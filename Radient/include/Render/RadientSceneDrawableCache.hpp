@@ -33,6 +33,7 @@
 
 #include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
+#include "RefCntAutoPtr.hpp"
 
 #include <deque>
 #include <string>
@@ -42,7 +43,12 @@
 namespace Diligent
 {
 
-/// Renderer-facing primitive data addressed by a stable drawable ID.
+/// Renderer-facing primitive slot addressed by a stable drawable ID.
+///
+/// A slot represents one renderable primitive, not the whole mesh component. It owns the
+/// primitive draw range and resolved material pointers, and references mutable scene state
+/// such as renderer component, world matrix, and effective visibility. Draw lists store only
+/// the slot ID, so they can be sorted or filtered without moving this data.
 struct RadientDrawableSlot
 {
     static constexpr size_t InvalidDrawListIndex = ~size_t{0};
@@ -113,6 +119,10 @@ enum class RadientDrawableMeshStatus
     Failed
 };
 
+/// Resolved mesh data needed to expand one scene renderable into drawable primitive slots.
+///
+/// The mesh provider fills this once the asset is ready. Pending status keeps the renderable
+/// queued in RadientSceneDrawableCache; failed status removes it from retry processing.
 struct RadientDrawableMesh
 {
     const GLTF::Model* pModel = nullptr;
@@ -124,6 +134,10 @@ struct RadientDrawableMesh
     Uint32 BaseVertex         = 0;
 };
 
+/// Source of renderer-ready mesh data for RadientSceneDrawableCache.
+///
+/// Production code resolves assets through the asset manager. Tests can provide a lightweight
+/// fake provider without constructing the real asset-loading stack.
 class IRadientDrawableMeshProvider
 {
 public:
@@ -132,6 +146,40 @@ public:
     virtual RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMesh,
                                                       RadientDrawableMesh& Mesh) = 0;
 };
+
+// RadientSceneDrawableCache is the bridge between scene-state components and renderer-facing
+// draw/light lists. It owns stable drawable slots and keeps the lightweight lists in sync
+// incrementally from RadientSceneState changes.
+//
+//      IRadientScene / RadientSceneState
+//          |
+//          |  EnumerateRenderableMeshChanges()
+//          v
+//      m_Renderables[Entity] --------------------------+
+//          |                                           |
+//          |  IRadientDrawableMeshProvider             |
+//          |  resolves RadientMesh -> RadientDrawableMesh
+//          v                                           |
+//      m_DrawableSlots[DrawableID] <-------------------+
+//          |
+//          +--> m_DrawLists[AlphaMode] -> RadientDrawItem{DrawableID}
+//          |
+//          +--> m_DrawableChanges     -> Added/Updated/Removed DrawableID
+//
+//      IRadientScene / RadientSceneState
+//          |
+//          |  EnumerateRenderableLightChanges()
+//          v
+//      m_Lights[Entity] -> light-list location
+//          |
+//          +--> m_LightLists[LightType] -> RadientLightItem{component/world/visibility refs}
+//          |
+//          +--> m_LightChanges          -> Added/Updated/Removed light entity
+//
+// Render passes consume draw/light lists. Heavy per-drawable data is reached through
+// DrawableID -> RadientDrawableSlot, while draw lists stay compact and cheap to sort or filter.
+// Scene revisions decide when to synchronize; pending renderables are retried until mesh data
+// becomes ready.
 
 /// Converts Radient scene state into renderer-facing render data.
 class RadientSceneDrawableCache
@@ -176,37 +224,41 @@ public:
         return m_SceneRevisions;
     }
 
-    const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const;
+    const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
+    {
+        if (DrawableID >= m_DrawableSlots.size())
+        {
+            UNEXPECTED("Invalid drawable ID ", DrawableID);
+            return nullptr;
+        }
+
+        const RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
+        VERIFY(Slot.IsValid(), "Drawable ID ", DrawableID, " is not valid");
+        return Slot.IsValid() ? &Slot : nullptr;
+    }
 
 private:
     struct RenderableRecord
     {
-        RadientMeshComponent Mesh;
+        // Strong mesh asset reference kept while pending or expanded drawables still depend on it.
+        RefCntAutoPtr<IRadientMeshAsset> pMesh;
 
+        // Scene-state references refreshed by renderable change synchronization.
         const RadientMeshRendererComponent* pRenderer         = nullptr;
         const RadientMatrix4x4*             pWorldMatrix      = nullptr;
         const Bool*                         pEffectiveVisible = nullptr;
 
+        // True while this entity is waiting for its mesh asset to become drawable.
         bool PendingResolution = false;
 
+        // Drawable IDs produced from this renderable's mesh primitives.
         std::vector<RadientDrawableID> DrawableIDs;
     };
 
-    struct LightRecord
+    struct LightListLocation
     {
-        static constexpr size_t InvalidListIndex = ~size_t{0};
-
-        const RadientLightComponent* pLight            = nullptr;
-        const RadientMatrix4x4*      pWorldMatrix      = nullptr;
-        const Bool*                  pEffectiveVisible = nullptr;
-
-        RADIENT_LIGHT_TYPE Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
-        size_t             ListIndex = InvalidListIndex;
-
-        bool IsInLightList() const
-        {
-            return ListIndex != InvalidListIndex;
-        }
+        RADIENT_LIGHT_TYPE Type  = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+        size_t             Index = 0;
     };
 
     void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh);
@@ -221,20 +273,21 @@ private:
     RadientDrawableID AllocateDrawableID();
 
     void FreeDrawableID(RadientDrawableID DrawableID);
-    void AddDrawableToDrawList(RadientDrawableID DrawableID);
     void RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
     void RemoveRenderableDrawables(RenderableRecord& Record);
     void AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record);
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
-    void AddLightToList(RadientEntityID Entity, LightRecord& Record);
-    void RemoveLightFromList(RadientEntityID Entity, LightRecord& Record);
+
+    void RemoveLightFromList(RadientEntityID Entity, const LightListLocation& Location);
     void RecordLightChange(RadientEntityID Entity, RADIENT_LIGHT_TYPE Type, RadientLightChangeType Change);
 
 private:
     IRadientDrawableMeshProvider& m_MeshProvider;
 
-    std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
-    std::unordered_map<RadientEntityID, LightRecord>      m_Lights;
+    using RenderableMap = std::unordered_map<RadientEntityID, RenderableRecord>;
+    using LightMap      = std::unordered_map<RadientEntityID, LightListLocation>;
+    RenderableMap m_Renderables;
+    LightMap      m_Lights;
 
     // Geometry passes cache pointers to drawable slots; deque keeps existing slot
     // addresses stable when new drawable IDs append more slots.

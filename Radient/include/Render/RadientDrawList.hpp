@@ -38,9 +38,14 @@ namespace Diligent
 
 using RadientDrawableID = Uint32;
 
+/// Invalid stable drawable slot identifier.
 static constexpr RadientDrawableID InvalidRadientDrawableID = ~RadientDrawableID{0};
 
-/// Lightweight reference to renderer-facing drawable data.
+/// Lightweight draw-list entry.
+///
+/// Draw items deliberately store only a stable drawable ID. Heavy primitive data, material
+/// state, scene transform/visibility references, and renderer-derived pass data live in
+/// RadientSceneDrawableCache/RadientDrawableSlot or in the render pass cache.
 struct RadientDrawItem
 {
     explicit RadientDrawItem(RadientDrawableID _DrawableID) :
@@ -51,7 +56,11 @@ struct RadientDrawItem
 };
 
 
-/// Cached list of renderable primitives prepared for backend rendering.
+/// Compact list of drawable IDs selected for a render pass subset.
+///
+/// A draw list does not own drawable data and does not preserve semantic order. Removal uses
+/// swap-erase; RemoveAt returns the moved drawable ID so RadientSceneDrawableCache can repair
+/// the moved slot's DrawListIndex.
 class RadientDrawList
 {
 public:
@@ -64,6 +73,8 @@ public:
         return Index;
     }
 
+    /// Removes the item at the specified index using swap-erase and returns the moved drawable ID,
+    /// or InvalidRadientDrawableID if no item was moved (i.e. the removed item was the last one).
     RadientDrawableID RemoveAt(size_t Index);
 
     size_t GetItemCount() const
@@ -91,7 +102,10 @@ private:
 };
 
 
-/// Collection of draw lists for different material alpha modes.
+/// Draw lists split by material alpha mode.
+///
+/// Render passes can select one or more alpha-mode lists, then build their own pass-local
+/// sorted index without moving heavyweight drawable data.
 class RadientDrawLists
 {
 public:

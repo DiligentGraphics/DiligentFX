@@ -31,18 +31,6 @@
 namespace Diligent
 {
 
-namespace
-{
-
-size_t GetLightTypeIndex(RADIENT_LIGHT_TYPE Type)
-{
-    const size_t Index = static_cast<size_t>(Type);
-    VERIFY(Index < RadientLightLists::LightTypeCount, "Invalid Radient light type");
-    return Index < RadientLightLists::LightTypeCount ? Index : 0;
-}
-
-} // namespace
-
 RadientEntityID RadientLightList::RemoveAt(size_t Index)
 {
     if (Index >= m_Items.size())
@@ -83,16 +71,6 @@ size_t RadientLightLists::GetItemCount() const
         ItemCount += LightList.GetItemCount();
 
     return ItemCount;
-}
-
-const RadientLightList& RadientLightLists::GetLightList(RADIENT_LIGHT_TYPE Type) const
-{
-    return m_LightLists[GetLightTypeIndex(Type)];
-}
-
-RadientLightList& RadientLightLists::GetMutableLightList(RADIENT_LIGHT_TYPE Type)
-{
-    return m_LightLists[GetLightTypeIndex(Type)];
 }
 
 } // namespace Diligent

@@ -34,7 +34,11 @@
 namespace Diligent
 {
 
-/// One scene light after scene traversal.
+/// Renderer-facing light-list entry.
+///
+/// Light items keep references to scene-state component data instead of copying it. The
+/// references remain valid while the scene is not mutated and the drawable cache stays synced.
+/// Render passes should check pEffectiveVisible before using the light.
 struct RadientLightItem
 {
     RadientLightItem(RadientEntityID              _Entity,
@@ -47,14 +51,17 @@ struct RadientLightItem
         pEffectiveVisible{&_EffectiveVisible}
     {}
 
-    RadientEntityID              Entity       = InvalidRadientEntityID;
-    const RadientLightComponent* pLight       = nullptr;
-    const RadientMatrix4x4*      pWorldMatrix = nullptr;
+    RadientEntityID              Entity            = InvalidRadientEntityID;
+    const RadientLightComponent* pLight            = nullptr;
+    const RadientMatrix4x4*      pWorldMatrix      = nullptr;
     const Bool*                  pEffectiveVisible = nullptr;
 };
 
 
-/// Cached list of scene lights prepared for backend rendering.
+/// Compact list of scene lights of one or more compatible render paths.
+///
+/// The list does not own light data. Removal uses swap-erase; RemoveAt returns the moved
+/// entity ID so RadientSceneDrawableCache can repair the moved LightRecord::ListIndex.
 class RadientLightList
 {
 public:
@@ -65,21 +72,13 @@ public:
         m_Items.clear();
     }
 
-    void Add(RadientEntityID              Entity,
-             const RadientLightComponent& Light,
-             const RadientMatrix4x4&      WorldMatrix,
-             const Bool&                  EffectiveVisible)
-    {
-        m_Items.emplace_back(Entity, Light, WorldMatrix, EffectiveVisible);
-    }
-
-    size_t AddAndGetIndex(RadientEntityID              Entity,
-                          const RadientLightComponent& Light,
-                          const RadientMatrix4x4&      WorldMatrix,
-                          const Bool&                  EffectiveVisible)
+    size_t Add(RadientEntityID              Entity,
+               const RadientLightComponent& Light,
+               const RadientMatrix4x4&      WorldMatrix,
+               const Bool&                  EffectiveVisible)
     {
         const size_t Index = m_Items.size();
-        Add(Entity, Light, WorldMatrix, EffectiveVisible);
+        m_Items.emplace_back(Entity, Light, WorldMatrix, EffectiveVisible);
         return Index;
     }
 
@@ -105,11 +104,14 @@ private:
 };
 
 
-/// Collection of light lists for each Radient light type.
+/// Light lists split by Radient light type.
+///
+/// Keeping directional, point, and spot lights in separate arrays lets render code consume
+/// only the categories it supports without filtering the whole light set every frame.
 class RadientLightLists
 {
 public:
-    static constexpr size_t LightTypeCount = static_cast<size_t>(RADIENT_LIGHT_TYPE_SPOT) + 1u;
+    static constexpr size_t LightTypeCount = static_cast<size_t>(RADIENT_LIGHT_TYPE_COUNT);
 
     void Clear();
 
@@ -119,20 +121,23 @@ public:
                const RadientMatrix4x4&      WorldMatrix,
                const Bool&                  EffectiveVisible)
     {
-        return GetMutableLightList(Type).AddAndGetIndex(Entity, Light, WorldMatrix, EffectiveVisible);
+        return m_LightLists[Type].Add(Entity, Light, WorldMatrix, EffectiveVisible);
     }
 
     RadientEntityID RemoveAt(RADIENT_LIGHT_TYPE Type,
                              size_t             Index)
     {
-        return GetMutableLightList(Type).RemoveAt(Index);
+        return m_LightLists[Type].RemoveAt(Index);
     }
 
     bool IsEmpty() const;
 
     size_t GetItemCount() const;
 
-    const RadientLightList& GetLightList(RADIENT_LIGHT_TYPE Type) const;
+    const RadientLightList& GetLightList(RADIENT_LIGHT_TYPE Type) const
+    {
+        return m_LightLists[Type];
+    }
 
     template <typename CallbackType>
     void Enumerate(CallbackType&& Callback) const
@@ -145,8 +150,6 @@ public:
     }
 
 private:
-    RadientLightList& GetMutableLightList(RADIENT_LIGHT_TYPE Type);
-
     std::array<RadientLightList, LightTypeCount> m_LightLists;
 };
 

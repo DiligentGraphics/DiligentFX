@@ -41,12 +41,6 @@ namespace Diligent
 namespace
 {
 
-bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
-                     const RadientMeshComponent& Mesh1)
-{
-    return Mesh0.pMesh == Mesh1.pMesh;
-}
-
 class RadientAssetDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
 public:
@@ -102,10 +96,8 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
     if (m_SceneRevisions == SceneRevisions && m_PendingRenderableEntities.empty())
         return RADIENT_STATUS_NO_CHANGE;
 
-    const bool UpdateRenderables =
-        m_SceneRevisions.Drawables != SceneRevisions.Drawables;
-    const bool UpdateLights =
-        m_SceneRevisions.Lights != SceneRevisions.Lights;
+    const bool UpdateRenderables = (m_SceneRevisions.Drawables != SceneRevisions.Drawables);
+    const bool UpdateLights      = (m_SceneRevisions.Lights != SceneRevisions.Lights);
 
     const RadientSceneImpl*  pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
     const RadientSceneState& State      = pSceneImpl->GetState();
@@ -153,19 +145,19 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
 {
     auto record_it = m_Renderables.find(Mesh.Entity);
 
-    const bool IsNewRecord = record_it == m_Renderables.end();
+    const bool IsNewRecord = (record_it == m_Renderables.end());
     if (IsNewRecord)
     {
         record_it = m_Renderables.emplace(Mesh.Entity, RenderableRecord{}).first;
     }
     RenderableRecord& Record      = record_it->second;
-    const bool        MeshChanged = !IsNewRecord && !IsSameMeshAsset(Record.Mesh, Mesh.Mesh);
+    const bool        MeshChanged = !IsNewRecord && (Record.pMesh != Mesh.Mesh.pMesh);
 
     if (IsNewRecord || MeshChanged)
     {
         RemoveRenderableDrawables(Record);
 
-        Record.Mesh              = Mesh.Mesh;
+        Record.pMesh             = Mesh.Mesh.pMesh;
         Record.PendingResolution = false;
     }
 
@@ -195,7 +187,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
 
 void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Entity)
 {
-    std::unordered_map<RadientEntityID, RenderableRecord>::iterator It = m_Renderables.find(Entity);
+    RenderableMap::iterator It = m_Renderables.find(Entity);
     if (It == m_Renderables.end())
         return;
 
@@ -205,41 +197,39 @@ void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Ent
 
 void RadientSceneDrawableCache::ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light)
 {
-    auto RecordIt = m_Lights.find(Light.Entity);
-    if (RecordIt == m_Lights.end())
-        RecordIt = m_Lights.emplace(Light.Entity, LightRecord{}).first;
+    LightMap::iterator It = m_Lights.find(Light.Entity);
 
-    LightRecord& Record        = RecordIt->second;
-    const bool   HadLight      = Record.pLight != nullptr;
-    const bool   TypeChanged   = HadLight && Record.Type != Light.Light.Type;
-    const bool   WasInList     = Record.IsInLightList();
+    const bool IsNewRecord = (It == m_Lights.end());
+    const bool TypeChanged = !IsNewRecord && It->second.Type != Light.Light.Type;
+    const bool NeedsAdd    = IsNewRecord || TypeChanged;
 
-    if (TypeChanged && WasInList)
-        RemoveLightFromList(Light.Entity, Record);
+    if (TypeChanged)
+        RemoveLightFromList(Light.Entity, It->second);
 
-    Record.pLight            = &Light.Light;
-    Record.pWorldMatrix      = &Light.WorldMatrix;
-    Record.pEffectiveVisible = &Light.EffectiveVisible;
-    Record.Type              = Light.Light.Type;
-
-    if (!HadLight || TypeChanged || !WasInList)
+    if (NeedsAdd)
     {
-        AddLightToList(Light.Entity, Record);
-        return;
-    }
+        const size_t            ListIndex = m_LightLists.Add(Light.Light.Type, Light.Entity, Light.Light, Light.WorldMatrix, Light.EffectiveVisible);
+        const LightListLocation Location{Light.Light.Type, ListIndex};
+        if (IsNewRecord)
+            m_Lights.emplace(Light.Entity, Location);
+        else
+            It->second = Location;
 
-    RecordLightChange(Light.Entity, Record.Type, RadientLightChangeType::Updated);
+        RecordLightChange(Light.Entity, Light.Light.Type, RadientLightChangeType::Added);
+    }
+    else
+    {
+        RecordLightChange(Light.Entity, It->second.Type, RadientLightChangeType::Updated);
+    }
 }
 
 void RadientSceneDrawableCache::ProcessRenderableLightRemoved(RadientEntityID Entity)
 {
-    std::unordered_map<RadientEntityID, LightRecord>::iterator It = m_Lights.find(Entity);
+    LightMap::iterator It = m_Lights.find(Entity);
     if (It == m_Lights.end())
         return;
 
-    if (It->second.IsInLightList())
-        RemoveLightFromList(Entity, It->second);
-
+    RemoveLightFromList(Entity, It->second);
     m_Lights.erase(It);
 }
 
@@ -250,7 +240,7 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 
     for (const RadientEntityID Entity : m_PendingRenderableEntitiesScratch)
     {
-        std::unordered_map<RadientEntityID, RenderableRecord>::iterator It = m_Renderables.find(Entity);
+        RenderableMap::iterator It = m_Renderables.find(Entity);
         if (It == m_Renderables.end())
             continue;
 
@@ -267,7 +257,7 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
     RadientDrawableMesh Mesh;
-    switch (m_MeshProvider.GetDrawableMesh(Record.Mesh.pMesh, Mesh))
+    switch (m_MeshProvider.GetDrawableMesh(Record.pMesh, Mesh))
     {
         case RadientDrawableMeshStatus::Ready:
             break;
@@ -316,8 +306,8 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.ElementCount       = ElementCount;
         Slot.AlphaMode          = static_cast<Uint8>(pMaterial->Attribs.AlphaMode);
 
+        Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
         Record.DrawableIDs.push_back(DrawableID);
-        AddDrawableToDrawList(DrawableID);
         RecordDrawableChange(DrawableID, RadientDrawableChangeType::Added);
     }
 
@@ -365,26 +355,6 @@ void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
 
     RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
     m_FreeDrawableIDs.push_back(DrawableID);
-}
-
-void RadientSceneDrawableCache::AddDrawableToDrawList(RadientDrawableID DrawableID)
-{
-    if (DrawableID >= m_DrawableSlots.size())
-    {
-        UNEXPECTED("Trying to add an invalid drawable ID to a draw list");
-        return;
-    }
-
-    RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    VERIFY(Slot.IsValid(), "Trying to add an invalid drawable slot to a draw list");
-
-    if (Slot.IsInDrawList())
-    {
-        UNEXPECTED("Trying to add a drawable slot that is already in a draw list");
-        return;
-    }
-
-    Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
 }
 
 void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
@@ -439,61 +409,30 @@ void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableI
     m_DrawableChanges.push_back({DrawableID, Type});
 }
 
-void RadientSceneDrawableCache::AddLightToList(RadientEntityID Entity, LightRecord& Record)
+void RadientSceneDrawableCache::RemoveLightFromList(RadientEntityID Entity, const LightListLocation& Location)
 {
-    if (Record.pLight == nullptr || Record.pWorldMatrix == nullptr || Record.pEffectiveVisible == nullptr)
-    {
-        UNEXPECTED("Trying to add invalid light record to the light list");
-        return;
-    }
-
-    if (Record.IsInLightList())
-    {
-        UNEXPECTED("Trying to add a light that is already in a light list");
-        return;
-    }
-
-    Record.ListIndex = m_LightLists.Add(Record.Type, Entity, *Record.pLight, *Record.pWorldMatrix, *Record.pEffectiveVisible);
-    RecordLightChange(Entity, Record.Type, RadientLightChangeType::Added);
-}
-
-void RadientSceneDrawableCache::RemoveLightFromList(RadientEntityID Entity, LightRecord& Record)
-{
-    if (!Record.IsInLightList())
-    {
-        UNEXPECTED("Trying to remove a light that is not in a light list");
-        return;
-    }
-
-    const RADIENT_LIGHT_TYPE RemovedType = Record.Type;
-    const RadientEntityID    MovedEntity = m_LightLists.RemoveAt(RemovedType, Record.ListIndex);
+    const RADIENT_LIGHT_TYPE RemovedType = Location.Type;
+    const RadientEntityID    MovedEntity = m_LightLists.RemoveAt(RemovedType, Location.Index);
     if (MovedEntity != InvalidRadientEntityID && MovedEntity != Entity)
     {
-        std::unordered_map<RadientEntityID, LightRecord>::iterator MovedIt = m_Lights.find(MovedEntity);
+        LightMap::iterator MovedIt = m_Lights.find(MovedEntity);
         VERIFY(MovedIt != m_Lights.end(), "Light list returned moved entity that is missing from the light records");
         if (MovedIt != m_Lights.end())
-            MovedIt->second.ListIndex = Record.ListIndex;
+            MovedIt->second.Index = Location.Index;
     }
 
-    Record.ListIndex = LightRecord::InvalidListIndex;
     RecordLightChange(Entity, RemovedType, RadientLightChangeType::Removed);
 }
 
 void RadientSceneDrawableCache::RecordLightChange(RadientEntityID Entity, RADIENT_LIGHT_TYPE Type, RadientLightChangeType Change)
 {
     if (Entity == InvalidRadientEntityID)
+    {
+        UNEXPECTED("Trying to record a light change for an invalid entity");
         return;
+    }
 
     m_LightChanges.push_back({Entity, Type, Change});
-}
-
-const RadientDrawableSlot* RadientSceneDrawableCache::GetDrawableSlot(RadientDrawableID DrawableID) const
-{
-    if (DrawableID >= m_DrawableSlots.size())
-        return nullptr;
-
-    const RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    return Slot.IsValid() ? &Slot : nullptr;
 }
 
 } // namespace Diligent
