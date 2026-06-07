@@ -35,11 +35,11 @@
 #include <utility>
 
 #ifdef DILIGENT_DEBUG
-#    define VERIFY_ENTITY(Entity)                                                                                                      \
-        do                                                                                                                             \
-        {                                                                                                                              \
-            const entt::entity InternalEntity = (Entity);                                                                              \
-            VERIFY(InternalEntity != entt::null, "Entity is null. This should never happen.");                                         \
+#    define VERIFY_ENTITY(Entity)                                                                                                       \
+        do                                                                                                                              \
+        {                                                                                                                               \
+            const entt::entity InternalEntity = (Entity);                                                                               \
+            VERIFY(InternalEntity != entt::null, "Entity is null. This should never happen.");                                          \
             VERIFY(InternalEntity == entt::null || m_Registry.valid(InternalEntity), "Entity is not valid. This should never happen."); \
         } while (false)
 #else
@@ -985,14 +985,33 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
         Stack.pop_back();
 
         ChangeFlags |= CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY;
-        if (RecordRenderableMeshRemoved(Current))
+
+        const bool HadRenderableChange = RecordRenderableMeshRemoved(Current);
+        if ((ChangeFlags & CHANGE_FLAG_DRAWABLES) == CHANGE_FLAG_NONE &&
+            (HadRenderableChange ||
+             m_Registry.all_of<MeshComponentStorage>(Current) ||
+             m_Registry.all_of<RadientMeshRendererComponent>(Current) ||
+             m_Registry.all_of<MaterialBindingsStorage>(Current)))
+        {
             ChangeFlags |= CHANGE_FLAG_DRAWABLES;
+        }
+
         if (RecordRenderableLightRemoved(Current))
+        {
             ChangeFlags |= CHANGE_FLAG_LIGHTS;
-        if (m_Registry.all_of<RadientCameraComponent>(Current))
+        }
+
+        if ((ChangeFlags & CHANGE_FLAG_CAMERAS) == CHANGE_FLAG_NONE &&
+            m_Registry.all_of<RadientCameraComponent>(Current))
+        {
             ChangeFlags |= CHANGE_FLAG_CAMERAS;
-        if (m_Registry.all_of<CustomComponentIndexComponent>(Current))
+        }
+
+        if ((ChangeFlags & CHANGE_FLAG_CUSTOM_COMPONENTS) == CHANGE_FLAG_NONE &&
+            m_Registry.all_of<CustomComponentIndexComponent>(Current))
+        {
             ChangeFlags |= CHANGE_FLAG_CUSTOM_COMPONENTS;
+        }
 
         RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);

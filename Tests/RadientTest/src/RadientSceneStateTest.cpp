@@ -2995,6 +2995,51 @@ TEST(RadientSceneStateTest, DestroyEntityTouchesDrawableRevisionWhenDrawableIsRe
     ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
 }
 
+TEST(RadientSceneStateTest, DestroyEntityTouchesDrawableRevisionWhenDrawableComponentIsRemoved)
+{
+    // Drawable revisions track mesh, renderer, and material binding component data,
+    // even if the entity never has enough components to become renderable.
+    const auto ExpectDestroyTouchesDrawableRevision = [](auto&& Setup) {
+        RadientSceneState State;
+
+        RadientEntityID Entity = InvalidRadientEntityID;
+        ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+        Setup(State, Entity);
+        State.ClearRenderableMeshChanges();
+
+        const RadientSceneRevisions BeforeDestroy = State.GetSceneRevisions();
+        EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
+
+        RadientSceneRevisions ExpectedDelta{};
+        ExpectedDelta.Drawables  = 1;
+        ExpectedDelta.Transforms = 1;
+        ExpectedDelta.Visibility = 1;
+        ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
+    };
+
+    // Mesh-only entity: no renderer component, so no renderable mesh is created.
+    ExpectDestroyTouchesDrawableRevision(
+        [](RadientSceneState& State, RadientEntityID Entity) {
+            EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://destroy-mesh-only")), RADIENT_STATUS_OK);
+        });
+
+    // Renderer-only entity: no mesh component, so no renderable mesh is created.
+    ExpectDestroyTouchesDrawableRevision(
+        [](RadientSceneState& State, RadientEntityID Entity) {
+            EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+        });
+
+    // Material-bindings-only entity: no mesh or renderer component, so no renderable mesh is created.
+    ExpectDestroyTouchesDrawableRevision(
+        [](RadientSceneState& State, RadientEntityID Entity) {
+            TestMaterialBinding              MaterialBinding = MakeMaterialBinding(0, "material://destroy-bindings-only");
+            RadientMaterialBindingsComponent MaterialBindings;
+            MaterialBindings.pBindings    = &MaterialBinding.Binding;
+            MaterialBindings.BindingCount = 1;
+            EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
+        });
+}
+
 TEST(RadientSceneStateTest, DestroyEntityTouchesLightRevisionWhenLightIsRemoved)
 {
     // Removing a light subtree should bump only light, transform, and visibility revisions.
