@@ -50,7 +50,7 @@ jobs:
       uses: DiligentGraphics/github-action/build@v14
 
     - name: Run MSVC Code Analysis
-      uses: microsoft/msvc-code-analysis-action@v0.1.1
+      uses: DiligentGraphics/msvc-code-analysis-action@main
       # Provide a unique ID to access the sarif output path
       id: run-analysis
       with:
@@ -59,7 +59,7 @@ jobs:
         # Ruleset file that will determine what checks will be run
         ruleset: NativeRecommendedRules.ruleset
         # Paths to ignore analysis of CMake targets and includes
-        ignoredPaths: '${{ github.workspace }}/DiligentCore;${{ github.workspace }}/DiligentTools;${{ github.workspace }}/DiligentFX/ThirdParty'
+        ignoredPaths: '${{ github.workspace }}/DiligentCore;${{ github.workspace }}/DiligentTools;${{ github.workspace }}/DiligentFX/ThirdParty;${{ env.DILIGENT_BUILD_DIR }}/_deps'
 
     # Upload SARIF file to GitHub Code Scanning Alerts
     - name: Upload SARIF to GitHub
