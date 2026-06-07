@@ -273,7 +273,6 @@ private:
     RadientDrawableID AllocateDrawableID();
 
     void FreeDrawableID(RadientDrawableID DrawableID);
-    void RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
     void RemoveRenderableDrawables(RenderableRecord& Record);
     void AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record);
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);

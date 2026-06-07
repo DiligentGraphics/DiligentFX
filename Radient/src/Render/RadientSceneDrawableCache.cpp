@@ -237,7 +237,7 @@ void RadientSceneDrawableCache::ProcessRenderableLightAddedOrUpdated(const Radie
     LightMap::iterator It = m_Lights.find(Light.Entity);
 
     const bool IsNewRecord = (It == m_Lights.end());
-    const bool TypeChanged = !IsNewRecord && It->second.Type != Light.Light.Type;
+    const bool TypeChanged = !IsNewRecord && (It->second.Type != Light.Light.Type);
     const bool NeedsAdd    = IsNewRecord || TypeChanged;
 
     if (TypeChanged)
@@ -279,7 +279,10 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
     {
         RenderableMap::iterator It = m_Renderables.find(Entity);
         if (It == m_Renderables.end())
+        {
+            // Pending renderable was removed.
             continue;
+        }
 
         RenderableRecord& Record = It->second;
         if (!Record.PendingResolution || !Record.DrawableIDs.empty())
@@ -381,34 +384,11 @@ void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
         return;
     }
 
-    RemoveDrawableFromDrawList(DrawableID);
-
     RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
     VERIFY(Slot.IsValid(), "Trying to free an invalid drawable slot");
+    VERIFY(Slot.IsInDrawList(), "Trying to free a drawable slot that is not in a draw list");
 
-    const Uint32 Generation = Slot.Generation + 1u;
-    Slot                    = {};
-    Slot.Generation         = Generation;
-
-    RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
-    m_FreeDrawableIDs.push_back(DrawableID);
-}
-
-void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
-{
-    if (DrawableID >= m_DrawableSlots.size())
-    {
-        UNEXPECTED("Trying to remove an invalid drawable ID from a draw list");
-        return;
-    }
-
-    RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    if (!Slot.IsInDrawList())
-    {
-        UNEXPECTED("Trying to remove a drawable slot that is not in a draw list");
-        return;
-    }
-
+    // Remove the drawable from its draw list.
     const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), Slot.DrawListIndex);
     if (MovedDrawableID != InvalidRadientDrawableID && MovedDrawableID != DrawableID)
     {
@@ -419,7 +399,12 @@ void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID Dra
         MovedSlot.DrawListIndex = Slot.DrawListIndex;
     }
 
-    Slot.DrawListIndex = RadientDrawableSlot::InvalidDrawListIndex;
+    const Uint32 Generation = Slot.Generation + 1u;
+    Slot                    = {};
+    Slot.Generation         = Generation;
+
+    RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
+    m_FreeDrawableIDs.push_back(DrawableID);
 }
 
 void RadientSceneDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)
