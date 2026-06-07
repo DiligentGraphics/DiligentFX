@@ -1892,6 +1892,27 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
     EXPECT_FALSE(Changes[0].HasMesh);
 }
 
+TEST(RadientSceneStateTest, RejectsNullMeshComponent)
+{
+    // Mesh components must reference an asset. Removing a mesh should use
+    // RemoveComponent instead of setting a null mesh.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+
+    RadientMeshComponent Mesh;
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+
+    Bool HasMesh = True;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MESH, HasMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMesh, False);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+}
+
 TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
 {
     // Destroying a parent subtree should emit Removed changes for every
@@ -2412,7 +2433,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableLights)
 
     RadientEntityID MeshOnly = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, MeshOnly), RADIENT_STATUS_OK);
-    EXPECT_EQ(State.SetMesh(MeshOnly, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(MeshOnly, MakeMeshComponent("mesh://light-enumeration-mesh")), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetMeshRenderer(MeshOnly, {}), RADIENT_STATUS_OK);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
@@ -2522,7 +2543,7 @@ TEST(RadientSceneStateTest, HasComponent)
 
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, False);
-    EXPECT_EQ(State.SetMesh(Entity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://has-component")), RADIENT_STATUS_OK);
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, True);
 

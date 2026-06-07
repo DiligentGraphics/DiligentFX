@@ -586,6 +586,9 @@ RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientM
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
 
+    if (Mesh.pMesh == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     MeshComponentStorage* pExistingMesh = m_Registry.try_get<MeshComponentStorage>(E);
     if (pExistingMesh != nullptr && pExistingMesh->Component == Mesh)
         return RADIENT_STATUS_NO_CHANGE;
