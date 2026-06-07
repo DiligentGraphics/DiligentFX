@@ -423,6 +423,51 @@ TEST(RadientSceneStateTest, SetEnvironmentKeepsTextureAsset)
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 2);
 }
 
+TEST(RadientSceneStateTest, RejectsInvalidEnvironmentProperties)
+{
+    // Null environment map is valid and means the renderer should use default IBL,
+    // but numeric environment parameters must be finite and non-negative where applicable.
+    RadientSceneState State;
+
+    RadientEnvironmentDesc Environment{};
+    Environment.pEnvironmentMap = nullptr;
+    Environment.Color           = {0.25f, 0.5f, 1.f};
+    Environment.Intensity       = 0.f;
+    Environment.Exposure        = -2.f;
+
+    EXPECT_EQ(State.SetEnvironment(Environment), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
+
+    const RadientEnvironmentDesc StoredEnvironment = State.GetEnvironment();
+    const RadientSceneRevisions  StoredRevisions   = State.GetSceneRevisions();
+
+    const auto ExpectInvalidEnvironment = [&](RadientEnvironmentDesc InvalidEnvironment) {
+        EXPECT_EQ(State.SetEnvironment(InvalidEnvironment), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(State.GetEnvironment(), StoredEnvironment);
+        EXPECT_EQ(State.GetSceneRevisions(), StoredRevisions);
+    };
+
+    RadientEnvironmentDesc InvalidEnvironment = StoredEnvironment;
+    InvalidEnvironment.Color.x                = -0.1f;
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment         = StoredEnvironment;
+    InvalidEnvironment.Color.y = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment           = StoredEnvironment;
+    InvalidEnvironment.Intensity = -1.f;
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment           = StoredEnvironment;
+    InvalidEnvironment.Intensity = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment          = StoredEnvironment;
+    InvalidEnvironment.Exposure = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+}
+
 TEST(RadientSceneStateTest, IsEntityAlive)
 {
     // Exercises entity lifetime queries for missing, created, and destroyed entities.

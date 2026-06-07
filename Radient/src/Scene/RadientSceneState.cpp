@@ -141,6 +141,15 @@ bool IsValidLightComponent(const RadientLightComponent& Light)
         IsFinite(Light.ShapingFocus);
 }
 
+bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    return (Environment.pEnvironmentMap == nullptr ||
+            Environment.pEnvironmentMap->GetType() == RADIENT_ASSET_TYPE_TEXTURE) &&
+        IsFiniteNonNegative(Environment.Color) &&
+        IsFiniteNonNegative(Environment.Intensity) &&
+        IsFinite(Environment.Exposure);
+}
+
 } // namespace
 
 
@@ -678,6 +687,9 @@ RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const Radient
 
 RADIENT_STATUS RadientSceneState::SetEnvironment(const RadientEnvironmentDesc& Environment)
 {
+    if (!IsValidEnvironment(Environment))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     RadientEnvironmentDesc NewEnvironment = Environment;
     NewEnvironment.pEnvironmentMap        = Environment.pEnvironmentMap;
 
