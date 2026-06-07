@@ -34,6 +34,21 @@
 #include <limits>
 #include <utility>
 
+#ifdef DILIGENT_DEBUG
+#    define VERIFY_ENTITY(Entity)                                                                                                      \
+        do                                                                                                                             \
+        {                                                                                                                              \
+            const entt::entity InternalEntity = (Entity);                                                                              \
+            VERIFY(InternalEntity != entt::null, "Entity is null. This should never happen.");                                         \
+            VERIFY(InternalEntity == entt::null || m_Registry.valid(InternalEntity), "Entity is not valid. This should never happen."); \
+        } while (false)
+#else
+#    define VERIFY_ENTITY(...) \
+        do                     \
+        {                      \
+        } while (false)
+#endif
+
 namespace Diligent
 {
 
@@ -882,8 +897,8 @@ entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
 
 bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const
 {
-    if (!VerifyInternalEntity(Entity) || !VerifyInternalEntity(PotentialAncestor))
-        return false;
+    VERIFY_ENTITY(Entity);
+    VERIFY_ENTITY(PotentialAncestor);
 
     if (m_Registry.get<HierarchyComponent>(PotentialAncestor).Children.empty())
         return false;
@@ -904,49 +919,28 @@ bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity Potential
 
 bool RadientSceneState::IsRenderableMeshEntity(entt::entity Entity) const
 {
-    if (!VerifyInternalEntity(Entity))
-        return false;
+    VERIFY_ENTITY(Entity);
 
     return m_Registry.all_of<MeshComponentStorage, RadientMeshRendererComponent>(Entity);
 }
 
 bool RadientSceneState::IsRenderableLightEntity(entt::entity Entity) const
 {
-    if (!VerifyInternalEntity(Entity))
-        return false;
+    VERIFY_ENTITY(Entity);
 
     return m_Registry.all_of<RadientLightComponent>(Entity);
 }
 
-bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
-{
-    if (Entity == entt::null)
-    {
-        UNEXPECTED("Entity is null. This should never happen.");
-        return false;
-    }
-
-    if (!m_Registry.valid(Entity))
-    {
-        UNEXPECTED("Entity is not valid. This should never happen.");
-        return false;
-    }
-
-    return true;
-}
-
 void RadientSceneState::DetachFromParent(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
     if (Hierarchy.Parent == entt::null)
         return;
 
     const entt::entity Parent = Hierarchy.Parent;
-    if (!VerifyInternalEntity(Parent))
-        return;
+    VERIFY_ENTITY(Parent);
 
     std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(Parent).Children;
 
@@ -965,8 +959,7 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
 
 RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return CHANGE_FLAG_NONE;
+    VERIFY_ENTITY(Entity);
 
     CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE;
 
@@ -977,18 +970,14 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
     while (!Stack.empty())
     {
         DestroyWorkItem& Item = Stack.back();
-        if (!VerifyInternalEntity(Item.Entity))
-        {
-            Stack.pop_back();
-            continue;
-        }
+        VERIFY_ENTITY(Item.Entity);
 
         const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
         if (Item.NextChildIndex < Children.size())
         {
             const entt::entity Child = Children[Item.NextChildIndex++];
-            if (VerifyInternalEntity(Child))
-                Stack.push_back({Child, 0});
+            VERIFY_ENTITY(Child);
+            Stack.push_back({Child, 0});
             continue;
         }
 
@@ -1018,8 +1007,7 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
 
 void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(Entity);
     if (pIndex == nullptr)
@@ -1041,8 +1029,7 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
 
 void RadientSceneState::RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     PendingRenderableMeshChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
     if (pPendingChange == nullptr)
@@ -1072,8 +1059,7 @@ void RadientSceneState::RecordRenderableMeshChange(entt::entity Entity, Renderab
 
 void RadientSceneState::RecordRenderableMeshUpdated(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     const RenderableMeshStateComponent& RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
     if (RenderableState.IsRenderable)
@@ -1082,8 +1068,7 @@ void RadientSceneState::RecordRenderableMeshUpdated(entt::entity Entity)
 
 bool RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return false;
+    VERIFY_ENTITY(Entity);
 
     RenderableMeshStateComponent&         RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
     PendingRenderableMeshChangeComponent* pPendingChange  = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
@@ -1106,8 +1091,7 @@ bool RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
 
 void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     RenderableMeshStateComponent& RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
     const bool                    WasRenderable   = RenderableState.IsRenderable;
@@ -1126,8 +1110,7 @@ void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
 
 void RadientSceneState::RecordRenderableLightChange(entt::entity Entity, RenderableLightChangeType Type)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
     if (pPendingChange == nullptr)
@@ -1157,8 +1140,7 @@ void RadientSceneState::RecordRenderableLightChange(entt::entity Entity, Rendera
 
 void RadientSceneState::RecordRenderableLightUpdated(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     if (m_Registry.all_of<RadientLightComponent>(Entity))
         RecordRenderableLightChange(Entity, RenderableLightChangeType::Updated);
@@ -1166,8 +1148,7 @@ void RadientSceneState::RecordRenderableLightUpdated(entt::entity Entity)
 
 bool RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
 {
-    if (!VerifyInternalEntity(Entity))
-        return false;
+    VERIFY_ENTITY(Entity);
 
     PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
     const bool                             WasAddedThisFrame =
@@ -1191,8 +1172,7 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
     if (Flags == DIRTY_FLAG_NONE)
         return DIRTY_FLAG_NONE;
 
-    if (!VerifyInternalEntity(Entity))
-        return DIRTY_FLAG_NONE;
+    VERIFY_ENTITY(Entity);
 
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
 
@@ -1226,8 +1206,7 @@ void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
     if (Flags == DIRTY_FLAG_NONE)
         return;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
     DirtyState.Flags &= ~Flags;
@@ -1269,8 +1248,7 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
     if (Flags == DIRTY_FLAG_NONE)
         return;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
     Stack.clear();
@@ -1281,8 +1259,7 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
         const DirtyWorkItem Item = Stack.back();
         Stack.pop_back();
 
-        if (!VerifyInternalEntity(Item.Entity))
-            continue;
+        VERIFY_ENTITY(Item.Entity);
 
         const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
         for (const entt::entity Child : Children)
@@ -1306,8 +1283,7 @@ void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS
     if (Flags == DIRTY_FLAG_NONE)
         return;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const entt::entity Child : Children)
@@ -1341,8 +1317,7 @@ void RadientSceneState::UpdateDirtyEntities()
     // descendants dirty without adding them to m_DirtyEntities, so this pass can iterate the worklist directly.
     for (const entt::entity Entity : m_DirtyEntities)
     {
-        if (!VerifyInternalEntity(Entity))
-            continue;
+        VERIFY_ENTITY(Entity);
 
         const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
         VERIFY(DirtyState.IsInDirtyList(), "Dirty entity is not marked as being in the dirty list");
@@ -1361,8 +1336,7 @@ void RadientSceneState::UpdateDirtyEntities()
 
     for (const entt::entity Entity : m_DirtyEntities)
     {
-        if (!VerifyInternalEntity(Entity))
-            continue;
+        VERIFY_ENTITY(Entity);
 
         const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
         VERIFY(DirtyState.IsInDirtyList(), "Dirty entity is not marked as being in the dirty list");
@@ -1374,8 +1348,7 @@ void RadientSceneState::UpdateDirtyEntities()
         const entt::entity Parent = m_Registry.get<HierarchyComponent>(Entity).Parent;
         if (Parent != entt::null)
         {
-            if (!VerifyInternalEntity(Parent))
-                continue;
+            VERIFY_ENTITY(Parent);
 
             const DIRTY_FLAGS ParentFlags = m_Registry.get<DirtyStateComponent>(Parent).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
             if (ParentFlags != DIRTY_FLAG_NONE)
@@ -1389,8 +1362,7 @@ void RadientSceneState::UpdateDirtyEntities()
     // recompute can use cached parent world transform and effective visibility without doing an upward walk.
     for (const entt::entity Entity : DirtyRoots)
     {
-        if (!VerifyInternalEntity(Entity))
-            continue;
+        VERIFY_ENTITY(Entity);
 
         const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
         VERIFY(DirtyState.IsInDirtyList(), "Dirty root is not in the dirty list");
@@ -1415,8 +1387,7 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
 {
     InheritedFlags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
     Stack.clear();
@@ -1427,8 +1398,7 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
         const DirtyWorkItem Item = Stack.back();
         Stack.pop_back();
 
-        if (!VerifyInternalEntity(Item.Entity))
-            continue;
+        VERIFY_ENTITY(Item.Entity);
 
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Item.Entity);
         const DIRTY_FLAGS    Flags      = (DirtyState.Flags | Item.Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
@@ -1456,8 +1426,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
     if (Flags == DIRTY_FLAG_NONE)
         return;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     // If the scene has no pending dirtiness for the requested derived state, the cached value is valid and no
     // path walk is needed. m_DirtyFlags is conservative while the scene is dirty, so a set bit may cause extra
@@ -1472,8 +1441,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
     // root; it is consumed in reverse order so dirty ancestors are updated before their descendants.
     for (entt::entity Current = Entity; Current != entt::null;)
     {
-        if (!VerifyInternalEntity(Current))
-            break;
+        VERIFY_ENTITY(Current);
 
         Path.push_back(Current);
         Current = m_Registry.get<HierarchyComponent>(Current).Parent;
@@ -1528,16 +1496,14 @@ void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAG
     if (Flags == DIRTY_FLAG_NONE)
         return;
 
-    if (!VerifyInternalEntity(Entity))
-        return;
+    VERIFY_ENTITY(Entity);
 
     const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
 
     entt::entity Parent = Hierarchy.Parent;
     if (Parent != entt::null)
     {
-        if (!VerifyInternalEntity(Parent))
-            return;
+        VERIFY_ENTITY(Parent);
 
         // This low-level helper never walks the hierarchy. Both commit and lazy path repair must update parents
         // before calling it for a child.

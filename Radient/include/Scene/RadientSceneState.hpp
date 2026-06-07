@@ -314,7 +314,6 @@ private:
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
     bool         IsRenderableMeshEntity(entt::entity Entity) const;
     bool         IsRenderableLightEntity(entt::entity Entity) const;
-    bool         VerifyInternalEntity(entt::entity Entity) const;
     void         DetachFromParent(entt::entity Entity);
     CHANGE_FLAGS DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
