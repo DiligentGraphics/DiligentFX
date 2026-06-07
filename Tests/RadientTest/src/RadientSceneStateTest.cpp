@@ -86,6 +86,19 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
     EXPECT_EQ(Revisions.CustomComponents, CustomComponents);
 }
 
+void ExpectSceneRevisionDelta(const RadientSceneRevisions& Before,
+                              const RadientSceneRevisions& After,
+                              const RadientSceneRevisions& Delta)
+{
+    EXPECT_EQ(After.Drawables, Before.Drawables + Delta.Drawables);
+    EXPECT_EQ(After.Lights, Before.Lights + Delta.Lights);
+    EXPECT_EQ(After.Transforms, Before.Transforms + Delta.Transforms);
+    EXPECT_EQ(After.Visibility, Before.Visibility + Delta.Visibility);
+    EXPECT_EQ(After.Cameras, Before.Cameras + Delta.Cameras);
+    EXPECT_EQ(After.Environment, Before.Environment + Delta.Environment);
+    EXPECT_EQ(After.CustomComponents, Before.CustomComponents + Delta.CustomComponents);
+}
+
 RadientTransform MakeTranslation(float X, float Y, float Z)
 {
     RadientTransform Transform;
@@ -2925,7 +2938,8 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
 TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
 {
     // Parent changes and subtree destruction affect transform and visibility
-    // derived data, and destroying entities also removes renderable categories.
+    // derived data, but subtree destruction only touches component categories
+    // that were actually present in the removed subtree.
     RadientSceneState State;
 
     RadientEntityID Parent = InvalidRadientEntityID;
@@ -2939,16 +2953,109 @@ TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
     // Reparenting dirties child transform and visibility inheritance.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3);
 
-    RadientCustomComponentData CustomComponent;
-    CustomComponent.ComponentType = 101;
-    ASSERT_EQ(State.SetCustomComponentData(Child, CustomComponent), RADIENT_STATUS_OK);
-    // Custom data attached to a child is tracked independently of hierarchy.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3, 0, 0, 1);
-
     EXPECT_EQ(State.DestroyEntity(Parent), RADIENT_STATUS_OK);
-    // Destroying the parent removes the child subtree and advances all affected
-    // render data categories, including custom components removed from the subtree.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 1, 4, 4, 1, 0, 2);
+    // Destroying the transform-only subtree does not invalidate drawables,
+    // lights, cameras, environment, or custom components.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 4, 4);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityTouchesOnlyRemovedSubtreeComponentRevisions)
+{
+    // Destroying a transform-only entity should not over-invalidate renderer-side
+    // caches for drawables, lights, cameras, or custom components.
+    RadientSceneState State;
+
+    RadientEntityID TransformOnly = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, TransformOnly), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 1, 1);
+
+    EXPECT_EQ(State.DestroyEntity(TransformOnly), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityTouchesDrawableRevisionWhenDrawableIsRemoved)
+{
+    // Removing a drawable subtree should bump only drawable, transform, and visibility revisions.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://destroy-revisions")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    State.ClearRenderableMeshChanges();
+
+    const RadientSceneRevisions BeforeDestroy = State.GetSceneRevisions();
+    EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
+
+    RadientSceneRevisions ExpectedDelta{};
+    ExpectedDelta.Drawables  = 1;
+    ExpectedDelta.Transforms = 1;
+    ExpectedDelta.Visibility = 1;
+    ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityTouchesLightRevisionWhenLightIsRemoved)
+{
+    // Removing a light subtree should bump only light, transform, and visibility revisions.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetLight(Entity, {}), RADIENT_STATUS_OK);
+    State.ClearRenderableLightChanges();
+
+    const RadientSceneRevisions BeforeDestroy = State.GetSceneRevisions();
+    EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
+
+    RadientSceneRevisions ExpectedDelta{};
+    ExpectedDelta.Lights     = 1;
+    ExpectedDelta.Transforms = 1;
+    ExpectedDelta.Visibility = 1;
+    ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityTouchesCameraRevisionWhenCameraIsRemoved)
+{
+    // Removing a camera subtree should bump only camera, transform, and visibility revisions.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetCamera(Entity, {}), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions BeforeDestroy = State.GetSceneRevisions();
+    EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
+
+    RadientSceneRevisions ExpectedDelta{};
+    ExpectedDelta.Transforms = 1;
+    ExpectedDelta.Visibility = 1;
+    ExpectedDelta.Cameras    = 1;
+    ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityTouchesCustomRevisionWhenCustomComponentIsRemoved)
+{
+    // Removing a custom component subtree should bump only custom, transform, and visibility revisions.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    RadientCustomComponentData CustomComponent;
+    CustomComponent.ComponentType = 102;
+    ASSERT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions BeforeDestroy = State.GetSceneRevisions();
+    EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
+
+    RadientSceneRevisions ExpectedDelta{};
+    ExpectedDelta.Transforms       = 1;
+    ExpectedDelta.Visibility       = 1;
+    ExpectedDelta.CustomComponents = 1;
+    ExpectSceneRevisionDelta(BeforeDestroy, State.GetSceneRevisions(), ExpectedDelta);
 }
 
 } // namespace

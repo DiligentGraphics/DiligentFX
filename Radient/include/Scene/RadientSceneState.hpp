@@ -316,15 +316,15 @@ private:
     bool         IsRenderableLightEntity(entt::entity Entity) const;
     bool         VerifyInternalEntity(entt::entity Entity) const;
     void         DetachFromParent(entt::entity Entity);
-    void         DestroyEntitySubtree(entt::entity Entity);
+    CHANGE_FLAGS DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
     void         RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type);
     void         RecordRenderableMeshUpdated(entt::entity Entity);
-    void         RecordRenderableMeshRemoved(entt::entity Entity);
+    bool         RecordRenderableMeshRemoved(entt::entity Entity);
     void         UpdateRenderableMeshState(entt::entity Entity);
     void         RecordRenderableLightChange(entt::entity Entity, RenderableLightChangeType Type);
     void         RecordRenderableLightUpdated(entt::entity Entity);
-    void         RecordRenderableLightRemoved(entt::entity Entity);
+    bool         RecordRenderableLightRemoved(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList = true);
     void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState);

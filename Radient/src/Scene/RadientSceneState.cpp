@@ -439,10 +439,10 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
         return RADIENT_STATUS_NOT_FOUND;
 
     DetachFromParent(E);
-    DestroyEntitySubtree(E);
+    const CHANGE_FLAGS ChangeFlags = DestroyEntitySubtree(E);
     if (m_DirtyEntities.empty())
         m_DirtyFlags = DIRTY_FLAG_NONE;
-    Touch(CHANGE_FLAG_DRAWABLES | CHANGE_FLAG_LIGHTS | CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY | CHANGE_FLAG_CAMERAS | CHANGE_FLAG_CUSTOM_COMPONENTS);
+    Touch(ChangeFlags);
     return RADIENT_STATUS_OK;
 }
 
@@ -963,10 +963,12 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
     Hierarchy.Parent = entt::null;
 }
 
-void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
+RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
 {
     if (!VerifyInternalEntity(Entity))
-        return;
+        return CHANGE_FLAG_NONE;
+
+    CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE;
 
     std::vector<DestroyWorkItem>& Stack = m_TmpDestroyStack;
     Stack.clear();
@@ -993,8 +995,16 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
         const entt::entity Current = Item.Entity;
         Stack.pop_back();
 
-        RecordRenderableMeshRemoved(Current);
-        RecordRenderableLightRemoved(Current);
+        ChangeFlags |= CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY;
+        if (RecordRenderableMeshRemoved(Current))
+            ChangeFlags |= CHANGE_FLAG_DRAWABLES;
+        if (RecordRenderableLightRemoved(Current))
+            ChangeFlags |= CHANGE_FLAG_LIGHTS;
+        if (m_Registry.all_of<RadientCameraComponent>(Current))
+            ChangeFlags |= CHANGE_FLAG_CAMERAS;
+        if (m_Registry.all_of<CustomComponentIndexComponent>(Current))
+            ChangeFlags |= CHANGE_FLAG_CUSTOM_COMPONENTS;
+
         RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
         RemoveFromDirtyList(Current, DirtyState);
@@ -1003,6 +1013,7 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
     }
 
     Stack.clear();
+    return ChangeFlags;
 }
 
 void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
@@ -1069,10 +1080,10 @@ void RadientSceneState::RecordRenderableMeshUpdated(entt::entity Entity)
         RecordRenderableMeshChange(Entity, RenderableMeshChangeType::Updated);
 }
 
-void RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
+bool RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
 {
     if (!VerifyInternalEntity(Entity))
-        return;
+        return false;
 
     RenderableMeshStateComponent&         RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
     PendingRenderableMeshChangeComponent* pPendingChange  = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
@@ -1090,6 +1101,7 @@ void RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
         m_Registry.remove<PendingRenderableMeshChangeComponent>(Entity);
 
     RenderableState.IsRenderable = false;
+    return NeedsRemovedChange;
 }
 
 void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
@@ -1152,10 +1164,10 @@ void RadientSceneState::RecordRenderableLightUpdated(entt::entity Entity)
         RecordRenderableLightChange(Entity, RenderableLightChangeType::Updated);
 }
 
-void RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
+bool RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
 {
     if (!VerifyInternalEntity(Entity))
-        return;
+        return false;
 
     PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
     const bool                             WasAddedThisFrame =
@@ -1170,6 +1182,8 @@ void RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
 
     if (pPendingChange != nullptr)
         m_Registry.remove<PendingRenderableLightChangeComponent>(Entity);
+
+    return NeedsRemovedChange;
 }
 
 RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList)
