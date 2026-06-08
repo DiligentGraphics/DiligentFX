@@ -487,6 +487,32 @@ TEST(RadientSceneStateTest, IsEntityAlive)
     EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
 }
 
+TEST(RadientSceneStateTest, CreateEntityRejectsMissingParent)
+{
+    // Entity creation should fail when the requested parent ID does not map to
+    // an alive scene entity, and it should not allocate a new public ID.
+    RadientSceneState State;
+
+    RadientEntityDesc Desc;
+    Desc.Parent = 123;
+
+    RadientEntityID Entity = 456;
+    EXPECT_EQ(State.CreateEntity(Desc, Entity), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Entity, InvalidRadientEntityID);
+    EXPECT_EQ(State.IsEntityAlive(123), RADIENT_STATUS_NOT_FOUND);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityRejectsMissingEntity)
+{
+    // Destroying an unknown public ID should report not found and leave scene
+    // revisions unchanged.
+    RadientSceneState State;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.DestroyEntity(123), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
 TEST(RadientSceneStateTest, DestroyEntityHandlesDeepHierarchy)
 {
     // Destroys a 1000-node chain to verify subtree destruction is robust for
@@ -562,6 +588,17 @@ TEST(RadientSceneStateTest, GetEntityFlags)
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_NONE);
 }
 
+TEST(RadientSceneStateTest, SetEntityFlagsRejectsMissingEntity)
+{
+    // Updating flags on an unknown public ID should report not found and leave
+    // scene revisions unchanged.
+    RadientSceneState State;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetEntityFlags(123, RADIENT_ENTITY_FLAG_NONE), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
 TEST(RadientSceneStateTest, GetEntityOwnVisibility)
 {
     // Own visibility is derived directly from entity flags and should not be
@@ -604,6 +641,17 @@ TEST(RadientSceneStateTest, GetEntityOwnVisibility)
     // Destroyed entities should report not found and reset output visibility.
     EXPECT_EQ(State.GetEntityOwnVisibility(HiddenEntity, Visible), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Visible, False);
+}
+
+TEST(RadientSceneStateTest, SetEntityOwnVisibilityRejectsMissingEntity)
+{
+    // Updating visibility on an unknown public ID should report not found and
+    // leave scene revisions unchanged.
+    RadientSceneState State;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetEntityOwnVisibility(123, False), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 }
 
 TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
@@ -797,6 +845,148 @@ TEST(RadientSceneStateTest, GetParent)
     // Destroying Root also destroys Child because it was reattached under Root.
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
+}
+
+TEST(RadientSceneStateTest, SetParentRejectsMissingEntity)
+{
+    // Reparenting an unknown public ID should report not found and leave scene
+    // revisions unchanged.
+    RadientSceneState State;
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetParent(123, Parent, True), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetParentRejectsMissingParent)
+{
+    // Reparenting a valid entity under an unknown parent should fail without
+    // changing the existing hierarchy or scene revisions.
+    RadientSceneState State;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Child), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetParent(Child, 123, True), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+
+    RadientEntityID Parent = Child;
+    EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, InvalidRadientEntityID);
+}
+
+TEST(RadientSceneStateTest, SetLocalTransformRejectsMissingEntity)
+{
+    // Transform updates for an unknown entity should report not found and leave
+    // scene revisions unchanged.
+    RadientSceneState State;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetLocalTransform(123, MakeTranslation(1.f, 2.f, 3.f)), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetCameraRejectsMissingEntity)
+{
+    // Camera updates validate the entity before storing the component.
+    RadientSceneState State;
+
+    RadientCameraComponent Camera;
+    Camera.FocalLength = 35.f;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetCamera(123, Camera), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetMeshRejectsMissingEntity)
+{
+    // Mesh updates should reject unknown entities without touching drawable
+    // revisions.
+    RadientSceneState State;
+    TestMeshComponent Mesh = MakeMeshComponent("mesh://missing-entity");
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMesh(123, Mesh), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetMeshRendererRejectsMissingEntity)
+{
+    // Mesh renderer updates should reject unknown entities before modifying
+    // drawable state.
+    RadientSceneState State;
+
+    RadientMeshRendererComponent Renderer;
+    Renderer.VisibilityMask = 7;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMeshRenderer(123, Renderer), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetMaterialBindingsRejectsMissingEntity)
+{
+    // Material binding updates should reject unknown entities before copying
+    // binding data.
+    RadientSceneState   State;
+    TestMaterialBinding MaterialBinding = MakeMaterialBinding(0, "material://missing-entity");
+
+    RadientMaterialBindingsComponent MaterialBindings;
+    MaterialBindings.pBindings    = &MaterialBinding.Binding;
+    MaterialBindings.BindingCount = 1;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMaterialBindings(123, MaterialBindings), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetLightRejectsMissingEntity)
+{
+    // Light updates should reject unknown entities without touching light
+    // revisions.
+    RadientSceneState State;
+
+    RadientLightComponent Light;
+    Light.Intensity = 4.f;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetLight(123, Light), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, SetCustomComponentDataRejectsMissingEntity)
+{
+    // Custom component updates should reject unknown entities before copying
+    // custom payload data.
+    RadientSceneState State;
+
+    static constexpr RadientComponentTypeID CustomComponentType = 100;
+    Uint32                                  CustomValue         = 42;
+    RadientCustomComponentData              CustomComponent;
+    CustomComponent.ComponentType = CustomComponentType;
+    CustomComponent.Name          = "MissingEntityComponent";
+    CustomComponent.pData         = &CustomValue;
+    CustomComponent.DataSize      = sizeof(CustomValue);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetCustomComponentData(123, CustomComponent), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientSceneStateTest, RemoveComponentRejectsMissingEntity)
+{
+    // Removing a component from an unknown entity should report not found and
+    // leave all revision counters untouched.
+    RadientSceneState State;
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.RemoveComponent(123, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 }
 
 TEST(RadientSceneStateTest, SetParentRejectsCycles)

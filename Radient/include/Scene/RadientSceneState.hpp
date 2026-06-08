@@ -124,20 +124,21 @@ public:
 
     const RadientSceneDesc& GetDesc() const;
 
-    RADIENT_STATUS                IsEntityAlive(RadientEntityID Entity) const;
-    RADIENT_STATUS                GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
-    RADIENT_STATUS                GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS                GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
-    RADIENT_STATUS                GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS                GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
-    RADIENT_STATUS                GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
-    RADIENT_STATUS                GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
-    RADIENT_STATUS                GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
-    RADIENT_STATUS                GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
-    RADIENT_STATUS                GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
-    RADIENT_STATUS                GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    RADIENT_STATUS IsEntityAlive(RadientEntityID Entity) const;
+    RADIENT_STATUS GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
+    RADIENT_STATUS GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
+    RADIENT_STATUS GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
+    RADIENT_STATUS GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
+    RADIENT_STATUS GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
+    RADIENT_STATUS GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
+    RADIENT_STATUS GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
+    RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
+    RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
+
     const RadientEnvironmentDesc& GetEnvironment() const;
-    RADIENT_STATUS                HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
     const RadientSceneRevisions&    GetSceneRevisions() const;
     const RenderableChangeLogState& GetRenderableChangeLogState() const;
@@ -145,15 +146,19 @@ public:
     // Callback receives RenderableMesh by value, but its members reference registry-owned component data.
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
+
     // The renderable mesh pointer is valid only during the callback and is null for removed renderables.
     template <typename CallbackType>
     void EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
+
     // Callback receives RenderableLight by value, but its members reference registry-owned component data.
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
+
     // The renderable light pointer is valid only during the callback and is null for removed lights.
     template <typename CallbackType>
     void EnumerateRenderableLightChanges(CallbackType&& Callback) const;
+
     void ClearRenderableChanges();
     void ClearRenderableMeshChanges();
     void ClearRenderableLightChanges();
@@ -311,12 +316,14 @@ private:
     RenderableLight MakeRenderableLight(entt::entity Entity, const ComponentSourceType& ComponentSource) const;
 
     entt::entity FindEntity(RadientEntityID Entity) const;
-    bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
-    bool         IsRenderableMeshEntity(entt::entity Entity) const;
-    bool         IsRenderableLightEntity(entt::entity Entity) const;
+
+    bool IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
+    bool IsRenderableMeshEntity(entt::entity Entity) const;
+    bool IsRenderableLightEntity(entt::entity Entity) const;
+
     void         DetachFromParent(entt::entity Entity);
     CHANGE_FLAGS DestroyEntitySubtree(entt::entity Entity);
-    void         RemoveCustomComponents(entt::entity Entity);
+    bool         RemoveCustomComponents(entt::entity Entity);
     void         RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type);
     void         RecordRenderableMeshUpdated(entt::entity Entity);
     bool         RecordRenderableMeshRemoved(entt::entity Entity);

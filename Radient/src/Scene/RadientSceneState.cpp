@@ -79,8 +79,8 @@ bool IsValidLightType(RADIENT_LIGHT_TYPE Type)
 
 bool IsValidCameraProjection(RADIENT_CAMERA_PROJECTION Projection)
 {
-    return Projection == RADIENT_CAMERA_PROJECTION_PERSPECTIVE ||
-        Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC;
+    return (Projection == RADIENT_CAMERA_PROJECTION_PERSPECTIVE ||
+            Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
 }
 
 bool IsFinite(Float32 Value)
@@ -100,45 +100,45 @@ bool IsFiniteNonNegative(Float32 Value)
 
 bool IsFiniteNonNegative(const RadientFloat3& Value)
 {
-    return IsFiniteNonNegative(Value.x) &&
-        IsFiniteNonNegative(Value.y) &&
-        IsFiniteNonNegative(Value.z);
+    return (IsFiniteNonNegative(Value.x) &&
+            IsFiniteNonNegative(Value.y) &&
+            IsFiniteNonNegative(Value.z));
 }
 
 bool IsValidCameraComponent(const RadientCameraComponent& Camera)
 {
-    return IsValidCameraProjection(Camera.Projection) &&
-        IsFinitePositive(Camera.HorizontalAperture) &&
-        IsFinitePositive(Camera.VerticalAperture) &&
-        IsFinite(Camera.HorizontalApertureOffset) &&
-        IsFinite(Camera.VerticalApertureOffset) &&
-        IsFinitePositive(Camera.FocalLength) &&
-        IsFinitePositive(Camera.ClippingRange.x) &&
-        IsFinite(Camera.ClippingRange.y) &&
-        Camera.ClippingRange.y > Camera.ClippingRange.x &&
-        IsFiniteNonNegative(Camera.FStop) &&
-        IsFiniteNonNegative(Camera.FocusDistance);
+    return (IsValidCameraProjection(Camera.Projection) &&
+            IsFinitePositive(Camera.HorizontalAperture) &&
+            IsFinitePositive(Camera.VerticalAperture) &&
+            IsFinite(Camera.HorizontalApertureOffset) &&
+            IsFinite(Camera.VerticalApertureOffset) &&
+            IsFinitePositive(Camera.FocalLength) &&
+            IsFinitePositive(Camera.ClippingRange.x) &&
+            IsFinite(Camera.ClippingRange.y) &&
+            Camera.ClippingRange.y > Camera.ClippingRange.x &&
+            IsFiniteNonNegative(Camera.FStop) &&
+            IsFiniteNonNegative(Camera.FocusDistance));
 }
 
 bool IsValidLightComponent(const RadientLightComponent& Light)
 {
     static constexpr Float32 MaxSpotConeAngle = 1.5707963267948966f;
 
-    return IsValidLightType(Light.Type) &&
-        IsFiniteNonNegative(Light.Color) &&
-        IsFiniteNonNegative(Light.Intensity) &&
-        IsFiniteNonNegative(Light.Range) &&
-        IsFinite(Light.Exposure) &&
-        IsFiniteNonNegative(Light.Diffuse) &&
-        IsFiniteNonNegative(Light.Specular) &&
-        IsFinitePositive(Light.ColorTemperature) &&
-        IsFiniteNonNegative(Light.Radius) &&
-        IsFiniteNonNegative(Light.Angle) &&
-        IsFiniteNonNegative(Light.InnerConeAngle) &&
-        IsFinite(Light.OuterConeAngle) &&
-        Light.OuterConeAngle >= Light.InnerConeAngle &&
-        Light.OuterConeAngle <= MaxSpotConeAngle &&
-        IsFinite(Light.ShapingFocus);
+    return (IsValidLightType(Light.Type) &&
+            IsFiniteNonNegative(Light.Color) &&
+            IsFiniteNonNegative(Light.Intensity) &&
+            IsFiniteNonNegative(Light.Range) &&
+            IsFinite(Light.Exposure) &&
+            IsFiniteNonNegative(Light.Diffuse) &&
+            IsFiniteNonNegative(Light.Specular) &&
+            IsFinitePositive(Light.ColorTemperature) &&
+            IsFiniteNonNegative(Light.Radius) &&
+            IsFiniteNonNegative(Light.Angle) &&
+            IsFiniteNonNegative(Light.InnerConeAngle) &&
+            IsFinite(Light.OuterConeAngle) &&
+            Light.OuterConeAngle >= Light.InnerConeAngle &&
+            Light.OuterConeAngle <= MaxSpotConeAngle &&
+            IsFinite(Light.ShapingFocus));
 }
 
 bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
@@ -904,7 +904,8 @@ entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
     if (It == m_EntityMap.end())
         return entt::null;
 
-    return m_Registry.valid(It->second) ? It->second : entt::null;
+    VERIFY_ENTITY(It->second);
+    return It->second;
 }
 
 bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const
@@ -1019,13 +1020,11 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
             ChangeFlags |= CHANGE_FLAG_CAMERAS;
         }
 
-        if ((ChangeFlags & CHANGE_FLAG_CUSTOM_COMPONENTS) == CHANGE_FLAG_NONE &&
-            m_Registry.all_of<CustomComponentIndexComponent>(Current))
+        if (RemoveCustomComponents(Current))
         {
             ChangeFlags |= CHANGE_FLAG_CUSTOM_COMPONENTS;
         }
 
-        RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
         RemoveFromDirtyList(Current, DirtyState);
         m_EntityMap.erase(m_Registry.get<EntityComponent>(Current).ID);
@@ -1036,13 +1035,13 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
     return ChangeFlags;
 }
 
-void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
+bool RadientSceneState::RemoveCustomComponents(entt::entity Entity)
 {
     VERIFY_ENTITY(Entity);
 
     CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(Entity);
     if (pIndex == nullptr)
-        return;
+        return false;
 
     for (const RadientComponentTypeID ComponentType : pIndex->ComponentTypes)
     {
@@ -1056,6 +1055,7 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
     }
 
     m_Registry.remove<CustomComponentIndexComponent>(Entity);
+    return true;
 }
 
 void RadientSceneState::RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type)
@@ -1103,8 +1103,8 @@ bool RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
 
     RenderableMeshStateComponent&         RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
     PendingRenderableMeshChangeComponent* pPendingChange  = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
-    const bool                            WasAddedThisFrame =
-        pPendingChange != nullptr && pPendingChange->Type == RenderableMeshChangeType::Added;
+
+    const bool WasAddedThisFrame  = pPendingChange != nullptr && pPendingChange->Type == RenderableMeshChangeType::Added;
     const bool NeedsRemovedChange = RenderableState.IsRenderable || pPendingChange != nullptr;
 
     if (NeedsRemovedChange && !WasAddedThisFrame)
@@ -1125,8 +1125,9 @@ void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
     VERIFY_ENTITY(Entity);
 
     RenderableMeshStateComponent& RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
-    const bool                    WasRenderable   = RenderableState.IsRenderable;
-    const bool                    IsRenderable    = IsRenderableMeshEntity(Entity);
+
+    const bool WasRenderable = RenderableState.IsRenderable;
+    const bool IsRenderable  = IsRenderableMeshEntity(Entity);
 
     if (WasRenderable == IsRenderable)
     {
@@ -1182,8 +1183,8 @@ bool RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
     VERIFY_ENTITY(Entity);
 
     PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
-    const bool                             WasAddedThisFrame =
-        pPendingChange != nullptr && pPendingChange->Type == RenderableLightChangeType::Added;
+
+    const bool WasAddedThisFrame  = pPendingChange != nullptr && pPendingChange->Type == RenderableLightChangeType::Added;
     const bool NeedsRemovedChange = m_Registry.all_of<RadientLightComponent>(Entity) || pPendingChange != nullptr;
 
     if (NeedsRemovedChange && !WasAddedThisFrame)
