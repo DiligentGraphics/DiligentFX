@@ -68,13 +68,16 @@ bool MaterialBindingsStorage::Equals(const RadientMaterialBindingsComponent& Rhs
 void MaterialBindingsStorage::Assign(const RadientMaterialBindingsComponent& Rhs)
 {
     Component = Rhs;
-    Bindings  = {};
-    Materials = {};
+
+    Bindings.clear();
+    Materials.clear();
+
+    Bindings.reserve(Rhs.BindingCount);
+    Materials.reserve(Rhs.BindingCount);
 
     if (Rhs.BindingCount != 0)
     {
         Bindings.assign(Rhs.pBindings, Rhs.pBindings + Rhs.BindingCount);
-        Materials.reserve(Rhs.BindingCount);
         for (Uint32 BindingIndex = 0; BindingIndex < Rhs.BindingCount; ++BindingIndex)
         {
             Materials.emplace_back(Rhs.pBindings[BindingIndex].pMaterial);
