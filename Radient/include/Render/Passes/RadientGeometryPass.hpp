@@ -71,13 +71,15 @@ class RadientGeometryRenderer
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
+
     RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
                               IDeviceContext*                  pContext,
                               const RadientLightLists&         LightList,
                               GLTF::ResourceManager*           pResourceManager,
                               const RadientViewDesc&           ViewDesc,
                               const RadientFrameRenderTargets& Targets);
-    void           EndFrame();
+
+    void EndFrame();
 
     PBR_Renderer*           GetRenderer() const { return m_pRenderer.get(); }
     IBuffer*                GetFrameAttribsCB() const { return m_pFrameAttribsCB; }
@@ -91,7 +93,8 @@ private:
     RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
                                   IDeviceContext* pContext);
 
-    void           InitializeResourceCacheUseInfo();
+    void InitializeResourceCacheUseInfo();
+
     RADIENT_STATUS UpdateEnvironment(IDeviceContext*               pContext,
                                      const RadientEnvironmentDesc& Environment);
 

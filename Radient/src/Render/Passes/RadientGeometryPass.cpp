@@ -157,18 +157,19 @@ RadientCameraComponent GetCameraComponent(const RadientViewDesc& ViewDesc)
     return Camera;
 }
 
-HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
-                                     const RadientViewDesc&           ViewDesc,
-                                     const RadientFrameRenderTargets& Targets,
-                                     Uint32                           FrameIndex)
+void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
+                              const RadientViewDesc&           ViewDesc,
+                              const RadientFrameRenderTargets& Targets,
+                              Uint32                           FrameIndex,
+                              HLSL::CameraAttribs&             CameraAttribs)
 {
-    const RadientCameraComponent Camera = GetCameraComponent(ViewDesc);
+    const RadientCameraComponent Camera     = GetCameraComponent(ViewDesc);
+    const RadientExtent2D&       TargetSize = Targets.GetSize();
 
-    const RadientExtent2D& TargetSize       = Targets.GetSize();
-    const float            Width            = static_cast<float>(TargetSize.Width);
-    const float            Height           = static_cast<float>(TargetSize.Height);
-    const float            Aspect           = Height > 0.f ? Width / Height : 1.f;
-    const bool             NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
+    const float Width            = static_cast<float>(TargetSize.Width);
+    const float Height           = static_cast<float>(TargetSize.Height);
+    const float Aspect           = Height > 0.f ? Width / Height : 1.f;
+    const bool  NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
 
     float4x4 CameraWorld = float4x4::Identity();
     if (ViewDesc.pScene != nullptr && ViewDesc.Camera != InvalidRadientEntityID)
@@ -182,7 +183,6 @@ HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
     const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
     const float4x4                      CameraViewInv  = CameraWorld;
 
-    HLSL::CameraAttribs CameraAttribs{};
     CameraAttribs.f4ViewportSize = float4{Width, Height, Width > 0.f ? 1.f / Width : 0.f, Height > 0.f ? 1.f / Height : 0.f};
     CameraAttribs.SetClipPlanes(CameraProj.NearPlaneZ, CameraProj.FarPlaneZ);
     CameraAttribs.fSceneNearZ     = CameraAttribs.fNearPlaneZ;
@@ -203,8 +203,6 @@ HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
     CameraAttribs.mProjInv        = CameraProj.Matrix.Inverse();
     CameraAttribs.mViewProjInv    = CameraViewProj.Inverse();
     CameraAttribs.f4Position      = float4{float3::MakeVector(CameraWorld[3]), 1.f};
-
-    return CameraAttribs;
 }
 
 PBR_Renderer::LIGHT_TYPE GetPBRLightType(RADIENT_LIGHT_TYPE Type)
@@ -824,8 +822,8 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        pFrameAttribs->Camera     = GetCameraAttribs(pDevice, ViewDesc, Targets, m_FrameIndex);
-        pFrameAttribs->PrevCamera = pFrameAttribs->Camera;
+        WriteCameraShaderAttribs(pDevice, ViewDesc, Targets, m_FrameIndex, pFrameAttribs->Camera);
+        WriteCameraShaderAttribs(pDevice, ViewDesc, Targets, m_FrameIndex, pFrameAttribs->PrevCamera);
         WriteSceneLights(*m_pRenderer, LightList, Environment, m_pPrefilteredEnvMapSRV, *pFrameAttribs);
     }
 
@@ -1079,8 +1077,7 @@ void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    
             continue;
         }
 
-        const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(Change.DrawableID);
-        if (pDrawable != nullptr)
+        if (const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(Change.DrawableID))
             UpdateDrawablePassData(Renderer, *pDrawable, Change.DrawableID);
         else
             InvalidateDrawablePassData(Change.DrawableID);
