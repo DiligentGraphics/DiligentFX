@@ -30,7 +30,6 @@
 #include "Math/RadientMath.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -83,27 +82,9 @@ bool IsValidCameraProjection(RADIENT_CAMERA_PROJECTION Projection)
             Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
 }
 
-bool IsFinite(Float32 Value)
-{
-    return std::isfinite(Value);
-}
-
-bool IsFinitePositive(Float32 Value)
-{
-    return IsFinite(Value) && Value > 0.f;
-}
-
-bool IsFiniteNonNegative(Float32 Value)
-{
-    return IsFinite(Value) && Value >= 0.f;
-}
-
-bool IsFiniteNonNegative(const RadientFloat3& Value)
-{
-    return (IsFiniteNonNegative(Value.x) &&
-            IsFiniteNonNegative(Value.y) &&
-            IsFiniteNonNegative(Value.z));
-}
+using RadientMath::IsFinite;
+using RadientMath::IsFiniteNonNegative;
+using RadientMath::IsFinitePositive;
 
 bool IsValidCameraComponent(const RadientCameraComponent& Camera)
 {

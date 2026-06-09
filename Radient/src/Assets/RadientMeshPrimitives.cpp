@@ -26,6 +26,8 @@
 
 #include "RadientMeshPrimitives.h"
 
+#include "Math/RadientMath.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -45,11 +47,6 @@ struct MeshBuilder
     std::vector<RadientFloat2> TexCoords0;
     std::vector<Uint32>        Indices;
 };
-
-bool IsFinitePositive(Float32 Value)
-{
-    return std::isfinite(Value) && Value > 0.f;
-}
 
 RadientFloat3 Add(const RadientFloat3& Lhs, const RadientFloat3& Rhs)
 {
@@ -277,7 +274,7 @@ RADIENT_STATUS CreateRadientCubeMesh(IRadientAssetManager*            pAssetMana
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppMesh = nullptr;
 
-    if (!IsFinitePositive(MeshCI.Size))
+    if (!RadientMath::IsFinitePositive(MeshCI.Size))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const Uint32      Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
@@ -293,7 +290,7 @@ RADIENT_STATUS CreateRadientSphereMesh(IRadientAssetManager*              pAsset
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppMesh = nullptr;
 
-    if (!IsFinitePositive(MeshCI.Radius))
+    if (!RadientMath::IsFinitePositive(MeshCI.Radius))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const Uint32      Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;

@@ -30,6 +30,8 @@
 #include "RadientScene.h"
 #include "BasicMath.hpp"
 
+#include <cmath>
+
 namespace Diligent
 {
 
@@ -49,6 +51,51 @@ inline constexpr float3 ToFloat3(const RadientFloat3& Value)
 inline constexpr float4 ToFloat4(const RadientFloat4& Value)
 {
     return float4{Value.x, Value.y, Value.z, Value.w};
+}
+
+inline bool IsFinite(Float32 Value)
+{
+    return std::isfinite(Value);
+}
+
+inline bool IsFinite(const RadientFloat2& Value)
+{
+    return IsFinite(Value.x) && IsFinite(Value.y);
+}
+
+inline bool IsFinite(const RadientFloat3& Value)
+{
+    return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z);
+}
+
+inline bool IsFinite(const RadientFloat4& Value)
+{
+    return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z) && IsFinite(Value.w);
+}
+
+inline bool IsFinitePositive(Float32 Value)
+{
+    return IsFinite(Value) && Value > 0.f;
+}
+
+inline bool IsFiniteNonNegative(Float32 Value)
+{
+    return IsFinite(Value) && Value >= 0.f;
+}
+
+inline bool IsFiniteNonNegative(const RadientFloat2& Value)
+{
+    return IsFiniteNonNegative(Value.x) && IsFiniteNonNegative(Value.y);
+}
+
+inline bool IsFiniteNonNegative(const RadientFloat3& Value)
+{
+    return IsFiniteNonNegative(Value.x) && IsFiniteNonNegative(Value.y) && IsFiniteNonNegative(Value.z);
+}
+
+inline bool IsFiniteNonNegative(const RadientFloat4& Value)
+{
+    return IsFiniteNonNegative(Value.x) && IsFiniteNonNegative(Value.y) && IsFiniteNonNegative(Value.z) && IsFiniteNonNegative(Value.w);
 }
 
 inline QuaternionF ToQuaternion(const RadientQuaternion& Value)
