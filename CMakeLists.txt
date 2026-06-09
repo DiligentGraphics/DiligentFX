@@ -7,6 +7,8 @@ if(NOT DILIGENT_TOOLS_FOUND)
 	message(FATAL_ERROR "DiligentTools module is not found. Please add DiligentTools module to the project before DiligentFX module.")
 endif()
 
+option(DILIGENT_NO_RADIENT "Do not build Radient" OFF)
+
 set(DILIGENT_FX_FOUND TRUE CACHE INTERNAL "DiligentFX module is found")
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -63,7 +65,9 @@ add_subdirectory(Utilities)
 add_subdirectory(Components)
 add_subdirectory(PostProcess)
 add_subdirectory(PBR)
-add_subdirectory(Radient)
+if (NOT DILIGENT_NO_RADIENT)
+    add_subdirectory(Radient)
+endif()
 
 if(DILIGENT_USD_PATH)
     add_subdirectory(Hydrogent)
