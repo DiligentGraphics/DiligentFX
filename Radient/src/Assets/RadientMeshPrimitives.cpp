@@ -48,30 +48,6 @@ struct MeshBuilder
     std::vector<Uint32>        Indices;
 };
 
-RadientFloat3 Add(const RadientFloat3& Lhs, const RadientFloat3& Rhs)
-{
-    return RadientFloat3{Lhs.x + Rhs.x, Lhs.y + Rhs.y, Lhs.z + Rhs.z};
-}
-
-RadientFloat3 Mul(const RadientFloat3& Value, Float32 Scale)
-{
-    return RadientFloat3{Value.x * Scale, Value.y * Scale, Value.z * Scale};
-}
-
-Float32 LengthSq(const RadientFloat3& Value)
-{
-    return Value.x * Value.x + Value.y * Value.y + Value.z * Value.z;
-}
-
-RadientFloat3 Normalize(const RadientFloat3& Value)
-{
-    const Float32 LenSq = LengthSq(Value);
-    if (LenSq <= 0.f)
-        return {};
-
-    return Mul(Value, 1.f / std::sqrt(LenSq));
-}
-
 Float32 Clamp(Float32 Value, Float32 MinValue, Float32 MaxValue)
 {
     return Value < MinValue ? MinValue : (Value > MaxValue ? MaxValue : Value);
@@ -157,9 +133,9 @@ void AddCubeFace(MeshBuilder&         Mesh,
         {
             const Float32 U = static_cast<Float32>(X) / static_cast<Float32>(Subdivisions);
 
-            RadientFloat3 Position = Mul(Normal, HalfSize);
-            Position               = Add(Position, Mul(Tangent, (U - 0.5f) * Size));
-            Position               = Add(Position, Mul(Bitangent, (V - 0.5f) * Size));
+            RadientFloat3 Position = Normal * HalfSize;
+            Position               = Position + Tangent * ((U - 0.5f) * Size);
+            Position               = Position + Bitangent * ((V - 0.5f) * Size);
 
             Mesh.Positions.push_back(Position);
             Mesh.Normals.push_back(Normal);
@@ -207,8 +183,8 @@ MeshBuilder CreateSphere(Float32 Radius, Uint32 Subdivisions)
 
     for (size_t Vertex = 0; Vertex < Mesh.Positions.size(); ++Vertex)
     {
-        const RadientFloat3 Normal = Normalize(Mesh.Positions[Vertex]);
-        Mesh.Positions[Vertex]     = Mul(Normal, Radius);
+        const RadientFloat3 Normal = RadientMath::Normalize(Mesh.Positions[Vertex]);
+        Mesh.Positions[Vertex]     = Normal * Radius;
         Mesh.Normals[Vertex]       = Normal;
         Mesh.TexCoords0[Vertex]    = GetSphericalTexCoord(Normal);
     }

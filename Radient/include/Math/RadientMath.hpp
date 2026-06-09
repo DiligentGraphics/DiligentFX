@@ -35,6 +35,26 @@
 namespace Diligent
 {
 
+constexpr RadientFloat3 operator+(const RadientFloat3& Lhs, const RadientFloat3& Rhs)
+{
+    return RadientFloat3{Lhs.x + Rhs.x, Lhs.y + Rhs.y, Lhs.z + Rhs.z};
+}
+
+constexpr RadientFloat3 operator-(const RadientFloat3& Lhs, const RadientFloat3& Rhs)
+{
+    return RadientFloat3{Lhs.x - Rhs.x, Lhs.y - Rhs.y, Lhs.z - Rhs.z};
+}
+
+constexpr RadientFloat3 operator*(const RadientFloat3& Value, Float32 Scale)
+{
+    return RadientFloat3{Value.x * Scale, Value.y * Scale, Value.z * Scale};
+}
+
+constexpr RadientFloat3 operator*(Float32 Scale, const RadientFloat3& Value)
+{
+    return RadientFloat3{Value.x * Scale, Value.y * Scale, Value.z * Scale};
+}
+
 namespace RadientMath
 {
 
@@ -96,6 +116,20 @@ inline bool IsFiniteNonNegative(const RadientFloat3& Value)
 inline bool IsFiniteNonNegative(const RadientFloat4& Value)
 {
     return IsFiniteNonNegative(Value.x) && IsFiniteNonNegative(Value.y) && IsFiniteNonNegative(Value.z) && IsFiniteNonNegative(Value.w);
+}
+
+inline constexpr Float32 LengthSq(const RadientFloat3& Value)
+{
+    return Value.x * Value.x + Value.y * Value.y + Value.z * Value.z;
+}
+
+inline RadientFloat3 Normalize(const RadientFloat3& Value)
+{
+    const Float32 LenSq = LengthSq(Value);
+    if (LenSq <= 0.f)
+        return {};
+
+    return Value * (1.f / std::sqrt(LenSq));
 }
 
 inline QuaternionF ToQuaternion(const RadientQuaternion& Value)
