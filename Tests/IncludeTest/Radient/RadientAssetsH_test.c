@@ -30,8 +30,6 @@ void RadientAssets_C_UseTypes(void)
 {
     RadientAssetManagerDesc        AssetManagerDesc = {0};
     RadientAssetManagerCreateInfo  AssetManagerCI   = {0};
-    RadientVertexBufferCreateInfo  VertexBuffer     = {0};
-    RadientIndexBufferCreateInfo   IndexBuffer      = {0};
     RadientMeshPrimitiveCreateInfo Primitive        = {0};
     RadientMeshCreateInfo          MeshCI           = {0};
     RadientMaterialCreateInfo      MaterialCI       = {0};
@@ -45,8 +43,6 @@ void RadientAssets_C_UseTypes(void)
 
     (void)AssetManagerDesc;
     (void)AssetManagerCI;
-    (void)VertexBuffer;
-    (void)IndexBuffer;
     (void)Primitive;
     (void)MeshCI;
     (void)MaterialCI;

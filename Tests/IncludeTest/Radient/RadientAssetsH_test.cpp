@@ -42,14 +42,10 @@ static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 
 
 void RadientAssets_CPP_UseMeshCreateInfo()
 {
-    RadientVertexBufferCreateInfo  VertexBuffer;
-    RadientIndexBufferCreateInfo   IndexBuffer;
     RadientMeshPrimitiveCreateInfo Primitive;
     RadientMeshCreateInfo          MeshCI;
     RadientGLTFLoadInfo            GLTFLoadInfo;
 
-    (void)VertexBuffer;
-    (void)IndexBuffer;
     (void)Primitive;
     (void)MeshCI;
     (void)GLTFLoadInfo;

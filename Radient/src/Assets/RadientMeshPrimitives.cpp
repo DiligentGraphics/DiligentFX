@@ -210,32 +210,23 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    RadientVertexBufferCreateInfo VertexBufferCI{};
-    VertexBufferCI.Name        = Name;
-    VertexBufferCI.pPositions  = Mesh.Positions.data();
-    VertexBufferCI.pNormals    = Mesh.Normals.data();
-    VertexBufferCI.pTexCoords0 = Mesh.TexCoords0.data();
-    VertexBufferCI.VertexCount = static_cast<Uint32>(Mesh.Positions.size());
-
-    RadientIndexBufferCreateInfo IndexBufferCI{};
-    IndexBufferCI.pIndices   = Mesh.Indices.data();
-    IndexBufferCI.IndexCount = static_cast<Uint32>(Mesh.Indices.size());
-    IndexBufferCI.IndexType  = RADIENT_INDEX_TYPE_UINT32;
-
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.Name              = Name;
-    PrimitiveCI.VertexBufferIndex = 0;
-    PrimitiveCI.FirstIndex        = 0;
-    PrimitiveCI.IndexCount        = static_cast<Uint32>(Mesh.Indices.size());
-    PrimitiveCI.pMaterial         = pMaterial;
+    PrimitiveCI.Name       = Name;
+    PrimitiveCI.FirstIndex = 0;
+    PrimitiveCI.IndexCount = static_cast<Uint32>(Mesh.Indices.size());
+    PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name              = Name;
-    MeshCI.pVertexBuffers    = &VertexBufferCI;
-    MeshCI.VertexBufferCount = 1;
-    MeshCI.IndexBuffer       = IndexBufferCI;
-    MeshCI.pPrimitives       = &PrimitiveCI;
-    MeshCI.PrimitiveCount    = 1;
+    MeshCI.Name           = Name;
+    MeshCI.pPositions     = Mesh.Positions.data();
+    MeshCI.pNormals       = Mesh.Normals.data();
+    MeshCI.pTexCoords0    = Mesh.TexCoords0.data();
+    MeshCI.VertexCount    = static_cast<Uint32>(Mesh.Positions.size());
+    MeshCI.pIndices       = Mesh.Indices.data();
+    MeshCI.IndexCount     = static_cast<Uint32>(Mesh.Indices.size());
+    MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives    = &PrimitiveCI;
+    MeshCI.PrimitiveCount = 1;
 
     return pAssetManager->CreateMesh(MeshCI, ppMesh);
 }

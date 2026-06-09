@@ -127,17 +127,14 @@ private:
     {
         std::string Name;
 
-        Uint32 VertexBufferIndex = 0;
-        Uint32 FirstIndex        = 0;
-        Uint32 IndexCount        = 0;
+        Uint32 FirstIndex = 0;
+        Uint32 IndexCount = 0;
 
         RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     };
 
-    struct MeshVertexBufferStorage
+    struct MeshVertexDataStorage
     {
-        std::string Name;
-
         std::vector<RadientFloat3>       Positions;
         std::vector<RadientFloat3>       Normals;
         std::vector<RadientFloat4>       Tangents;
@@ -156,9 +153,9 @@ private:
 
     struct MeshStorage
     {
-        std::vector<MeshVertexBufferStorage> VertexBuffers;
-        MeshIndexBufferStorage               IndexBuffer;
-        std::vector<MeshPrimitiveStorage>    MeshPrimitives;
+        MeshVertexDataStorage             VertexData;
+        MeshIndexBufferStorage            IndexBuffer;
+        std::vector<MeshPrimitiveStorage> MeshPrimitives;
     };
 
     struct MaterialStorage

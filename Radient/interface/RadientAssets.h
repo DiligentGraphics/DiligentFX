@@ -116,10 +116,28 @@ struct RadientBoneIndices4
 typedef struct RadientBoneIndices4 RadientBoneIndices4;
 
 
-/// CPU-side vertex buffer creation attributes.
-struct RadientVertexBufferCreateInfo
+/// CPU-side mesh primitive creation attributes.
+struct RadientMeshPrimitiveCreateInfo
 {
-    /// Optional buffer name.
+    /// Optional primitive name.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// First index in RadientMeshCreateInfo::pIndices.
+    Uint32 FirstIndex DEFAULT_INITIALIZER(0);
+
+    /// Number of indices in RadientMeshCreateInfo::pIndices.
+    Uint32 IndexCount DEFAULT_INITIALIZER(0);
+
+    /// Default material for this primitive.
+    IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
+
+
+/// CPU-side mesh creation attributes.
+struct RadientMeshCreateInfo
+{
+    /// Mesh name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
     /// Vertex positions. Required when VertexCount is not zero.
@@ -145,13 +163,7 @@ struct RadientVertexBufferCreateInfo
 
     /// Number of vertices.
     Uint32 VertexCount DEFAULT_INITIALIZER(0);
-};
-typedef struct RadientVertexBufferCreateInfo RadientVertexBufferCreateInfo;
 
-
-/// CPU-side index buffer creation attributes.
-struct RadientIndexBufferCreateInfo
-{
     /// Index data. Type is controlled by IndexType.
     const void* pIndices DEFAULT_INITIALIZER(nullptr);
 
@@ -160,45 +172,6 @@ struct RadientIndexBufferCreateInfo
 
     /// Index type.
     RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
-};
-typedef struct RadientIndexBufferCreateInfo RadientIndexBufferCreateInfo;
-
-
-/// CPU-side mesh primitive creation attributes.
-struct RadientMeshPrimitiveCreateInfo
-{
-    /// Optional primitive name.
-    const Char* Name DEFAULT_INITIALIZER(nullptr);
-
-    /// Vertex buffer index in RadientMeshCreateInfo::pVertexBuffers.
-    Uint32 VertexBufferIndex DEFAULT_INITIALIZER(0);
-
-    /// First index in RadientMeshCreateInfo::IndexBuffer.
-    Uint32 FirstIndex DEFAULT_INITIALIZER(0);
-
-    /// Number of indices in RadientMeshCreateInfo::IndexBuffer.
-    Uint32 IndexCount DEFAULT_INITIALIZER(0);
-
-    /// Default material for this primitive.
-    IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
-};
-typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
-
-
-/// CPU-side mesh creation attributes.
-struct RadientMeshCreateInfo
-{
-    /// Mesh name.
-    const Char* Name DEFAULT_INITIALIZER(nullptr);
-
-    /// Mesh vertex buffers.
-    const RadientVertexBufferCreateInfo* pVertexBuffers DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of vertex buffers.
-    Uint32 VertexBufferCount DEFAULT_INITIALIZER(0);
-
-    /// Mesh index buffer.
-    RadientIndexBufferCreateInfo IndexBuffer DEFAULT_INITIALIZER({});
 
     /// Mesh primitives.
     const RadientMeshPrimitiveCreateInfo* pPrimitives DEFAULT_INITIALIZER(nullptr);

@@ -149,33 +149,24 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager& AssetManag
 
     const Uint32 Indices[] = {0, 1, 2};
 
-    RadientVertexBufferCreateInfo VertexBufferCI{};
-    VertexBufferCI.Name          = "Radient test vertices";
-    VertexBufferCI.pPositions    = Positions;
-    VertexBufferCI.pColors0      = Colors;
-    VertexBufferCI.pBoneIndices0 = BoneIndices;
-    VertexBufferCI.pBoneWeights0 = BoneWeights;
-    VertexBufferCI.VertexCount   = 3;
-
-    RadientIndexBufferCreateInfo IndexBufferCI{};
-    IndexBufferCI.pIndices   = Indices;
-    IndexBufferCI.IndexCount = 3;
-    IndexBufferCI.IndexType  = RADIENT_INDEX_TYPE_UINT32;
-
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.Name              = "Radient test primitive";
-    PrimitiveCI.VertexBufferIndex = 0;
-    PrimitiveCI.FirstIndex        = 0;
-    PrimitiveCI.IndexCount        = 3;
-    PrimitiveCI.pMaterial         = pMaterial;
+    PrimitiveCI.Name       = "Radient test primitive";
+    PrimitiveCI.FirstIndex = 0;
+    PrimitiveCI.IndexCount = 3;
+    PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name              = "Radient test mesh";
-    MeshCI.pVertexBuffers    = &VertexBufferCI;
-    MeshCI.VertexBufferCount = 1;
-    MeshCI.IndexBuffer       = IndexBufferCI;
-    MeshCI.pPrimitives       = &PrimitiveCI;
-    MeshCI.PrimitiveCount    = 1;
+    MeshCI.Name           = "Radient test mesh";
+    MeshCI.pPositions     = Positions;
+    MeshCI.pColors0       = Colors;
+    MeshCI.pBoneIndices0  = BoneIndices;
+    MeshCI.pBoneWeights0  = BoneWeights;
+    MeshCI.VertexCount    = 3;
+    MeshCI.pIndices       = Indices;
+    MeshCI.IndexCount     = 3;
+    MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives    = &PrimitiveCI;
+    MeshCI.PrimitiveCount = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     EXPECT_EQ(AssetManager.CreateMesh(MeshCI, &pMesh), RADIENT_STATUS_OK);
