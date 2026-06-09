@@ -24,19 +24,21 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientMeshPrimitives.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientMeshPrimitives_C_UseTypes(IRadientAssetManager* pAssetManager)
+{
+    RadientCubeMeshCreateInfo   CubeCI   = {0};
+    RadientSphereMeshCreateInfo SphereCI = {0};
+    IRadientMeshAsset*          pMesh    = 0;
+    RADIENT_STATUS              Status   = RADIENT_STATUS_OK;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    CubeCI.Size = 1.f;
+    Status      = Diligent_CreateRadientCubeMesh(pAssetManager, &CubeCI, &pMesh);
+
+    SphereCI.Radius = 1.f;
+    Status          = Diligent_CreateRadientSphereMesh(pAssetManager, &SphereCI, &pMesh);
+
+    (void)pMesh;
+    (void)Status;
+}

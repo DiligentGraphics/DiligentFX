@@ -4,6 +4,7 @@ project(Radient CXX)
 
 set(SOURCE
     src/Assets/RadientAssetManagerImpl.cpp
+    src/Assets/RadientMeshPrimitives.cpp
     src/Core/RadientBackendImpl.cpp
     src/Core/RadientEngineImpl.cpp
     src/Core/RadientViewImpl.cpp
@@ -56,6 +57,7 @@ set(INTERFACE
     interface/RadientBackend.h
     interface/RadientEngine.h
     interface/RadientMath.h
+    interface/RadientMeshPrimitives.h
     interface/RadientRenderer.h
     interface/RadientScene.h
     interface/RadientSceneImporter.h
