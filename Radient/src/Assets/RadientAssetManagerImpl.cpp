@@ -470,19 +470,6 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pModel,
-                                                         const Char*&        SourceURI)
-{
-    SourceURI = nullptr;
-
-    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
-    if (pImpl == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    SourceURI = pImpl->GetStorage().SourceURI.c_str();
-    return RADIENT_STATUS_OK;
-}
-
 RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFMesh(IRadientMeshAsset* pMesh,
                                                                                     bool               RequireGPUResourcesReady)
 {
@@ -580,6 +567,12 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
     if (pContext == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
+    if (m_pUploadManager != nullptr)
+        m_pUploadManager->RenderThreadUpdate(pContext);
+
+    if (m_pResourceManager != nullptr)
+        m_pResourceManager->UpdateAllResources(pDevice, pContext);
+
     std::vector<GLTFModelToPrepare> ModelsToPrepare;
 
     if (m_pDevice == nullptr)
@@ -599,10 +592,7 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
             continue;
 
         SceneAssetImpl* pImpl = pSceneAsset.RawPtr<SceneAssetImpl>();
-        VERIFY(pImpl != nullptr,
-               "Pending GPU resource update references an invalid asset");
-        if (pImpl == nullptr)
-            continue;
+        VERIFY_EXPR(pImpl != nullptr);
 
         GLTFModelStorage& GLTFModel = pImpl->GetStorage();
 
@@ -616,12 +606,6 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
         ModelsToPrepare.push_back({pSceneAsset, GLTFModel.pModel.get()});
     }
-
-    if (m_pUploadManager != nullptr)
-        m_pUploadManager->RenderThreadUpdate(pContext);
-
-    if (m_pResourceManager != nullptr)
-        m_pResourceManager->UpdateAllResources(pDevice, pContext);
 
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
 

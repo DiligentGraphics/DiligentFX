@@ -101,9 +101,6 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
-    static RADIENT_STATUS GetGLTFSourceURI(IRadientSceneAsset* pModel,
-                                           const Char*&        SourceURI);
-
     struct GLTFMeshResolveResult
     {
         const GLTF::Model*      pModel            = nullptr;
