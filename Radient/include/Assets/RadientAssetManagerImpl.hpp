@@ -52,6 +52,8 @@ struct IDeviceContext;
 struct IRenderDevice;
 struct IGPUUploadManager;
 struct ITexture;
+struct ITextureAtlasSuballocation;
+struct ITextureLoader;
 struct ITextureView;
 
 namespace GLTF
@@ -199,9 +201,19 @@ private:
 
     struct TextureStorage
     {
-        std::string             SourceURI;
-        RADIENT_STATUS          LoadStatus = RADIENT_STATUS_OK;
-        RefCntAutoPtr<ITexture> pTexture;
+        TextureStorage() = default;
+        TextureStorage(TextureStorage&& Rhs) noexcept;
+
+        TextureStorage& operator=(TextureStorage&& Rhs)  = delete;
+        TextureStorage(const TextureStorage&)            = delete;
+        TextureStorage& operator=(const TextureStorage&) = delete;
+
+        std::string                               SourceURI;
+        RefCntAutoPtr<ITexture>                   pTexture;
+        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+        std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
+        std::atomic_bool                          GPUResourcesReady{false};
+        std::atomic<Uint32>                       PendingUploads{0};
     };
 
     using MeshAssetStorage = std::variant<MeshStorage, GLTFMeshStorage>;
@@ -272,6 +284,15 @@ private:
                                      GLTFModelStorage&   GLTFModel);
     void CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                           std::unique_ptr<GLTF::Model> pModelData);
+    void CompleteTextureLoad(IRadientTextureAsset*         pTexture,
+                             RefCntAutoPtr<ITextureLoader> pLoader);
+
+    static RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
+                                                   GLTF::ResourceManager* pResourceManager,
+                                                   IGPUUploadManager*     pUploadManager,
+                                                   IRadientTextureAsset*  pTexture,
+                                                   ITextureLoader*        pLoader,
+                                                   TextureStorage&        Texture);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;

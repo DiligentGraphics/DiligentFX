@@ -341,7 +341,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   IRadientMaterialAsset**             ppMaterial) PURE;
 
-    /// Loads a texture asset from a URI.
+    /// Starts loading a texture asset from a URI.
+    /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;
