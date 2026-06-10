@@ -49,8 +49,6 @@ struct RadientGeometryResourceCacheUseInfo
 {
     GLTF::ResourceManager* pResourceMgr = nullptr;
 
-    GLTF::ResourceManager::VertexLayoutKey VtxLayoutKey;
-
     std::array<TEXTURE_FORMAT, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> AtlasFormats{};
 
     RadientGeometryResourceCacheUseInfo() noexcept
@@ -92,8 +90,6 @@ public:
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
                                   IDeviceContext* pContext);
-
-    void InitializeResourceCacheUseInfo();
 
     RADIENT_STATUS UpdateEnvironment(IDeviceContext*               pContext,
                                      const RadientEnvironmentDesc& Environment);

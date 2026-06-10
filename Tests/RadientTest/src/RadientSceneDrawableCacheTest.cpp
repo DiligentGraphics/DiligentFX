@@ -43,7 +43,8 @@ using namespace Diligent::Testing;
 namespace
 {
 
-static constexpr float EPSILON = 1e-5f;
+static constexpr float EPSILON        = 1e-5f;
+IVertexPool* const     TestVertexPool = reinterpret_cast<IVertexPool*>(size_t{1});
 
 class TestDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
@@ -53,6 +54,7 @@ public:
         GLTF::Model*              pModel             = nullptr;
         RadientDrawableMeshStatus Status             = RadientDrawableMeshStatus::Failed;
         PBR_Renderer::PSO_FLAGS   VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
+        IVertexPool*              pVertexPool        = TestVertexPool;
         Uint32                    FirstIndexLocation = 7;
         Uint32                    BaseVertex         = 3;
     };
@@ -62,12 +64,14 @@ public:
                       RadientDrawableMeshStatus Status,
                       PBR_Renderer::PSO_FLAGS   VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE,
                       Uint32                    FirstIndexLocation = 7,
-                      Uint32                    BaseVertex         = 3)
+                      Uint32                    BaseVertex         = 3,
+                      IVertexPool*              pVertexPool        = TestVertexPool)
     {
         Meshes[pMesh] = MeshData{
             &Model,
             Status,
             VertexAttribFlags,
+            pVertexPool,
             FirstIndexLocation,
             BaseVertex};
     }
@@ -105,6 +109,7 @@ public:
 
         Mesh.pModel             = MeshData.pModel;
         Mesh.pMesh              = &MeshData.pModel->Meshes[0];
+        Mesh.pVertexPool        = MeshData.pVertexPool;
         Mesh.VertexAttribFlags  = MeshData.VertexAttribFlags;
         Mesh.FirstIndexLocation = MeshData.FirstIndexLocation;
         Mesh.BaseVertex         = MeshData.BaseVertex;

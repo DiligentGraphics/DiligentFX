@@ -676,7 +676,6 @@ void BeginResourceCache(PBR_Renderer&                         Renderer,
                         ITextureView*                         pPrefilteredEnvMapSRV)
 {
     VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
-    VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be empty.");
 
     if (Renderer.GetJointsBuffer() != nullptr)
     {
@@ -698,24 +697,21 @@ void BeginResourceCache(PBR_Renderer&                         Renderer,
 
     pContext->TransitionShaderResources(Bindings.pSRB);
 
-    if (IVertexPool* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
-    {
-        const VertexPoolDesc& PoolDesc = pVertexPool->GetDesc();
-
-        std::array<IBuffer*, 8> pVBs;
-        VERIFY(PoolDesc.NumElements <= pVBs.size(), "Too many vertex buffers in Radient GLTF vertex pool");
-        for (Uint32 Index = 0; Index < PoolDesc.NumElements; ++Index)
-        {
-            pVBs[Index] = pVertexPool->Update(Index, pDevice, pContext);
-            if (pVBs[Index] != nullptr && (pVBs[Index]->GetDesc().BindFlags & BIND_VERTEX_BUFFER) == 0)
-                pVBs[Index] = nullptr;
-        }
-
-        pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
-    }
-
-    if (IBuffer* pIndexBuffer = CacheUseInfo.pResourceMgr->UpdateIndexBuffer(pDevice, pContext))
+    if (IBuffer* pIndexBuffer = CacheUseInfo.pResourceMgr->GetIndexBuffer())
         pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+}
+
+void BindVertexPool(IVertexPool&    VertexPool,
+                    IDeviceContext* pContext)
+{
+    const VertexPoolDesc& PoolDesc = VertexPool.GetDesc();
+
+    std::array<IBuffer*, 8> pVBs;
+    VERIFY(PoolDesc.NumElements <= pVBs.size(), "Too many vertex buffers in Radient GLTF vertex pool");
+    for (Uint32 Index = 0; Index < PoolDesc.NumElements; ++Index)
+        pVBs[Index] = VertexPool.GetBuffer(Index);
+
+    pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 }
 
 void WritePrimitiveAttribs(PBR_Renderer&           Renderer,
@@ -919,9 +915,10 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     BuildSortedDrawableIDs(DrawList, DrawableCache);
 
-    IShaderResourceBinding* pCurrSRB      = nullptr;
-    IPipelineState*         pCurrPSO      = nullptr;
-    const GLTF::Material*   pCurrMaterial = nullptr;
+    IShaderResourceBinding* pCurrSRB        = nullptr;
+    IPipelineState*         pCurrPSO        = nullptr;
+    IVertexPool*            pCurrVertexPool = nullptr;
+    const GLTF::Material*   pCurrMaterial   = nullptr;
 
     for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
     {
@@ -934,6 +931,14 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
         const RadientDrawableSlot& Drawable = *PassData.pDrawable;
         const GLTF::Material&      Material = *Drawable.pMaterial;
+
+        if (pCurrVertexPool != Drawable.pVertexPool)
+        {
+            pCurrVertexPool = Drawable.pVertexPool;
+            VERIFY(pCurrVertexPool != nullptr, "Sorted drawable references null vertex pool");
+            if (pCurrVertexPool != nullptr)
+                BindVertexPool(*pCurrVertexPool, pContext);
+        }
 
         const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
         if (pCurrPSO != PassData.pPSO)
@@ -987,7 +992,8 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
     {
         const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(DrawItem.DrawableID);
         if (pDrawable == nullptr ||
-            pDrawable->pMaterial == nullptr)
+            pDrawable->pMaterial == nullptr ||
+            pDrawable->pVertexPool == nullptr)
         {
             continue;
         }
@@ -1034,6 +1040,9 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
 
                   if (LhsPassData.pPSO != RhsPassData.pPSO)
                       return std::less<IPipelineState*>{}(LhsPassData.pPSO, RhsPassData.pPSO);
+
+                  if (LhsPassData.pDrawable->pVertexPool != RhsPassData.pDrawable->pVertexPool)
+                      return std::less<IVertexPool*>{}(LhsPassData.pDrawable->pVertexPool, RhsPassData.pDrawable->pVertexPool);
 
                   return LhsDrawableID < RhsDrawableID;
               });
@@ -1223,8 +1232,6 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     if (m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    InitializeResourceCacheUseInfo();
-
     m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_DEFAULT |
         PBR_Renderer::PSO_FLAG_ALL_TEXTURES |
@@ -1268,23 +1275,6 @@ RADIENT_STATUS RadientGeometryPass::CreatePsoCaches(PBR_Renderer&           Rend
     m_DrawablePassData.clear();
 
     return RADIENT_STATUS_OK;
-}
-
-void RadientGeometryRenderer::InitializeResourceCacheUseInfo()
-{
-    if (!m_CacheUseInfo.VtxLayoutKey.Elements.empty())
-        return;
-
-    InputLayoutDescX    InputLayout = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
-    std::vector<Uint32> Strides     = InputLayout.ResolveAutoOffsetsAndStrides();
-
-    m_CacheUseInfo.VtxLayoutKey.Elements.reserve(Strides.size());
-    for (const Uint32 Stride : Strides)
-    {
-        m_CacheUseInfo.VtxLayoutKey.Elements.emplace_back(Stride, BIND_VERTEX_BUFFER);
-    }
-
-    m_CacheUseInfo.AtlasFormats.fill(TEX_FORMAT_RGBA8_TYPELESS);
 }
 
 } // namespace Diligent

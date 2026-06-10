@@ -63,7 +63,8 @@ struct RadientDrawableSlot
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
 
-    const GLTF::Material* pMaterial = nullptr;
+    const GLTF::Material* pMaterial   = nullptr;
+    IVertexPool*          pVertexPool = nullptr;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
@@ -125,8 +126,9 @@ enum class RadientDrawableMeshStatus
 /// queued in RadientSceneDrawableCache; failed status removes it from retry processing.
 struct RadientDrawableMesh
 {
-    const GLTF::Model* pModel = nullptr;
-    const GLTF::Mesh*  pMesh  = nullptr;
+    const GLTF::Model* pModel      = nullptr;
+    const GLTF::Mesh*  pMesh       = nullptr;
+    IVertexPool*       pVertexPool = nullptr;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 

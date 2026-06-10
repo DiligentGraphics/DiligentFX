@@ -72,8 +72,12 @@ public:
         VERIFY(Result.MeshIndex < Result.pModel->Meshes.size(), "GLTF mesh index (", Result.MeshIndex, ") is out of range for the model (", Result.pModel->Meshes.size(),
                " meshes). This should not happen when the status is RADIENT_STATUS_OK");
 
+        IVertexPool* pVertexPool = Result.pModel->GetVertexPool();
+        VERIFY(pVertexPool != nullptr, "GLTF mesh resolve result references a model with null vertex pool. This should not happen when the status is RADIENT_STATUS_OK");
+
         Mesh.pModel             = Result.pModel;
         Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
+        Mesh.pVertexPool        = pVertexPool;
         Mesh.VertexAttribFlags  = Result.VertexAttribFlags;
         Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
         Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
@@ -339,6 +343,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
         Slot.IsIndexed          = IsIndexed;
         Slot.pMaterial          = pMaterial;
+        Slot.pVertexPool        = Mesh.pVertexPool;
         Slot.VertexAttribFlags  = Mesh.VertexAttribFlags;
         Slot.FirstIndexLocation = Mesh.FirstIndexLocation;
         Slot.BaseVertex         = Mesh.BaseVertex;
