@@ -99,6 +99,7 @@ RADIENT_STATUS RadientEngineImpl::GetBackend(IRadientBackend** ppBackend)
     if (ppBackend == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppBackend == nullptr, "Output backend pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppBackend = nullptr;
     if (m_pBackend == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
@@ -113,6 +114,7 @@ RADIENT_STATUS RadientEngineImpl::GetAssetManager(IRadientAssetManager** ppAsset
     if (ppAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppAssetManager == nullptr, "Output asset manager pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppAssetManager = nullptr;
     if (m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
@@ -127,6 +129,7 @@ RADIENT_STATUS RadientEngineImpl::CreateScene(const RadientSceneDesc& Desc, IRad
     if (ppScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppScene == nullptr, "Output scene pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppScene = nullptr;
 
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create(Desc);
@@ -139,6 +142,7 @@ RADIENT_STATUS RadientEngineImpl::CreateSceneWriter(IRadientScene* pScene, IRadi
     if (ppWriter == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppWriter == nullptr, "Output scene writer pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppWriter = nullptr;
     if (pScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -153,6 +157,7 @@ RADIENT_STATUS RadientEngineImpl::CreateSceneImporter(IRadientSceneWriter* pWrit
     if (ppImporter == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppImporter == nullptr, "Output scene importer pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppImporter = nullptr;
     if (pWriter == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -170,6 +175,7 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
     if (ppRenderer == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppRenderer == nullptr, "Output renderer pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppRenderer = nullptr;
     if (m_pBackend == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
@@ -204,6 +210,7 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientEngine)(const RadientEngine
     if (ppEngine == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppEngine == nullptr, "Output engine pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppEngine = nullptr;
 
     RefCntAutoPtr<IRadientEngine> pEngine = RadientEngineImpl::Create(EngineCI);

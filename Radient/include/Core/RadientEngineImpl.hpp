@@ -52,16 +52,16 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetAssetManager(IRadientAssetManager** ppAssetManager) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateScene(const RadientSceneDesc& Desc,
-                                                          IRadientScene**        ppScene) override final;
+                                                          IRadientScene**         ppScene) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneWriter(IRadientScene*        pScene,
                                                                 IRadientSceneWriter** ppWriter) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneImporter(IRadientSceneWriter*   pWriter,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneImporter(IRadientSceneWriter*    pWriter,
                                                                   IRadientSceneImporter** ppImporter) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateRenderer(const RadientRendererDesc& Desc,
-                                                             IRadientRenderer**        ppRenderer) override final;
+                                                             IRadientRenderer**         ppRenderer) override final;
 
 private:
     RefCntAutoPtr<IThreadPool>             m_pThreadPool;

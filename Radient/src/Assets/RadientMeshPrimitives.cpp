@@ -28,6 +28,8 @@
 
 #include "Math/RadientMath.hpp"
 
+#include "Errors.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -201,6 +203,7 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
     if (pAssetManager == nullptr ||
@@ -239,6 +242,7 @@ RADIENT_STATUS CreateRadientCubeMesh(IRadientAssetManager*            pAssetMana
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
     if (!RadientMath::IsFinitePositive(MeshCI.Size))
@@ -255,6 +259,7 @@ RADIENT_STATUS CreateRadientSphereMesh(IRadientAssetManager*              pAsset
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
     if (!RadientMath::IsFinitePositive(MeshCI.Radius))
@@ -276,7 +281,10 @@ extern "C"
         if (pMeshCI == nullptr)
         {
             if (ppMesh != nullptr)
+            {
+                DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
                 *ppMesh = nullptr;
+            }
             return Diligent::RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
@@ -290,7 +298,10 @@ extern "C"
         if (pMeshCI == nullptr)
         {
             if (ppMesh != nullptr)
+            {
+                DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
                 *ppMesh = nullptr;
+            }
             return Diligent::RADIENT_STATUS_INVALID_ARGUMENT;
         }
 

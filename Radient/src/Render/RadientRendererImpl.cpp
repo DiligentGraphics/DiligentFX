@@ -28,6 +28,8 @@
 #include "Render/RadientRenderPipeline.hpp"
 #include "Core/RadientViewImpl.hpp"
 
+#include "Errors.hpp"
+
 namespace Diligent
 {
 
@@ -112,6 +114,7 @@ RADIENT_STATUS RadientRendererImpl::CreateRenderTarget(const RadientRenderTarget
     if (ppTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppTarget == nullptr, "Output render target pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppTarget = nullptr;
 
     RefCntAutoPtr<IRadientRenderTarget> pTarget = RadientRenderTargetImpl::Create(Desc);
@@ -124,6 +127,7 @@ RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRad
     if (ppView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    DEV_CHECK_ERR(*ppView == nullptr, "Output view pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppView = nullptr;
 
     RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc);

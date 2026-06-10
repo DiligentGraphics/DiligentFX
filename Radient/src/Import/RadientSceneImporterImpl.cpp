@@ -30,6 +30,7 @@
 #include "Import/RadientGLTFConverter.hpp"
 
 #include "Cast.hpp"
+#include "Errors.hpp"
 
 #include <utility>
 
@@ -62,6 +63,7 @@ RADIENT_STATUS RadientSceneImporterImpl::ImportGLTF(const RadientGLTFLoadInfo&  
 {
     if (ppModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppModel == nullptr, "Output GLTF model pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppModel   = nullptr;
     RootEntity = InvalidRadientEntityID;
 
