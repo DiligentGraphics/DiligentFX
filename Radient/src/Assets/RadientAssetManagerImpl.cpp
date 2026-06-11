@@ -216,11 +216,15 @@ RadientAssetManagerImpl::TextureStorage::TextureStorage(TextureStorage&& Rhs) no
 {
 }
 
-template <typename InterfaceType, const INTERFACE_ID& InterfaceID, RADIENT_ASSET_TYPE AssetType, typename StorageType>
-RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, AssetType, StorageType>::AssetImpl(IReferenceCounters* pRefCounters,
-                                                                                                  std::string&&       URI,
-                                                                                                  const Char*         Name,
-                                                                                                  StorageType&&       Storage) :
+template <typename InterfaceType,
+          const INTERFACE_ID& InterfaceID,
+          const INTERFACE_ID& ImplID,
+          RADIENT_ASSET_TYPE  AssetType,
+          typename StorageType>
+RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, ImplID, AssetType, StorageType>::AssetImpl(IReferenceCounters* pRefCounters,
+                                                                                                          std::string&&       URI,
+                                                                                                          const Char*         Name,
+                                                                                                          StorageType&&       Storage) :
     TBase{pRefCounters},
     m_URI{std::move(URI)},
     m_Name{Name != nullptr ? Name : ""},
@@ -236,6 +240,17 @@ RefCntAutoPtr<ImplType> RadientAssetManagerImpl::CreateAsset(const char*        
                                                              typename ImplType::Storage&& Storage)
 {
     return RefCntAutoPtr<ImplType>{MakeNewRCObj<ImplType>()(MakeURI(Type), Name, std::move(Storage))};
+}
+
+template <typename ImplType, typename InterfaceType>
+RADIENT_STATUS RadientAssetManagerImpl::CreateAsset(const char*                  Type,
+                                                    const Char*                  Name,
+                                                    typename ImplType::Storage&& Storage,
+                                                    InterfaceType**              ppAsset)
+{
+    RefCntAutoPtr<ImplType> pAsset = CreateAsset<ImplType>(Type, Name, std::move(Storage));
+    *ppAsset                       = pAsset.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 template <typename ImplType, typename CreateAssetFuncType>
@@ -355,10 +370,10 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
         MeshData.MeshPrimitives.emplace_back(std::move(Primitive));
     }
 
-    RefCntAutoPtr<MeshAssetImpl> pMesh =
-        CreateAsset<MeshAssetImpl>("mesh", MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
-    pMesh->QueryInterface(IID_RadientMeshAsset, ppMesh);
-    return RADIENT_STATUS_OK;
+    return CreateAsset<MeshAssetImpl>("mesh",
+                                      MeshCI.Name,
+                                      MeshAssetStorage{std::move(MeshData)},
+                                      ppMesh);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
@@ -382,10 +397,10 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
-    RefCntAutoPtr<MaterialAssetImpl> pMaterial =
-        CreateAsset<MaterialAssetImpl>("material", MaterialCI.Name, std::move(MaterialData));
-    pMaterial->QueryInterface(IID_RadientMaterialAsset, ppMaterial);
-    return RADIENT_STATUS_OK;
+    return CreateAsset<MaterialAssetImpl>("material",
+                                          MaterialCI.Name,
+                                          std::move(MaterialData),
+                                          ppMaterial);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
@@ -581,10 +596,10 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     GLTFMeshData.pModel    = pModel;
     GLTFMeshData.MeshIndex = MeshIndex;
 
-    RefCntAutoPtr<MeshAssetImpl> pMesh =
-        CreateAsset<MeshAssetImpl>("mesh", Name, MeshAssetStorage{std::move(GLTFMeshData)});
-    pMesh->QueryInterface(IID_RadientMeshAsset, ppMesh);
-    return RADIENT_STATUS_OK;
+    return CreateAsset<MeshAssetImpl>("mesh",
+                                      Name,
+                                      MeshAssetStorage{std::move(GLTFMeshData)},
+                                      ppMesh);
 }
 
 RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFMesh(IRadientMeshAsset* pMesh,
@@ -833,20 +848,10 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
     switch (pAsset->GetType())
     {
         case RADIENT_ASSET_TYPE_SCENE:
-        {
-            RefCntAutoPtr<SceneAssetImpl> pScene{pAsset, IID_RadientSceneAsset};
-            return pScene != nullptr ?
-                pScene->GetLoadStatus() :
-                RADIENT_STATUS_INVALID_ARGUMENT;
-        }
+            return SceneAssetImpl::GetLoadStatus(pAsset);
 
         case RADIENT_ASSET_TYPE_TEXTURE:
-        {
-            RefCntAutoPtr<TextureAssetImpl> pTexture{pAsset, IID_RadientTextureAsset};
-            return pTexture != nullptr ?
-                pTexture->GetLoadStatus() :
-                RADIENT_STATUS_INVALID_ARGUMENT;
-        }
+            return TextureAssetImpl::GetLoadStatus(pAsset);
 
         default:
             return RADIENT_STATUS_OK;
