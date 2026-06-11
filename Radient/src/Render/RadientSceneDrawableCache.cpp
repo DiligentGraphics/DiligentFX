@@ -59,13 +59,7 @@ public:
 
         const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
             RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
-        if (RADIENT_FAILED(Result.Status))
-            return {};
-
-        if (Result.Status != RADIENT_STATUS_OK)
-            return {nullptr, RadientDrawableMeshStatus::Pending};
-
-        return {Result.pMesh, RadientDrawableMeshStatus::Ready};
+        return {Result.Status == RADIENT_STATUS_OK ? Result.pMesh : nullptr, Result.Status};
     }
 };
 
@@ -284,18 +278,14 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
     const RadientDrawableMeshResolveResult ResolveResult = m_MeshProvider.GetDrawableMesh(Record.pMesh);
-    switch (ResolveResult.Status)
+    if (ResolveResult.Status == RADIENT_STATUS_PENDING)
     {
-        case RadientDrawableMeshStatus::Ready:
-            break;
-
-        case RadientDrawableMeshStatus::Pending:
-            AddPendingResolution(Entity, Record);
-            return false;
-
-        case RadientDrawableMeshStatus::Failed:
-            return false;
+        AddPendingResolution(Entity, Record);
+        return false;
     }
+
+    if (ResolveResult.Status != RADIENT_STATUS_OK)
+        return false;
 
     VERIFY(ResolveResult.pMesh != nullptr, "Drawable mesh provider returned ready status with null mesh data");
     if (ResolveResult.pMesh == nullptr)

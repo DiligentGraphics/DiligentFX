@@ -36,13 +36,6 @@
 namespace Diligent
 {
 
-enum class RadientDrawableMeshStatus
-{
-    Ready,
-    Pending,
-    Failed
-};
-
 struct RadientDrawableMeshPrimitive
 {
     const GLTF::Material* pMaterial = nullptr;
@@ -69,7 +62,7 @@ struct RadientDrawableMesh
 struct RadientDrawableMeshResolveResult
 {
     const RadientDrawableMesh* pMesh  = nullptr;
-    RadientDrawableMeshStatus  Status = RadientDrawableMeshStatus::Failed;
+    RADIENT_STATUS             Status = RADIENT_STATUS_INVALID_OPERATION;
 };
 
 } // namespace Diligent

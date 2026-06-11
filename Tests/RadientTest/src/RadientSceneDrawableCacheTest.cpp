@@ -53,17 +53,17 @@ class TestDrawableMeshProvider final : public IRadientDrawableMeshProvider
 public:
     struct MeshData
     {
-        RadientDrawableMesh       Mesh;
-        RadientDrawableMeshStatus Status = RadientDrawableMeshStatus::Failed;
+        RadientDrawableMesh Mesh;
+        RADIENT_STATUS      Status = RADIENT_STATUS_INVALID_OPERATION;
     };
 
-    void RegisterMesh(IRadientMeshAsset*        pMesh,
-                      GLTF::Model&              Model,
-                      RadientDrawableMeshStatus Status,
-                      PBR_Renderer::PSO_FLAGS   VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE,
-                      Uint32                    FirstIndexLocation = 7,
-                      Uint32                    BaseVertex         = 3,
-                      IVertexPool*              pVertexPool        = TestVertexPool)
+    void RegisterMesh(IRadientMeshAsset*      pMesh,
+                      GLTF::Model&            Model,
+                      RADIENT_STATUS          Status,
+                      PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE,
+                      Uint32                  FirstIndexLocation = 7,
+                      Uint32                  BaseVertex         = 3,
+                      IVertexPool*            pVertexPool        = TestVertexPool)
     {
         MeshData Data;
         Data.Status                  = Status;
@@ -86,7 +86,7 @@ public:
         Meshes[pMesh] = std::move(Data);
     }
 
-    void SetMeshStatus(IRadientMeshAsset* pMesh, RadientDrawableMeshStatus Status)
+    void SetMeshStatus(IRadientMeshAsset* pMesh, RADIENT_STATUS Status)
     {
         auto MeshIt = Meshes.find(pMesh);
         ASSERT_NE(MeshIt, Meshes.end());
@@ -107,10 +107,10 @@ public:
         }
 
         const MeshData& MeshData = MeshIt->second;
-        if (MeshData.Status != RadientDrawableMeshStatus::Ready)
+        if (MeshData.Status != RADIENT_STATUS_OK)
             return {nullptr, MeshData.Status};
 
-        return {&MeshData.Mesh, RadientDrawableMeshStatus::Ready};
+        return {&MeshData.Mesh, RADIENT_STATUS_OK};
     }
 
     std::unordered_map<IRadientMeshAsset*, MeshData> Meshes;
@@ -317,7 +317,7 @@ RadientEntityID AddReadyRenderableEntity(TestDrawableMeshProvider&  MeshProvider
     const RadientEntityID Entity = AddRenderableEntity(Writer, pMesh, Parent);
     EXPECT_NE(Entity, InvalidRadientEntityID);
 
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(Scene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
@@ -463,7 +463,7 @@ TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-test", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -479,7 +479,7 @@ TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
 
     // The next sync has no new scene changes, but pending mesh resolution now
     // succeeds and expands the renderable into one drawable per primitive.
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
@@ -533,7 +533,7 @@ TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSyn
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-cleared-mesh-changes", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
 
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_NO_CHANGE);
 
@@ -602,7 +602,7 @@ TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-invalid-alpha-mode", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -638,7 +638,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-failed-mesh-test", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -654,7 +654,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
 
     // The retry reports failure. The cache should drop the pending retry and
     // keep draw lists empty.
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Failed);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_INVALID_OPERATION);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
@@ -678,7 +678,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
     EXPECT_EQ(pWriter->SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
@@ -707,7 +707,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-pending-remove-test", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -735,7 +735,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
 
     // Even if the provider later becomes ready, the removed renderable should
     // not be retried or expanded into drawables.
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(MeshProvider.NumCalls, 0u);
@@ -756,7 +756,7 @@ TEST(RadientSceneDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-shared-mesh-test", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
 
     const RadientEntityID Entity0 = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity0, InvalidRadientEntityID);
@@ -785,7 +785,7 @@ TEST(RadientSceneDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
 
     // Once the shared mesh becomes ready, both entities expand into drawable
     // slots. Each material alpha mode has two primitives per entity.
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 2u);
@@ -854,7 +854,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenR
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-pending-renderer-change", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
 
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
@@ -875,7 +875,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenR
     EXPECT_EQ(pWriter->SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls  = 0;
     MeshProvider.pLastMesh = nullptr;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
@@ -907,7 +907,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindings
     RefCntAutoPtr<IRadientMeshAsset>     pMesh     = MakeTestMeshAsset("mesh://drawable-cache-pending-bindings-change", 1);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://drawable-cache-pending-bindings-change", 1);
     RefCntAutoPtr<IRadientSceneWriter>   pWriter   = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
 
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
@@ -932,7 +932,7 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindings
     EXPECT_EQ(pWriter->SetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
-    MeshProvider.SetMeshStatus(pMesh, RadientDrawableMeshStatus::Ready);
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
     MeshProvider.NumCalls = 0;
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
@@ -957,14 +957,14 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshOnl
     RefCntAutoPtr<IRadientMeshAsset>   pMesh0  = MakeTestMeshAsset("mesh://drawable-cache-pending-mesh-change-0", 1);
     RefCntAutoPtr<IRadientMeshAsset>   pMesh1  = MakeTestMeshAsset("mesh://drawable-cache-pending-mesh-change-1", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh0, Model, RadientDrawableMeshStatus::Pending);
+    MeshProvider.RegisterMesh(pMesh0, Model, RADIENT_STATUS_PENDING);
 
     const PBR_Renderer::PSO_FLAGS NewVertexAttribFlags  = PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS | PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
     const Uint32                  NewFirstIndexLocation = 123;
     const Uint32                  NewBaseVertex         = 29;
     MeshProvider.RegisterMesh(pMesh1,
                               AlternateModel,
-                              RadientDrawableMeshStatus::Ready,
+                              RADIENT_STATUS_OK,
                               NewVertexAttribFlags,
                               NewFirstIndexLocation,
                               NewBaseVertex);
@@ -1018,7 +1018,7 @@ TEST(RadientSceneDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
     RefCntAutoPtr<IRadientMeshAsset>   pMesh0  = MakeTestMeshAsset("mesh://drawable-cache-mesh-change-0", 1);
     RefCntAutoPtr<IRadientMeshAsset>   pMesh1  = MakeTestMeshAsset("mesh://drawable-cache-mesh-change-1", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh0, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh0, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh0);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -1027,7 +1027,7 @@ TEST(RadientSceneDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
     const Uint32                  NewBaseVertex         = 17;
     MeshProvider.RegisterMesh(pMesh1,
                               AlternateModel,
-                              RadientDrawableMeshStatus::Ready,
+                              RADIENT_STATUS_OK,
                               NewVertexAttribFlags,
                               NewFirstIndexLocation,
                               NewBaseVertex);
@@ -1066,7 +1066,7 @@ TEST(RadientSceneDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-filtered-primitives", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
 
     const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
@@ -1097,7 +1097,7 @@ TEST(RadientSceneDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots)
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-renderer-change", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -1136,7 +1136,7 @@ TEST(RadientSceneDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListIndic
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-middle-removal", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
 
     const RadientEntityID Entity0 = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     const RadientEntityID Entity1 = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
@@ -1175,7 +1175,7 @@ TEST(RadientSceneDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawabl
     RefCntAutoPtr<IRadientMeshAsset>     pMesh     = MakeTestMeshAsset("mesh://drawable-cache-material-bindings-change", 1);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://drawable-cache-material-bindings-change", 1);
     RefCntAutoPtr<IRadientSceneWriter>   pWriter   = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -1213,7 +1213,7 @@ TEST(RadientSceneDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables)
     RefCntAutoPtr<IRadientMeshAsset>     pMesh     = MakeTestMeshAsset("mesh://drawable-cache-component-removal", 1);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://drawable-cache-component-removal", 1);
     RefCntAutoPtr<IRadientSceneWriter>   pWriter   = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
 
     const RadientEntityID Entity0 = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     const RadientEntityID Entity1 = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
@@ -1284,7 +1284,7 @@ TEST(RadientSceneDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDraw
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-world-matrix-change", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
@@ -1339,7 +1339,7 @@ TEST(RadientSceneDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawa
 
     RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-visibility-change", 1);
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
-    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
     const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
