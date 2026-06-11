@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssets.h"
 #include "ThreadPool.h"
 #include "Cast.hpp"
@@ -105,10 +106,8 @@ public:
 
     struct GLTFMeshResolveResult
     {
-        const GLTF::Model*      pModel            = nullptr;
-        PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
-        Uint32                  MeshIndex         = ~0u;
-        RADIENT_STATUS          Status            = RADIENT_STATUS_INVALID_ARGUMENT;
+        const RadientDrawableMesh* pMesh  = nullptr;
+        RADIENT_STATUS             Status = RADIENT_STATUS_INVALID_ARGUMENT;
     };
 
     static GLTFMeshResolveResult GetGLTFMesh(IRadientMeshAsset* pMesh,
@@ -196,7 +195,7 @@ private:
     struct GLTFMeshStorage
     {
         RefCntAutoPtr<IRadientSceneAsset> pModel;
-        Uint32                            MeshIndex = ~0u;
+        RadientDrawableMesh               DrawableMesh;
     };
 
     struct TextureStorage

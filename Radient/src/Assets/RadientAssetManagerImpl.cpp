@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 
+#include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Errors.hpp"
 #include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
@@ -592,9 +593,18 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     if (LoadStatus != RADIENT_STATUS_OK)
         return LoadStatus;
 
+    if (GLTFModel.pModel == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     GLTFMeshStorage GLTFMeshData;
-    GLTFMeshData.pModel    = pModel;
-    GLTFMeshData.MeshIndex = MeshIndex;
+    GLTFMeshData.pModel = pModel;
+
+    const RADIENT_STATUS Status = CreateGLTFDrawableMesh(*GLTFModel.pModel,
+                                                         MeshIndex,
+                                                         GLTFModel.VertexAttribFlags,
+                                                         GLTFMeshData.DrawableMesh);
+    if (RADIENT_FAILED(Status))
+        return Status;
 
     return CreateAsset<MeshAssetImpl>("mesh",
                                       Name,
@@ -634,17 +644,20 @@ RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFM
         return Result;
     }
 
-    if (GLTFModel.pModel == nullptr ||
-        pGLTFMeshStorage->MeshIndex >= GLTFModel.pModel->Meshes.size())
+    if (GLTFModel.pModel == nullptr)
     {
         Result.Status = RADIENT_STATUS_INVALID_OPERATION;
         return Result;
     }
 
-    Result.Status            = RADIENT_STATUS_OK;
-    Result.pModel            = GLTFModel.pModel.get();
-    Result.MeshIndex         = pGLTFMeshStorage->MeshIndex;
-    Result.VertexAttribFlags = GLTFModel.VertexAttribFlags;
+    if (RequireGPUResourcesReady && pGLTFMeshStorage->DrawableMesh.pVertexPool == nullptr)
+    {
+        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+        return Result;
+    }
+
+    Result.pMesh  = &pGLTFMeshStorage->DrawableMesh;
+    Result.Status = RADIENT_STATUS_OK;
     return Result;
 }
 

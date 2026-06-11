@@ -26,13 +26,13 @@
 
 #pragma once
 
+#include "Render/RadientDrawableMesh.hpp"
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientLightList.hpp"
 #include "RadientScene.h"
 #include "Scene/RadientSceneState.hpp"
 
 #include "GLTFLoader.hpp"
-#include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <deque>
@@ -113,29 +113,6 @@ struct RadientLightChange
     RadientLightChangeType Change = RadientLightChangeType::Updated;
 };
 
-enum class RadientDrawableMeshStatus
-{
-    Ready,
-    Pending,
-    Failed
-};
-
-/// Resolved mesh data needed to expand one scene renderable into drawable primitive slots.
-///
-/// The mesh provider fills this once the asset is ready. Pending status keeps the renderable
-/// queued in RadientSceneDrawableCache; failed status removes it from retry processing.
-struct RadientDrawableMesh
-{
-    const GLTF::Model* pModel      = nullptr;
-    const GLTF::Mesh*  pMesh       = nullptr;
-    IVertexPool*       pVertexPool = nullptr;
-
-    PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
-
-    Uint32 FirstIndexLocation = 0;
-    Uint32 BaseVertex         = 0;
-};
-
 /// Source of renderer-ready mesh data for RadientSceneDrawableCache.
 ///
 /// Production code resolves assets through the asset manager. Tests can provide a lightweight
@@ -145,8 +122,7 @@ class IRadientDrawableMeshProvider
 public:
     virtual ~IRadientDrawableMeshProvider() = default;
 
-    virtual RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMesh,
-                                                      RadientDrawableMesh& Mesh) = 0;
+    virtual RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh) = 0;
 };
 
 // RadientSceneDrawableCache is the bridge between scene-state components and renderer-facing

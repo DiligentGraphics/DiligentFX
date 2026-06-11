@@ -52,37 +52,20 @@ Uint8 CorrectMaterialAlphaMode(int AlphaMode)
 class RadientAssetDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
 public:
-    RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMeshAsset,
-                                              RadientDrawableMesh& Mesh) override final
+    RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMeshAsset) override final
     {
-        Mesh = {};
-
         if (pMeshAsset == nullptr)
-            return RadientDrawableMeshStatus::Failed;
+            return {};
 
         const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
             RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
         if (RADIENT_FAILED(Result.Status))
-            return RadientDrawableMeshStatus::Failed;
+            return {};
 
         if (Result.Status != RADIENT_STATUS_OK)
-            return RadientDrawableMeshStatus::Pending;
+            return {nullptr, RadientDrawableMeshStatus::Pending};
 
-        VERIFY(Result.pModel != nullptr, "GLTF mesh resolve result has null model pointer. This should not happen when the status is RADIENT_STATUS_OK");
-        VERIFY(Result.MeshIndex < Result.pModel->Meshes.size(), "GLTF mesh index (", Result.MeshIndex, ") is out of range for the model (", Result.pModel->Meshes.size(),
-               " meshes). This should not happen when the status is RADIENT_STATUS_OK");
-
-        IVertexPool* pVertexPool = Result.pModel->GetVertexPool();
-        VERIFY(pVertexPool != nullptr, "GLTF mesh resolve result references a model with null vertex pool. This should not happen when the status is RADIENT_STATUS_OK");
-
-        Mesh.pModel             = Result.pModel;
-        Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
-        Mesh.pVertexPool        = pVertexPool;
-        Mesh.VertexAttribFlags  = Result.VertexAttribFlags;
-        Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
-        Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
-
-        return RadientDrawableMeshStatus::Ready;
+        return {Result.pMesh, RadientDrawableMeshStatus::Ready};
     }
 };
 
@@ -300,8 +283,8 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 
 bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
-    RadientDrawableMesh Mesh;
-    switch (m_MeshProvider.GetDrawableMesh(Record.pMesh, Mesh))
+    const RadientDrawableMeshResolveResult ResolveResult = m_MeshProvider.GetDrawableMesh(Record.pMesh);
+    switch (ResolveResult.Status)
     {
         case RadientDrawableMeshStatus::Ready:
             break;
@@ -314,25 +297,23 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
             return false;
     }
 
+    VERIFY(ResolveResult.pMesh != nullptr, "Drawable mesh provider returned ready status with null mesh data");
+    if (ResolveResult.pMesh == nullptr)
+        return false;
+
+    const RadientDrawableMesh& Mesh = *ResolveResult.pMesh;
+
     Record.PendingResolution = false;
     RemoveRenderableDrawables(Record);
 
-    Record.DrawableIDs.reserve(Mesh.pMesh->Primitives.size());
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Mesh.pMesh->Primitives.size(); ++PrimitiveIndex)
+    Record.DrawableIDs.reserve(Mesh.Primitives.size());
+    for (const RadientDrawableMeshPrimitive& Primitive : Mesh.Primitives)
     {
-        const GLTF::Primitive& Primitive = Mesh.pMesh->Primitives[PrimitiveIndex];
-
-        const bool   IsIndexed    = Primitive.HasIndices();
-        const Uint32 FirstElement = IsIndexed ? Primitive.FirstIndex : Primitive.FirstVertex;
-        const Uint32 ElementCount = IsIndexed ? Primitive.IndexCount : Primitive.VertexCount;
-
-        if (ElementCount == 0)
+        if (Primitive.ElementCount == 0)
             continue;
 
-        if (Primitive.MaterialId >= Mesh.pModel->Materials.size())
+        if (Primitive.pMaterial == nullptr)
             continue;
-
-        const GLTF::Material* pMaterial = &Mesh.pModel->Materials[Primitive.MaterialId];
 
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
@@ -341,15 +322,15 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.pRenderer          = Record.pRenderer;
         Slot.pWorldMatrix       = Record.pWorldMatrix;
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
-        Slot.IsIndexed          = IsIndexed;
-        Slot.pMaterial          = pMaterial;
+        Slot.IsIndexed          = Primitive.IsIndexed;
+        Slot.pMaterial          = Primitive.pMaterial;
         Slot.pVertexPool        = Mesh.pVertexPool;
         Slot.VertexAttribFlags  = Mesh.VertexAttribFlags;
         Slot.FirstIndexLocation = Mesh.FirstIndexLocation;
         Slot.BaseVertex         = Mesh.BaseVertex;
-        Slot.FirstElement       = FirstElement;
-        Slot.ElementCount       = ElementCount;
-        Slot.AlphaMode          = CorrectMaterialAlphaMode(pMaterial->Attribs.AlphaMode);
+        Slot.FirstElement       = Primitive.FirstElement;
+        Slot.ElementCount       = Primitive.ElementCount;
+        Slot.AlphaMode          = CorrectMaterialAlphaMode(Primitive.pMaterial->Attribs.AlphaMode);
 
         Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
         Record.DrawableIDs.push_back(DrawableID);

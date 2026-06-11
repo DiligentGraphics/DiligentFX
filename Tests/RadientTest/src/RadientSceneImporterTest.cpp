@@ -599,13 +599,28 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 
     for (IRadientMeshAsset* pMesh : RenderableMeshes)
     {
-        // The asset manager should remember which glTF model and mesh index
-        // produced each converted Radient mesh.
+        // The asset manager should expose renderer-ready mesh data for each
+        // converted Radient mesh without leaking GLTF mesh/model details.
         const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
             RadientAssetManagerImpl::GetGLTFMesh(pMesh, false);
         EXPECT_EQ(Result.Status, RADIENT_STATUS_OK);
-        EXPECT_EQ(Result.pModel, pExpectedModel);
-        EXPECT_EQ(Result.MeshIndex, 0u);
+        ASSERT_NE(Result.pMesh, nullptr);
+        EXPECT_EQ(Result.pMesh->pVertexPool, pExpectedModel->GetVertexPool());
+        EXPECT_EQ(Result.pMesh->VertexAttribFlags, PBR_Renderer::PSO_FLAG_NONE);
+        EXPECT_EQ(Result.pMesh->FirstIndexLocation, pExpectedModel->GetFirstIndexLocation());
+        EXPECT_EQ(Result.pMesh->BaseVertex, pExpectedModel->GetBaseVertex());
+
+        ASSERT_EQ(Result.pMesh->Primitives.size(), pExpectedModel->Meshes[0].Primitives.size());
+        for (size_t PrimitiveIndex = 0; PrimitiveIndex < Result.pMesh->Primitives.size(); ++PrimitiveIndex)
+        {
+            const RadientDrawableMeshPrimitive& ResolvedPrimitive = Result.pMesh->Primitives[PrimitiveIndex];
+            const GLTF::Primitive&              ExpectedPrimitive = pExpectedModel->Meshes[0].Primitives[PrimitiveIndex];
+
+            EXPECT_EQ(ResolvedPrimitive.pMaterial, &pExpectedModel->Materials[ExpectedPrimitive.MaterialId]);
+            EXPECT_EQ(ResolvedPrimitive.IsIndexed, ExpectedPrimitive.HasIndices());
+            EXPECT_EQ(ResolvedPrimitive.FirstElement, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.FirstIndex : ExpectedPrimitive.FirstVertex);
+            EXPECT_EQ(ResolvedPrimitive.ElementCount, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.IndexCount : ExpectedPrimitive.VertexCount);
+        }
     }
 }
 

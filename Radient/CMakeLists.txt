@@ -4,6 +4,7 @@ project(Radient CXX)
 
 set(SOURCE
     src/Assets/RadientAssetManagerImpl.cpp
+    src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Core/RadientBackendImpl.cpp
     src/Core/RadientEngineImpl.cpp
@@ -29,6 +30,7 @@ set(SOURCE
 
 set(INCLUDE
     include/Assets/RadientAssetManagerImpl.hpp
+    include/Assets/RadientDrawableMeshConverter.hpp
     include/Core/RadientBackendImpl.hpp
     include/Core/RadientEngineImpl.hpp
     include/Core/RadientViewImpl.hpp
@@ -38,6 +40,7 @@ set(INCLUDE
     include/Render/Passes/RadientGeometryPass.hpp
     include/Render/Passes/RadientPostProcessPipeline.hpp
     include/Render/Passes/RadientSkyboxPass.hpp
+    include/Render/RadientDrawableMesh.hpp
     include/Render/RadientDrawList.hpp
     include/Render/RadientFrameRenderTargets.hpp
     include/Render/RadientLightList.hpp

@@ -27,6 +27,7 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
+#include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Render/RadientSceneDrawableCache.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
@@ -35,6 +36,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace Diligent;
@@ -51,12 +53,8 @@ class TestDrawableMeshProvider final : public IRadientDrawableMeshProvider
 public:
     struct MeshData
     {
-        GLTF::Model*              pModel             = nullptr;
-        RadientDrawableMeshStatus Status             = RadientDrawableMeshStatus::Failed;
-        PBR_Renderer::PSO_FLAGS   VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
-        IVertexPool*              pVertexPool        = TestVertexPool;
-        Uint32                    FirstIndexLocation = 7;
-        Uint32                    BaseVertex         = 3;
+        RadientDrawableMesh       Mesh;
+        RadientDrawableMeshStatus Status = RadientDrawableMeshStatus::Failed;
     };
 
     void RegisterMesh(IRadientMeshAsset*        pMesh,
@@ -67,13 +65,25 @@ public:
                       Uint32                    BaseVertex         = 3,
                       IVertexPool*              pVertexPool        = TestVertexPool)
     {
-        Meshes[pMesh] = MeshData{
-            &Model,
-            Status,
-            VertexAttribFlags,
-            pVertexPool,
-            FirstIndexLocation,
-            BaseVertex};
+        MeshData Data;
+        Data.Status                  = Status;
+        Data.Mesh.pVertexPool        = pVertexPool;
+        Data.Mesh.VertexAttribFlags  = VertexAttribFlags;
+        Data.Mesh.FirstIndexLocation = FirstIndexLocation;
+        Data.Mesh.BaseVertex         = BaseVertex;
+
+        const RADIENT_STATUS ConvertStatus =
+            !Model.Meshes.empty() ?
+            ConvertGLTFDrawableMeshPrimitives(Model.Meshes[0].Primitives,
+                                              Model.Materials,
+                                              Data.Mesh.Primitives) :
+            RADIENT_STATUS_INVALID_ARGUMENT;
+        if (RADIENT_FAILED(ConvertStatus))
+        {
+            ADD_FAILURE() << "Registered mesh data must reference a valid model";
+        }
+
+        Meshes[pMesh] = std::move(Data);
     }
 
     void SetMeshStatus(IRadientMeshAsset* pMesh, RadientDrawableMeshStatus Status)
@@ -84,8 +94,7 @@ public:
             MeshIt->second.Status = Status;
     }
 
-    RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMesh,
-                                              RadientDrawableMesh& Mesh) override final
+    RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh) override final
     {
         ++NumCalls;
         pLastMesh = pMesh;
@@ -94,26 +103,14 @@ public:
         if (MeshIt == Meshes.end())
         {
             ADD_FAILURE() << "Mesh asset must be registered with the test mesh provider";
-            return RadientDrawableMeshStatus::Failed;
+            return {};
         }
 
         const MeshData& MeshData = MeshIt->second;
         if (MeshData.Status != RadientDrawableMeshStatus::Ready)
-            return MeshData.Status;
+            return {nullptr, MeshData.Status};
 
-        if (MeshData.pModel == nullptr || MeshData.pModel->Meshes.empty())
-        {
-            ADD_FAILURE() << "Registered mesh data must reference a valid model";
-            return RadientDrawableMeshStatus::Failed;
-        }
-
-        Mesh.pModel             = MeshData.pModel;
-        Mesh.pMesh              = &MeshData.pModel->Meshes[0];
-        Mesh.pVertexPool        = MeshData.pVertexPool;
-        Mesh.VertexAttribFlags  = MeshData.VertexAttribFlags;
-        Mesh.FirstIndexLocation = MeshData.FirstIndexLocation;
-        Mesh.BaseVertex         = MeshData.BaseVertex;
-        return RadientDrawableMeshStatus::Ready;
+        return {&MeshData.Mesh, RadientDrawableMeshStatus::Ready};
     }
 
     std::unordered_map<IRadientMeshAsset*, MeshData> Meshes;
