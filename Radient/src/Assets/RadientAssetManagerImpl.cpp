@@ -153,6 +153,19 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoader(const std::string& SourceURI,
     }
 }
 
+std::string MakeGLTFCacheKey(const char* URI)
+{
+    return std::string{"gltf:"} + URI;
+}
+
+std::string MakeTextureCacheKey(const RadientTextureLoadInfo& LoadInfo)
+{
+    std::string Key{"texture:"};
+    Key += LoadInfo.URI;
+    Key += LoadInfo.IsSRGB ? ":srgb=1" : ":srgb=0";
+    return Key;
+}
+
 PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
 {
     PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
@@ -217,33 +230,48 @@ RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, AssetType, Storag
     m_Ref.Version = 1;
 }
 
-template <typename InterfaceType, typename ImplType>
-InterfaceType* RadientAssetManagerImpl::StoreAsset(const char*                  Type,
-                                                   const Char*                  Name,
-                                                   typename ImplType::Storage&& Storage)
+template <typename ImplType>
+RefCntAutoPtr<ImplType> RadientAssetManagerImpl::CreateAsset(const char*                  Type,
+                                                             const Char*                  Name,
+                                                             typename ImplType::Storage&& Storage)
 {
-    RefCntAutoPtr<ImplType> pAsset{MakeNewRCObj<ImplType>()(MakeURI(Type), Name, std::move(Storage))};
+    return RefCntAutoPtr<ImplType>{MakeNewRCObj<ImplType>()(MakeURI(Type), Name, std::move(Storage))};
+}
 
-    RefCntAutoPtr<IRadientAsset> pBase{pAsset, IID_RadientAsset};
-    VERIFY(pBase != nullptr, "Radient asset object does not expose IRadientAsset");
+template <typename ImplType, typename CreateAssetFuncType>
+std::pair<RefCntAutoPtr<ImplType>, bool> RadientAssetManagerImpl::CacheAssetOrGetExisting(const std::string&    CacheKey,
+                                                                                          CreateAssetFuncType&& CreateAssetFunc)
+{
+    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
 
+    const auto It = m_Assets.find(HashMapStringKey{CacheKey.c_str()});
+    if (It != m_Assets.end())
     {
-        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-
-        const auto It = m_Assets.find(HashMapStringKey{pBase->GetReference().URI});
-        if (It != m_Assets.end())
+        RefCntAutoPtr<IRadientAsset> pExisting = It->second.Lock();
+        if (pExisting != nullptr)
         {
-            VERIFY(It->second.Lock() == nullptr, "Asset URI already exists");
-            It->second = RefCntWeakPtr<IRadientAsset>{pBase};
-        }
-        else
-        {
-            m_Assets.emplace(HashMapStringKey{pBase->GetReference().URI, true},
-                             RefCntWeakPtr<IRadientAsset>{pBase});
+            return {RefCntAutoPtr<ImplType>{pExisting.RawPtr<ImplType>()}, false};
         }
     }
 
-    return pAsset.Detach();
+    RefCntAutoPtr<ImplType> pAsset = CreateAssetFunc();
+    if (!pAsset)
+    {
+        UNEXPECTED("Failed to create asset for cache key '", CacheKey, "'");
+        return {};
+    }
+
+    if (It != m_Assets.end())
+    {
+        It->second = RefCntWeakPtr<IRadientAsset>{pAsset};
+    }
+    else
+    {
+        m_Assets.emplace(HashMapStringKey{CacheKey, true},
+                         RefCntWeakPtr<IRadientAsset>{pAsset});
+    }
+
+    return {pAsset, true};
 }
 
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
@@ -287,6 +315,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
     if (!ValidateMesh(MeshCI))
@@ -326,7 +355,9 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
         MeshData.MeshPrimitives.emplace_back(std::move(Primitive));
     }
 
-    *ppMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>("mesh", MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
+    RefCntAutoPtr<MeshAssetImpl> pMesh =
+        CreateAsset<MeshAssetImpl>("mesh", MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
+    pMesh->QueryInterface(IID_RadientMeshAsset, ppMesh);
     return RADIENT_STATUS_OK;
 }
 
@@ -335,6 +366,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
 {
     if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMaterial = nullptr;
 
     MaterialStorage MaterialData;
@@ -350,7 +382,9 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
-    *ppMaterial = StoreAsset<IRadientMaterialAsset, MaterialAssetImpl>("material", MaterialCI.Name, std::move(MaterialData));
+    RefCntAutoPtr<MaterialAssetImpl> pMaterial =
+        CreateAsset<MaterialAssetImpl>("material", MaterialCI.Name, std::move(MaterialData));
+    pMaterial->QueryInterface(IID_RadientMaterialAsset, ppMaterial);
     return RADIENT_STATUS_OK;
 }
 
@@ -359,54 +393,78 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
 {
     if (ppTexture == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppTexture == nullptr, "Output texture pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppTexture = nullptr;
 
     if (!ValidateTexture(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    TextureStorage TextureData;
-    TextureData.SourceURI = LoadInfo.URI;
+    const std::string CacheKey = MakeTextureCacheKey(LoadInfo);
+    auto [pTextureAsset, TextureCreated] =
+        CacheAssetOrGetExisting<TextureAssetImpl>(
+            CacheKey,
+            [this, &LoadInfo]() {
+                TextureStorage TextureData;
+                TextureData.SourceURI = LoadInfo.URI;
+                TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
+                return CreateAsset<TextureAssetImpl>("texture", LoadInfo.URI, std::move(TextureData));
+            });
+    VERIFY_EXPR(pTextureAsset != nullptr);
+    if (!TextureCreated)
+    {
+        const RADIENT_STATUS Status = pTextureAsset->GetLoadStatus();
+        pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
+        return Status;
+    }
 
     if (m_pThreadPool == nullptr)
     {
-        RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoader(TextureData.SourceURI, LoadInfo.IsSRGB);
+        RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoader(LoadInfo.URI, LoadInfo.IsSRGB);
         if (pLoader == nullptr)
+        {
+            pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
             return RADIENT_STATUS_INVALID_OPERATION;
+        }
 
-        TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-        *ppTexture = StoreAsset<IRadientTextureAsset, TextureAssetImpl>("texture", LoadInfo.URI, std::move(TextureData));
+        CompleteTextureLoad(pTextureAsset, std::move(pLoader));
+        const RADIENT_STATUS Status = pTextureAsset->GetLoadStatus();
+        if (RADIENT_FAILED(Status))
+            return Status;
 
-        CompleteTextureLoad(*ppTexture, std::move(pLoader));
-        return GetAssetLoadStatus(*ppTexture);
+        pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
+        return Status;
     }
 
-    TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-    *ppTexture = StoreAsset<IRadientTextureAsset, TextureAssetImpl>("texture", LoadInfo.URI, std::move(TextureData));
-
-    RefCntAutoPtr<RadientAssetManagerImpl> pSelf{this};
-    RefCntAutoPtr<IRadientTextureAsset>    pTextureAsset{*ppTexture};
+    RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
+    RefCntAutoPtr<IRadientTextureAsset>    pTextureForWorker{pTextureAsset};
     const std::string                      SourceURI{LoadInfo.URI};
     const Bool                             IsSRGB = LoadInfo.IsSRGB;
 
+    pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
+
     EnqueueAsyncWork(
         m_pThreadPool,
-        [pSelf, pTextureAsset, SourceURI, IsSRGB](Uint32) //
+        [pWeakSelf, pTextureForWorker, SourceURI, IsSRGB](Uint32) mutable //
         {
+            RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
+            if (pSelf == nullptr)
+                return ASYNC_TASK_STATUS_CANCELLED;
+
             RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoader(SourceURI, IsSRGB);
             if (pLoader == nullptr)
             {
-                IRadientTextureAsset* pTexture = pTextureAsset;
+                IRadientTextureAsset* pTexture = pTextureForWorker;
                 TextureAssetImpl*     pImpl    = ClassPtrCast<TextureAssetImpl>(pTexture);
                 VERIFY_EXPR(pImpl != nullptr);
                 pImpl->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
-            pSelf->CompleteTextureLoad(pTextureAsset, std::move(pLoader));
+            pSelf->CompleteTextureLoad(pTextureForWorker, std::move(pLoader));
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return GetAssetLoadStatus(pTextureAsset);
+    return pTextureAsset->GetLoadStatus();
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
@@ -414,54 +472,70 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 {
     if (ppModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppModel == nullptr, "Output GLTF model pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppModel = nullptr;
 
     if (!ValidateGLTF(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    GLTFModelStorage GLTFModelData;
-    GLTFModelData.SourceURI = LoadInfo.URI;
+    const std::string CacheKey = MakeGLTFCacheKey(LoadInfo.URI);
+    auto [pModelAsset, ModelCreated] =
+        CacheAssetOrGetExisting<SceneAssetImpl>(
+            CacheKey,
+            [this, &LoadInfo]() {
+                GLTFModelStorage GLTFModelData;
+                GLTFModelData.SourceURI = LoadInfo.URI;
+                GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING);
+                return CreateAsset<SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+            });
+    VERIFY_EXPR(pModelAsset != nullptr);
+    if (!ModelCreated)
+    {
+        const RADIENT_STATUS Status = pModelAsset->GetLoadStatus();
+        pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
+        return Status;
+    }
 
     if (m_pThreadPool == nullptr)
     {
-        GLTFModelData.pModel = LoadGLTFModel(GLTFModelData.SourceURI,
-                                             m_pDevice,
-                                             m_pResourceManager,
-                                             m_pUploadManager);
-        if (GLTFModelData.pModel == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+        CompleteGLTFLoad(pModelAsset,
+                         LoadGLTFModel(LoadInfo.URI,
+                                       m_pDevice,
+                                       m_pResourceManager,
+                                       m_pUploadManager));
 
-        GLTFModelData.VertexAttribFlags = GetVertexAttribFlags(*GLTFModelData.pModel);
-        GLTFModelData.LoadStatus.store(RADIENT_STATUS_OK);
-        GLTFModelData.GPUUpdateQueued.store(true);
-        *ppModel = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+        const RADIENT_STATUS Status = pModelAsset->GetLoadStatus();
+        if (RADIENT_FAILED(Status))
+            return Status;
 
-        m_PendingGPUResourceUpdates.Enqueue(RefCntWeakPtr<IRadientSceneAsset>{*ppModel});
-
-        return RADIENT_STATUS_OK;
+        pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
+        return Status;
     }
 
-    GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING);
-    *ppModel = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
-
-    RefCntAutoPtr<RadientAssetManagerImpl> pSelf{this};
-    RefCntAutoPtr<IRadientSceneAsset>      pModelAsset{*ppModel};
+    RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
+    RefCntAutoPtr<IRadientSceneAsset>      pModelForWorker{pModelAsset};
     const std::string                      SourceURI{LoadInfo.URI};
+
+    pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
 
     EnqueueAsyncWork(
         m_pThreadPool,
-        [pSelf, pModelAsset, SourceURI](Uint32) //
+        [pWeakSelf, pModelForWorker, SourceURI](Uint32) mutable //
         {
+            RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
+            if (pSelf == nullptr)
+                return ASYNC_TASK_STATUS_CANCELLED;
+
             std::unique_ptr<GLTF::Model> pModel = LoadGLTFModel(SourceURI,
                                                                 pSelf->m_pDevice,
                                                                 pSelf->m_pResourceManager,
                                                                 pSelf->m_pUploadManager);
 
-            pSelf->CompleteGLTFLoad(pModelAsset, std::move(pModel));
+            pSelf->CompleteGLTFLoad(pModelForWorker, std::move(pModel));
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return GetGLTFLoadStatus(pModelAsset);
+    return pModelAsset->GetLoadStatus();
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
@@ -491,6 +565,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
     const SceneAssetImpl* pModelImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
@@ -506,7 +581,9 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     GLTFMeshData.pModel    = pModel;
     GLTFMeshData.MeshIndex = MeshIndex;
 
-    *ppMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>("mesh", Name, MeshAssetStorage{std::move(GLTFMeshData)});
+    RefCntAutoPtr<MeshAssetImpl> pMesh =
+        CreateAsset<MeshAssetImpl>("mesh", Name, MeshAssetStorage{std::move(GLTFMeshData)});
+    pMesh->QueryInterface(IID_RadientMeshAsset, ppMesh);
     return RADIENT_STATUS_OK;
 }
 
@@ -579,7 +656,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pM
     if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    return pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire);
+    return pImpl->GetLoadStatus();
 }
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
@@ -757,19 +834,17 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
     {
         case RADIENT_ASSET_TYPE_SCENE:
         {
-            RefCntAutoPtr<IRadientSceneAsset> pScene{pAsset, IID_RadientSceneAsset};
-            const SceneAssetImpl*             pImpl = pScene.RawPtr<SceneAssetImpl>();
-            return pImpl != nullptr ?
-                pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire) :
+            RefCntAutoPtr<SceneAssetImpl> pScene{pAsset, IID_RadientSceneAsset};
+            return pScene != nullptr ?
+                pScene->GetLoadStatus() :
                 RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         case RADIENT_ASSET_TYPE_TEXTURE:
         {
-            RefCntAutoPtr<IRadientTextureAsset> pTexture{pAsset, IID_RadientTextureAsset};
-            const TextureAssetImpl*             pImpl = pTexture.RawPtr<TextureAssetImpl>();
-            return pImpl != nullptr ?
-                pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire) :
+            RefCntAutoPtr<TextureAssetImpl> pTexture{pAsset, IID_RadientTextureAsset};
+            return pTexture != nullptr ?
+                pTexture->GetLoadStatus() :
                 RADIENT_STATUS_INVALID_ARGUMENT;
         }
 

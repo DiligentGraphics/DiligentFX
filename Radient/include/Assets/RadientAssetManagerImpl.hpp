@@ -250,6 +250,12 @@ private:
             return m_Storage;
         }
 
+        template <typename T = StorageType>
+        auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
+        {
+            return m_Storage.LoadStatus.load(std::memory_order_acquire);
+        }
+
         IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(InterfaceID, IID_RadientAsset, TBase)
 
     private:
@@ -275,10 +281,14 @@ private:
 
     std::string MakeURI(const char* Type);
 
-    template <typename InterfaceType, typename ImplType>
-    InterfaceType* StoreAsset(const char*                  Type,
-                              const Char*                  Name,
-                              typename ImplType::Storage&& Storage);
+    template <typename ImplType>
+    RefCntAutoPtr<ImplType> CreateAsset(const char*                  Type,
+                                        const Char*                  Name,
+                                        typename ImplType::Storage&& Storage);
+
+    template <typename ImplType, typename CreateAssetFuncType>
+    std::pair<RefCntAutoPtr<ImplType>, bool> CacheAssetOrGetExisting(const std::string&    CacheKey,
+                                                                     CreateAssetFuncType&& CreateAssetFunc);
 
     void TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pModel,
                                      GLTFModelStorage&   GLTFModel);
@@ -305,6 +315,8 @@ private:
     mutable std::shared_mutex  m_Mutex;
     std::atomic<RadientHandle> m_NextAssetID{1};
 
+    // Weak cache keyed by canonical source identity. The manager does not own
+    // assets: entries expire when scenes/views/drop their strong references.
     using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
     mutable AssetMapType m_Assets;
 
