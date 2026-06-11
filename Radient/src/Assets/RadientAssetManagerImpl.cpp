@@ -612,10 +612,10 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
                                       ppMesh);
 }
 
-RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFMesh(IRadientMeshAsset* pMesh,
-                                                                                    bool               RequireGPUResourcesReady)
+RadientDrawableMeshResolveResult RadientAssetManagerImpl::GetDrawableMesh(IRadientMeshAsset* pMesh,
+                                                                          bool               RequireGPUResourcesReady)
 {
-    GLTFMeshResolveResult Result;
+    RadientDrawableMeshResolveResult Result;
 
     const MeshAssetImpl* pMeshImpl = ClassPtrCast<const MeshAssetImpl>(pMesh);
     if (pMeshImpl == nullptr)

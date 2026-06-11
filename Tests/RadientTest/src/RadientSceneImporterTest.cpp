@@ -601,8 +601,8 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     {
         // The asset manager should expose renderer-ready mesh data for each
         // converted Radient mesh without leaking GLTF mesh/model details.
-        const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
-            RadientAssetManagerImpl::GetGLTFMesh(pMesh, false);
+        const RadientDrawableMeshResolveResult Result =
+            RadientAssetManagerImpl::GetDrawableMesh(pMesh, false);
         EXPECT_EQ(Result.Status, RADIENT_STATUS_OK);
         ASSERT_NE(Result.pMesh, nullptr);
         EXPECT_EQ(Result.pMesh->pVertexPool, pExpectedModel->GetVertexPool());

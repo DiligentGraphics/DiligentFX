@@ -104,14 +104,8 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
-    struct GLTFMeshResolveResult
-    {
-        const RadientDrawableMesh* pMesh  = nullptr;
-        RADIENT_STATUS             Status = RADIENT_STATUS_INVALID_ARGUMENT;
-    };
-
-    static GLTFMeshResolveResult GetGLTFMesh(IRadientMeshAsset* pMesh,
-                                             bool               RequireGPUResourcesReady);
+    static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
+                                                            bool               RequireGPUResourcesReady);
 
     static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
                                            bool                RequireGPUResourcesReady = false);

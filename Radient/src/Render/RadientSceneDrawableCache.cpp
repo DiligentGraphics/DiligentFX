@@ -57,8 +57,8 @@ public:
         if (pMeshAsset == nullptr)
             return {};
 
-        const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
-            RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
+        const RadientDrawableMeshResolveResult Result =
+            RadientAssetManagerImpl::GetDrawableMesh(pMeshAsset, true);
         return {Result.Status == RADIENT_STATUS_OK ? Result.pMesh : nullptr, Result.Status};
     }
 };
