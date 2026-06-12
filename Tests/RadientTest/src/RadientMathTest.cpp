@@ -95,6 +95,26 @@ TEST(RadientMathTest, ToFloat4)
     EXPECT_EQ(Value.w, 4.f);
 }
 
+TEST(RadientMathTest, ColorRGBA8ToFloat4)
+{
+    // Converts normalized 8-bit color channels to Diligent float4.
+    const float4 Value = RadientMath::ToFloat4(RadientColorRGBA8{0, 128, 255, 64});
+    EXPECT_FLOAT_EQ(Value.x, 0.f);
+    EXPECT_FLOAT_EQ(Value.y, 128.f / 255.f);
+    EXPECT_FLOAT_EQ(Value.z, 1.f);
+    EXPECT_FLOAT_EQ(Value.w, 64.f / 255.f);
+}
+
+TEST(RadientMathTest, BoneIndicesToFloat4)
+{
+    // Converts integer bone indices to Diligent float4 component values.
+    const float4 Value = RadientMath::ToFloat4(RadientBoneIndices4{1, 2, 3, 4});
+    EXPECT_EQ(Value.x, 1.f);
+    EXPECT_EQ(Value.y, 2.f);
+    EXPECT_EQ(Value.z, 3.f);
+    EXPECT_EQ(Value.w, 4.f);
+}
+
 TEST(RadientMathTest, ToQuaternion)
 {
     // A zero-length Radient quaternion is treated as identity to avoid invalid

@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "RadientAssets.h"
 #include "RadientMath.h"
 #include "RadientScene.h"
 #include "BasicMath.hpp"
@@ -71,6 +72,27 @@ inline constexpr float3 ToFloat3(const RadientFloat3& Value)
 inline constexpr float4 ToFloat4(const RadientFloat4& Value)
 {
     return float4{Value.x, Value.y, Value.z, Value.w};
+}
+
+inline constexpr float4 ToFloat4(const RadientColorRGBA8& Color)
+{
+    constexpr float Inv255 = 1.f / 255.f;
+    return float4{
+        Color.r * Inv255,
+        Color.g * Inv255,
+        Color.b * Inv255,
+        Color.a * Inv255,
+    };
+}
+
+inline constexpr float4 ToFloat4(const RadientBoneIndices4& Indices)
+{
+    return float4{
+        static_cast<Float32>(Indices.x),
+        static_cast<Float32>(Indices.y),
+        static_cast<Float32>(Indices.z),
+        static_cast<Float32>(Indices.w),
+    };
 }
 
 inline bool IsFinite(Float32 Value)
