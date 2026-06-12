@@ -29,6 +29,7 @@
 #include "gtest/gtest.h"
 
 #include "RadientEngine.h"
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
@@ -363,17 +364,54 @@ TEST(RadientEngineTest, CreateWithExternalThreadPool)
 
 TEST(RadientAssetManagerTest, CreateMaterial)
 {
-    // Creating a material should allocate a stable asset URI and non-zero version.
+    // Creating a material should allocate a stable asset reference and build the
+    // internal GLTF material representation used by the renderer.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture = MakeTestTextureAsset("texture://base-color", 1);
+    RefCntAutoPtr<IRadientTextureAsset> pNormalTexture    = MakeTestTextureAsset("texture://normal", 2);
+
+    RadientMaterialCreateInfo MaterialCI{};
+    MaterialCI.Name              = "Radient test material";
+    MaterialCI.BaseColorFactor   = {0.25f, 0.5f, 0.75f, 0.8f};
+    MaterialCI.MetallicFactor    = 0.2f;
+    MaterialCI.RoughnessFactor   = 0.7f;
+    MaterialCI.EmissiveFactor    = {1.f, 2.f, 3.f};
+    MaterialCI.AlphaCutoff       = 0.33f;
+    MaterialCI.DoubleSided       = True;
+    MaterialCI.pBaseColorTexture = pBaseColorTexture;
+    MaterialCI.pNormalTexture    = pNormalTexture;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
     EXPECT_NE(pMaterial->GetReference().URI, nullptr);
     EXPECT_NE(pMaterial->GetReference().Version, 0u);
+
+    const GLTF::Material* pGLTFMaterial = RadientAssetManagerImpl::GetMaterial(pMaterial);
+    ASSERT_NE(pGLTFMaterial, nullptr);
+
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.x, MaterialCI.BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.y, MaterialCI.BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.z, MaterialCI.BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.w, MaterialCI.BaseColorFactor.w);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.MetallicFactor, MaterialCI.MetallicFactor);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.RoughnessFactor, MaterialCI.RoughnessFactor);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.x, MaterialCI.EmissiveFactor.x);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.y, MaterialCI.EmissiveFactor.y);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.z, MaterialCI.EmissiveFactor.z);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.AlphaCutoff, MaterialCI.AlphaCutoff);
+    EXPECT_TRUE(pGLTFMaterial->DoubleSided);
+
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
+    EXPECT_EQ(pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId).GetUVSelector(), 0);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 1);
+    EXPECT_EQ(pGLTFMaterial->GetTextureAttrib(GLTF::DefaultNormalTextureAttribId).GetUVSelector(), 0);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultMetallicRoughnessTextureAttribId), -1);
 }
 
 TEST(RadientAssetManagerTest, CreateMesh)

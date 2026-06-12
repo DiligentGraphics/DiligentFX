@@ -29,10 +29,12 @@
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
+#include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GraphicsAccessories.hpp"
 #include "GPUUploadManager.h"
+#include "Math/RadientMath.hpp"
 #include "ThreadPool.hpp"
 #include "TextureLoader.h"
 
@@ -185,6 +187,59 @@ RadientAssetManagerImpl::TextureStorage::TextureStorage(TextureStorage&& Rhs) no
     GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
     PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
 {
+}
+
+GLTF::Material RadientAssetManagerImpl::CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI)
+{
+    GLTF::Material        Material;
+    GLTF::MaterialBuilder Builder{Material};
+
+    GLTF::Material::ShaderAttribs& Attribs = Builder.GetShaderAttribs();
+    Attribs.BaseColorFactor                = RadientMath::ToFloat4(MaterialCI.BaseColorFactor);
+    Attribs.MetallicFactor                 = MaterialCI.MetallicFactor;
+    Attribs.RoughnessFactor                = MaterialCI.RoughnessFactor;
+    Attribs.EmissiveFactor                 = RadientMath::ToFloat3(MaterialCI.EmissiveFactor);
+    Attribs.AlphaCutoff                    = MaterialCI.AlphaCutoff;
+
+    Material.DoubleSided = MaterialCI.DoubleSided != False;
+
+    int  TextureId = 0;
+    auto AddMaterialTexture =
+        [&](Uint32 TextureAttribId, IRadientTextureAsset* pTexture) //
+    {
+        if (pTexture == nullptr)
+            return;
+
+        Builder.SetTextureId(TextureAttribId, TextureId++);
+        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
+        TextureAttribs.SetUVSelector(0);
+        ApplyTextureAtlasAttribs(pTexture, TextureAttribs);
+    };
+
+    AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
+    AddMaterialTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, MaterialCI.pMetallicRoughnessTexture);
+    AddMaterialTexture(GLTF::DefaultNormalTextureAttribId, MaterialCI.pNormalTexture);
+    AddMaterialTexture(GLTF::DefaultOcclusionTextureAttribId, MaterialCI.pOcclusionTexture);
+    AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
+
+    Builder.Finalize();
+    return Material;
+}
+
+bool RadientAssetManagerImpl::ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
+                                                       GLTF::Material::TextureShaderAttribs& Attribs)
+{
+    RefCntAutoPtr<TextureAssetImpl> pImpl{pTexture, IID_TextureAssetImpl};
+    if (!pImpl)
+        return false;
+
+    ITextureAtlasSuballocation* pAtlasSuballocation = pImpl->GetStorage().pAtlasSuballocation;
+    if (pAtlasSuballocation == nullptr)
+        return false;
+
+    Attribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
+    Attribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
+    return true;
 }
 
 template <typename InterfaceType,
@@ -356,12 +411,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     *ppMaterial = nullptr;
 
     MaterialStorage MaterialData;
-    MaterialData.BaseColorFactor           = MaterialCI.BaseColorFactor;
-    MaterialData.MetallicFactor            = MaterialCI.MetallicFactor;
-    MaterialData.RoughnessFactor           = MaterialCI.RoughnessFactor;
-    MaterialData.EmissiveFactor            = MaterialCI.EmissiveFactor;
-    MaterialData.AlphaCutoff               = MaterialCI.AlphaCutoff;
-    MaterialData.DoubleSided               = MaterialCI.DoubleSided;
+    MaterialData.Material                  = CreateGLTFMaterial(MaterialCI);
     MaterialData.pBaseColorTexture         = MaterialCI.pBaseColorTexture;
     MaterialData.pMetallicRoughnessTexture = MaterialCI.pMetallicRoughnessTexture;
     MaterialData.pNormalTexture            = MaterialCI.pNormalTexture;
@@ -633,6 +683,12 @@ RadientDrawableMeshResolveResult RadientAssetManagerImpl::GetDrawableMesh(IRadie
     Result.pMesh  = &pGLTFMeshStorage->DrawableMesh;
     Result.Status = RADIENT_STATUS_OK;
     return Result;
+}
+
+const GLTF::Material* RadientAssetManagerImpl::GetMaterial(IRadientMaterialAsset* pMaterial)
+{
+    RefCntAutoPtr<MaterialAssetImpl> pImpl{pMaterial, IID_MaterialAssetImpl};
+    return pImpl ? &pImpl->GetStorage().Material : nullptr;
 }
 
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pModel,

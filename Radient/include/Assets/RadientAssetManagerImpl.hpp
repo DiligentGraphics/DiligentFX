@@ -107,6 +107,8 @@ public:
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
+    static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
+
     static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
                                            bool                RequireGPUResourcesReady = false);
     static RADIENT_STATUS     GetGLTFLoadStatus(IRadientSceneAsset* pModel);
@@ -155,12 +157,7 @@ private:
 
     struct MaterialStorage
     {
-        RadientFloat4 BaseColorFactor = {1.f, 1.f, 1.f, 1.f};
-        Float32       MetallicFactor  = 1.f;
-        Float32       RoughnessFactor = 1.f;
-        RadientFloat3 EmissiveFactor  = {0.f, 0.f, 0.f};
-        Float32       AlphaCutoff     = 0.5f;
-        Bool          DoubleSided     = False;
+        GLTF::Material Material;
 
         RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;
         RefCntAutoPtr<IRadientTextureAsset> pMetallicRoughnessTexture;
@@ -301,6 +298,9 @@ private:
     static bool           ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo);
     static bool           ValidateTexture(const RadientTextureLoadInfo& LoadInfo);
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
+    static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
+    static bool           ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
+                                                   GLTF::Material::TextureShaderAttribs& Attribs);
 
     std::string MakeURI(const char* Type);
 
