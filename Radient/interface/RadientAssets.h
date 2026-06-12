@@ -225,10 +225,28 @@ typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 
 
 /// Texture load attributes.
+/// Optional callback used to release memory passed through RadientTextureLoadInfo::pData.
+/// The callback is invoked when Radient no longer needs the source memory.
+typedef void (*RadientTextureReleaseDataCallbackType)(const void* pData, Uint64 DataSize, void* pUserData);
+
 struct RadientTextureLoadInfo
 {
-    /// Source URI. The scheme may identify a local file, remote resource, or memory-backed source.
+    /// Source URI. For memory-backed textures, this is optional and may be used as the texture identity
+    /// for asset cache lookup and debugging.
     const Char* URI DEFAULT_INITIALIZER(nullptr);
+
+    /// Optional pointer to encoded texture data.
+    const void* pData DEFAULT_INITIALIZER(nullptr);
+
+    /// Size of the encoded texture data, in bytes.
+    Uint64 DataSize DEFAULT_INITIALIZER(0);
+
+    /// Optional callback to release pData when Radient no longer needs it.
+    /// If this callback is null and pData is not null, Radient makes an internal copy of the data.
+    RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);
+
+    /// User data passed to ReleaseData.
+    void* pReleaseDataUserData DEFAULT_INITIALIZER(nullptr);
 
     /// Interpret the texture as sRGB.
     Bool IsSRGB DEFAULT_INITIALIZER(False);

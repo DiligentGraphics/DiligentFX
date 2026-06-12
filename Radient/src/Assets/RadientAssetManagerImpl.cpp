@@ -27,6 +27,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 
 #include "Assets/RadientDrawableMeshConverter.hpp"
+#include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
 #include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
@@ -36,8 +37,11 @@
 #include "TextureLoader.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <exception>
+#include <limits>
+#include <memory>
 #include <thread>
 #include <utility>
 
@@ -128,43 +132,9 @@ std::unique_ptr<GLTF::Model> LoadGLTFModel(const std::string&     SourceURI,
     }
 }
 
-RefCntAutoPtr<ITextureLoader> CreateTextureLoader(const std::string& SourceURI,
-                                                  Bool               IsSRGB)
-{
-    try
-    {
-        TextureLoadInfo LoadInfo{SourceURI.c_str()};
-        LoadInfo.Usage     = USAGE_DEFAULT;
-        LoadInfo.BindFlags = BIND_SHADER_RESOURCE;
-        LoadInfo.IsSRGB    = IsSRGB;
-
-        RefCntAutoPtr<ITextureLoader> pLoader;
-        CreateTextureLoaderFromFile(SourceURI.c_str(), IMAGE_FILE_FORMAT_UNKNOWN, LoadInfo, &pLoader);
-        return pLoader;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient texture asset '", SourceURI, "': ", Error.what());
-        return {};
-    }
-    catch (...)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient texture asset '", SourceURI, "'");
-        return {};
-    }
-}
-
 std::string MakeGLTFCacheKey(const char* URI)
 {
     return std::string{"gltf:"} + URI;
-}
-
-std::string MakeTextureCacheKey(const RadientTextureLoadInfo& LoadInfo)
-{
-    std::string Key{"texture:"};
-    Key += LoadInfo.URI;
-    Key += LoadInfo.IsSRGB ? ":srgb=1" : ":srgb=0";
-    return Key;
 }
 
 PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
@@ -415,15 +385,19 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     if (!ValidateTexture(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const std::string CacheKey = MakeTextureCacheKey(LoadInfo);
+    RadientTextureSource TextureSource{LoadInfo};
+    const std::string    SourceURI = TextureSource.GetURI();
+    const std::string    CacheKey  = RadientTextureSource::MakeCacheKey(LoadInfo);
     auto [pTextureAsset, TextureCreated] =
         CacheAssetOrGetExisting<TextureAssetImpl>(
             CacheKey,
-            [this, &LoadInfo]() {
+            [this, &SourceURI]() {
                 TextureStorage TextureData;
-                TextureData.SourceURI = LoadInfo.URI;
+                TextureData.SourceURI = SourceURI;
                 TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-                return CreateAsset<TextureAssetImpl>("texture", LoadInfo.URI, std::move(TextureData));
+                return CreateAsset<TextureAssetImpl>("texture",
+                                                     SourceURI.empty() ? nullptr : SourceURI.c_str(),
+                                                     std::move(TextureData));
             });
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!TextureCreated)
@@ -435,7 +409,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
 
     if (m_pThreadPool == nullptr)
     {
-        RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoader(LoadInfo.URI, LoadInfo.IsSRGB);
+        RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
         if (pLoader == nullptr)
         {
             pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
@@ -453,20 +427,20 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
 
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
     RefCntAutoPtr<IRadientTextureAsset>    pTextureForWorker{pTextureAsset};
-    const std::string                      SourceURI{LoadInfo.URI};
-    const Bool                             IsSRGB = LoadInfo.IsSRGB;
+
+    TextureSource.MakeMemoryCopy();
 
     pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
 
     EnqueueAsyncWork(
         m_pThreadPool,
-        [pWeakSelf, pTextureForWorker, SourceURI, IsSRGB](Uint32) mutable //
+        [pWeakSelf, pTextureForWorker, TextureSource = std::move(TextureSource)](Uint32) mutable //
         {
             RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
             if (pSelf == nullptr)
                 return ASYNC_TASK_STATUS_CANCELLED;
 
-            RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoader(SourceURI, IsSRGB);
+            RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
             if (pLoader == nullptr)
             {
                 IRadientTextureAsset* pTexture = pTextureForWorker;
@@ -850,7 +824,19 @@ bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo)
 
 bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& LoadInfo)
 {
-    return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
+    const bool HasURI  = LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
+    const bool HasData = LoadInfo.pData != nullptr;
+
+    if (!HasData)
+        return HasURI;
+
+    if (LoadInfo.DataSize == 0 ||
+        LoadInfo.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset)
