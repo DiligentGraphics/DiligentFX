@@ -26,9 +26,9 @@
 
 #include "Assets/RadientTextureSource.hpp"
 
+#include "HashUtils.hpp"
 #include "TextureLoader.h"
 
-#include <atomic>
 #include <utility>
 
 namespace Diligent
@@ -106,15 +106,16 @@ std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
 std::string RadientTextureSource::MakeCacheKey(const RadientTextureLoadInfo& LoadInfo)
 {
     std::string Key{"texture:"};
-    if (LoadInfo.URI != nullptr && *LoadInfo.URI != 0)
+    if (LoadInfo.pData != nullptr)
+    {
+        Key += "memory:";
+        Key += std::to_string(LoadInfo.DataSize);
+        Key += ':';
+        Key += std::to_string(ComputeHashRaw(LoadInfo.pData, static_cast<size_t>(LoadInfo.DataSize)));
+    }
+    else if (LoadInfo.URI != nullptr && *LoadInfo.URI != 0)
     {
         Key += LoadInfo.URI;
-    }
-    else
-    {
-        static std::atomic<Uint64> NextMemoryTextureID{0};
-        Key += "memory:";
-        Key += std::to_string(NextMemoryTextureID.fetch_add(1, std::memory_order_relaxed));
     }
     Key += LoadInfo.IsSRGB ? ":srgb=1" : ":srgb=0";
     return Key;

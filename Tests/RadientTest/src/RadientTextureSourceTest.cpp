@@ -79,16 +79,31 @@ TEST(RadientTextureSourceTest, BuildsStableURITextureCacheKey)
               RadientTextureSource::MakeCacheKey(LinearLoadInfo));
 }
 
-TEST(RadientTextureSourceTest, BuildsUniqueAnonymousMemoryTextureCacheKeys)
+TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
 {
-    std::array<Uint8, 4> Data{1, 2, 3, 4};
+    std::array<Uint8, 4> Data0{1, 2, 3, 4};
+    std::array<Uint8, 4> Data1{1, 2, 3, 4};
+    std::array<Uint8, 4> Data2{1, 2, 3, 5};
 
     RadientTextureLoadInfo LoadInfo{};
-    LoadInfo.pData    = Data.data();
-    LoadInfo.DataSize = static_cast<Uint64>(Data.size());
+    LoadInfo.pData    = Data0.data();
+    LoadInfo.DataSize = static_cast<Uint64>(Data0.size());
 
+    RadientTextureLoadInfo SameDataLoadInfo = LoadInfo;
+    SameDataLoadInfo.pData                  = Data1.data();
+
+    EXPECT_EQ(RadientTextureSource::MakeCacheKey(LoadInfo),
+              RadientTextureSource::MakeCacheKey(SameDataLoadInfo));
+
+    RadientTextureLoadInfo DifferentDataLoadInfo = LoadInfo;
+    DifferentDataLoadInfo.pData                  = Data2.data();
     EXPECT_NE(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(LoadInfo));
+              RadientTextureSource::MakeCacheKey(DifferentDataLoadInfo));
+
+    RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
+    LinearLoadInfo.IsSRGB                 = True;
+    EXPECT_NE(RadientTextureSource::MakeCacheKey(LoadInfo),
+              RadientTextureSource::MakeCacheKey(LinearLoadInfo));
 }
 
 TEST(RadientTextureSourceTest, BorrowsMemoryWhenCopyIsDisabled)
