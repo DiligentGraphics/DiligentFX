@@ -26,12 +26,14 @@
 
 #pragma once
 
+#include "GLTFLoader.hpp"
+#include "HashUtils.hpp"
 #include "RadientAssets.h"
 #include "RefCntAutoPtr.hpp"
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
-#include <array>
+#include <unordered_map>
 #include <vector>
 
 namespace Diligent
@@ -41,26 +43,12 @@ namespace Diligent
 class RadientMeshSource final
 {
 public:
-    static constexpr Uint32 VertexBufferCount = 5;
+    explicit RadientMeshSource(const RadientMeshCreateInfo& MeshCI);
 
-    using VertexBufferStrides = std::array<Uint32, VertexBufferCount>;
-    using VertexBufferSizes   = std::array<Uint32, VertexBufferCount>;
-
-    struct UploadData
-    {
-        PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
-        Uint32                  VertexCount       = 0;
-        Uint32                  IndexCount        = 0;
-        Uint32                  VertexBufferCount = 0;
-
-        VertexBufferStrides VertexStrides{};
-        VertexBufferSizes   VertexBufferDataSizes{};
-
-        Uint32 GetIndexDataSize() const
-        {
-            return IndexCount * sizeof(Uint32);
-        }
-    };
+    RadientMeshSource(const RadientMeshSource&)            = delete;
+    RadientMeshSource(RadientMeshSource&&)                 = delete;
+    RadientMeshSource& operator=(const RadientMeshSource&) = delete;
+    RadientMeshSource& operator=(RadientMeshSource&&)      = delete;
 
     struct PackDestination
     {
@@ -68,29 +56,19 @@ public:
         Uint32 DataSize = 0;
     };
 
-    using VertexBufferDestinations = std::array<PackDestination, VertexBufferCount>;
-
     struct PackDestinations
     {
-        PackDestination          Indices;
-        VertexBufferDestinations VertexBuffers{};
-    };
+        explicit PackDestinations(Uint32 VertexBufferCount = 0) :
+            VertexBuffers(VertexBufferCount)
+        {}
 
-    explicit RadientMeshSource(const RadientMeshCreateInfo& MeshCI);
+        PackDestination              Indices;
+        std::vector<PackDestination> VertexBuffers;
+    };
 
     RADIENT_STATUS GetStatus() const
     {
         return m_Status;
-    }
-
-    PBR_Renderer::PSO_FLAGS GetVertexAttribFlags() const
-    {
-        return m_VertexAttribFlags;
-    }
-
-    Uint32 GetVertexCount() const
-    {
-        return m_VertexCount;
     }
 
     const std::vector<RadientMeshPrimitiveCreateInfo>& GetPrimitives() const
@@ -100,30 +78,97 @@ public:
 
     IRadientMaterialAsset* GetPrimitiveMaterial(Uint32 PrimitiveIndex) const
     {
-        return PrimitiveIndex < m_PrimitiveMaterials.size() ? m_PrimitiveMaterials[PrimitiveIndex] : nullptr;
+        return PrimitiveIndex < m_PrimitiveMaterials.size() ? m_PrimitiveMaterials[PrimitiveIndex].RawPtr() : nullptr;
     }
 
-    RADIENT_STATUS GetUploadData(UploadData& Data) const;
-    RADIENT_STATUS Pack(const UploadData& Data, const PackDestinations& Destinations) const;
+    RADIENT_STATUS SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes);
 
-    static PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const RadientMeshCreateInfo& MeshCI);
+    PBR_Renderer::PSO_FLAGS GetVertexAttribFlags() const
+    {
+        VerifyVertexAttributesSet();
+        return m_VertexAttribFlags;
+    }
+
+    Uint32 GetVertexCount() const
+    {
+        return m_VertexCount;
+    }
+
+    Uint32 GetIndexCount() const
+    {
+        return m_IndexCount;
+    }
+
+    Uint32 GetIndexDataSize() const
+    {
+        return m_IndexCount * sizeof(Uint32);
+    }
+
+    Uint32 GetVertexBufferCount() const
+    {
+        VerifyVertexAttributesSet();
+        return static_cast<Uint32>(m_VertexStrides.size());
+    }
+
+    Uint32 GetVertexStride(Uint32 BufferIndex) const
+    {
+        VerifyVertexAttributesSet();
+        VERIFY(BufferIndex < m_VertexStrides.size(), "Invalid vertex buffer index");
+        return BufferIndex < m_VertexStrides.size() ? m_VertexStrides[BufferIndex] : 0;
+    }
+
+    Uint32 GetVertexBufferDataSize(Uint32 BufferIndex) const
+    {
+        VerifyVertexAttributesSet();
+        VERIFY(BufferIndex < m_VertexBufferDataSizes.size(), "Invalid vertex buffer index");
+        return BufferIndex < m_VertexBufferDataSizes.size() ? m_VertexBufferDataSizes[BufferIndex] : 0;
+    }
+
+    Uint32 GetActiveVertexBufferMask() const
+    {
+        VerifyVertexAttributesSet();
+        return m_ActiveVertexBufferMask;
+    }
+
+    bool IsVertexBufferActive(Uint32 BufferIndex) const
+    {
+        VerifyVertexAttributesSet();
+        return BufferIndex < sizeof(m_ActiveVertexBufferMask) * 8 &&
+            (m_ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
+    }
+
+    RADIENT_STATUS Pack(const PackDestinations& Destinations) const;
 
 private:
-    static bool Validate(const RadientMeshCreateInfo& MeshCI);
+    struct SrcAttributeData
+    {
+        VALUE_TYPE Type          = VT_UNDEFINED;
+        Uint8      NumComponents = 0;
+        bool       IsNormalized  = false;
+        Uint32     ElementSize   = 0;
+
+        std::vector<Uint8> Bytes;
+    };
+
+    void VerifyVertexAttributesSet() const
+    {
+        VERIFY(!m_DstAttributes.empty(), "Vertex attributes have not been set");
+    }
 
 private:
     RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
 
-    PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
-    Uint32                  m_VertexCount       = 0;
+    std::unordered_map<HashMapStringKey, SrcAttributeData, HashMapStringKey::Hasher> m_SrcAttributes;
 
-    std::vector<RadientFloat3>       m_Positions;
-    std::vector<RadientFloat3>       m_Normals;
-    std::vector<RadientFloat4>       m_Tangents;
-    std::vector<RadientFloat2>       m_TexCoords0;
-    std::vector<RadientColorRGBA8>   m_Colors0;
-    std::vector<RadientBoneIndices4> m_BoneIndices0;
-    std::vector<RadientFloat4>       m_BoneWeights0;
+    PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    Uint32 m_VertexCount            = 0;
+    Uint32 m_IndexCount             = 0;
+    Uint32 m_ActiveVertexBufferMask = 0;
+
+    std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
+    std::vector<Uint32>                    m_VertexStrides;
+    std::vector<Uint32>                    m_VertexBufferDataSizes;
 
     std::vector<Uint16> m_Indices16;
     std::vector<Uint32> m_Indices32;

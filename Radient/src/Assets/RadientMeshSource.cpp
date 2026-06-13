@@ -26,14 +26,14 @@
 
 #include "Assets/RadientMeshSource.hpp"
 
-#include "Math/RadientMath.hpp"
-
 #include "DebugUtilities.hpp"
+#include "GLTFVertexDataConverter.hpp"
+#include "GraphicsAccessories.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <limits>
+#include <utility>
 
 namespace Diligent
 {
@@ -41,37 +41,14 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint32 MeshBuffer0Stride = sizeof(RadientFloat3) + sizeof(RadientFloat3) + sizeof(RadientFloat2);
-constexpr Uint32 MeshBuffer1Stride = sizeof(RadientFloat4) + sizeof(RadientFloat4);
-constexpr Uint32 MeshBuffer2Stride = sizeof(RadientFloat2);
-constexpr Uint32 MeshBuffer3Stride = sizeof(RadientFloat4);
-constexpr Uint32 MeshBuffer4Stride = sizeof(RadientFloat3);
-
-constexpr std::array<Uint32, RadientMeshSource::VertexBufferCount> MeshVertexStrides = {
-    MeshBuffer0Stride,
-    MeshBuffer1Stride,
-    MeshBuffer2Stride,
-    MeshBuffer3Stride,
-    MeshBuffer4Stride,
-};
-
-constexpr Uint32 MeshBuffer0PositionOffset  = 0;
-constexpr Uint32 MeshBuffer0NormalOffset    = MeshBuffer0PositionOffset + sizeof(RadientFloat3);
-constexpr Uint32 MeshBuffer0TexCoord0Offset = MeshBuffer0NormalOffset + sizeof(RadientFloat3);
-constexpr Uint32 MeshBuffer1JointsOffset    = 0;
-constexpr Uint32 MeshBuffer1WeightsOffset   = MeshBuffer1JointsOffset + sizeof(RadientFloat4);
-
-template <typename ValueType>
-void WriteValue(void* pDstData, Uint32 DataSize, size_t Offset, const ValueType& Value)
-{
-    VERIFY_EXPR(pDstData != nullptr);
-    VERIFY_EXPR(Offset + sizeof(ValueType) <= DataSize);
-    std::memcpy(static_cast<Uint8*>(pDstData) + Offset, &Value, sizeof(ValueType));
-}
-
 bool CheckByteSize(Uint32 Count, Uint32 Stride)
 {
     return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
+}
+
+bool CheckByteOffset(Uint32 Offset, Uint32 Size)
+{
+    return Offset <= (std::numeric_limits<Uint32>::max)() - Size;
 }
 
 template <typename ValueType>
@@ -81,56 +58,18 @@ void CopyArray(std::vector<ValueType>& Dst, const ValueType* pSrc, Uint32 Count)
         Dst.assign(pSrc, pSrc + Count);
 }
 
-} // namespace
-
-RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI) :
-    m_VertexAttribFlags{GetVertexAttribFlags(MeshCI)}
+bool IsAttributeName(const GLTF::VertexAttributeDesc& DstAttrib, const char* Name)
 {
-    if (!Validate(MeshCI))
-    {
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
-        return;
-    }
-
-    m_VertexCount = MeshCI.VertexCount;
-
-    CopyArray(m_Positions, MeshCI.pPositions, MeshCI.VertexCount);
-    CopyArray(m_Normals, MeshCI.pNormals, MeshCI.VertexCount);
-    CopyArray(m_Tangents, MeshCI.pTangents, MeshCI.VertexCount);
-    CopyArray(m_TexCoords0, MeshCI.pTexCoords0, MeshCI.VertexCount);
-    CopyArray(m_Colors0, MeshCI.pColors0, MeshCI.VertexCount);
-    CopyArray(m_BoneIndices0, MeshCI.pBoneIndices0, MeshCI.VertexCount);
-    CopyArray(m_BoneWeights0, MeshCI.pBoneWeights0, MeshCI.VertexCount);
-
-    if (MeshCI.IndexType == RADIENT_INDEX_TYPE_UINT32)
-        CopyArray(m_Indices32, static_cast<const Uint32*>(MeshCI.pIndices), MeshCI.IndexCount);
-    else
-        CopyArray(m_Indices16, static_cast<const Uint16*>(MeshCI.pIndices), MeshCI.IndexCount);
-
-    CopyArray(m_Primitives, MeshCI.pPrimitives, MeshCI.PrimitiveCount);
-    m_PrimitiveMaterials.reserve(MeshCI.PrimitiveCount);
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
-        m_PrimitiveMaterials.emplace_back(MeshCI.pPrimitives[PrimitiveIndex].pMaterial);
+    return DstAttrib.Name != nullptr && std::strcmp(DstAttrib.Name, Name) == 0;
 }
 
-PBR_Renderer::PSO_FLAGS RadientMeshSource::GetVertexAttribFlags(const RadientMeshCreateInfo& MeshCI)
+bool IsActiveVertexBuffer(Uint32 ActiveVertexBufferMask, Uint32 BufferIndex)
 {
-    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
-    if (MeshCI.pNormals != nullptr)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
-    if (MeshCI.pTangents != nullptr)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
-    if (MeshCI.pTexCoords0 != nullptr)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
-    if (MeshCI.pColors0 != nullptr)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
-    if (MeshCI.pBoneIndices0 != nullptr)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_JOINTS;
-
-    return Flags;
+    return BufferIndex < sizeof(ActiveVertexBufferMask) * 8 &&
+        (ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
 }
 
-bool RadientMeshSource::Validate(const RadientMeshCreateInfo& MeshCI)
+bool ValidateRadientMeshCI(const RadientMeshCreateInfo& MeshCI)
 {
     if (MeshCI.VertexCount == 0 ||
         MeshCI.pPositions == nullptr ||
@@ -170,213 +109,301 @@ bool RadientMeshSource::Validate(const RadientMeshCreateInfo& MeshCI)
     return true;
 }
 
-RADIENT_STATUS RadientMeshSource::GetUploadData(UploadData& Data) const
-{
-    Data = {};
+} // namespace
 
+
+RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
+{
+    if (!ValidateRadientMeshCI(MeshCI))
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return;
+    }
+
+    m_VertexCount = MeshCI.VertexCount;
+    m_IndexCount  = MeshCI.IndexCount;
+
+    auto AddAttribute =
+        [this](const char* Name, VALUE_TYPE Type, Uint8 NumComponents, bool IsNormalized, const auto* pSrcData) //
+    {
+        if (pSrcData == nullptr)
+            return;
+
+        SrcAttributeData Data;
+        Data.Type          = Type;
+        Data.NumComponents = NumComponents;
+        Data.IsNormalized  = IsNormalized;
+        Data.ElementSize   = sizeof(*pSrcData);
+        Data.Bytes.resize(size_t{m_VertexCount} * Data.ElementSize);
+        std::memcpy(Data.Bytes.data(), pSrcData, Data.Bytes.size());
+        m_SrcAttributes.emplace(HashMapStringKey{Name, true}, std::move(Data));
+    };
+
+    AddAttribute(GLTF::PositionAttributeName, VT_FLOAT32, 3, false, MeshCI.pPositions);
+    AddAttribute(GLTF::NormalAttributeName, VT_FLOAT32, 3, false, MeshCI.pNormals);
+    AddAttribute(GLTF::TangentAttributeName, VT_FLOAT32, 4, false, MeshCI.pTangents);
+    AddAttribute(GLTF::Texcoord0AttributeName, VT_FLOAT32, 2, false, MeshCI.pTexCoords0);
+    AddAttribute(GLTF::VertexColorAttributeName, VT_UINT8, 4, true, MeshCI.pColors0);
+    AddAttribute(GLTF::JointsAttributeName, VT_UINT16, 4, false, MeshCI.pBoneIndices0);
+    AddAttribute(GLTF::WeightsAttributeName, VT_FLOAT32, 4, false, MeshCI.pBoneWeights0);
+
+    if (MeshCI.IndexType == RADIENT_INDEX_TYPE_UINT32)
+        CopyArray(m_Indices32, static_cast<const Uint32*>(MeshCI.pIndices), MeshCI.IndexCount);
+    else
+        CopyArray(m_Indices16, static_cast<const Uint16*>(MeshCI.pIndices), MeshCI.IndexCount);
+
+    CopyArray(m_Primitives, MeshCI.pPrimitives, MeshCI.PrimitiveCount);
+    m_PrimitiveMaterials.reserve(MeshCI.PrimitiveCount);
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
+        m_PrimitiveMaterials.emplace_back(MeshCI.pPrimitives[PrimitiveIndex].pMaterial);
+}
+
+RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,
+                                                      Uint32                           NumDstAttributes)
+{
     if (RADIENT_FAILED(m_Status))
         return m_Status;
 
-    if (m_VertexCount == 0 || m_Positions.empty())
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    Data.VertexAttribFlags = m_VertexAttribFlags;
-    Data.VertexCount       = m_VertexCount;
-
-    if (!m_Indices32.empty())
+    if (pDstAttributes == nullptr || NumDstAttributes == 0)
     {
-        if (!CheckByteSize(static_cast<Uint32>(m_Indices32.size()), sizeof(Uint32)))
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        Data.IndexCount = static_cast<Uint32>(m_Indices32.size());
-    }
-    else if (!m_Indices16.empty())
-    {
-        if (!CheckByteSize(static_cast<Uint32>(m_Indices16.size()), sizeof(Uint32)))
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        Data.IndexCount = static_cast<Uint32>(m_Indices16.size());
-    }
-    else
-    {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return m_Status;
     }
 
-    // Vertex pool buffers are bound directly to matching PBR input slots.
-    // Allocate only the contiguous prefix needed by enabled attributes.
-    Data.VertexBufferCount = 1;
-    if (!m_BoneIndices0.empty())
-    {
-        if (m_BoneWeights0.empty())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+    std::vector<GLTF::VertexAttributeDesc> DstAttributes{pDstAttributes, pDstAttributes + NumDstAttributes};
 
-        Data.VertexBufferCount = std::max(Data.VertexBufferCount, 2u);
-    }
-    if (!m_Colors0.empty())
-        Data.VertexBufferCount = std::max(Data.VertexBufferCount, 4u);
-    if (!m_Tangents.empty())
-        Data.VertexBufferCount = std::max(Data.VertexBufferCount, 5u);
-
-    for (Uint32 BufferIndex = 0; BufferIndex < Data.VertexBufferCount; ++BufferIndex)
+    Uint32 MaxBufferId = 0;
+    for (Uint32 AttribIndex = 0; AttribIndex < NumDstAttributes; ++AttribIndex)
     {
-        Data.VertexStrides[BufferIndex] = MeshVertexStrides[BufferIndex];
-        if (!CheckByteSize(m_VertexCount, Data.VertexStrides[BufferIndex]))
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+        const GLTF::VertexAttributeDesc& DstAttrib = DstAttributes[AttribIndex];
+        if (DstAttrib.Name == nullptr ||
+            DstAttrib.ValueType != VT_FLOAT32 ||
+            DstAttrib.NumComponents == 0 ||
+            DstAttrib.NumComponents > 4 ||
+            DstAttrib.BufferId >= GLTF::ModelCreateInfo::MaxBuffers)
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
+
+        MaxBufferId = std::max<Uint32>(MaxBufferId, DstAttrib.BufferId);
     }
 
-    auto SetVertexBufferDataSize =
-        [&Data, this](Uint32 BufferIndex) //
+    std::vector<Uint32> VertexStrides(size_t{MaxBufferId} + 1, 0);
+    for (GLTF::VertexAttributeDesc& DstAttrib : DstAttributes)
     {
-        Data.VertexBufferDataSizes[BufferIndex] = m_VertexCount * Data.VertexStrides[BufferIndex];
+        Uint32& BufferStride   = VertexStrides[DstAttrib.BufferId];
+        Uint32& RelativeOffset = DstAttrib.RelativeOffset;
+        if (RelativeOffset == GLTF::VertexAttributeDesc{}.RelativeOffset)
+            RelativeOffset = BufferStride;
+
+        const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+        if (!CheckByteOffset(RelativeOffset, DstAttribSize))
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
+
+        BufferStride = std::max(BufferStride, RelativeOffset + DstAttribSize);
+    }
+
+    auto HasSourceBackedDstAttribute = [this, &DstAttributes](const char* Name) //
+    {
+        if (m_SrcAttributes.find(Name) == m_SrcAttributes.end())
+            return false;
+
+        for (const GLTF::VertexAttributeDesc& DstAttrib : DstAttributes)
+        {
+            if (IsAttributeName(DstAttrib, Name))
+                return true;
+        }
+        return false;
     };
 
-    SetVertexBufferDataSize(0);
-    if (!m_BoneIndices0.empty())
-        SetVertexBufferDataSize(1);
-    if (!m_Colors0.empty())
-        SetVertexBufferDataSize(3);
-    if (!m_Tangents.empty())
-        SetVertexBufferDataSize(4);
+    if (!HasSourceBackedDstAttribute(GLTF::PositionAttributeName))
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return m_Status;
+    }
+
+    Uint32 ActiveVertexBufferMask = 0;
+    for (const GLTF::VertexAttributeDesc& DstAttrib : DstAttributes)
+    {
+        if (m_SrcAttributes.find(DstAttrib.Name) != m_SrcAttributes.end())
+            ActiveVertexBufferMask |= Uint32{1} << DstAttrib.BufferId;
+    }
+
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+    if (HasSourceBackedDstAttribute(GLTF::NormalAttributeName))
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+    if (HasSourceBackedDstAttribute(GLTF::TangentAttributeName))
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
+    if (HasSourceBackedDstAttribute(GLTF::Texcoord0AttributeName))
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+    if (HasSourceBackedDstAttribute(GLTF::VertexColorAttributeName))
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
+    if (HasSourceBackedDstAttribute(GLTF::JointsAttributeName) &&
+        HasSourceBackedDstAttribute(GLTF::WeightsAttributeName))
+    {
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_JOINTS;
+    }
+
+    Uint32 VertexBufferCount = 0;
+    for (Uint32 BufferIndex = 0; BufferIndex < VertexStrides.size(); ++BufferIndex)
+    {
+        if (IsActiveVertexBuffer(ActiveVertexBufferMask, BufferIndex))
+            VertexBufferCount = BufferIndex + 1;
+    }
+
+    if (VertexBufferCount == 0 || VertexBufferCount > VertexStrides.size())
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return m_Status;
+    }
+
+    VertexStrides.resize(VertexBufferCount);
+    std::vector<Uint32> VertexBufferDataSizes(VertexBufferCount, 0);
+
+    for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
+    {
+        if (!IsActiveVertexBuffer(ActiveVertexBufferMask, BufferIndex))
+            continue;
+
+        const Uint32 VertexStride = VertexStrides[BufferIndex];
+        if (VertexStride == 0 || !CheckByteSize(m_VertexCount, VertexStride))
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
+
+        VertexBufferDataSizes[BufferIndex] = m_VertexCount * VertexStride;
+    }
+
+    m_DstAttributes          = std::move(DstAttributes);
+    m_VertexAttribFlags      = VertexAttribFlags;
+    m_ActiveVertexBufferMask = ActiveVertexBufferMask;
+    m_VertexStrides          = std::move(VertexStrides);
+    m_VertexBufferDataSizes  = std::move(VertexBufferDataSizes);
 
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientMeshSource::Pack(const UploadData& Data, const PackDestinations& Destinations) const
+RADIENT_STATUS RadientMeshSource::Pack(const PackDestinations& Destinations) const
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;
 
-    if (Data.VertexCount != m_VertexCount ||
-        Data.IndexCount == 0 ||
-        Data.GetIndexDataSize() == 0)
-    {
+    if (m_DstAttributes.empty())
         return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    Uint32 IndexDataSize = 0;
+    if (Destinations.Indices.pData != nullptr)
+    {
+        IndexDataSize = GetIndexDataSize();
+        if (Destinations.Indices.DataSize < IndexDataSize)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    bool WroteData = false;
+    bool HasWritableDestination = Destinations.Indices.pData != nullptr;
+    for (Uint32 BufferIndex = 0; BufferIndex < Destinations.VertexBuffers.size(); ++BufferIndex)
+    {
+        const PackDestination& Destination = Destinations.VertexBuffers[BufferIndex];
+        if (Destination.pData == nullptr)
+            continue;
+
+        if (!IsVertexBufferActive(BufferIndex))
+            continue;
+
+        if (Destination.DataSize == 0 ||
+            Destination.DataSize < m_VertexBufferDataSizes[BufferIndex])
+        {
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        HasWritableDestination = true;
+    }
+
+    if (!HasWritableDestination)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     if (Destinations.Indices.pData != nullptr)
     {
-        if (Destinations.Indices.DataSize != Data.GetIndexDataSize())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
         Uint8* pDstIndices = static_cast<Uint8*>(Destinations.Indices.pData);
         if (!m_Indices32.empty())
         {
-            if (Data.IndexCount != static_cast<Uint32>(m_Indices32.size()))
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-
-            std::memcpy(pDstIndices, m_Indices32.data(), Data.GetIndexDataSize());
+            std::memcpy(pDstIndices, m_Indices32.data(), IndexDataSize);
         }
-        else if (!m_Indices16.empty())
+        else
         {
-            if (Data.IndexCount != static_cast<Uint32>(m_Indices16.size()))
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-
-            for (Uint32 Index = 0; Index < Data.IndexCount; ++Index)
+            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
             {
                 const Uint32 Value = m_Indices16[Index];
                 std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
             }
         }
-        else
+    }
+
+    for (Uint32 BufferIndex = 0; BufferIndex < Destinations.VertexBuffers.size(); ++BufferIndex)
+    {
+        if (!IsVertexBufferActive(BufferIndex))
+            continue;
+
+        const PackDestination& Destination = Destinations.VertexBuffers[BufferIndex];
+        if (Destination.pData == nullptr)
+            continue;
+
+        std::memset(Destination.pData, 0, m_VertexBufferDataSizes[BufferIndex]);
+    }
+
+    for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
+    {
+        if (DstAttrib.BufferId >= Destinations.VertexBuffers.size())
+            continue;
+
+        if (!IsVertexBufferActive(DstAttrib.BufferId))
+            continue;
+
+        const PackDestination& Destination = Destinations.VertexBuffers[DstAttrib.BufferId];
+        if (Destination.pData == nullptr)
+            continue;
+
+        const auto SrcAttribIt    = m_SrcAttributes.find(DstAttrib.Name);
+        Uint8*     pDstAttribData = static_cast<Uint8*>(Destination.pData) + DstAttrib.RelativeOffset;
+
+        if (SrcAttribIt != m_SrcAttributes.end())
         {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+            const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
+            const bool              Written   = GLTF::VertexDataConverter::Write({
+                SrcAttrib.Bytes.data(),
+                SrcAttrib.Type,
+                SrcAttrib.NumComponents,
+                SrcAttrib.ElementSize,
+                pDstAttribData,
+                DstAttrib.ValueType,
+                DstAttrib.NumComponents,
+                m_VertexStrides[DstAttrib.BufferId],
+                m_VertexCount,
+                SrcAttrib.IsNormalized,
+            });
+            if (!Written)
+                return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-
-        WroteData = true;
-    }
-
-    auto ValidateDestination =
-        [&Data](const PackDestination& Destination, Uint32 BufferIndex) //
-    {
-        return Destination.pData == nullptr ||
-            (BufferIndex < Data.VertexBufferCount &&
-             Destination.DataSize != 0 &&
-             Destination.DataSize == Data.VertexBufferDataSizes[BufferIndex]);
-    };
-
-    for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
-    {
-        if (!ValidateDestination(Destinations.VertexBuffers[BufferIndex], BufferIndex))
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    if (Destinations.VertexBuffers[0].pData != nullptr)
-    {
-        void* const  pDstData = Destinations.VertexBuffers[0].pData;
-        const Uint32 DataSize = Destinations.VertexBuffers[0].DataSize;
-
-        std::memset(pDstData, 0, DataSize);
-
-        for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
+        else if (DstAttrib.pDefaultValue != nullptr)
         {
-            const size_t Buffer0Offset = size_t{Vertex} * MeshBuffer0Stride;
-            WriteValue(pDstData, DataSize, Buffer0Offset + MeshBuffer0PositionOffset, m_Positions[Vertex]);
-            if (!m_Normals.empty())
-                WriteValue(pDstData, DataSize, Buffer0Offset + MeshBuffer0NormalOffset, m_Normals[Vertex]);
-            if (!m_TexCoords0.empty())
-                WriteValue(pDstData, DataSize, Buffer0Offset + MeshBuffer0TexCoord0Offset, m_TexCoords0[Vertex]);
+            const bool Written = GLTF::VertexDataConverter::WriteDefault({
+                DstAttrib.pDefaultValue,
+                pDstAttribData,
+                DstAttrib.ValueType,
+                DstAttrib.NumComponents,
+                m_VertexStrides[DstAttrib.BufferId],
+                m_VertexCount,
+            });
+            if (!Written)
+                return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-
-        WroteData = true;
     }
 
-    if (Destinations.VertexBuffers[1].pData != nullptr)
-    {
-        if (m_BoneIndices0.empty() || m_BoneWeights0.empty())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        void* const  pDstData = Destinations.VertexBuffers[1].pData;
-        const Uint32 DataSize = Destinations.VertexBuffers[1].DataSize;
-
-        for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
-        {
-            const size_t Buffer1Offset = size_t{Vertex} * MeshBuffer1Stride;
-            const float4 Joints        = RadientMath::ToFloat4(m_BoneIndices0[Vertex]);
-            WriteValue(pDstData, DataSize, Buffer1Offset + MeshBuffer1JointsOffset, Joints);
-            WriteValue(pDstData, DataSize, Buffer1Offset + MeshBuffer1WeightsOffset, m_BoneWeights0[Vertex]);
-        }
-
-        WroteData = true;
-    }
-
-    if (Destinations.VertexBuffers[3].pData != nullptr)
-    {
-        if (m_Colors0.empty())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        void* const  pDstData = Destinations.VertexBuffers[3].pData;
-        const Uint32 DataSize = Destinations.VertexBuffers[3].DataSize;
-
-        for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
-        {
-            const size_t Buffer3Offset = size_t{Vertex} * MeshBuffer3Stride;
-            WriteValue(pDstData, DataSize, Buffer3Offset, RadientMath::ToFloat4(m_Colors0[Vertex]));
-        }
-
-        WroteData = true;
-    }
-
-    if (Destinations.VertexBuffers[4].pData != nullptr)
-    {
-        if (m_Tangents.empty())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        void* const  pDstData = Destinations.VertexBuffers[4].pData;
-        const Uint32 DataSize = Destinations.VertexBuffers[4].DataSize;
-
-        for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
-        {
-            const size_t        Buffer4Offset = size_t{Vertex} * MeshBuffer4Stride;
-            const RadientFloat3 Tangent{m_Tangents[Vertex].x, m_Tangents[Vertex].y, m_Tangents[Vertex].z};
-            WriteValue(pDstData, DataSize, Buffer4Offset, Tangent);
-        }
-
-        WroteData = true;
-    }
-
-    return WroteData ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_ARGUMENT;
+    return RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent
