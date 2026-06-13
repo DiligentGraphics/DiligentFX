@@ -36,6 +36,7 @@
 #include "MapHelper.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -706,10 +707,10 @@ void BindVertexPool(IVertexPool&    VertexPool,
 {
     const VertexPoolDesc& PoolDesc = VertexPool.GetDesc();
 
-    std::array<IBuffer*, 8> pVBs;
-    VERIFY(PoolDesc.NumElements <= pVBs.size(), "Too many vertex buffers in Radient GLTF vertex pool");
-    for (Uint32 Index = 0; Index < PoolDesc.NumElements; ++Index)
-        pVBs[Index] = VertexPool.GetBuffer(Index);
+    std::array<IBuffer*, GLTF::ModelCreateInfo::MaxBuffers> pVBs; // Do not zero-initialize
+    VERIFY(PoolDesc.NumElements <= pVBs.size(), "Too many vertex buffers in Radient vertex pool");
+    for (Uint32 BufferIndex = 0; BufferIndex < PoolDesc.NumElements; ++BufferIndex)
+        pVBs[BufferIndex] = VertexPool.GetBuffer(BufferIndex);
 
     pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 }

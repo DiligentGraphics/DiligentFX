@@ -34,6 +34,8 @@
 #include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "BufferSuballocator.h"
+#include "VertexPool.h"
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
 #include <atomic>
@@ -120,39 +122,24 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
-    struct MeshPrimitiveStorage
-    {
-        std::string Name;
-
-        Uint32 FirstIndex = 0;
-        Uint32 IndexCount = 0;
-
-        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    };
-
-    struct MeshVertexDataStorage
-    {
-        std::vector<RadientFloat3>       Positions;
-        std::vector<RadientFloat3>       Normals;
-        std::vector<RadientFloat4>       Tangents;
-        std::vector<RadientFloat2>       TexCoords0;
-        std::vector<RadientColorRGBA8>   Colors0;
-        std::vector<RadientBoneIndices4> BoneIndices0;
-        std::vector<RadientFloat4>       BoneWeights0;
-    };
-
-    struct MeshIndexBufferStorage
-    {
-        RADIENT_INDEX_TYPE IndexType  = RADIENT_INDEX_TYPE_NONE;
-        Uint32             IndexCount = 0;
-        std::vector<Uint8> Indices;
-    };
-
     struct MeshStorage
     {
-        MeshVertexDataStorage             VertexData;
-        MeshIndexBufferStorage            IndexBuffer;
-        std::vector<MeshPrimitiveStorage> MeshPrimitives;
+        MeshStorage() = default;
+        MeshStorage(MeshStorage&& Rhs) noexcept;
+
+        MeshStorage& operator=(MeshStorage&& Rhs)  = delete;
+        MeshStorage(const MeshStorage&)            = delete;
+        MeshStorage& operator=(const MeshStorage&) = delete;
+
+        RadientDrawableMesh DrawableMesh;
+
+        RefCntAutoPtr<IBufferSuballocation>               pIndexAllocation;
+        RefCntAutoPtr<IVertexPoolAllocation>              pVertexAllocation;
+        std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
+
+        std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
+        std::atomic_bool            GPUResourcesReady{false};
+        std::atomic<Uint32>         PendingUploads{0};
     };
 
     struct MaterialStorage
@@ -207,6 +194,11 @@ private:
     };
 
     using MeshAssetStorage = std::variant<MeshStorage, GLTFMeshStorage>;
+
+    static RadientDrawableMeshResolveResult GetDrawableMesh(const MeshStorage& Mesh,
+                                                            bool               RequireGPUResourcesReady);
+    static RadientDrawableMeshResolveResult GetDrawableMesh(const GLTFMeshStorage& Mesh,
+                                                            bool                   RequireGPUResourcesReady);
 
     template <typename InterfaceType,
               const INTERFACE_ID& InterfaceID,
