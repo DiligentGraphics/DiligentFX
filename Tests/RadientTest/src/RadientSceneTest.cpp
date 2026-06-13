@@ -446,7 +446,10 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     RadientGLTFLoadInfo               GLTFLoadInfo{};
     RefCntAutoPtr<IRadientSceneAsset> pGLTFModel;
     // A missing URI is invalid and should not create an asset reference.
-    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
+        EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
 
     TempDirectory     TempDir{"RadientAssetManagerTest"};
     const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
@@ -633,7 +636,10 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RefCntAutoPtr<IRadientSceneAsset> ImportedModel;
     RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
     // Empty load info is invalid and should not instantiate anything.
-    EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, &ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
+        EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, &ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
 
     TempDirectory     ImportTempDir{"RadientSceneTest"};
     const std::string ImportGLTFPath = WriteBasicGLTFFile(ImportTempDir);

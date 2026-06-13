@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 
+#include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
@@ -359,7 +360,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
     DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
-    if (!ValidateMesh(MeshCI))
+    if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     MeshStorage MeshData;
@@ -432,7 +433,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     DEV_CHECK_ERR(*ppTexture == nullptr, "Output texture pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppTexture = nullptr;
 
-    if (!ValidateTexture(LoadInfo))
+    if (!ValidateTextureLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RadientTextureSource TextureSource{LoadInfo};
@@ -515,7 +516,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
     DEV_CHECK_ERR(*ppModel == nullptr, "Output GLTF model pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppModel = nullptr;
 
-    if (!ValidateGLTF(LoadInfo))
+    if (!ValidateGLTFLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const std::string CacheKey = MakeGLTFCacheKey(LoadInfo.URI);
@@ -832,67 +833,6 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 GLTF::ResourceManager* RadientAssetManagerImpl::GetResourceManager() const
 {
     return m_pResourceManager;
-}
-
-bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI)
-{
-    if (MeshCI.VertexCount == 0 || MeshCI.pPositions == nullptr ||
-        MeshCI.PrimitiveCount == 0 || MeshCI.pPrimitives == nullptr)
-    {
-        return false;
-    }
-
-    const bool HasBoneIndices = MeshCI.pBoneIndices0 != nullptr;
-    const bool HasBoneWeights = MeshCI.pBoneWeights0 != nullptr;
-    if (HasBoneIndices != HasBoneWeights)
-        return false;
-
-    if (MeshCI.IndexCount == 0 ||
-        MeshCI.pIndices == nullptr ||
-        (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
-         MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32))
-    {
-        return false;
-    }
-
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
-    {
-        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = MeshCI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.IndexCount == 0 ||
-            PrimitiveCI.FirstIndex >= MeshCI.IndexCount)
-        {
-            return false;
-        }
-
-        if (PrimitiveCI.IndexCount > MeshCI.IndexCount - PrimitiveCI.FirstIndex)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo)
-{
-    return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
-}
-
-bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& LoadInfo)
-{
-    const bool HasURI  = LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
-    const bool HasData = LoadInfo.pData != nullptr;
-
-    if (!HasData)
-        return HasURI;
-
-    if (LoadInfo.DataSize == 0 ||
-        LoadInfo.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
-    {
-        return false;
-    }
-
-    return true;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset)

@@ -4,6 +4,7 @@ project(Radient CXX)
 
 set(SOURCE
     src/Assets/RadientAssetManagerImpl.cpp
+    src/Assets/RadientAssetValidation.cpp
     src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Assets/RadientMeshSource.cpp
@@ -32,6 +33,7 @@ set(SOURCE
 
 set(INCLUDE
     include/Assets/RadientAssetManagerImpl.hpp
+    include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientDrawableMeshConverter.hpp
     include/Assets/RadientMeshSource.hpp
     include/Assets/RadientTextureSource.hpp

@@ -294,9 +294,6 @@ private:
     using SceneAssetImpl =
         AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
-    static bool           ValidateMesh(const RadientMeshCreateInfo& MeshCI);
-    static bool           ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo);
-    static bool           ValidateTexture(const RadientTextureLoadInfo& LoadInfo);
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
     static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
     static bool           ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
