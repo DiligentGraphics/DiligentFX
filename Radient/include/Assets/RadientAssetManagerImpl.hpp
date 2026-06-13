@@ -308,12 +308,7 @@ private:
     std::pair<RefCntAutoPtr<ImplType>, bool> CacheAssetOrGetExisting(const std::string&    CacheKey,
                                                                      CreateAssetFuncType&& CreateAssetFunc);
 
-    void TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pModel,
-                                     GLTFModelStorage&   GLTFModel);
-    void CompleteGLTFLoad(IRadientSceneAsset*          pModel,
-                          std::unique_ptr<GLTF::Model> pModelData);
-    void CompleteTextureLoad(IRadientTextureAsset*         pTexture,
-                             RefCntAutoPtr<ITextureLoader> pLoader);
+    void LoadGLTFModel(SceneAssetImpl& Model);
 
     static RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
                                                    GLTF::ResourceManager* pResourceManager,

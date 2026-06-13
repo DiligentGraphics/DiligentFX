@@ -464,6 +464,29 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
 }
 
+TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientGLTFLoadInfo GLTFLoadInfo{};
+    GLTFLoadInfo.URI = "no_thread_pool.gltf";
+
+    RefCntAutoPtr<IRadientSceneAsset> pGLTFModel;
+    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pGLTFModel, nullptr);
+
+    std::array<Uint8, 4> TextureData{1, 2, 3, 4};
+
+    RadientTextureLoadInfo TextureLoadInfo{};
+    TextureLoadInfo.pData    = TextureData.data();
+    TextureLoadInfo.DataSize = static_cast<Uint64>(TextureData.size());
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_EQ(pAssetManager->LoadTexture(TextureLoadInfo, &pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pTexture, nullptr);
+}
+
 TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
 {
     // Loading the same glTF URI twice should return the same live asset instead

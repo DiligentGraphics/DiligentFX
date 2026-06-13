@@ -109,30 +109,6 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     return CreateInfo;
 }
 
-std::unique_ptr<GLTF::Model> LoadGLTFModel(const std::string&     SourceURI,
-                                           IRenderDevice*         pDevice,
-                                           GLTF::ResourceManager* pResourceManager,
-                                           IGPUUploadManager*     pUploadManager)
-{
-    try
-    {
-        GLTF::ModelCreateInfo ModelCI{SourceURI.c_str()};
-        ModelCI.pResourceManager = pResourceManager;
-        ModelCI.pUploadMgr       = pUploadManager;
-        return std::make_unique<GLTF::Model>(pDevice, nullptr, ModelCI);
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "': ", Error.what());
-        return {};
-    }
-    catch (...)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
-        return {};
-    }
-}
-
 std::string MakeGLTFCacheKey(const char* URI)
 {
     return std::string{"gltf:"} + URI;
@@ -411,6 +387,9 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     if (!ValidateTextureLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    if (m_pThreadPool == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     RadientTextureSource TextureSource{LoadInfo};
     const std::string    SourceURI = TextureSource.GetURI();
     const std::string    CacheKey  = RadientTextureSource::MakeCacheKey(LoadInfo);
@@ -433,26 +412,8 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
         return Status;
     }
 
-    if (m_pThreadPool == nullptr)
-    {
-        RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
-        if (pLoader == nullptr)
-        {
-            pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        CompleteTextureLoad(pTextureAsset, std::move(pLoader));
-        const RADIENT_STATUS Status = pTextureAsset->GetLoadStatus();
-        if (RADIENT_FAILED(Status))
-            return Status;
-
-        pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
-        return Status;
-    }
-
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
-    RefCntAutoPtr<IRadientTextureAsset>    pTextureForWorker{pTextureAsset};
+    RefCntAutoPtr<TextureAssetImpl>        pTextureForWorker{pTextureAsset};
 
     TextureSource.MakeMemoryCopy();
 
@@ -469,14 +430,18 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
             RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
             if (pLoader == nullptr)
             {
-                IRadientTextureAsset* pTexture = pTextureForWorker;
-                TextureAssetImpl*     pImpl    = ClassPtrCast<TextureAssetImpl>(pTexture);
-                VERIFY_EXPR(pImpl != nullptr);
-                pImpl->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+                pTextureForWorker->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
-            pSelf->CompleteTextureLoad(pTextureForWorker, std::move(pLoader));
+            TextureStorage&      Texture = pTextureForWorker->GetStorage();
+            const RADIENT_STATUS Status  = RadientAssetManagerImpl::ScheduleTextureGPUUpload(pSelf->m_pDevice,
+                                                                                             pSelf->m_pResourceManager,
+                                                                                             pSelf->m_pUploadManager,
+                                                                                             pTextureForWorker,
+                                                                                             pLoader,
+                                                                                             Texture);
+            Texture.LoadStatus.store(Status, std::memory_order_release);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -493,6 +458,9 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     if (!ValidateGLTFLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_pThreadPool == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
 
     const std::string CacheKey = MakeGLTFCacheKey(LoadInfo.URI);
     auto [pModelAsset, ModelCreated] =
@@ -512,42 +480,20 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         return Status;
     }
 
-    if (m_pThreadPool == nullptr)
-    {
-        CompleteGLTFLoad(pModelAsset,
-                         LoadGLTFModel(LoadInfo.URI,
-                                       m_pDevice,
-                                       m_pResourceManager,
-                                       m_pUploadManager));
-
-        const RADIENT_STATUS Status = pModelAsset->GetLoadStatus();
-        if (RADIENT_FAILED(Status))
-            return Status;
-
-        pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
-        return Status;
-    }
-
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
-    RefCntAutoPtr<IRadientSceneAsset>      pModelForWorker{pModelAsset};
-    const std::string                      SourceURI{LoadInfo.URI};
+    RefCntAutoPtr<SceneAssetImpl>          pModelForWorker{pModelAsset};
 
     pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
 
     EnqueueAsyncWork(
         m_pThreadPool,
-        [pWeakSelf, pModelForWorker, SourceURI](Uint32) mutable //
+        [pWeakSelf, pModelForWorker](Uint32) mutable //
         {
             RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
             if (pSelf == nullptr)
                 return ASYNC_TASK_STATUS_CANCELLED;
 
-            std::unique_ptr<GLTF::Model> pModel = LoadGLTFModel(SourceURI,
-                                                                pSelf->m_pDevice,
-                                                                pSelf->m_pResourceManager,
-                                                                pSelf->m_pUploadManager);
-
-            pSelf->CompleteGLTFLoad(pModelForWorker, std::move(pModel));
+            pSelf->LoadGLTFModel(*pModelForWorker);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -768,14 +714,6 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
     if (pContext == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    if (m_pUploadManager != nullptr)
-        m_pUploadManager->RenderThreadUpdate(pContext);
-
-    if (m_pResourceManager != nullptr)
-        m_pResourceManager->UpdateAllResources(pDevice, pContext);
-
-    std::vector<GLTFModelToPrepare> ModelsToPrepare;
-
     if (m_pDevice == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -784,6 +722,14 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
         UNEXPECTED("Radient asset manager device changed. This should never happen.");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
+
+    if (m_pUploadManager != nullptr)
+        m_pUploadManager->RenderThreadUpdate(pContext);
+
+    if (m_pResourceManager != nullptr)
+        m_pResourceManager->UpdateAllResources(pDevice, pContext);
+
+    std::vector<GLTFModelToPrepare> ModelsToPrepare;
 
     ModelsToPrepare.reserve(m_PendingGPUResourceUpdates.Size());
     for (RefCntWeakPtr<IRadientSceneAsset> WeakAsset; m_PendingGPUResourceUpdates.Dequeue(WeakAsset);)
@@ -893,55 +839,41 @@ std::string RadientAssetManagerImpl::MakeURI(const char* Type)
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 
-void RadientAssetManagerImpl::TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pModel,
-                                                          GLTFModelStorage&   GLTFModel)
+void RadientAssetManagerImpl::LoadGLTFModel(SceneAssetImpl& Model)
 {
-    if (pModel == nullptr ||
-        GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
-        GLTFModel.GPUResourcesReady.load(std::memory_order_acquire) ||
-        GLTFModel.pModel == nullptr)
+    GLTFModelStorage& GLTFModel = Model.GetStorage();
+    const std::string SourceURI = GLTFModel.SourceURI;
+
+    std::unique_ptr<GLTF::Model> pModelData;
+    try
     {
-        return;
+        GLTF::ModelCreateInfo ModelCI{SourceURI.c_str()};
+        ModelCI.pResourceManager = m_pResourceManager;
+        ModelCI.pUploadMgr       = m_pUploadManager;
+        pModelData               = std::make_unique<GLTF::Model>(m_pDevice, nullptr, ModelCI);
     }
-
-    if (GLTFModel.GPUUpdateQueued.exchange(true, std::memory_order_acq_rel))
-        return;
-
-    m_PendingGPUResourceUpdates.Enqueue(RefCntWeakPtr<IRadientSceneAsset>{pModel});
-}
-
-void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pModel,
-                                               std::unique_ptr<GLTF::Model> pModelData)
-{
-    SceneAssetImpl* pImpl = ClassPtrCast<SceneAssetImpl>(pModel);
-    if (pImpl == nullptr)
-        return;
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "': ", Error.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
+    }
 
     const RADIENT_STATUS Status = pModelData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
 
-    GLTFModelStorage& GLTFModel = pImpl->GetStorage();
     GLTFModel.VertexAttribFlags = pModelData != nullptr ?
         GetVertexAttribFlags(*pModelData) :
         PBR_Renderer::PSO_FLAG_NONE;
-    GLTFModel.pModel            = std::move(pModelData);
+
+    GLTFModel.pModel = std::move(pModelData);
     GLTFModel.GPUResourcesReady.store(false, std::memory_order_release);
-    GLTFModel.GPUUpdateQueued.store(false, std::memory_order_release);
+    GLTFModel.GPUUpdateQueued.store(Status == RADIENT_STATUS_OK, std::memory_order_release);
     GLTFModel.LoadStatus.store(Status, std::memory_order_release);
 
-    TryEnqueueGPUResourceUpdate(pModel, GLTFModel);
-}
-
-void RadientAssetManagerImpl::CompleteTextureLoad(IRadientTextureAsset*         pTexture,
-                                                  RefCntAutoPtr<ITextureLoader> pLoader)
-{
-    TextureAssetImpl* pImpl = ClassPtrCast<TextureAssetImpl>(pTexture);
-    if (pImpl == nullptr)
-        return;
-
-    TextureStorage&      Texture = pImpl->GetStorage();
-    const RADIENT_STATUS Status  = ScheduleTextureGPUUpload(m_pDevice, m_pResourceManager, m_pUploadManager, pTexture, pLoader, Texture);
-
-    Texture.LoadStatus.store(Status, std::memory_order_release);
+    if (Status == RADIENT_STATUS_OK)
+        m_PendingGPUResourceUpdates.Enqueue(RefCntWeakPtr<IRadientSceneAsset>{&Model});
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
