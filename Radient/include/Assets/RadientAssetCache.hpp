@@ -32,6 +32,7 @@
 #include "SpinLock.hpp"
 
 #include <algorithm>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -57,6 +58,19 @@ private:
     class AssetEntry
     {
     public:
+        enum class CreateAction
+        {
+            Create,
+            Wait,
+            Recursive
+        };
+
+        struct CreateState
+        {
+            CreateAction Action     = CreateAction::Wait;
+            Uint64       Generation = 0;
+        };
+
         RefCntAutoPtr<InterfaceType> Lock()
         {
             Threading::SpinLockGuard LockGuard{m_Lock};
@@ -69,14 +83,64 @@ private:
             m_Asset = RefCntWeakPtr<InterfaceType>{pAsset};
         }
 
+        CreateState BeginCreate()
+        {
+            std::lock_guard<std::mutex> LockGuard{m_CreateMtx};
+
+            if (m_IsCreating)
+            {
+                return CreateState{
+                    m_CreatorThread == std::this_thread::get_id() ? CreateAction::Recursive : CreateAction::Wait,
+                    m_Generation,
+                };
+            }
+
+            m_IsCreating    = true;
+            m_CreatorThread = std::this_thread::get_id();
+            return CreateState{CreateAction::Create, m_Generation};
+        }
+
+        bool WaitCreate(Uint64 Generation)
+        {
+            std::unique_lock<std::mutex> LockGuard{m_CreateMtx};
+            m_CreateCV.wait(LockGuard, [&]() {
+                return !m_IsCreating || m_Generation != Generation;
+            });
+
+            return m_LastCreateSucceeded;
+        }
+
+        void EndCreate(bool Succeeded)
+        {
+            {
+                std::lock_guard<std::mutex> LockGuard{m_CreateMtx};
+                VERIFY_EXPR(m_IsCreating);
+                VERIFY_EXPR(m_CreatorThread == std::this_thread::get_id());
+
+                m_IsCreating          = false;
+                m_LastCreateSucceeded = Succeeded;
+                m_CreatorThread       = {};
+                ++m_Generation;
+            }
+
+            m_CreateCV.notify_all();
+        }
+
     private:
         // While multiple weak pointers referencing the same object may be safely used concurrently,
         // the weak pointer itself is not thread safe and must be protected by a lock.
         Threading::SpinLock          m_Lock;
         RefCntWeakPtr<InterfaceType> m_Asset;
+
+        std::mutex              m_CreateMtx;
+        std::condition_variable m_CreateCV;
+        bool                    m_IsCreating          = false;
+        bool                    m_LastCreateSucceeded = false;
+        Uint64                  m_Generation          = 0;
+        std::thread::id         m_CreatorThread;
     };
 
-    using AssetMapType = std::unordered_map<HashMapStringKey, AssetEntry>;
+    using AssetMapType = std::unordered_map<HashMapStringKey, std::shared_ptr<AssetEntry>>;
 
 #ifdef _MSC_VER
 #    pragma warning(push)
@@ -105,8 +169,9 @@ public:
                                                          const INTERFACE_ID&   ImplID,
                                                          CreateAssetFuncType&& CreateAssetFunc)
     {
-        const HashMapStringKey Key{CacheKey.c_str()};
-        Shard&                 CacheShard = GetShard(Key.GetHash());
+        const HashMapStringKey      Key{CacheKey.c_str()};
+        Shard&                      CacheShard = GetShard(Key.GetHash());
+        std::shared_ptr<AssetEntry> pEntry;
 
         // First, try to find the asset in the cache with shared lock.
         {
@@ -114,44 +179,69 @@ public:
 
             const auto It = CacheShard.Assets.find(Key);
             if (It != CacheShard.Assets.end())
+                pEntry = It->second;
+        }
+
+        if (!pEntry)
+        {
+            std::unique_lock<std::shared_mutex> Lock{CacheShard.Mutex};
+
+            const auto It = CacheShard.Assets.find(Key);
+            if (It != CacheShard.Assets.end())
             {
-                if (RefCntAutoPtr<InterfaceType> pExisting = It->second.Lock())
-                    return {RefCntAutoPtr<ImplType>{pExisting, ImplID}, false};
+                pEntry = It->second;
+            }
+            else
+            {
+                pEntry                 = std::make_shared<AssetEntry>();
+                auto [NewIt, Inserted] = CacheShard.Assets.emplace(HashMapStringKey{CacheKey, true}, pEntry);
+                VERIFY_EXPR(Inserted);
             }
         }
 
-        // Asset was not found or has been expired. We need to create it and insert into the cache.
-        std::unique_lock<std::shared_mutex> Lock{CacheShard.Mutex};
-
-        const auto It = CacheShard.Assets.find(Key);
-        if (It != CacheShard.Assets.end())
+        for (;;)
         {
-            // Another thread may have created the asset while we were waiting for the lock. Try to lock it again.
-            RefCntAutoPtr<InterfaceType> pExisting = It->second.Lock();
-            if (pExisting != nullptr)
+            if (RefCntAutoPtr<InterfaceType> pExisting = pEntry->Lock())
                 return {RefCntAutoPtr<ImplType>{pExisting, ImplID}, false};
-        }
 
-        RefCntAutoPtr<ImplType> pAsset = std::forward<CreateAssetFuncType>(CreateAssetFunc)();
-        if (!pAsset)
-        {
-            LOG_ERROR_MESSAGE("Failed to create asset for cache key '", CacheKey, "'");
-            return {};
-        }
+            const typename AssetEntry::CreateState State = pEntry->BeginCreate();
+            if (State.Action == AssetEntry::CreateAction::Wait)
+            {
+                if (pEntry->WaitCreate(State.Generation))
+                    continue;
 
-        if (It != CacheShard.Assets.end())
-        {
-            It->second.Set(pAsset.RawPtr());
-        }
-        else
-        {
-            auto [NewIt, Inserted] = CacheShard.Assets.try_emplace(HashMapStringKey{CacheKey, true});
-            VERIFY_EXPR(Inserted);
+                return {};
+            }
 
-            NewIt->second.Set(pAsset.RawPtr());
-        }
+            if (State.Action == AssetEntry::CreateAction::Recursive)
+            {
+                LOG_ERROR_MESSAGE("Recursive asset creation detected for cache key '", CacheKey, "'");
+                return {};
+            }
 
-        return {pAsset, true};
+            RefCntAutoPtr<ImplType> pAsset;
+            try
+            {
+                pAsset = CreateAssetFunc();
+            }
+            catch (...)
+            {
+                pEntry->EndCreate(false);
+                throw;
+            }
+
+            if (!pAsset)
+            {
+                LOG_ERROR_MESSAGE("Failed to create asset for cache key '", CacheKey, "'");
+                pEntry->EndCreate(false);
+                return {};
+            }
+
+            pEntry->Set(pAsset.RawPtr());
+            pEntry->EndCreate(true);
+
+            return {pAsset, true};
+        }
     }
 
 private:

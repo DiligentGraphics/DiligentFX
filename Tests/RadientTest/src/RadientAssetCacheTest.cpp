@@ -241,6 +241,79 @@ TEST(RadientAssetCacheTest, ReturnsEmptyWhenFactoryFails)
     EXPECT_EQ(Asset->GetStorage().Value, 5u);
 }
 
+TEST(RadientAssetCacheTest, FactoryCanCreateDifferentKeyInSameShard)
+{
+    RadientAssetCache<IRadientTextureAsset> Cache{1};
+
+    Uint32 CreateCount = 0;
+    auto [Asset, Created] =
+        Cache.GetOrCreate<TestTextureAssetImpl>(
+            "material-key",
+            IID_TestTextureAssetImpl,
+            [&]() {
+                ++CreateCount;
+
+                auto [DependencyAsset, DependencyCreated] =
+                    Cache.GetOrCreate<TestTextureAssetImpl>(
+                        "texture-key",
+                        IID_TestTextureAssetImpl,
+                        [&]() {
+                            ++CreateCount;
+                            return CreateTestTextureAsset("texture://dependency", 21);
+                        });
+
+                EXPECT_NE(DependencyAsset, nullptr);
+                EXPECT_TRUE(DependencyCreated);
+                EXPECT_EQ(DependencyAsset->GetStorage().Value, 21u);
+
+                return CreateTestTextureAsset("texture://material", 22);
+            });
+
+    ASSERT_NE(Asset, nullptr);
+    EXPECT_TRUE(Created);
+    EXPECT_EQ(CreateCount, 2u);
+    EXPECT_STREQ(Asset->GetReference().URI, "texture://material");
+    EXPECT_EQ(Asset->GetStorage().Value, 22u);
+}
+
+TEST(RadientAssetCacheTest, RecursiveFactoryForSameKeyReturnsEmpty)
+{
+    RadientAssetCache<IRadientTextureAsset> Cache{1};
+
+    Uint32 CreateCount = 0;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"Recursive asset creation detected for cache key 'texture-key'"};
+
+        auto [Asset, Created] =
+            Cache.GetOrCreate<TestTextureAssetImpl>(
+                "texture-key",
+                IID_TestTextureAssetImpl,
+                [&]() {
+                    ++CreateCount;
+
+                    auto [RecursiveAsset, RecursiveCreated] =
+                        Cache.GetOrCreate<TestTextureAssetImpl>(
+                            "texture-key",
+                            IID_TestTextureAssetImpl,
+                            [&]() {
+                                ADD_FAILURE() << "Recursive factory must not be called";
+                                return CreateTestTextureAsset("texture://recursive", 23);
+                            });
+
+                    EXPECT_EQ(RecursiveAsset, nullptr);
+                    EXPECT_FALSE(RecursiveCreated);
+
+                    return CreateTestTextureAsset("texture://created", 24);
+                });
+
+        ASSERT_NE(Asset, nullptr);
+        EXPECT_TRUE(Created);
+        EXPECT_EQ(Asset->GetStorage().Value, 24u);
+    }
+
+    EXPECT_EQ(CreateCount, 1u);
+}
+
 TEST(RadientAssetCacheTest, ConcurrentRequestsCreateSingleAssetForSameKey)
 {
     static constexpr Uint32 ThreadCount = 16;
