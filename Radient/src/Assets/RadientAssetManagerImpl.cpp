@@ -154,16 +154,6 @@ RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(GLTFModelStorage&& R
 {
 }
 
-RadientAssetManagerImpl::TextureStorage::TextureStorage(TextureStorage&& Rhs) noexcept :
-    SourceURI{std::move(Rhs.SourceURI)},
-    pTexture{std::move(Rhs.pTexture)},
-    pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
-    LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-    GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
-    PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
-{
-}
-
 RADIENT_STATUS RadientAssetManagerImpl::InitializeMeshStorage(const RadientMeshSource& Source,
                                                               MeshStorage&             Storage) const
 {
@@ -398,24 +388,6 @@ RADIENT_STATUS RadientAssetManagerImpl::ScheduleMeshGPUUpload(MeshAssetImpl&    
     return RADIENT_STATUS_OK;
 }
 
-template <typename InterfaceType,
-          const INTERFACE_ID& InterfaceID,
-          const INTERFACE_ID& ImplID,
-          RADIENT_ASSET_TYPE  AssetType,
-          typename StorageType>
-RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, ImplID, AssetType, StorageType>::AssetImpl(IReferenceCounters* pRefCounters,
-                                                                                                          std::string&&       URI,
-                                                                                                          const Char*         Name,
-                                                                                                          StorageType&&       Storage) :
-    TBase{pRefCounters},
-    m_URI{std::move(URI)},
-    m_Name{Name != nullptr ? Name : ""},
-    m_Storage{std::move(Storage)}
-{
-    m_Ref.URI     = m_URI.c_str();
-    m_Ref.Version = 1;
-}
-
 template <typename ImplType>
 RefCntAutoPtr<ImplType> RadientAssetManagerImpl::CreateAsset(const char*                  Type,
                                                              const Char*                  Name,
@@ -433,71 +405,6 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateAsset(const char*                 
     RefCntAutoPtr<ImplType> pAsset = CreateAsset<ImplType>(Type, Name, std::move(Storage));
     *ppAsset                       = pAsset.Detach();
     return RADIENT_STATUS_OK;
-}
-
-template <typename ImplType, typename CreateAssetFuncType>
-std::pair<RefCntAutoPtr<ImplType>, bool> RadientAssetManagerImpl::CacheAssetOrGetExisting(const std::string&    CacheKey,
-                                                                                          CreateAssetFuncType&& CreateAssetFunc)
-{
-    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-
-    const auto It = m_Assets.find(HashMapStringKey{CacheKey.c_str()});
-    if (It != m_Assets.end())
-    {
-        RefCntAutoPtr<IRadientAsset> pExisting = It->second.Lock();
-        if (pExisting != nullptr)
-        {
-            return {RefCntAutoPtr<ImplType>{pExisting.RawPtr<ImplType>()}, false};
-        }
-    }
-
-    RefCntAutoPtr<ImplType> pAsset = CreateAssetFunc();
-    if (!pAsset)
-    {
-        UNEXPECTED("Failed to create asset for cache key '", CacheKey, "'");
-        return {};
-    }
-
-    if (It != m_Assets.end())
-    {
-        It->second = RefCntWeakPtr<IRadientAsset>{pAsset};
-    }
-    else
-    {
-        m_Assets.emplace(HashMapStringKey{CacheKey, true},
-                         RefCntWeakPtr<IRadientAsset>{pAsset});
-    }
-
-    return {pAsset, true};
-}
-
-std::pair<RefCntAutoPtr<IRadientTextureAsset>, bool>
-RadientAssetManagerImpl::CacheTextureAssetOrGetExisting(const std::string& CacheKey,
-                                                        const std::string& SourceURI)
-{
-    auto [pTextureAsset, Created] = CacheAssetOrGetExisting<TextureAssetImpl>(
-        CacheKey,
-        [this, &SourceURI]() {
-            TextureStorage TextureData;
-            TextureData.SourceURI = SourceURI;
-            TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-            return CreateAsset<TextureAssetImpl>("texture",
-                                                 SourceURI.empty() ? nullptr : SourceURI.c_str(),
-                                                 std::move(TextureData));
-        });
-
-    RefCntAutoPtr<IRadientTextureAsset> pTextureInterface{pTextureAsset.RawPtr()};
-    return {pTextureInterface, Created};
-}
-
-RADIENT_STATUS RadientAssetManagerImpl::CreateMaterialAsset(const Char*             Name,
-                                                            MaterialStorage&&       Storage,
-                                                            IRadientMaterialAsset** ppMaterial)
-{
-    return CreateAsset<MaterialAssetImpl>("material",
-                                          Name,
-                                          std::move(Storage),
-                                          ppMaterial);
 }
 
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
@@ -622,8 +529,9 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     const std::string CacheKey = MakeGLTFCacheKey(LoadInfo.URI);
     auto [pModelAsset, ModelCreated] =
-        CacheAssetOrGetExisting<SceneAssetImpl>(
+        m_GLTFAssetCache.GetOrCreate<SceneAssetImpl>(
             CacheKey,
+            IID_SceneAssetImpl,
             [this, &LoadInfo]() {
                 GLTFModelStorage GLTFModelData;
                 GLTFModelData.SourceURI = LoadInfo.URI;
@@ -965,7 +873,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
             return SceneAssetImpl::GetLoadStatus(pAsset);
 
         case RADIENT_ASSET_TYPE_TEXTURE:
-            return TextureAssetImpl::GetLoadStatus(pAsset);
+            return RadientTextureAssetManager::GetLoadStatus(pAsset);
 
         default:
             return RADIENT_STATUS_OK;

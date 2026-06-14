@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
 
@@ -44,7 +45,8 @@ public:
     RADIENT_STATUS LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
-    static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+    static ITextureView*  GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pTextureAsset);
 
     static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
                                          GLTF::Material::TextureShaderAttribs& Attribs);
@@ -54,7 +56,8 @@ private:
                                      ITextureLoader&       Loader) const;
 
 private:
-    RadientAssetManagerImpl& m_Owner;
+    RadientAssetManagerImpl&                m_Owner;
+    RadientAssetCache<IRadientTextureAsset> m_TextureCache;
 };
 
 } // namespace Diligent

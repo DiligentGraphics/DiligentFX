@@ -27,13 +27,13 @@
 #pragma once
 
 #include "Render/RadientDrawableMesh.hpp"
+#include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshSource.hpp"
 #include "RadientTextureAssetManager.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
-#include "HashUtils.hpp"
 #include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -43,10 +43,7 @@
 
 #include <atomic>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -148,17 +145,6 @@ private:
         std::atomic<Uint32>         PendingUploads{0};
     };
 
-    struct MaterialStorage
-    {
-        GLTF::Material Material;
-
-        RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;
-        RefCntAutoPtr<IRadientTextureAsset> pMetallicRoughnessTexture;
-        RefCntAutoPtr<IRadientTextureAsset> pNormalTexture;
-        RefCntAutoPtr<IRadientTextureAsset> pOcclusionTexture;
-        RefCntAutoPtr<IRadientTextureAsset> pEmissiveTexture;
-    };
-
     struct GLTFModelStorage
     {
         GLTFModelStorage() = default;
@@ -182,23 +168,6 @@ private:
         RadientDrawableMesh               DrawableMesh;
     };
 
-    struct TextureStorage
-    {
-        TextureStorage() = default;
-        TextureStorage(TextureStorage&& Rhs) noexcept;
-
-        TextureStorage& operator=(TextureStorage&& Rhs)  = delete;
-        TextureStorage(const TextureStorage&)            = delete;
-        TextureStorage& operator=(const TextureStorage&) = delete;
-
-        std::string                               SourceURI;
-        RefCntAutoPtr<ITexture>                   pTexture;
-        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-        std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
-        std::atomic_bool                          GPUResourcesReady{false};
-        std::atomic<Uint32>                       PendingUploads{0};
-    };
-
     using MeshAssetStorage = std::variant<MeshStorage, GLTFMeshStorage>;
 
     static RadientDrawableMeshResolveResult GetDrawableMesh(const MeshStorage& Mesh,
@@ -206,91 +175,13 @@ private:
     static RadientDrawableMeshResolveResult GetDrawableMesh(const GLTFMeshStorage& Mesh,
                                                             bool                   RequireGPUResourcesReady);
 
-    template <typename InterfaceType,
-              const INTERFACE_ID& InterfaceID,
-              const INTERFACE_ID& ImplID,
-              RADIENT_ASSET_TYPE  AssetType,
-              typename StorageType>
-    class AssetImpl final : public ObjectBase<InterfaceType>
-    {
-    public:
-        using TBase   = ObjectBase<InterfaceType>;
-        using Storage = StorageType;
-
-        AssetImpl(IReferenceCounters* pRefCounters,
-                  std::string&&       URI,
-                  const Char*         Name,
-                  StorageType&&       Storage);
-
-        virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
-        {
-            return m_Ref;
-        }
-
-        virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
-        {
-            return AssetType;
-        }
-
-        StorageType& GetStorage()
-        {
-            return m_Storage;
-        }
-
-        const StorageType& GetStorage() const
-        {
-            return m_Storage;
-        }
-
-        template <typename T = StorageType>
-        auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
-        {
-            return m_Storage.LoadStatus.load(std::memory_order_acquire);
-        }
-
-        template <typename T = StorageType>
-        static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
-        {
-            RefCntAutoPtr<AssetImpl> pImpl{pAsset, ImplID};
-            return pImpl ? pImpl->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-
-        virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override
-        {
-            if (ppInterface == nullptr)
-                return;
-            if (IID == InterfaceID || IID == IID_RadientAsset || IID == ImplID)
-            {
-                *ppInterface = this;
-                (*ppInterface)->AddRef();
-            }
-            else
-            {
-                TBase::QueryInterface(IID, ppInterface);
-            }
-        }
-        using IObject::QueryInterface;
-
-    private:
-        std::string           m_URI;
-        std::string           m_Name;
-        RadientAssetReference m_Ref;
-        StorageType           m_Storage;
-    };
-
-    static constexpr INTERFACE_ID IID_MeshAssetImpl     = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
-    static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4d, {0xb8, 0xcd, 0x48, 0x89, 0xa4, 0x65, 0xa, 0x50}};
-    static constexpr INTERFACE_ID IID_TextureAssetImpl  = {0x8bd4869c, 0x6ec8, 0x4944, {0xbc, 0x3d, 0xe7, 0xcc, 0x5d, 0xb, 0x26, 0xc5}};
-    static constexpr INTERFACE_ID IID_SceneAssetImpl    = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
+    static constexpr INTERFACE_ID IID_MeshAssetImpl  = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
+    static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
 
     using MeshAssetImpl =
-        AssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshAssetStorage>;
-    using MaterialAssetImpl =
-        AssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialStorage>;
-    using TextureAssetImpl =
-        AssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TextureStorage>;
+        RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshAssetStorage>;
     using SceneAssetImpl =
-        AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
+        RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
@@ -315,15 +206,6 @@ private:
                                typename ImplType::Storage&& Storage,
                                InterfaceType**              ppAsset);
 
-    template <typename ImplType, typename CreateAssetFuncType>
-    std::pair<RefCntAutoPtr<ImplType>, bool>             CacheAssetOrGetExisting(const std::string&    CacheKey,
-                                                                                 CreateAssetFuncType&& CreateAssetFunc);
-    RADIENT_STATUS                                       CreateMaterialAsset(const Char*             Name,
-                                                                             MaterialStorage&&       Storage,
-                                                                             IRadientMaterialAsset** ppMaterial);
-    std::pair<RefCntAutoPtr<IRadientTextureAsset>, bool> CacheTextureAssetOrGetExisting(const std::string& CacheKey,
-                                                                                        const std::string& SourceURI);
-
     void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
                             std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
@@ -338,13 +220,9 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    mutable std::shared_mutex  m_Mutex;
     std::atomic<RadientHandle> m_NextAssetID{1};
 
-    // Weak cache keyed by canonical source identity. The manager does not own
-    // assets: entries expire when scenes/views/drop their strong references.
-    using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
-    mutable AssetMapType m_Assets;
+    RadientAssetCache<IRadientSceneAsset> m_GLTFAssetCache;
 
     MPSCQueue<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
 };

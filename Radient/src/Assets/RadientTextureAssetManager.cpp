@@ -44,6 +44,41 @@
 namespace Diligent
 {
 
+namespace
+{
+
+static constexpr INTERFACE_ID IID_TextureAssetImpl = {0x8bd4869c, 0x6ec8, 0x4944, {0xbc, 0x3d, 0xe7, 0xcc, 0x5d, 0xb, 0x26, 0xc5}};
+
+struct TextureStorage
+{
+    TextureStorage() = default;
+    TextureStorage(TextureStorage&& Rhs) noexcept :
+        SourceURI{std::move(Rhs.SourceURI)},
+        pTexture{std::move(Rhs.pTexture)},
+        pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
+        LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
+        GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+        PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
+    {
+    }
+
+    TextureStorage& operator=(TextureStorage&& Rhs)  = delete;
+    TextureStorage(const TextureStorage&)            = delete;
+    TextureStorage& operator=(const TextureStorage&) = delete;
+
+    std::string                               SourceURI;
+    RefCntAutoPtr<ITexture>                   pTexture;
+    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+    std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
+    std::atomic_bool                          GPUResourcesReady{false};
+    std::atomic<Uint32>                       PendingUploads{0};
+};
+
+using TextureAssetImpl =
+    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TextureStorage>;
+
+} // namespace
+
 RadientTextureAssetManager::RadientTextureAssetManager(RadientAssetManagerImpl& Owner) noexcept :
     m_Owner{Owner}
 {
@@ -64,26 +99,34 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
         return RADIENT_STATUS_INVALID_OPERATION;
 
     RadientTextureSource TextureSource{LoadInfo};
-    const std::string    SourceURI       = TextureSource.GetURI();
-    const std::string    CacheKey        = RadientTextureSource::MakeCacheKey(LoadInfo);
-    auto [pTextureAsset, TextureCreated] = m_Owner.CacheTextureAssetOrGetExisting(CacheKey, SourceURI);
+    const std::string    SourceURI = TextureSource.GetURI();
+    const std::string    CacheKey  = RadientTextureSource::MakeCacheKey(LoadInfo);
+    auto [pTextureAsset, TextureCreated] =
+        m_TextureCache.GetOrCreate<TextureAssetImpl>(
+            CacheKey,
+            IID_TextureAssetImpl,
+            [this, &SourceURI]() {
+                TextureStorage TextureData;
+                TextureData.SourceURI = SourceURI;
+                TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
+                return RefCntAutoPtr<TextureAssetImpl>{
+                    MakeNewRCObj<TextureAssetImpl>()(m_Owner.MakeURI("texture"),
+                                                     SourceURI.empty() ? nullptr : SourceURI.c_str(),
+                                                     std::move(TextureData))};
+            });
     VERIFY_EXPR(pTextureAsset != nullptr);
-    RefCntAutoPtr<RadientAssetManagerImpl::TextureAssetImpl> pTextureImpl{
-        pTextureAsset,
-        RadientAssetManagerImpl::IID_TextureAssetImpl};
-    VERIFY_EXPR(pTextureImpl != nullptr);
-    if (!pTextureImpl)
+    if (!pTextureAsset)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     if (!TextureCreated)
     {
-        const RADIENT_STATUS Status = pTextureImpl->GetLoadStatus();
+        const RADIENT_STATUS Status = pTextureAsset->GetLoadStatus();
         pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
         return Status;
     }
 
-    RefCntWeakPtr<RadientAssetManagerImpl>                   pWeakOwner{&m_Owner};
-    RefCntAutoPtr<RadientAssetManagerImpl::TextureAssetImpl> pTextureForWorker{pTextureImpl};
+    RefCntWeakPtr<RadientAssetManagerImpl> pWeakOwner{&m_Owner};
+    RefCntAutoPtr<TextureAssetImpl>        pTextureForWorker{pTextureAsset};
 
     TextureSource.MakeMemoryCopy();
 
@@ -109,17 +152,16 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return pTextureImpl->GetLoadStatus();
+    return pTextureAsset->GetLoadStatus();
 }
 
 ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
 {
-    const RadientAssetManagerImpl::TextureAssetImpl* pImpl =
-        ClassPtrCast<const RadientAssetManagerImpl::TextureAssetImpl>(pTextureAsset);
-    if (pImpl == nullptr)
+    RefCntAutoPtr<TextureAssetImpl> pImpl{pTextureAsset, IID_TextureAssetImpl};
+    if (!pImpl)
         return nullptr;
 
-    const RadientAssetManagerImpl::TextureStorage& Texture = pImpl->GetStorage();
+    const TextureStorage& Texture = pImpl->GetStorage();
     if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
         !Texture.GPUResourcesReady.load(std::memory_order_acquire))
     {
@@ -136,12 +178,17 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pT
     return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
 }
 
+RADIENT_STATUS RadientTextureAssetManager::GetLoadStatus(IRadientAsset* pTextureAsset)
+{
+    return TextureAssetImpl::GetLoadStatus(pTextureAsset);
+}
+
 bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
                                                           GLTF::Material::TextureShaderAttribs& Attribs)
 {
-    RefCntAutoPtr<RadientAssetManagerImpl::TextureAssetImpl> pImpl{
+    RefCntAutoPtr<TextureAssetImpl> pImpl{
         pTexture,
-        RadientAssetManagerImpl::IID_TextureAssetImpl};
+        IID_TextureAssetImpl};
     if (!pImpl)
         return false;
 
@@ -157,9 +204,9 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
 RADIENT_STATUS RadientTextureAssetManager::ScheduleGPUUpload(IRadientTextureAsset& TextureAsset,
                                                              ITextureLoader&       Loader) const
 {
-    RefCntAutoPtr<RadientAssetManagerImpl::TextureAssetImpl> pTextureAsset{
+    RefCntAutoPtr<TextureAssetImpl> pTextureAsset{
         &TextureAsset,
-        RadientAssetManagerImpl::IID_TextureAssetImpl};
+        IID_TextureAssetImpl};
     if (!pTextureAsset)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -170,15 +217,15 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleGPUUpload(IRadientTextureAsse
     if (pDevice == nullptr || pUploadManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    RadientAssetManagerImpl::TextureStorage& Texture = pTextureAsset->GetStorage();
-    const TextureDesc&                       TexDesc = Loader.GetTextureDesc();
+    TextureStorage&    Texture = pTextureAsset->GetStorage();
+    const TextureDesc& TexDesc = Loader.GetTextureDesc();
 
     struct TextureCopyData
     {
-        RefCntAutoPtr<RadientAssetManagerImpl::TextureAssetImpl> pTexture;
-        RadientAssetManagerImpl::TextureStorage*                 pStorage = nullptr;
-        RefCntAutoPtr<ITextureAtlasSuballocation>                pAtlasSuballocation;
-        RefCntAutoPtr<IRenderDevice>                             pDevice;
+        RefCntAutoPtr<TextureAssetImpl>           pTexture;
+        TextureStorage*                           pStorage = nullptr;
+        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+        RefCntAutoPtr<IRenderDevice>              pDevice;
     };
 
     Texture.PendingUploads.store(0, std::memory_order_release);

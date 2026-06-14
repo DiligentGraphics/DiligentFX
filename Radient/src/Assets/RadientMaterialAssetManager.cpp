@@ -27,6 +27,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientAssetImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFBuilder.hpp"
@@ -36,6 +37,27 @@
 
 namespace Diligent
 {
+
+namespace
+{
+
+static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4d, {0xb8, 0xcd, 0x48, 0x89, 0xa4, 0x65, 0xa, 0x50}};
+
+struct MaterialStorage
+{
+    GLTF::Material Material;
+
+    RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;
+    RefCntAutoPtr<IRadientTextureAsset> pMetallicRoughnessTexture;
+    RefCntAutoPtr<IRadientTextureAsset> pNormalTexture;
+    RefCntAutoPtr<IRadientTextureAsset> pOcclusionTexture;
+    RefCntAutoPtr<IRadientTextureAsset> pEmissiveTexture;
+};
+
+using MaterialAssetImpl =
+    RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialStorage>;
+
+} // namespace
 
 RadientMaterialAssetManager::RadientMaterialAssetManager(RadientAssetManagerImpl& Owner) noexcept :
     m_Owner{Owner}
@@ -50,7 +72,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMaterial = nullptr;
 
-    RadientAssetManagerImpl::MaterialStorage MaterialData;
+    MaterialStorage MaterialData;
     MaterialData.Material                  = CreateGLTFMaterial(MaterialCI);
     MaterialData.pBaseColorTexture         = MaterialCI.pBaseColorTexture;
     MaterialData.pMetallicRoughnessTexture = MaterialCI.pMetallicRoughnessTexture;
@@ -58,16 +80,19 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
-    return m_Owner.CreateMaterialAsset(MaterialCI.Name,
-                                       std::move(MaterialData),
-                                       ppMaterial);
+    RefCntAutoPtr<MaterialAssetImpl> pMaterial{
+        MakeNewRCObj<MaterialAssetImpl>()(m_Owner.MakeURI("material"),
+                                          MaterialCI.Name,
+                                          std::move(MaterialData))};
+    *ppMaterial = pMaterial.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 const GLTF::Material* RadientMaterialAssetManager::GetMaterial(IRadientMaterialAsset* pMaterial)
 {
-    RefCntAutoPtr<RadientAssetManagerImpl::MaterialAssetImpl> pImpl{
+    RefCntAutoPtr<MaterialAssetImpl> pImpl{
         pMaterial,
-        RadientAssetManagerImpl::IID_MaterialAssetImpl};
+        IID_MaterialAssetImpl};
     return pImpl ? &pImpl->GetStorage().Material : nullptr;
 }
 
