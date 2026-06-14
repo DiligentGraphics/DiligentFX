@@ -71,14 +71,15 @@ public:
         return m_Status;
     }
 
-    const std::vector<RadientMeshPrimitiveCreateInfo>& GetPrimitives() const
+    Uint32 GetPrimitiveCount() const
     {
-        return m_Primitives;
+        return static_cast<Uint32>(m_Primitives.size());
     }
 
-    IRadientMaterialAsset* GetPrimitiveMaterial(Uint32 PrimitiveIndex) const
+    const RadientMeshPrimitiveCreateInfo& GetPrimitive(Uint32 PrimitiveIndex) const
     {
-        return PrimitiveIndex < m_PrimitiveMaterials.size() ? m_PrimitiveMaterials[PrimitiveIndex].RawPtr() : nullptr;
+        VERIFY(PrimitiveIndex < m_Primitives.size(), "Invalid primitive index");
+        return m_Primitives[PrimitiveIndex];
     }
 
     RADIENT_STATUS SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes);
@@ -173,7 +174,9 @@ private:
     std::vector<Uint16> m_Indices16;
     std::vector<Uint32> m_Indices32;
 
-    std::vector<RadientMeshPrimitiveCreateInfo>       m_Primitives;
+    std::vector<RadientMeshPrimitiveCreateInfo> m_Primitives;
+
+    // Keeps material assets alive while m_Primitives stores the public raw pointers.
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> m_PrimitiveMaterials;
 };
 

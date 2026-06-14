@@ -28,6 +28,7 @@
 
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssets.h"
+#include "RadientMeshSource.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
 #include "HashUtils.hpp"
@@ -288,8 +289,17 @@ private:
 
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
     static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
-    static bool           ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
-                                                   GLTF::Material::TextureShaderAttribs& Attribs);
+
+    static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
+                                         GLTF::Material::TextureShaderAttribs& Attribs);
+
+    RADIENT_STATUS InitializeMeshStorage(const RadientMeshSource& Source,
+                                         MeshStorage&             Storage) const;
+    RADIENT_STATUS ScheduleMeshGPUUpload(MeshAssetImpl&           MeshAsset,
+                                         const RadientMeshSource& Source,
+                                         MeshStorage&             Storage) const;
+    static void    UpdateMeshUploadProgress(MeshStorage& Storage,
+                                            bool         CopyScheduled);
 
     std::string MakeURI(const char* Type);
 
@@ -308,6 +318,8 @@ private:
     std::pair<RefCntAutoPtr<ImplType>, bool> CacheAssetOrGetExisting(const std::string&    CacheKey,
                                                                      CreateAssetFuncType&& CreateAssetFunc);
 
+    void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
+                            std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
 
     static RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
