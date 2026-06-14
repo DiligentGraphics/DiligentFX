@@ -30,11 +30,9 @@
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMeshSource.hpp"
 #include "Errors.hpp"
-#include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
-#include "Math/RadientMath.hpp"
 #include "ThreadPool.hpp"
 
 #include <atomic>
@@ -164,43 +162,6 @@ RadientAssetManagerImpl::TextureStorage::TextureStorage(TextureStorage&& Rhs) no
     GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
     PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
 {
-}
-
-GLTF::Material RadientAssetManagerImpl::CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI)
-{
-    GLTF::Material        Material;
-    GLTF::MaterialBuilder Builder{Material};
-
-    GLTF::Material::ShaderAttribs& Attribs = Builder.GetShaderAttribs();
-    Attribs.BaseColorFactor                = RadientMath::ToFloat4(MaterialCI.BaseColorFactor);
-    Attribs.MetallicFactor                 = MaterialCI.MetallicFactor;
-    Attribs.RoughnessFactor                = MaterialCI.RoughnessFactor;
-    Attribs.EmissiveFactor                 = RadientMath::ToFloat3(MaterialCI.EmissiveFactor);
-    Attribs.AlphaCutoff                    = MaterialCI.AlphaCutoff;
-
-    Material.DoubleSided = MaterialCI.DoubleSided != False;
-
-    int  TextureId = 0;
-    auto AddMaterialTexture =
-        [&](Uint32 TextureAttribId, IRadientTextureAsset* pTexture) //
-    {
-        if (pTexture == nullptr)
-            return;
-
-        Builder.SetTextureId(TextureAttribId, TextureId++);
-        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
-        TextureAttribs.SetUVSelector(0);
-        RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, TextureAttribs);
-    };
-
-    AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
-    AddMaterialTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, MaterialCI.pMetallicRoughnessTexture);
-    AddMaterialTexture(GLTF::DefaultNormalTextureAttribId, MaterialCI.pNormalTexture);
-    AddMaterialTexture(GLTF::DefaultOcclusionTextureAttribId, MaterialCI.pOcclusionTexture);
-    AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
-
-    Builder.Finalize();
-    return Material;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::InitializeMeshStorage(const RadientMeshSource& Source,
@@ -529,11 +490,22 @@ RadientAssetManagerImpl::CacheTextureAssetOrGetExisting(const std::string& Cache
     return {pTextureInterface, Created};
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::CreateMaterialAsset(const Char*             Name,
+                                                            MaterialStorage&&       Storage,
+                                                            IRadientMaterialAsset** ppMaterial)
+{
+    return CreateAsset<MaterialAssetImpl>("material",
+                                          Name,
+                                          std::move(Storage),
+                                          ppMaterial);
+}
+
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
     m_Name{CreateInfo.Assets.Desc.Name != nullptr ? CreateInfo.Assets.Desc.Name : ""},
     m_Desc{CreateInfo.Assets.Desc},
+    m_MaterialManager{*this},
     m_TextureManager{*this},
     m_pThreadPool{CreateInfo.pThreadPool}
 {
@@ -625,23 +597,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                        IRadientMaterialAsset**          ppMaterial)
 {
-    if (ppMaterial == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppMaterial = nullptr;
-
-    MaterialStorage MaterialData;
-    MaterialData.Material                  = CreateGLTFMaterial(MaterialCI);
-    MaterialData.pBaseColorTexture         = MaterialCI.pBaseColorTexture;
-    MaterialData.pMetallicRoughnessTexture = MaterialCI.pMetallicRoughnessTexture;
-    MaterialData.pNormalTexture            = MaterialCI.pNormalTexture;
-    MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
-    MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
-
-    return CreateAsset<MaterialAssetImpl>("material",
-                                          MaterialCI.Name,
-                                          std::move(MaterialData),
-                                          ppMaterial);
+    return m_MaterialManager.CreateMaterial(MaterialCI, ppMaterial);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
@@ -854,8 +810,7 @@ RadientDrawableMeshResolveResult RadientAssetManagerImpl::GetDrawableMesh(const 
 
 const GLTF::Material* RadientAssetManagerImpl::GetMaterial(IRadientMaterialAsset* pMaterial)
 {
-    RefCntAutoPtr<MaterialAssetImpl> pImpl{pMaterial, IID_MaterialAssetImpl};
-    return pImpl ? &pImpl->GetStorage().Material : nullptr;
+    return RadientMaterialAssetManager::GetMaterial(pMaterial);
 }
 
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pModel,

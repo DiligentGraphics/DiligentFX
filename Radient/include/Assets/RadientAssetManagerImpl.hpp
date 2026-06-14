@@ -28,6 +28,7 @@
 
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssets.h"
+#include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshSource.hpp"
 #include "RadientTextureAssetManager.hpp"
 #include "ThreadPool.h"
@@ -124,6 +125,7 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
+    friend class RadientMaterialAssetManager;
     friend class RadientTextureAssetManager;
 
     struct MeshStorage
@@ -291,7 +293,6 @@ private:
         AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
-    static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
 
     RADIENT_STATUS InitializeMeshStorage(const RadientMeshSource& Source,
                                          MeshStorage&             Storage) const;
@@ -315,8 +316,11 @@ private:
                                InterfaceType**              ppAsset);
 
     template <typename ImplType, typename CreateAssetFuncType>
-    std::pair<RefCntAutoPtr<ImplType>, bool> CacheAssetOrGetExisting(const std::string&    CacheKey,
-                                                                     CreateAssetFuncType&& CreateAssetFunc);
+    std::pair<RefCntAutoPtr<ImplType>, bool>             CacheAssetOrGetExisting(const std::string&    CacheKey,
+                                                                                 CreateAssetFuncType&& CreateAssetFunc);
+    RADIENT_STATUS                                       CreateMaterialAsset(const Char*             Name,
+                                                                             MaterialStorage&&       Storage,
+                                                                             IRadientMaterialAsset** ppMaterial);
     std::pair<RefCntAutoPtr<IRadientTextureAsset>, bool> CacheTextureAssetOrGetExisting(const std::string& CacheKey,
                                                                                         const std::string& SourceURI);
 
@@ -324,9 +328,10 @@ private:
                             std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
 
-    std::string             m_Name;
-    RadientAssetManagerDesc m_Desc;
-    RadientTextureAssetManager m_TextureManager;
+    std::string                 m_Name;
+    RadientAssetManagerDesc     m_Desc;
+    RadientMaterialAssetManager m_MaterialManager;
+    RadientTextureAssetManager  m_TextureManager;
 
     RefCntAutoPtr<IThreadPool>           m_pThreadPool;
     RefCntAutoPtr<IRenderDevice>         m_pDevice;
