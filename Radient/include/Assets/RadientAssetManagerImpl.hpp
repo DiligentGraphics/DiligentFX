@@ -29,6 +29,7 @@
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssets.h"
 #include "RadientMeshSource.hpp"
+#include "RadientTextureAssetManager.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
 #include "HashUtils.hpp"
@@ -123,6 +124,8 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
+    friend class RadientTextureAssetManager;
+
     struct MeshStorage
     {
         MeshStorage() = default;
@@ -290,9 +293,6 @@ private:
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
     static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
 
-    static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
-                                         GLTF::Material::TextureShaderAttribs& Attribs);
-
     RADIENT_STATUS InitializeMeshStorage(const RadientMeshSource& Source,
                                          MeshStorage&             Storage) const;
     RADIENT_STATUS ScheduleMeshGPUUpload(MeshAssetImpl&           MeshAsset,
@@ -317,20 +317,16 @@ private:
     template <typename ImplType, typename CreateAssetFuncType>
     std::pair<RefCntAutoPtr<ImplType>, bool> CacheAssetOrGetExisting(const std::string&    CacheKey,
                                                                      CreateAssetFuncType&& CreateAssetFunc);
+    std::pair<RefCntAutoPtr<IRadientTextureAsset>, bool> CacheTextureAssetOrGetExisting(const std::string& CacheKey,
+                                                                                        const std::string& SourceURI);
 
     void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
                             std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
 
-    static RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
-                                                   GLTF::ResourceManager* pResourceManager,
-                                                   IGPUUploadManager*     pUploadManager,
-                                                   IRadientTextureAsset*  pTexture,
-                                                   ITextureLoader*        pLoader,
-                                                   TextureStorage&        Texture);
-
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
+    RadientTextureAssetManager m_TextureManager;
 
     RefCntAutoPtr<IThreadPool>           m_pThreadPool;
     RefCntAutoPtr<IRenderDevice>         m_pDevice;

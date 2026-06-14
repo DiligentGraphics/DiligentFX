@@ -29,16 +29,13 @@
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMeshSource.hpp"
-#include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
-#include "GraphicsAccessories.hpp"
 #include "GPUUploadManager.h"
 #include "Math/RadientMath.hpp"
 #include "ThreadPool.hpp"
-#include "TextureLoader.h"
 
 #include <atomic>
 #include <cstring>
@@ -57,13 +54,6 @@ struct GLTFModelToPrepare
 {
     RefCntAutoPtr<IRadientSceneAsset> pAsset;
     GLTF::Model*                      pModel = nullptr;
-};
-
-struct TextureCopyData
-{
-    RefCntAutoPtr<IRadientTextureAsset>       pTexture;
-    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-    RefCntAutoPtr<IRenderDevice>              pDevice;
 };
 
 struct MeshBufferWriteData
@@ -200,7 +190,7 @@ GLTF::Material RadientAssetManagerImpl::CreateGLTFMaterial(const RadientMaterial
         Builder.SetTextureId(TextureAttribId, TextureId++);
         GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
         TextureAttribs.SetUVSelector(0);
-        ApplyTextureAtlasAttribs(pTexture, TextureAttribs);
+        RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, TextureAttribs);
     };
 
     AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
@@ -211,22 +201,6 @@ GLTF::Material RadientAssetManagerImpl::CreateGLTFMaterial(const RadientMaterial
 
     Builder.Finalize();
     return Material;
-}
-
-bool RadientAssetManagerImpl::ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
-                                                       GLTF::Material::TextureShaderAttribs& Attribs)
-{
-    RefCntAutoPtr<TextureAssetImpl> pImpl{pTexture, IID_TextureAssetImpl};
-    if (!pImpl)
-        return false;
-
-    ITextureAtlasSuballocation* pAtlasSuballocation = pImpl->GetStorage().pAtlasSuballocation;
-    if (pAtlasSuballocation == nullptr)
-        return false;
-
-    Attribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
-    Attribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
-    return true;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::InitializeMeshStorage(const RadientMeshSource& Source,
@@ -536,11 +510,31 @@ std::pair<RefCntAutoPtr<ImplType>, bool> RadientAssetManagerImpl::CacheAssetOrGe
     return {pAsset, true};
 }
 
+std::pair<RefCntAutoPtr<IRadientTextureAsset>, bool>
+RadientAssetManagerImpl::CacheTextureAssetOrGetExisting(const std::string& CacheKey,
+                                                        const std::string& SourceURI)
+{
+    auto [pTextureAsset, Created] = CacheAssetOrGetExisting<TextureAssetImpl>(
+        CacheKey,
+        [this, &SourceURI]() {
+            TextureStorage TextureData;
+            TextureData.SourceURI = SourceURI;
+            TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
+            return CreateAsset<TextureAssetImpl>("texture",
+                                                 SourceURI.empty() ? nullptr : SourceURI.c_str(),
+                                                 std::move(TextureData));
+        });
+
+    RefCntAutoPtr<IRadientTextureAsset> pTextureInterface{pTextureAsset.RawPtr()};
+    return {pTextureInterface, Created};
+}
+
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
     m_Name{CreateInfo.Assets.Desc.Name != nullptr ? CreateInfo.Assets.Desc.Name : ""},
     m_Desc{CreateInfo.Assets.Desc},
+    m_TextureManager{*this},
     m_pThreadPool{CreateInfo.pThreadPool}
 {
     m_Desc.Name = m_Name.c_str();
@@ -653,73 +647,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                     IRadientTextureAsset**        ppTexture)
 {
-    if (ppTexture == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppTexture == nullptr, "Output texture pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppTexture = nullptr;
-
-    if (!ValidateTextureLoadInfo(LoadInfo))
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (m_pThreadPool == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    RadientTextureSource TextureSource{LoadInfo};
-    const std::string    SourceURI = TextureSource.GetURI();
-    const std::string    CacheKey  = RadientTextureSource::MakeCacheKey(LoadInfo);
-    auto [pTextureAsset, TextureCreated] =
-        CacheAssetOrGetExisting<TextureAssetImpl>(
-            CacheKey,
-            [this, &SourceURI]() {
-                TextureStorage TextureData;
-                TextureData.SourceURI = SourceURI;
-                TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-                return CreateAsset<TextureAssetImpl>("texture",
-                                                     SourceURI.empty() ? nullptr : SourceURI.c_str(),
-                                                     std::move(TextureData));
-            });
-    VERIFY_EXPR(pTextureAsset != nullptr);
-    if (!TextureCreated)
-    {
-        const RADIENT_STATUS Status = pTextureAsset->GetLoadStatus();
-        pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
-        return Status;
-    }
-
-    RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
-    RefCntAutoPtr<TextureAssetImpl>        pTextureForWorker{pTextureAsset};
-
-    TextureSource.MakeMemoryCopy();
-
-    pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
-
-    EnqueueAsyncWork(
-        m_pThreadPool,
-        [pWeakSelf, pTextureForWorker, TextureSource = std::move(TextureSource)](Uint32) mutable //
-        {
-            RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
-            if (pSelf == nullptr)
-                return ASYNC_TASK_STATUS_CANCELLED;
-
-            RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
-            if (pLoader == nullptr)
-            {
-                pTextureForWorker->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            TextureStorage&      Texture = pTextureForWorker->GetStorage();
-            const RADIENT_STATUS Status  = RadientAssetManagerImpl::ScheduleTextureGPUUpload(pSelf->m_pDevice,
-                                                                                             pSelf->m_pResourceManager,
-                                                                                             pSelf->m_pUploadManager,
-                                                                                             pTextureForWorker,
-                                                                                             pLoader,
-                                                                                             Texture);
-            Texture.LoadStatus.store(Status, std::memory_order_release);
-            return ASYNC_TASK_STATUS_COMPLETE;
-        });
-
-    return pTextureAsset->GetLoadStatus();
+    return m_TextureManager.LoadTexture(LoadInfo, ppTexture);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
@@ -958,25 +886,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pM
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
 {
-    const TextureAssetImpl* pImpl = ClassPtrCast<const TextureAssetImpl>(pTextureAsset);
-    if (pImpl == nullptr)
-        return nullptr;
-
-    const TextureStorage& Texture = pImpl->GetStorage();
-    if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
-        !Texture.GPUResourcesReady.load(std::memory_order_acquire))
-    {
-        return nullptr;
-    }
-
-    ITexture* pTexture = Texture.pTexture;
-    if (pTexture == nullptr && Texture.pAtlasSuballocation != nullptr)
-    {
-        if (IDynamicTextureAtlas* pAtlas = Texture.pAtlasSuballocation->GetAtlas())
-            pTexture = pAtlas->GetTexture();
-    }
-
-    return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+    return RadientTextureAssetManager::GetTextureSRV(pTextureAsset);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevice,
@@ -1191,178 +1101,6 @@ void RadientAssetManagerImpl::LoadMeshFromSource(MeshAssetImpl&                 
                                    *pMeshStorage);
     if (RADIENT_FAILED(Status))
         SetLoadStatus(Status);
-}
-
-RADIENT_STATUS RadientAssetManagerImpl::ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
-                                                                 GLTF::ResourceManager* pResourceManager,
-                                                                 IGPUUploadManager*     pUploadManager,
-                                                                 IRadientTextureAsset*  pTexture,
-                                                                 ITextureLoader*        pLoader,
-                                                                 TextureStorage&        Texture)
-{
-    if (pDevice == nullptr || pUploadManager == nullptr || pTexture == nullptr || pLoader == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    const TextureDesc& TexDesc = pLoader->GetTextureDesc();
-
-    Texture.PendingUploads.store(0, std::memory_order_release);
-    Texture.GPUResourcesReady.store(false, std::memory_order_release);
-    Texture.pTexture.Release();
-    Texture.pAtlasSuballocation.Release();
-
-    if (TexDesc.Type != RESOURCE_DIM_TEX_2D || TexDesc.GetArraySize() != 1)
-    {
-        pLoader->CreateTexture(pDevice, &Texture.pTexture);
-        Texture.GPUResourcesReady.store(Texture.pTexture != nullptr, std::memory_order_release);
-        return Texture.pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    if (pResourceManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    Texture.pAtlasSuballocation = pResourceManager->AllocateTextureSpace(TexDesc.Format,
-                                                                         TexDesc.Width,
-                                                                         TexDesc.Height,
-                                                                         pTexture->GetReference().URI);
-    if (Texture.pAtlasSuballocation == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    const TextureDesc&          AtlasDesc        = Texture.pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
-    const TextureFormatAttribs& FmtAttribs       = GetTextureFormatAttribs(TexDesc.Format);
-    const uint2                 Origin           = Texture.pAtlasSuballocation->GetOrigin();
-    const Uint32                MipLevels        = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
-    Uint32                      ScheduledUploads = 0;
-
-    for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
-    {
-        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, Mip);
-        if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
-        {
-            // Do not copy mip levels that are smaller than the block size.
-            if (MipProps.LogicalWidth < FmtAttribs.BlockWidth ||
-                MipProps.LogicalHeight < FmtAttribs.BlockHeight)
-                break;
-        }
-
-        const TextureSubResData& SubRes = pLoader->GetSubresourceData(Mip);
-
-        TextureCopyData* pCopyData = new TextureCopyData{
-            RefCntAutoPtr<IRadientTextureAsset>{pTexture},
-            Texture.pAtlasSuballocation,
-            RefCntAutoPtr<IRenderDevice>{pDevice},
-        };
-
-        ScheduleTextureUpdateInfo UpdateInfo;
-        UpdateInfo.Format      = AtlasDesc.Format;
-        UpdateInfo.pSrcData    = SubRes.pData;
-        UpdateInfo.Stride      = SubRes.Stride;
-        UpdateInfo.DepthStride = SubRes.DepthStride;
-        UpdateInfo.DstMipLevel = Mip;
-        UpdateInfo.DstSlice    = Texture.pAtlasSuballocation->GetSlice();
-
-        UpdateInfo.DstBox.MinX      = Origin.x >> Mip;
-        UpdateInfo.DstBox.MaxX      = UpdateInfo.DstBox.MinX + MipProps.LogicalWidth;
-        UpdateInfo.DstBox.MinY      = Origin.y >> Mip;
-        UpdateInfo.DstBox.MaxY      = UpdateInfo.DstBox.MinY + MipProps.LogicalHeight;
-        UpdateInfo.pCopyTextureData = pCopyData;
-
-        Texture.PendingUploads.fetch_add(1, std::memory_order_acq_rel);
-        ++ScheduledUploads;
-
-        UpdateInfo.CopyTexture =
-            [](IDeviceContext*          pContext,
-               Uint32                   DstMipLevel,
-               Uint32                   DstSlice,
-               const Box&               DstBox,
-               const TextureSubResData& SrcData,
-               void*                    pUserData) {
-                std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-
-                bool CopyScheduled = false;
-                if (pContext != nullptr)
-                {
-                    ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pDevice, pContext);
-                    if (pAtlasTexture != nullptr)
-                    {
-                        pContext->UpdateTexture(pAtlasTexture, DstMipLevel, DstSlice, DstBox, SrcData,
-                                                RESOURCE_STATE_TRANSITION_MODE_VERIFY,
-                                                RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                        CopyScheduled = true;
-                    }
-                }
-
-                IRadientTextureAsset* pTexture = Data->pTexture;
-                TextureAssetImpl*     pImpl    = ClassPtrCast<TextureAssetImpl>(pTexture);
-                VERIFY_EXPR(pImpl != nullptr);
-
-                TextureStorage& Texture            = pImpl->GetStorage();
-                const Uint32    PrevPendingUploads = Texture.PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
-                VERIFY_EXPR(PrevPendingUploads > 0);
-                if (PrevPendingUploads == 1)
-                    Texture.GPUResourcesReady.store(CopyScheduled, std::memory_order_release);
-            };
-
-        UpdateInfo.CopyD3D11Texture =
-            [](IDeviceContext* pContext,
-               Uint32          DstMipLevel,
-               Uint32          DstSlice,
-               const Box&      DstBox,
-               ITexture*       pSrcTexture,
-               Uint32          SrcX,
-               Uint32          SrcY,
-               void*           pUserData) {
-                std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-
-                bool CopyScheduled = false;
-                if (pContext != nullptr && pSrcTexture != nullptr)
-                {
-                    ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pDevice, pContext);
-                    if (pAtlasTexture != nullptr)
-                    {
-                        CopyTextureAttribs CopyAttribs;
-                        CopyAttribs.pSrcTexture              = pSrcTexture;
-                        CopyAttribs.pDstTexture              = pAtlasTexture;
-                        CopyAttribs.DstMipLevel              = DstMipLevel;
-                        CopyAttribs.DstSlice                 = DstSlice;
-                        CopyAttribs.DstX                     = DstBox.MinX;
-                        CopyAttribs.DstY                     = DstBox.MinY;
-                        CopyAttribs.DstZ                     = DstBox.MinZ;
-                        CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_VERIFY;
-                        CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-
-                        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(pAtlasTexture->GetDesc().Format);
-
-                        Box SrcBox;
-                        SrcBox.MinX = SrcX;
-                        SrcBox.MinY = SrcY;
-                        SrcBox.MaxX = AlignUp(SrcX + DstBox.Width(), FmtAttribs.BlockWidth);
-                        SrcBox.MaxY = AlignUp(SrcY + DstBox.Height(), FmtAttribs.BlockHeight);
-
-                        CopyAttribs.pSrcBox = &SrcBox;
-
-                        pContext->CopyTexture(CopyAttribs);
-                        CopyScheduled = true;
-                    }
-                }
-
-                IRadientTextureAsset* pTexture = Data->pTexture;
-                TextureAssetImpl*     pImpl    = ClassPtrCast<TextureAssetImpl>(pTexture);
-                VERIFY_EXPR(pImpl != nullptr);
-
-                TextureStorage& Texture            = pImpl->GetStorage();
-                const Uint32    PrevPendingUploads = Texture.PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
-                VERIFY_EXPR(PrevPendingUploads > 0);
-                if (PrevPendingUploads == 1)
-                    Texture.GPUResourcesReady.store(CopyScheduled, std::memory_order_release);
-            };
-
-        pUploadManager->ScheduleTextureUpdate(UpdateInfo);
-    }
-
-    if (ScheduledUploads == 0)
-        Texture.GPUResourcesReady.store(true, std::memory_order_release);
-
-    return RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent
