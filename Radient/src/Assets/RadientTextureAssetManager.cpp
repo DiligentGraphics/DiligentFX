@@ -26,6 +26,7 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 
+#include "Assets/RadientAssetImpl.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientTextureSource.hpp"

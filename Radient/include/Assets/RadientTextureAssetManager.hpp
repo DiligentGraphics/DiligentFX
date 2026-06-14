@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "RadientAssetImpl.hpp"
+#include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
 

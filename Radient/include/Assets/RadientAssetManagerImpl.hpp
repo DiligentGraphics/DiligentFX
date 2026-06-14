@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Render/RadientDrawableMesh.hpp"
+#include "RadientAssetCache.hpp"
 #include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"

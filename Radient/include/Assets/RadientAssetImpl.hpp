@@ -27,16 +27,11 @@
 #pragma once
 
 #include "RadientAssets.h"
-#include "DebugUtilities.hpp"
-#include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <atomic>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 namespace Diligent
@@ -121,52 +116,6 @@ private:
     std::string           m_Name;
     RadientAssetReference m_Ref;
     StorageType           m_Storage;
-};
-
-template <typename InterfaceType>
-class RadientAssetCache
-{
-public:
-    template <typename ImplType, typename CreateAssetFuncType>
-    std::pair<RefCntAutoPtr<ImplType>, bool> GetOrCreate(const std::string&    CacheKey,
-                                                         const INTERFACE_ID&   ImplID,
-                                                         CreateAssetFuncType&& CreateAssetFunc)
-    {
-        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-
-        const auto It = m_Assets.find(HashMapStringKey{CacheKey.c_str()});
-        if (It != m_Assets.end())
-        {
-            RefCntAutoPtr<InterfaceType> pExisting = It->second.Lock();
-            if (pExisting != nullptr)
-                return {RefCntAutoPtr<ImplType>{pExisting, ImplID}, false};
-        }
-
-        RefCntAutoPtr<ImplType> pAsset = CreateAssetFunc();
-        if (!pAsset)
-        {
-            LOG_ERROR_MESSAGE("Failed to create asset for cache key '", CacheKey, "'");
-            return {};
-        }
-
-        if (It != m_Assets.end())
-        {
-            It->second = RefCntWeakPtr<InterfaceType>{pAsset.RawPtr()};
-        }
-        else
-        {
-            m_Assets.emplace(HashMapStringKey{CacheKey, true},
-                             RefCntWeakPtr<InterfaceType>{pAsset.RawPtr()});
-        }
-
-        return {pAsset, true};
-    }
-
-private:
-    using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<InterfaceType>>;
-
-    mutable std::shared_mutex m_Mutex;
-    AssetMapType              m_Assets;
 };
 
 } // namespace Diligent

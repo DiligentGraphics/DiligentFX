@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientAssetCache.hpp"
 #include "Assets/RadientAssetImpl.hpp"
 
 #include "TestingEnvironment.hpp"
