@@ -245,7 +245,7 @@ TEST(RadientAssetCacheTest, ConcurrentRequestsCreateSingleAssetForSameKey)
 {
     static constexpr Uint32 ThreadCount = 16;
 
-    RadientAssetCache<IRadientTextureAsset> Cache;
+    RadientAssetCache<IRadientTextureAsset> Cache{2};
     ThreadStartGate                         StartGate{ThreadCount};
     std::atomic<Uint32>                     CreateCount{0};
     std::vector<std::thread>                Threads;
@@ -292,7 +292,7 @@ TEST(RadientAssetCacheTest, ConcurrentRequestsReplaceExpiredEntryOnce)
 {
     static constexpr Uint32 ThreadCount = 16;
 
-    RadientAssetCache<IRadientTextureAsset> Cache;
+    RadientAssetCache<IRadientTextureAsset> Cache{2};
     std::atomic<Uint32>                     InitialCreateCount{0};
     {
         auto [InitialAsset, InitialCreated] =
@@ -358,7 +358,7 @@ TEST(RadientAssetCacheTest, ConcurrentLiveCacheHitsDoNotCallFactory)
 {
     static constexpr Uint32 ThreadCount = 16;
 
-    RadientAssetCache<IRadientTextureAsset> Cache;
+    RadientAssetCache<IRadientTextureAsset> Cache{2};
     std::atomic<Uint32>                     CreateCount{0};
 
     auto [InitialAsset, InitialCreated] =
@@ -416,7 +416,7 @@ TEST(RadientAssetCacheTest, ConcurrentRequestsForDifferentKeysCreateIndependentA
 {
     static constexpr Uint32 ThreadCount = 16;
 
-    RadientAssetCache<IRadientTextureAsset> Cache;
+    RadientAssetCache<IRadientTextureAsset> Cache{2};
     ThreadStartGate                         StartGate{ThreadCount};
     std::atomic<Uint32>                     CreateCount{0};
     std::vector<std::thread>                Threads;
