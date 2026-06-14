@@ -145,7 +145,7 @@ public:
         RefCntAutoPtr<ImplType> pAsset = CreateAssetFunc();
         if (!pAsset)
         {
-            UNEXPECTED("Failed to create asset for cache key '", CacheKey, "'");
+            LOG_ERROR_MESSAGE("Failed to create asset for cache key '", CacheKey, "'");
             return {};
         }
 
