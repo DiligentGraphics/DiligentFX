@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -565,6 +565,18 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     for (std::vector<PrimitiveRenderInfo>& List : m_RenderLists)
         List.clear();
 
+    auto GetTransmissionSortDistanceSq = [&](const GLTF::Primitive& Primitive, const GLTF::Node& Node) //
+    {
+        if (RenderParams.pCameraPosition == nullptr)
+            return 0.f;
+
+        const float4x4 NodeTransform = Transforms.NodeGlobalMatrices[Node.Index] * RenderParams.ModelTransform;
+        const BoundBox WorldBB       = Primitive.BB.Transform(NodeTransform);
+        const float3   Center        = (WorldBB.Min + WorldBB.Max) * 0.5f;
+        const float3   Delta         = Center - *RenderParams.pCameraPosition;
+        return dot(Delta, Delta);
+    };
+
     for (const GLTF::Node* pNode : Scene.LinearNodes)
     {
         VERIFY_EXPR(pNode != nullptr);
@@ -581,18 +593,54 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             if ((RenderParams.AlphaModes & (1u << AlphaMode)) == 0)
                 continue;
 
-            m_RenderLists[AlphaMode].emplace_back(primitive, *pNode);
+            RENDER_LIST_ID RenderListId = RENDER_LIST_OPAQUE;
+            RenderInfo::SURFACE_FLAGS SurfaceFlag = RenderInfo::SURFACE_FLAG_OPAQUE;
+
+            const bool IsTransmissive = m_Settings.EnableTransmission &&
+                Material.Transmission != nullptr &&
+                Material.Transmission->Factor > 0.f;
+            if (IsTransmissive)
+            {
+                RenderListId = RENDER_LIST_TRANSMISSION;
+                SurfaceFlag  = RenderInfo::SURFACE_FLAG_TRANSMISSION;
+            }
+            else if (Material.Attribs.AlphaMode == GLTF::Material::ALPHA_MODE_MASK)
+            {
+                RenderListId = RENDER_LIST_MASK;
+                SurfaceFlag  = RenderInfo::SURFACE_FLAG_MASK;
+            }
+            else if (Material.Attribs.AlphaMode == GLTF::Material::ALPHA_MODE_BLEND)
+            {
+                RenderListId = RENDER_LIST_BLEND;
+                SurfaceFlag  = RenderInfo::SURFACE_FLAG_BLEND;
+            }
+
+            if ((RenderParams.SurfaceFlags & SurfaceFlag) == 0)
+                continue;
+
+            m_RenderLists[RenderListId].emplace_back(primitive, *pNode, GetTransmissionSortDistanceSq(primitive, *pNode));
         }
+    }
+
+    if (RenderParams.pCameraPosition != nullptr)
+    {
+        std::vector<PrimitiveRenderInfo>& TransmissionList = m_RenderLists[RENDER_LIST_TRANSMISSION];
+        std::sort(TransmissionList.begin(), TransmissionList.end(),
+                  [](const PrimitiveRenderInfo& LHS, const PrimitiveRenderInfo& RHS) //
+                  {
+                      return LHS.SortDistanceSq > RHS.SortDistanceSq;
+                  });
     }
 
     const Uint32 FirstIndexLocation = GLTFModel.GetFirstIndexLocation();
     const Uint32 BaseVertex         = GLTFModel.GetBaseVertex();
 
-    const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes //
+    const std::array<RENDER_LIST_ID, RENDER_LIST_COUNT> RenderListIds //
         {
-            GLTF::Material::ALPHA_MODE_OPAQUE, // Opaque primitives - first
-            GLTF::Material::ALPHA_MODE_MASK,   // Alpha-masked primitives - second
-            GLTF::Material::ALPHA_MODE_BLEND,  // Transparent primitives - last (TODO: depth sorting)
+            RENDER_LIST_OPAQUE,       // Non-transmission opaque primitives - first
+            RENDER_LIST_MASK,         // Non-transmission alpha-masked primitives - second
+            RENDER_LIST_TRANSMISSION, // Transmission composite primitives - third
+            RENDER_LIST_BLEND,        // Non-transmission alpha-blended primitives - last
         };
 
     IPipelineState*         pCurrPSO      = nullptr;
@@ -603,14 +651,21 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     if (PrevTransforms == nullptr)
         PrevTransforms = &Transforms;
 
-    for (GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+    for (RENDER_LIST_ID RenderListId : RenderListIds)
     {
-        const std::vector<PrimitiveRenderInfo>& RenderList = m_RenderLists[AlphaMode];
+        pCurrPSO      = nullptr;
+        pCurrSRB      = nullptr;
+        pCurrMaterial = nullptr;
+
+        const bool IsTransmissionList = RenderListId == RENDER_LIST_TRANSMISSION;
+        const std::vector<PrimitiveRenderInfo>& RenderList = m_RenderLists[RenderListId];
         for (const PrimitiveRenderInfo& PrimRI : RenderList)
         {
-            const GLTF::Node&      Node                 = PrimRI.Node;
-            const GLTF::Primitive& primitive            = PrimRI.Primitive;
+            VERIFY_EXPR(PrimRI.Node != nullptr && PrimRI.Primitive != nullptr);
+            const GLTF::Node&      Node                 = *PrimRI.Node;
+            const GLTF::Primitive& primitive            = *PrimRI.Primitive;
             const GLTF::Material&  material             = GLTFModel.Materials[primitive.MaterialId];
+            const auto AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(material.Attribs.AlphaMode);
             const float4x4&        NodeGlobalMatrix     = Transforms.NodeGlobalMatrices[Node.Index];
             const float4x4&        PrevNodeGlobalMatrix = PrevTransforms->NodeGlobalMatrices[Node.Index];
 
@@ -629,7 +684,13 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 PSOFlags |= PSO_FLAG_USE_IBL;
             }
 
+            if (IsTransmissionList && RenderParams.pTransmissionSceneColorSRV != nullptr)
+            {
+                PSOFlags |= PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE;
+            }
+
             PSOFlags &= RenderParams.Flags;
+            const bool IsTransmissionComposite = (PSOFlags & PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE) != PSO_FLAG_NONE;
 
             if (RenderParams.Wireframe)
                 PSOFlags |= PSO_FLAG_UNSHADED;
@@ -669,6 +730,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (pCurrSRB != pSRB)
                 {
                     pCurrSRB = pSRB;
+                    if (IsTransmissionComposite)
+                    {
+                        SetTransmissionSceneColor(pSRB, RenderParams.pTransmissionSceneColorSRV);
+                    }
                     pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
                 }
             }
@@ -678,6 +743,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (pCurrSRB != pCacheBindings->pSRB)
                 {
                     pCurrSRB = pCacheBindings->pSRB;
+                    if (IsTransmissionComposite)
+                    {
+                        SetTransmissionSceneColor(pCurrSRB, RenderParams.pTransmissionSceneColorSRV);
+                    }
                     pCtx->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
                 }
             }
