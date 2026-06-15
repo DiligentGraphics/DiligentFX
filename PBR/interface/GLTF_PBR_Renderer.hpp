@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -96,6 +96,35 @@ public:
         };
         /// Flag indicating which alpha modes to render
         ALPHA_MODE_FLAGS AlphaModes = ALPHA_MODE_FLAG_ALL;
+
+        enum SURFACE_FLAGS : Uint32
+        {
+            /// Render nothing
+            SURFACE_FLAG_NONE = 0,
+
+            /// Render non-transmission opaque materials
+            SURFACE_FLAG_OPAQUE = 1u << 0u,
+
+            /// Render non-transmission alpha-masked materials
+            SURFACE_FLAG_MASK = 1u << 1u,
+
+            /// Render transmission composite materials
+            SURFACE_FLAG_TRANSMISSION = 1u << 2u,
+
+            /// Render non-transmission alpha-blended materials
+            SURFACE_FLAG_BLEND = 1u << 3u,
+
+            /// Render all surface buckets
+            SURFACE_FLAG_ALL = SURFACE_FLAG_OPAQUE | SURFACE_FLAG_MASK | SURFACE_FLAG_TRANSMISSION | SURFACE_FLAG_BLEND
+        };
+        /// Flag indicating which derived surface buckets to render.
+        SURFACE_FLAGS SurfaceFlags = SURFACE_FLAG_ALL;
+
+        /// Copied linear HDR scene color texture used by transmission composite.
+        ITextureView* pTransmissionSceneColorSRV = nullptr;
+
+        /// Optional camera position used to sort transmissive surfaces back-to-front.
+        const float3* pCameraPosition = nullptr;
 
         DebugViewType DebugView = DebugViewType::None;
 
@@ -269,23 +298,36 @@ private:
 private:
     RenderInfo m_RenderParams;
 
+    enum RENDER_LIST_ID : size_t
+    {
+        RENDER_LIST_OPAQUE = 0,
+        RENDER_LIST_MASK,
+        RENDER_LIST_TRANSMISSION,
+        RENDER_LIST_BLEND,
+        RENDER_LIST_COUNT
+    };
+
     struct PrimitiveRenderInfo
     {
-        const GLTF::Primitive& Primitive;
-        const GLTF::Node&      Node;
+        const GLTF::Primitive* Primitive      = nullptr;
+        const GLTF::Node*      Node           = nullptr;
+        float                  SortDistanceSq = 0;
 
         PrimitiveRenderInfo(const GLTF::Primitive& _Primitive,
-                            const GLTF::Node&      _Node) noexcept :
-            Primitive{_Primitive},
-            Node{_Node}
+                            const GLTF::Node&      _Node,
+                            float                  _SortDistanceSq = 0) noexcept :
+            Primitive{&_Primitive},
+            Node{&_Node},
+            SortDistanceSq{_SortDistanceSq}
         {}
     };
-    std::array<std::vector<PrimitiveRenderInfo>, GLTF::Material::ALPHA_MODE_NUM_MODES> m_RenderLists;
+    std::array<std::vector<PrimitiveRenderInfo>, RENDER_LIST_COUNT> m_RenderLists;
 
     PsoCacheAccessor m_PbrPSOCache;
     PsoCacheAccessor m_WireframePSOCache;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)
+DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::SURFACE_FLAGS)
 
 } // namespace Diligent
