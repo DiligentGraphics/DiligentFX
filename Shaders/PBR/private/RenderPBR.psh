@@ -40,7 +40,15 @@
 #   define ALLOW_DEBUG_VIEW 0
 #endif
 
+#ifndef ENABLE_TRANSMISSION_COMPOSITE
+#   define ENABLE_TRANSMISSION_COMPOSITE 0
+#endif
+
 #include "PBR_Textures.fxh"
+
+#if ENABLE_TRANSMISSION_COMPOSITE
+Texture2D g_TransmissionSceneColor;
+#endif
 
 cbuffer cbFrameAttribs
 {
@@ -457,8 +465,14 @@ PSOutput main(in VSOutput VSOut,
 #   endif
 
     PBRMaterialBasicAttribs BasicAttribs = g_Material.Basic;
+    float CoverageAlpha = BaseColor.a;
+    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_OPAQUE)
+    {
+        CoverageAlpha = 1.0;
+    }
+
 #   if PBR_ALPHA_MODE == PBR_ALPHA_MODE_MASK
-    if (BaseColor.a < BasicAttribs.AlphaMaskCutoff)
+    if (CoverageAlpha < BasicAttribs.AlphaMaskCutoff)
     {
         discard;
     }
@@ -512,19 +526,31 @@ PSOutput main(in VSOutput VSOut,
 #       endif
         
         OutColor.rgb = ResolveLighting(Shading, SrfLighting);
-#       if ENABLE_TRANSMISSION
+#       if ENABLE_TRANSMISSION && ENABLE_TRANSMISSION_COMPOSITE
         {
-            OutColor.a = 1.0 - Shading.Transmission;
-        }
-#       else
-        {
-            OutColor.a = BaseColor.a;
+            uint TransmissionSceneColorWidth;
+            uint TransmissionSceneColorHeight;
+            uint TransmissionSceneColorMipCount;
+            g_TransmissionSceneColor.GetDimensions(0, TransmissionSceneColorWidth, TransmissionSceneColorHeight, TransmissionSceneColorMipCount);
+
+            float2 ScreenUV = VSOut.ClipPos.xy * g_Frame.Camera.f4ViewportSize.zw;
+            float  MaxMip   = float(TransmissionSceneColorMipCount > 0u ? TransmissionSceneColorMipCount - 1u : 0u);
+            float  LOD      = saturate(Shading.BaseLayer.Srf.PerceptualRoughness) * MaxMip;
+            float3 Transmitted = g_TransmissionSceneColor.SampleLevel(g_LinearClampSampler, ScreenUV, LOD).rgb * BaseColor.rgb;
+
+            float IOR = max(g_Material.Transmission.IOR, 1.0);
+            float F0  = (IOR - 1.0) / (IOR + 1.0);
+            F0 *= F0;
+            float Fresnel = SchlickReflection(Shading.BaseLayer.NdotV, F0, 1.0);
+
+            OutColor.rgb += Transmitted * Shading.Transmission * (1.0 - Fresnel);
         }
 #       endif
+        OutColor.a = CoverageAlpha;
     }
     else
     {
-        OutColor = BaseColor;
+        OutColor = float4(BaseColor.rgb, CoverageAlpha);
     }
 
 #if ENABLE_TONE_MAPPING
@@ -544,9 +570,9 @@ PSOutput main(in VSOutput VSOut,
     float Transmittance = 1.0;
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_BLEND)
     {
-        OutColor.rgb *= BaseColor.a;
+        OutColor.rgb *= CoverageAlpha;
 #if NUM_OIT_LAYERS > 0
-        if (BaseColor.a > OIT_OPACITY_THRESHOLD)
+        if (CoverageAlpha > OIT_OPACITY_THRESHOLD)
         {
             float D = VSOut.ClipPos.z;
             if (g_Frame.Camera.fNearPlaneDepth > g_Frame.Camera.fFarPlaneDepth)
@@ -630,11 +656,7 @@ PSOutput main(in VSOutput VSOut,
 #endif
 
     OutColor.rgb *= Transmittance;
-    if (BasicAttribs.AlphaMode != PBR_ALPHA_MODE_BLEND)
-    {
-        // Write 1.0 alpha to indicate full opacity
-        OutColor.a = 1.0;
-    }
+    OutColor.a = CoverageAlpha;
  
 #if CONVERT_OUTPUT_TO_SRGB
     {
