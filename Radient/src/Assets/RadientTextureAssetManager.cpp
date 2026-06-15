@@ -102,10 +102,9 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
     RadientTextureSource TextureSource{LoadInfo};
     const std::string    SourceURI = TextureSource.GetURI();
     const std::string    CacheKey  = RadientTextureSource::MakeCacheKey(LoadInfo);
-    auto [pTextureAsset, TextureCreated] =
-        m_TextureCache.GetOrCreate<TextureAssetImpl>(
-            CacheKey,
-            IID_TextureAssetImpl,
+    auto [pTextureInterface, TextureCreated] =
+        m_TextureCache.GetOrCreate(
+            CacheKey.c_str(),
             [this, &SourceURI]() {
                 TextureStorage TextureData;
                 TextureData.SourceURI = SourceURI;
@@ -115,6 +114,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
                                                      SourceURI.empty() ? nullptr : SourceURI.c_str(),
                                                      std::move(TextureData))};
             });
+    RefCntAutoPtr<TextureAssetImpl> pTextureAsset{pTextureInterface, IID_TextureAssetImpl};
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!pTextureAsset)
         return RADIENT_STATUS_INVALID_OPERATION;

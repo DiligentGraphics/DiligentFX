@@ -26,9 +26,9 @@
 
 #pragma once
 
-#include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
+#include "WeakObjectCache.hpp"
 
 namespace Diligent
 {
@@ -56,8 +56,8 @@ private:
                                      ITextureLoader&       Loader) const;
 
 private:
-    RadientAssetManagerImpl&                m_Owner;
-    RadientAssetCache<IRadientTextureAsset> m_TextureCache;
+    RadientAssetManagerImpl&              m_Owner;
+    WeakObjectCache<IRadientTextureAsset> m_TextureCache;
 };
 
 } // namespace Diligent

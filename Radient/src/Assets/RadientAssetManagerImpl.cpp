@@ -528,17 +528,20 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const std::string CacheKey = MakeGLTFCacheKey(LoadInfo.URI);
-    auto [pModelAsset, ModelCreated] =
-        m_GLTFAssetCache.GetOrCreate<SceneAssetImpl>(
-            CacheKey,
-            IID_SceneAssetImpl,
+    auto [pModelInterface, ModelCreated] =
+        m_GLTFAssetCache.GetOrCreate(
+            CacheKey.c_str(),
             [this, &LoadInfo]() {
                 GLTFModelStorage GLTFModelData;
                 GLTFModelData.SourceURI = LoadInfo.URI;
                 GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING);
                 return CreateAsset<SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
             });
+    RefCntAutoPtr<SceneAssetImpl> pModelAsset{pModelInterface, IID_SceneAssetImpl};
     VERIFY_EXPR(pModelAsset != nullptr);
+    if (!pModelAsset)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     if (!ModelCreated)
     {
         const RADIENT_STATUS Status = pModelAsset->GetLoadStatus();

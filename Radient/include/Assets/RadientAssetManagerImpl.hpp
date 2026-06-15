@@ -27,12 +27,12 @@
 #pragma once
 
 #include "Render/RadientDrawableMesh.hpp"
-#include "RadientAssetCache.hpp"
 #include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshSource.hpp"
 #include "RadientTextureAssetManager.hpp"
+#include "WeakObjectCache.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
 #include "MPSCQueue.hpp"
@@ -223,7 +223,7 @@ private:
 
     std::atomic<RadientHandle> m_NextAssetID{1};
 
-    RadientAssetCache<IRadientSceneAsset> m_GLTFAssetCache;
+    WeakObjectCache<IRadientSceneAsset> m_GLTFAssetCache;
 
     MPSCQueue<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
 };
