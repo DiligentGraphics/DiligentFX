@@ -75,7 +75,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
     LoadingAnimation{_LoadingAnimation},
     UserValue{_UserValue}
 {
-    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{38}, "Please handle the new flag below, if necessary");
+    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{39}, "Please handle the new flag below, if necessary");
     static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please handle the new render pass type below, if necessary");
     if (Type == RenderPassType::Shadow)
     {
@@ -210,8 +210,9 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_ENABLE_SHEEN:        FlagsStr += "SHEEN"; break;
             case PSO_FLAG_ENABLE_ANISOTROPY:   FlagsStr += "ANISOTROPY"; break;
             case PSO_FLAG_ENABLE_IRIDESCENCE:  FlagsStr += "IRIDESCENCE"; break;
-            case PSO_FLAG_ENABLE_TRANSMISSION: FlagsStr += "TRANSMISSION"; break;
-            case PSO_FLAG_ENABLE_VOLUME:       FlagsStr += "VOLUME"; break;
+            case PSO_FLAG_ENABLE_TRANSMISSION:           FlagsStr += "TRANSMISSION"; break;
+            case PSO_FLAG_ENABLE_VOLUME:                 FlagsStr += "VOLUME"; break;
+            case PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE: FlagsStr += "TRANSMISSION_COMPOSITE"; break;
 
             case PSO_FLAG_USE_IBL:                   FlagsStr += "IBL"; break;
             case PSO_FLAG_USE_LIGHTS:                FlagsStr += "LIGHTS"; break;
@@ -229,7 +230,7 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
                 FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
         }
     }
-    static_assert(PSO_FLAG_LAST == 1ull << 38ull, "Please update the switch above to handle the new flag");
+    static_assert(PSO_FLAG_LAST == 1ull << 39ull, "Please update the switch above to handle the new flag");
 
     return FlagsStr;
 }
@@ -1062,6 +1063,23 @@ void PBR_Renderer::SetOITResources(IShaderResourceBinding* pSRB, const OITResour
     }
 }
 
+void PBR_Renderer::SetTransmissionSceneColor(IShaderResourceBinding* pSRB, ITextureView* pSceneColorSRV) const
+{
+    if (!m_Settings.EnableTransmission || pSceneColorSRV == nullptr)
+        return;
+
+    if (pSRB == nullptr)
+    {
+        UNEXPECTED("SRB must not be null");
+        return;
+    }
+
+    if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_PIXEL, "g_TransmissionSceneColor"})
+    {
+        Var.Set(pSceneColorSRV, SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+    }
+}
+
 void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const
 {
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
@@ -1257,6 +1275,12 @@ void PBR_Renderer::CreateSignature()
             SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName, SamDesc);
         }
     };
+
+    if (m_Settings.EnableTransmission)
+    {
+        constexpr WebGPUResourceAttribs WGPUSceneColor{WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_2D};
+        AddTextureAndSampler("g_TransmissionSceneColor", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUSceneColor);
+    }
 
     if (m_Settings.EnableIBL)
     {
@@ -1474,7 +1498,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("LOADING_ANIMATION_TRANSITIONING", static_cast<int>(LoadingAnimationMode::Transitioning));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(38), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(39), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1506,6 +1530,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(ENABLE_IRIDESCENCE);
     ADD_PSO_FLAG_MACRO(ENABLE_TRANSMISSION);
     ADD_PSO_FLAG_MACRO(ENABLE_VOLUME);
+    ADD_PSO_FLAG_MACRO(ENABLE_TRANSMISSION_COMPOSITE);
 
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
@@ -1930,8 +1955,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         Macros.Add("USE_GL_POINT_SIZE", "1");
     }
 
+    const bool IsTransmissionComposite = (PSOFlags & PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE) != PSO_FLAG_NONE;
     const Uint32 OITLayerCount = (Key.GetType() == RenderPassType::OITLayers) ||
-            (Key.GetType() == RenderPassType::Main && Key.GetAlphaMode() == ALPHA_MODE_BLEND) ?
+            (Key.GetType() == RenderPassType::Main && Key.GetAlphaMode() == ALPHA_MODE_BLEND && !IsTransmissionComposite) ?
         m_Settings.OITLayerCount :
         0;
     Macros.Add("NUM_OIT_LAYERS", static_cast<int>(OITLayerCount));
@@ -2063,6 +2089,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     else
     {
         RenderTargetBlendDesc& RT0 = PSOCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
+        if (IsTransmissionComposite)
+        {
+            GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
+        }
+
         if (AlphaMode == ALPHA_MODE_OPAQUE ||
             AlphaMode == ALPHA_MODE_MASK)
         {
@@ -2189,7 +2220,7 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     }
     if (!m_Settings.EnableTransmission)
     {
-        Flags &= ~PSO_FLAG_ENABLE_TRANSMISSION;
+        Flags &= ~(PSO_FLAG_ENABLE_TRANSMISSION | PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE);
     }
     if (!m_Settings.EnableVolume)
     {
@@ -2230,7 +2261,7 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     }
     if ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) == 0)
     {
-        Flags &= ~PSO_FLAG_USE_TRANSMISSION_MAP;
+        Flags &= ~(PSO_FLAG_USE_TRANSMISSION_MAP | PSO_FLAG_ENABLE_TRANSMISSION_COMPOSITE);
     }
     if ((Flags & PSO_FLAG_ENABLE_VOLUME) == 0)
     {
