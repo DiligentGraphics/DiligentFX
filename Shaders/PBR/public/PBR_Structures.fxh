@@ -218,7 +218,7 @@ struct PBRMaterialIridescenceAttribs
 struct PBRMaterialTransmissionAttribs
 {
     float Factor;
-    float Padding0;
+    float IOR;
     float Padding1;
     float Padding2;
 };
