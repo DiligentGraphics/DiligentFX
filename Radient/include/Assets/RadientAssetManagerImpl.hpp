@@ -26,11 +26,10 @@
 
 #pragma once
 
-#include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"
-#include "RadientMeshSource.hpp"
+#include "RadientMeshAssetManager.hpp"
 #include "RadientTextureAssetManager.hpp"
 #include "WeakObjectCache.hpp"
 #include "ThreadPool.h"
@@ -38,16 +37,12 @@
 #include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
-#include "BufferSuballocator.h"
-#include "VertexPool.h"
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
 #include <atomic>
 #include <memory>
 #include <string>
 #include <utility>
-#include <variant>
-#include <vector>
 
 namespace Diligent
 {
@@ -123,26 +118,6 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
-    struct MeshStorage
-    {
-        MeshStorage() = default;
-        MeshStorage(MeshStorage&& Rhs) noexcept;
-
-        MeshStorage& operator=(MeshStorage&& Rhs)  = delete;
-        MeshStorage(const MeshStorage&)            = delete;
-        MeshStorage& operator=(const MeshStorage&) = delete;
-
-        RadientDrawableMesh DrawableMesh;
-
-        RefCntAutoPtr<IBufferSuballocation>               pIndexAllocation;
-        RefCntAutoPtr<IVertexPoolAllocation>              pVertexAllocation;
-        std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
-
-        std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
-        std::atomic_bool            GPUResourcesReady{false};
-        std::atomic<Uint32>         PendingUploads{0};
-    };
-
     struct GLTFModelStorage
     {
         GLTFModelStorage() = default;
@@ -160,36 +135,12 @@ private:
         std::atomic_bool             GPUUpdateQueued{false};
     };
 
-    struct GLTFMeshStorage
-    {
-        RefCntAutoPtr<IRadientSceneAsset> pModel;
-        RadientDrawableMesh               DrawableMesh;
-    };
-
-    using MeshAssetStorage = std::variant<MeshStorage, GLTFMeshStorage>;
-
-    static RadientDrawableMeshResolveResult GetDrawableMesh(const MeshStorage& Mesh,
-                                                            bool               RequireGPUResourcesReady);
-    static RadientDrawableMeshResolveResult GetDrawableMesh(const GLTFMeshStorage& Mesh,
-                                                            bool                   RequireGPUResourcesReady);
-
-    static constexpr INTERFACE_ID IID_MeshAssetImpl  = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
     static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
 
-    using MeshAssetImpl =
-        RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshAssetStorage>;
     using SceneAssetImpl =
         RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
-
-    RADIENT_STATUS InitializeMeshStorage(const RadientMeshSource& Source,
-                                         MeshStorage&             Storage) const;
-    RADIENT_STATUS ScheduleMeshGPUUpload(MeshAssetImpl&           MeshAsset,
-                                         const RadientMeshSource& Source,
-                                         MeshStorage&             Storage) const;
-    static void    UpdateMeshUploadProgress(MeshStorage& Storage,
-                                            bool         CopyScheduled);
 
     template <typename ImplType>
     RefCntAutoPtr<ImplType> CreateAsset(const char*                  Type,
@@ -197,15 +148,6 @@ private:
                                         const Char*                  Name,
                                         typename ImplType::Storage&& Storage);
 
-    template <typename ImplType, typename InterfaceType>
-    RADIENT_STATUS CreateAsset(const char*                  Type,
-                               std::atomic<RadientHandle>&  NextAssetID,
-                               const Char*                  Name,
-                               typename ImplType::Storage&& Storage,
-                               InterfaceType**              ppAsset);
-
-    void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
-                            std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
 
     std::string             m_Name;
@@ -216,9 +158,9 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    std::atomic<RadientHandle> m_NextMeshAssetID{1};
     std::atomic<RadientHandle> m_NextSceneAssetID{1};
 
+    RadientMeshAssetManager     m_MeshManager;
     RadientMaterialAssetManager m_MaterialManager;
     RadientTextureAssetManager  m_TextureManager;
 

@@ -7,6 +7,7 @@ set(SOURCE
     src/Assets/RadientAssetValidation.cpp
     src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientMaterialAssetManager.cpp
+    src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Assets/RadientMeshSource.cpp
     src/Assets/RadientTextureAssetManager.cpp
@@ -40,6 +41,7 @@ set(INCLUDE
     include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientDrawableMeshConverter.hpp
     include/Assets/RadientMaterialAssetManager.hpp
+    include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshSource.hpp
     include/Assets/RadientTextureAssetManager.hpp
     include/Assets/RadientTextureSource.hpp
