@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 
+#include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMeshSource.hpp"
@@ -96,6 +97,26 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
 
     return CreateInfo;
+}
+
+RefCntAutoPtr<GLTF::ResourceManager> CreateRadientResourceManager(IRenderDevice* pDevice)
+{
+    if (pDevice == nullptr)
+        return {};
+
+    return GLTF::ResourceManager::Create(pDevice, CreateResourceManagerInfo());
+}
+
+RefCntAutoPtr<IGPUUploadManager> CreateRadientGPUUploadManager(IRenderDevice* pDevice)
+{
+    if (pDevice == nullptr)
+        return {};
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager;
+    GPUUploadManagerCreateInfo       UploadCI;
+    UploadCI.pDevice = pDevice;
+    CreateGPUUploadManager(UploadCI, &pUploadManager);
+    return pUploadManager;
 }
 
 std::string MakeGLTFCacheKey(const char* URI)
@@ -390,19 +411,22 @@ RADIENT_STATUS RadientAssetManagerImpl::ScheduleMeshGPUUpload(MeshAssetImpl&    
 
 template <typename ImplType>
 RefCntAutoPtr<ImplType> RadientAssetManagerImpl::CreateAsset(const char*                  Type,
+                                                             std::atomic<RadientHandle>&  NextAssetID,
                                                              const Char*                  Name,
                                                              typename ImplType::Storage&& Storage)
 {
-    return RefCntAutoPtr<ImplType>{MakeNewRCObj<ImplType>()(MakeURI(Type), Name, std::move(Storage))};
+    const RadientHandle AssetID = NextAssetID.fetch_add(1, std::memory_order_relaxed);
+    return RefCntAutoPtr<ImplType>{MakeNewRCObj<ImplType>()(MakeRadientAssetURI(Type, AssetID), Name, std::move(Storage))};
 }
 
 template <typename ImplType, typename InterfaceType>
 RADIENT_STATUS RadientAssetManagerImpl::CreateAsset(const char*                  Type,
+                                                    std::atomic<RadientHandle>&  NextAssetID,
                                                     const Char*                  Name,
                                                     typename ImplType::Storage&& Storage,
                                                     InterfaceType**              ppAsset)
 {
-    RefCntAutoPtr<ImplType> pAsset = CreateAsset<ImplType>(Type, Name, std::move(Storage));
+    RefCntAutoPtr<ImplType> pAsset = CreateAsset<ImplType>(Type, NextAssetID, Name, std::move(Storage));
     *ppAsset                       = pAsset.Detach();
     return RADIENT_STATUS_OK;
 }
@@ -412,23 +436,21 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     TBase{pRefCounters},
     m_Name{CreateInfo.Assets.Desc.Name != nullptr ? CreateInfo.Assets.Desc.Name : ""},
     m_Desc{CreateInfo.Assets.Desc},
-    m_MaterialManager{*this},
-    m_TextureManager{*this},
-    m_pThreadPool{CreateInfo.pThreadPool}
+    m_pThreadPool{CreateInfo.pThreadPool},
+    m_pDevice{CreateInfo.pDevice},
+    m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice)},
+    m_pUploadManager{CreateRadientGPUUploadManager(CreateInfo.pDevice)},
+    m_MaterialManager{},
+    m_TextureManager{
+        RadientTextureAssetManager::CreateInfo{
+            m_pThreadPool,
+            m_pDevice,
+            m_pResourceManager,
+            m_pUploadManager,
+        },
+    }
 {
     m_Desc.Name = m_Name.c_str();
-
-    if (CreateInfo.pDevice != nullptr)
-    {
-        GPUUploadManagerCreateInfo UploadCI;
-        UploadCI.pDevice = CreateInfo.pDevice;
-        CreateGPUUploadManager(UploadCI, &m_pUploadManager);
-
-        const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
-
-        m_pDevice          = CreateInfo.pDevice;
-        m_pResourceManager = GLTF::ResourceManager::Create(CreateInfo.pDevice, ResourceCI);
-    }
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
@@ -474,6 +496,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 
     RefCntAutoPtr<MeshAssetImpl> pMeshAsset =
         CreateAsset<MeshAssetImpl>("mesh",
+                                   m_NextMeshAssetID,
                                    MeshCI.Name,
                                    std::move(MeshData));
     VERIFY_EXPR(pMeshAsset != nullptr);
@@ -535,7 +558,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
                 GLTFModelStorage GLTFModelData;
                 GLTFModelData.SourceURI = LoadInfo.URI;
                 GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING);
-                return CreateAsset<SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+                return CreateAsset<SceneAssetImpl>("gltf", m_NextSceneAssetID, LoadInfo.URI, std::move(GLTFModelData));
             });
     RefCntAutoPtr<SceneAssetImpl> pModelAsset{pModelInterface, IID_SceneAssetImpl};
     VERIFY_EXPR(pModelAsset != nullptr);
@@ -622,6 +645,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
         return Status;
 
     return CreateAsset<MeshAssetImpl>("mesh",
+                                      m_NextMeshAssetID,
                                       Name,
                                       MeshAssetStorage{std::move(GLTFMeshData)},
                                       ppMesh);
@@ -881,12 +905,6 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
         default:
             return RADIENT_STATUS_OK;
     }
-}
-
-std::string RadientAssetManagerImpl::MakeURI(const char* Type)
-{
-    const RadientHandle AssetID = m_NextAssetID.fetch_add(1, std::memory_order_relaxed);
-    return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 
 void RadientAssetManagerImpl::LoadGLTFModel(SceneAssetImpl& Model)

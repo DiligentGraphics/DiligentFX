@@ -36,6 +36,7 @@ set(SOURCE
 set(INCLUDE
     include/Assets/RadientAssetImpl.hpp
     include/Assets/RadientAssetManagerImpl.hpp
+    include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientDrawableMeshConverter.hpp
     include/Assets/RadientMaterialAssetManager.hpp

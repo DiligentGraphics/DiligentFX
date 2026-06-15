@@ -26,8 +26,8 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 
-#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetImpl.hpp"
+#include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFBuilder.hpp"
@@ -59,11 +59,6 @@ using MaterialAssetImpl =
 
 } // namespace
 
-RadientMaterialAssetManager::RadientMaterialAssetManager(RadientAssetManagerImpl& Owner) noexcept :
-    m_Owner{Owner}
-{
-}
-
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                            IRadientMaterialAsset**          ppMaterial)
 {
@@ -81,7 +76,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
     RefCntAutoPtr<MaterialAssetImpl> pMaterial{
-        MakeNewRCObj<MaterialAssetImpl>()(m_Owner.MakeURI("material"),
+        MakeNewRCObj<MaterialAssetImpl>()(MakeRadientAssetURI("material", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)),
                                           MaterialCI.Name,
                                           std::move(MaterialData))};
     *ppMaterial = pMaterial.Detach();

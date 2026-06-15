@@ -28,19 +28,38 @@
 
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
+#include "RefCntAutoPtr.hpp"
 #include "WeakObjectCache.hpp"
+
+#include <atomic>
 
 namespace Diligent
 {
 
-class RadientAssetManagerImpl;
+struct IGPUUploadManager;
+struct IRenderDevice;
+struct IThreadPool;
 struct ITextureLoader;
 struct ITextureView;
+
+namespace GLTF
+{
+class ResourceManager;
+} // namespace GLTF
 
 class RadientTextureAssetManager final
 {
 public:
-    explicit RadientTextureAssetManager(RadientAssetManagerImpl& Owner) noexcept;
+    struct CreateInfo
+    {
+        IThreadPool*           pThreadPool      = nullptr;
+        IRenderDevice*         pDevice          = nullptr;
+        GLTF::ResourceManager* pResourceManager = nullptr;
+        IGPUUploadManager*     pUploadManager   = nullptr;
+    };
+
+    explicit RadientTextureAssetManager(const CreateInfo& CI) noexcept;
+    ~RadientTextureAssetManager();
 
     RADIENT_STATUS LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
@@ -52,12 +71,12 @@ public:
                                          GLTF::Material::TextureShaderAttribs& Attribs);
 
 private:
-    RADIENT_STATUS ScheduleGPUUpload(IRadientTextureAsset& TextureAsset,
-                                     ITextureLoader&       Loader) const;
-
-private:
-    RadientAssetManagerImpl&              m_Owner;
+    RefCntAutoPtr<IThreadPool>            m_pThreadPool;
+    RefCntAutoPtr<IRenderDevice>          m_pDevice;
+    RefCntAutoPtr<GLTF::ResourceManager>  m_pResourceManager;
+    RefCntAutoPtr<IGPUUploadManager>      m_pUploadManager;
     WeakObjectCache<IRadientTextureAsset> m_TextureCache;
+    std::atomic<RadientHandle>            m_NextAssetID{1};
 };
 
 } // namespace Diligent

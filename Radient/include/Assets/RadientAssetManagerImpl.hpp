@@ -123,9 +123,6 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
-    friend class RadientMaterialAssetManager;
-    friend class RadientTextureAssetManager;
-
     struct MeshStorage
     {
         MeshStorage() = default;
@@ -194,15 +191,15 @@ private:
     static void    UpdateMeshUploadProgress(MeshStorage& Storage,
                                             bool         CopyScheduled);
 
-    std::string MakeURI(const char* Type);
-
     template <typename ImplType>
     RefCntAutoPtr<ImplType> CreateAsset(const char*                  Type,
+                                        std::atomic<RadientHandle>&  NextAssetID,
                                         const Char*                  Name,
                                         typename ImplType::Storage&& Storage);
 
     template <typename ImplType, typename InterfaceType>
     RADIENT_STATUS CreateAsset(const char*                  Type,
+                               std::atomic<RadientHandle>&  NextAssetID,
                                const Char*                  Name,
                                typename ImplType::Storage&& Storage,
                                InterfaceType**              ppAsset);
@@ -211,17 +208,19 @@ private:
                             std::unique_ptr<RadientMeshSource> pSource);
     void LoadGLTFModel(SceneAssetImpl& Model);
 
-    std::string                 m_Name;
-    RadientAssetManagerDesc     m_Desc;
-    RadientMaterialAssetManager m_MaterialManager;
-    RadientTextureAssetManager  m_TextureManager;
+    std::string             m_Name;
+    RadientAssetManagerDesc m_Desc;
 
     RefCntAutoPtr<IThreadPool>           m_pThreadPool;
     RefCntAutoPtr<IRenderDevice>         m_pDevice;
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    std::atomic<RadientHandle> m_NextAssetID{1};
+    std::atomic<RadientHandle> m_NextMeshAssetID{1};
+    std::atomic<RadientHandle> m_NextSceneAssetID{1};
+
+    RadientMaterialAssetManager m_MaterialManager;
+    RadientTextureAssetManager  m_TextureManager;
 
     WeakObjectCache<IRadientSceneAsset> m_GLTFAssetCache;
 

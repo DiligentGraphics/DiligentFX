@@ -26,27 +26,17 @@
 
 #pragma once
 
-#include "RadientAssets.h"
-#include "GLTFLoader.hpp"
+#include "RadientTypes.h"
 
-#include <atomic>
+#include <string>
 
 namespace Diligent
 {
 
-class RadientMaterialAssetManager final
+inline std::string MakeRadientAssetURI(const char*   Type,
+                                       RadientHandle AssetID)
 {
-public:
-    RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
-                                  IRadientMaterialAsset**          ppMaterial);
-
-    static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
-
-private:
-    static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
-
-private:
-    std::atomic<RadientHandle> m_NextAssetID{1};
-};
+    return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
+}
 
 } // namespace Diligent
