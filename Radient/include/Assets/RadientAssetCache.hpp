@@ -30,6 +30,7 @@
 #include "WeakObjectCache.hpp"
 
 #include <memory>
+#include <thread>
 #include <utility>
 
 namespace Diligent
@@ -57,7 +58,7 @@ private:
 
 public:
     explicit RadientAssetCache(size_t ShardCount = 0) :
-        m_pState{std::make_shared<State>(ShardCount)}
+        m_pState{std::make_shared<State>(GetActualShardCount(ShardCount))}
     {
     }
 
@@ -99,6 +100,20 @@ public:
     }
 
 private:
+    static size_t GetActualShardCount(size_t ShardCount)
+    {
+        if (ShardCount != 0)
+            return ShardCount;
+
+        static constexpr size_t MaxDefaultShardCount = 8;
+
+        const unsigned int ThreadCount = std::thread::hardware_concurrency();
+        if (ThreadCount == 0)
+            return size_t{4};
+
+        return ThreadCount < MaxDefaultShardCount ? static_cast<size_t>(ThreadCount) : MaxDefaultShardCount;
+    }
+
     std::shared_ptr<State> m_pState;
 };
 
