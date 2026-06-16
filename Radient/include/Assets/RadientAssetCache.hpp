@@ -30,6 +30,7 @@
 #include "WeakObjectCache.hpp"
 
 #include <memory>
+#include <string>
 #include <thread>
 #include <utility>
 
@@ -92,9 +93,11 @@ public:
         return pState->Cache.GetOrCreate(
             CacheKey,
             [pState, CacheKey, &CreateAssetFunc]() {
+                const std::string StableCacheKey{CacheKey};
+
                 auto pAsset = std::forward<CreateAssetFuncType>(CreateAssetFunc)();
                 if (pAsset)
-                    pAsset->SetCacheRemovalHandler(pState, CacheKey);
+                    pAsset->SetCacheRemovalHandler(pState, StableCacheKey.c_str());
                 return pAsset;
             });
     }

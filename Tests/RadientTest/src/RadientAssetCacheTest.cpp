@@ -146,6 +146,39 @@ TEST(RadientAssetCacheTest, RemovesEntryWhenAssetReleased)
     EXPECT_EQ(Cache.Size(), size_t{1});
 }
 
+TEST(RadientAssetCacheTest, FactoryMayMutateCacheKeyStorage)
+{
+    RadientAssetCache<IRadientTextureAsset> Cache{1};
+    std::string                             Key{"texture-key"};
+
+    auto [pAsset, Created] =
+        Cache.GetOrCreate(
+            Key.c_str(),
+            [&]() {
+                Key = "different-key";
+                return CreateTestTextureAsset("texture-uri", 1);
+            });
+
+    EXPECT_TRUE(Created);
+    ASSERT_NE(pAsset, nullptr);
+    EXPECT_EQ(Key, "different-key");
+    EXPECT_EQ(Cache.Size(), size_t{1});
+
+    pAsset.Release();
+    EXPECT_EQ(Cache.Size(), size_t{0});
+
+    auto [pNewAsset, NewCreated] =
+        Cache.GetOrCreate(
+            "texture-key",
+            []() {
+                return CreateTestTextureAsset("texture-uri", 2);
+            });
+
+    EXPECT_TRUE(NewCreated);
+    ASSERT_NE(pNewAsset, nullptr);
+    EXPECT_EQ(Cache.Size(), size_t{1});
+}
+
 TEST(RadientAssetCacheTest, KeepsEntryWhileAssetIsLive)
 {
     RadientAssetCache<IRadientTextureAsset> Cache{1};
