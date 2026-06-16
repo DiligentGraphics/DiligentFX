@@ -31,11 +31,21 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <utility>
 
 namespace Diligent
 {
+
+class IRadientAssetCacheRemovalHandler
+{
+public:
+    virtual void RemoveAssetFromCache(const Char* CacheKey) noexcept = 0;
+
+protected:
+    ~IRadientAssetCacheRemovalHandler() = default;
+};
 
 template <typename InterfaceType,
           const INTERFACE_ID& InterfaceID,
@@ -87,6 +97,20 @@ public:
         return m_Storage.LoadStatus.load(std::memory_order_acquire);
     }
 
+    void SetCacheRemovalHandler(std::weak_ptr<IRadientAssetCacheRemovalHandler> Handler,
+                                const Char*                                     CacheKey)
+    {
+        m_CacheRemovalHandler = std::move(Handler);
+        m_CacheKey            = CacheKey != nullptr ? CacheKey : "";
+    }
+
+    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final
+    {
+        return TBase::Release([this]() {
+            RemoveFromCache();
+        });
+    }
+
     template <typename T = StorageType>
     static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
     {
@@ -112,10 +136,23 @@ public:
     using IObject::QueryInterface;
 
 private:
+    void RemoveFromCache() noexcept
+    {
+        if (m_CacheKey.empty())
+            return;
+
+        if (std::shared_ptr<IRadientAssetCacheRemovalHandler> pHandler = m_CacheRemovalHandler.lock())
+            pHandler->RemoveAssetFromCache(m_CacheKey.c_str());
+    }
+
+private:
     std::string           m_URI;
     std::string           m_Name;
     RadientAssetReference m_Ref;
     StorageType           m_Storage;
+
+    std::weak_ptr<IRadientAssetCacheRemovalHandler> m_CacheRemovalHandler;
+    std::string                                     m_CacheKey;
 };
 
 } // namespace Diligent

@@ -29,7 +29,7 @@
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
-#include "WeakObjectCache.hpp"
+#include "RadientAssetCache.hpp"
 
 #include <atomic>
 
@@ -71,12 +71,12 @@ public:
                                          GLTF::Material::TextureShaderAttribs& Attribs);
 
 private:
-    RefCntAutoPtr<IThreadPool>            m_pThreadPool;
-    RefCntAutoPtr<IRenderDevice>          m_pDevice;
-    RefCntAutoPtr<GLTF::ResourceManager>  m_pResourceManager;
-    RefCntAutoPtr<IGPUUploadManager>      m_pUploadManager;
-    WeakObjectCache<IRadientTextureAsset> m_TextureCache;
-    std::atomic<RadientHandle>            m_NextAssetID{1};
+    RefCntAutoPtr<IThreadPool>              m_pThreadPool;
+    RefCntAutoPtr<IRenderDevice>            m_pDevice;
+    RefCntAutoPtr<GLTF::ResourceManager>    m_pResourceManager;
+    RefCntAutoPtr<IGPUUploadManager>        m_pUploadManager;
+    RadientAssetCache<IRadientTextureAsset> m_TextureCache;
+    std::atomic<RadientHandle>              m_NextAssetID{1};
 };
 
 } // namespace Diligent

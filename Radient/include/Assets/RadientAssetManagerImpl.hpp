@@ -26,12 +26,12 @@
 
 #pragma once
 
+#include "RadientAssetCache.hpp"
 #include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshAssetManager.hpp"
 #include "RadientTextureAssetManager.hpp"
-#include "WeakObjectCache.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
 #include "MPSCQueue.hpp"
@@ -164,7 +164,7 @@ private:
     RadientMaterialAssetManager m_MaterialManager;
     RadientTextureAssetManager  m_TextureManager;
 
-    WeakObjectCache<IRadientSceneAsset> m_GLTFAssetCache;
+    RadientAssetCache<IRadientSceneAsset> m_GLTFAssetCache;
 
     MPSCQueue<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
 };
