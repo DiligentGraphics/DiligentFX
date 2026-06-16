@@ -178,6 +178,10 @@ struct RadientMeshCreateInfo
 
     /// Number of primitives.
     Uint32 PrimitiveCount DEFAULT_INITIALIZER(0);
+
+    /// Optional cache key. When non-empty, live mesh assets created with the
+    /// same key are reused instead of creating a new asset.
+    const Char* CacheKey DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientMeshCreateInfo RadientMeshCreateInfo;
 

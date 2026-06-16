@@ -134,7 +134,9 @@ RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& As
     return pMaterial;
 }
 
-RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager& AssetManager, IRadientMaterialAsset* pMaterial)
+RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetManager,
+                                                IRadientMaterialAsset* pMaterial,
+                                                const Char*            CacheKey = nullptr)
 {
     const RadientFloat3 Positions[] =
         {
@@ -174,6 +176,7 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager& AssetManag
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name           = "Radient test mesh";
+    MeshCI.CacheKey       = CacheKey;
     MeshCI.pPositions     = Positions;
     MeshCI.pColors0       = Colors;
     MeshCI.pBoneIndices0  = BoneIndices;
@@ -431,6 +434,44 @@ TEST(RadientAssetManagerTest, CreateMesh)
     ASSERT_NE(pMesh, nullptr);
     EXPECT_NE(pMesh->GetReference().URI, nullptr);
     EXPECT_NE(pMesh->GetReference().Version, 0u);
+}
+
+TEST(RadientAssetManagerTest, CreateMeshWithoutCacheKeyCreatesDistinctAssets)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh0 = CreateTestMesh(*pAssetManager, pMaterial);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh1 = CreateTestMesh(*pAssetManager, pMaterial);
+
+    ASSERT_NE(pMesh0, nullptr);
+    ASSERT_NE(pMesh1, nullptr);
+    EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
+}
+
+TEST(RadientAssetManagerTest, CreateMeshUsesCacheKey)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh0 = CreateTestMesh(*pAssetManager, pMaterial, "raw-mesh-key");
+    RefCntAutoPtr<IRadientMeshAsset> pMesh1 = CreateTestMesh(*pAssetManager, pMaterial, "raw-mesh-key");
+
+    ASSERT_NE(pMesh0, nullptr);
+    ASSERT_NE(pMesh1, nullptr);
+    EXPECT_EQ(pMesh0.RawPtr(), pMesh1.RawPtr());
 }
 
 TEST(RadientAssetManagerTest, LoadGLTF)

@@ -534,11 +534,6 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
     if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    std::unique_ptr<RadientMeshSource> pMeshSource  = std::make_unique<RadientMeshSource>(MeshCI);
-    const RADIENT_STATUS               SourceStatus = pMeshSource->GetStatus();
-    if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
-
     const bool CanUploadMesh =
         m_pDevice != nullptr &&
         m_pResourceManager != nullptr &&
@@ -546,27 +541,68 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
     if (CanUploadMesh && m_pThreadPool == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    MeshStorage MeshData;
-    MeshData.LoadStatus.store(CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
-    MeshData.GPUResourcesReady.store(false, std::memory_order_release);
+    RADIENT_STATUS SourceStatus = RADIENT_STATUS_OK;
 
-    RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAsset(m_NextAssetID, MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
-    VERIFY_EXPR(pMeshAsset != nullptr);
-    pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
-    if (!CanUploadMesh)
-        return RADIENT_STATUS_OK;
+    auto CreateMeshAssetFromCI =
+        [this, &MeshCI, CanUploadMesh, &SourceStatus]() -> RefCntAutoPtr<MeshAssetImpl> {
+        std::unique_ptr<RadientMeshSource> pMeshSource = std::make_unique<RadientMeshSource>(MeshCI);
+        SourceStatus                                   = pMeshSource->GetStatus();
+        if (RADIENT_FAILED(SourceStatus))
+            return {};
 
-    EnqueueAsyncWork(
-        m_pThreadPool,
-        [pMeshAsset,
-         pDevice          = m_pDevice,
-         pResourceManager = m_pResourceManager,
-         pUploadManager   = m_pUploadManager,
-         pMeshSource      = std::move(pMeshSource)](Uint32) mutable //
+        MeshStorage MeshData;
+        MeshData.LoadStatus.store(CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+        MeshData.GPUResourcesReady.store(false, std::memory_order_release);
+
+        RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAsset(m_NextAssetID, MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
+        VERIFY_EXPR(pMeshAsset != nullptr);
+
+        if (CanUploadMesh)
         {
-            LoadMeshFromSource(*pMeshAsset, std::move(pMeshSource), pDevice, pResourceManager, pUploadManager);
-            return ASYNC_TASK_STATUS_COMPLETE;
-        });
+            EnqueueAsyncWork(
+                m_pThreadPool,
+                [pMeshAsset,
+                 pDevice          = m_pDevice,
+                 pResourceManager = m_pResourceManager,
+                 pUploadManager   = m_pUploadManager,
+                 pMeshSource      = std::move(pMeshSource)](Uint32) mutable //
+                {
+                    LoadMeshFromSource(*pMeshAsset, std::move(pMeshSource), pDevice, pResourceManager, pUploadManager);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                });
+        }
+
+        return pMeshAsset;
+    };
+
+    const bool HasCacheKey = MeshCI.CacheKey != nullptr && MeshCI.CacheKey[0] != '\0';
+    if (HasCacheKey)
+    {
+        auto [pMesh, MeshCreated] =
+            m_MeshCache.GetOrCreate(
+                MeshCI.CacheKey,
+                [&CreateMeshAssetFromCI]() {
+                    return CreateMeshAssetFromCI();
+                });
+
+        (void)MeshCreated;
+
+        if (!pMesh)
+        {
+            return RADIENT_FAILED(SourceStatus) ? SourceStatus : RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        *ppMesh = pMesh.Detach();
+        return RADIENT_STATUS_OK;
+    }
+
+    RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAssetFromCI();
+    if (!pMeshAsset)
+    {
+        return RADIENT_FAILED(SourceStatus) ? SourceStatus : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
     return RADIENT_STATUS_OK;
 }

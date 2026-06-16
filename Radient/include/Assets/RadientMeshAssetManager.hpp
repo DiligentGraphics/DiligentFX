@@ -80,6 +80,7 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
+    RadientAssetCache<IRadientMeshAsset> m_MeshCache;
     RadientAssetCache<IRadientMeshAsset> m_GLTFMeshCache;
     std::atomic<RadientHandle>           m_NextAssetID{1};
 };
