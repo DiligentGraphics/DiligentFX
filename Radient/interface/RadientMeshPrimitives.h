@@ -48,6 +48,10 @@ struct RadientCubeMeshCreateInfo
 
     /// Default material assigned to the cube primitive.
     IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
+
+    /// Optional six face colors in +X, -X, +Y, -Y, +Z, -Z order.
+    /// When null, the cube mesh does not include vertex colors.
+    const RadientColorRGBA8* pFaceColors DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientCubeMeshCreateInfo RadientCubeMeshCreateInfo;
 

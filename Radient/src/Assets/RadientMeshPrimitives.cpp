@@ -42,12 +42,15 @@ namespace
 
 constexpr Float32 PI = 3.14159265358979323846f;
 
+constexpr Uint32 CubeFaceCount = 6;
+
 struct MeshBuilder
 {
-    std::vector<RadientFloat3> Positions;
-    std::vector<RadientFloat3> Normals;
-    std::vector<RadientFloat2> TexCoords0;
-    std::vector<Uint32>        Indices;
+    std::vector<RadientFloat3>     Positions;
+    std::vector<RadientFloat3>     Normals;
+    std::vector<RadientFloat2>     TexCoords0;
+    std::vector<RadientColorRGBA8> Colors0;
+    std::vector<Uint32>            Indices;
 };
 
 Float32 Clamp(Float32 Value, Float32 MinValue, Float32 MaxValue)
@@ -72,6 +75,8 @@ Uint32 GetSeamFixedVertex(MeshBuilder& Mesh, std::vector<Uint32>& SeamVertices, 
     Mesh.Positions.push_back(Mesh.Positions[Vertex]);
     Mesh.Normals.push_back(Mesh.Normals[Vertex]);
     Mesh.TexCoords0.push_back(RadientFloat2{Mesh.TexCoords0[Vertex].x + 1.f, Mesh.TexCoords0[Vertex].y});
+    if (!Mesh.Colors0.empty())
+        Mesh.Colors0.push_back(Mesh.Colors0[Vertex]);
     return SeamVertex;
 }
 
@@ -118,12 +123,13 @@ void AddQuadIndices(std::vector<Uint32>& Indices,
     Indices.push_back(Vertex01);
 }
 
-void AddCubeFace(MeshBuilder&         Mesh,
-                 const RadientFloat3& Normal,
-                 const RadientFloat3& Tangent,
-                 const RadientFloat3& Bitangent,
-                 Float32              Size,
-                 Uint32               Subdivisions)
+void AddCubeFace(MeshBuilder&             Mesh,
+                 const RadientFloat3&     Normal,
+                 const RadientFloat3&     Tangent,
+                 const RadientFloat3&     Bitangent,
+                 const RadientColorRGBA8* pColor,
+                 Float32                  Size,
+                 Uint32                   Subdivisions)
 {
     const Uint32  BaseVertex = static_cast<Uint32>(Mesh.Positions.size());
     const Float32 HalfSize   = Size * 0.5f;
@@ -142,6 +148,8 @@ void AddCubeFace(MeshBuilder&         Mesh,
             Mesh.Positions.push_back(Position);
             Mesh.Normals.push_back(Normal);
             Mesh.TexCoords0.push_back(RadientFloat2{U, 1.f - V});
+            if (pColor != nullptr)
+                Mesh.Colors0.push_back(*pColor);
         }
     }
 
@@ -159,7 +167,7 @@ void AddCubeFace(MeshBuilder&         Mesh,
     }
 }
 
-MeshBuilder CreateCube(Float32 Size, Uint32 Subdivisions)
+MeshBuilder CreateCube(Float32 Size, Uint32 Subdivisions, const RadientColorRGBA8* pFaceColors = nullptr)
 {
     MeshBuilder Mesh;
 
@@ -167,14 +175,20 @@ MeshBuilder CreateCube(Float32 Size, Uint32 Subdivisions)
     Mesh.Positions.reserve(6u * VertexCountPerFace);
     Mesh.Normals.reserve(6u * VertexCountPerFace);
     Mesh.TexCoords0.reserve(6u * VertexCountPerFace);
+    if (pFaceColors != nullptr)
+        Mesh.Colors0.reserve(CubeFaceCount * VertexCountPerFace);
     Mesh.Indices.reserve(6u * Subdivisions * Subdivisions * 6u);
 
-    AddCubeFace(Mesh, {+1.f, 0.f, 0.f}, {0.f, 0.f, -1.f}, {0.f, +1.f, 0.f}, Size, Subdivisions);
-    AddCubeFace(Mesh, {-1.f, 0.f, 0.f}, {0.f, 0.f, +1.f}, {0.f, +1.f, 0.f}, Size, Subdivisions);
-    AddCubeFace(Mesh, {0.f, +1.f, 0.f}, {+1.f, 0.f, 0.f}, {0.f, 0.f, -1.f}, Size, Subdivisions);
-    AddCubeFace(Mesh, {0.f, -1.f, 0.f}, {+1.f, 0.f, 0.f}, {0.f, 0.f, +1.f}, Size, Subdivisions);
-    AddCubeFace(Mesh, {0.f, 0.f, +1.f}, {+1.f, 0.f, 0.f}, {0.f, +1.f, 0.f}, Size, Subdivisions);
-    AddCubeFace(Mesh, {0.f, 0.f, -1.f}, {-1.f, 0.f, 0.f}, {0.f, +1.f, 0.f}, Size, Subdivisions);
+    const auto GetFaceColor = [pFaceColors](Uint32 Face) {
+        return pFaceColors != nullptr ? &pFaceColors[Face] : nullptr;
+    };
+
+    AddCubeFace(Mesh, {+1.f, 0.f, 0.f}, {0.f, 0.f, -1.f}, {0.f, +1.f, 0.f}, GetFaceColor(0), Size, Subdivisions);
+    AddCubeFace(Mesh, {-1.f, 0.f, 0.f}, {0.f, 0.f, +1.f}, {0.f, +1.f, 0.f}, GetFaceColor(1), Size, Subdivisions);
+    AddCubeFace(Mesh, {0.f, +1.f, 0.f}, {+1.f, 0.f, 0.f}, {0.f, 0.f, -1.f}, GetFaceColor(2), Size, Subdivisions);
+    AddCubeFace(Mesh, {0.f, -1.f, 0.f}, {+1.f, 0.f, 0.f}, {0.f, 0.f, +1.f}, GetFaceColor(3), Size, Subdivisions);
+    AddCubeFace(Mesh, {0.f, 0.f, +1.f}, {+1.f, 0.f, 0.f}, {0.f, +1.f, 0.f}, GetFaceColor(4), Size, Subdivisions);
+    AddCubeFace(Mesh, {0.f, 0.f, -1.f}, {-1.f, 0.f, 0.f}, {0.f, +1.f, 0.f}, GetFaceColor(5), Size, Subdivisions);
 
     return Mesh;
 }
@@ -224,6 +238,7 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
     MeshCI.pPositions     = Mesh.Positions.data();
     MeshCI.pNormals       = Mesh.Normals.data();
     MeshCI.pTexCoords0    = Mesh.TexCoords0.data();
+    MeshCI.pColors0       = Mesh.Colors0.empty() ? nullptr : Mesh.Colors0.data();
     MeshCI.VertexCount    = static_cast<Uint32>(Mesh.Positions.size());
     MeshCI.pIndices       = Mesh.Indices.data();
     MeshCI.IndexCount     = static_cast<Uint32>(Mesh.Indices.size());
@@ -249,7 +264,7 @@ RADIENT_STATUS CreateRadientCubeMesh(IRadientAssetManager*            pAssetMana
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const Uint32      Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
-    const MeshBuilder Mesh         = CreateCube(MeshCI.Size, Subdivisions);
+    const MeshBuilder Mesh         = CreateCube(MeshCI.Size, Subdivisions, MeshCI.pFaceColors);
     return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial, Mesh, ppMesh);
 }
 

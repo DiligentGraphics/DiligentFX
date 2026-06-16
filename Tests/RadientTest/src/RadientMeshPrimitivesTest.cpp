@@ -28,8 +28,15 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientMeshPrimitives.h"
+#include "RadientTestAssetHelpers.hpp"
+
+#include "ObjectBase.hpp"
+
+#include <array>
+#include <vector>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
@@ -47,6 +54,81 @@ void ExpectValidMeshAsset(IRadientMeshAsset* pMesh)
     EXPECT_NE(pMesh->GetReference().Version, 0u);
 }
 
+void ExpectColorEq(const RadientColorRGBA8& Actual, const RadientColorRGBA8& Expected)
+{
+    EXPECT_EQ(Actual.r, Expected.r);
+    EXPECT_EQ(Actual.g, Expected.g);
+    EXPECT_EQ(Actual.b, Expected.b);
+    EXPECT_EQ(Actual.a, Expected.a);
+}
+
+class CaptureMeshAssetManager final : public ObjectBase<IRadientAssetManager>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetManager>;
+
+    explicit CaptureMeshAssetManager(IReferenceCounters* pRefCounters) :
+        TBase{pRefCounters}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetManager, TBase)
+
+    virtual const RadientAssetManagerDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        return m_Desc;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMesh(const RadientMeshCreateInfo& MeshCI,
+                                                         IRadientMeshAsset**          ppMesh) override final
+    {
+        if (ppMesh == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        *ppMesh         = nullptr;
+        VertexCount     = MeshCI.VertexCount;
+        HasVertexColors = MeshCI.pColors0 != nullptr;
+        CapturedVertexColors.clear();
+        if (MeshCI.pColors0 != nullptr)
+            CapturedVertexColors.assign(MeshCI.pColors0, MeshCI.pColors0 + MeshCI.VertexCount);
+
+        RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://captured-cube", ++m_NextMeshVersion);
+        *ppMesh                                = pMesh.Detach();
+        return RADIENT_STATUS_OK;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo&,
+                                                             IRadientMaterialAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo&,
+                                                          IRadientTextureAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo&,
+                                                       IRadientSceneAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset*) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    Uint32                         VertexCount     = 0;
+    bool                           HasVertexColors = false;
+    std::vector<RadientColorRGBA8> CapturedVertexColors;
+
+private:
+    RadientAssetManagerDesc m_Desc{};
+    Uint64                  m_NextMeshVersion = 0;
+};
+
 } // namespace
 
 TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
@@ -63,6 +145,39 @@ TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     EXPECT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_OK);
     ExpectValidMeshAsset(pMesh);
+}
+
+TEST(RadientMeshPrimitivesTest, CreateCubeMeshWithFaceColors)
+{
+    RefCntAutoPtr<CaptureMeshAssetManager> pAssetManager{MakeNewRCObj<CaptureMeshAssetManager>()()};
+
+    const std::array<RadientColorRGBA8, 6> FaceColors{
+        RadientColorRGBA8{255, 0, 0, 255},
+        RadientColorRGBA8{0, 255, 0, 255},
+        RadientColorRGBA8{0, 0, 255, 255},
+        RadientColorRGBA8{255, 255, 0, 255},
+        RadientColorRGBA8{255, 0, 255, 255},
+        RadientColorRGBA8{0, 255, 255, 255},
+    };
+
+    RadientCubeMeshCreateInfo CubeCI{};
+    CubeCI.Size        = 1.f;
+    CubeCI.pFaceColors = FaceColors.data();
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_OK);
+    ExpectValidMeshAsset(pMesh);
+
+    ASSERT_TRUE(pAssetManager->HasVertexColors);
+    ASSERT_EQ(pAssetManager->VertexCount, 24u);
+    ASSERT_EQ(pAssetManager->CapturedVertexColors.size(), pAssetManager->VertexCount);
+
+    static constexpr Uint32 VerticesPerFace = 4;
+    for (size_t Face = 0; Face < FaceColors.size(); ++Face)
+    {
+        for (size_t Vertex = 0; Vertex < VerticesPerFace; ++Vertex)
+            ExpectColorEq(pAssetManager->CapturedVertexColors[Face * VerticesPerFace + Vertex], FaceColors[Face]);
+    }
 }
 
 TEST(RadientMeshPrimitivesTest, CreateSphereMesh)
