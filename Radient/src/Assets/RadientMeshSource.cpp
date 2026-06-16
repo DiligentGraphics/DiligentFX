@@ -288,83 +288,55 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientMeshSource::Pack(const PackDestinations& Destinations) const
+RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) const
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;
 
-    if (m_DstAttributes.empty())
+    if (Destination.pData == nullptr ||
+        Destination.DataSize < GetIndexDataSize())
+    {
         return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    Uint32 IndexDataSize = 0;
-    if (Destinations.Indices.pData != nullptr)
-    {
-        IndexDataSize = GetIndexDataSize();
-        if (Destinations.Indices.DataSize < IndexDataSize)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    bool HasWritableDestination = Destinations.Indices.pData != nullptr;
-    for (Uint32 BufferIndex = 0; BufferIndex < Destinations.VertexBuffers.size(); ++BufferIndex)
+    Uint8* const pDstIndices = static_cast<Uint8*>(Destination.pData);
+    if (!m_Indices32.empty())
     {
-        const PackDestination& Destination = Destinations.VertexBuffers[BufferIndex];
-        if (Destination.pData == nullptr)
-            continue;
-
-        if (!IsVertexBufferActive(BufferIndex))
-            continue;
-
-        if (Destination.DataSize == 0 ||
-            Destination.DataSize < m_VertexBufferDataSizes[BufferIndex])
+        std::memcpy(pDstIndices, m_Indices32.data(), GetIndexDataSize());
+    }
+    else
+    {
+        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
         {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+            const Uint32 Value = m_Indices16[Index];
+            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
         }
-
-        HasWritableDestination = true;
     }
 
-    if (!HasWritableDestination)
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientMeshSource::PackVertexData(Uint32          VertexBufferIndex,
+                                                 PackDestination Destination) const
+{
+    if (RADIENT_FAILED(m_Status))
+        return m_Status;
+
+    if (m_DstAttributes.empty() ||
+        Destination.pData == nullptr ||
+        VertexBufferIndex >= m_VertexBufferDataSizes.size() ||
+        !IsVertexBufferActive(VertexBufferIndex) ||
+        Destination.DataSize == 0 ||
+        Destination.DataSize < m_VertexBufferDataSizes[VertexBufferIndex])
+    {
         return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (Destinations.Indices.pData != nullptr)
-    {
-        Uint8* pDstIndices = static_cast<Uint8*>(Destinations.Indices.pData);
-        if (!m_Indices32.empty())
-        {
-            std::memcpy(pDstIndices, m_Indices32.data(), IndexDataSize);
-        }
-        else
-        {
-            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-            {
-                const Uint32 Value = m_Indices16[Index];
-                std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
-            }
-        }
     }
 
-    for (Uint32 BufferIndex = 0; BufferIndex < Destinations.VertexBuffers.size(); ++BufferIndex)
-    {
-        if (!IsVertexBufferActive(BufferIndex))
-            continue;
-
-        const PackDestination& Destination = Destinations.VertexBuffers[BufferIndex];
-        if (Destination.pData == nullptr)
-            continue;
-
-        std::memset(Destination.pData, 0, m_VertexBufferDataSizes[BufferIndex]);
-    }
+    std::memset(Destination.pData, 0, m_VertexBufferDataSizes[VertexBufferIndex]);
 
     for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
     {
-        if (DstAttrib.BufferId >= Destinations.VertexBuffers.size())
-            continue;
-
-        if (!IsVertexBufferActive(DstAttrib.BufferId))
-            continue;
-
-        const PackDestination& Destination = Destinations.VertexBuffers[DstAttrib.BufferId];
-        if (Destination.pData == nullptr)
+        if (DstAttrib.BufferId != VertexBufferIndex)
             continue;
 
         const auto SrcAttribIt    = m_SrcAttributes.find(DstAttrib.Name);
@@ -381,7 +353,7 @@ RADIENT_STATUS RadientMeshSource::Pack(const PackDestinations& Destinations) con
                 pDstAttribData,
                 DstAttrib.ValueType,
                 DstAttrib.NumComponents,
-                m_VertexStrides[DstAttrib.BufferId],
+                m_VertexStrides[VertexBufferIndex],
                 m_VertexCount,
                 SrcAttrib.IsNormalized,
             });
@@ -395,7 +367,7 @@ RADIENT_STATUS RadientMeshSource::Pack(const PackDestinations& Destinations) con
                 pDstAttribData,
                 DstAttrib.ValueType,
                 DstAttrib.NumComponents,
-                m_VertexStrides[DstAttrib.BufferId],
+                m_VertexStrides[VertexBufferIndex],
                 m_VertexCount,
             });
             if (!Written)

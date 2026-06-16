@@ -238,10 +238,8 @@ void WriteMeshIndexData(void* pDstData, Uint32 NumBytes, void* pUserData)
     if (Data == nullptr || Data->pSource == nullptr)
         return;
 
-    RadientMeshSource::PackDestinations Destinations{Data->pSource->GetVertexBufferCount()};
-    Destinations.Indices = RadientMeshSource::PackDestination{pDstData, NumBytes};
-
-    const RADIENT_STATUS Status = Data->pSource->Pack(Destinations);
+    const RADIENT_STATUS Status =
+        Data->pSource->PackIndexData(RadientMeshSource::PackDestination{pDstData, NumBytes});
     VERIFY_EXPR(Status == RADIENT_STATUS_OK);
 }
 
@@ -252,10 +250,9 @@ void WriteMeshVertexData(void* pDstData, Uint32 NumBytes, void* pUserData)
     if (Data == nullptr || Data->pSource == nullptr)
         return;
 
-    RadientMeshSource::PackDestinations Destinations{Data->pSource->GetVertexBufferCount()};
-    Destinations.VertexBuffers[Data->VertexBufferIndex] = RadientMeshSource::PackDestination{pDstData, NumBytes};
-
-    const RADIENT_STATUS Status = Data->pSource->Pack(Destinations);
+    const RADIENT_STATUS Status =
+        Data->pSource->PackVertexData(Data->VertexBufferIndex,
+                                      RadientMeshSource::PackDestination{pDstData, NumBytes});
     VERIFY_EXPR(Status == RADIENT_STATUS_OK);
 }
 

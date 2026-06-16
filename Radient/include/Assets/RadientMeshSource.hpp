@@ -56,16 +56,6 @@ public:
         Uint32 DataSize = 0;
     };
 
-    struct PackDestinations
-    {
-        explicit PackDestinations(Uint32 VertexBufferCount = 0) :
-            VertexBuffers(VertexBufferCount)
-        {}
-
-        PackDestination              Indices;
-        std::vector<PackDestination> VertexBuffers;
-    };
-
     RADIENT_STATUS GetStatus() const
     {
         return m_Status;
@@ -138,7 +128,8 @@ public:
             (m_ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
     }
 
-    RADIENT_STATUS Pack(const PackDestinations& Destinations) const;
+    RADIENT_STATUS PackIndexData(PackDestination Destination) const;
+    RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const;
 
 private:
     struct SrcAttributeData

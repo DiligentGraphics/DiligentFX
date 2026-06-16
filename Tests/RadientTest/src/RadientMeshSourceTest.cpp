@@ -197,10 +197,9 @@ PackedDefaultAttribute PackDefaultAttribute(GLTF::VertexAttributeDesc DstAttrib)
         return Result;
 
     Result.Buffer.resize(BufferSize);
-    RadientMeshSource::PackDestinations Destinations{Result.Source->GetVertexBufferCount()};
-    Destinations.VertexBuffers[Result.BufferIndex] =
-        RadientMeshSource::PackDestination{Result.Buffer.data(), BufferSize};
-    EXPECT_EQ(Result.Source->Pack(Destinations), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Source->PackVertexData(Result.BufferIndex,
+                                            RadientMeshSource::PackDestination{Result.Buffer.data(), BufferSize}),
+              RADIENT_STATUS_OK);
 
     return Result;
 }
@@ -293,7 +292,7 @@ TEST(RadientMeshSourceTest, RejectsInvalidVertexAttributes)
     ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()));
 }
 
-TEST(RadientMeshSourceTest, RejectsInvalidPackDestinations)
+TEST(RadientMeshSourceTest, RejectsInvalidPackDestination)
 {
     std::array<RadientFloat3, 2> Positions{
         RadientFloat3{1.f, 2.f, 3.f},
@@ -306,7 +305,12 @@ TEST(RadientMeshSourceTest, RejectsInvalidPackDestinations)
 
     RadientMeshSource SourceWithoutLayout{MeshCI};
     ASSERT_EQ(SourceWithoutLayout.GetStatus(), RADIENT_STATUS_OK);
-    EXPECT_EQ(SourceWithoutLayout.Pack(RadientMeshSource::PackDestinations{}), RADIENT_STATUS_INVALID_ARGUMENT);
+    std::array<Uint8, 16> BufferWithoutLayout{};
+    EXPECT_EQ(SourceWithoutLayout.PackVertexData(0,
+                                                 RadientMeshSource::PackDestination{
+                                                     BufferWithoutLayout.data(),
+                                                     static_cast<Uint32>(BufferWithoutLayout.size())}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
 
     RadientMeshSource Source{MeshCI};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
@@ -314,33 +318,29 @@ TEST(RadientMeshSourceTest, RejectsInvalidPackDestinations)
                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
               RADIENT_STATUS_OK);
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount()};
-    EXPECT_EQ(Source.Pack(Destinations), RADIENT_STATUS_INVALID_ARGUMENT);
-
     std::vector<Uint32> PackedIndices(Source.GetIndexCount());
-    Destinations.Indices = RadientMeshSource::PackDestination{PackedIndices.data(), Source.GetIndexDataSize() - 1};
-    EXPECT_EQ(Source.Pack(Destinations), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{nullptr, Source.GetIndexDataSize()}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{PackedIndices.data(),
+                                                                      Source.GetIndexDataSize() - 1}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
 
     std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
-    Destinations                  = RadientMeshSource::PackDestinations{Source.GetVertexBufferCount()};
-    Destinations.VertexBuffers[0] = RadientMeshSource::PackDestination{Buffer0.data(), 0};
-    EXPECT_EQ(Source.Pack(Destinations), RADIENT_STATUS_INVALID_ARGUMENT);
-
-    Destinations                  = RadientMeshSource::PackDestinations{Source.GetVertexBufferCount()};
-    Destinations.VertexBuffers[0] = RadientMeshSource::PackDestination{Buffer0.data(), Source.GetVertexBufferDataSize(0) - 1};
-    EXPECT_EQ(Source.Pack(Destinations), RADIENT_STATUS_INVALID_ARGUMENT);
-
-    std::array<Uint32, 3> UnmodifiedIndices{7, 8, 9};
-    Destinations                  = RadientMeshSource::PackDestinations{Source.GetVertexBufferCount()};
-    Destinations.Indices          = RadientMeshSource::PackDestination{UnmodifiedIndices.data(), Source.GetIndexDataSize()};
-    Destinations.VertexBuffers[0] = RadientMeshSource::PackDestination{Buffer0.data(), Source.GetVertexBufferDataSize(0) - 1};
-    EXPECT_EQ(Source.Pack(Destinations), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(UnmodifiedIndices[0], 7u);
-    EXPECT_EQ(UnmodifiedIndices[1], 8u);
-    EXPECT_EQ(UnmodifiedIndices[2], 9u);
+    EXPECT_EQ(Source.PackVertexData(0, RadientMeshSource::PackDestination{nullptr, Source.GetVertexBufferDataSize(0)}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackVertexData(0, RadientMeshSource::PackDestination{Buffer0.data(), 0}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       Source.GetVertexBufferDataSize(0) - 1}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackVertexData(Source.GetVertexBufferCount(),
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
-TEST(RadientMeshSourceTest, SkipsUndersizedInactiveVertexBufferWithoutTouchingData)
+TEST(RadientMeshSourceTest, RejectsInactiveVertexBufferWithoutTouchingData)
 {
     RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);
     MeshCI.pTangents             = DefaultAttribTangents.data();
@@ -362,14 +362,18 @@ TEST(RadientMeshSourceTest, SkipsUndersizedInactiveVertexBufferWithoutTouchingDa
     std::array<Uint8, 1> ExtraInactiveBuffer{Sentinel};
     std::vector<Uint8>   Buffer0(Source.GetVertexBufferDataSize(0));
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount() + 1};
-    Destinations.VertexBuffers[0] =
-        RadientMeshSource::PackDestination{Buffer0.data(), static_cast<Uint32>(Buffer0.size())};
-    Destinations.VertexBuffers[3] =
-        RadientMeshSource::PackDestination{TinyInactiveBuffer.data(), static_cast<Uint32>(TinyInactiveBuffer.size())};
-    Destinations.VertexBuffers[Source.GetVertexBufferCount()] =
-        RadientMeshSource::PackDestination{ExtraInactiveBuffer.data(), static_cast<Uint32>(ExtraInactiveBuffer.size())};
-    ASSERT_EQ(Source.Pack(Destinations), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(Source.PackVertexData(3,
+                                    RadientMeshSource::PackDestination{TinyInactiveBuffer.data(),
+                                                                       static_cast<Uint32>(TinyInactiveBuffer.size())}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Source.PackVertexData(Source.GetVertexBufferCount(),
+                                    RadientMeshSource::PackDestination{ExtraInactiveBuffer.data(),
+                                                                       static_cast<Uint32>(ExtraInactiveBuffer.size())}),
+              RADIENT_STATUS_INVALID_ARGUMENT);
 
     ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), DefaultAttribPositions[0]);
     EXPECT_EQ(TinyInactiveBuffer[0], Sentinel);
@@ -499,13 +503,14 @@ TEST(RadientMeshSourceTest, CopiesAndPacksMinimalMesh)
     std::vector<Uint32> PackedIndices(Source.GetIndexCount() + 1, SentinelIndex);
     std::vector<Uint8>  Buffer0(Buffer0Size + 4, SentinelByte);
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount()};
-    Destinations.Indices = RadientMeshSource::PackDestination{
-        PackedIndices.data(),
-        static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))};
-    Destinations.VertexBuffers[0] =
-        RadientMeshSource::PackDestination{Buffer0.data(), static_cast<Uint32>(Buffer0.size())};
-    ASSERT_EQ(Source.Pack(Destinations), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{
+                  PackedIndices.data(),
+                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
 
     EXPECT_EQ(PackedIndices[0], 0u);
     EXPECT_EQ(PackedIndices[1], 1u);
@@ -561,10 +566,14 @@ TEST(RadientMeshSourceTest, StagesOnlyPresentAttributeBuffers)
     std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
     std::vector<Uint8> Buffer3(Source.GetVertexBufferDataSize(3));
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount()};
-    Destinations.VertexBuffers[0] = RadientMeshSource::PackDestination{Buffer0.data(), static_cast<Uint32>(Buffer0.size())};
-    Destinations.VertexBuffers[3] = RadientMeshSource::PackDestination{Buffer3.data(), static_cast<Uint32>(Buffer3.size())};
-    ASSERT_EQ(Source.Pack(Destinations), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(3,
+                                    RadientMeshSource::PackDestination{Buffer3.data(),
+                                                                       static_cast<Uint32>(Buffer3.size())}),
+              RADIENT_STATUS_OK);
 
     const RadientFloat4 Color0 = ReadValue<RadientFloat4>(Buffer3, 0);
     EXPECT_FLOAT_EQ(Color0.x, 1.f);
@@ -609,12 +618,14 @@ TEST(RadientMeshSourceTest, PacksCustomVertexAttributeLayout)
     std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
     std::vector<Uint8> Buffer3(Source.GetVertexBufferDataSize(3));
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount()};
-    Destinations.VertexBuffers[0] =
-        RadientMeshSource::PackDestination{Buffer0.data(), static_cast<Uint32>(Buffer0.size())};
-    Destinations.VertexBuffers[3] =
-        RadientMeshSource::PackDestination{Buffer3.data(), static_cast<Uint32>(Buffer3.size())};
-    ASSERT_EQ(Source.Pack(Destinations), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(3,
+                                    RadientMeshSource::PackDestination{Buffer3.data(),
+                                                                       static_cast<Uint32>(Buffer3.size())}),
+              RADIENT_STATUS_OK);
 
     const RadientFloat3 Padding = ReadValue<RadientFloat3>(Buffer0, 0);
     EXPECT_FLOAT_EQ(Padding.x, 0.f);
@@ -655,10 +666,10 @@ TEST(RadientMeshSourceTest, PacksUnsortedExplicitVertexAttributeOffsets)
 
     std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
 
-    RadientMeshSource::PackDestinations Destinations{Source.GetVertexBufferCount()};
-    Destinations.VertexBuffers[0] =
-        RadientMeshSource::PackDestination{Buffer0.data(), static_cast<Uint32>(Buffer0.size())};
-    ASSERT_EQ(Source.Pack(Destinations), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
 
     ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), DefaultAttribPositions[0]);
     ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffer0, 16),
