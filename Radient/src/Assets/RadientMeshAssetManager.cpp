@@ -43,6 +43,7 @@
 
 #include <cstring>
 #include <memory>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -93,7 +94,7 @@ struct MeshIndexBufferWriteData
 
 struct MeshVertexBufferWriteData
 {
-    const RadientMeshSource* pSource = nullptr;
+    const RadientMeshSource* pSource           = nullptr;
     Uint32                   VertexBufferIndex = 0;
 };
 
@@ -484,6 +485,16 @@ RefCntAutoPtr<MeshAssetImpl> CreateMeshAsset(std::atomic<RadientHandle>& NextAss
         MakeNewRCObj<MeshAssetImpl>()(MakeRadientAssetURI("mesh", AssetID), Name, std::move(Storage))};
 }
 
+std::string MakeGLTFMeshCacheKey(const IRadientSceneAsset& Model,
+                                 Uint32                    MeshIndex)
+{
+    const RadientAssetReference& ModelRef = Model.GetReference();
+    if (ModelRef.URI == nullptr || ModelRef.URI[0] == '\0')
+        return {};
+
+    return std::string{"gltf-mesh:"} + ModelRef.URI + ":mesh:" + std::to_string(MeshIndex);
+}
+
 RadientDrawableMeshResolveResult ResolveDrawableMesh(const MeshStorage& Mesh,
                                                      bool               RequireGPUResourcesReady);
 RadientDrawableMeshResolveResult ResolveDrawableMesh(const GLTFMeshStorage& Mesh,
@@ -578,18 +589,34 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshFromGLTFMesh(IRadientSceneAsse
     if (pModelData == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    GLTFMeshStorage GLTFMeshData;
-    GLTFMeshData.pModel = pModel;
+    const std::string CacheKey = MakeGLTFMeshCacheKey(*pModel, MeshIndex);
+    if (CacheKey.empty())
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS Status = CreateGLTFDrawableMesh(*pModelData,
-                                                         MeshIndex,
-                                                         GetVertexAttribFlags(*pModelData),
-                                                         GLTFMeshData.DrawableMesh);
-    if (RADIENT_FAILED(Status))
-        return Status;
+    RADIENT_STATUS CreateStatus = RADIENT_STATUS_INVALID_OPERATION;
+    auto [pMesh, MeshCreated] =
+        m_GLTFMeshCache.GetOrCreate(
+            CacheKey.c_str(),
+            [this, pModel, MeshIndex, Name, pModelData, &CreateStatus]() {
+                GLTFMeshStorage GLTFMeshData;
+                GLTFMeshData.pModel = pModel;
 
-    RefCntAutoPtr<MeshAssetImpl> pMesh = CreateMeshAsset(m_NextAssetID, Name, MeshAssetStorage{std::move(GLTFMeshData)});
-    *ppMesh                            = pMesh.Detach();
+                CreateStatus = CreateGLTFDrawableMesh(*pModelData,
+                                                      MeshIndex,
+                                                      GetVertexAttribFlags(*pModelData),
+                                                      GLTFMeshData.DrawableMesh);
+                if (RADIENT_FAILED(CreateStatus))
+                    return RefCntAutoPtr<MeshAssetImpl>{};
+
+                return CreateMeshAsset(m_NextAssetID, Name, MeshAssetStorage{std::move(GLTFMeshData)});
+            });
+
+    (void)MeshCreated;
+
+    if (!pMesh)
+        return CreateStatus;
+
+    *ppMesh = pMesh.Detach();
     return RADIENT_STATUS_OK;
 }
 

@@ -624,6 +624,61 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     }
 }
 
+TEST(RadientSceneImporterTest, CreateMeshFromGLTFMeshUsesCache)
+{
+    TempDirectory TempDir{"RadientSceneImporterTest"};
+
+    const float  Positions[] = {0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.f};
+    const Uint16 Indices[]   = {0u, 1u, 2u};
+
+    std::vector<Uint8> Buffer(sizeof(Positions) + sizeof(Indices));
+    std::memcpy(Buffer.data(), Positions, sizeof(Positions));
+    std::memcpy(Buffer.data() + sizeof(Positions), Indices, sizeof(Indices));
+    WriteBinaryFile(TempDir, "cached_mesh.bin", Buffer);
+
+    const std::string GLTFPath = WriteGLTFFile(TempDir, "cached_mesh.gltf",
+                                               R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "buffers": [{"uri": "cached_mesh.bin", "byteLength": 42}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+        {"buffer": 0, "byteOffset": 36, "byteLength": 6}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [{"name": "CachedTriangle", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+    "nodes": [{"name": "MeshNode", "mesh": 0}]
+})GLTF");
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pAssetManager, nullptr);
+
+    RadientGLTFLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    const RADIENT_STATUS              LoadStatus = Fixture.pAssetManager->LoadGLTF(LoadInfo, &pModel);
+    ASSERT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
+    ASSERT_NE(pModel, nullptr);
+    ASSERT_EQ(ProcessGLTFLoad(Fixture, pModel), RADIENT_STATUS_OK);
+
+    RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
+    ASSERT_NE(pAssetManagerImpl, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh0;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh1;
+    EXPECT_EQ(pAssetManagerImpl->CreateMeshFromGLTFMesh(pModel, 0, "CachedTriangle", &pMesh0), RADIENT_STATUS_OK);
+    EXPECT_EQ(pAssetManagerImpl->CreateMeshFromGLTFMesh(pModel, 0, "CachedTriangle", &pMesh1), RADIENT_STATUS_OK);
+
+    ASSERT_NE(pMesh0, nullptr);
+    ASSERT_NE(pMesh1, nullptr);
+    EXPECT_EQ(pMesh0.RawPtr(), pMesh1.RawPtr());
+}
+
 TEST(RadientSceneImporterTest, ImportsLights)
 {
     // Imports KHR_lights_punctual lights and verifies that Radient light

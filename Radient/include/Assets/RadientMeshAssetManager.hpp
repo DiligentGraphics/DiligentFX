@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Render/RadientDrawableMesh.hpp"
+#include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
 #include "RefCntAutoPtr.hpp"
 
@@ -79,7 +80,8 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    std::atomic<RadientHandle> m_NextAssetID{1};
+    RadientAssetCache<IRadientMeshAsset> m_GLTFMeshCache;
+    std::atomic<RadientHandle>           m_NextAssetID{1};
 };
 
 } // namespace Diligent
