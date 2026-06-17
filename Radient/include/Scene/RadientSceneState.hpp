@@ -291,6 +291,16 @@ private:
         Bool                    ParentVisible      = True;
     };
 
+    struct DerivedStateStorages
+    {
+        entt::storage<DirtyStateComponent>&          DirtyStates;
+        entt::storage<HierarchyComponent>&           Hierarchies;
+        entt::storage<LocalTransformComponent>&      LocalTransforms;
+        entt::storage<WorldTransformComponent>&      WorldTransforms;
+        entt::storage<EntityStateComponent>&         EntityStates;
+        entt::storage<EffectiveVisibilityComponent>& EffectiveVisibilities;
+    };
+
     struct DestroyWorkItem
     {
         entt::entity Entity         = entt::null;
@@ -334,16 +344,23 @@ private:
     void         RecordRenderableLightUpdated(entt::entity Entity);
     bool         RecordRenderableLightRemoved(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList = true);
-    void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState);
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild);
     void         UpdateDirtyEntities();
     void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
     void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
-    void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
-    void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags, const RadientMatrix4x4* pParentWorldMatrix, Bool ParentVisible);
-    void         Touch(CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
+
+    DerivedStateStorages GetDerivedStateStorages();
+
+    void UpdateEntityDerivedState(DerivedStateStorages&   Storages,
+                                  entt::entity            Entity,
+                                  DirtyStateComponent&    DirtyState,
+                                  DIRTY_FLAGS             Flags,
+                                  const RadientMatrix4x4* pParentWorldMatrix,
+                                  Bool                    ParentVisible);
+
+    void Touch(CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
 
     const std::string m_Name;
     RadientSceneDesc  m_Desc;
