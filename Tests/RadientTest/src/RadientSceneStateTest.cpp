@@ -62,6 +62,22 @@ void ExpectTransformEq(const RadientTransform& Transform, const RadientTransform
     EXPECT_EQ(Transform.Scale.z, Reference.Scale.z);
 }
 
+void ExpectTransformNear(const RadientTransform& Transform, const RadientTransform& Reference)
+{
+    EXPECT_NEAR(Transform.Position.x, Reference.Position.x, EPSILON);
+    EXPECT_NEAR(Transform.Position.y, Reference.Position.y, EPSILON);
+    EXPECT_NEAR(Transform.Position.z, Reference.Position.z, EPSILON);
+
+    EXPECT_NEAR(Transform.Rotation.x, Reference.Rotation.x, EPSILON);
+    EXPECT_NEAR(Transform.Rotation.y, Reference.Rotation.y, EPSILON);
+    EXPECT_NEAR(Transform.Rotation.z, Reference.Rotation.z, EPSILON);
+    EXPECT_NEAR(Transform.Rotation.w, Reference.Rotation.w, EPSILON);
+
+    EXPECT_NEAR(Transform.Scale.x, Reference.Scale.x, EPSILON);
+    EXPECT_NEAR(Transform.Scale.y, Reference.Scale.y, EPSILON);
+    EXPECT_NEAR(Transform.Scale.z, Reference.Scale.z, EPSILON);
+}
+
 void ExpectMatrixNear(const RadientMatrix4x4& Matrix, const RadientMatrix4x4& Reference)
 {
     for (Uint32 i = 0; i < 16; ++i)
@@ -1143,12 +1159,17 @@ TEST(RadientSceneStateTest, GetLocalTransform)
     EXPECT_EQ(State.GetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, RadientTransform{});
 
-    // Creation with an initial transform should preserve the exact TRS values.
+    // Creation with an initial transform should normalize rotation once before
+    // storing local TRS values.
     RadientTransform InitialTransform;
     InitialTransform.Position   = {1.f, 2.f, 3.f};
-    InitialTransform.Rotation.z = 0.70710678f;
-    InitialTransform.Rotation.w = 0.70710678f;
+    InitialTransform.Rotation.z = 2.f;
+    InitialTransform.Rotation.w = 2.f;
     InitialTransform.Scale      = {2.f, 3.f, 4.f};
+
+    RadientTransform ExpectedInitialTransform = InitialTransform;
+    ExpectedInitialTransform.Rotation.z       = 0.70710678f;
+    ExpectedInitialTransform.Rotation.w       = 0.70710678f;
 
     RadientEntityDesc EntityDesc;
     EntityDesc.Transform = InitialTransform;
@@ -1156,28 +1177,32 @@ TEST(RadientSceneStateTest, GetLocalTransform)
     RadientEntityID TransformedEntity = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity(EntityDesc, TransformedEntity), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
-    ExpectTransformEq(Transform, InitialTransform);
+    ExpectTransformNear(Transform, ExpectedInitialTransform);
 
     RadientTransform UpdatedTransform;
     UpdatedTransform.Position   = {4.f, 5.f, 6.f};
-    UpdatedTransform.Rotation.x = 0.70710678f;
-    UpdatedTransform.Rotation.w = 0.70710678f;
+    UpdatedTransform.Rotation.x = 2.f;
+    UpdatedTransform.Rotation.w = 2.f;
     UpdatedTransform.Scale      = {5.f, 6.f, 7.f};
+
+    RadientTransform ExpectedUpdatedTransform = UpdatedTransform;
+    ExpectedUpdatedTransform.Rotation.x       = 0.70710678f;
+    ExpectedUpdatedTransform.Rotation.w       = 0.70710678f;
 
     EXPECT_EQ(State.SetLocalTransform(TransformedEntity, UpdatedTransform), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
-    ExpectTransformEq(Transform, UpdatedTransform);
+    ExpectTransformNear(Transform, ExpectedUpdatedTransform);
 
-    // Setting the same transform again should report no change.
+    // Setting an equivalent non-unit transform again should report no change.
     EXPECT_EQ(State.SetLocalTransform(TransformedEntity, UpdatedTransform), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
-    ExpectTransformEq(Transform, UpdatedTransform);
+    ExpectTransformNear(Transform, ExpectedUpdatedTransform);
 
     EXPECT_EQ(State.GetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, RadientTransform{});
 
     EXPECT_EQ(State.DestroyEntity(TransformedEntity), RADIENT_STATUS_OK);
-    Transform = UpdatedTransform;
+    Transform = ExpectedUpdatedTransform;
     // Destroyed entities should report not found and reset output transform.
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_NOT_FOUND);
     ExpectTransformEq(Transform, RadientTransform{});

@@ -412,13 +412,14 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
         m_NextEntityID == std::numeric_limits<RadientEntityID>::max())
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    Entity               = m_NextEntityID++;
-    const entt::entity E = m_Registry.create();
+    Entity                                = m_NextEntityID++;
+    const entt::entity     E              = m_Registry.create();
+    const RadientTransform LocalTransform = RadientMath::NormalizeTransform(Desc.Transform);
 
     m_Registry.emplace<EntityComponent>(E, EntityComponent{Entity, Desc.Name != nullptr ? Desc.Name : ""});
     m_Registry.emplace<EntityStateComponent>(E, EntityStateComponent{Desc.Flags});
     m_Registry.emplace<HierarchyComponent>(E);
-    m_Registry.emplace<LocalTransformComponent>(E, LocalTransformComponent{Desc.Transform});
+    m_Registry.emplace<LocalTransformComponent>(E, LocalTransformComponent{LocalTransform});
     m_Registry.emplace<WorldTransformComponent>(E);
     m_Registry.emplace<EffectiveVisibilityComponent>(E);
     m_Registry.emplace<RenderableMeshStateComponent>(E);
@@ -557,11 +558,12 @@ RADIENT_STATUS RadientSceneState::SetLocalTransform(RadientEntityID Entity, cons
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
 
-    LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(E);
-    if (LocalTransform.Transform == Transform)
+    const RadientTransform   NormalizedTransform = RadientMath::NormalizeTransform(Transform);
+    LocalTransformComponent& LocalTransform      = m_Registry.get<LocalTransformComponent>(E);
+    if (LocalTransform.Transform == NormalizedTransform)
         return RADIENT_STATUS_NO_CHANGE;
 
-    LocalTransform.Transform = Transform;
+    LocalTransform.Transform = NormalizedTransform;
     MarkDirty(E, DIRTY_FLAG_TRANSFORM);
     Touch(CHANGE_FLAG_TRANSFORMS);
     return RADIENT_STATUS_OK;

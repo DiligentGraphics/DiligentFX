@@ -182,8 +182,34 @@ inline RadientQuaternion ToRadientQuaternion(const QuaternionF& Value)
     return RadientQuaternion{Q.q.x, Q.q.y, Q.q.z, Q.q.w};
 }
 
+inline RadientTransform NormalizeTransform(const RadientTransform& Transform)
+{
+    RadientQuaternion Rotation = Transform.Rotation;
+
+    const float LengthSq = Rotation.x * Rotation.x + Rotation.y * Rotation.y + Rotation.z * Rotation.z + Rotation.w * Rotation.w;
+    if (LengthSq > 0.f)
+    {
+        const float InvLength = 1.f / std::sqrt(LengthSq);
+        Rotation.x *= InvLength;
+        Rotation.y *= InvLength;
+        Rotation.z *= InvLength;
+        Rotation.w *= InvLength;
+    }
+    else
+    {
+        Rotation = {};
+    }
+
+    return {
+        Transform.Position,
+        Rotation,
+        Transform.Scale,
+    };
+}
+
 inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
 {
+    // Rotation is expected to be normalized when the transform is stored.
     const float sx = Transform.Scale.x;
     const float sy = Transform.Scale.y;
     const float sz = Transform.Scale.z;
@@ -192,12 +218,10 @@ inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
     const float ty = Transform.Position.y;
     const float tz = Transform.Position.z;
 
-    const QuaternionF Q = ToQuaternion(Transform.Rotation);
-
-    const float x = Q.q.x;
-    const float y = Q.q.y;
-    const float z = Q.q.z;
-    const float w = Q.q.w;
+    const float x = Transform.Rotation.x;
+    const float y = Transform.Rotation.y;
+    const float z = Transform.Rotation.z;
+    const float w = Transform.Rotation.w;
 
     const float sx2 = sx + sx;
     const float sy2 = sy + sy;

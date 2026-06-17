@@ -29,6 +29,8 @@
 
 #include "Math/RadientMath.hpp"
 
+#include <cmath>
+
 using namespace Diligent;
 using namespace Diligent::Testing;
 
@@ -131,6 +133,55 @@ TEST(RadientMathTest, ToQuaternion)
     EXPECT_EQ(NormalizedQuat.q.y, 0.f);
     EXPECT_EQ(NormalizedQuat.q.z, 0.f);
     EXPECT_EQ(NormalizedQuat.q.w, 1.f);
+}
+
+TEST(RadientMathTest, NormalizeTransformNormalizesRotation)
+{
+    RadientTransform Transform;
+    Transform.Position = {1.f, 2.f, 3.f};
+    Transform.Rotation = {1.f, 2.f, 3.f, 4.f};
+    Transform.Scale    = {5.f, 6.f, 7.f};
+
+    const RadientTransform NormalizedTransform = RadientMath::NormalizeTransform(Transform);
+    const float            InvLength           = 1.f / std::sqrt(30.f);
+
+    EXPECT_EQ(NormalizedTransform.Position, Transform.Position);
+    EXPECT_NEAR(NormalizedTransform.Rotation.x, Transform.Rotation.x * InvLength, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.y, Transform.Rotation.y * InvLength, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.z, Transform.Rotation.z * InvLength, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.w, Transform.Rotation.w * InvLength, EPSILON);
+    EXPECT_EQ(NormalizedTransform.Scale, Transform.Scale);
+}
+
+TEST(RadientMathTest, NormalizeTransformKeepsUnitRotation)
+{
+    RadientTransform Transform;
+    Transform.Position = {-1.f, -2.f, -3.f};
+    Transform.Rotation = {0.f, 0.f, 0.6f, 0.8f};
+    Transform.Scale    = {0.5f, 1.5f, 2.5f};
+
+    const RadientTransform NormalizedTransform = RadientMath::NormalizeTransform(Transform);
+
+    EXPECT_EQ(NormalizedTransform.Position, Transform.Position);
+    EXPECT_NEAR(NormalizedTransform.Rotation.x, Transform.Rotation.x, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.y, Transform.Rotation.y, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.z, Transform.Rotation.z, EPSILON);
+    EXPECT_NEAR(NormalizedTransform.Rotation.w, Transform.Rotation.w, EPSILON);
+    EXPECT_EQ(NormalizedTransform.Scale, Transform.Scale);
+}
+
+TEST(RadientMathTest, NormalizeTransformTreatsZeroRotationAsIdentity)
+{
+    RadientTransform Transform;
+    Transform.Position = {8.f, 9.f, 10.f};
+    Transform.Rotation = {0.f, 0.f, 0.f, 0.f};
+    Transform.Scale    = {2.f, 3.f, 4.f};
+
+    const RadientTransform NormalizedTransform = RadientMath::NormalizeTransform(Transform);
+
+    EXPECT_EQ(NormalizedTransform.Position, Transform.Position);
+    EXPECT_EQ(NormalizedTransform.Rotation, RadientQuaternion{});
+    EXPECT_EQ(NormalizedTransform.Scale, Transform.Scale);
 }
 
 TEST(RadientMathTest, RoundTripsMatrixType)
