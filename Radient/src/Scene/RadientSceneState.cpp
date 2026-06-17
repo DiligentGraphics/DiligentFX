@@ -1260,6 +1260,11 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
 
     VERIFY_ENTITY(Entity);
 
+    auto& DirtyStates = m_Registry.storage<DirtyStateComponent>();
+    auto& Hierarchies = m_Registry.storage<HierarchyComponent>();
+
+    m_DirtyFlags |= Flags;
+
     std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
     Stack.clear();
     Stack.push_back({Entity, Flags});
@@ -1271,16 +1276,24 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
 
         VERIFY_ENTITY(Item.Entity);
 
-        const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
+        const std::vector<entt::entity>& Children = Hierarchies.get(Item.Entity).Children;
         for (const entt::entity Child : Children)
         {
             // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
             // not already present, and traversal stops as soon as a subtree already has all requested flags. This
             // keeps overlapping dirty roots from repeatedly walking the same descendants.
-            constexpr bool    AddToDirtyList = false;
-            const DIRTY_FLAGS AddedFlags     = MarkDirty(Child, Item.Flags, AddToDirtyList) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
-            if (AddedFlags != DIRTY_FLAG_NONE)
-                Stack.push_back({Child, AddedFlags});
+            VERIFY_ENTITY(Child);
+
+            DirtyStateComponent& ChildDirtyState = DirtyStates.get(Child);
+            const DIRTY_FLAGS    AddedFlags      = Item.Flags & ~ChildDirtyState.Flags;
+            if (AddedFlags == DIRTY_FLAG_NONE)
+                continue;
+
+            ChildDirtyState.Flags |= AddedFlags;
+
+            const DIRTY_FLAGS PropagatedFlags = AddedFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+            if (PropagatedFlags != DIRTY_FLAG_NONE)
+                Stack.push_back({Child, PropagatedFlags});
         }
     }
 
