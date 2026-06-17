@@ -1406,7 +1406,23 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
 
     std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
     Stack.clear();
-    Stack.push_back({Entity, InheritedFlags});
+
+    auto& DirtyStates           = m_Registry.storage<DirtyStateComponent>();
+    auto& Hierarchies           = m_Registry.storage<HierarchyComponent>();
+    auto& WorldTransforms       = m_Registry.storage<WorldTransformComponent>();
+    auto& EffectiveVisibilities = m_Registry.storage<EffectiveVisibilityComponent>();
+
+    const RadientMatrix4x4* pParentWorldMatrix = nullptr;
+    Bool                    ParentVisible      = True;
+    if (const entt::entity RootParent = Hierarchies.get(Entity).Parent; RootParent != entt::null)
+    {
+        VERIFY_ENTITY(RootParent);
+
+        pParentWorldMatrix = &WorldTransforms.get(RootParent).Matrix;
+        ParentVisible      = EffectiveVisibilities.get(RootParent).Visible;
+    }
+
+    Stack.push_back({Entity, InheritedFlags, pParentWorldMatrix, ParentVisible});
 
     while (!Stack.empty())
     {
@@ -1415,21 +1431,29 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
 
         VERIFY_ENTITY(Item.Entity);
 
-        DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Item.Entity);
+        DirtyStateComponent& DirtyState = DirtyStates.get(Item.Entity);
         const DIRTY_FLAGS    Flags      = (DirtyState.Flags | Item.Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         if (Flags == DIRTY_FLAG_NONE)
             continue;
 
         // This function is only used by commit's top-down traversal. The parent has already been updated, and
         // Item.Flags carries the dirty state caused by ancestors, so this node can be updated directly.
-        UpdateEntityDerivedState(Item.Entity, Flags);
-        ClearDirtyFlags(Item.Entity, Flags);
+        UpdateEntityDerivedState(Item.Entity, Flags, Item.pParentWorldMatrix, Item.ParentVisible);
+        DirtyState.Flags &= ~Flags;
+        if (DirtyState.Flags == DIRTY_FLAG_NONE)
+            RemoveFromDirtyList(Item.Entity, DirtyState);
 
         // Pass the effective dirty flags to all children. A child may also have its own dirty flags; the stack
         // item combines both sets before updating it.
-        const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
+        const std::vector<entt::entity>& Children = Hierarchies.get(Item.Entity).Children;
+        if (Children.empty())
+            continue;
+
+        const RadientMatrix4x4& WorldMatrix = WorldTransforms.get(Item.Entity).Matrix;
+        const Bool              Visible     = EffectiveVisibilities.get(Item.Entity).Visible;
+
         for (const entt::entity Child : Children)
-            Stack.push_back({Child, Flags});
+            Stack.push_back({Child, Flags, &WorldMatrix, Visible});
     }
 
     Stack.clear();
@@ -1526,31 +1550,46 @@ void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAG
                "Parent derived state must be up to date before updating child derived state");
     }
 
+    const RadientMatrix4x4* pParentWorldMatrix = nullptr;
+    Bool                    ParentVisible      = True;
+    if (Parent != entt::null)
+    {
+        if ((Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
+            pParentWorldMatrix = &m_Registry.get<WorldTransformComponent>(Parent).Matrix;
+
+        if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
+            ParentVisible = m_Registry.get<EffectiveVisibilityComponent>(Parent).Visible;
+    }
+
+    UpdateEntityDerivedState(Entity, Flags, pParentWorldMatrix, ParentVisible);
+}
+
+void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags, const RadientMatrix4x4* pParentWorldMatrix, Bool ParentVisible)
+{
+    Flags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    VERIFY_ENTITY(Entity);
+
     if ((Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
     {
-        const LocalTransformComponent& LocalTransform        = m_Registry.get<LocalTransformComponent>(Entity);
-        const RadientMatrix4x4         LocalMatrix           = RadientMath::TransformToMatrix(LocalTransform.Transform);
-        const WorldTransformComponent* pParentWorldTransform = (Parent != entt::null) ?
-            &m_Registry.get<WorldTransformComponent>(Parent) :
-            nullptr;
+        const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
+        const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
+        WorldTransformComponent&       WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
 
-        WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
-
-        WorldTransform.Matrix = pParentWorldTransform != nullptr ?
-            RadientMath::MultiplyMatrices(LocalMatrix, pParentWorldTransform->Matrix) :
+        WorldTransform.Matrix = pParentWorldMatrix != nullptr ?
+            RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
             LocalMatrix;
     }
 
     if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
     {
-        const EntityStateComponent&         State             = m_Registry.get<EntityStateComponent>(Entity);
-        EffectiveVisibilityComponent&       Visibility        = m_Registry.get<EffectiveVisibilityComponent>(Entity);
-        const EffectiveVisibilityComponent* pParentVisibility = (Parent != entt::null) ?
-            &m_Registry.get<EffectiveVisibilityComponent>(Parent) :
-            nullptr;
+        const EntityStateComponent&   State      = m_Registry.get<EntityStateComponent>(Entity);
+        EffectiveVisibilityComponent& Visibility = m_Registry.get<EffectiveVisibilityComponent>(Entity);
 
         const Bool OwnVisible = (State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
-        Visibility.Visible    = OwnVisible && (pParentVisibility == nullptr || pParentVisibility->Visible) ? True : False;
+        Visibility.Visible    = OwnVisible && ParentVisible ? True : False;
     }
 }
 

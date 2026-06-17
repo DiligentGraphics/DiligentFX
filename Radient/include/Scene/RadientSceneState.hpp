@@ -285,8 +285,10 @@ private:
 
     struct DirtyWorkItem
     {
-        entt::entity Entity = entt::null;
-        DIRTY_FLAGS  Flags  = DIRTY_FLAG_NONE;
+        entt::entity            Entity             = entt::null;
+        DIRTY_FLAGS             Flags              = DIRTY_FLAG_NONE;
+        const RadientMatrix4x4* pParentWorldMatrix = nullptr;
+        Bool                    ParentVisible      = True;
     };
 
     struct DestroyWorkItem
@@ -340,6 +342,7 @@ private:
     void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
     void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
     void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags, const RadientMatrix4x4* pParentWorldMatrix, Bool ParentVisible);
     void         Touch(CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
 
     const std::string m_Name;
