@@ -250,9 +250,13 @@ inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
     // clang-format on
 }
 
-inline RadientMatrix4x4 MultiplyMatrices(const RadientMatrix4x4& A, const RadientMatrix4x4& B)
+inline RadientMatrix4x4 MultiplyMatrices(
+    const RadientMatrix4x4& A,
+    const RadientMatrix4x4& B)
 {
-    return ToRadientMatrix(ToFloat4x4(A) * ToFloat4x4(B));
+    RadientMatrix4x4 Result;
+    Diligent::MultiplyMatrix4x4(A.Data, B.Data, Result.Data);
+    return Result;
 }
 
 inline bool TryInverseMatrix(const RadientMatrix4x4& Matrix, RadientMatrix4x4& Inverse)
