@@ -184,29 +184,46 @@ inline RadientQuaternion ToRadientQuaternion(const QuaternionF& Value)
 
 inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
 {
-    const float3      S = ToFloat3(Transform.Scale);
-    const float3      T = ToFloat3(Transform.Position);
+    const float sx = Transform.Scale.x;
+    const float sy = Transform.Scale.y;
+    const float sz = Transform.Scale.z;
+
+    const float tx = Transform.Position.x;
+    const float ty = Transform.Position.y;
+    const float tz = Transform.Position.z;
+
     const QuaternionF Q = ToQuaternion(Transform.Rotation);
 
-    float4x4 R = Q.ToMatrix();
+    const float x = Q.q.x;
+    const float y = Q.q.y;
+    const float z = Q.q.z;
+    const float w = Q.q.w;
 
-    // S * R * T for row-vector convention:
-    R._11 *= S.x;
-    R._12 *= S.x;
-    R._13 *= S.x;
-    R._21 *= S.y;
-    R._22 *= S.y;
-    R._23 *= S.y;
-    R._31 *= S.z;
-    R._32 *= S.z;
-    R._33 *= S.z;
+    const float sx2 = sx + sx;
+    const float sy2 = sy + sy;
+    const float sz2 = sz + sz;
 
-    R._41 = T.x;
-    R._42 = T.y;
-    R._43 = T.z;
-    R._44 = 1.f;
+    const float xx = x * x;
+    const float yy = y * y;
+    const float zz = z * z;
 
-    return ToRadientMatrix(R);
+    const float xy = x * y;
+    const float xz = x * z;
+    const float yz = y * z;
+
+    const float wx = w * x;
+    const float wy = w * y;
+    const float wz = w * z;
+
+    // S * R * T for row-vector convention.
+    // clang-format off
+    return RadientMatrix4x4{
+        sx - (yy + zz) * sx2, (xy + wz) * sx2,      (xz - wy) * sx2,      0.0f,
+        (xy - wz) * sy2,      sy - (xx + zz) * sy2, (yz + wx) * sy2,      0.0f,
+        (xz + wy) * sz2,      (yz - wx) * sz2,      sz - (xx + yy) * sz2, 0.0f,
+        tx,                   ty,                   tz,                   1.0f,
+    };
+    // clang-format on
 }
 
 inline RadientMatrix4x4 MultiplyMatrices(const RadientMatrix4x4& A, const RadientMatrix4x4& B)
