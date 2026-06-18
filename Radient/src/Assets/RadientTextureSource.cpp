@@ -103,21 +103,21 @@ std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
     return LoadInfo.URI != nullptr ? LoadInfo.URI : "";
 }
 
-std::string RadientTextureSource::MakeCacheKey(const RadientTextureLoadInfo& LoadInfo)
+std::string RadientTextureSource::MakeCacheKey() const
 {
     std::string Key{"texture:"};
-    if (LoadInfo.pData != nullptr)
+    if (m_pData != nullptr)
     {
         Key += "memory:";
-        Key += std::to_string(LoadInfo.DataSize);
+        Key += std::to_string(m_DataSize);
         Key += ':';
-        Key += std::to_string(ComputeHashRaw(LoadInfo.pData, static_cast<size_t>(LoadInfo.DataSize)));
+        Key += std::to_string(ComputeHashRaw(m_pData, m_DataSize));
     }
-    else if (LoadInfo.URI != nullptr && *LoadInfo.URI != 0)
+    else if (!m_URI.empty())
     {
-        Key += LoadInfo.URI;
+        Key += m_URI;
     }
-    Key += LoadInfo.IsSRGB ? ":srgb=1" : ":srgb=0";
+    Key += m_IsSRGB ? ":srgb=1" : ":srgb=0";
     return Key;
 }
 

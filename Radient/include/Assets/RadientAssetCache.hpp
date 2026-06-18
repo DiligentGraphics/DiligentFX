@@ -41,12 +41,28 @@ template <typename InterfaceType>
 class RadientAssetCache final
 {
 private:
-    class State final : public IRadientAssetCacheRemovalHandler
+    class State final : public IRadientAssetCacheRemovalHandler, public std::enable_shared_from_this<State>
     {
     public:
         explicit State(size_t ShardCount) :
             Cache{ShardCount}
         {
+        }
+
+        template <typename CreateAssetFuncType>
+        std::pair<RefCntAutoPtr<InterfaceType>, bool> GetOrCreate(const Char*           CacheKey,
+                                                                  CreateAssetFuncType&& CreateAssetFunc)
+        {
+            return Cache.GetOrCreate(
+                CacheKey,
+                [pState = this->shared_from_this(), CacheKey, &CreateAssetFunc]() {
+                    const std::string StableCacheKey{CacheKey};
+
+                    auto pObject = std::forward<CreateAssetFuncType>(CreateAssetFunc)();
+                    if (pObject)
+                        pObject->SetCacheRemovalHandler(pState, StableCacheKey.c_str());
+                    return pObject;
+                });
         }
 
         virtual void RemoveAssetFromCache(const Char* CacheKey) noexcept override final
@@ -58,6 +74,29 @@ private:
     };
 
 public:
+    class Accessor final
+    {
+    public:
+        Accessor() = default;
+
+        template <typename CreateAssetFuncType>
+        std::pair<RefCntAutoPtr<InterfaceType>, bool> GetOrCreate(const Char*           CacheKey,
+                                                                  CreateAssetFuncType&& CreateAssetFunc) const
+        {
+            return m_pState->GetOrCreate(CacheKey, std::forward<CreateAssetFuncType>(CreateAssetFunc));
+        }
+
+    private:
+        friend class RadientAssetCache;
+
+        explicit Accessor(std::shared_ptr<State> pState) :
+            m_pState{std::move(pState)}
+        {
+        }
+
+        std::shared_ptr<State> m_pState;
+    };
+
     explicit RadientAssetCache(size_t ShardCount = 0) :
         m_pState{std::make_shared<State>(GetActualShardCount(ShardCount))}
     {
@@ -85,21 +124,16 @@ public:
         return m_pState->Cache.EraseIfExpired(CacheKey);
     }
 
+    Accessor GetAccessor() const
+    {
+        return Accessor{m_pState};
+    }
+
     template <typename CreateAssetFuncType>
     std::pair<RefCntAutoPtr<InterfaceType>, bool> GetOrCreate(const Char*           CacheKey,
                                                               CreateAssetFuncType&& CreateAssetFunc)
     {
-        std::shared_ptr<State> pState = m_pState;
-        return pState->Cache.GetOrCreate(
-            CacheKey,
-            [pState, CacheKey, &CreateAssetFunc]() {
-                const std::string StableCacheKey{CacheKey};
-
-                auto pAsset = std::forward<CreateAssetFuncType>(CreateAssetFunc)();
-                if (pAsset)
-                    pAsset->SetCacheRemovalHandler(pState, StableCacheKey.c_str());
-                return pAsset;
-            });
+        return m_pState->GetOrCreate(CacheKey, std::forward<CreateAssetFuncType>(CreateAssetFunc));
     }
 
 private:

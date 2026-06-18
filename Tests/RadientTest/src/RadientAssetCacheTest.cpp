@@ -39,20 +39,21 @@ using namespace Diligent;
 namespace
 {
 
-static constexpr INTERFACE_ID IID_TestTextureAssetImpl = {0x115f62b7, 0xba9d, 0x4e35, {0x9a, 0xd5, 0x86, 0xc4, 0xf9, 0xb7, 0x8c, 0x92}};
-
 struct TestTextureStorage
 {
     Uint32 Value = 0;
 };
 
-using TestTextureAssetImpl =
-    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TestTextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TestTextureStorage>;
-
-RefCntAutoPtr<TestTextureAssetImpl> CreateTestTextureAsset(const char* URI, Uint32 Value)
+class TestTexturePayloadImpl final : public RadientAssetPayloadImpl<TestTextureStorage, TestTexturePayloadImpl>
 {
-    return RefCntAutoPtr<TestTextureAssetImpl>{
-        MakeNewRCObj<TestTextureAssetImpl>()(std::string{URI}, URI, TestTextureStorage{Value})};
+public:
+    using TBase = RadientAssetPayloadImpl<TestTextureStorage, TestTexturePayloadImpl>;
+    using TBase::TBase;
+};
+
+RefCntAutoPtr<TestTexturePayloadImpl> CreateTestTexturePayload(Uint32 Value)
+{
+    return TestTexturePayloadImpl::Create(TestTextureStorage{Value});
 }
 
 class ThreadStartGate
@@ -81,15 +82,15 @@ private:
 
 TEST(RadientAssetCacheTest, ExistingLiveHitDoesNotCallFactory)
 {
-    RadientAssetCache<IRadientTextureAsset> Cache{1};
-    Uint32                                  CreateCount = 0;
+    RadientAssetCache<TestTexturePayloadImpl> Cache{1};
+    Uint32                                    CreateCount = 0;
 
     auto [pAsset0, Created0] =
         Cache.GetOrCreate(
             "texture-key",
             [&]() {
                 ++CreateCount;
-                return CreateTestTextureAsset("texture-uri", 1);
+                return CreateTestTexturePayload(1);
             });
 
     auto [pAsset1, Created1] =
@@ -98,7 +99,7 @@ TEST(RadientAssetCacheTest, ExistingLiveHitDoesNotCallFactory)
             [&]() {
                 ADD_FAILURE() << "Factory must not be called for a live cache hit";
                 ++CreateCount;
-                return CreateTestTextureAsset("texture-uri", 2);
+                return CreateTestTexturePayload(2);
             });
 
     EXPECT_TRUE(Created0);
@@ -112,8 +113,8 @@ TEST(RadientAssetCacheTest, ExistingLiveHitDoesNotCallFactory)
 
 TEST(RadientAssetCacheTest, RemovesEntryWhenAssetReleased)
 {
-    RadientAssetCache<IRadientTextureAsset> Cache{1};
-    Uint32                                  CreateCount = 0;
+    RadientAssetCache<TestTexturePayloadImpl> Cache{1};
+    Uint32                                    CreateCount = 0;
 
     {
         auto [pAsset, Created] =
@@ -121,7 +122,7 @@ TEST(RadientAssetCacheTest, RemovesEntryWhenAssetReleased)
                 "texture-key",
                 [&]() {
                     ++CreateCount;
-                    return CreateTestTextureAsset("texture-uri", 1);
+                    return CreateTestTexturePayload(1);
                 });
 
         EXPECT_TRUE(Created);
@@ -137,7 +138,7 @@ TEST(RadientAssetCacheTest, RemovesEntryWhenAssetReleased)
             "texture-key",
             [&]() {
                 ++CreateCount;
-                return CreateTestTextureAsset("texture-uri", 2);
+                return CreateTestTexturePayload(2);
             });
 
     EXPECT_TRUE(Created);
@@ -148,15 +149,15 @@ TEST(RadientAssetCacheTest, RemovesEntryWhenAssetReleased)
 
 TEST(RadientAssetCacheTest, FactoryMayMutateCacheKeyStorage)
 {
-    RadientAssetCache<IRadientTextureAsset> Cache{1};
-    std::string                             Key{"texture-key"};
+    RadientAssetCache<TestTexturePayloadImpl> Cache{1};
+    std::string                               Key{"texture-key"};
 
     auto [pAsset, Created] =
         Cache.GetOrCreate(
             Key.c_str(),
             [&]() {
                 Key = "different-key";
-                return CreateTestTextureAsset("texture-uri", 1);
+                return CreateTestTexturePayload(1);
             });
 
     EXPECT_TRUE(Created);
@@ -171,7 +172,7 @@ TEST(RadientAssetCacheTest, FactoryMayMutateCacheKeyStorage)
         Cache.GetOrCreate(
             "texture-key",
             []() {
-                return CreateTestTextureAsset("texture-uri", 2);
+                return CreateTestTexturePayload(2);
             });
 
     EXPECT_TRUE(NewCreated);
@@ -181,13 +182,13 @@ TEST(RadientAssetCacheTest, FactoryMayMutateCacheKeyStorage)
 
 TEST(RadientAssetCacheTest, KeepsEntryWhileAssetIsLive)
 {
-    RadientAssetCache<IRadientTextureAsset> Cache{1};
+    RadientAssetCache<TestTexturePayloadImpl> Cache{1};
 
     auto [pAsset, Created] =
         Cache.GetOrCreate(
             "texture-key",
             []() {
-                return CreateTestTextureAsset("texture-uri", 1);
+                return CreateTestTexturePayload(1);
             });
 
     EXPECT_TRUE(Created);
@@ -199,15 +200,15 @@ TEST(RadientAssetCacheTest, KeepsEntryWhileAssetIsLive)
 
 TEST(RadientAssetCacheTest, AssetMayOutliveCache)
 {
-    RefCntAutoPtr<IRadientTextureAsset> pAsset;
+    RefCntAutoPtr<TestTexturePayloadImpl> pAsset;
 
     {
-        RadientAssetCache<IRadientTextureAsset> Cache{1};
+        RadientAssetCache<TestTexturePayloadImpl> Cache{1};
         auto [pCachedAsset, Created] =
             Cache.GetOrCreate(
                 "texture-key",
                 []() {
-                    return CreateTestTextureAsset("texture-uri", 1);
+                    return CreateTestTexturePayload(1);
                 });
 
         EXPECT_TRUE(Created);
@@ -223,14 +224,14 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
 {
     static constexpr Uint32 ThreadCount = 8;
 
-    RadientAssetCache<IRadientTextureAsset>          Cache{1};
-    ThreadStartGate                                  StartGate{ThreadCount};
-    Threading::Signal                                FactoryEntered;
-    Threading::Signal                                FinishFactory;
-    std::atomic<Uint32>                              CreateCount{0};
-    std::vector<std::thread>                         Threads;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Assets(ThreadCount);
-    std::vector<Uint8>                               Created(ThreadCount, 0);
+    RadientAssetCache<TestTexturePayloadImpl>          Cache{1};
+    ThreadStartGate                                    StartGate{ThreadCount};
+    Threading::Signal                                  FactoryEntered;
+    Threading::Signal                                  FinishFactory;
+    std::atomic<Uint32>                                CreateCount{0};
+    std::vector<std::thread>                           Threads;
+    std::vector<RefCntAutoPtr<TestTexturePayloadImpl>> Assets(ThreadCount);
+    std::vector<Uint8>                                 Created(ThreadCount, 0);
 
     Threads.reserve(ThreadCount);
     for (Uint32 ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
@@ -249,7 +250,7 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
                             FactoryEntered.Trigger(true);
                             FinishFactory.Wait(true, 1);
                         }
-                        return CreateTestTextureAsset("texture-uri", Count);
+                        return CreateTestTexturePayload(Count);
                     });
 
             Assets[ThreadIndex]  = std::move(pAsset);
@@ -271,7 +272,7 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
         CreatedCount += WasCreated;
     EXPECT_EQ(CreatedCount, 1u);
 
-    for (const RefCntAutoPtr<IRadientTextureAsset>& pAsset : Assets)
+    for (const RefCntAutoPtr<TestTexturePayloadImpl>& pAsset : Assets)
     {
         ASSERT_NE(pAsset, nullptr);
         EXPECT_EQ(pAsset.RawPtr(), Assets[0].RawPtr());
@@ -284,8 +285,8 @@ TEST(RadientAssetCacheTest, ReleaseMayOverlapSameKeyGetOrCreate)
 {
     static constexpr Uint32 IterationCount = 64;
 
-    RadientAssetCache<IRadientTextureAsset> Cache{1};
-    std::atomic<Uint32>                     CreateCount{0};
+    RadientAssetCache<TestTexturePayloadImpl> Cache{1};
+    std::atomic<Uint32>                       CreateCount{0};
 
     for (Uint32 Iteration = 0; Iteration < IterationCount; ++Iteration)
     {
@@ -294,16 +295,16 @@ TEST(RadientAssetCacheTest, ReleaseMayOverlapSameKeyGetOrCreate)
                 "texture-key",
                 [&]() {
                     CreateCount.fetch_add(1, std::memory_order_acq_rel);
-                    return CreateTestTextureAsset("initial-texture-uri", Iteration);
+                    return CreateTestTexturePayload(Iteration);
                 });
 
         ASSERT_NE(pInitialAsset, nullptr);
         EXPECT_TRUE(InitialCreated);
         EXPECT_EQ(Cache.Size(), size_t{1});
 
-        Threading::Signal                   StartWorker;
-        RefCntAutoPtr<IRadientTextureAsset> pWorkerAsset;
-        bool                                WorkerCreated = false;
+        Threading::Signal                     StartWorker;
+        RefCntAutoPtr<TestTexturePayloadImpl> pWorkerAsset;
+        bool                                  WorkerCreated = false;
 
         std::thread Worker{[&]() {
             StartWorker.Wait(true, 1);
@@ -313,7 +314,7 @@ TEST(RadientAssetCacheTest, ReleaseMayOverlapSameKeyGetOrCreate)
                     "texture-key",
                     [&]() {
                         CreateCount.fetch_add(1, std::memory_order_acq_rel);
-                        return CreateTestTextureAsset("replacement-texture-uri", Iteration);
+                        return CreateTestTexturePayload(Iteration);
                     });
 
             pWorkerAsset  = std::move(pAsset);

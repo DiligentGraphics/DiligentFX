@@ -54,8 +54,15 @@ struct MaterialStorage
     RefCntAutoPtr<IRadientTextureAsset> pEmissiveTexture;
 };
 
+class MaterialPayloadImpl final : public RadientAssetPayloadImpl<MaterialStorage, MaterialPayloadImpl>
+{
+public:
+    using TBase = RadientAssetPayloadImpl<MaterialStorage, MaterialPayloadImpl>;
+    using TBase::TBase;
+};
+
 using MaterialAssetImpl =
-    RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialStorage>;
+    RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialPayloadImpl>;
 
 } // namespace
 
@@ -75,19 +82,17 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
-    RefCntAutoPtr<MaterialAssetImpl> pMaterial{
-        MakeNewRCObj<MaterialAssetImpl>()(MakeRadientAssetURI("material", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)),
-                                          MaterialCI.Name,
-                                          std::move(MaterialData))};
+    RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create(std::move(MaterialData));
+    RefCntAutoPtr<MaterialAssetImpl>   pMaterial =
+        MaterialAssetImpl::Create(MakeRadientAssetURI("material", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)),
+                                  std::move(pPayload));
     *ppMaterial = pMaterial.Detach();
     return RADIENT_STATUS_OK;
 }
 
 const GLTF::Material* RadientMaterialAssetManager::GetMaterial(IRadientMaterialAsset* pMaterial)
 {
-    RefCntAutoPtr<MaterialAssetImpl> pImpl{
-        pMaterial,
-        IID_MaterialAssetImpl};
+    RefCntAutoPtr<MaterialAssetImpl> pImpl = MaterialAssetImpl::ResolveAsset(pMaterial);
     return pImpl ? &pImpl->GetStorage().Material : nullptr;
 }
 

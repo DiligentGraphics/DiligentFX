@@ -85,7 +85,8 @@ public:
     RefCntAutoPtr<ITextureLoader> CreateLoader() const;
 
     static std::string GetURI(const RadientTextureLoadInfo& LoadInfo);
-    static std::string MakeCacheKey(const RadientTextureLoadInfo& LoadInfo);
+
+    std::string MakeCacheKey() const;
 
 private:
     void ReleaseMemory();

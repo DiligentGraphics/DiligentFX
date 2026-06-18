@@ -82,6 +82,17 @@ void ReleaseTextureData(const void* pData, Uint64 DataSize, void* pUserData)
     State.DataSize = DataSize;
 }
 
+static constexpr std::array<Uint8, 67> TransparentPng{
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82};
+
 RefCntAutoPtr<IRadientEngine> CreateTestEngine()
 {
     RadientEngineCreateInfo EngineCI{};
@@ -471,7 +482,11 @@ TEST(RadientAssetManagerTest, CreateMeshUsesCacheKey)
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
-    EXPECT_EQ(pMesh0.RawPtr(), pMesh1.RawPtr());
+    EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
+
+    const MeshPayloadImpl* pMeshPayload0 = RadientMeshAssetManager::GetMeshPayload(pMesh0);
+    ASSERT_NE(pMeshPayload0, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh1), pMeshPayload0);
 }
 
 TEST(RadientAssetManagerTest, LoadGLTF)
@@ -501,6 +516,7 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     EXPECT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pGLTFModel, nullptr);
     EXPECT_NE(pGLTFModel->GetReference().URI, nullptr);
+    EXPECT_STREQ(pGLTFModel->GetReference().URI, GLTFLoadInfo.URI);
     EXPECT_NE(pGLTFModel->GetReference().Version, 0u);
     EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
 }
@@ -530,8 +546,8 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
 
 TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
 {
-    // Loading the same glTF URI twice should return the same live asset instead
-    // of decoding and uploading the model a second time.
+    // Loading the same glTF URI twice should create distinct lightweight asset
+    // handles that resolve to the same cached model payload.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -551,15 +567,21 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pFirstModel), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientSceneAsset> pSecondModel;
-    EXPECT_EQ(pAssetManager->LoadGLTF(LoadInfo, &pSecondModel), RADIENT_STATUS_OK);
+    const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadGLTF(LoadInfo, &pSecondModel);
+    EXPECT_TRUE(SecondLoadStatus == RADIENT_STATUS_OK || SecondLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondModel, nullptr);
-    EXPECT_EQ(pSecondModel.RawPtr(), pFirstModel.RawPtr());
+    ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pSecondModel), RADIENT_STATUS_OK);
+    EXPECT_NE(pSecondModel.RawPtr(), pFirstModel.RawPtr());
+    ASSERT_NE(pSecondModel->GetReference().URI, nullptr);
+    ASSERT_NE(pFirstModel->GetReference().URI, nullptr);
+    EXPECT_STREQ(pFirstModel->GetReference().URI, LoadInfo.URI);
+    EXPECT_STREQ(pSecondModel->GetReference().URI, LoadInfo.URI);
+    EXPECT_STREQ(pSecondModel->GetReference().URI, pFirstModel->GetReference().URI);
+    EXPECT_EQ(RadientAssetManagerImpl::GetGLTFModel(pSecondModel), RadientAssetManagerImpl::GetGLTFModel(pFirstModel));
 }
 
-TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
+TEST(RadientAssetManagerTest, TextureWithSourceURIKeepsSourceURI)
 {
-    // A duplicate texture request should reuse the first pending texture asset
-    // before the worker thread has a chance to load the source memory.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     ASSERT_NE(pThreadPool, nullptr);
 
@@ -573,16 +595,42 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    static constexpr std::array<Uint8, 67> TransparentPng{
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82};
+    std::array<Uint8, TransparentPng.size()> TextureData = TransparentPng;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI      = "Textures/TestAlbedo.png";
+    LoadInfo.pData    = TextureData.data();
+    LoadInfo.DataSize = static_cast<Uint64>(TextureData.size());
+    LoadInfo.IsSRGB   = True;
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_EQ(pAssetManager->LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_NE(pTexture->GetReference().URI, nullptr);
+    EXPECT_STREQ(pTexture->GetReference().URI, LoadInfo.URI);
+
+    while (pThreadPool->GetQueueSize() != 0)
+    {
+        pThreadPool->ProcessTask(0, false);
+    }
+}
+
+TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
+{
+    // Duplicate texture requests should create distinct lightweight assets that
+    // resolve to the same cached payload when the workers run.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientEngineCreateInfo EngineCI{};
+    EngineCI.pThreadPool = pThreadPool;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    ASSERT_NE(pAssetManager, nullptr);
 
     std::array<Uint8, TransparentPng.size()> TextureData = TransparentPng;
 
@@ -598,7 +646,10 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     RefCntAutoPtr<IRadientTextureAsset> pSecondTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(LoadInfo, &pSecondTexture), RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondTexture, nullptr);
-    EXPECT_EQ(pSecondTexture.RawPtr(), pFirstTexture.RawPtr());
+    EXPECT_NE(pSecondTexture.RawPtr(), pFirstTexture.RawPtr());
+    ASSERT_NE(pSecondTexture->GetReference().URI, nullptr);
+    ASSERT_NE(pFirstTexture->GetReference().URI, nullptr);
+    EXPECT_STRNE(pSecondTexture->GetReference().URI, pFirstTexture->GetReference().URI);
 
     std::array<Uint8, TransparentPng.size()> DuplicateTextureData = TransparentPng;
     TextureReleaseState                      CacheHitRelease;
@@ -611,10 +662,9 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     RefCntAutoPtr<IRadientTextureAsset> pOwnedDuplicateTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(OwnedLoadInfo, &pOwnedDuplicateTexture), RADIENT_STATUS_PENDING);
     ASSERT_NE(pOwnedDuplicateTexture, nullptr);
-    EXPECT_EQ(pOwnedDuplicateTexture.RawPtr(), pFirstTexture.RawPtr());
-    EXPECT_EQ(CacheHitRelease.Count, 1u);
-    EXPECT_EQ(CacheHitRelease.pData, DuplicateTextureData.data());
-    EXPECT_EQ(CacheHitRelease.DataSize, DuplicateTextureData.size());
+    EXPECT_NE(pOwnedDuplicateTexture.RawPtr(), pFirstTexture.RawPtr());
+    ASSERT_NE(pOwnedDuplicateTexture->GetReference().URI, nullptr);
+    EXPECT_STRNE(pOwnedDuplicateTexture->GetReference().URI, pFirstTexture->GetReference().URI);
 
     RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
     LinearLoadInfo.IsSRGB                 = False;
@@ -632,6 +682,16 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     {
         pThreadPool->ProcessTask(0, false);
     }
+
+    const TexturePayloadImpl* pFirstPayload = RadientTextureAssetManager::GetTexturePayload(pFirstTexture);
+    ASSERT_NE(pFirstPayload, nullptr);
+    EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pSecondTexture), pFirstPayload);
+    EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pOwnedDuplicateTexture), pFirstPayload);
+    EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(pLinearTexture), pFirstPayload);
+
+    EXPECT_EQ(CacheHitRelease.Count, 1u);
+    EXPECT_EQ(CacheHitRelease.pData, DuplicateTextureData.data());
+    EXPECT_EQ(CacheHitRelease.DataSize, DuplicateTextureData.size());
 
     pThreadPool->StopThreads();
 }

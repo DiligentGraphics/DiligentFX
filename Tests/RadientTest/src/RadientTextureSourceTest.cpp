@@ -62,21 +62,18 @@ std::vector<Uint8> ReadSourceBytes(const RadientTextureSource& Source)
 
 TEST(RadientTextureSourceTest, BuildsStableURITextureCacheKey)
 {
-    std::array<Uint8, 4> Data{1, 2, 3, 4};
-
     RadientTextureLoadInfo LoadInfo{};
-    LoadInfo.URI      = "memory://texture";
-    LoadInfo.pData    = Data.data();
-    LoadInfo.DataSize = static_cast<Uint64>(Data.size());
-    LoadInfo.IsSRGB   = True;
+    LoadInfo.URI    = "Textures/Albedo.png";
+    LoadInfo.IsSRGB = True;
 
-    EXPECT_EQ(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(LoadInfo));
+    RadientTextureSource Source{LoadInfo};
+    RadientTextureSource SameSource{LoadInfo};
+    EXPECT_EQ(Source.MakeCacheKey(), SameSource.MakeCacheKey());
 
     RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
     LinearLoadInfo.IsSRGB                 = False;
-    EXPECT_NE(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(LinearLoadInfo));
+    RadientTextureSource LinearSource{LinearLoadInfo};
+    EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
 }
 
 TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
@@ -92,18 +89,23 @@ TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
     RadientTextureLoadInfo SameDataLoadInfo = LoadInfo;
     SameDataLoadInfo.pData                  = Data1.data();
 
-    EXPECT_EQ(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(SameDataLoadInfo));
+    RadientTextureSource Source{LoadInfo};
+    RadientTextureSource SameDataSource{SameDataLoadInfo};
+    Source.MakeMemoryCopy();
+    SameDataSource.MakeMemoryCopy();
+    EXPECT_EQ(Source.MakeCacheKey(), SameDataSource.MakeCacheKey());
 
     RadientTextureLoadInfo DifferentDataLoadInfo = LoadInfo;
     DifferentDataLoadInfo.pData                  = Data2.data();
-    EXPECT_NE(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(DifferentDataLoadInfo));
+    RadientTextureSource DifferentDataSource{DifferentDataLoadInfo};
+    DifferentDataSource.MakeMemoryCopy();
+    EXPECT_NE(Source.MakeCacheKey(), DifferentDataSource.MakeCacheKey());
 
     RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
     LinearLoadInfo.IsSRGB                 = True;
-    EXPECT_NE(RadientTextureSource::MakeCacheKey(LoadInfo),
-              RadientTextureSource::MakeCacheKey(LinearLoadInfo));
+    RadientTextureSource LinearSource{LinearLoadInfo};
+    LinearSource.MakeMemoryCopy();
+    EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
 }
 
 TEST(RadientTextureSourceTest, BorrowsMemoryWhenCopyIsDisabled)

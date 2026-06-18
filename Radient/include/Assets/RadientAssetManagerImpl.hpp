@@ -127,7 +127,6 @@ private:
         GLTFModelStorage(const GLTFModelStorage&)            = delete;
         GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
 
-        std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
         PBR_Renderer::PSO_FLAGS      VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
         std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
@@ -137,18 +136,15 @@ private:
 
     static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
 
+    class ScenePayloadImpl;
+
     using SceneAssetImpl =
-        RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
+        RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, ScenePayloadImpl>;
 
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
-    template <typename ImplType>
-    RefCntAutoPtr<ImplType> CreateAsset(const char*                  Type,
-                                        std::atomic<RadientHandle>&  NextAssetID,
-                                        const Char*                  Name,
-                                        typename ImplType::Storage&& Storage);
-
-    void LoadGLTFModel(SceneAssetImpl& Model);
+    void LoadGLTFModel(ScenePayloadImpl&  Model,
+                       const std::string& SourceURI);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
@@ -158,15 +154,13 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    std::atomic<RadientHandle> m_NextSceneAssetID{1};
-
     RadientMeshAssetManager     m_MeshManager;
     RadientMaterialAssetManager m_MaterialManager;
     RadientTextureAssetManager  m_TextureManager;
 
-    RadientAssetCache<IRadientSceneAsset> m_GLTFAssetCache;
+    RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
 
-    MPSCQueue<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
+    MPSCQueue<RefCntWeakPtr<ScenePayloadImpl>> m_PendingGPUResourceUpdates;
 };
 
 } // namespace Diligent

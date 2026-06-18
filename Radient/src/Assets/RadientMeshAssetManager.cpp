@@ -84,8 +84,20 @@ struct GLTFMeshStorage
 
 using MeshAssetStorage = std::variant<MeshStorage, GLTFMeshStorage>;
 
+} // namespace
+
+class MeshPayloadImpl final : public RadientAssetPayloadImpl<MeshAssetStorage, MeshPayloadImpl>
+{
+public:
+    using TBase = RadientAssetPayloadImpl<MeshAssetStorage, MeshPayloadImpl>;
+    using TBase::TBase;
+};
+
+namespace
+{
+
 using MeshAssetImpl =
-    RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshAssetStorage>;
+    RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshPayloadImpl>;
 
 struct MeshIndexBufferWriteData
 {
@@ -100,18 +112,18 @@ struct MeshVertexBufferWriteData
 
 struct MeshIndexBufferCopyData
 {
-    RefCntAutoPtr<MeshAssetImpl> pMeshAsset;
-    MeshStorage*                 pMeshStorage = nullptr;
-    RefCntAutoPtr<IRenderDevice> pDevice;
+    RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
+    MeshStorage*                   pMeshStorage = nullptr;
+    RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IBufferSuballocation> pIndexAllocation;
 };
 
 struct MeshVertexBufferCopyData
 {
-    RefCntAutoPtr<MeshAssetImpl> pMeshAsset;
-    MeshStorage*                 pMeshStorage = nullptr;
-    RefCntAutoPtr<IRenderDevice> pDevice;
+    RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
+    MeshStorage*                   pMeshStorage = nullptr;
+    RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IVertexPoolAllocation> pVertexAllocation;
 
@@ -316,12 +328,12 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
 
 void ScheduleMeshIndexUpload(IGPUUploadManager*       pUploadManager,
                              IRenderDevice*           pDevice,
-                             MeshAssetImpl&           MeshAsset,
+                             MeshPayloadImpl&         MeshPayload,
                              const RadientMeshSource& Source,
                              MeshStorage&             Storage)
 {
     std::unique_ptr<MeshIndexBufferCopyData> pCopyData{new MeshIndexBufferCopyData{}};
-    pCopyData->pMeshAsset       = &MeshAsset;
+    pCopyData->pMeshPayload     = &MeshPayload;
     pCopyData->pMeshStorage     = &Storage;
     pCopyData->pDevice          = pDevice;
     pCopyData->pIndexAllocation = Storage.pIndexAllocation;
@@ -344,13 +356,13 @@ void ScheduleMeshIndexUpload(IGPUUploadManager*       pUploadManager,
 
 void ScheduleMeshVertexUpload(IGPUUploadManager*       pUploadManager,
                               IRenderDevice*           pDevice,
-                              MeshAssetImpl&           MeshAsset,
+                              MeshPayloadImpl&         MeshPayload,
                               const RadientMeshSource& Source,
                               MeshStorage&             Storage,
                               Uint32                   VertexBufferIndex)
 {
     std::unique_ptr<MeshVertexBufferCopyData> pCopyData{new MeshVertexBufferCopyData{}};
-    pCopyData->pMeshAsset        = &MeshAsset;
+    pCopyData->pMeshPayload      = &MeshPayload;
     pCopyData->pMeshStorage      = &Storage;
     pCopyData->pDevice           = pDevice;
     pCopyData->pVertexAllocation = Storage.pVertexAllocation;
@@ -376,7 +388,7 @@ void ScheduleMeshVertexUpload(IGPUUploadManager*       pUploadManager,
 
 RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
                                      IGPUUploadManager*       pUploadManager,
-                                     MeshAssetImpl&           MeshAsset,
+                                     MeshPayloadImpl&         MeshPayload,
                                      const RadientMeshSource& Source,
                                      MeshStorage&             Storage)
 {
@@ -415,20 +427,20 @@ RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
     Storage.GPUResourcesReady.store(false, std::memory_order_release);
     Storage.LoadStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
 
-    ScheduleMeshIndexUpload(pUploadManager, pDevice, MeshAsset, Source, Storage);
+    ScheduleMeshIndexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage);
 
     for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
     {
         if (!Source.IsVertexBufferActive(BufferIndex))
             continue;
 
-        ScheduleMeshVertexUpload(pUploadManager, pDevice, MeshAsset, Source, Storage, BufferIndex);
+        ScheduleMeshVertexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage, BufferIndex);
     }
 
     return RADIENT_STATUS_OK;
 }
 
-void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
+void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
                         std::unique_ptr<RadientMeshSource> pSource,
                         IRenderDevice*                     pDevice,
                         GLTF::ResourceManager*             pResourceManager,
@@ -476,13 +488,17 @@ void LoadMeshFromSource(MeshAssetImpl&                     Mesh,
         SetLoadStatus(Status);
 }
 
-RefCntAutoPtr<MeshAssetImpl> CreateMeshAsset(std::atomic<RadientHandle>& NextAssetID,
-                                             const Char*                 Name,
-                                             MeshAssetStorage&&          Storage)
+RefCntAutoPtr<MeshAssetImpl> CreateMeshAsset(std::atomic<RadientHandle>&      NextAssetID,
+                                             RefCntAutoPtr<MeshPayloadImpl>&& pPayload)
 {
     const RadientHandle AssetID = NextAssetID.fetch_add(1, std::memory_order_relaxed);
-    return RefCntAutoPtr<MeshAssetImpl>{
-        MakeNewRCObj<MeshAssetImpl>()(MakeRadientAssetURI("mesh", AssetID), Name, std::move(Storage))};
+    return MeshAssetImpl::Create(MakeRadientAssetURI("mesh", AssetID), std::move(pPayload));
+}
+
+RefCntAutoPtr<MeshAssetImpl> CreateCachedMeshAsset(const char*                      CacheKey,
+                                                   RefCntAutoPtr<MeshPayloadImpl>&& pPayload)
+{
+    return MeshAssetImpl::Create(MakeRadientAssetCacheURI("mesh", CacheKey), std::move(pPayload));
 }
 
 std::string MakeGLTFMeshCacheKey(const IRadientSceneAsset& Model,
@@ -543,8 +559,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
 
     RADIENT_STATUS SourceStatus = RADIENT_STATUS_OK;
 
-    auto CreateMeshAssetFromCI =
-        [this, &MeshCI, CanUploadMesh, &SourceStatus]() -> RefCntAutoPtr<MeshAssetImpl> {
+    auto CreateMeshPayloadFromCI =
+        [this, &MeshCI, CanUploadMesh, &SourceStatus]() -> RefCntAutoPtr<MeshPayloadImpl> {
         std::unique_ptr<RadientMeshSource> pMeshSource = std::make_unique<RadientMeshSource>(MeshCI);
         SourceStatus                                   = pMeshSource->GetStatus();
         if (RADIENT_FAILED(SourceStatus))
@@ -554,53 +570,62 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
         MeshData.LoadStatus.store(CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
         MeshData.GPUResourcesReady.store(false, std::memory_order_release);
 
-        RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAsset(m_NextAssetID, MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
-        VERIFY_EXPR(pMeshAsset != nullptr);
+        RefCntAutoPtr<MeshPayloadImpl> pMeshPayload = MeshPayloadImpl::Create(MeshAssetStorage{std::move(MeshData)});
+        VERIFY_EXPR(pMeshPayload != nullptr);
 
         if (CanUploadMesh)
         {
             EnqueueAsyncWork(
                 m_pThreadPool,
-                [pMeshAsset,
+                [pMeshPayload,
                  pDevice          = m_pDevice,
                  pResourceManager = m_pResourceManager,
                  pUploadManager   = m_pUploadManager,
                  pMeshSource      = std::move(pMeshSource)](Uint32) mutable //
                 {
-                    LoadMeshFromSource(*pMeshAsset, std::move(pMeshSource), pDevice, pResourceManager, pUploadManager);
+                    LoadMeshFromSource(*pMeshPayload, std::move(pMeshSource), pDevice, pResourceManager, pUploadManager);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 });
         }
 
-        return pMeshAsset;
+        return pMeshPayload;
     };
 
-    const bool HasCacheKey = MeshCI.CacheKey != nullptr && MeshCI.CacheKey[0] != '\0';
+    const bool                     HasCacheKey = MeshCI.CacheKey != nullptr && MeshCI.CacheKey[0] != '\0';
+    RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
     if (HasCacheKey)
     {
-        auto [pMesh, MeshCreated] =
+        auto [pCachedMeshPayload, PayloadCreated] =
             m_MeshCache.GetOrCreate(
                 MeshCI.CacheKey,
-                [&CreateMeshAssetFromCI]() {
-                    return CreateMeshAssetFromCI();
+                [&CreateMeshPayloadFromCI]() {
+                    return CreateMeshPayloadFromCI();
                 });
 
-        (void)MeshCreated;
+        (void)PayloadCreated;
 
-        if (!pMesh)
+        if (!pCachedMeshPayload)
         {
             return RADIENT_FAILED(SourceStatus) ? SourceStatus : RADIENT_STATUS_INVALID_OPERATION;
         }
 
-        *ppMesh = pMesh.Detach();
+        RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateCachedMeshAsset(MeshCI.CacheKey, std::move(pCachedMeshPayload));
+        if (!pMeshAsset)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
         return RADIENT_STATUS_OK;
     }
 
-    RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAssetFromCI();
-    if (!pMeshAsset)
+    pMeshPayload = CreateMeshPayloadFromCI();
+    if (!pMeshPayload)
     {
         return RADIENT_FAILED(SourceStatus) ? SourceStatus : RADIENT_STATUS_INVALID_OPERATION;
     }
+
+    RefCntAutoPtr<MeshAssetImpl> pMeshAsset = CreateMeshAsset(m_NextAssetID, std::move(pMeshPayload));
+    if (!pMeshAsset)
+        return RADIENT_STATUS_INVALID_OPERATION;
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
@@ -630,10 +655,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshFromGLTFMesh(IRadientSceneAsse
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RADIENT_STATUS CreateStatus = RADIENT_STATUS_INVALID_OPERATION;
-    auto [pMesh, MeshCreated] =
+    auto [pMeshPayload, PayloadCreated] =
         m_GLTFMeshCache.GetOrCreate(
             CacheKey.c_str(),
-            [this, pModel, MeshIndex, Name, pModelData, &CreateStatus]() {
+            [pModel, MeshIndex, pModelData, &CreateStatus]() {
                 GLTFMeshStorage GLTFMeshData;
                 GLTFMeshData.pModel = pModel;
 
@@ -642,17 +667,21 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshFromGLTFMesh(IRadientSceneAsse
                                                       GetVertexAttribFlags(*pModelData),
                                                       GLTFMeshData.DrawableMesh);
                 if (RADIENT_FAILED(CreateStatus))
-                    return RefCntAutoPtr<MeshAssetImpl>{};
+                    return RefCntAutoPtr<MeshPayloadImpl>{};
 
-                return CreateMeshAsset(m_NextAssetID, Name, MeshAssetStorage{std::move(GLTFMeshData)});
+                return MeshPayloadImpl::Create(MeshAssetStorage{std::move(GLTFMeshData)});
             });
 
-    (void)MeshCreated;
+    (void)PayloadCreated;
 
-    if (!pMesh)
+    if (!pMeshPayload)
         return CreateStatus;
 
-    *ppMesh = pMesh.Detach();
+    RefCntAutoPtr<MeshAssetImpl> pMesh = CreateCachedMeshAsset(CacheKey.c_str(), std::move(pMeshPayload));
+    if (!pMesh)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    pMesh->QueryInterface(IID_RadientMeshAsset, ppMesh);
     return RADIENT_STATUS_OK;
 }
 
@@ -661,8 +690,8 @@ RadientDrawableMeshResolveResult RadientMeshAssetManager::GetDrawableMesh(IRadie
 {
     RadientDrawableMeshResolveResult Result;
 
-    const MeshAssetImpl* pMeshImpl = ClassPtrCast<const MeshAssetImpl>(pMesh);
-    if (pMeshImpl == nullptr)
+    RefCntAutoPtr<MeshAssetImpl> pMeshImpl = MeshAssetImpl::ResolveAsset(pMesh);
+    if (!pMeshImpl)
         return Result;
 
     const MeshAssetStorage& Storage = pMeshImpl->GetStorage();
@@ -676,7 +705,7 @@ RadientDrawableMeshResolveResult RadientMeshAssetManager::GetDrawableMesh(IRadie
 
 RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
 {
-    RefCntAutoPtr<MeshAssetImpl> pMesh{pMeshAsset, IID_MeshAssetImpl};
+    const MeshAssetImpl* pMesh = ClassPtrCast<const MeshAssetImpl>(pMeshAsset);
     if (!pMesh)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -688,6 +717,12 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
         return pGLTFMeshStorage->pModel ? RadientAssetManagerImpl::GetGLTFLoadStatus(pGLTFMeshStorage->pModel) : RADIENT_STATUS_INVALID_OPERATION;
 
     return RADIENT_STATUS_INVALID_OPERATION;
+}
+
+const MeshPayloadImpl* RadientMeshAssetManager::GetMeshPayload(IRadientMeshAsset* pMeshAsset)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    return pMesh ? pMesh->GetPayload().RawPtr() : nullptr;
 }
 
 namespace

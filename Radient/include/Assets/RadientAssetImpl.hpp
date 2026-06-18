@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "DebugUtilities.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -47,38 +48,25 @@ protected:
     ~IRadientAssetCacheRemovalHandler() = default;
 };
 
-template <typename InterfaceType,
-          const INTERFACE_ID& InterfaceID,
-          const INTERFACE_ID& ImplID,
-          RADIENT_ASSET_TYPE  AssetType,
-          typename StorageType>
-class RadientAssetImpl final : public ObjectBase<InterfaceType>
+template <typename StorageType, typename PayloadType>
+class RadientAssetPayloadImpl : public ObjectBase<IObject>
 {
 public:
-    using TBase   = ObjectBase<InterfaceType>;
+    using TBase   = ObjectBase<IObject>;
     using Storage = StorageType;
+    using Payload = PayloadType;
 
-    RadientAssetImpl(IReferenceCounters* pRefCounters,
-                     std::string&&       URI,
-                     const Char*         Name,
-                     StorageType&&       Storage) :
+    RadientAssetPayloadImpl(IReferenceCounters* pRefCounters,
+                            StorageType&&       Storage) :
         TBase{pRefCounters},
-        m_URI{std::move(URI)},
-        m_Name{Name != nullptr ? Name : ""},
         m_Storage{std::move(Storage)}
     {
-        m_Ref.URI     = m_URI.c_str();
-        m_Ref.Version = 1;
     }
 
-    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
+    static RefCntAutoPtr<PayloadType> Create(StorageType&& Storage)
     {
-        return m_Ref;
-    }
-
-    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
-    {
-        return AssetType;
+        return RefCntAutoPtr<PayloadType>{
+            MakeNewRCObj<PayloadType>()(std::move(Storage))};
     }
 
     StorageType& GetStorage()
@@ -89,12 +77,6 @@ public:
     const StorageType& GetStorage() const
     {
         return m_Storage;
-    }
-
-    template <typename T = StorageType>
-    auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
-    {
-        return m_Storage.LoadStatus.load(std::memory_order_acquire);
     }
 
     void SetCacheRemovalHandler(std::weak_ptr<IRadientAssetCacheRemovalHandler> Handler,
@@ -111,10 +93,137 @@ public:
         });
     }
 
-    template <typename T = StorageType>
-    static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
+private:
+    void RemoveFromCache() noexcept
+    {
+        if (m_CacheKey.empty())
+            return;
+
+        if (std::shared_ptr<IRadientAssetCacheRemovalHandler> pHandler = m_CacheRemovalHandler.lock())
+            pHandler->RemoveAssetFromCache(m_CacheKey.c_str());
+    }
+
+private:
+    StorageType m_Storage;
+
+    std::weak_ptr<IRadientAssetCacheRemovalHandler> m_CacheRemovalHandler;
+    std::string                                     m_CacheKey;
+};
+
+template <typename InterfaceType,
+          const INTERFACE_ID& InterfaceID,
+          const INTERFACE_ID& ImplID,
+          RADIENT_ASSET_TYPE  AssetType,
+          typename PayloadType>
+class RadientAssetImpl final : public ObjectBase<InterfaceType>
+{
+public:
+    using TBase   = ObjectBase<InterfaceType>;
+    using Payload = PayloadType;
+    using Storage = typename PayloadType::Storage;
+
+    RadientAssetImpl(IReferenceCounters*          pRefCounters,
+                     std::string&&                AssetURI,
+                     RefCntAutoPtr<PayloadType>&& pPayload = {}) :
+        TBase{pRefCounters},
+        m_URI{std::move(AssetURI)}
+    {
+        m_Ref.URI     = m_URI.c_str();
+        m_Ref.Version = 1;
+
+        if (pPayload)
+            Resolve(std::move(pPayload));
+    }
+
+    static RefCntAutoPtr<RadientAssetImpl> Create(std::string                  AssetURI,
+                                                  RefCntAutoPtr<PayloadType>&& pPayload = {})
+    {
+        return RefCntAutoPtr<RadientAssetImpl>{
+            MakeNewRCObj<RadientAssetImpl>()(std::move(AssetURI), std::move(pPayload))};
+    }
+
+    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
+    {
+        return m_Ref;
+    }
+
+    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
+    {
+        return AssetType;
+    }
+
+    Storage& GetStorage()
+    {
+        VERIFY_EXPR(m_pPayload != nullptr);
+        return m_pPayload->GetStorage();
+    }
+
+    const Storage& GetStorage() const
+    {
+        VERIFY_EXPR(m_pPayload != nullptr);
+        return m_pPayload->GetStorage();
+    }
+
+    RADIENT_STATUS GetResolveStatus() const
+    {
+        return m_ResolveStatus.load(std::memory_order_acquire);
+    }
+
+    void Resolve(RefCntAutoPtr<PayloadType>&& pPayload)
+    {
+        if (pPayload == nullptr)
+        {
+            Fail(RADIENT_STATUS_INVALID_OPERATION);
+            return;
+        }
+
+        m_pPayload = std::move(pPayload);
+        m_ResolveStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
+    }
+
+    void Fail(RADIENT_STATUS Status)
+    {
+        if (Status == RADIENT_STATUS_OK ||
+            Status == RADIENT_STATUS_PENDING)
+        {
+            Status = RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        m_ResolveStatus.store(Status, std::memory_order_release);
+    }
+
+    RefCntAutoPtr<PayloadType> GetPayload() const
+    {
+        if (GetResolveStatus() != RADIENT_STATUS_OK)
+            return {};
+
+        return m_pPayload;
+    }
+
+    static RefCntAutoPtr<RadientAssetImpl> ResolveAsset(InterfaceType* pAsset)
     {
         RefCntAutoPtr<RadientAssetImpl> pImpl{pAsset, ImplID};
+        if (!pImpl || pImpl->GetResolveStatus() != RADIENT_STATUS_OK)
+            return {};
+
+        return pImpl;
+    }
+
+    template <typename T = Storage>
+    auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
+    {
+        const RADIENT_STATUS ResolveStatus = GetResolveStatus();
+        if (ResolveStatus != RADIENT_STATUS_OK)
+            return ResolveStatus;
+
+        RefCntAutoPtr<PayloadType> pPayload = GetPayload();
+        return pPayload ? pPayload->GetStorage().LoadStatus.load(std::memory_order_acquire) : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    template <typename T = Storage>
+    static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
+    {
+        const RadientAssetImpl* pImpl = ClassPtrCast<const RadientAssetImpl>(pAsset);
         return pImpl ? pImpl->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
@@ -136,23 +245,11 @@ public:
     using IObject::QueryInterface;
 
 private:
-    void RemoveFromCache() noexcept
-    {
-        if (m_CacheKey.empty())
-            return;
-
-        if (std::shared_ptr<IRadientAssetCacheRemovalHandler> pHandler = m_CacheRemovalHandler.lock())
-            pHandler->RemoveAssetFromCache(m_CacheKey.c_str());
-    }
-
-private:
     std::string           m_URI;
-    std::string           m_Name;
     RadientAssetReference m_Ref;
-    StorageType           m_Storage;
 
-    std::weak_ptr<IRadientAssetCacheRemovalHandler> m_CacheRemovalHandler;
-    std::string                                     m_CacheKey;
+    RefCntAutoPtr<PayloadType>  m_pPayload;
+    std::atomic<RADIENT_STATUS> m_ResolveStatus{RADIENT_STATUS_PENDING};
 };
 
 } // namespace Diligent

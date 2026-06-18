@@ -46,6 +46,7 @@ class ResourceManager;
 } // namespace GLTF
 
 class RadientMeshSource;
+class MeshPayloadImpl;
 
 class RadientMeshAssetManager final
 {
@@ -72,7 +73,8 @@ public:
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
-    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMeshAsset);
+    static RADIENT_STATUS         GetLoadStatus(IRadientAsset* pMeshAsset);
+    static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
 
 private:
     RefCntAutoPtr<IThreadPool>           m_pThreadPool;
@@ -80,9 +82,9 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    RadientAssetCache<IRadientMeshAsset> m_MeshCache;
-    RadientAssetCache<IRadientMeshAsset> m_GLTFMeshCache;
-    std::atomic<RadientHandle>           m_NextAssetID{1};
+    RadientAssetCache<MeshPayloadImpl> m_MeshCache;
+    RadientAssetCache<MeshPayloadImpl> m_GLTFMeshCache;
+    std::atomic<RadientHandle>         m_NextAssetID{1};
 };
 
 } // namespace Diligent

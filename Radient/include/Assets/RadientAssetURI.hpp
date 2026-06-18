@@ -39,4 +39,10 @@ inline std::string MakeRadientAssetURI(const char*   Type,
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 
+inline std::string MakeRadientAssetCacheURI(const char*        Type,
+                                            const std::string& CacheKey)
+{
+    return std::string{"radient://cache/"} + Type + "/" + CacheKey;
+}
+
 } // namespace Diligent

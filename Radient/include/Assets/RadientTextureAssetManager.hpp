@@ -47,6 +47,8 @@ namespace GLTF
 class ResourceManager;
 } // namespace GLTF
 
+class TexturePayloadImpl;
+
 class RadientTextureAssetManager final
 {
 public:
@@ -64,19 +66,20 @@ public:
     RADIENT_STATUS LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
-    static ITextureView*  GetTextureSRV(IRadientTextureAsset* pTextureAsset);
-    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pTextureAsset);
+    static ITextureView*             GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+    static RADIENT_STATUS            GetLoadStatus(IRadientAsset* pTextureAsset);
+    static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
 
     static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
                                          GLTF::Material::TextureShaderAttribs& Attribs);
 
 private:
-    RefCntAutoPtr<IThreadPool>              m_pThreadPool;
-    RefCntAutoPtr<IRenderDevice>            m_pDevice;
-    RefCntAutoPtr<GLTF::ResourceManager>    m_pResourceManager;
-    RefCntAutoPtr<IGPUUploadManager>        m_pUploadManager;
-    RadientAssetCache<IRadientTextureAsset> m_TextureCache;
-    std::atomic<RadientHandle>              m_NextAssetID{1};
+    RefCntAutoPtr<IThreadPool>            m_pThreadPool;
+    RefCntAutoPtr<IRenderDevice>          m_pDevice;
+    RefCntAutoPtr<GLTF::ResourceManager>  m_pResourceManager;
+    RefCntAutoPtr<IGPUUploadManager>      m_pUploadManager;
+    RadientAssetCache<TexturePayloadImpl> m_TextureCache;
+    std::atomic<RadientHandle>            m_NextAssetID{1};
 };
 
 } // namespace Diligent

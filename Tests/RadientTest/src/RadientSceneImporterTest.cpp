@@ -676,7 +676,13 @@ TEST(RadientSceneImporterTest, CreateMeshFromGLTFMeshUsesCache)
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
-    EXPECT_EQ(pMesh0.RawPtr(), pMesh1.RawPtr());
+
+    const RadientDrawableMeshResolveResult Mesh0 = RadientAssetManagerImpl::GetDrawableMesh(pMesh0, false);
+    const RadientDrawableMeshResolveResult Mesh1 = RadientAssetManagerImpl::GetDrawableMesh(pMesh1, false);
+    EXPECT_EQ(Mesh0.Status, RADIENT_STATUS_OK);
+    EXPECT_EQ(Mesh1.Status, RADIENT_STATUS_OK);
+    EXPECT_NE(Mesh0.pMesh, nullptr);
+    EXPECT_EQ(Mesh0.pMesh, Mesh1.pMesh);
 }
 
 TEST(RadientSceneImporterTest, ImportsLights)
