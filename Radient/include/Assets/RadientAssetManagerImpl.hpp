@@ -120,7 +120,7 @@ public:
 private:
     struct GLTFModelStorage
     {
-        GLTFModelStorage() = default;
+        explicit GLTFModelStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK);
         GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept;
 
         GLTFModelStorage& operator=(GLTFModelStorage&& Rhs)  = delete;

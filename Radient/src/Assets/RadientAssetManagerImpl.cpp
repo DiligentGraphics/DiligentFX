@@ -137,6 +137,11 @@ PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
 
 } // namespace
 
+RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(RADIENT_STATUS InitLoadStatus) :
+    LoadStatus{InitLoadStatus}
+{
+}
+
 RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
     pModel{std::move(Rhs.pModel)},
     VertexAttribFlags{Rhs.VertexAttribFlags},
@@ -257,9 +262,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
                 pSelf->m_GLTFAssetCache.GetOrCreate(
                     CacheKey.c_str(),
                     []() {
-                        GLTFModelStorage GLTFModelData;
-                        GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING);
-                        return ScenePayloadImpl::Create(std::move(GLTFModelData));
+                        return ScenePayloadImpl::Create(GLTFModelStorage{RADIENT_STATUS_PENDING});
                     });
 
             if (!pModelPayload)

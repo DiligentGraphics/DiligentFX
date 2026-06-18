@@ -58,7 +58,11 @@ static constexpr INTERFACE_ID IID_MeshAssetImpl = {0xee010529, 0xc9ad, 0x4044, {
 
 struct MeshStorage
 {
-    MeshStorage() = default;
+    explicit MeshStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
+        LoadStatus{InitLoadStatus}
+    {
+    }
+
     MeshStorage(MeshStorage&& Rhs) noexcept;
 
     MeshStorage& operator=(MeshStorage&& Rhs)  = delete;
@@ -566,8 +570,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
         if (RADIENT_FAILED(SourceStatus))
             return {};
 
-        MeshStorage MeshData;
-        MeshData.LoadStatus.store(CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+        MeshStorage MeshData{CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION};
         MeshData.GPUResourcesReady.store(false, std::memory_order_release);
 
         RefCntAutoPtr<MeshPayloadImpl> pMeshPayload = MeshPayloadImpl::Create(MeshAssetStorage{std::move(MeshData)});

@@ -52,7 +52,11 @@ static constexpr INTERFACE_ID IID_TextureAssetImpl = {0x8bd4869c, 0x6ec8, 0x4944
 
 struct TextureStorage
 {
-    TextureStorage() = default;
+    explicit TextureStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
+        LoadStatus{InitLoadStatus}
+    {
+    }
+
     TextureStorage(TextureStorage&& Rhs) noexcept :
         pTexture{std::move(Rhs.pTexture)},
         pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
@@ -151,9 +155,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
                 TextureCache.GetOrCreate(
                     TextureCacheKey.c_str(),
                     []() {
-                        TextureStorage TextureData;
-                        TextureData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
-                        return TexturePayloadImpl::Create(std::move(TextureData));
+                        return TexturePayloadImpl::Create(TextureStorage{RADIENT_STATUS_PENDING});
                     });
 
             if (!pTexturePayload)
