@@ -1403,16 +1403,14 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
     std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
     Stack.clear();
 
-    CoreStorages& Storages = m_CoreStorages;
-
     const RadientMatrix4x4* pParentWorldMatrix = nullptr;
     Bool                    ParentVisible      = True;
-    if (const entt::entity RootParent = Storages.get<HierarchyComponent>(Entity).Parent; RootParent != entt::null)
+    if (const entt::entity RootParent = m_CoreStorages.get<HierarchyComponent>(Entity).Parent; RootParent != entt::null)
     {
         VERIFY_ENTITY(RootParent);
 
-        pParentWorldMatrix = &Storages.get<WorldTransformComponent>(RootParent).Matrix;
-        ParentVisible      = Storages.get<EffectiveVisibilityComponent>(RootParent).Visible;
+        pParentWorldMatrix = &m_CoreStorages.get<WorldTransformComponent>(RootParent).Matrix;
+        ParentVisible      = m_CoreStorages.get<EffectiveVisibilityComponent>(RootParent).Visible;
     }
 
     Stack.push_back({Entity, InheritedFlags, pParentWorldMatrix, ParentVisible});
@@ -1424,23 +1422,23 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
 
         VERIFY_ENTITY(Item.Entity);
 
-        DirtyStateComponent& DirtyState = Storages.get<DirtyStateComponent>(Item.Entity);
+        DirtyStateComponent& DirtyState = m_CoreStorages.get<DirtyStateComponent>(Item.Entity);
         const DIRTY_FLAGS    Flags      = (DirtyState.Flags | Item.Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         if (Flags == DIRTY_FLAG_NONE)
             continue;
 
         // This function is only used by commit's top-down traversal. The parent has already been updated, and
         // Item.Flags carries the dirty state caused by ancestors, so this node can be updated directly.
-        UpdateEntityDerivedState(Storages, Item.Entity, DirtyState, Flags, Item.pParentWorldMatrix, Item.ParentVisible);
+        UpdateEntityDerivedState(Item.Entity, DirtyState, Flags, Item.pParentWorldMatrix, Item.ParentVisible);
 
         // Pass the effective dirty flags to all children. A child may also have its own dirty flags; the stack
         // item combines both sets before updating it.
-        const std::vector<entt::entity>& Children = Storages.get<HierarchyComponent>(Item.Entity).Children;
+        const std::vector<entt::entity>& Children = m_CoreStorages.get<HierarchyComponent>(Item.Entity).Children;
         if (Children.empty())
             continue;
 
-        const RadientMatrix4x4& WorldMatrix = Storages.get<WorldTransformComponent>(Item.Entity).Matrix;
-        const Bool              Visible     = Storages.get<EffectiveVisibilityComponent>(Item.Entity).Visible;
+        const RadientMatrix4x4& WorldMatrix = m_CoreStorages.get<WorldTransformComponent>(Item.Entity).Matrix;
+        const Bool              Visible     = m_CoreStorages.get<EffectiveVisibilityComponent>(Item.Entity).Visible;
 
         for (const entt::entity Child : Children)
             Stack.push_back({Child, Flags, &WorldMatrix, Visible});
@@ -1463,8 +1461,6 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
     if ((m_DirtyFlags & Flags) == DIRTY_FLAG_NONE)
         return;
 
-    CoreStorages& Storages = m_CoreStorages;
-
     std::vector<entt::entity>& Path = m_TmpEntityBuffer;
     Path.clear();
 
@@ -1475,7 +1471,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
         VERIFY_ENTITY(Current);
 
         Path.push_back(Current);
-        Current = Storages.get<HierarchyComponent>(Current).Parent;
+        Current = m_CoreStorages.get<HierarchyComponent>(Current).Parent;
     }
 
     // Find the highest dirty ancestor on the path. Nodes above it are already clean for the requested flags, so
@@ -1484,7 +1480,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
     for (size_t Index = Path.size(); Index > 0; --Index)
     {
         const size_t      PathIndex   = Index - 1;
-        const DIRTY_FLAGS EntityFlags = Storages.get<DirtyStateComponent>(Path[PathIndex]).Flags & Flags;
+        const DIRTY_FLAGS EntityFlags = m_CoreStorages.get<DirtyStateComponent>(Path[PathIndex]).Flags & Flags;
         if (EntityFlags != DIRTY_FLAG_NONE)
         {
             FirstDirtyIndex = PathIndex;
@@ -1500,7 +1496,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
     {
         const size_t         PathIndex   = Index - 1;
         const entt::entity   Current     = Path[PathIndex];
-        DirtyStateComponent& DirtyState  = Storages.get<DirtyStateComponent>(Current);
+        DirtyStateComponent& DirtyState  = m_CoreStorages.get<DirtyStateComponent>(Current);
         const DIRTY_FLAGS    EntityFlags = DirtyState.Flags & Flags;
         // Once a parent is dirty, the same flags are inherited by every descendant on this path.
         ActiveFlags |= EntityFlags;
@@ -1513,19 +1509,19 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
         Bool                    ParentVisible      = True;
         if (Parent != entt::null)
         {
-            VERIFY((Storages.get<DirtyStateComponent>(Parent).Flags & ActiveFlags) == DIRTY_FLAG_NONE,
+            VERIFY((m_CoreStorages.get<DirtyStateComponent>(Parent).Flags & ActiveFlags) == DIRTY_FLAG_NONE,
                    "Parent derived state must be up to date before updating child derived state");
 
             if ((ActiveFlags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
-                pParentWorldMatrix = &Storages.get<WorldTransformComponent>(Parent).Matrix;
+                pParentWorldMatrix = &m_CoreStorages.get<WorldTransformComponent>(Parent).Matrix;
 
             if ((ActiveFlags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
-                ParentVisible = Storages.get<EffectiveVisibilityComponent>(Parent).Visible;
+                ParentVisible = m_CoreStorages.get<EffectiveVisibilityComponent>(Parent).Visible;
         }
 
         // Update this path node directly. Parent state is already valid because the loop walks from the highest
         // dirty ancestor down toward the originally requested entity.
-        UpdateEntityDerivedState(Storages, Current, DirtyState, ActiveFlags, pParentWorldMatrix, ParentVisible);
+        UpdateEntityDerivedState(Current, DirtyState, ActiveFlags, pParentWorldMatrix, ParentVisible);
 
         // Only the requested path is repaired. Off-path children inherit the parent's change and remain dirty so
         // a later query or CommitChanges() can update their subtrees.
@@ -1537,8 +1533,7 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
         m_DirtyFlags = DIRTY_FLAG_NONE;
 }
 
-void RadientSceneState::UpdateEntityDerivedState(CoreStorages&           Storages,
-                                                 entt::entity            Entity,
+void RadientSceneState::UpdateEntityDerivedState(entt::entity            Entity,
                                                  DirtyStateComponent&    DirtyState,
                                                  DIRTY_FLAGS             Flags,
                                                  const RadientMatrix4x4* pParentWorldMatrix,
@@ -1550,9 +1545,9 @@ void RadientSceneState::UpdateEntityDerivedState(CoreStorages&           Storage
 
     if ((Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
     {
-        const LocalTransformComponent& LocalTransform = Storages.get<LocalTransformComponent>(Entity);
+        const LocalTransformComponent& LocalTransform = m_CoreStorages.get<LocalTransformComponent>(Entity);
         const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
-        WorldTransformComponent&       WorldTransform = Storages.get<WorldTransformComponent>(Entity);
+        WorldTransformComponent&       WorldTransform = m_CoreStorages.get<WorldTransformComponent>(Entity);
 
         WorldTransform.Matrix = pParentWorldMatrix != nullptr ?
             RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
@@ -1561,8 +1556,8 @@ void RadientSceneState::UpdateEntityDerivedState(CoreStorages&           Storage
 
     if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
     {
-        const EntityStateComponent&   State      = Storages.get<EntityStateComponent>(Entity);
-        EffectiveVisibilityComponent& Visibility = Storages.get<EffectiveVisibilityComponent>(Entity);
+        const EntityStateComponent&   State      = m_CoreStorages.get<EntityStateComponent>(Entity);
+        EffectiveVisibilityComponent& Visibility = m_CoreStorages.get<EffectiveVisibilityComponent>(Entity);
 
         const Bool OwnVisible = (State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
         Visibility.Visible    = OwnVisible && ParentVisible ? True : False;

@@ -394,8 +394,7 @@ private:
     void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
     void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
 
-    void UpdateEntityDerivedState(CoreStorages&           Storages,
-                                  entt::entity            Entity,
+    void UpdateEntityDerivedState(entt::entity            Entity,
                                   DirtyStateComponent&    DirtyState,
                                   DIRTY_FLAGS             Flags,
                                   const RadientMatrix4x4* pParentWorldMatrix,
