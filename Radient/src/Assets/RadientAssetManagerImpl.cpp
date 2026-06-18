@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 
+#include "Assets/RadientAssetImpl.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Errors.hpp"
 #include "GLTFLoader.hpp"
@@ -51,6 +52,33 @@ constexpr Uint32 RadientDefaultVertexPoolSize        = 1024u * 1024u;
 constexpr Uint32 RadientDefaultTextureAtlasSize      = 4096u;
 constexpr Uint32 RadientDefaultTextureAtlasSlices    = 1u;
 constexpr Uint32 RadientDefaultTextureAtlasMaxSlices = 2048u;
+
+static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
+
+struct GLTFModelStorage
+{
+    explicit GLTFModelStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
+        LoadStatus{InitLoadStatus}
+    {
+    }
+
+    GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
+        pModel{std::move(Rhs.pModel)},
+        LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
+        GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+        GPUUpdateQueued{Rhs.GPUUpdateQueued.load(std::memory_order_relaxed)}
+    {
+    }
+
+    GLTFModelStorage& operator=(GLTFModelStorage&& Rhs)  = delete;
+    GLTFModelStorage(const GLTFModelStorage&)            = delete;
+    GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
+
+    std::unique_ptr<GLTF::Model> pModel;
+    std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
+    std::atomic_bool             GPUResourcesReady{false};
+    std::atomic_bool             GPUUpdateQueued{false};
+};
 
 GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
 {
@@ -108,25 +136,20 @@ std::string MakeGLTFCacheKey(const char* URI)
 
 } // namespace
 
-RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(RADIENT_STATUS InitLoadStatus) :
-    LoadStatus{InitLoadStatus}
-{
-}
-
-RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
-    pModel{std::move(Rhs.pModel)},
-    LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-    GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
-    GPUUpdateQueued{Rhs.GPUUpdateQueued.load(std::memory_order_relaxed)}
-{
-}
-
-class RadientAssetManagerImpl::ScenePayloadImpl final : public RadientAssetPayloadImpl<GLTFModelStorage, ScenePayloadImpl>
+class ScenePayloadImpl final : public RadientAssetPayloadImpl<GLTFModelStorage, ScenePayloadImpl>
 {
 public:
     using TBase = RadientAssetPayloadImpl<GLTFModelStorage, ScenePayloadImpl>;
     using TBase::TBase;
 };
+
+namespace
+{
+
+using SceneAssetImpl =
+    RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, ScenePayloadImpl>;
+
+} // namespace
 
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :

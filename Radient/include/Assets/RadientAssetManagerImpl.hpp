@@ -27,7 +27,6 @@
 #pragma once
 
 #include "RadientAssetCache.hpp"
-#include "RadientAssetImpl.hpp"
 #include "RadientAssets.h"
 #include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshAssetManager.hpp"
@@ -37,12 +36,8 @@
 #include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
-#include "../../../PBR/interface/PBR_Renderer.hpp"
 
-#include <atomic>
-#include <memory>
 #include <string>
-#include <utility>
 
 namespace Diligent
 {
@@ -57,9 +52,12 @@ struct ITextureView;
 
 namespace GLTF
 {
+struct Material;
 struct Model;
 class ResourceManager;
 } // namespace GLTF
+
+class ScenePayloadImpl;
 
 class RadientAssetManagerImpl final : public ObjectBase<IRadientAssetManager>
 {
@@ -118,28 +116,6 @@ public:
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
-    struct GLTFModelStorage
-    {
-        explicit GLTFModelStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK);
-        GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept;
-
-        GLTFModelStorage& operator=(GLTFModelStorage&& Rhs)  = delete;
-        GLTFModelStorage(const GLTFModelStorage&)            = delete;
-        GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
-
-        std::unique_ptr<GLTF::Model> pModel;
-        std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
-        std::atomic_bool             GPUResourcesReady{false};
-        std::atomic_bool             GPUUpdateQueued{false};
-    };
-
-    static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
-
-    class ScenePayloadImpl;
-
-    using SceneAssetImpl =
-        RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, ScenePayloadImpl>;
-
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
     void LoadGLTFModel(ScenePayloadImpl&  Model,
