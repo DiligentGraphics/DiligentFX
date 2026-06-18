@@ -45,7 +45,10 @@
 #endif
 
 #include <cstddef>
+#include <functional>
 #include <string>
+#include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -291,14 +294,54 @@ private:
         Bool                    ParentVisible      = True;
     };
 
-    struct DerivedStateStorages
+    // Core components are attached to every scene entity and are used by the hottest transform,
+    // visibility, hierarchy, and renderable-state paths. Cache their storages so these paths can use
+    // storage.get() directly and avoid registry.get<T>() resolving the storage through assure<T>() on every access.
+    // Optional components still go through registry queries and views.
+    struct CoreStorages
     {
-        entt::storage<DirtyStateComponent>&          DirtyStates;
-        entt::storage<HierarchyComponent>&           Hierarchies;
-        entt::storage<LocalTransformComponent>&      LocalTransforms;
-        entt::storage<WorldTransformComponent>&      WorldTransforms;
-        entt::storage<EntityStateComponent>&         EntityStates;
-        entt::storage<EffectiveVisibilityComponent>& EffectiveVisibilities;
+        explicit CoreStorages(entt::registry& Registry) :
+            m_Storages{
+                std::ref(Registry.storage<EntityComponent>()),
+                std::ref(Registry.storage<EntityStateComponent>()),
+                std::ref(Registry.storage<HierarchyComponent>()),
+                std::ref(Registry.storage<LocalTransformComponent>()),
+                std::ref(Registry.storage<WorldTransformComponent>()),
+                std::ref(Registry.storage<EffectiveVisibilityComponent>()),
+                std::ref(Registry.storage<RenderableMeshStateComponent>()),
+                std::ref(Registry.storage<DirtyStateComponent>())}
+        {
+        }
+
+        template <typename ComponentType>
+        ComponentType& get(entt::entity Entity)
+        {
+            return storage<std::remove_const_t<ComponentType>>().get(Entity);
+        }
+
+        template <typename ComponentType>
+        const std::remove_const_t<ComponentType>& get(entt::entity Entity) const
+        {
+            return storage<std::remove_const_t<ComponentType>>().get(Entity);
+        }
+
+    private:
+        template <typename ComponentType>
+        entt::storage<ComponentType>& storage() const
+        {
+            return std::get<std::reference_wrapper<entt::storage<ComponentType>>>(m_Storages).get();
+        }
+
+        std::tuple<
+            std::reference_wrapper<entt::storage<EntityComponent>>,
+            std::reference_wrapper<entt::storage<EntityStateComponent>>,
+            std::reference_wrapper<entt::storage<HierarchyComponent>>,
+            std::reference_wrapper<entt::storage<LocalTransformComponent>>,
+            std::reference_wrapper<entt::storage<WorldTransformComponent>>,
+            std::reference_wrapper<entt::storage<EffectiveVisibilityComponent>>,
+            std::reference_wrapper<entt::storage<RenderableMeshStateComponent>>,
+            std::reference_wrapper<entt::storage<DirtyStateComponent>>>
+            m_Storages;
     };
 
     struct DestroyWorkItem
@@ -351,9 +394,7 @@ private:
     void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
     void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
 
-    DerivedStateStorages GetDerivedStateStorages();
-
-    void UpdateEntityDerivedState(DerivedStateStorages&   Storages,
+    void UpdateEntityDerivedState(CoreStorages&           Storages,
                                   entt::entity            Entity,
                                   DirtyStateComponent&    DirtyState,
                                   DIRTY_FLAGS             Flags,
@@ -368,6 +409,7 @@ private:
     using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
     using EntityMapType                = absl::flat_hash_map<RadientEntityID, entt::entity>;
     entt::registry                      m_Registry;
+    CoreStorages                        m_CoreStorages;
     EntityMapType                       m_EntityMap;
     CustomComponentStoresMapType        m_CustomComponentStores;
     RadientEntityID                     m_NextEntityID = 1;
@@ -401,11 +443,11 @@ DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::CHANGE_FLAGS);
 template <typename ComponentSourceType>
 inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(entt::entity Entity, const ComponentSourceType& ComponentSource) const
 {
-    const EntityComponent&              EntityData       = ComponentSource.template get<const EntityComponent>(Entity);
+    const EntityComponent&              EntityData       = m_CoreStorages.get<EntityComponent>(Entity);
     const MeshComponentStorage&         MeshStorage      = ComponentSource.template get<const MeshComponentStorage>(Entity);
     const RadientMeshRendererComponent& Renderer         = ComponentSource.template get<const RadientMeshRendererComponent>(Entity);
-    const WorldTransformComponent&      WorldTransform   = ComponentSource.template get<const WorldTransformComponent>(Entity);
-    const EffectiveVisibilityComponent& EffectiveVisible = ComponentSource.template get<const EffectiveVisibilityComponent>(Entity);
+    const WorldTransformComponent&      WorldTransform   = m_CoreStorages.get<WorldTransformComponent>(Entity);
+    const EffectiveVisibilityComponent& EffectiveVisible = m_CoreStorages.get<EffectiveVisibilityComponent>(Entity);
 
     const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
 
@@ -421,10 +463,10 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
 template <typename ComponentSourceType>
 inline RadientSceneState::RenderableLight RadientSceneState::MakeRenderableLight(entt::entity Entity, const ComponentSourceType& ComponentSource) const
 {
-    const EntityComponent&              EntityData       = ComponentSource.template get<const EntityComponent>(Entity);
+    const EntityComponent&              EntityData       = m_CoreStorages.get<EntityComponent>(Entity);
     const RadientLightComponent&        Light            = ComponentSource.template get<const RadientLightComponent>(Entity);
-    const WorldTransformComponent&      WorldTransform   = ComponentSource.template get<const WorldTransformComponent>(Entity);
-    const EffectiveVisibilityComponent& EffectiveVisible = ComponentSource.template get<const EffectiveVisibilityComponent>(Entity);
+    const WorldTransformComponent&      WorldTransform   = m_CoreStorages.get<WorldTransformComponent>(Entity);
+    const EffectiveVisibilityComponent& EffectiveVisible = m_CoreStorages.get<EffectiveVisibilityComponent>(Entity);
 
     return RenderableLight{
         EntityData.ID,
