@@ -147,12 +147,12 @@ RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& As
 
 RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetManager,
                                                 IRadientMaterialAsset* pMaterial,
-                                                const Char*            CacheKey = nullptr)
+                                                Float32                PositionOffset = 0.f)
 {
     const RadientFloat3 Positions[] =
         {
             {0.f, 0.f, 0.f},
-            {1.f, 0.f, 0.f},
+            {1.f + PositionOffset, 0.f, 0.f},
             {0.f, 1.f, 0.f},
         };
 
@@ -187,7 +187,6 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name           = "Radient test mesh";
-    MeshCI.CacheKey       = CacheKey;
     MeshCI.pPositions     = Positions;
     MeshCI.pColors0       = Colors;
     MeshCI.pBoneIndices0  = BoneIndices;
@@ -200,7 +199,8 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
     MeshCI.PrimitiveCount = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
-    EXPECT_EQ(AssetManager.CreateMesh(MeshCI, &pMesh), RADIENT_STATUS_OK);
+    const RADIENT_STATUS             CreateStatus = AssetManager.CreateMesh(MeshCI, &pMesh);
+    EXPECT_TRUE(CreateStatus == RADIENT_STATUS_OK || CreateStatus == RADIENT_STATUS_PENDING);
     EXPECT_NE(pMesh, nullptr);
     if (pMesh != nullptr)
     {
@@ -447,7 +447,7 @@ TEST(RadientAssetManagerTest, CreateMesh)
     EXPECT_NE(pMesh->GetReference().Version, 0u);
 }
 
-TEST(RadientAssetManagerTest, CreateMeshWithoutCacheKeyCreatesDistinctAssets)
+TEST(RadientAssetManagerTest, CreateMeshDeduplicatesIdenticalRawData)
 {
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -463,10 +463,18 @@ TEST(RadientAssetManagerTest, CreateMeshWithoutCacheKeyCreatesDistinctAssets)
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
+    const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
+    const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
+    EXPECT_TRUE(MeshStatus0 == RADIENT_STATUS_OK || MeshStatus0 == RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_TRUE(MeshStatus1 == RADIENT_STATUS_OK || MeshStatus1 == RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
+
+    const MeshPayloadImpl* pMeshPayload0 = RadientMeshAssetManager::GetMeshPayload(pMesh0);
+    ASSERT_NE(pMeshPayload0, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh1), pMeshPayload0);
 }
 
-TEST(RadientAssetManagerTest, CreateMeshUsesCacheKey)
+TEST(RadientAssetManagerTest, CreateMeshDifferentRawDataUsesDifferentPayload)
 {
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -477,16 +485,20 @@ TEST(RadientAssetManagerTest, CreateMeshUsesCacheKey)
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
     ASSERT_NE(pMaterial, nullptr);
 
-    RefCntAutoPtr<IRadientMeshAsset> pMesh0 = CreateTestMesh(*pAssetManager, pMaterial, "raw-mesh-key");
-    RefCntAutoPtr<IRadientMeshAsset> pMesh1 = CreateTestMesh(*pAssetManager, pMaterial, "raw-mesh-key");
+    RefCntAutoPtr<IRadientMeshAsset> pMesh0 = CreateTestMesh(*pAssetManager, pMaterial);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh1 = CreateTestMesh(*pAssetManager, pMaterial, 0.5f);
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
+    const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
+    const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
+    EXPECT_TRUE(MeshStatus0 == RADIENT_STATUS_OK || MeshStatus0 == RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_TRUE(MeshStatus1 == RADIENT_STATUS_OK || MeshStatus1 == RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
 
     const MeshPayloadImpl* pMeshPayload0 = RadientMeshAssetManager::GetMeshPayload(pMesh0);
     ASSERT_NE(pMeshPayload0, nullptr);
-    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh1), pMeshPayload0);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh1), pMeshPayload0);
 }
 
 TEST(RadientAssetManagerTest, LoadGLTF)

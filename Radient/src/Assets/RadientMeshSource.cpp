@@ -31,6 +31,7 @@
 #include "GraphicsAccessories.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -67,6 +68,25 @@ bool IsActiveVertexBuffer(Uint32 ActiveVertexBufferMask, Uint32 BufferIndex)
 {
     return BufferIndex < sizeof(ActiveVertexBufferMask) * 8 &&
         (ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
+}
+
+void HashMaterial(std::size_t& Hash, IRadientMaterialAsset* pMaterial)
+{
+    HashCombine(Hash, pMaterial != nullptr);
+    if (pMaterial == nullptr)
+        return;
+
+    const RadientAssetReference& MaterialRef = pMaterial->GetReference();
+    if (MaterialRef.URI != nullptr && MaterialRef.URI[0] != '\0')
+    {
+        HashCombine(Hash,
+                    CStringHash<Char>{}(MaterialRef.URI),
+                    MaterialRef.Version);
+    }
+    else
+    {
+        HashCombine(Hash, reinterpret_cast<uintptr_t>(pMaterial));
+    }
 }
 
 bool ValidateRadientMeshCI(const RadientMeshCreateInfo& MeshCI)
@@ -122,6 +142,7 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
 
     m_VertexCount = MeshCI.VertexCount;
     m_IndexCount  = MeshCI.IndexCount;
+    m_IndexType   = MeshCI.IndexType;
 
     auto AddAttribute =
         [this](const char* Name, VALUE_TYPE Type, Uint8 NumComponents, bool IsNormalized, const auto* pSrcData) //
@@ -156,6 +177,67 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
     m_PrimitiveMaterials.reserve(MeshCI.PrimitiveCount);
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
         m_PrimitiveMaterials.emplace_back(MeshCI.pPrimitives[PrimitiveIndex].pMaterial);
+}
+
+std::string RadientMeshSource::MakeCacheKey() const
+{
+    if (RADIENT_FAILED(m_Status))
+        return {};
+
+    std::size_t Hash = 0;
+    HashCombine(Hash,
+                Uint32{1}, // Raw mesh cache key version.
+                m_VertexCount,
+                m_IndexCount,
+                m_IndexType);
+
+    auto HashSourceAttribute =
+        [this, &Hash](const char* Name, Uint32 AttributeId) //
+    {
+        HashCombine(Hash, AttributeId);
+
+        const auto SrcAttribIt = m_SrcAttributes.find(Name);
+        const bool HasAttrib   = SrcAttribIt != m_SrcAttributes.end();
+        HashCombine(Hash, HasAttrib);
+        if (!HasAttrib)
+            return;
+
+        const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
+        HashCombine(Hash,
+                    SrcAttrib.Type,
+                    SrcAttrib.NumComponents,
+                    SrcAttrib.IsNormalized,
+                    SrcAttrib.ElementSize,
+                    SrcAttrib.Bytes.size(),
+                    ComputeHashRaw(SrcAttrib.Bytes.data(), SrcAttrib.Bytes.size()));
+    };
+
+    HashSourceAttribute(GLTF::PositionAttributeName, 0);
+    HashSourceAttribute(GLTF::NormalAttributeName, 1);
+    HashSourceAttribute(GLTF::TangentAttributeName, 2);
+    HashSourceAttribute(GLTF::Texcoord0AttributeName, 3);
+    HashSourceAttribute(GLTF::VertexColorAttributeName, 4);
+    HashSourceAttribute(GLTF::JointsAttributeName, 5);
+    HashSourceAttribute(GLTF::WeightsAttributeName, 6);
+
+    HashCombine(Hash, m_Indices16.size());
+    if (!m_Indices16.empty())
+        HashCombine(Hash, ComputeHashRaw(m_Indices16.data(), m_Indices16.size() * sizeof(m_Indices16[0])));
+
+    HashCombine(Hash, m_Indices32.size());
+    if (!m_Indices32.empty())
+        HashCombine(Hash, ComputeHashRaw(m_Indices32.data(), m_Indices32.size() * sizeof(m_Indices32[0])));
+
+    HashCombine(Hash, m_Primitives.size());
+    for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
+    {
+        HashCombine(Hash,
+                    Primitive.FirstIndex,
+                    Primitive.IndexCount);
+        HashMaterial(Hash, Primitive.pMaterial);
+    }
+
+    return std::string{"raw-mesh:"} + std::to_string(Hash);
 }
 
 RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,

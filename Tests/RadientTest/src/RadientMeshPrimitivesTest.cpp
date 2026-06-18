@@ -31,6 +31,7 @@
 #include "RadientTestAssetHelpers.hpp"
 
 #include "ObjectBase.hpp"
+#include "ThreadPool.hpp"
 
 #include <array>
 #include <vector>
@@ -43,7 +44,21 @@ namespace
 
 RefCntAutoPtr<RadientAssetManagerImpl> CreateAssetManager()
 {
-    return RadientAssetManagerImpl::Create({});
+    RefCntAutoPtr<IThreadPool>          pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    RadientAssetManagerImpl::CreateInfo CreateInfo;
+    CreateInfo.pThreadPool = pThreadPool;
+    return RadientAssetManagerImpl::Create(CreateInfo);
+}
+
+void ExpectCreateMeshAccepted(RADIENT_STATUS Status)
+{
+    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_PENDING);
+}
+
+void ExpectMeshLoadFinished(IRadientAssetManager* pAssetManager, IRadientMeshAsset* pMesh)
+{
+    const RADIENT_STATUS Status = pAssetManager->WaitForAssetLoad(pMesh);
+    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_INVALID_OPERATION);
 }
 
 void ExpectValidMeshAsset(IRadientMeshAsset* pMesh)
@@ -143,8 +158,9 @@ TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
     CubeCI.Subdivisions = 2;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
-    EXPECT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_OK);
+    ExpectCreateMeshAccepted(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh));
     ExpectValidMeshAsset(pMesh);
+    ExpectMeshLoadFinished(pAssetManager, pMesh);
 }
 
 TEST(RadientMeshPrimitivesTest, CreateCubeMeshWithFaceColors)
@@ -192,8 +208,9 @@ TEST(RadientMeshPrimitivesTest, CreateSphereMesh)
     SphereCI.Subdivisions = 4;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
-    EXPECT_EQ(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh), RADIENT_STATUS_OK);
+    ExpectCreateMeshAccepted(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh));
     ExpectValidMeshAsset(pMesh);
+    ExpectMeshLoadFinished(pAssetManager, pMesh);
 }
 
 TEST(RadientMeshPrimitivesTest, RejectInvalidArguments)

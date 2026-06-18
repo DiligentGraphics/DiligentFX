@@ -33,6 +33,7 @@
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -131,6 +132,8 @@ public:
     RADIENT_STATUS PackIndexData(PackDestination Destination) const;
     RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const;
 
+    std::string MakeCacheKey() const;
+
 private:
     struct SrcAttributeData
     {
@@ -154,9 +157,10 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    Uint32 m_VertexCount            = 0;
-    Uint32 m_IndexCount             = 0;
-    Uint32 m_ActiveVertexBufferMask = 0;
+    Uint32             m_VertexCount            = 0;
+    Uint32             m_IndexCount             = 0;
+    Uint32             m_ActiveVertexBufferMask = 0;
+    RADIENT_INDEX_TYPE m_IndexType              = RADIENT_INDEX_TYPE_NONE;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
     std::vector<Uint32>                    m_VertexStrides;
