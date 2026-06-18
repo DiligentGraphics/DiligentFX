@@ -568,7 +568,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
     EnqueueAsyncWork(
         m_pThreadPool,
         [pMeshAsset,
-         MeshCache        = m_MeshCache.GetAccessor(),
+         MeshCache = m_MeshCache.GetAccessor(),
          CanUploadMesh,
          pDevice          = m_pDevice,
          pResourceManager = m_pResourceManager,
@@ -593,9 +593,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
                 MeshCache.GetOrCreate(
                     CacheKey.c_str(),
                     [CanUploadMesh]() {
-                        MeshStorage MeshData{CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION};
-                        MeshData.GPUResourcesReady.store(false, std::memory_order_release);
-                        return MeshPayloadImpl::Create(MeshAssetStorage{std::move(MeshData)});
+                        return MeshPayloadImpl::Create(MeshAssetStorage{
+                            MeshStorage{CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION},
+                        });
                     });
 
             if (!pMeshPayload)
