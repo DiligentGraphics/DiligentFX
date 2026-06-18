@@ -128,7 +128,6 @@ private:
         GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
 
         std::unique_ptr<GLTF::Model> pModel;
-        PBR_Renderer::PSO_FLAGS      VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
         std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
         std::atomic_bool             GPUResourcesReady{false};
         std::atomic_bool             GPUUpdateQueued{false};
