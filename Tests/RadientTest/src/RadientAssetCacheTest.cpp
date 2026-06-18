@@ -24,7 +24,9 @@
  *  of the possibility of such damages.
  */
 
+#define DILIGENT_WEAK_OBJECT_CACHE_TEST_HOOKS 1
 #include "Assets/RadientAssetCache.hpp"
+#undef DILIGENT_WEAK_OBJECT_CACHE_TEST_HOOKS
 
 #include "ThreadSignal.hpp"
 #include "gtest/gtest.h"
@@ -228,10 +230,18 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
     ThreadStartGate                                    StartGate{ThreadCount};
     Threading::Signal                                  FactoryEntered;
     Threading::Signal                                  FinishFactory;
+    std::atomic<Uint32>                                WaitersWaiting{0};
     std::atomic<Uint32>                                CreateCount{0};
     std::vector<std::thread>                           Threads;
     std::vector<RefCntAutoPtr<TestTexturePayloadImpl>> Assets(ThreadCount);
     std::vector<Uint8>                                 Created(ThreadCount, 0);
+
+    Cache.SetWaitCreateCallback(
+        [](const Char*, void* pUserData) {
+            auto& Waiting = *static_cast<std::atomic<Uint32>*>(pUserData);
+            Waiting.fetch_add(1, std::memory_order_acq_rel);
+        },
+        &WaitersWaiting);
 
     Threads.reserve(ThreadCount);
     for (Uint32 ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
@@ -259,6 +269,10 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
     }
 
     FactoryEntered.Wait(true, 1);
+
+    while (WaitersWaiting.load(std::memory_order_acquire) != ThreadCount - 1)
+        std::this_thread::yield();
+
     FinishFactory.Trigger(true);
 
     for (std::thread& Thread : Threads)

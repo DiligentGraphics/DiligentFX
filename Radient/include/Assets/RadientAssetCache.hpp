@@ -124,6 +124,15 @@ public:
         return m_pState->Cache.EraseIfExpired(CacheKey);
     }
 
+#ifdef DILIGENT_WEAK_OBJECT_CACHE_TEST_HOOKS
+    using WaitCreateCallbackType = typename WeakObjectCache<InterfaceType>::WaitCreateCallbackType;
+
+    void SetWaitCreateCallback(WaitCreateCallbackType Callback, void* pUserData = nullptr)
+    {
+        m_pState->Cache.SetWaitCreateCallback(Callback, pUserData);
+    }
+#endif
+
     Accessor GetAccessor() const
     {
         return Accessor{m_pState};
