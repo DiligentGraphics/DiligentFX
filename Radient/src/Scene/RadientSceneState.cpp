@@ -1253,13 +1253,13 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
 
     m_DirtyFlags |= Flags;
 
-    std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
+    std::vector<DirtyPropagationWorkItem>& Stack = m_TmpDirtyPropagationWorkItems;
     Stack.clear();
     Stack.push_back({Entity, Flags});
 
     while (!Stack.empty())
     {
-        const DirtyWorkItem Item = Stack.back();
+        const DirtyPropagationWorkItem Item = Stack.back();
         Stack.pop_back();
 
         VERIFY_ENTITY(Item.Entity);

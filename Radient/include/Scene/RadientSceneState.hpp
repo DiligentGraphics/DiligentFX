@@ -286,6 +286,12 @@ private:
         }
     };
 
+    struct DirtyPropagationWorkItem
+    {
+        entt::entity Entity = entt::null;
+        DIRTY_FLAGS  Flags  = DIRTY_FLAG_NONE;
+    };
+
     struct DirtyWorkItem
     {
         entt::entity            Entity             = entt::null;
@@ -431,6 +437,9 @@ private:
 
     // Reused stack for iterative post-order destruction.
     std::vector<DestroyWorkItem> m_TmpDestroyStack;
+
+    // Reused stack for dirty-flag propagation.
+    std::vector<DirtyPropagationWorkItem> m_TmpDirtyPropagationWorkItems;
 
     // Reused stack for iterative dirty subtree traversal.
     std::vector<DirtyWorkItem> m_TmpDirtyWorkItems;
