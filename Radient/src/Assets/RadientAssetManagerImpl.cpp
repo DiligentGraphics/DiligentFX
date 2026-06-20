@@ -258,13 +258,8 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
                         return ScenePayloadImpl::Create(GLTFModelStorage{RADIENT_STATUS_PENDING});
                     });
 
-            if (!pModelPayload)
-            {
-                pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+            if (!pModelAsset->SetPayload(std::move(pModelPayload)))
                 return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            pModelAsset->Resolve(std::move(pModelPayload));
 
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;

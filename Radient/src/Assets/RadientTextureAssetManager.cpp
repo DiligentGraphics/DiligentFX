@@ -158,13 +158,9 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
                         return TexturePayloadImpl::Create(TextureStorage{RADIENT_STATUS_PENDING});
                     });
 
-            if (!pTexturePayload)
-            {
-                pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+            if (!pTextureAsset->SetPayload(std::move(pTexturePayload)))
                 return ASYNC_TASK_STATUS_COMPLETE;
-            }
 
-            pTextureAsset->Resolve(std::move(pTexturePayload));
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 

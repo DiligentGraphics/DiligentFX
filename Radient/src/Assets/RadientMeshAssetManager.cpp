@@ -598,14 +598,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
                         });
                     });
 
-            if (!pMeshPayload)
-            {
-                pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
             MeshPayloadImpl* const pMeshPayloadRaw = pMeshPayload.RawPtr();
-            pMeshAsset->Resolve(std::move(pMeshPayload));
+            if (!pMeshAsset->SetPayload(std::move(pMeshPayload)))
+                return ASYNC_TASK_STATUS_COMPLETE;
 
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;

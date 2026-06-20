@@ -132,7 +132,7 @@ public:
         m_Ref.Version = 1;
 
         if (pPayload)
-            Resolve(std::move(pPayload));
+            SetPayload(std::move(pPayload));
     }
 
     static RefCntAutoPtr<RadientAssetImpl> Create(std::string                  AssetURI,
@@ -169,16 +169,17 @@ public:
         return m_ResolveStatus.load(std::memory_order_acquire);
     }
 
-    void Resolve(RefCntAutoPtr<PayloadType>&& pPayload)
+    bool SetPayload(RefCntAutoPtr<PayloadType>&& pPayload)
     {
         if (pPayload == nullptr)
         {
             Fail(RADIENT_STATUS_INVALID_OPERATION);
-            return;
+            return false;
         }
 
         m_pPayload = std::move(pPayload);
         m_ResolveStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
+        return true;
     }
 
     void Fail(RADIENT_STATUS Status)

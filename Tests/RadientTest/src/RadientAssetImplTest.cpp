@@ -115,7 +115,7 @@ TEST(RadientAssetImplTest, CreatesPendingAssetReference)
     EXPECT_EQ(TestTextureAssetImpl::GetLoadStatus(pAsset), RADIENT_STATUS_PENDING);
 }
 
-TEST(RadientAssetImplTest, ResolveExposesPayloadStorageAndInterfaces)
+TEST(RadientAssetImplTest, SetPayloadExposesPayloadStorageAndInterfaces)
 {
     RefCntAutoPtr<TestTexturePayloadImpl> pPayload = CreatePayload(17, RADIENT_STATUS_PENDING);
     RefCntAutoPtr<TestTextureAssetImpl>   pAsset   = TestTextureAssetImpl::Create("texture://resolved", std::move(pPayload));
@@ -142,13 +142,13 @@ TEST(RadientAssetImplTest, ResolveExposesPayloadStorageAndInterfaces)
     EXPECT_EQ(pWrongInterface, nullptr);
 }
 
-TEST(RadientAssetImplTest, ResolveAndFailHandleInvalidStatuses)
+TEST(RadientAssetImplTest, SetPayloadAndFailHandleInvalidStatuses)
 {
     RefCntAutoPtr<TestTextureAssetImpl> pNullResolvedAsset = TestTextureAssetImpl::Create("texture://null-payload");
     ASSERT_NE(pNullResolvedAsset, nullptr);
 
     RefCntAutoPtr<TestTexturePayloadImpl> pNullPayload;
-    pNullResolvedAsset->Resolve(std::move(pNullPayload));
+    EXPECT_FALSE(pNullResolvedAsset->SetPayload(std::move(pNullPayload)));
     EXPECT_EQ(pNullResolvedAsset->GetResolveStatus(), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pNullResolvedAsset->GetPayload(), nullptr);
     EXPECT_EQ(TestTextureAssetImpl::ResolveAsset(pNullResolvedAsset), nullptr);

@@ -39,7 +39,6 @@ namespace Diligent
 struct IGPUUploadManager;
 struct IRenderDevice;
 struct IThreadPool;
-struct ITextureLoader;
 struct ITextureView;
 
 namespace GLTF
