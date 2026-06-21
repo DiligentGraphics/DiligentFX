@@ -167,13 +167,13 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
 {
     RadientTextureLoadInfo LoadInfo{};
     {
-        TestingEnvironment::ErrorScope ExpectedErrors{"either URI must be non-empty or pData must not be null"};
+        TestingEnvironment::ErrorScope ExpectedErrors{"either URI must be non-empty"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
     LoadInfo.URI = "";
     {
-        TestingEnvironment::ErrorScope ExpectedErrors{"either URI must be non-empty or pData must not be null"};
+        TestingEnvironment::ErrorScope ExpectedErrors{"either URI must be non-empty"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
@@ -194,8 +194,64 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     LoadInfo.URI = "";
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
+    std::array<Uint8, 16> RawPixels{};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pData  = RawPixels.data();
+
+    LoadInfo              = {};
+    LoadInfo.pTextureData = &TextureData;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+
+    LoadInfo.pData    = Data.data();
+    LoadInfo.DataSize = static_cast<Uint64>(Data.size());
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"pData and pTextureData must not both be specified"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
+    LoadInfo              = {};
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureData InvalidTextureData = TextureData;
+    InvalidTextureData.Width              = 0;
+    LoadInfo.pTextureData                 = &InvalidTextureData;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data width and height must not be zero"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
+    InvalidTextureData        = TextureData;
+    InvalidTextureData.Format = RADIENT_TEXTURE_FORMAT_UNKNOWN;
+    LoadInfo.pTextureData     = &InvalidTextureData;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
+    InvalidTextureData       = TextureData;
+    InvalidTextureData.pData = nullptr;
+    LoadInfo.pTextureData    = &InvalidTextureData;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data pointer must not be null"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
+    InvalidTextureData        = TextureData;
+    InvalidTextureData.Stride = 1;
+    LoadInfo.pTextureData     = &InvalidTextureData;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data stride"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
     if ((std::numeric_limits<size_t>::max)() < (std::numeric_limits<Uint64>::max)())
     {
+        LoadInfo          = {};
+        LoadInfo.pData    = Data.data();
         LoadInfo.DataSize = static_cast<Uint64>((std::numeric_limits<size_t>::max)()) + Uint64{1};
         TestingEnvironment::ErrorScope ExpectedErrors{"exceeds maximum supported size_t value"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));

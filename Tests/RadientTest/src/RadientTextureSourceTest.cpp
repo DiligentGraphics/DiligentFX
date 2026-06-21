@@ -24,7 +24,10 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientTextureFormat.hpp"
 #include "Assets/RadientTextureSource.hpp"
+
+#include "TextureLoader.h"
 
 #include "gtest/gtest.h"
 
@@ -108,6 +111,140 @@ TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
     EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
 }
 
+TEST(RadientTextureSourceTest, MapsRadientTextureFormats)
+{
+    const std::array<std::pair<RADIENT_TEXTURE_FORMAT, TEXTURE_FORMAT>, 28> Formats{
+        std::pair{RADIENT_TEXTURE_FORMAT_R8_UNORM, TEX_FORMAT_R8_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG8_UNORM, TEX_FORMAT_RG8_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, TEX_FORMAT_RGBA8_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB, TEX_FORMAT_RGBA8_UNORM_SRGB},
+        std::pair{RADIENT_TEXTURE_FORMAT_R8_UINT, TEX_FORMAT_R8_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG8_UINT, TEX_FORMAT_RG8_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UINT, TEX_FORMAT_RGBA8_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R8_SINT, TEX_FORMAT_R8_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG8_SINT, TEX_FORMAT_RG8_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_SINT, TEX_FORMAT_RGBA8_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R16_UNORM, TEX_FORMAT_R16_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG16_UNORM, TEX_FORMAT_RG16_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_UNORM, TEX_FORMAT_RGBA16_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_R16_UINT, TEX_FORMAT_R16_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG16_UINT, TEX_FORMAT_RG16_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_UINT, TEX_FORMAT_RGBA16_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R16_SINT, TEX_FORMAT_R16_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG16_SINT, TEX_FORMAT_RG16_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_SINT, TEX_FORMAT_RGBA16_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R32_UINT, TEX_FORMAT_R32_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG32_UINT, TEX_FORMAT_RG32_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_UINT, TEX_FORMAT_RGBA32_UINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R32_SINT, TEX_FORMAT_R32_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG32_SINT, TEX_FORMAT_RG32_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_SINT, TEX_FORMAT_RGBA32_SINT},
+        std::pair{RADIENT_TEXTURE_FORMAT_R32_FLOAT, TEX_FORMAT_R32_FLOAT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG32_FLOAT, TEX_FORMAT_RG32_FLOAT},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT, TEX_FORMAT_RGBA32_FLOAT}};
+
+    EXPECT_EQ(RadientToTextureFormat(RADIENT_TEXTURE_FORMAT_UNKNOWN), TEX_FORMAT_UNKNOWN);
+    for (const auto& [RadientFormat, TextureFormat] : Formats)
+        EXPECT_EQ(RadientToTextureFormat(RadientFormat), TextureFormat);
+}
+
+TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
+{
+    std::array<Uint8, 4>  Data0{1, 2, 3, 4};
+    std::array<Uint8, 4>  Data1{1, 2, 3, 4};
+    std::array<Uint8, 4>  Data2{1, 2, 3, 5};
+    std::array<Uint8, 16> Data3{1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureData.pData  = Data0.data();
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureData SameTextureData = TextureData;
+    SameTextureData.pData              = Data1.data();
+    RadientTextureLoadInfo SameDataLoadInfo{};
+    SameDataLoadInfo.pTextureData = &SameTextureData;
+
+    RadientTextureSource Source{LoadInfo};
+    RadientTextureSource SameDataSource{SameDataLoadInfo};
+    Source.MakeMemoryCopy();
+    SameDataSource.MakeMemoryCopy();
+    EXPECT_EQ(Source.MakeCacheKey(), SameDataSource.MakeCacheKey());
+
+    RadientTextureData DifferentTextureData = TextureData;
+    DifferentTextureData.pData              = Data2.data();
+    RadientTextureLoadInfo DifferentDataLoadInfo{};
+    DifferentDataLoadInfo.pTextureData = &DifferentTextureData;
+    RadientTextureSource DifferentDataSource{DifferentDataLoadInfo};
+    DifferentDataSource.MakeMemoryCopy();
+    EXPECT_NE(Source.MakeCacheKey(), DifferentDataSource.MakeCacheKey());
+
+    RadientTextureData DifferentFormatTextureData = TextureData;
+    DifferentFormatTextureData.Format             = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    DifferentFormatTextureData.pData              = Data3.data();
+    RadientTextureLoadInfo DifferentFormatLoadInfo{};
+    DifferentFormatLoadInfo.pTextureData = &DifferentFormatTextureData;
+    RadientTextureSource DifferentFormatSource{DifferentFormatLoadInfo};
+    DifferentFormatSource.MakeMemoryCopy();
+    EXPECT_NE(Source.MakeCacheKey(), DifferentFormatSource.MakeCacheKey());
+}
+
+TEST(RadientTextureSourceTest, SupportsRGBA8_UNORM_SRGBTextureDataFormat)
+{
+    std::array<Uint8, 16> Data{};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB;
+    TextureData.pData  = Data.data();
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI          = "rgba8-srgb-data";
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource Source{LoadInfo};
+    EXPECT_EQ(Source.GetDataSize(), Data.size());
+
+    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    ASSERT_NE(pLoader, nullptr);
+    EXPECT_EQ(pLoader->GetTextureDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
+
+    RadientTextureData LinearTextureData = TextureData;
+    LinearTextureData.Format             = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+
+    RadientTextureLoadInfo LinearLoadInfo{};
+    LinearLoadInfo.URI          = LoadInfo.URI;
+    LinearLoadInfo.pTextureData = &LinearTextureData;
+
+    RadientTextureSource LinearSource{LinearLoadInfo};
+    EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
+}
+
+TEST(RadientTextureSourceTest, CreatesLoaderFromIntegerTextureData)
+{
+    const std::array<Uint16, 1> Data{42};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 1;
+    TextureData.Height = 1;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_R16_UINT;
+    TextureData.pData  = Data.data();
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI          = "r16-uint-data";
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource          Source{LoadInfo};
+    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    ASSERT_NE(pLoader, nullptr);
+    EXPECT_EQ(pLoader->GetTextureDesc().Format, TEX_FORMAT_R16_UINT);
+}
+
 TEST(RadientTextureSourceTest, BorrowsMemoryWhenCopyIsDisabled)
 {
     std::array<Uint8, 4> Data{1, 2, 3, 4};
@@ -137,6 +274,33 @@ TEST(RadientTextureSourceTest, CopiesMemoryWhenRequested)
     ASSERT_TRUE(Source.IsMemory());
     EXPECT_TRUE(Source.OwnsMemory());
     EXPECT_NE(Source.GetData(), Data.data());
+
+    Data.fill(0);
+    EXPECT_EQ(ReadSourceBytes(Source), Expected);
+}
+
+TEST(RadientTextureSourceTest, CopiesTextureDataMemoryWhenRequested)
+{
+    std::array<Uint8, 8>     Data{1, 2, 3, 4, 5, 6, 7, 8};
+    const std::vector<Uint8> Expected{Data.begin(), Data.end()};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureData.pData  = Data.data();
+    TextureData.Stride = 4;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource Source{LoadInfo};
+    Source.MakeMemoryCopy();
+    ASSERT_TRUE(Source.IsMemory());
+    EXPECT_TRUE(Source.IsTextureData());
+    EXPECT_TRUE(Source.OwnsMemory());
+    EXPECT_NE(Source.GetData(), Data.data());
+    EXPECT_EQ(Source.GetDataSize(), Expected.size());
 
     Data.fill(0);
     EXPECT_EQ(ReadSourceBytes(Source), Expected);
@@ -183,6 +347,36 @@ TEST(RadientTextureSourceTest, ReleasesCallbackOwnedMemory)
     EXPECT_EQ(State.DataSize, Data.size());
 }
 
+TEST(RadientTextureSourceTest, ReleasesCallbackOwnedTextureDataMemory)
+{
+    std::array<Uint8, 8> Data{1, 2, 3, 4, 5, 6, 7, 8};
+    ReleaseState         State;
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureData.pData  = Data.data();
+    TextureData.Stride = 4;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData         = &TextureData;
+    LoadInfo.ReleaseData          = ReleaseTextureData;
+    LoadInfo.pReleaseDataUserData = &State;
+
+    {
+        RadientTextureSource Source{LoadInfo};
+        EXPECT_TRUE(Source.IsMemory());
+        EXPECT_TRUE(Source.IsTextureData());
+        EXPECT_TRUE(Source.OwnsMemory());
+        EXPECT_EQ(Source.GetData(), Data.data());
+    }
+
+    EXPECT_EQ(State.Count, 1u);
+    EXPECT_EQ(State.pData, Data.data());
+    EXPECT_EQ(State.DataSize, Data.size());
+}
+
 TEST(RadientTextureSourceTest, MoveTransfersReleaseCallbackOwnership)
 {
     std::array<Uint8, 4> Data{1, 2, 3, 4};
@@ -203,4 +397,57 @@ TEST(RadientTextureSourceTest, MoveTransfersReleaseCallbackOwnership)
     EXPECT_EQ(State.Count, 1u);
     EXPECT_EQ(State.pData, Data.data());
     EXPECT_EQ(State.DataSize, Data.size());
+}
+
+TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
+{
+    const std::array<Uint8, 16> Data{
+        1, 3, 20, 24,
+        5, 7, 28, 32,
+        40, 44, 80, 88,
+        52, 56, 94, 98};
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 4;
+    TextureData.Height = 4;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureData.pData  = Data.data();
+    TextureData.Stride = 4;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI          = "r8-data";
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource          Source{LoadInfo};
+    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    ASSERT_NE(pLoader, nullptr);
+
+    const TextureDesc& Desc = pLoader->GetTextureDesc();
+    EXPECT_EQ(Desc.Type, RESOURCE_DIM_TEX_2D);
+    EXPECT_EQ(Desc.Width, 4u);
+    EXPECT_EQ(Desc.Height, 4u);
+    EXPECT_EQ(Desc.Format, TEX_FORMAT_R8_UNORM);
+    EXPECT_EQ(Desc.MipLevels, 3u);
+
+    const std::array<Uint8, 4> ExpectedMip1{
+        4, 26,
+        48, 90};
+    const std::array<Uint8, 1> ExpectedMip2{42};
+
+    const auto CheckMip = [&](Uint32 Mip, Uint32 Width, Uint32 Height, const Uint8* pExpected) {
+        const TextureSubResData& Subres = pLoader->GetSubresourceData(Mip);
+        ASSERT_NE(Subres.pData, nullptr);
+
+        const Uint8* pData = static_cast<const Uint8*>(Subres.pData);
+        for (Uint32 y = 0; y < Height; ++y)
+        {
+            const Uint8* pRow = pData + Subres.Stride * y;
+            for (Uint32 x = 0; x < Width; ++x)
+                EXPECT_EQ(pRow[x], pExpected[y * Width + x]);
+        }
+    };
+
+    CheckMip(0, 4, 4, Data.data());
+    CheckMip(1, 2, 2, ExpectedMip1.data());
+    CheckMip(2, 1, 1, ExpectedMip2.data());
 }

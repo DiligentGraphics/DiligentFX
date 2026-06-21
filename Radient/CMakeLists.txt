@@ -45,6 +45,7 @@ set(INCLUDE
     include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshSource.hpp
     include/Assets/RadientTextureAssetManager.hpp
+    include/Assets/RadientTextureFormat.hpp
     include/Assets/RadientTextureSource.hpp
     include/Core/RadientBackendImpl.hpp
     include/Core/RadientEngineImpl.hpp

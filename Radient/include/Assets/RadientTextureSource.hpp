@@ -41,6 +41,13 @@ struct ITextureLoader;
 class RadientTextureSource final
 {
 public:
+    enum class SourceType
+    {
+        URI,
+        EncodedMemory,
+        TextureData
+    };
+
     explicit RadientTextureSource(const RadientTextureLoadInfo& LoadInfo);
     ~RadientTextureSource();
 
@@ -53,6 +60,11 @@ public:
     bool IsMemory() const
     {
         return m_pData != nullptr;
+    }
+
+    bool IsTextureData() const
+    {
+        return m_SourceType == SourceType::TextureData;
     }
 
     Bool IsSRGB() const
@@ -92,12 +104,15 @@ private:
     void ReleaseMemory();
     void MoveFrom(RadientTextureSource&& Rhs) noexcept;
 
+    SourceType  m_SourceType = SourceType::URI;
     std::string m_URI;
     Bool        m_IsSRGB = False;
 
     std::vector<Uint8> m_Data;
     const void*        m_pData    = nullptr;
     size_t             m_DataSize = 0;
+
+    RadientTextureData m_TextureData;
 
     RadientTextureReleaseDataCallbackType m_ReleaseData          = nullptr;
     void*                                 m_pReleaseDataUserData = nullptr;

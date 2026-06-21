@@ -225,10 +225,120 @@ typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 
 
 /// Texture load attributes.
-/// Optional callback used to release memory passed through RadientTextureLoadInfo::pData.
+/// Optional callback used to release memory passed through RadientTextureLoadInfo::pData or
+/// RadientTextureLoadInfo::pTextureData->pData.
 /// The callback is invoked when Radient no longer needs the source memory.
 /// The callback may be invoked from any thread.
 typedef void (*RadientTextureReleaseDataCallbackType)(const void* pData, Uint64 DataSize, void* pUserData);
+
+/// Texture format.
+DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
+    /// Unknown format.
+    RADIENT_TEXTURE_FORMAT_UNKNOWN = 0,
+
+    /// One 8-bit unsigned normalized component.
+    RADIENT_TEXTURE_FORMAT_R8_UNORM,
+
+    /// Two 8-bit unsigned normalized components.
+    RADIENT_TEXTURE_FORMAT_RG8_UNORM,
+
+    /// Four 8-bit unsigned normalized components.
+    RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
+
+    /// Four 8-bit unsigned normalized components with sRGB-encoded color data.
+    RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB,
+
+    /// One 8-bit unsigned integer component.
+    RADIENT_TEXTURE_FORMAT_R8_UINT,
+
+    /// Two 8-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RG8_UINT,
+
+    /// Four 8-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA8_UINT,
+
+    /// One 8-bit signed integer component.
+    RADIENT_TEXTURE_FORMAT_R8_SINT,
+
+    /// Two 8-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RG8_SINT,
+
+    /// Four 8-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA8_SINT,
+
+    /// One 16-bit unsigned normalized component.
+    RADIENT_TEXTURE_FORMAT_R16_UNORM,
+
+    /// Two 16-bit unsigned normalized components.
+    RADIENT_TEXTURE_FORMAT_RG16_UNORM,
+
+    /// Four 16-bit unsigned normalized components.
+    RADIENT_TEXTURE_FORMAT_RGBA16_UNORM,
+
+    /// One 16-bit unsigned integer component.
+    RADIENT_TEXTURE_FORMAT_R16_UINT,
+
+    /// Two 16-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RG16_UINT,
+
+    /// Four 16-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA16_UINT,
+
+    /// One 16-bit signed integer component.
+    RADIENT_TEXTURE_FORMAT_R16_SINT,
+
+    /// Two 16-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RG16_SINT,
+
+    /// Four 16-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA16_SINT,
+
+    /// One 32-bit unsigned integer component.
+    RADIENT_TEXTURE_FORMAT_R32_UINT,
+
+    /// Two 32-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RG32_UINT,
+
+    /// Four 32-bit unsigned integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA32_UINT,
+
+    /// One 32-bit signed integer component.
+    RADIENT_TEXTURE_FORMAT_R32_SINT,
+
+    /// Two 32-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RG32_SINT,
+
+    /// Four 32-bit signed integer components.
+    RADIENT_TEXTURE_FORMAT_RGBA32_SINT,
+
+    /// One 32-bit floating-point component.
+    RADIENT_TEXTURE_FORMAT_R32_FLOAT,
+
+    /// Two 32-bit floating-point components.
+    RADIENT_TEXTURE_FORMAT_RG32_FLOAT,
+
+    /// Four 32-bit floating-point components.
+    RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT};
+
+/// Texture source data.
+struct RadientTextureData
+{
+    /// Texture width in pixels.
+    Uint32 Width DEFAULT_INITIALIZER(0);
+
+    /// Texture height in pixels.
+    Uint32 Height DEFAULT_INITIALIZER(0);
+
+    /// Texture format.
+    RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
+
+    /// Pointer to mip 0 pixel data.
+    const void* pData DEFAULT_INITIALIZER(nullptr);
+
+    /// Row stride, in bytes. If zero, Radient derives tightly packed stride from Format and Width.
+    Uint64 Stride DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientTextureData RadientTextureData;
 
 struct RadientTextureLoadInfo
 {
@@ -242,8 +352,12 @@ struct RadientTextureLoadInfo
     /// Size of the encoded texture data, in bytes.
     Uint64 DataSize DEFAULT_INITIALIZER(0);
 
-    /// Optional callback to release pData when Radient no longer needs it.
-    /// If this callback is null and pData is not null, Radient makes an internal copy of the data.
+    /// Optional pointer to texture data. Only 2D texture data is currently supported.
+    /// Mip 0 data must be provided; Radient always generates mip levels.
+    const RadientTextureData* pTextureData DEFAULT_INITIALIZER(nullptr);
+
+    /// Optional callback to release pData or pTextureData->pData when Radient no longer needs it.
+    /// If this callback is null and memory-backed source data is not null, Radient makes an internal copy of the data.
     /// The callback may be invoked from any thread.
     RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);
 

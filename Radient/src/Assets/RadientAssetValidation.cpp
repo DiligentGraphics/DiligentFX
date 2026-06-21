@@ -26,7 +26,9 @@
 
 #include "Assets/RadientAssetValidation.hpp"
 
+#include "Assets/RadientTextureFormat.hpp"
 #include "Errors.hpp"
+#include "GraphicsAccessories.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -120,29 +122,77 @@ bool ValidateGLTFLoadInfo(const RadientGLTFLoadInfo& LoadInfo)
 
 bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
 {
-    const bool HasURI  = LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
-    const bool HasData = LoadInfo.pData != nullptr;
+    const bool HasURI         = LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
+    const bool HasEncodedData = LoadInfo.pData != nullptr;
+    const bool HasTextureData = LoadInfo.pTextureData != nullptr;
 
-    if (!HasData)
+    if (HasEncodedData && HasTextureData)
+    {
+        return LogValidationError("RadientTextureLoadInfo",
+                                  "pData and pTextureData must not both be specified.");
+    }
+
+    if (!HasEncodedData && !HasTextureData)
     {
         if (!HasURI)
         {
             return LogValidationError("RadientTextureLoadInfo",
-                                      "either URI must be non-empty or pData must not be null.");
+                                      "either URI must be non-empty, pData must not be null, or pTextureData must not be null.");
         }
 
         return true;
     }
 
-    if (LoadInfo.DataSize == 0)
-        return LogValidationError("RadientTextureLoadInfo", "DataSize must not be zero when pData is specified.");
-
-    if (LoadInfo.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+    if (HasEncodedData)
     {
-        return LogValidationError("RadientTextureLoadInfo",
-                                  "DataSize (", LoadInfo.DataSize,
-                                  ") exceeds maximum supported size_t value (",
-                                  (std::numeric_limits<size_t>::max)(), ").");
+        if (LoadInfo.DataSize == 0)
+            return LogValidationError("RadientTextureLoadInfo", "DataSize must not be zero when pData is specified.");
+
+        if (LoadInfo.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        {
+            return LogValidationError("RadientTextureLoadInfo",
+                                      "DataSize (", LoadInfo.DataSize,
+                                      ") exceeds maximum supported size_t value (",
+                                      (std::numeric_limits<size_t>::max)(), ").");
+        }
+    }
+
+    if (HasTextureData)
+    {
+        const RadientTextureData& TextureData = *LoadInfo.pTextureData;
+        if (TextureData.Width == 0 || TextureData.Height == 0)
+            return LogValidationError("RadientTextureLoadInfo", "texture data width and height must not be zero.");
+
+        const TEXTURE_FORMAT TextureFormat = RadientToTextureFormat(TextureData.Format);
+        if (TextureFormat == TEX_FORMAT_UNKNOWN)
+            return LogValidationError("RadientTextureLoadInfo", "texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN.");
+
+        if (TextureData.pData == nullptr)
+            return LogValidationError("RadientTextureLoadInfo", "texture data pointer must not be null.");
+
+        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TextureFormat);
+        const Uint64                RowSize    = Uint64{TextureData.Width} *
+            Uint64{FmtAttribs.ComponentSize} *
+            Uint64{FmtAttribs.NumComponents};
+        if (TextureData.Stride != 0 && TextureData.Stride < RowSize)
+        {
+            return LogValidationError("RadientTextureLoadInfo",
+                                      "texture data stride (", TextureData.Stride,
+                                      ") must be zero or at least the row size (", RowSize, ").");
+        }
+
+        const Uint64 Stride = TextureData.Stride != 0 ? TextureData.Stride : RowSize;
+        if (TextureData.Height != 0 && Stride > (std::numeric_limits<Uint64>::max)() / TextureData.Height)
+            return LogValidationError("RadientTextureLoadInfo", "texture data size overflows Uint64.");
+
+        const Uint64 DataSize = Stride * Uint64{TextureData.Height};
+        if (DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        {
+            return LogValidationError("RadientTextureLoadInfo",
+                                      "texture data size (", DataSize,
+                                      ") exceeds maximum supported size_t value (",
+                                      (std::numeric_limits<size_t>::max)(), ").");
+        }
     }
 
     return true;
