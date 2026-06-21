@@ -134,9 +134,9 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    RadientMeshAssetManager     m_MeshManager;
-    RadientMaterialAssetManager m_MaterialManager;
-    RadientTextureAssetManager  m_TextureManager;
+    RadientMeshAssetManager              m_MeshManager;
+    RadientMaterialAssetManager          m_MaterialManager;
+    RadientTextureAssetManagerSharedPtr  m_pTextureManager;
 
     RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
 

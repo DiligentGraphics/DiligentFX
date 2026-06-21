@@ -32,6 +32,7 @@
 #include "RadientAssetCache.hpp"
 
 #include <atomic>
+#include <memory>
 
 namespace Diligent
 {
@@ -40,6 +41,7 @@ struct IGPUUploadManager;
 struct IRenderDevice;
 struct IThreadPool;
 struct ITextureView;
+struct ITextureLoader;
 
 namespace GLTF
 {
@@ -47,8 +49,11 @@ class ResourceManager;
 } // namespace GLTF
 
 class TexturePayloadImpl;
+class RadientTextureAssetManager;
 
-class RadientTextureAssetManager final
+using RadientTextureAssetManagerSharedPtr = std::shared_ptr<RadientTextureAssetManager>;
+
+class RadientTextureAssetManager final : public std::enable_shared_from_this<RadientTextureAssetManager>
 {
 public:
     struct CreateInfo
@@ -59,13 +64,14 @@ public:
         IGPUUploadManager*     pUploadManager   = nullptr;
     };
 
-    explicit RadientTextureAssetManager(const CreateInfo& CI) noexcept;
     ~RadientTextureAssetManager();
+
+    static RadientTextureAssetManagerSharedPtr Create(const CreateInfo& CI);
 
     RADIENT_STATUS LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
-    static ITextureView*             GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+    static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
 
     // Reports texture source loading and upload-scheduling status. OK does not
     // imply that the texture is ready for sampling; use GetTextureSRV() for that.
@@ -76,6 +82,11 @@ public:
                                          GLTF::Material::TextureShaderAttribs& Attribs);
 
 private:
+    explicit RadientTextureAssetManager(const CreateInfo& CI) noexcept;
+
+    RADIENT_STATUS ScheduleTextureGPUUpload(IRadientTextureAsset& TextureAsset,
+                                            ITextureLoader&       Loader);
+
     RefCntAutoPtr<IThreadPool>            m_pThreadPool;
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
     RefCntAutoPtr<GLTF::ResourceManager>  m_pResourceManager;

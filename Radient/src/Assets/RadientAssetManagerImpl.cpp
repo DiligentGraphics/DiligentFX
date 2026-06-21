@@ -169,14 +169,14 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
         },
     },
     m_MaterialManager{},
-    m_TextureManager{
-        RadientTextureAssetManager::CreateInfo{
-            m_pThreadPool,
-            m_pDevice,
-            m_pResourceManager,
-            m_pUploadManager,
-        },
-    }
+    m_pTextureManager{
+        RadientTextureAssetManager::Create(
+            RadientTextureAssetManager::CreateInfo{
+                m_pThreadPool,
+                m_pDevice,
+                m_pResourceManager,
+                m_pUploadManager,
+            })}
 {
     m_Desc.Name = m_Name.c_str();
 }
@@ -210,7 +210,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                     IRadientTextureAsset**        ppTexture)
 {
-    return m_TextureManager.LoadTexture(LoadInfo, ppTexture);
+    return m_pTextureManager->LoadTexture(LoadInfo, ppTexture);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,

@@ -102,6 +102,11 @@ RadientTextureAssetManager::CreateInfo MakeTextureManagerCI(IThreadPool* pThread
     return CI;
 }
 
+RadientTextureAssetManagerSharedPtr CreateTextureManager(IThreadPool* pThreadPool)
+{
+    return RadientTextureAssetManager::Create(MakeTextureManagerCI(pThreadPool));
+}
+
 TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRuns)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
@@ -111,13 +116,14 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
     ASSERT_NE(pBlocker, nullptr);
 
-    RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+    ASSERT_NE(pManager, nullptr);
 
     const RadientTextureData     TextureData = MakeTextureData(TexturePixels.data());
     const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_EQ(Manager.LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pManager->LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
     EXPECT_NE(pTexture, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
@@ -134,7 +140,8 @@ TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
     ASSERT_NE(pThreadPool, nullptr);
 
-    RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+    ASSERT_NE(pManager, nullptr);
 
     std::array<Uint8, TexturePixels.size()> TexturePixels0 = TexturePixels;
     std::array<Uint8, TexturePixels.size()> TexturePixels1 = TexturePixels;
@@ -142,11 +149,11 @@ TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
     const RadientTextureData                TextureData1   = MakeTextureData(TexturePixels1.data());
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
-    EXPECT_EQ(Manager.LoadTexture(MakeTextureDataLoadInfo(TextureData0), &pTexture0), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pManager->LoadTexture(MakeTextureDataLoadInfo(TextureData0), &pTexture0), RADIENT_STATUS_PENDING);
     ASSERT_NE(pTexture0, nullptr);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture1;
-    EXPECT_EQ(Manager.LoadTexture(MakeTextureDataLoadInfo(TextureData1), &pTexture1), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pManager->LoadTexture(MakeTextureDataLoadInfo(TextureData1), &pTexture1), RADIENT_STATUS_PENDING);
     ASSERT_NE(pTexture1, nullptr);
     EXPECT_NE(pTexture1.RawPtr(), pTexture0.RawPtr());
 
@@ -162,16 +169,17 @@ TEST(RadientTextureAssetManagerTest, DifferentTextureOptionsUseDifferentPayloads
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
     ASSERT_NE(pThreadPool, nullptr);
 
-    RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+    ASSERT_NE(pManager, nullptr);
 
     const RadientTextureData TextureData = MakeTextureData(TexturePixels.data());
 
     RefCntAutoPtr<IRadientTextureAsset> pSRGBTexture;
-    EXPECT_EQ(Manager.LoadTexture(MakeTextureDataLoadInfo(TextureData, True), &pSRGBTexture), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pManager->LoadTexture(MakeTextureDataLoadInfo(TextureData, True), &pSRGBTexture), RADIENT_STATUS_PENDING);
     ASSERT_NE(pSRGBTexture, nullptr);
 
     RefCntAutoPtr<IRadientTextureAsset> pLinearTexture;
-    EXPECT_EQ(Manager.LoadTexture(MakeTextureDataLoadInfo(TextureData, False), &pLinearTexture), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pManager->LoadTexture(MakeTextureDataLoadInfo(TextureData, False), &pLinearTexture), RADIENT_STATUS_PENDING);
     ASSERT_NE(pLinearTexture, nullptr);
 
     WaitForAllTasksAndStop(*pThreadPool);
@@ -190,7 +198,8 @@ TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool(ThreadCount);
     ASSERT_NE(pThreadPool, nullptr);
 
-    RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+    ASSERT_NE(pManager, nullptr);
 
     std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures(ThreadCount);
     std::vector<std::thread>                         Threads;
@@ -202,7 +211,7 @@ TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
     for (Uint32 i = 0; i < ThreadCount; ++i)
     {
         Threads.emplace_back(
-            [&Manager, &Textures, &StartSignal, &ReadyCount, i]() //
+            [pManager, &Textures, &StartSignal, &ReadyCount, i]() //
             {
                 ReadyCount.fetch_add(1, std::memory_order_release);
                 StartSignal.Wait(true, ThreadCount);
@@ -211,7 +220,7 @@ TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
                 const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
 
                 RefCntAutoPtr<IRadientTextureAsset> pTexture;
-                const RADIENT_STATUS                Status = Manager.LoadTexture(LoadInfo, &pTexture);
+                const RADIENT_STATUS                Status = pManager->LoadTexture(LoadInfo, &pTexture);
                 EXPECT_TRUE(Status == RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK);
                 EXPECT_NE(pTexture, nullptr);
                 Textures[i] = std::move(pTexture);
@@ -246,11 +255,12 @@ TEST(RadientTextureAssetManagerTest, TextureHandleMayOutliveManager)
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
-        RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+        RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+        ASSERT_NE(pManager, nullptr);
 
         const RadientTextureData     TextureData = MakeTextureData(TexturePixels.data());
         const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
-        EXPECT_EQ(Manager.LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(pManager->LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         ASSERT_NE(pTexture, nullptr);
 
         WaitForAllTasksAndStop(*pThreadPool);
@@ -272,11 +282,12 @@ TEST(RadientTextureAssetManagerTest, ManagerMayDieBeforeWorkerRuns)
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
-        RadientTextureAssetManager Manager{MakeTextureManagerCI(pThreadPool)};
+        RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pThreadPool);
+        ASSERT_NE(pManager, nullptr);
 
         const RadientTextureData     TextureData = MakeTextureData(TexturePixels.data());
         const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
-        EXPECT_EQ(Manager.LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(pManager->LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         EXPECT_NE(pTexture, nullptr);
         if (pTexture != nullptr)
             EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
