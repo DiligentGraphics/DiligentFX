@@ -164,6 +164,9 @@ public:
         return m_pPayload->GetStorage();
     }
 
+    /// Reports whether this asset handle has been assigned a payload.
+    /// RADIENT_STATUS_OK only means payload storage is available; it does not imply
+    /// that payload content has loaded or that GPU resources are ready.
     RADIENT_STATUS GetPayloadStatus() const
     {
         return m_PayloadStatus.load(std::memory_order_acquire);
@@ -210,6 +213,8 @@ public:
         return pImpl;
     }
 
+    /// Reports payload load/source-processing status.
+    /// RADIENT_STATUS_OK does not imply that queued GPU upload callbacks have completed.
     template <typename T = Storage>
     auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
     {
@@ -221,6 +226,8 @@ public:
         return pPayload ? pPayload->GetStorage().LoadStatus.load(std::memory_order_acquire) : RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    /// Reports payload load/source-processing status for a generic asset pointer.
+    /// RADIENT_STATUS_OK does not imply that queued GPU upload callbacks have completed.
     template <typename T = Storage>
     static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
     {

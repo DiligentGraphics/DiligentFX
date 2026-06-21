@@ -466,6 +466,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     VIRTUAL const RadientAssetManagerDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Creates a mesh asset from CPU-side primitive data.
+    ///
+    /// The returned status reports asset payload creation and source-data processing. A successful
+    /// status does not guarantee that all GPU upload work has completed.
     VIRTUAL RADIENT_STATUS METHOD(CreateMesh)(THIS_
                                               const RadientMeshCreateInfo REF MeshCI,
                                               IRadientMeshAsset**             ppMesh) PURE;
@@ -475,19 +478,28 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   IRadientMaterialAsset**             ppMaterial) PURE;
 
-    /// Starts loading a texture asset from a URI.
+    /// Starts loading a texture asset from a URI or texture data.
+    ///
+    /// The returned status reports source loading and GPU upload scheduling. A successful status
+    /// does not guarantee that the texture is already available for sampling.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;
 
     /// Starts loading a GLTF model asset from a URI.
+    ///
+    /// The returned status reports model loading and GPU upload scheduling. A successful status
+    /// does not guarantee that all GPU resources referenced by the model are ready.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
                                             const RadientGLTFLoadInfo REF LoadInfo,
                                             IRadientSceneAsset**          ppModel) PURE;
 
-    /// Blocks the calling thread until the asset load has completed.
+    /// Blocks the calling thread until asset payload loading and GPU upload scheduling have completed.
+    ///
+    /// This does not wait for the render thread to execute queued GPU upload callbacks. Resource-specific
+    /// accessors may still report that GPU resources are not ready after this method returns RADIENT_STATUS_OK.
     /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
     VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
                                                     IRadientAsset* pAsset) PURE;

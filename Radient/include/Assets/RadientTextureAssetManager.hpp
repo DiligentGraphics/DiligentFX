@@ -66,6 +66,9 @@ public:
                                IRadientTextureAsset**        ppTexture);
 
     static ITextureView*             GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+
+    // Reports texture source loading and upload-scheduling status. OK does not
+    // imply that the texture is ready for sampling; use GetTextureSRV() for that.
     static RADIENT_STATUS            GetLoadStatus(IRadientAsset* pTextureAsset);
     static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
 
