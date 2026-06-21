@@ -62,6 +62,7 @@ struct TextureStorage
         pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
         LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
         GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+        GPUUploadsSucceeded{Rhs.GPUUploadsSucceeded.load(std::memory_order_relaxed)},
         PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
     {
     }
@@ -70,10 +71,26 @@ struct TextureStorage
     TextureStorage(const TextureStorage&)            = delete;
     TextureStorage& operator=(const TextureStorage&) = delete;
 
+    void UpdateUploadProgress(bool CopyScheduled)
+    {
+        if (!CopyScheduled)
+            GPUUploadsSucceeded.store(false, std::memory_order_release);
+
+        const Uint32 PrevPendingUploads = PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
+        VERIFY_EXPR(PrevPendingUploads > 0);
+        if (PrevPendingUploads == 1)
+        {
+            const bool Ready = CopyScheduled &&
+                GPUUploadsSucceeded.load(std::memory_order_acquire);
+            GPUResourcesReady.store(Ready, std::memory_order_release);
+        }
+    }
+
     RefCntAutoPtr<ITexture>                   pTexture;
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
     std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
     std::atomic_bool                          GPUResourcesReady{false};
+    std::atomic_bool                          GPUUploadsSucceeded{true};
     std::atomic<Uint32>                       PendingUploads{0};
 };
 
@@ -306,6 +323,7 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
     }
 
     Texture.PendingUploads.store(UploadMipLevels, std::memory_order_release);
+    Texture.GPUUploadsSucceeded.store(true, std::memory_order_release);
     Texture.GPUResourcesReady.store(UploadMipLevels == 0, std::memory_order_release);
 
     for (Uint32 Mip = 0; Mip < UploadMipLevels; ++Mip)
@@ -359,12 +377,7 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
-                {
-                    const Uint32 PrevPendingUploads = Data->pStorage->PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
-                    VERIFY_EXPR(PrevPendingUploads > 0);
-                    if (PrevPendingUploads == 1)
-                        Data->pStorage->GPUResourcesReady.store(CopyScheduled, std::memory_order_release);
-                }
+                    Data->pStorage->UpdateUploadProgress(CopyScheduled);
             };
 
         UpdateInfo.CopyD3D11Texture =
@@ -412,12 +425,7 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
-                {
-                    const Uint32 PrevPendingUploads = Data->pStorage->PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
-                    VERIFY_EXPR(PrevPendingUploads > 0);
-                    if (PrevPendingUploads == 1)
-                        Data->pStorage->GPUResourcesReady.store(CopyScheduled, std::memory_order_release);
-                }
+                    Data->pStorage->UpdateUploadProgress(CopyScheduled);
             };
 
         pUploadManager->ScheduleTextureUpdate(UpdateInfo);
