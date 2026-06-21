@@ -284,15 +284,18 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
     if (Texture.pAtlasSuballocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const TextureDesc&          AtlasDesc        = Texture.pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
-    const TextureFormatAttribs& FmtAttribs       = GetTextureFormatAttribs(TexDesc.Format);
-    const uint2                 Origin           = Texture.pAtlasSuballocation->GetOrigin();
-    const Uint32                MipLevels        = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
-    Uint32                      ScheduledUploads = 0;
+    const TextureDesc&          AtlasDesc       = Texture.pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
+    const TextureFormatAttribs& FmtAttribs      = GetTextureFormatAttribs(TexDesc.Format);
+    const uint2                 Origin          = Texture.pAtlasSuballocation->GetOrigin();
+    const Uint32                MipLevels       = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
+    Uint32                      UploadMipLevels = 0;
 
-    for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
+    // Render-thread callbacks may run while this worker is still scheduling uploads.
+    // Publish the full pending count before scheduling any mip to avoid transiently
+    // reaching zero and marking the texture ready before the complete batch is queued.
+    for (; UploadMipLevels < MipLevels; ++UploadMipLevels)
     {
-        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, Mip);
+        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, UploadMipLevels);
         if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
         {
             // Do not copy mip levels that are smaller than the block size.
@@ -300,6 +303,14 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
                 MipProps.LogicalHeight < FmtAttribs.BlockHeight)
                 break;
         }
+    }
+
+    Texture.PendingUploads.store(UploadMipLevels, std::memory_order_release);
+    Texture.GPUResourcesReady.store(UploadMipLevels == 0, std::memory_order_release);
+
+    for (Uint32 Mip = 0; Mip < UploadMipLevels; ++Mip)
+    {
+        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, Mip);
 
         const TextureSubResData& SubRes = Loader.GetSubresourceData(Mip);
 
@@ -323,9 +334,6 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
         UpdateInfo.DstBox.MinY      = Origin.y >> Mip;
         UpdateInfo.DstBox.MaxY      = UpdateInfo.DstBox.MinY + MipProps.LogicalHeight;
         UpdateInfo.pCopyTextureData = pCopyData;
-
-        Texture.PendingUploads.fetch_add(1, std::memory_order_acq_rel);
-        ++ScheduledUploads;
 
         UpdateInfo.CopyTexture =
             [](IDeviceContext*          pContext,
@@ -414,9 +422,6 @@ RADIENT_STATUS ScheduleTextureGPUUpload(IRenderDevice*         pDevice,
 
         pUploadManager->ScheduleTextureUpdate(UpdateInfo);
     }
-
-    if (ScheduledUploads == 0)
-        Texture.GPUResourcesReady.store(true, std::memory_order_release);
 
     return RADIENT_STATUS_OK;
 }
