@@ -109,7 +109,7 @@ TEST(RadientAssetImplTest, CreatesPendingAssetReference)
     EXPECT_EQ(Ref.Version, 1u);
     EXPECT_EQ(pAsset->GetType(), RADIENT_ASSET_TYPE_TEXTURE);
 
-    EXPECT_EQ(pAsset->GetResolveStatus(), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pAsset->GetPayloadStatus(), RADIENT_STATUS_PENDING);
     EXPECT_EQ(pAsset->GetPayload(), nullptr);
     EXPECT_EQ(TestTextureAssetImpl::ResolveAsset(pAsset), nullptr);
     EXPECT_EQ(TestTextureAssetImpl::GetLoadStatus(pAsset), RADIENT_STATUS_PENDING);
@@ -121,7 +121,7 @@ TEST(RadientAssetImplTest, SetPayloadExposesPayloadStorageAndInterfaces)
     RefCntAutoPtr<TestTextureAssetImpl>   pAsset   = TestTextureAssetImpl::Create("texture://resolved", std::move(pPayload));
     ASSERT_NE(pAsset, nullptr);
 
-    EXPECT_EQ(pAsset->GetResolveStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pAsset->GetPayloadStatus(), RADIENT_STATUS_OK);
     ASSERT_NE(pAsset->GetPayload(), nullptr);
     EXPECT_EQ(pAsset->GetStorage().Value, 17u);
     EXPECT_EQ(pAsset->GetLoadStatus(), RADIENT_STATUS_PENDING);
@@ -149,7 +149,7 @@ TEST(RadientAssetImplTest, SetPayloadAndFailHandleInvalidStatuses)
 
     RefCntAutoPtr<TestTexturePayloadImpl> pNullPayload;
     EXPECT_FALSE(pNullResolvedAsset->SetPayload(std::move(pNullPayload)));
-    EXPECT_EQ(pNullResolvedAsset->GetResolveStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pNullResolvedAsset->GetPayloadStatus(), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pNullResolvedAsset->GetPayload(), nullptr);
     EXPECT_EQ(TestTextureAssetImpl::ResolveAsset(pNullResolvedAsset), nullptr);
     EXPECT_EQ(TestTextureAssetImpl::GetLoadStatus(pNullResolvedAsset), RADIENT_STATUS_INVALID_OPERATION);
@@ -157,17 +157,17 @@ TEST(RadientAssetImplTest, SetPayloadAndFailHandleInvalidStatuses)
     RefCntAutoPtr<TestTextureAssetImpl> pOkFailureAsset = TestTextureAssetImpl::Create("texture://ok-failure");
     ASSERT_NE(pOkFailureAsset, nullptr);
     pOkFailureAsset->Fail(RADIENT_STATUS_OK);
-    EXPECT_EQ(pOkFailureAsset->GetResolveStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pOkFailureAsset->GetPayloadStatus(), RADIENT_STATUS_INVALID_OPERATION);
 
     RefCntAutoPtr<TestTextureAssetImpl> pPendingFailureAsset = TestTextureAssetImpl::Create("texture://pending-failure");
     ASSERT_NE(pPendingFailureAsset, nullptr);
     pPendingFailureAsset->Fail(RADIENT_STATUS_PENDING);
-    EXPECT_EQ(pPendingFailureAsset->GetResolveStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pPendingFailureAsset->GetPayloadStatus(), RADIENT_STATUS_INVALID_OPERATION);
 
     RefCntAutoPtr<TestTextureAssetImpl> pInvalidArgAsset = TestTextureAssetImpl::Create("texture://invalid-arg");
     ASSERT_NE(pInvalidArgAsset, nullptr);
     pInvalidArgAsset->Fail(RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInvalidArgAsset->GetResolveStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pInvalidArgAsset->GetPayloadStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(TestTextureAssetImpl::GetLoadStatus(pInvalidArgAsset), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 

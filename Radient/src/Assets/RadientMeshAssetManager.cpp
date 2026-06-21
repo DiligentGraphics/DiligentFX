@@ -611,7 +611,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return pMeshAsset->GetResolveStatus();
+    return pMeshAsset->GetPayloadStatus();
 }
 
 RADIENT_STATUS RadientMeshAssetManager::CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
@@ -691,9 +691,9 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
     if (!pMesh)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS ResolveStatus = pMesh->GetResolveStatus();
-    if (ResolveStatus != RADIENT_STATUS_OK)
-        return ResolveStatus;
+    const RADIENT_STATUS PayloadStatus = pMesh->GetPayloadStatus();
+    if (PayloadStatus != RADIENT_STATUS_OK)
+        return PayloadStatus;
 
     const MeshAssetStorage& Storage = pMesh->GetStorage();
     if (const MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))

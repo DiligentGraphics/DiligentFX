@@ -193,7 +193,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return pTextureAsset->GetResolveStatus();
+    return pTextureAsset->GetPayloadStatus();
 }
 
 ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pTextureAsset)

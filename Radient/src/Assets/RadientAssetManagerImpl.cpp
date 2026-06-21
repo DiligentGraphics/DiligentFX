@@ -268,7 +268,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
-    return pModelAsset->GetResolveStatus();
+    return pModelAsset->GetPayloadStatus();
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)

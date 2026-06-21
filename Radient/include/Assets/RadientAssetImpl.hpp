@@ -164,9 +164,9 @@ public:
         return m_pPayload->GetStorage();
     }
 
-    RADIENT_STATUS GetResolveStatus() const
+    RADIENT_STATUS GetPayloadStatus() const
     {
-        return m_ResolveStatus.load(std::memory_order_acquire);
+        return m_PayloadStatus.load(std::memory_order_acquire);
     }
 
     bool SetPayload(RefCntAutoPtr<PayloadType>&& pPayload)
@@ -178,7 +178,7 @@ public:
         }
 
         m_pPayload = std::move(pPayload);
-        m_ResolveStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
+        m_PayloadStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
         return true;
     }
 
@@ -190,12 +190,12 @@ public:
             Status = RADIENT_STATUS_INVALID_OPERATION;
         }
 
-        m_ResolveStatus.store(Status, std::memory_order_release);
+        m_PayloadStatus.store(Status, std::memory_order_release);
     }
 
     RefCntAutoPtr<PayloadType> GetPayload() const
     {
-        if (GetResolveStatus() != RADIENT_STATUS_OK)
+        if (GetPayloadStatus() != RADIENT_STATUS_OK)
             return {};
 
         return m_pPayload;
@@ -204,7 +204,7 @@ public:
     static RefCntAutoPtr<RadientAssetImpl> ResolveAsset(InterfaceType* pAsset)
     {
         RefCntAutoPtr<RadientAssetImpl> pImpl{pAsset, ImplID};
-        if (!pImpl || pImpl->GetResolveStatus() != RADIENT_STATUS_OK)
+        if (!pImpl || pImpl->GetPayloadStatus() != RADIENT_STATUS_OK)
             return {};
 
         return pImpl;
@@ -213,9 +213,9 @@ public:
     template <typename T = Storage>
     auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
     {
-        const RADIENT_STATUS ResolveStatus = GetResolveStatus();
-        if (ResolveStatus != RADIENT_STATUS_OK)
-            return ResolveStatus;
+        const RADIENT_STATUS PayloadStatus = GetPayloadStatus();
+        if (PayloadStatus != RADIENT_STATUS_OK)
+            return PayloadStatus;
 
         RefCntAutoPtr<PayloadType> pPayload = GetPayload();
         return pPayload ? pPayload->GetStorage().LoadStatus.load(std::memory_order_acquire) : RADIENT_STATUS_INVALID_OPERATION;
@@ -250,7 +250,7 @@ private:
     RadientAssetReference m_Ref;
 
     RefCntAutoPtr<PayloadType>  m_pPayload;
-    std::atomic<RADIENT_STATUS> m_ResolveStatus{RADIENT_STATUS_PENDING};
+    std::atomic<RADIENT_STATUS> m_PayloadStatus{RADIENT_STATUS_PENDING};
 };
 
 } // namespace Diligent
