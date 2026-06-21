@@ -71,7 +71,7 @@ struct TextureStorage
     TextureStorage(const TextureStorage&)            = delete;
     TextureStorage& operator=(const TextureStorage&) = delete;
 
-    void UpdateUploadProgress(bool CopyScheduled)
+    bool UpdateUploadProgress(bool CopyScheduled)
     {
         if (!CopyScheduled)
             GPUUploadsSucceeded.store(false, std::memory_order_release);
@@ -83,7 +83,10 @@ struct TextureStorage
             const bool Ready = CopyScheduled &&
                 GPUUploadsSucceeded.load(std::memory_order_acquire);
             GPUResourcesReady.store(Ready, std::memory_order_release);
+            return true;
         }
+
+        return false;
     }
 
     RefCntAutoPtr<ITexture>                   pTexture;
@@ -92,6 +95,53 @@ struct TextureStorage
     std::atomic_bool                          GPUResourcesReady{false};
     std::atomic_bool                          GPUUploadsSucceeded{true};
     std::atomic<Uint32>                       PendingUploads{0};
+};
+
+void IncrementCounter(std::atomic<Uint32>& Counter,
+                      Uint32               Count = 1) noexcept
+{
+    if (Count != 0)
+        Counter.fetch_add(Count, std::memory_order_acq_rel);
+}
+
+void DecrementCounter(std::atomic<Uint32>& Counter,
+                      Uint32               Count = 1) noexcept
+{
+    if (Count == 0)
+        return;
+
+    const Uint32 PrevValue = Counter.fetch_sub(Count, std::memory_order_acq_rel);
+    VERIFY_EXPR(PrevValue >= Count);
+}
+
+class DecrementCounterGuard final
+{
+public:
+    DecrementCounterGuard(std::atomic<Uint32>& Counter,
+                          Uint32               Count = 1) noexcept :
+        m_Counter{Counter},
+        m_Count{Count}
+    {
+    }
+
+    ~DecrementCounterGuard()
+    {
+        DecrementCounter(m_Counter, m_Count);
+    }
+
+    DecrementCounterGuard(const DecrementCounterGuard&)            = delete;
+    DecrementCounterGuard& operator=(const DecrementCounterGuard&) = delete;
+    DecrementCounterGuard(DecrementCounterGuard&&)                 = delete;
+    DecrementCounterGuard& operator=(DecrementCounterGuard&&)      = delete;
+
+    void Reset() noexcept
+    {
+        m_Count = 0;
+    }
+
+private:
+    std::atomic<Uint32>& m_Counter;
+    Uint32               m_Count = 0;
 };
 
 } // namespace
@@ -112,11 +162,18 @@ using TextureAssetImpl =
 
 } // namespace
 
+RadientTextureAssetManagerStats RadientTextureAssetManager::AtomicStats::GetSnapshot() const noexcept
+{
+    RadientTextureAssetManagerStats Stats;
+    Stats.PendingTextureLoads       = PendingTextureLoads.load(std::memory_order_acquire);
+    Stats.PendingTextureSourceLoads = PendingTextureSourceLoads.load(std::memory_order_acquire);
+    Stats.PendingUploadScheduling   = PendingUploadScheduling.load(std::memory_order_acquire);
+    Stats.PendingGPUUploads         = PendingGPUUploads.load(std::memory_order_acquire);
+    return Stats;
+}
+
 RadientTextureAssetManager::RadientTextureAssetManager(const CreateInfo& CI) noexcept :
-    m_pThreadPool{CI.pThreadPool},
-    m_pDevice{CI.pDevice},
-    m_pResourceManager{CI.pResourceManager},
-    m_pUploadManager{CI.pUploadManager}
+    m_pDevice{CI.pDevice}
 {
 }
 
@@ -127,7 +184,15 @@ RadientTextureAssetManagerSharedPtr RadientTextureAssetManager::Create(const Cre
     return RadientTextureAssetManagerSharedPtr{new RadientTextureAssetManager{CI}};
 }
 
-RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
+RadientTextureAssetManagerStats RadientTextureAssetManager::GetStats() const noexcept
+{
+    return m_Stats.GetSnapshot();
+}
+
+RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&                  ThreadPool,
+                                                       GLTF::ResourceManager*        pResourceManager,
+                                                       IGPUUploadManager*            pUploadManager,
+                                                       const RadientTextureLoadInfo& LoadInfo,
                                                        IRadientTextureAsset**        ppTexture)
 {
     if (ppTexture == nullptr)
@@ -137,9 +202,6 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
 
     if (!ValidateTextureLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (m_pThreadPool == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
 
     RadientTextureSource TextureSource{LoadInfo};
 
@@ -156,12 +218,23 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
 
     pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
 
+    IncrementCounter(m_Stats.PendingTextureLoads);
+    IncrementCounter(m_Stats.PendingTextureSourceLoads);
+
+    RefCntWeakPtr<GLTF::ResourceManager> WeakResourceManager{pResourceManager};
+    RefCntWeakPtr<IGPUUploadManager>     WeakUploadManager{pUploadManager};
+
     EnqueueAsyncWork(
-        m_pThreadPool,
+        &ThreadPool,
         [pTextureAsset,
          pSelf         = shared_from_this(),
-         TextureSource = std::move(TextureSource)](Uint32) //
+         WeakResourceManager,
+         WeakUploadManager,
+         TextureSource = std::move(TextureSource)](Uint32) mutable //
         {
+            DecrementCounterGuard PendingTextureLoadGuard{pSelf->m_Stats.PendingTextureLoads};
+            DecrementCounterGuard PendingSourceLoadGuard{pSelf->m_Stats.PendingTextureSourceLoads};
+
             const std::string TextureCacheKey = TextureSource.MakeCacheKey();
 
             auto [pTexturePayload, PayloadCreated] =
@@ -184,7 +257,16 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(const RadientTextureLoadI
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
-            const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pTextureAsset, *pLoader);
+            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = WeakResourceManager.Lock();
+            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = WeakUploadManager.Lock();
+            if (!pResourceManager || !pUploadManager)
+            {
+                pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
+            PendingTextureLoadGuard.Reset();
+            const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
             pTextureAsset->GetStorage().LoadStatus.store(Status, std::memory_order_release);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
@@ -246,16 +328,20 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
     return true;
 }
 
-RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(IRadientTextureAsset& TextureAsset,
-                                                                    ITextureLoader&       Loader)
+RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
+                                                                    IGPUUploadManager&     UploadManager,
+                                                                    IRadientTextureAsset&  TextureAsset,
+                                                                    ITextureLoader&        Loader)
 {
+    DecrementCounterGuard PendingTextureLoadGuard{m_Stats.PendingTextureLoads};
+
     RefCntAutoPtr<TextureAssetImpl> pTextureAsset{
         &TextureAsset,
         IID_TextureAssetImpl};
     if (!pTextureAsset)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (m_pDevice == nullptr || m_pUploadManager == nullptr)
+    if (m_pDevice == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     TextureStorage&    Texture = pTextureAsset->GetStorage();
@@ -281,13 +367,10 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(IRadientText
         return Texture.pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    if (m_pResourceManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    Texture.pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format,
-                                                                           TexDesc.Width,
-                                                                           TexDesc.Height,
-                                                                           TextureAsset.GetReference().URI);
+    Texture.pAtlasSuballocation = ResourceManager.AllocateTextureSpace(TexDesc.Format,
+                                                                       TexDesc.Width,
+                                                                       TexDesc.Height,
+                                                                       TextureAsset.GetReference().URI);
     if (Texture.pAtlasSuballocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -315,6 +398,11 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(IRadientText
     Texture.PendingUploads.store(UploadMipLevels, std::memory_order_release);
     Texture.GPUUploadsSucceeded.store(true, std::memory_order_release);
     Texture.GPUResourcesReady.store(UploadMipLevels == 0, std::memory_order_release);
+
+    const Uint32 PendingUploadScheduling = UploadMipLevels != 0 ? 1u : 0u;
+    IncrementCounter(m_Stats.PendingUploadScheduling, PendingUploadScheduling);
+    DecrementCounterGuard PendingUploadScheduleGuard{m_Stats.PendingUploadScheduling, PendingUploadScheduling};
+    IncrementCounter(m_Stats.PendingGPUUploads, UploadMipLevels);
 
     for (Uint32 Mip = 0; Mip < UploadMipLevels; ++Mip)
     {
@@ -367,7 +455,12 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(IRadientText
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
-                    Data->pStorage->UpdateUploadProgress(CopyScheduled);
+                {
+                    if (Data->pStorage->UpdateUploadProgress(CopyScheduled))
+                        DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
+                }
+
+                DecrementCounter(Data->pManager->m_Stats.PendingGPUUploads);
             };
 
         UpdateInfo.CopyD3D11Texture =
@@ -415,11 +508,19 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(IRadientText
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
-                    Data->pStorage->UpdateUploadProgress(CopyScheduled);
+                {
+                    if (Data->pStorage->UpdateUploadProgress(CopyScheduled))
+                        DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
+                }
+
+                DecrementCounter(Data->pManager->m_Stats.PendingGPUUploads);
             };
 
-        m_pUploadManager->ScheduleTextureUpdate(UpdateInfo);
+        UploadManager.ScheduleTextureUpdate(UpdateInfo);
     }
+
+    if (UploadMipLevels != 0)
+        PendingTextureLoadGuard.Reset();
 
     return RADIENT_STATUS_OK;
 }

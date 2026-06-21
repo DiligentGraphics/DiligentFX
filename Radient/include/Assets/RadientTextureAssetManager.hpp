@@ -53,22 +53,45 @@ class RadientTextureAssetManager;
 
 using RadientTextureAssetManagerSharedPtr = std::shared_ptr<RadientTextureAssetManager>;
 
+struct RadientTextureAssetManagerStats
+{
+    // Total number of texture loads that are still active in any stage. A load
+    // is counted until it either fails, reuses an existing payload, completes an
+    // immediate texture creation path, or all scheduled GPU upload callbacks finish.
+    Uint32 PendingTextureLoads = 0;
+
+    // Number of texture source loads currently queued or running on the worker
+    // thread. This covers source key creation, cache lookup, loader creation,
+    // and upload scheduling preparation, but not render-thread GPU upload callbacks.
+    Uint32 PendingTextureSourceLoads = 0;
+
+    // Number of worker-side upload scheduling operations still in progress.
+    // This remains non-zero while the worker is enqueueing GPU upload callbacks.
+    Uint32 PendingUploadScheduling = 0;
+
+    // Number of scheduled GPU upload callbacks that have not reported completion.
+    // The texture load is still pending while this value is non-zero.
+    Uint32 PendingGPUUploads = 0;
+};
+
 class RadientTextureAssetManager final : public std::enable_shared_from_this<RadientTextureAssetManager>
 {
 public:
     struct CreateInfo
     {
-        IThreadPool*           pThreadPool      = nullptr;
-        IRenderDevice*         pDevice          = nullptr;
-        GLTF::ResourceManager* pResourceManager = nullptr;
-        IGPUUploadManager*     pUploadManager   = nullptr;
+        IRenderDevice* pDevice = nullptr;
     };
 
     ~RadientTextureAssetManager();
 
     static RadientTextureAssetManagerSharedPtr Create(const CreateInfo& CI);
 
-    RADIENT_STATUS LoadTexture(const RadientTextureLoadInfo& LoadInfo,
+    RadientTextureAssetManagerStats GetStats() const noexcept;
+
+    RADIENT_STATUS LoadTexture(IThreadPool&                  ThreadPool,
+                               GLTF::ResourceManager*        pResourceManager,
+                               IGPUUploadManager*            pUploadManager,
+                               const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
     static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
@@ -84,14 +107,24 @@ public:
 private:
     explicit RadientTextureAssetManager(const CreateInfo& CI) noexcept;
 
-    RADIENT_STATUS ScheduleTextureGPUUpload(IRadientTextureAsset& TextureAsset,
-                                            ITextureLoader&       Loader);
+    struct AtomicStats
+    {
+        RadientTextureAssetManagerStats GetSnapshot() const noexcept;
 
-    RefCntAutoPtr<IThreadPool>            m_pThreadPool;
+        std::atomic<Uint32> PendingTextureLoads{0};
+        std::atomic<Uint32> PendingTextureSourceLoads{0};
+        std::atomic<Uint32> PendingUploadScheduling{0};
+        std::atomic<Uint32> PendingGPUUploads{0};
+    };
+
+    RADIENT_STATUS ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
+                                            IGPUUploadManager&     UploadManager,
+                                            IRadientTextureAsset&  TextureAsset,
+                                            ITextureLoader&        Loader);
+
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
-    RefCntAutoPtr<GLTF::ResourceManager>  m_pResourceManager;
-    RefCntAutoPtr<IGPUUploadManager>      m_pUploadManager;
     RadientAssetCache<TexturePayloadImpl> m_TextureCache;
+    AtomicStats                           m_Stats;
     std::atomic<RadientHandle>            m_NextAssetID{1};
 };
 
