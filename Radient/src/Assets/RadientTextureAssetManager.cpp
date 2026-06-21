@@ -220,7 +220,11 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
     if (!pImpl)
         return false;
 
-    ITextureAtlasSuballocation* pAtlasSuballocation = pImpl->GetStorage().pAtlasSuballocation;
+    const TextureStorage& Texture = pImpl->GetStorage();
+    if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK)
+        return false;
+
+    ITextureAtlasSuballocation* pAtlasSuballocation = Texture.pAtlasSuballocation;
     if (pAtlasSuballocation == nullptr)
         return false;
 
