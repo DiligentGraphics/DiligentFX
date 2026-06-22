@@ -30,19 +30,30 @@
 #include "GLTFLoader.hpp"
 
 #include <atomic>
+#include <memory>
 
 namespace Diligent
 {
 
-class RadientMaterialAssetManager final
+class RadientMaterialAssetManager;
+
+using RadientMaterialAssetManagerSharedPtr = std::shared_ptr<RadientMaterialAssetManager>;
+
+class RadientMaterialAssetManager final : public std::enable_shared_from_this<RadientMaterialAssetManager>
 {
 public:
+    ~RadientMaterialAssetManager();
+
+    static RadientMaterialAssetManagerSharedPtr Create();
+
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);
 
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
 private:
+    RadientMaterialAssetManager() = default;
+
     static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
 
 private:

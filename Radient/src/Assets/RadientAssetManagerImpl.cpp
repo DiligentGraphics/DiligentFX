@@ -165,7 +165,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
             RadientMeshAssetManager::CreateInfo{
                 m_pDevice,
             })},
-    m_MaterialManager{},
+    m_pMaterialManager{RadientMaterialAssetManager::Create()},
     m_pTextureManager{
         RadientTextureAssetManager::Create(
             RadientTextureAssetManager::CreateInfo{
@@ -200,7 +200,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                        IRadientMaterialAsset**          ppMaterial)
 {
-    return m_MaterialManager.CreateMaterial(MaterialCI, ppMaterial);
+    return m_pMaterialManager->CreateMaterial(MaterialCI, ppMaterial);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,

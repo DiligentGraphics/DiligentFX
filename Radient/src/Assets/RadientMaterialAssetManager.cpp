@@ -66,6 +66,13 @@ using MaterialAssetImpl =
 
 } // namespace
 
+RadientMaterialAssetManager::~RadientMaterialAssetManager() = default;
+
+RadientMaterialAssetManagerSharedPtr RadientMaterialAssetManager::Create()
+{
+    return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager{}};
+}
+
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                            IRadientMaterialAsset**          ppMaterial)
 {
