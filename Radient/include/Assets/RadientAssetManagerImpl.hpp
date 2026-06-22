@@ -110,8 +110,8 @@ public:
 
     // Reports GLTF model load and upload-scheduling status. OK does not imply
     // that render-thread GPU upload callbacks have completed.
-    static RADIENT_STATUS     GetGLTFLoadStatus(IRadientSceneAsset* pModel);
-    static ITextureView*      GetTextureSRV(IRadientTextureAsset* pTexture);
+    static RADIENT_STATUS GetGLTFLoadStatus(IRadientSceneAsset* pModel);
+    static ITextureView*  GetTextureSRV(IRadientTextureAsset* pTexture);
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
@@ -134,9 +134,9 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    RadientMeshAssetManager              m_MeshManager;
-    RadientMaterialAssetManager          m_MaterialManager;
-    RadientTextureAssetManagerSharedPtr  m_pTextureManager;
+    RadientMeshAssetManagerSharedPtr    m_pMeshManager;
+    RadientMaterialAssetManager         m_MaterialManager;
+    RadientTextureAssetManagerSharedPtr m_pTextureManager;
 
     RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
 

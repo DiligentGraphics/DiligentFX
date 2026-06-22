@@ -444,6 +444,18 @@ RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
     return RADIENT_STATUS_OK;
 }
 
+void SetMeshLoadStatus(MeshPayloadImpl& Mesh,
+                       RADIENT_STATUS   Status)
+{
+    MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Mesh.GetStorage());
+    VERIFY_EXPR(pMeshStorage != nullptr);
+    if (pMeshStorage == nullptr)
+        return;
+
+    pMeshStorage->GPUResourcesReady.store(false, std::memory_order_release);
+    pMeshStorage->LoadStatus.store(Status, std::memory_order_release);
+}
+
 void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
                         std::unique_ptr<RadientMeshSource> pSource,
                         IRenderDevice*                     pDevice,
@@ -455,16 +467,9 @@ void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
     if (pMeshStorage == nullptr)
         return;
 
-    auto SetLoadStatus =
-        [pMeshStorage](RADIENT_STATUS Status) //
-    {
-        pMeshStorage->GPUResourcesReady.store(false, std::memory_order_release);
-        pMeshStorage->LoadStatus.store(Status, std::memory_order_release);
-    };
-
     if (pSource == nullptr)
     {
-        SetLoadStatus(RADIENT_STATUS_INVALID_ARGUMENT);
+        SetMeshLoadStatus(Mesh, RADIENT_STATUS_INVALID_ARGUMENT);
         return;
     }
 
@@ -472,14 +477,14 @@ void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
                                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
     if (RADIENT_FAILED(Status))
     {
-        SetLoadStatus(Status);
+        SetMeshLoadStatus(Mesh, Status);
         return;
     }
 
     Status = InitializeMeshStorage(pResourceManager, *pSource, *pMeshStorage);
     if (RADIENT_FAILED(Status))
     {
-        SetLoadStatus(Status);
+        SetMeshLoadStatus(Mesh, Status);
         return;
     }
 
@@ -489,7 +494,7 @@ void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
                                    *pSource,
                                    *pMeshStorage);
     if (RADIENT_FAILED(Status))
-        SetLoadStatus(Status);
+        SetMeshLoadStatus(Mesh, Status);
 }
 
 RefCntAutoPtr<MeshAssetImpl> CreateCachedMeshAsset(const char*                      CacheKey,
@@ -527,16 +532,21 @@ MeshStorage::MeshStorage(MeshStorage&& Rhs) noexcept :
 }
 
 RadientMeshAssetManager::RadientMeshAssetManager(const CreateInfo& CI) noexcept :
-    m_pThreadPool{CI.pThreadPool},
-    m_pDevice{CI.pDevice},
-    m_pResourceManager{CI.pResourceManager},
-    m_pUploadManager{CI.pUploadManager}
+    m_pDevice{CI.pDevice}
 {
 }
 
 RadientMeshAssetManager::~RadientMeshAssetManager() = default;
 
-RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& MeshCI,
+RadientMeshAssetManagerSharedPtr RadientMeshAssetManager::Create(const CreateInfo& CI)
+{
+    return RadientMeshAssetManagerSharedPtr{new RadientMeshAssetManager{CI}};
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 ThreadPool,
+                                                   GLTF::ResourceManager*       pResourceManager,
+                                                   IGPUUploadManager*           pUploadManager,
+                                                   const RadientMeshCreateInfo& MeshCI,
                                                    IRadientMeshAsset**          ppMesh)
 {
     if (ppMesh == nullptr)
@@ -546,14 +556,6 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
 
     if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (m_pThreadPool == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    const bool CanUploadMesh =
-        m_pDevice != nullptr &&
-        m_pResourceManager != nullptr &&
-        m_pUploadManager != nullptr;
 
     RefCntAutoPtr<MeshAssetImpl> pMeshAsset =
         MeshAssetImpl::Create(MakeRadientAssetURI("mesh", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)));
@@ -565,15 +567,16 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
+    RefCntWeakPtr<GLTF::ResourceManager> WeakResourceManager{pResourceManager};
+    RefCntWeakPtr<IGPUUploadManager>     WeakUploadManager{pUploadManager};
+
     EnqueueAsyncWork(
-        m_pThreadPool,
+        &ThreadPool,
         [pMeshAsset,
-         MeshCache = m_MeshCache.GetAccessor(),
-         CanUploadMesh,
-         pDevice          = m_pDevice,
-         pResourceManager = m_pResourceManager,
-         pUploadManager   = m_pUploadManager,
-         pMeshSource      = std::move(pMeshSource)](Uint32) mutable //
+         pSelf = shared_from_this(),
+         WeakResourceManager,
+         WeakUploadManager,
+         pMeshSource = std::move(pMeshSource)](Uint32) mutable //
         {
             const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
             if (RADIENT_FAILED(SourceStatus))
@@ -590,11 +593,11 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
             }
 
             auto [pMeshPayload, PayloadCreated] =
-                MeshCache.GetOrCreate(
+                pSelf->m_MeshCache.GetOrCreate(
                     CacheKey.c_str(),
-                    [CanUploadMesh]() {
+                    []() {
                         return MeshPayloadImpl::Create(MeshAssetStorage{
-                            MeshStorage{CanUploadMesh ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION},
+                            MeshStorage{RADIENT_STATUS_PENDING},
                         });
                     });
 
@@ -605,8 +608,19 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(const RadientMeshCreateInfo& 
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            if (CanUploadMesh)
-                LoadMeshFromSource(*pMeshPayloadRaw, std::move(pMeshSource), pDevice, pResourceManager, pUploadManager);
+            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = WeakResourceManager.Lock();
+            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = WeakUploadManager.Lock();
+            if (!pSelf->m_pDevice || !pResourceManager || !pUploadManager)
+            {
+                SetMeshLoadStatus(*pMeshPayloadRaw, RADIENT_STATUS_INVALID_OPERATION);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
+            LoadMeshFromSource(*pMeshPayloadRaw,
+                               std::move(pMeshSource),
+                               pSelf->m_pDevice,
+                               pResourceManager,
+                               pUploadManager);
 
             return ASYNC_TASK_STATUS_COMPLETE;
         });

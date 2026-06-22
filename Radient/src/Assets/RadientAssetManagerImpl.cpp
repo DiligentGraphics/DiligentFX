@@ -160,14 +160,11 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     m_pDevice{CreateInfo.pDevice},
     m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice)},
     m_pUploadManager{CreateRadientGPUUploadManager(CreateInfo.pDevice)},
-    m_MeshManager{
-        RadientMeshAssetManager::CreateInfo{
-            m_pThreadPool,
-            m_pDevice,
-            m_pResourceManager,
-            m_pUploadManager,
-        },
-    },
+    m_pMeshManager{
+        RadientMeshAssetManager::Create(
+            RadientMeshAssetManager::CreateInfo{
+                m_pDevice,
+            })},
     m_MaterialManager{},
     m_pTextureManager{
         RadientTextureAssetManager::Create(
@@ -195,7 +192,9 @@ const RadientAssetManagerDesc& RadientAssetManagerImpl::GetDesc() const
 RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& MeshCI,
                                                    IRadientMeshAsset**          ppMesh)
 {
-    return m_MeshManager.CreateMesh(MeshCI, ppMesh);
+    return m_pThreadPool ?
+        m_pMeshManager->CreateMesh(*m_pThreadPool, m_pResourceManager, m_pUploadManager, MeshCI, ppMesh) :
+        RADIENT_STATUS_INVALID_OPERATION;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
@@ -208,7 +207,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
                                                     IRadientTextureAsset**        ppTexture)
 {
     return m_pThreadPool ?
-        m_pTextureManager->LoadTexture(*m_pThreadPool, m_pResourceManager, m_pUploadManager, LoadInfo, ppTexture):
+        m_pTextureManager->LoadTexture(*m_pThreadPool, m_pResourceManager, m_pUploadManager, LoadInfo, ppTexture) :
         RADIENT_STATUS_INVALID_OPERATION;
 }
 
@@ -295,7 +294,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
                                                                const Char*         Name,
                                                                IRadientMeshAsset** ppMesh)
 {
-    return m_MeshManager.CreateMeshFromGLTFMesh(pModel, MeshIndex, Name, ppMesh);
+    return m_pMeshManager->CreateMeshFromGLTFMesh(pModel, MeshIndex, Name, ppMesh);
 }
 
 RadientDrawableMeshResolveResult RadientAssetManagerImpl::GetDrawableMesh(IRadientMeshAsset* pMesh,

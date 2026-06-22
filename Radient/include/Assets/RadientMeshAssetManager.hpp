@@ -32,6 +32,7 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <atomic>
+#include <memory>
 
 namespace Diligent
 {
@@ -47,22 +48,26 @@ class ResourceManager;
 
 class RadientMeshSource;
 class MeshPayloadImpl;
+class RadientMeshAssetManager;
 
-class RadientMeshAssetManager final
+using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager>;
+
+class RadientMeshAssetManager final : public std::enable_shared_from_this<RadientMeshAssetManager>
 {
 public:
     struct CreateInfo
     {
-        IThreadPool*           pThreadPool      = nullptr;
-        IRenderDevice*         pDevice          = nullptr;
-        GLTF::ResourceManager* pResourceManager = nullptr;
-        IGPUUploadManager*     pUploadManager   = nullptr;
+        IRenderDevice* pDevice = nullptr;
     };
 
-    explicit RadientMeshAssetManager(const CreateInfo& CI) noexcept;
     ~RadientMeshAssetManager();
 
-    RADIENT_STATUS CreateMesh(const RadientMeshCreateInfo& MeshCI,
+    static RadientMeshAssetManagerSharedPtr Create(const CreateInfo& CI);
+
+    RADIENT_STATUS CreateMesh(IThreadPool&                 ThreadPool,
+                              GLTF::ResourceManager*       pResourceManager,
+                              IGPUUploadManager*           pUploadManager,
+                              const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
@@ -79,10 +84,9 @@ public:
     static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
 
 private:
-    RefCntAutoPtr<IThreadPool>           m_pThreadPool;
-    RefCntAutoPtr<IRenderDevice>         m_pDevice;
-    RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
-    RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
+    explicit RadientMeshAssetManager(const CreateInfo& CI) noexcept;
+
+    RefCntAutoPtr<IRenderDevice> m_pDevice;
 
     RadientAssetCache<MeshPayloadImpl> m_MeshCache;
     RadientAssetCache<MeshPayloadImpl> m_GLTFMeshCache;
