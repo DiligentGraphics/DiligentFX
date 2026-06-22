@@ -336,6 +336,7 @@ struct RadientTextureData
     const void* pData DEFAULT_INITIALIZER(nullptr);
 
     /// Row stride, in bytes. If zero, Radient derives tightly packed stride from Format and Width.
+    /// Stride must be at least the active row size.
     Uint64 Stride DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientTextureData RadientTextureData;
@@ -357,6 +358,7 @@ struct RadientTextureLoadInfo
     const RadientTextureData* pTextureData DEFAULT_INITIALIZER(nullptr);
 
     /// Optional callback to release pData or pTextureData->pData when Radient no longer needs it.
+    /// For pTextureData, DataSize is the minimum source span described by RadientTextureData::pData.
     /// If this callback is null and memory-backed source data is not null, Radient makes an internal copy of the data.
     /// The callback may be invoked from any thread.
     RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);

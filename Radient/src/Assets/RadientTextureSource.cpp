@@ -31,10 +31,92 @@
 #include "HashUtils.hpp"
 #include "TextureLoader.h"
 
+#include <limits>
 #include <utility>
 
 namespace Diligent
 {
+
+bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
+                               RadientTextureDataSpan&   Span)
+{
+    Span = {};
+
+    const TEXTURE_FORMAT TextureFormat = RadientToTextureFormat(TextureData.Format);
+    if (TextureFormat == TEX_FORMAT_UNKNOWN || TextureData.Width == 0 || TextureData.Height == 0)
+        return false;
+
+    TextureDesc Desc;
+    Desc.Type      = RESOURCE_DIM_TEX_2D;
+    Desc.Width     = TextureData.Width;
+    Desc.Height    = TextureData.Height;
+    Desc.MipLevels = 1;
+    Desc.Format    = TextureFormat;
+
+    const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TextureFormat);
+    const MipLevelProperties    MipProps   = GetMipLevelProperties(Desc, 0);
+    if (MipProps.RowSize == 0 || MipProps.StorageHeight == 0)
+        return false;
+
+    Uint32 RowCount = MipProps.StorageHeight;
+    if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
+    {
+        if (FmtAttribs.BlockHeight == 0 || (MipProps.StorageHeight % FmtAttribs.BlockHeight) != 0)
+            return false;
+
+        RowCount = MipProps.StorageHeight / FmtAttribs.BlockHeight;
+    }
+
+    if (RowCount == 0)
+        return false;
+
+    const Uint64 Stride = TextureData.Stride != 0 ? TextureData.Stride : MipProps.RowSize;
+    if (Stride < MipProps.RowSize)
+        return false;
+
+    Uint64 DataSize = MipProps.RowSize;
+    if (RowCount > 1)
+    {
+        const Uint64 RowStrideCount = Uint64{RowCount - 1};
+        if (Stride > (std::numeric_limits<Uint64>::max)() / RowStrideCount)
+            return false;
+
+        const Uint64 PrefixSize = Stride * RowStrideCount;
+        if (PrefixSize > (std::numeric_limits<Uint64>::max)() - MipProps.RowSize)
+            return false;
+
+        DataSize = PrefixSize + MipProps.RowSize;
+    }
+
+    Span.ActiveRowSize = MipProps.RowSize;
+    Span.RowCount      = RowCount;
+    Span.DataSize      = DataSize;
+    return true;
+}
+
+namespace
+{
+
+size_t ComputeTextureDataHash(const void* pData,
+                              Uint64      ActiveRowSize,
+                              Uint32      RowCount,
+                              Uint64      Stride)
+{
+    if (pData == nullptr || ActiveRowSize == 0 || RowCount == 0 ||
+        ActiveRowSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+    {
+        return 0;
+    }
+
+    size_t       Hash = 0;
+    const Uint8* pRow = static_cast<const Uint8*>(pData);
+    for (Uint32 Row = 0; Row < RowCount; ++Row, pRow += Stride)
+        HashCombine(Hash, ComputeHashRaw(pRow, static_cast<size_t>(ActiveRowSize)));
+
+    return Hash;
+}
+
+} // namespace
 
 RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInfo) :
     m_URI{GetURI(LoadInfo)},
@@ -45,16 +127,19 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
         m_SourceType  = SourceType::TextureData;
         m_TextureData = *LoadInfo.pTextureData;
         m_pData       = m_TextureData.pData;
-        if (m_TextureData.Stride == 0)
-        {
-            const TEXTURE_FORMAT        TextureFormat = RadientToTextureFormat(m_TextureData.Format);
-            const TextureFormatAttribs& FmtAttribs    = GetTextureFormatAttribs(TextureFormat);
 
-            m_TextureData.Stride = Uint64{m_TextureData.Width} *
-                Uint64{FmtAttribs.ComponentSize} *
-                Uint64{FmtAttribs.NumComponents};
+        RadientTextureDataSpan Span;
+        if (GetRadientTextureDataSpan(m_TextureData, Span) &&
+            Span.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        {
+            if (m_TextureData.Stride == 0)
+                m_TextureData.Stride = Span.ActiveRowSize;
+
+            m_TextureDataActiveRowSize = Span.ActiveRowSize;
+            m_TextureDataRowCount      = Span.RowCount;
+            m_DataSize                 = static_cast<size_t>(Span.DataSize);
         }
-        m_DataSize             = static_cast<size_t>(m_TextureData.Stride * Uint64{m_TextureData.Height});
+
         m_ReleaseData          = LoadInfo.ReleaseData;
         m_pReleaseDataUserData = LoadInfo.pReleaseDataUserData;
     }
@@ -162,12 +247,15 @@ std::string RadientTextureSource::MakeCacheKey() const
         Key += std::to_string(m_TextureData.Height);
         Key += ":format=";
         Key += std::to_string(static_cast<Uint32>(m_TextureData.Format));
-        Key += ":stride=";
-        Key += std::to_string(m_TextureData.Stride);
-        Key += ":size=";
-        Key += std::to_string(m_DataSize);
+        Key += ":row=";
+        Key += std::to_string(m_TextureDataActiveRowSize);
+        Key += ":rows=";
+        Key += std::to_string(m_TextureDataRowCount);
         Key += ":hash=";
-        Key += std::to_string(ComputeHashRaw(m_pData, m_DataSize));
+        Key += std::to_string(ComputeTextureDataHash(m_pData,
+                                                     m_TextureDataActiveRowSize,
+                                                     m_TextureDataRowCount,
+                                                     m_TextureData.Stride));
     }
     else if (m_SourceType == SourceType::EncodedMemory)
     {
@@ -189,24 +277,28 @@ void RadientTextureSource::ReleaseMemory()
     if (m_pData != nullptr && m_ReleaseData != nullptr)
         m_ReleaseData(m_pData, static_cast<Uint64>(m_DataSize), m_pReleaseDataUserData);
 
-    m_SourceType           = SourceType::URI;
-    m_pData                = nullptr;
-    m_DataSize             = 0;
-    m_TextureData          = {};
-    m_ReleaseData          = nullptr;
-    m_pReleaseDataUserData = nullptr;
+    m_SourceType               = SourceType::URI;
+    m_pData                    = nullptr;
+    m_DataSize                 = 0;
+    m_TextureData              = {};
+    m_TextureDataActiveRowSize = 0;
+    m_TextureDataRowCount      = 0;
+    m_ReleaseData              = nullptr;
+    m_pReleaseDataUserData     = nullptr;
 }
 
 void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
 {
-    m_SourceType           = Rhs.m_SourceType;
-    m_URI                  = std::move(Rhs.m_URI);
-    m_IsSRGB               = Rhs.m_IsSRGB;
-    m_Data                 = std::move(Rhs.m_Data);
-    m_DataSize             = Rhs.m_DataSize;
-    m_TextureData          = Rhs.m_TextureData;
-    m_ReleaseData          = Rhs.m_ReleaseData;
-    m_pReleaseDataUserData = Rhs.m_pReleaseDataUserData;
+    m_SourceType               = Rhs.m_SourceType;
+    m_URI                      = std::move(Rhs.m_URI);
+    m_IsSRGB                   = Rhs.m_IsSRGB;
+    m_Data                     = std::move(Rhs.m_Data);
+    m_DataSize                 = Rhs.m_DataSize;
+    m_TextureData              = Rhs.m_TextureData;
+    m_TextureDataActiveRowSize = Rhs.m_TextureDataActiveRowSize;
+    m_TextureDataRowCount      = Rhs.m_TextureDataRowCount;
+    m_ReleaseData              = Rhs.m_ReleaseData;
+    m_pReleaseDataUserData     = Rhs.m_pReleaseDataUserData;
 
     if (!m_Data.empty())
         m_pData = m_Data.data();
@@ -216,12 +308,14 @@ void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
     if (m_SourceType == SourceType::TextureData)
         m_TextureData.pData = m_pData;
 
-    Rhs.m_SourceType           = SourceType::URI;
-    Rhs.m_pData                = nullptr;
-    Rhs.m_DataSize             = 0;
-    Rhs.m_TextureData          = {};
-    Rhs.m_ReleaseData          = nullptr;
-    Rhs.m_pReleaseDataUserData = nullptr;
+    Rhs.m_SourceType               = SourceType::URI;
+    Rhs.m_pData                    = nullptr;
+    Rhs.m_DataSize                 = 0;
+    Rhs.m_TextureData              = {};
+    Rhs.m_TextureDataActiveRowSize = 0;
+    Rhs.m_TextureDataRowCount      = 0;
+    Rhs.m_ReleaseData              = nullptr;
+    Rhs.m_pReleaseDataUserData     = nullptr;
 }
 
 } // namespace Diligent

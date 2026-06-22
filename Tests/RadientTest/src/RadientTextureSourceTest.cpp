@@ -193,6 +193,69 @@ TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
     EXPECT_NE(Source.MakeCacheKey(), DifferentFormatSource.MakeCacheKey());
 }
 
+TEST(RadientTextureSourceTest, TextureDataCacheKeyIgnoresRowPadding)
+{
+    constexpr Uint32 Width         = 3;
+    constexpr Uint32 Height        = 2;
+    constexpr Uint32 ActiveRowSize = Width * 4;
+    constexpr Uint32 Stride0       = 16;
+    constexpr Uint32 Stride1       = 20;
+    constexpr Uint32 DataSize0     = (Height - 1) * Stride0 + ActiveRowSize;
+    constexpr Uint32 DataSize1     = (Height - 1) * Stride1 + ActiveRowSize;
+
+    // clang-format off
+    std::array<Uint8, DataSize0> Data0{
+        // Row 0 pixels, followed by 4 bytes of padding.
+        1, 2, 3, 4,     5, 6, 7, 8,     9, 10, 11, 12,
+        90, 91, 92, 93,
+        // Row 1 pixels. Final-row padding is not part of the valid source span.
+        13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+    std::array<Uint8, DataSize1> Data1{
+        // Same row 0 pixels, followed by different 8-byte padding.
+        1, 2, 3, 4,     5, 6, 7, 8,     9, 10, 11, 12,
+        190, 191, 192, 193, 194, 195, 196, 197,
+        // Same row 1 pixels.
+        13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+    // clang-format on
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = Width;
+    TextureData.Height = Height;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.Stride = Stride0;
+    TextureData.pData  = Data0.data();
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource Source{LoadInfo};
+    Source.MakeMemoryCopy();
+
+    RadientTextureData SameTextureData = TextureData;
+    SameTextureData.pData              = Data1.data();
+    SameTextureData.Stride             = Stride1;
+    RadientTextureLoadInfo SameLoadInfo{};
+    SameLoadInfo.pTextureData = &SameTextureData;
+
+    RadientTextureSource SameSource{SameLoadInfo};
+    SameSource.MakeMemoryCopy();
+
+    EXPECT_EQ(Source.MakeCacheKey(), SameSource.MakeCacheKey());
+
+    std::array<Uint8, DataSize0> Data2 = Data0;
+    Data2[4]                           = 200;
+
+    RadientTextureData DifferentTextureData = TextureData;
+    DifferentTextureData.pData              = Data2.data();
+    RadientTextureLoadInfo DifferentLoadInfo{};
+    DifferentLoadInfo.pTextureData = &DifferentTextureData;
+
+    RadientTextureSource DifferentSource{DifferentLoadInfo};
+    DifferentSource.MakeMemoryCopy();
+
+    EXPECT_NE(Source.MakeCacheKey(), DifferentSource.MakeCacheKey());
+}
+
 TEST(RadientTextureSourceTest, SupportsRGBA8_UNORM_SRGBTextureDataFormat)
 {
     std::array<Uint8, 16> Data{};
@@ -281,8 +344,14 @@ TEST(RadientTextureSourceTest, CopiesMemoryWhenRequested)
 
 TEST(RadientTextureSourceTest, CopiesTextureDataMemoryWhenRequested)
 {
-    std::array<Uint8, 8>     Data{1, 2, 3, 4, 5, 6, 7, 8};
-    const std::vector<Uint8> Expected{Data.begin(), Data.end()};
+    // clang-format off
+    std::array<Uint8, 8> Data{
+        // Row 0 pixels, followed by 2 bytes of padding.
+        1, 2, 3, 4,
+        // Row 1 pixels, followed by unused final-row padding.
+        5, 6, 7, 8};
+    const std::vector<Uint8> Expected{Data.begin(), Data.begin() + 6};
+    // clang-format on
 
     RadientTextureData TextureData{};
     TextureData.Width  = 2;
@@ -290,6 +359,46 @@ TEST(RadientTextureSourceTest, CopiesTextureDataMemoryWhenRequested)
     TextureData.Format = RADIENT_TEXTURE_FORMAT_R8_UNORM;
     TextureData.pData  = Data.data();
     TextureData.Stride = 4;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData = &TextureData;
+
+    RadientTextureSource Source{LoadInfo};
+    Source.MakeMemoryCopy();
+    ASSERT_TRUE(Source.IsMemory());
+    EXPECT_TRUE(Source.IsTextureData());
+    EXPECT_TRUE(Source.OwnsMemory());
+    EXPECT_NE(Source.GetData(), Data.data());
+    EXPECT_EQ(Source.GetDataSize(), Expected.size());
+
+    Data.fill(0);
+    EXPECT_EQ(ReadSourceBytes(Source), Expected);
+}
+
+TEST(RadientTextureSourceTest, CopiesOnlyValidTextureDataSpan)
+{
+    constexpr Uint32 Width         = 3;
+    constexpr Uint32 Height        = 2;
+    constexpr Uint32 ActiveRowSize = Width * 4;
+    constexpr Uint32 Stride        = 16;
+    constexpr Uint32 DataSize      = (Height - 1) * Stride + ActiveRowSize;
+
+    // clang-format off
+    std::array<Uint8, DataSize> Data{
+        // Row 0 pixels, followed by 4 bytes of padding.
+        1, 2, 3, 4,     5, 6, 7, 8,     9, 10, 11, 12,
+        90, 91, 92, 93,
+        // Row 1 pixels. Final-row padding is not part of the valid source span.
+        13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+    const std::vector<Uint8> Expected{Data.begin(), Data.end()};
+    // clang-format on
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = Width;
+    TextureData.Height = Height;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.Stride = Stride;
+    TextureData.pData  = Data.data();
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
@@ -374,7 +483,7 @@ TEST(RadientTextureSourceTest, ReleasesCallbackOwnedTextureDataMemory)
 
     EXPECT_EQ(State.Count, 1u);
     EXPECT_EQ(State.pData, Data.data());
-    EXPECT_EQ(State.DataSize, Data.size());
+    EXPECT_EQ(State.DataSize, 6u);
 }
 
 TEST(RadientTextureSourceTest, MoveTransfersReleaseCallbackOwnership)

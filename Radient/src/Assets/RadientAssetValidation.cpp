@@ -27,8 +27,8 @@
 #include "Assets/RadientAssetValidation.hpp"
 
 #include "Assets/RadientTextureFormat.hpp"
+#include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
-#include "GraphicsAccessories.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -170,26 +170,18 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         if (TextureData.pData == nullptr)
             return LogValidationError("RadientTextureLoadInfo", "texture data pointer must not be null.");
 
-        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TextureFormat);
-        const Uint64                RowSize    = Uint64{TextureData.Width} *
-            Uint64{FmtAttribs.ComponentSize} *
-            Uint64{FmtAttribs.NumComponents};
-        if (TextureData.Stride != 0 && TextureData.Stride < RowSize)
+        RadientTextureDataSpan Span;
+        if (!GetRadientTextureDataSpan(TextureData, Span))
         {
             return LogValidationError("RadientTextureLoadInfo",
                                       "texture data stride (", TextureData.Stride,
-                                      ") must be zero or at least the row size (", RowSize, ").");
+                                      ") must be zero or at least the active row size and texture data size must not overflow.");
         }
 
-        const Uint64 Stride = TextureData.Stride != 0 ? TextureData.Stride : RowSize;
-        if (TextureData.Height != 0 && Stride > (std::numeric_limits<Uint64>::max)() / TextureData.Height)
-            return LogValidationError("RadientTextureLoadInfo", "texture data size overflows Uint64.");
-
-        const Uint64 DataSize = Stride * Uint64{TextureData.Height};
-        if (DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        if (Span.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
         {
             return LogValidationError("RadientTextureLoadInfo",
-                                      "texture data size (", DataSize,
+                                      "texture data size (", Span.DataSize,
                                       ") exceeds maximum supported size_t value (",
                                       (std::numeric_limits<size_t>::max)(), ").");
         }

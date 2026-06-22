@@ -38,6 +38,32 @@ namespace Diligent
 
 struct ITextureLoader;
 
+/// Describes the valid readable span of RadientTextureData::pData.
+struct RadientTextureDataSpan
+{
+    /// Number of bytes in each row that contain texture data.
+    /// Row padding, if any, is not included.
+    Uint64 ActiveRowSize = 0;
+
+    /// Number of stored source rows. For block-compressed formats, this is the number of block rows.
+    Uint32 RowCount = 0;
+
+    /// Minimum number of bytes that may be read from RadientTextureData::pData:
+    /// (RowCount - 1) * Stride + ActiveRowSize.
+    /// The final row does not need padding bytes beyond ActiveRowSize.
+    Uint64 DataSize = 0;
+};
+
+/// Computes the format-aware source data span for RadientTextureData.
+///
+/// \returns    true if the format, dimensions, stride, and computed span are valid; false otherwise.
+///
+/// \remarks    If RadientTextureData::Stride is zero, tightly packed rows are assumed.
+///             The function validates that non-zero stride is at least ActiveRowSize and that
+///             the computed DataSize does not overflow Uint64.
+bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
+                               RadientTextureDataSpan&   Span);
+
 class RadientTextureSource final
 {
 public:
@@ -113,6 +139,8 @@ private:
     size_t             m_DataSize = 0;
 
     RadientTextureData m_TextureData;
+    Uint64             m_TextureDataActiveRowSize = 0;
+    Uint32             m_TextureDataRowCount      = 0;
 
     RadientTextureReleaseDataCallbackType m_ReleaseData          = nullptr;
     void*                                 m_pReleaseDataUserData = nullptr;
