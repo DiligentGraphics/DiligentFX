@@ -227,7 +227,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     EnqueueAsyncWork(
         &ThreadPool,
         [pTextureAsset,
-         pSelf         = shared_from_this(),
+         pSelf = shared_from_this(),
          WeakResourceManager,
          WeakUploadManager,
          TextureSource = std::move(TextureSource)](Uint32) mutable //

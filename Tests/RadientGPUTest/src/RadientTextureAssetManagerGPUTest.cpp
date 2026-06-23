@@ -209,6 +209,20 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
     return IsTextureManagerIdle(Manager->GetStats());
 }
 
+bool WaitForTextureUploadScheduling(const RadientTextureAssetManagerSharedPtr& Manager)
+{
+    for (Uint32 i = 0; i < 256; ++i)
+    {
+        const RadientTextureAssetManagerStats Stats = Manager->GetStats();
+        if (Stats.PendingUploadScheduling != 0)
+            return true;
+
+        std::this_thread::sleep_for(1ms);
+    }
+
+    return Manager->GetStats().PendingUploadScheduling != 0;
+}
+
 bool IsPendingOrOK(RADIENT_STATUS Status)
 {
     return Status == RADIENT_STATUS_PENDING ||
@@ -489,6 +503,42 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
     pThreadPool->StopThreads();
 
     ASSERT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+}
+
+TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, nullptr);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice);
+    ASSERT_NE(pManager, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, pResourceManager, pUploadManager, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+
+    const bool EnteredUploadScheduling = WaitForTextureUploadScheduling(pManager);
+
+    pUploadManager->Stop(pContext);
+    pThreadPool->StopThreads();
+
+    ASSERT_TRUE(EnteredUploadScheduling);
+    EXPECT_TRUE(IsTextureManagerIdle(pManager->GetStats()));
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
 }
 
 TEST(RadientTextureAssetManagerGPUTest, TextureHandleMayOutliveManagerAfterUpload)

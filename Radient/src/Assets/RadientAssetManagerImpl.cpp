@@ -177,6 +177,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
+    if (m_pUploadManager)
+        m_pUploadManager->Stop(nullptr);
 }
 
 RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const CreateInfo& CreateInfo)
@@ -432,6 +434,11 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 GLTF::ResourceManager* RadientAssetManagerImpl::GetResourceManager() const
 {
     return m_pResourceManager;
+}
+
+RadientTextureAssetManagerStats RadientAssetManagerImpl::GetTextureManagerStats() const
+{
+    return m_pTextureManager ? m_pTextureManager->GetStats() : RadientTextureAssetManagerStats{};
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset)

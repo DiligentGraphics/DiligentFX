@@ -116,7 +116,8 @@ public:
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
 
-    GLTF::ResourceManager* GetResourceManager() const;
+    GLTF::ResourceManager*          GetResourceManager() const;
+    RadientTextureAssetManagerStats GetTextureManagerStats() const;
 
 private:
     // Dispatches to the asset-type-specific load status. OK means source data

@@ -34,10 +34,13 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <chrono>
+#include <thread>
 #include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
+using namespace std::chrono_literals;
 
 namespace
 {
@@ -92,6 +95,20 @@ bool IsPendingOrOK(RADIENT_STATUS Status)
 {
     return Status == RADIENT_STATUS_PENDING ||
         Status == RADIENT_STATUS_OK;
+}
+
+bool WaitForTextureUploadScheduling(RadientAssetManagerImpl& AssetManager)
+{
+    for (Uint32 i = 0; i < 256; ++i)
+    {
+        const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
+        if (Stats.PendingUploadScheduling != 0)
+            return true;
+
+        std::this_thread::sleep_for(1ms);
+    }
+
+    return AssetManager.GetTextureManagerStats().PendingUploadScheduling != 0;
 }
 
 RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
@@ -169,6 +186,48 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_INVALID_OPERATION) << i;
         EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(Textures[i]), nullptr) << i;
     }
+}
+
+TEST(RadientAssetManagerGPUTest, DestructorShutsDownUploadManagerForBlockedTextureUpload)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv    = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice = pEnv->GetDevice();
+    ASSERT_NE(pDevice, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    const Uint32 TextureWidth  = 64;
+    const Uint32 TextureHeight = 64;
+    const Uint32 TextureStride = TextureWidth * 4;
+
+    std::vector<Uint8> TexturePixels = MakeTexturePixels(TextureWidth, TextureHeight, TextureStride, 1);
+    RadientTextureData TextureData   = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TexturePixels.data());
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    bool                                EnteredUploadScheduling = false;
+
+    {
+        RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+        AssetManagerCI.pThreadPool = pThreadPool;
+        AssetManagerCI.pDevice     = pDevice;
+
+        RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+        ASSERT_NE(pAssetManager, nullptr);
+
+        EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadTexture(MakeTextureLoadInfo(TextureData), &pTexture)));
+        ASSERT_NE(pTexture, nullptr);
+
+        EnteredUploadScheduling = WaitForTextureUploadScheduling(*pAssetManager);
+    }
+
+    pThreadPool->StopThreads();
+
+    ASSERT_TRUE(EnteredUploadScheduling);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(pTexture), nullptr);
 }
 
 } // namespace
