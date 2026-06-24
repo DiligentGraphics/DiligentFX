@@ -51,11 +51,6 @@ float LoadDepth(int2 PixelCoord)
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
-float ComputeGaussianWeight(float Distance)
-{
-    return exp(-0.66 * Distance * Distance); // assuming Distance is normalized to 1
-}
-
 float4 ComputeBlurKernelRotation(uint2 PixelCoord, uint FrameIndex)
 {
     float Angle = Bayer4x4(PixelCoord, FrameIndex);
@@ -85,7 +80,7 @@ float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughne
         float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
         float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
         float LocalBRDF = Vis * D * NdotL;
-        LocalBRDF *= ComputeGaussianWeight(Weight);
+        LocalBRDF *= Weight;
         return float2(max(LocalBRDF / max(PDF, 1e-5), 1e-6), RayLength);
     }
 }
