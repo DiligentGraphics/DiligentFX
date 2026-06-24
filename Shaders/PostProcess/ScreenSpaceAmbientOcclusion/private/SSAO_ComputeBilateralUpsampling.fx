@@ -41,8 +41,8 @@ float LoadDepthLinear(float2 Texcoord)
     float2 Position = g_Camera.f4ViewportSize.xy * Texcoord;
     int2 Positioni = int2(Position - 0.5);
     
-    float x = frac(Position + 0.5);
-    float y = frac(Position + 0.5);
+    float x = frac(Position.x + 0.5);
+    float y = frac(Position.y + 0.5);
 
     float4 Weight;
     Weight.x = (1.0 - x) * (1.0 - y);
@@ -85,8 +85,8 @@ float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Tar
     float2 HalfPosition = 0.5 * Position;
     int2 HalfPositioni = int2(HalfPosition - 0.5);
 
-    float x = frac(HalfPosition + 0.5);
-    float y = frac(HalfPosition + 0.5);
+    float x = frac(HalfPosition.x + 0.5);
+    float y = frac(HalfPosition.y + 0.5);
 
     float4 Weight;
     Weight.x = (1.0 - x) * (1.0 - y);
