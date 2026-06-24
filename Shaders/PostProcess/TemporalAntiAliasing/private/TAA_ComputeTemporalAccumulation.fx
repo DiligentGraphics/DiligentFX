@@ -157,7 +157,7 @@ float4 SamplePrevColorCatmullRom(float2 Position)
     float2 TexPos12 = (CenterPosition + W2 / W12) * TexelSize;
 
     float P0 = W12.x * W0.y;
-    float P1 = W0.x * W12.x;
+    float P1 = W0.x * W12.y;
     float P2 = W12.x * W12.y;
     float P3 = W3.x * W12.y;
     float P4 = W12.x * W3.y;
