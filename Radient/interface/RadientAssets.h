@@ -40,6 +40,7 @@ typedef struct IRadientMeshAsset     IRadientMeshAsset;
 typedef struct IRadientMaterialAsset IRadientMaterialAsset;
 typedef struct IRadientTextureAsset  IRadientTextureAsset;
 typedef struct IRadientSceneAsset    IRadientSceneAsset;
+typedef struct IDeviceContext        IDeviceContext;
 
 // clang-format off
 
@@ -505,6 +506,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
     VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
                                                     IRadientAsset* pAsset) PURE;
+
+    /// Permanently stops the asset manager's internal GPU upload work.
+    ///
+    /// The method must be called before destroying a GPU-backed asset manager. pContext must be the
+    /// device context used by the renderer/update path and must not be used concurrently while Stop()
+    /// is executing.
+    VIRTUAL RADIENT_STATUS METHOD(Stop)(THIS_
+                                        IDeviceContext* pContext) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -518,6 +527,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadGLTF(This, ...)           CALL_IFACE_METHOD(RadientAssetManager, LoadGLTF,       This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
+#    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)
 
 #endif
 

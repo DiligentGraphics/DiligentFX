@@ -177,8 +177,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
-    if (m_pUploadManager)
-        m_pUploadManager->Stop(nullptr);
+    DEV_CHECK_ERR(m_pUploadManager == nullptr || m_Stopped,
+                  "RadientAssetManagerImpl::Stop() must be called before destroying a GPU-backed asset manager");
 }
 
 RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const CreateInfo& CreateInfo)
@@ -289,6 +289,26 @@ RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
         if (!m_pThreadPool->ProcessTask(0, false))
             std::this_thread::yield();
     }
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::Stop(IDeviceContext* pContext)
+{
+    if (m_Stopped)
+        return RADIENT_STATUS_OK;
+
+    if (m_pUploadManager == nullptr)
+    {
+        m_Stopped = true;
+        return RADIENT_STATUS_OK;
+    }
+
+    if (pContext == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    m_pUploadManager->Stop(pContext);
+    m_Stopped = true;
+
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,

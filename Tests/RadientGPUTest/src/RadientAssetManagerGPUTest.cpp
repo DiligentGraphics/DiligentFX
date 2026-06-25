@@ -130,9 +130,11 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
-    GPUTestingEnvironment* pEnv    = GPUTestingEnvironment::GetInstance();
-    IRenderDevice*         pDevice = pEnv->GetDevice();
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
     ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
 
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
@@ -172,10 +174,11 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
             EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_PENDING) << i;
             EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(Textures[i]), nullptr) << i;
         }
+
+        EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     }
 
-    // RadientAssetManagerImpl owns the resource and upload managers. Releasing
-    // it before the worker resumes makes texture load tasks observe expired GPU
+    // After Stop() and manager release, texture load tasks observe expired GPU
     // upload dependencies and exit without completing the texture load.
     ReleaseWorker.Trigger();
     pThreadPool->StopThreads();
@@ -188,13 +191,15 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     }
 }
 
-TEST(RadientAssetManagerGPUTest, DestructorShutsDownUploadManagerForBlockedTextureUpload)
+TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUpload)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
-    GPUTestingEnvironment* pEnv    = GPUTestingEnvironment::GetInstance();
-    IRenderDevice*         pDevice = pEnv->GetDevice();
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
     ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
 
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
@@ -221,6 +226,7 @@ TEST(RadientAssetManagerGPUTest, DestructorShutsDownUploadManagerForBlockedTextu
         ASSERT_NE(pTexture, nullptr);
 
         EnteredUploadScheduling = WaitForTextureUploadScheduling(*pAssetManager);
+        EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     }
 
     pThreadPool->StopThreads();

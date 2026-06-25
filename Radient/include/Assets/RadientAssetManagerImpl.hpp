@@ -95,6 +95,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset* pAsset) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
+
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
                                           Uint32              MeshIndex,
                                           const Char*         Name,
@@ -142,6 +144,8 @@ private:
     RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
 
     MPSCQueue<RefCntWeakPtr<ScenePayloadImpl>> m_PendingGPUResourceUpdates;
+
+    bool m_Stopped = false;
 };
 
 } // namespace Diligent

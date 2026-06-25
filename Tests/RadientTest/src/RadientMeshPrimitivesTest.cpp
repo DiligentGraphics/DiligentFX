@@ -135,6 +135,11 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext*) override final
+    {
+        return RADIENT_STATUS_OK;
+    }
+
     Uint32                         VertexCount     = 0;
     bool                           HasVertexColors = false;
     std::vector<RadientColorRGBA8> CapturedVertexColors;
