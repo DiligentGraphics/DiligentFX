@@ -54,48 +54,57 @@ jobs:
             cc:              "clang-18"
             cxx:             "clang++-18"
 
+          - name:            "Clang-ASAN"
+            build_type:      "RelWithDebInfo"
+            cmake_generator: "Ninja"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_TESTS=ON"
+            enable_asan:     "true"
+            cc:              "clang-18"
+            cxx:             "clang++-18"
+
     name: Linux -> ${{ matrix.name }}-x64, ${{ matrix.build_type }}
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v17
+      uses: DiligentGraphics/github-action/checkout@v18
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v17
+      uses: DiligentGraphics/github-action/setup-build-env@v18
       with:
         platform:        Linux
         cmake-generator: ${{ matrix.cmake_generator }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v17
+      uses: DiligentGraphics/github-action/configure-cmake@v18
       with:
         cc:         ${{ matrix.cc }}
         cxx:        ${{ matrix.cxx }}
         generator:  ${{ matrix.cmake_generator }}
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
+        enable-asan: ${{ matrix.enable_asan }}
 
     - name: Build
       id:   build
       if: success()
-      uses: DiligentGraphics/github-action/build@v17
+      uses: DiligentGraphics/github-action/build@v18
 
     - name: RadientTest
       if:   success()
-      uses: DiligentGraphics/github-action/run-radient-tests@v17
+      uses: DiligentGraphics/github-action/run-radient-tests@v18
 
     - name: RadientGPUTest VK
       # NB: it is essential to include failure() to override the default status check of success()
       #     that is automatically applied to if conditions that don't contain a status check function.
       if:   ${{ success() || failure() && steps.build.outcome == 'success' }}
-      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v17
+      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v18
       with:
         mode: vk_sw
 
     - name: RadientGPUTest GL
       if:   ${{ success() || failure() && steps.build.outcome == 'success' }}
-      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v17
+      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v18
       with:
         mode: gl
