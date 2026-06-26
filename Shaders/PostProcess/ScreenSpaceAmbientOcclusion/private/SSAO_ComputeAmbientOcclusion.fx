@@ -65,13 +65,53 @@ float IntegrateArcCosWeighted(float HorizonX, float HorizonY, float N, float Cos
     return 0.25 * ((-cos(H1 - N) + CosN + H1 * SinN) + (-cos(H2 - N) + CosN + H2 * SinN));
 }
 
-float2 GetInvViewportSize() 
+float2 GetInvViewportSize()
 {
 #if SSAO_OPTION_HALF_RESOLUTION
     return 2.0 * g_Camera.f4ViewportSize.zw;
 #else
     return g_Camera.f4ViewportSize.zw;
 #endif
+}
+
+uint ComputeOccludedSectors(float MinHorizon, float MaxHorizon, uint OccludedBitfield)
+{
+    uint StartInt      = uint(MinHorizon * float(SSAO_BITMASK_SECTOR_COUNT));
+    uint AngleInt      = uint(ceil((MaxHorizon - MinHorizon) * float(SSAO_BITMASK_SECTOR_COUNT)));
+    uint AngleBitfield = AngleInt > 0u ? (0xFFFFFFFFu >> (SSAO_BITMASK_SECTOR_COUNT - AngleInt)) : 0u;
+    return OccludedBitfield | (AngleBitfield << StartInt);
+}
+
+uint ComputeSampleOcclusion(float3 SamplePositionVS0, float3 SamplePositionVS1, float3 PositionVS, float3 ViewVS, float NSlice, float FalloffMul, float FalloffAdd, uint OccludedBitfield)
+{
+    float3 DeltaPos0     = SamplePositionVS0 - PositionVS;
+    float3 DeltaPos1     = SamplePositionVS1 - PositionVS;
+    float3 ViewThickness = ViewVS * g_SSAOAttribs.BitmaskThickness;
+
+    float2 Weight = saturate(float2(length(DeltaPos0), length(DeltaPos1)) * FalloffMul + FalloffAdd);
+
+    float4 FrontBack = float4(
+        FastACos(dot(normalize(DeltaPos0), ViewVS)), FastACos(dot(normalize(DeltaPos0 - ViewThickness), ViewVS)),
+        FastACos(dot(normalize(DeltaPos1), ViewVS)), FastACos(dot(normalize(DeltaPos1 - ViewThickness), ViewVS)));
+
+    FrontBack = saturate((float4(-FrontBack.xy, FrontBack.zw) - NSlice + M_HALF_PI) / M_PI);
+
+    if (Weight.x > 0.0)
+        OccludedBitfield = ComputeOccludedSectors(FrontBack.y, FrontBack.x, OccludedBitfield);
+    if (Weight.y > 0.0)
+        OccludedBitfield = ComputeOccludedSectors(FrontBack.z, FrontBack.w, OccludedBitfield);
+    return OccludedBitfield;
+}
+
+float2 ComputeSampleHorizons(float3 SamplePositionVS0, float3 SamplePositionVS1, float3 PositionVS, float3 ViewVS, float2 MinCosHorizons, float2 MaxCosHorizons, float FalloffMul, float FalloffAdd)
+{
+    float3 SampleDifference0 = SamplePositionVS0 - PositionVS;
+    float3 SampleDifference1 = SamplePositionVS1 - PositionVS;
+
+    float2 SampleDistance   = float2(length(SampleDifference0), length(SampleDifference1));
+    float2 SampleCosHorizon = float2(dot(SampleDifference0 / SampleDistance.x, ViewVS), dot(SampleDifference1 / SampleDistance.y, ViewVS));
+    float2 Weight           = saturate(SampleDistance * FalloffMul + FalloffAdd);
+    return max(MaxCosHorizons, lerp(MinCosHorizons, SampleCosHorizon, Weight));
 }
 
 float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
@@ -125,6 +165,10 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
         float CosNorm = saturate(dot(ProjNormal / ProjNormalLen, ViewVS));
         float N = sign(dot(OrthoSliceDir, ProjNormal)) * FastACos(CosNorm);
 
+#if SSAO_ALGORITHM == SSAO_ALGORITHM_VBAO
+        uint OccludedBitfield = 0u;
+        float NBitmask = -N;
+#else
         float2 MinCosHorizons;
         MinCosHorizons.x = cos(N + M_HALF_PI);
         MinCosHorizons.y = cos(N - M_HALF_PI);
@@ -132,6 +176,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
         float2 MaxCosHorizons;
         MaxCosHorizons.x = MinCosHorizons.x;
         MaxCosHorizons.y = MinCosHorizons.y;
+#endif
 
         float2 SampleDirection = float2(Omega.x, Omega.y) * F3NDC_XYZ_TO_UVD_SCALE.xy * SampleRadius;
         SampleDirection.x *= g_Camera.f4ViewportSize.y * g_Camera.f4ViewportSize.z; // Aspect ratio correction
@@ -149,28 +194,20 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
             float3 SamplePositionVS0 = ScreenXYDepthToViewSpace(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS0, MipLevel)), g_Camera.mProj);
             float3 SamplePositionVS1 = ScreenXYDepthToViewSpace(float3(SamplePositionSS1, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
 
-            float3 SampleDifference0 = SamplePositionVS0 - PositionVS;
-            float3 SampleDifference1 = SamplePositionVS1 - PositionVS;
-
-            float SampleDistance0 = length(SampleDifference0);
-            float SampleCosHorizon0 = dot(SampleDifference0 / SampleDistance0, ViewVS);
-            float Weight0 = saturate(SampleDistance0 * FalloffMul + FalloffAdd);
-
-            float SampleDistance1 = length(SampleDifference1);
-            float SampleCosHorizon1 = dot(SampleDifference1 / SampleDistance1, ViewVS);
-            float Weight1 = saturate(SampleDistance1 * FalloffMul + FalloffAdd);
-
-            MaxCosHorizons.x = max(MaxCosHorizons.x, lerp(MinCosHorizons.x, SampleCosHorizon0, Weight0));
-            MaxCosHorizons.y = max(MaxCosHorizons.y, lerp(MinCosHorizons.y, SampleCosHorizon1, Weight1));
+#if SSAO_ALGORITHM == SSAO_ALGORITHM_VBAO
+            OccludedBitfield = ComputeSampleOcclusion(SamplePositionVS0, SamplePositionVS1, PositionVS, ViewVS, NBitmask, FalloffMul, FalloffAdd, OccludedBitfield);
+#else
+            MaxCosHorizons = ComputeSampleHorizons(SamplePositionVS0, SamplePositionVS1, PositionVS, ViewVS, MinCosHorizons, MaxCosHorizons, FalloffMul, FalloffAdd);
+#endif
         }
 
-        float2 HorizonAngles;
-        HorizonAngles.x = +FastACos(MaxCosHorizons.x);
-        HorizonAngles.y = -FastACos(MaxCosHorizons.y);
-
-#if SSAO_OPTION_UNIFORM_WEIGHTING
+#if SSAO_ALGORITHM == SSAO_ALGORITHM_VBAO
+        Visibility += 1.0 - float(countbits(OccludedBitfield)) / float(SSAO_BITMASK_SECTOR_COUNT);
+#elif SSAO_ALGORITHM == SSAO_ALGORITHM_HBAO
+        float2 HorizonAngles = float2(+FastACos(MaxCosHorizons.x), -FastACos(MaxCosHorizons.y));
         Visibility += 0.5 * IntegrateArcUniform(HorizonAngles.x, HorizonAngles.y);
 #else
+        float2 HorizonAngles = float2(+FastACos(MaxCosHorizons.x), -FastACos(MaxCosHorizons.y));
         Visibility += ProjNormalLen * IntegrateArcCosWeighted(HorizonAngles.x, HorizonAngles.y, N, CosNorm);
 #endif
     }

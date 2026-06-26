@@ -65,10 +65,20 @@ public:
         FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 0u,
 
         /// Compute the effect in half resolution.
-        FEATURE_FLAG_HALF_RESOLUTION = 1u << 1u,
+        FEATURE_FLAG_HALF_RESOLUTION = 1u << 1u
+    };
 
-        /// Use uniform weighting for the occlusion.
-        FEATURE_FLAG_UNIFORM_WEIGHTING = 1u << 2u
+    /// Ambient occlusion algorithm.
+    enum ALGORITHM_TYPE : Uint32
+    {
+        /// Ground-Truth Ambient Occlusion (cosine-weighted horizon integration).
+        ALGORITHM_TYPE_GTAO = 0,
+
+        /// Horizon-Based Ambient Occlusion (uniformly weighted horizon integration).
+        ALGORITHM_TYPE_HBAO = 1,
+
+        /// Visibility Bitmask Ambient Occlusion (partial occlusion via a per-sector bit field).
+        ALGORITHM_TYPE_VBAO = 2
     };
 
     /// Render attributes.
@@ -193,13 +203,15 @@ private:
 private:
     struct RenderTechniqueKey
     {
-        const RENDER_TECH   RenderTech;
-        const FEATURE_FLAGS FeatureFlags;
-        const bool          UseReverseDepth;
+        const RENDER_TECH    RenderTech;
+        const FEATURE_FLAGS  FeatureFlags;
+        const ALGORITHM_TYPE Algorithm;
+        const bool           UseReverseDepth;
 
-        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags, bool _UseReverseDepth) :
+        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags, ALGORITHM_TYPE _Algorithm, bool _UseReverseDepth) :
             RenderTech{_RenderTech},
             FeatureFlags{_FeatureFlags},
+            Algorithm{_Algorithm},
             UseReverseDepth{_UseReverseDepth}
         {}
 
@@ -207,6 +219,7 @@ private:
         {
             return RenderTech == RHS.RenderTech &&
                 FeatureFlags == RHS.FeatureFlags &&
+                Algorithm == RHS.Algorithm &&
                 UseReverseDepth == RHS.UseReverseDepth;
         }
 
@@ -214,7 +227,7 @@ private:
         {
             size_t operator()(const RenderTechniqueKey& Key) const
             {
-                return ComputeHash(Key.FeatureFlags, Key.FeatureFlags, Key.UseReverseDepth);
+                return ComputeHash(Key.RenderTech, Key.FeatureFlags, Key.Algorithm, Key.UseReverseDepth);
             }
         };
     };
@@ -249,9 +262,10 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
     Uint32 m_LastFrameIdx     = ~0u;
 
-    FEATURE_FLAGS m_FeatureFlags    = FEATURE_FLAG_NONE;
-    bool          m_UseReverseDepth = false;
-    CreateInfo    m_Settings;
+    FEATURE_FLAGS  m_FeatureFlags    = FEATURE_FLAG_NONE;
+    ALGORITHM_TYPE m_Algorithm       = ALGORITHM_TYPE_GTAO;
+    bool           m_UseReverseDepth = false;
+    CreateInfo     m_Settings;
 
     Timer m_FrameTimer;
 };

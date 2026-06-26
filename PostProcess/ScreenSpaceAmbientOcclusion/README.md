@@ -44,6 +44,7 @@ The following table lists the parameters and their descriptions.
 | Depth MIP sampling offset                | Controls the main trade-off between performance (memory bandwidth) and quality (temporal stability is the first affected, thin objects next). |
 | Temporal stability factor                | The value is responsible for interpolating between the current and previous frame. |
 | Spatial reconstruction radius            | Controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise. |
+| Bitmask thickness                        | View-space occluder thickness used by the VBAO algorithm. Larger values let more light pass behind thin surfaces. |
 
 
 The effect can be configured using the `ScreenSpaceAmbientOcclusion::FEATURE_FLAGS` enumeration. The following table lists the flags and their descriptions.
@@ -52,7 +53,8 @@ The effect can be configured using the `ScreenSpaceAmbientOcclusion::FEATURE_FLA
 | -----------------------------------------|-----------|
 | `FEATURE_FLAG_HALF_PRECISION_DEPTH`        | Use half-precision fixed-point format for depth values in the SSAO computation |
 | `FEATURE_FLAG_HALF_RESOLUTION`             | Compute SSAO at half resolution of the target render texture |
-| `FEATURE_FLAG_UNIFORM_WEIGHTING`           | By default, we compute AO using the GTAO algorithm. This flag enables the computation of AO using the HBAO algorithm |
+
+The ambient occlusion algorithm is selected with `ScreenSpaceAmbientOcclusionAttribs::Algorithm` (`ALGORITHM_TYPE_GTAO`, `ALGORITHM_TYPE_HBAO`, or `ALGORITHM_TYPE_VBAO`).
 
 
 ### Host API
@@ -149,6 +151,8 @@ Modifications made from the original algorithm version include:
 
 - **[Intel-XeGTAO]**: An implementation of [Jimenez et al., 2016] Ground Truth Ambient Occlusion, MIT license - https://github.com/GameTechDev/XeGTAO
 - **[Jimenez et al., 2016]**: GTAO, Practical Realtime Strategies for Accurate Indirect Occlusion, Jimenez et al., 2016 - https://blog.selfshadow.com/publications/s2016-shading-course/activision/s2016_pbs_activision_occlusion.pdf
+- **[Therrien et al., 2023]**: VBAO, Screen Space Indirect Lighting with Visibility Bitmask, Therrien et al., 2023 - https://arxiv.org/abs/2301.11376
+- **[SSAO-Bitmask-Impl]**: SSAO using Visibility Bitmasks, reference implementation - https://cdrinmatane.github.io/posts/ssaovb-code/
 - **[RTAO, 2019]**: Exploring the Ray Traced Future in 'Metro Exodus' - https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9985-exploring-ray-traced-future-in-metro-exodus.pdf
 - **[ReBLUR, 2020]**: Fast Denoising with Self Stabilizing Recurrent Blurs - https://developer.download.nvidia.com/video/gputechconf/gtc/2020/presentations/s22699-fast-denoising-with-self-stabilizing-recurrent-blurs.pdf
 - **[ReBLUR, 2021]**: ReBLUR: A Hierarchical Recurrent Denoiser - https://link.springer.com/chapter/10.1007/978-1-4842-7185-8_49#preview
