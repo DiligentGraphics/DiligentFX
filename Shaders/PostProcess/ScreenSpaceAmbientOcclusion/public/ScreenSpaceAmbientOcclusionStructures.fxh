@@ -25,6 +25,9 @@
 // Number of samples per slice used in the calculation of ambient occlusion
 #define SSAO_SAMPLES_PER_SLICE 3
 
+// Number of hemisphere-slice sectors encoded in the visibility bitmask (must fit in a 32-bit uint)
+#define SSAO_BITMASK_SECTOR_COUNT 32
+
 // Number of samples on the Poisson disc used in the spatial reconstruction step
 #define SSAO_SPATIAL_RECONSTRUCTION_SAMPLES 8
 
@@ -53,6 +56,11 @@
 // Higher values reduce noise for the price of increased ghosting.
 #define SSAO_MAX_HISTORY_LENGTH 16.0
 
+// Ambient occlusion algorithm (ScreenSpaceAmbientOcclusionAttribs::Algorithm)
+#define SSAO_ALGORITHM_GTAO 0
+#define SSAO_ALGORITHM_HBAO 1
+#define SSAO_ALGORITHM_VBAO 2
+
 struct ScreenSpaceAmbientOcclusionAttribs
 {
     // The value defines world space radius of ambient occlusion
@@ -78,6 +86,15 @@ struct ScreenSpaceAmbientOcclusionAttribs
     
     // The parameter is responsible for adjusting the intensity of SSAO with time
     float AlphaInterpolation          DEFAULT_VALUE(1.0);
+
+    // View-space occluder thickness used by the visibility bitmask method. Larger values let more light pass behind thin surfaces
+    float BitmaskThickness            DEFAULT_VALUE(0.5f);
+
+    // Ambient occlusion algorithm (SSAO_ALGORITHM_GTAO / SSAO_ALGORITHM_HBAO / SSAO_ALGORITHM_VBAO)
+    uint  Algorithm                   DEFAULT_VALUE(SSAO_ALGORITHM_GTAO);
+
+    float Padding0                    DEFAULT_VALUE(0.0f);
+    float Padding1                    DEFAULT_VALUE(0.0f);
 };
 
 #ifdef CHECK_STRUCT_ALIGNMENT
