@@ -88,7 +88,7 @@ public:
 
     virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final
     {
-        return TBase::Release([this]() {
+        return TBase::Release([this]() noexcept {
             RemoveFromCache();
         });
     }
