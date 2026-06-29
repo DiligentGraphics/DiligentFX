@@ -29,6 +29,7 @@
 #include "DebugUtilities.hpp"
 #include "GLTFVertexDataConverter.hpp"
 #include "GraphicsAccessories.hpp"
+#include "XXH128Hasher.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -70,22 +71,38 @@ bool IsActiveVertexBuffer(Uint32 ActiveVertexBufferMask, Uint32 BufferIndex)
         (ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
 }
 
-void HashMaterial(std::size_t& Hash, IRadientMaterialAsset* pMaterial)
+void UpdateRawIfNotEmpty(XXH128State& Hasher, const void* pData, size_t Size)
 {
-    HashCombine(Hash, pMaterial != nullptr);
-    if (pMaterial == nullptr)
+    if (pData != nullptr && Size != 0)
+        Hasher.UpdateRaw(pData, static_cast<Uint64>(Size));
+}
+
+void UpdateString(XXH128State& Hasher, const Char* Str)
+{
+    const Uint64 Len = Str != nullptr ? static_cast<Uint64>(std::strlen(Str)) : 0;
+    Hasher.Update(Len);
+    if (Len != 0)
+        Hasher.UpdateRaw(Str, Len);
+}
+
+void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
+{
+    const bool HasMaterial = pMaterial != nullptr;
+    Hasher.Update(HasMaterial);
+    if (!HasMaterial)
         return;
 
     const RadientAssetReference& MaterialRef = pMaterial->GetReference();
-    if (MaterialRef.URI != nullptr && MaterialRef.URI[0] != '\0')
+    const bool                   HasURI      = MaterialRef.URI != nullptr && MaterialRef.URI[0] != '\0';
+    Hasher.Update(HasURI);
+    if (HasURI)
     {
-        HashCombine(Hash,
-                    CStringHash<Char>{}(MaterialRef.URI),
-                    MaterialRef.Version);
+        UpdateString(Hasher, MaterialRef.URI);
+        Hasher.Update(MaterialRef.Version);
     }
     else
     {
-        HashCombine(Hash, reinterpret_cast<uintptr_t>(pMaterial));
+        Hasher.Update(reinterpret_cast<uintptr_t>(pMaterial));
     }
 }
 
@@ -184,32 +201,30 @@ std::string RadientMeshSource::MakeCacheKey() const
     if (RADIENT_FAILED(m_Status))
         return {};
 
-    std::size_t Hash = 0;
-    HashCombine(Hash,
-                Uint32{1}, // Raw mesh cache key version.
-                m_VertexCount,
-                m_IndexCount,
-                m_IndexType);
+    XXH128State Hasher;
+    Hasher.Update(Uint32{2}, // Raw mesh cache key version.
+                  m_VertexCount,
+                  m_IndexCount,
+                  m_IndexType);
 
     auto HashSourceAttribute =
-        [this, &Hash](const char* Name, Uint32 AttributeId) //
+        [this, &Hasher](const char* Name, Uint32 AttributeId) //
     {
-        HashCombine(Hash, AttributeId);
+        Hasher.Update(AttributeId);
 
         const auto SrcAttribIt = m_SrcAttributes.find(Name);
         const bool HasAttrib   = SrcAttribIt != m_SrcAttributes.end();
-        HashCombine(Hash, HasAttrib);
+        Hasher.Update(HasAttrib);
         if (!HasAttrib)
             return;
 
         const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
-        HashCombine(Hash,
-                    SrcAttrib.Type,
-                    SrcAttrib.NumComponents,
-                    SrcAttrib.IsNormalized,
-                    SrcAttrib.ElementSize,
-                    SrcAttrib.Bytes.size(),
-                    ComputeHashRaw(SrcAttrib.Bytes.data(), SrcAttrib.Bytes.size()));
+        Hasher.Update(SrcAttrib.Type,
+                      SrcAttrib.NumComponents,
+                      SrcAttrib.IsNormalized,
+                      SrcAttrib.ElementSize,
+                      static_cast<Uint64>(SrcAttrib.Bytes.size()));
+        UpdateRawIfNotEmpty(Hasher, SrcAttrib.Bytes.data(), SrcAttrib.Bytes.size());
     };
 
     HashSourceAttribute(GLTF::PositionAttributeName, 0);
@@ -220,24 +235,21 @@ std::string RadientMeshSource::MakeCacheKey() const
     HashSourceAttribute(GLTF::JointsAttributeName, 5);
     HashSourceAttribute(GLTF::WeightsAttributeName, 6);
 
-    HashCombine(Hash, m_Indices16.size());
-    if (!m_Indices16.empty())
-        HashCombine(Hash, ComputeHashRaw(m_Indices16.data(), m_Indices16.size() * sizeof(m_Indices16[0])));
+    Hasher.Update(static_cast<Uint64>(m_Indices16.size()));
+    UpdateRawIfNotEmpty(Hasher, m_Indices16.data(), m_Indices16.size() * sizeof(m_Indices16[0]));
 
-    HashCombine(Hash, m_Indices32.size());
-    if (!m_Indices32.empty())
-        HashCombine(Hash, ComputeHashRaw(m_Indices32.data(), m_Indices32.size() * sizeof(m_Indices32[0])));
+    Hasher.Update(static_cast<Uint64>(m_Indices32.size()));
+    UpdateRawIfNotEmpty(Hasher, m_Indices32.data(), m_Indices32.size() * sizeof(m_Indices32[0]));
 
-    HashCombine(Hash, m_Primitives.size());
+    Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
     {
-        HashCombine(Hash,
-                    Primitive.FirstIndex,
-                    Primitive.IndexCount);
-        HashMaterial(Hash, Primitive.pMaterial);
+        Hasher.Update(Primitive.FirstIndex,
+                      Primitive.IndexCount);
+        HashMaterial(Hasher, Primitive.pMaterial);
     }
 
-    return std::string{"raw-mesh:"} + std::to_string(Hash);
+    return std::string{"raw-mesh:"} + Hasher.Digest().ToString();
 }
 
 RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,

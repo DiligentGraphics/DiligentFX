@@ -28,8 +28,8 @@
 
 #include "Assets/RadientTextureFormat.hpp"
 #include "GraphicsAccessories.hpp"
-#include "HashUtils.hpp"
 #include "TextureLoader.h"
+#include "XXH128Hasher.hpp"
 
 #include <limits>
 #include <utility>
@@ -100,27 +100,37 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
 namespace
 {
 
-size_t ComputeTextureDataHash(const void* pData,
-                              Uint64      ActiveRowSize,
-                              Uint32      RowCount,
-                              Uint32      Stride)
+XXH128Hash ComputeDataHash(const void* pData, Uint64 DataSize)
+{
+    if (pData == nullptr || DataSize == 0)
+        return {};
+
+    XXH128State Hasher;
+    Hasher.UpdateRaw(pData, DataSize);
+    return Hasher.Digest();
+}
+
+XXH128Hash ComputeTextureDataHash(const void* pData,
+                                  Uint64      ActiveRowSize,
+                                  Uint32      RowCount,
+                                  Uint32      Stride)
 {
     if (pData == nullptr || ActiveRowSize == 0 || RowCount == 0 ||
         ActiveRowSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
     {
-        return 0;
+        return {};
     }
 
-    size_t       Hash        = 0;
+    XXH128State  Hasher;
     const Uint8* pRow0       = static_cast<const Uint8*>(pData);
     const size_t RowDataSize = static_cast<size_t>(ActiveRowSize);
     for (Uint32 Row = 0; Row < RowCount; ++Row)
     {
         const size_t RowOffset = static_cast<size_t>(Uint64{Row} * Stride);
-        HashCombine(Hash, ComputeHashRaw(pRow0 + RowOffset, RowDataSize));
+        Hasher.UpdateRaw(pRow0 + RowOffset, RowDataSize);
     }
 
-    return Hash;
+    return Hasher.Digest();
 }
 
 } // namespace
@@ -259,17 +269,19 @@ std::string RadientTextureSource::MakeCacheKey() const
         Key += ":rows=";
         Key += std::to_string(m_TextureDataRowCount);
         Key += ":hash=";
-        Key += std::to_string(ComputeTextureDataHash(m_pData,
-                                                     m_TextureDataActiveRowSize,
-                                                     m_TextureDataRowCount,
-                                                     m_TextureData.Stride));
+        const XXH128Hash Hash = ComputeTextureDataHash(m_pData,
+                                                       m_TextureDataActiveRowSize,
+                                                       m_TextureDataRowCount,
+                                                       m_TextureData.Stride);
+        Key += Hash.ToString();
     }
     else if (m_SourceType == SourceType::EncodedMemory)
     {
         Key += "memory:";
         Key += std::to_string(m_DataSize);
         Key += ':';
-        Key += std::to_string(ComputeHashRaw(m_pData, m_DataSize));
+        const XXH128Hash Hash = ComputeDataHash(m_pData, m_DataSize);
+        Key += Hash.ToString();
     }
     else if (!m_URI.empty())
     {
