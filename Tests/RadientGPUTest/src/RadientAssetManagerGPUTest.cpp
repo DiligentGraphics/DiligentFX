@@ -71,7 +71,7 @@ std::vector<Uint8> MakeTexturePixels(Uint32 Width,
 
 RadientTextureData MakeTextureData(Uint32      Width,
                                    Uint32      Height,
-                                   Uint64      Stride,
+                                   Uint32      Stride,
                                    const void* pData)
 {
     RadientTextureData TextureData{};

@@ -338,7 +338,7 @@ struct RadientTextureData
 
     /// Row stride, in bytes. If zero, Radient derives tightly packed stride from Format and Width.
     /// Stride must be at least the active row size.
-    Uint64 Stride DEFAULT_INITIALIZER(0);
+    Uint32 Stride DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientTextureData RadientTextureData;
 

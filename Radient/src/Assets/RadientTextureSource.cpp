@@ -58,6 +58,9 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
     if (MipProps.RowSize == 0 || MipProps.StorageHeight == 0)
         return false;
 
+    if (MipProps.RowSize > static_cast<Uint64>((std::numeric_limits<Uint32>::max)()))
+        return false;
+
     Uint32 RowCount = MipProps.StorageHeight;
     if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
     {
@@ -70,7 +73,7 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
     if (RowCount == 0)
         return false;
 
-    const Uint64 Stride = TextureData.Stride != 0 ? TextureData.Stride : MipProps.RowSize;
+    const Uint32 Stride = TextureData.Stride != 0 ? TextureData.Stride : static_cast<Uint32>(MipProps.RowSize);
     if (Stride < MipProps.RowSize)
         return false;
 
@@ -81,7 +84,7 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
         if (Stride > (std::numeric_limits<Uint64>::max)() / RowStrideCount)
             return false;
 
-        const Uint64 PrefixSize = Stride * RowStrideCount;
+        const Uint64 PrefixSize = Uint64{Stride} * RowStrideCount;
         if (PrefixSize > (std::numeric_limits<Uint64>::max)() - MipProps.RowSize)
             return false;
 
@@ -100,7 +103,7 @@ namespace
 size_t ComputeTextureDataHash(const void* pData,
                               Uint64      ActiveRowSize,
                               Uint32      RowCount,
-                              Uint64      Stride)
+                              Uint32      Stride)
 {
     if (pData == nullptr || ActiveRowSize == 0 || RowCount == 0 ||
         ActiveRowSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
@@ -108,10 +111,14 @@ size_t ComputeTextureDataHash(const void* pData,
         return 0;
     }
 
-    size_t       Hash = 0;
-    const Uint8* pRow = static_cast<const Uint8*>(pData);
-    for (Uint32 Row = 0; Row < RowCount; ++Row, pRow += Stride)
-        HashCombine(Hash, ComputeHashRaw(pRow, static_cast<size_t>(ActiveRowSize)));
+    size_t       Hash        = 0;
+    const Uint8* pRow0       = static_cast<const Uint8*>(pData);
+    const size_t RowDataSize = static_cast<size_t>(ActiveRowSize);
+    for (Uint32 Row = 0; Row < RowCount; ++Row)
+    {
+        const size_t RowOffset = static_cast<size_t>(Uint64{Row} * Stride);
+        HashCombine(Hash, ComputeHashRaw(pRow0 + RowOffset, RowDataSize));
+    }
 
     return Hash;
 }
@@ -133,7 +140,7 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
             Span.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
         {
             if (m_TextureData.Stride == 0)
-                m_TextureData.Stride = Span.ActiveRowSize;
+                m_TextureData.Stride = static_cast<Uint32>(Span.ActiveRowSize);
 
             m_TextureDataActiveRowSize = Span.ActiveRowSize;
             m_TextureDataRowCount      = Span.RowCount;
