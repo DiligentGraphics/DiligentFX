@@ -54,7 +54,7 @@ The effect can be configured using the `ScreenSpaceAmbientOcclusion::FEATURE_FLA
 | `FEATURE_FLAG_HALF_PRECISION_DEPTH`        | Use half-precision fixed-point format for depth values in the SSAO computation |
 | `FEATURE_FLAG_HALF_RESOLUTION`             | Compute SSAO at half resolution of the target render texture |
 
-The ambient occlusion algorithm is selected with `ScreenSpaceAmbientOcclusionAttribs::Algorithm` (`ALGORITHM_TYPE_GTAO`, `ALGORITHM_TYPE_HBAO`, or `ALGORITHM_TYPE_VBAO`).
+The ambient occlusion algorithm is selected with `HLSL::ScreenSpaceAmbientOcclusionAttribs::Algorithm` using the `SSAO_ALGORITHM_GTAO`, `SSAO_ALGORITHM_HBAO`, or `SSAO_ALGORITHM_VBAO` constants. These values match the host-side `ScreenSpaceAmbientOcclusion::ALGORITHM_TYPE` enumeration.
 
 
 ### Host API

@@ -76,10 +76,25 @@ float2 GetInvViewportSize()
 
 uint ComputeOccludedSectors(float MinHorizon, float MaxHorizon, uint OccludedBitfield)
 {
-    uint StartInt      = uint(MinHorizon * float(SSAO_BITMASK_SECTOR_COUNT));
-    uint AngleInt      = uint(ceil((MaxHorizon - MinHorizon) * float(SSAO_BITMASK_SECTOR_COUNT)));
-    uint AngleBitfield = AngleInt > 0u ? (0xFFFFFFFFu >> (SSAO_BITMASK_SECTOR_COUNT - AngleInt)) : 0u;
-    return OccludedBitfield | (AngleBitfield << StartInt);
+    MinHorizon = saturate(MinHorizon);
+    MaxHorizon = saturate(MaxHorizon);
+
+    uint Result = OccludedBitfield;
+    if (MaxHorizon > MinHorizon)
+    {
+        uint SectorCount = uint(SSAO_BITMASK_SECTOR_COUNT);
+        uint StartInt    = min(uint(MinHorizon * float(SectorCount)), SectorCount - 1u);
+        uint EndInt      = min(uint(ceil(MaxHorizon * float(SectorCount))), SectorCount);
+
+        if (EndInt > StartInt)
+        {
+            uint AngleInt      = EndInt - StartInt;
+            uint AngleBitfield = AngleInt >= 32u ? 0xFFFFFFFFu : ((1u << AngleInt) - 1u);
+            Result |= AngleBitfield << StartInt;
+        }
+    }
+
+    return Result;
 }
 
 uint ComputeSampleOcclusion(float3 SamplePositionVS0, float3 SamplePositionVS1, float3 PositionVS, float3 ViewVS, float NSlice, float FalloffMul, float FalloffAdd, uint OccludedBitfield)

@@ -470,9 +470,13 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     ShaderMacroHelper Macros;
     Macros.Add("SSAO_OPTION_INVERTED_DEPTH", m_UseReverseDepth);
     Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-    Macros.Add("SSAO_ALGORITHM", static_cast<int>(m_Algorithm));
     Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
     Macros.Add("SSAO_OPTION_HALF_PRECISION_DEPTH", (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0);
+
+    // SSAO_ALGORITHM affects only the ambient-occlusion shader. Keep it out of the shared macro set
+    // so the other passes do not get algorithm-specific shader/PSO variants.
+    ShaderMacroHelper AmbientOcclusionMacros = Macros;
+    AmbientOcclusionMacros.Add("SSAO_ALGORITHM", static_cast<int>(m_Algorithm));
 
     bool AllPSOsReady = true;
 
@@ -562,7 +566,7 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
                 RenderAttribs.pDevice, RenderAttribs.pStateCache,
                 "SSAO_ComputeAmbientOcclusion.fx", "ComputeAmbientOcclusionPS",
-                SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+                SHADER_TYPE_PIXEL, AmbientOcclusionMacros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -1326,7 +1330,9 @@ void ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction(const RenderAttri
 
 ScreenSpaceAmbientOcclusion::RenderTechnique& ScreenSpaceAmbientOcclusion::GetRenderTechnique(RENDER_TECH RenderTech)
 {
-    return m_RenderTech[{RenderTech, m_FeatureFlags, m_Algorithm, m_UseReverseDepth}];
+    // Only the ambient-occlusion pass is specialized by algorithm; the other passes can reuse their PSOs.
+    const ALGORITHM_TYPE Algorithm = RenderTech == RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION ? m_Algorithm : ALGORITHM_TYPE_GTAO;
+    return m_RenderTech[{RenderTech, m_FeatureFlags, Algorithm, m_UseReverseDepth}];
 }
 
 } // namespace Diligent
