@@ -170,6 +170,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
         RadientTextureAssetManager::Create(
             RadientTextureAssetManager::CreateInfo{
                 m_pDevice,
+                m_pResourceManager,
+                m_pUploadManager,
             })}
 {
     m_Desc.Name = m_Name.c_str();
@@ -209,7 +211,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
                                                     IRadientTextureAsset**        ppTexture)
 {
     return m_pThreadPool ?
-        m_pTextureManager->LoadTexture(*m_pThreadPool, m_pResourceManager, m_pUploadManager, LoadInfo, ppTexture) :
+        m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture) :
         RADIENT_STATUS_INVALID_OPERATION;
 }
 

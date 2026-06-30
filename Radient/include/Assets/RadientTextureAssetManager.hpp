@@ -79,7 +79,9 @@ class RadientTextureAssetManager final : public std::enable_shared_from_this<Rad
 public:
     struct CreateInfo
     {
-        IRenderDevice* pDevice = nullptr;
+        IRenderDevice*         pDevice          = nullptr;
+        GLTF::ResourceManager* pResourceManager = nullptr;
+        IGPUUploadManager*     pUploadManager   = nullptr;
     };
 
     ~RadientTextureAssetManager();
@@ -89,8 +91,6 @@ public:
     RadientTextureAssetManagerStats GetStats() const noexcept;
 
     RADIENT_STATUS LoadTexture(IThreadPool&                  ThreadPool,
-                               GLTF::ResourceManager*        pResourceManager,
-                               IGPUUploadManager*            pUploadManager,
                                const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
@@ -124,6 +124,8 @@ private:
                                             ITextureLoader&        Loader);
 
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
+    RefCntWeakPtr<GLTF::ResourceManager>  m_WeakResourceManager;
+    RefCntWeakPtr<IGPUUploadManager>      m_WeakUploadManager;
     RadientAssetCache<TexturePayloadImpl> m_TextureCache;
     AtomicStats                           m_Stats;
     std::atomic<RadientHandle>            m_NextAssetID{1};

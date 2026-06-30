@@ -176,7 +176,9 @@ RadientTextureAssetManagerStats RadientTextureAssetManager::AtomicStats::GetSnap
 }
 
 RadientTextureAssetManager::RadientTextureAssetManager(const CreateInfo& CI) noexcept :
-    m_pDevice{CI.pDevice}
+    m_pDevice{CI.pDevice},
+    m_WeakResourceManager{CI.pResourceManager},
+    m_WeakUploadManager{CI.pUploadManager}
 {
 }
 
@@ -193,8 +195,6 @@ RadientTextureAssetManagerStats RadientTextureAssetManager::GetStats() const noe
 }
 
 RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&                  ThreadPool,
-                                                       GLTF::ResourceManager*        pResourceManager,
-                                                       IGPUUploadManager*            pUploadManager,
                                                        const RadientTextureLoadInfo& LoadInfo,
                                                        IRadientTextureAsset**        ppTexture)
 {
@@ -224,15 +224,10 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     IncrementCounter(m_Stats.PendingTextureLoads);
     IncrementCounter(m_Stats.PendingTextureSourceLoads);
 
-    RefCntWeakPtr<GLTF::ResourceManager> WeakResourceManager{pResourceManager};
-    RefCntWeakPtr<IGPUUploadManager>     WeakUploadManager{pUploadManager};
-
     EnqueueAsyncWork(
         &ThreadPool,
         [pTextureAsset,
-         pSelf = shared_from_this(),
-         WeakResourceManager,
-         WeakUploadManager,
+         pSelf         = shared_from_this(),
          TextureSource = std::move(TextureSource)](Uint32) mutable //
         {
             DecrementCounterGuard PendingTextureLoadGuard{pSelf->m_Stats.PendingTextureLoads};
@@ -260,8 +255,8 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
-            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = WeakResourceManager.Lock();
-            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = WeakUploadManager.Lock();
+            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
+            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
             if (!pResourceManager || !pUploadManager)
             {
                 pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
