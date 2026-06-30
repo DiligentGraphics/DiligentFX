@@ -40,6 +40,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace Diligent
@@ -90,10 +91,22 @@ public:
         m_pAtlasSuballocation.Release();
     }
 
-    void SetTexture(RefCntAutoPtr<ITexture> pTexture)
+    ITexture* CreateTexture(IRenderDevice* pDevice, const TextureDesc& Desc)
     {
+        VERIFY_EXPR(pDevice != nullptr);
+
+        RefCntAutoPtr<ITexture> pTexture;
+        if (pDevice != nullptr)
+            pDevice->CreateTexture(Desc, nullptr, pTexture.GetAddressOfEmpty());
+
         m_pTexture = std::move(pTexture);
         m_AllCopyCommandsEnqueued.store(m_pTexture != nullptr, std::memory_order_release);
+        return m_pTexture;
+    }
+
+    ITexture* GetTexture() const noexcept
+    {
+        return m_pTexture;
     }
 
     void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation)
@@ -241,10 +254,13 @@ struct TextureCopyData
     RadientTextureAssetManagerSharedPtr       pManager;
     RefCntAutoPtr<IRenderDevice>              pDevice;
     RefCntAutoPtr<TextureAssetImpl>           pTexture;
-    TextureStorage*                           pStorage = nullptr;
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-    std::atomic<Uint32>&                      PendingTextureLoads;
-    std::atomic<Uint32>&                      PendingGPUUploads;
+
+    TextureDesc TexDesc;
+    std::string TextureName;
+
+    std::atomic<Uint32>& PendingTextureLoads;
+    std::atomic<Uint32>& PendingGPUUploads;
 
     static void CopyTextureCallback(IDeviceContext*          pContext,
                                     Uint32                   DstMipLevel,
@@ -271,14 +287,31 @@ struct TextureCopyData
     }
 
 private:
+    ITexture* GetDestinationTexture(IDeviceContext* pContext)
+    {
+        if (pContext == nullptr)
+            return nullptr;
+
+        if (pAtlasSuballocation != nullptr)
+            return pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
+
+        TextureStorage& Storage     = pTexture->GetStorage();
+        ITexture*       pDstTexture = Storage.GetTexture();
+        if (pDstTexture == nullptr)
+        {
+            TextureDesc Desc = TexDesc;
+            Desc.Name        = TextureName.empty() ? nullptr : TextureName.c_str();
+
+            pDstTexture = Storage.CreateTexture(pDevice, Desc);
+        }
+
+        return pDstTexture;
+    }
+
     void RecordCopyCommandEnqueueResult(bool CopyEnqueued)
     {
-        VERIFY_EXPR(pStorage != nullptr);
-        if (pStorage != nullptr)
-        {
-            if (pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
-                DecrementCounter(PendingTextureLoads);
-        }
+        if (pTexture->GetStorage().RecordCopyCommandEnqueueResult(CopyEnqueued))
+            DecrementCounter(PendingTextureLoads);
 
         DecrementCounter(PendingGPUUploads);
     }
@@ -292,10 +325,9 @@ private:
         bool CopyEnqueued = false;
         if (pContext != nullptr)
         {
-            ITexture* pAtlasTexture = pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
-            if (pAtlasTexture != nullptr)
+            if (ITexture* pDstTexture = GetDestinationTexture(pContext))
             {
-                pContext->UpdateTexture(pAtlasTexture, DstMipLevel, DstSlice, DstBox, SrcData,
+                pContext->UpdateTexture(pDstTexture, DstMipLevel, DstSlice, DstBox, SrcData,
                                         RESOURCE_STATE_TRANSITION_MODE_VERIFY,
                                         RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 CopyEnqueued = true;
@@ -316,12 +348,11 @@ private:
         bool CopyEnqueued = false;
         if (pContext != nullptr && pSrcTexture != nullptr)
         {
-            ITexture* pAtlasTexture = pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
-            if (pAtlasTexture != nullptr)
+            if (ITexture* pDstTexture = GetDestinationTexture(pContext))
             {
                 CopyTextureAttribs CopyAttribs;
                 CopyAttribs.pSrcTexture              = pSrcTexture;
-                CopyAttribs.pDstTexture              = pAtlasTexture;
+                CopyAttribs.pDstTexture              = pDstTexture;
                 CopyAttribs.DstMipLevel              = DstMipLevel;
                 CopyAttribs.DstSlice                 = DstSlice;
                 CopyAttribs.DstX                     = DstBox.MinX;
@@ -330,7 +361,7 @@ private:
                 CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_VERIFY;
                 CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
 
-                const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(pAtlasTexture->GetDesc().Format);
+                const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(pDstTexture->GetDesc().Format);
 
                 Box SrcBox;
                 SrcBox.MinX = SrcX;
@@ -509,97 +540,137 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     if (m_pDevice == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    TextureStorage&    Texture = pTextureAsset->GetStorage();
     const TextureDesc& TexDesc = Loader.GetTextureDesc();
-
-    Texture.ResetGPUResourceState();
-
-    if (TexDesc.Type != RESOURCE_DIM_TEX_2D || TexDesc.GetArraySize() != 1)
-    {
-        RefCntAutoPtr<ITexture> pTexture;
-        Loader.CreateTexture(m_pDevice, &pTexture);
-        const RADIENT_STATUS Status = pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
-        Texture.SetTexture(std::move(pTexture));
-        return Status;
-    }
-
-    Texture.SetAtlasSuballocation(ResourceManager.AllocateTextureSpace(TexDesc.Format,
-                                                                       TexDesc.Width,
-                                                                       TexDesc.Height,
-                                                                       TextureAsset.GetReference().URI));
-
-    ITextureAtlasSuballocation* pAtlasSuballocation = Texture.GetAtlasSuballocation();
-    if (pAtlasSuballocation == nullptr)
+    if (TexDesc.Is3D())
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const TextureDesc&          AtlasDesc       = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
-    const TextureFormatAttribs& FmtAttribs      = GetTextureFormatAttribs(TexDesc.Format);
-    const uint2                 Origin          = pAtlasSuballocation->GetOrigin();
-    const Uint32                MipLevels       = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
-    Uint32                      UploadMipLevels = 0;
+    TextureStorage& Texture = pTextureAsset->GetStorage();
+    Texture.ResetGPUResourceState();
 
-    // Render-thread callbacks may run while this worker is still scheduling uploads.
-    // Publish the full pending count before scheduling any mip to avoid transiently
-    // reaching zero and marking the texture ready before the complete batch is queued.
-    for (; UploadMipLevels < MipLevels; ++UploadMipLevels)
+    const TextureDesc AtlasDescForFit = ResourceManager.GetAtlasDesc(TexDesc.Format);
+    const bool        UseTextureAtlas =
+        TexDesc.Type == RESOURCE_DIM_TEX_2D &&
+        TexDesc.GetArraySize() == 1 &&
+        AtlasDescForFit.Type != RESOURCE_DIM_UNDEFINED &&
+        TexDesc.Width <= AtlasDescForFit.Width &&
+        TexDesc.Height <= AtlasDescForFit.Height;
+
+    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+
+    uint2          AtlasOrigin{};
+    Uint32         UploadMipLevels = TexDesc.MipLevels;
+    Uint32         UploadSlices    = TexDesc.GetArraySize();
+    TEXTURE_FORMAT UploadFormat    = TexDesc.Format;
+
+    if (UseTextureAtlas)
     {
-        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, UploadMipLevels);
-        if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
+        pAtlasSuballocation = ResourceManager.AllocateTextureSpace(TexDesc.Format,
+                                                                   TexDesc.Width,
+                                                                   TexDesc.Height,
+                                                                   TextureAsset.GetReference().URI);
+        if (pAtlasSuballocation == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+        Texture.SetAtlasSuballocation(pAtlasSuballocation);
+
+        const TextureDesc&          AtlasDesc  = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
+        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TexDesc.Format);
+        const Uint32                MipLevels  = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
+
+        UploadMipLevels = 0;
+        UploadSlices    = 1;
+        UploadFormat    = AtlasDesc.Format;
+        AtlasOrigin     = pAtlasSuballocation->GetOrigin();
+
+        for (; UploadMipLevels < MipLevels; ++UploadMipLevels)
         {
-            // Do not copy mip levels that are smaller than the block size.
-            if (MipProps.LogicalWidth < FmtAttribs.BlockWidth ||
-                MipProps.LogicalHeight < FmtAttribs.BlockHeight)
-                break;
+            const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, UploadMipLevels);
+            if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
+            {
+                // Do not copy mip levels that are smaller than the block size.
+                if (MipProps.LogicalWidth < FmtAttribs.BlockWidth ||
+                    MipProps.LogicalHeight < FmtAttribs.BlockHeight)
+                    break;
+            }
+        }
+    }
+    else
+    {
+        if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation != DEVICE_FEATURE_STATE_DISABLED)
+        {
+            if (Texture.CreateTexture(m_pDevice, TexDesc) == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
         }
     }
 
-    Texture.BeginSubresourceUploads(UploadMipLevels);
+    const Uint32 UploadSubresourceCount = UploadSlices * UploadMipLevels;
 
-    const Uint32 PendingUploadScheduling = UploadMipLevels != 0 ? 1u : 0u;
+    // Render-thread callbacks may run while this worker is still scheduling uploads.
+    // Publish the full pending count before scheduling any subresource to avoid transiently
+    // reaching zero and marking the texture ready before the complete batch is queued.
+    Texture.BeginSubresourceUploads(UploadSubresourceCount);
+
+    const Uint32 PendingUploadScheduling = UploadSubresourceCount != 0 ? 1u : 0u;
     IncrementCounter(m_Stats.PendingUploadScheduling, PendingUploadScheduling);
     DecrementCounterGuard PendingUploadScheduleGuard{m_Stats.PendingUploadScheduling, PendingUploadScheduling};
-    IncrementCounter(m_Stats.PendingGPUUploads, UploadMipLevels);
+    IncrementCounter(m_Stats.PendingGPUUploads, UploadSubresourceCount);
 
-    for (Uint32 Mip = 0; Mip < UploadMipLevels; ++Mip)
+    RadientTextureAssetManagerSharedPtr pSelf = shared_from_this();
+
+    for (Uint32 Slice = 0; Slice < UploadSlices; ++Slice)
     {
-        const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, Mip);
+        for (Uint32 Mip = 0; Mip < UploadMipLevels; ++Mip)
+        {
+            const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, Mip);
+            const TextureSubResData& SubRes   = Loader.GetSubresourceData(Mip, Slice);
 
-        const TextureSubResData& SubRes = Loader.GetSubresourceData(Mip);
+            TextureCopyData* pCopyData = new TextureCopyData{
+                pSelf,
+                m_pDevice,
+                pTextureAsset,
+                pAtlasSuballocation,
+                pAtlasSuballocation ? TextureDesc{} : TexDesc,
+                pAtlasSuballocation || TexDesc.Name == nullptr ? std::string{} : TexDesc.Name,
+                m_Stats.PendingTextureLoads,
+                m_Stats.PendingGPUUploads,
+            };
 
-        TextureCopyData* pCopyData = new TextureCopyData{
-            shared_from_this(),
-            m_pDevice,
-            pTextureAsset,
-            &Texture,
-            RefCntAutoPtr<ITextureAtlasSuballocation>{pAtlasSuballocation},
-            m_Stats.PendingTextureLoads,
-            m_Stats.PendingGPUUploads,
-        };
+            ScheduleTextureUpdateInfo UpdateInfo;
+            UpdateInfo.Format      = UploadFormat;
+            UpdateInfo.pSrcData    = SubRes.pData;
+            UpdateInfo.Stride      = SubRes.Stride;
+            UpdateInfo.DepthStride = SubRes.DepthStride;
+            UpdateInfo.DstMipLevel = Mip;
 
-        ScheduleTextureUpdateInfo UpdateInfo;
-        UpdateInfo.Format      = AtlasDesc.Format;
-        UpdateInfo.pSrcData    = SubRes.pData;
-        UpdateInfo.Stride      = SubRes.Stride;
-        UpdateInfo.DepthStride = SubRes.DepthStride;
-        UpdateInfo.DstMipLevel = Mip;
-        UpdateInfo.DstSlice    = pAtlasSuballocation->GetSlice();
+            Box& DstBox = UpdateInfo.DstBox;
+            if (pAtlasSuballocation != nullptr)
+            {
+                VERIFY_EXPR(Slice == 0);
+                UpdateInfo.DstSlice = pAtlasSuballocation->GetSlice();
 
-        UpdateInfo.DstBox.MinX      = Origin.x >> Mip;
-        UpdateInfo.DstBox.MaxX      = UpdateInfo.DstBox.MinX + MipProps.LogicalWidth;
-        UpdateInfo.DstBox.MinY      = Origin.y >> Mip;
-        UpdateInfo.DstBox.MaxY      = UpdateInfo.DstBox.MinY + MipProps.LogicalHeight;
-        UpdateInfo.pCopyTextureData = pCopyData;
+                DstBox.MinX = AtlasOrigin.x >> Mip;
+                DstBox.MaxX = DstBox.MinX + MipProps.LogicalWidth;
+                DstBox.MinY = AtlasOrigin.y >> Mip;
+                DstBox.MaxY = DstBox.MinY + MipProps.LogicalHeight;
+            }
+            else
+            {
+                UpdateInfo.DstSlice = Slice;
 
-        UpdateInfo.CopyTexture      = TextureCopyData::CopyTextureCallback;
-        UpdateInfo.CopyD3D11Texture = TextureCopyData::CopyD3D11TextureCallback;
+                DstBox = Box{0, MipProps.LogicalWidth, 0, MipProps.LogicalHeight};
+            }
 
-        UploadManager.ScheduleTextureUpdate(UpdateInfo);
+            UpdateInfo.pCopyTextureData = pCopyData;
+            UpdateInfo.CopyTexture      = TextureCopyData::CopyTextureCallback;
+            UpdateInfo.CopyD3D11Texture = TextureCopyData::CopyD3D11TextureCallback;
+
+            UploadManager.ScheduleTextureUpdate(UpdateInfo);
+        }
     }
 
-    if (UploadMipLevels != 0)
+    if (UploadSubresourceCount != 0)
         PendingTextureLoadGuard.Reset();
 
-    return UploadMipLevels != 0 ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
+    return UploadSubresourceCount != 0 ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent
