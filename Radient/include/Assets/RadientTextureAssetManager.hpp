@@ -96,8 +96,9 @@ public:
 
     static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
 
-    // Reports texture source loading and upload-scheduling status. OK does not
-    // imply that the texture is ready for sampling; use GetTextureSRV() for that.
+    // Reports texture source loading and upload scheduling status. OK means
+    // required copy commands were enqueued, but does not imply GPU completion.
+    // Use GetTextureSRV() to retrieve the texture view.
     static RADIENT_STATUS            GetLoadStatus(IRadientAsset* pTextureAsset);
     static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
 

@@ -61,7 +61,7 @@ struct TextureStorage
         pTexture{std::move(Rhs.pTexture)},
         pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
         LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-        GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+        GPUCopyEnqueued{Rhs.GPUCopyEnqueued.load(std::memory_order_relaxed)},
         GPUUploadsSucceeded{Rhs.GPUUploadsSucceeded.load(std::memory_order_relaxed)},
         PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
     {
@@ -80,9 +80,10 @@ struct TextureStorage
         VERIFY_EXPR(PrevPendingUploads > 0);
         if (PrevPendingUploads == 1)
         {
-            const bool Ready = CopyScheduled &&
+            const bool Enqueued = CopyScheduled &&
                 GPUUploadsSucceeded.load(std::memory_order_acquire);
-            GPUResourcesReady.store(Ready, std::memory_order_release);
+            GPUCopyEnqueued.store(Enqueued, std::memory_order_release);
+            LoadStatus.store(Enqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
             return true;
         }
 
@@ -92,9 +93,11 @@ struct TextureStorage
     RefCntAutoPtr<ITexture>                   pTexture;
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
     std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
-    std::atomic_bool                          GPUResourcesReady{false};
-    std::atomic_bool                          GPUUploadsSucceeded{true};
-    std::atomic<Uint32>                       PendingUploads{0};
+    // True when no deferred copy is required or all required copy callbacks
+    // have enqueued commands. This is not a GPU completion fence.
+    std::atomic_bool    GPUCopyEnqueued{false};
+    std::atomic_bool    GPUUploadsSucceeded{true};
+    std::atomic<Uint32> PendingUploads{0};
 };
 
 void IncrementCounter(std::atomic<Uint32>& Counter,
@@ -267,7 +270,8 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
 
             PendingTextureLoadGuard.Reset();
             const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
-            pTextureAsset->GetStorage().LoadStatus.store(Status, std::memory_order_release);
+            if (Status != RADIENT_STATUS_PENDING)
+                pTextureAsset->GetStorage().LoadStatus.store(Status, std::memory_order_release);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -282,7 +286,7 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pT
 
     const TextureStorage& Texture = pImpl->GetStorage();
     if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
-        !Texture.GPUResourcesReady.load(std::memory_order_acquire))
+        !Texture.GPUCopyEnqueued.load(std::memory_order_acquire))
     {
         return nullptr;
     }
@@ -356,14 +360,14 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     };
 
     Texture.PendingUploads.store(0, std::memory_order_release);
-    Texture.GPUResourcesReady.store(false, std::memory_order_release);
+    Texture.GPUCopyEnqueued.store(false, std::memory_order_release);
     Texture.pTexture.Release();
     Texture.pAtlasSuballocation.Release();
 
     if (TexDesc.Type != RESOURCE_DIM_TEX_2D || TexDesc.GetArraySize() != 1)
     {
         Loader.CreateTexture(m_pDevice, &Texture.pTexture);
-        Texture.GPUResourcesReady.store(Texture.pTexture != nullptr, std::memory_order_release);
+        Texture.GPUCopyEnqueued.store(Texture.pTexture != nullptr, std::memory_order_release);
         return Texture.pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
     }
 
@@ -397,7 +401,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
 
     Texture.PendingUploads.store(UploadMipLevels, std::memory_order_release);
     Texture.GPUUploadsSucceeded.store(true, std::memory_order_release);
-    Texture.GPUResourcesReady.store(UploadMipLevels == 0, std::memory_order_release);
+    Texture.GPUCopyEnqueued.store(UploadMipLevels == 0, std::memory_order_release);
 
     const Uint32 PendingUploadScheduling = UploadMipLevels != 0 ? 1u : 0u;
     IncrementCounter(m_Stats.PendingUploadScheduling, PendingUploadScheduling);
@@ -522,7 +526,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     if (UploadMipLevels != 0)
         PendingTextureLoadGuard.Reset();
 
-    return RADIENT_STATUS_OK;
+    return UploadMipLevels != 0 ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent

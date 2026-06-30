@@ -226,13 +226,19 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
         ASSERT_NE(pTexture, nullptr);
 
         EnteredUploadScheduling = WaitForTextureUploadScheduling(*pAssetManager);
+        ASSERT_TRUE(EnteredUploadScheduling);
+
+        // The worker has queued upload callbacks, but they have not reported
+        // success or failure yet, so the texture load remains pending.
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
         EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     }
 
     pThreadPool->StopThreads();
 
-    ASSERT_TRUE(EnteredUploadScheduling);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    // Stop() shuts down the upload manager and drains the blocked callbacks.
+    // No texture copy was enqueued, so the load reaches a terminal failure.
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(pTexture), nullptr);
 }
 
