@@ -63,6 +63,11 @@ struct TestTextureStorage
     TestTextureStorage& operator=(const TestTextureStorage&) = delete;
     // clang-format on
 
+    RADIENT_STATUS GetLoadStatus() const noexcept
+    {
+        return LoadStatus.load(std::memory_order_acquire);
+    }
+
     Uint32                      Value = 0;
     std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
 };

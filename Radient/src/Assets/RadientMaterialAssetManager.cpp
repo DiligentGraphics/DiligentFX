@@ -45,6 +45,11 @@ static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4
 
 struct MaterialStorage
 {
+    RADIENT_STATUS GetLoadStatus() const noexcept
+    {
+        return RADIENT_STATUS_OK;
+    }
+
     GLTF::Material Material;
 
     RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;

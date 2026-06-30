@@ -74,6 +74,11 @@ struct GLTFModelStorage
     GLTFModelStorage(const GLTFModelStorage&)            = delete;
     GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
 
+    RADIENT_STATUS GetLoadStatus() const noexcept
+    {
+        return LoadStatus.load(std::memory_order_acquire);
+    }
+
     std::unique_ptr<GLTF::Model> pModel;
     std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
     std::atomic_bool             GPUResourcesReady{false};

@@ -215,21 +215,19 @@ public:
 
     /// Reports payload load/source-processing status.
     /// RADIENT_STATUS_OK does not imply that queued GPU upload callbacks have completed.
-    template <typename T = Storage>
-    auto GetLoadStatus() const -> decltype(std::declval<const T&>().LoadStatus.load())
+    RADIENT_STATUS GetLoadStatus() const
     {
         const RADIENT_STATUS PayloadStatus = GetPayloadStatus();
         if (PayloadStatus != RADIENT_STATUS_OK)
             return PayloadStatus;
 
         RefCntAutoPtr<PayloadType> pPayload = GetPayload();
-        return pPayload ? pPayload->GetStorage().LoadStatus.load(std::memory_order_acquire) : RADIENT_STATUS_INVALID_OPERATION;
+        return pPayload ? pPayload->GetStorage().GetLoadStatus() : RADIENT_STATUS_INVALID_OPERATION;
     }
 
     /// Reports payload load/source-processing status for a generic asset pointer.
     /// RADIENT_STATUS_OK does not imply that queued GPU upload callbacks have completed.
-    template <typename T = Storage>
-    static auto GetLoadStatus(IRadientAsset* pAsset) -> decltype(std::declval<const T&>().LoadStatus.load())
+    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pAsset)
     {
         const RadientAssetImpl* pImpl = ClassPtrCast<const RadientAssetImpl>(pAsset);
         return pImpl ? pImpl->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;

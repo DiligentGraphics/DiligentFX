@@ -50,20 +50,21 @@ namespace
 
 static constexpr INTERFACE_ID IID_TextureAssetImpl = {0x8bd4869c, 0x6ec8, 0x4944, {0xbc, 0x3d, 0xe7, 0xcc, 0x5d, 0xb, 0x26, 0xc5}};
 
-struct TextureStorage
+class TextureStorage
 {
+public:
     explicit TextureStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
-        LoadStatus{InitLoadStatus}
+        m_LoadStatus{InitLoadStatus}
     {
     }
 
     TextureStorage(TextureStorage&& Rhs) noexcept :
-        pTexture{std::move(Rhs.pTexture)},
-        pAtlasSuballocation{std::move(Rhs.pAtlasSuballocation)},
-        LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-        GPUCopyEnqueued{Rhs.GPUCopyEnqueued.load(std::memory_order_relaxed)},
-        GPUUploadsSucceeded{Rhs.GPUUploadsSucceeded.load(std::memory_order_relaxed)},
-        PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
+        m_pTexture{std::move(Rhs.m_pTexture)},
+        m_pAtlasSuballocation{std::move(Rhs.m_pAtlasSuballocation)},
+        m_LoadStatus{Rhs.m_LoadStatus.load(std::memory_order_relaxed)},
+        m_AllCopyCommandsEnqueued{Rhs.m_AllCopyCommandsEnqueued.load(std::memory_order_relaxed)},
+        m_AnyCopyCommandEnqueueFailed{Rhs.m_AnyCopyCommandEnqueueFailed.load(std::memory_order_relaxed)},
+        m_PendingSubresourceUploads{Rhs.m_PendingSubresourceUploads.load(std::memory_order_relaxed)}
     {
     }
 
@@ -71,33 +72,105 @@ struct TextureStorage
     TextureStorage(const TextureStorage&)            = delete;
     TextureStorage& operator=(const TextureStorage&) = delete;
 
-    bool UpdateUploadProgress(bool CopyScheduled)
+    void SetLoadStatus(RADIENT_STATUS Status) noexcept
     {
-        if (!CopyScheduled)
-            GPUUploadsSucceeded.store(false, std::memory_order_release);
+        m_LoadStatus.store(Status, std::memory_order_release);
+    }
 
-        const Uint32 PrevPendingUploads = PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
-        VERIFY_EXPR(PrevPendingUploads > 0);
-        if (PrevPendingUploads == 1)
+    RADIENT_STATUS GetLoadStatus() const noexcept
+    {
+        return m_LoadStatus.load(std::memory_order_acquire);
+    }
+
+    void ResetGPUResourceState()
+    {
+        m_PendingSubresourceUploads.store(0, std::memory_order_release);
+        m_AllCopyCommandsEnqueued.store(false, std::memory_order_release);
+        m_pTexture.Release();
+        m_pAtlasSuballocation.Release();
+    }
+
+    void SetTexture(RefCntAutoPtr<ITexture> pTexture)
+    {
+        m_pTexture = std::move(pTexture);
+        m_AllCopyCommandsEnqueued.store(m_pTexture != nullptr, std::memory_order_release);
+    }
+
+    void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation)
+    {
+        m_pAtlasSuballocation = std::move(pAtlasSuballocation);
+    }
+
+    ITextureAtlasSuballocation* GetAtlasSuballocation() const noexcept
+    {
+        return m_pAtlasSuballocation;
+    }
+
+    ITextureView* GetTextureSRV() const
+    {
+        if (GetLoadStatus() != RADIENT_STATUS_OK ||
+            !m_AllCopyCommandsEnqueued.load(std::memory_order_acquire))
         {
-            const bool Enqueued = CopyScheduled &&
-                GPUUploadsSucceeded.load(std::memory_order_acquire);
-            GPUCopyEnqueued.store(Enqueued, std::memory_order_release);
-            LoadStatus.store(Enqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+            return nullptr;
+        }
+
+        ITexture* pTexture = m_pTexture;
+        if (pTexture == nullptr)
+        {
+            ITextureAtlasSuballocation* pAtlasSuballocation = GetAtlasSuballocation();
+            if (pAtlasSuballocation != nullptr)
+            {
+                if (IDynamicTextureAtlas* pAtlas = pAtlasSuballocation->GetAtlas())
+                    pTexture = pAtlas->GetTexture();
+            }
+        }
+
+        return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+    }
+
+    void BeginSubresourceUploads(Uint32 SubresourceUploadCount)
+    {
+        m_PendingSubresourceUploads.store(SubresourceUploadCount, std::memory_order_release);
+        m_AnyCopyCommandEnqueueFailed.store(false, std::memory_order_release);
+        m_AllCopyCommandsEnqueued.store(SubresourceUploadCount == 0, std::memory_order_release);
+    }
+
+    // Records the result of a copy command enqueue operation.
+    // Returns true if this was the last pending subresource upload and the final load status has been set.
+    bool RecordCopyCommandEnqueueResult(bool CopyEnqueued)
+    {
+        if (!CopyEnqueued)
+            m_AnyCopyCommandEnqueueFailed.store(true, std::memory_order_release);
+
+        const Uint32 PrevPendingSubresourceUploads = m_PendingSubresourceUploads.fetch_sub(1, std::memory_order_acq_rel);
+        VERIFY_EXPR(PrevPendingSubresourceUploads > 0);
+        if (PrevPendingSubresourceUploads == 1)
+        {
+            const bool AllCopiesEnqueued = !m_AnyCopyCommandEnqueueFailed.load(std::memory_order_acquire);
+            m_AllCopyCommandsEnqueued.store(AllCopiesEnqueued, std::memory_order_release);
+            SetLoadStatus(AllCopiesEnqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
             return true;
         }
 
         return false;
     }
 
-    RefCntAutoPtr<ITexture>                   pTexture;
-    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-    std::atomic<RADIENT_STATUS>               LoadStatus{RADIENT_STATUS_OK};
+private:
+    RefCntAutoPtr<ITexture>                   m_pTexture;
+    RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
+
+    std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
+
     // True when no deferred copy is required or all required copy callbacks
     // have enqueued commands. This is not a GPU completion fence.
-    std::atomic_bool    GPUCopyEnqueued{false};
-    std::atomic_bool    GPUUploadsSucceeded{true};
-    std::atomic<Uint32> PendingUploads{0};
+    std::atomic_bool m_AllCopyCommandsEnqueued{false};
+
+    // True if any copy command failed to enqueue. This is used to set the final load status.
+    std::atomic_bool m_AnyCopyCommandEnqueueFailed{false};
+
+    // Number of subresource upload callbacks that have not reported whether
+    // their copy commands were enqueued. This is not GPU completion tracking.
+    std::atomic<Uint32> m_PendingSubresourceUploads{0};
 };
 
 void IncrementCounter(std::atomic<Uint32>& Counter,
@@ -251,7 +324,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
             if (pLoader == nullptr)
             {
-                pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+                pTextureAsset->GetStorage().SetLoadStatus(RADIENT_STATUS_INVALID_OPERATION);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
@@ -259,14 +332,14 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
             if (!pResourceManager || !pUploadManager)
             {
-                pTextureAsset->GetStorage().LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+                pTextureAsset->GetStorage().SetLoadStatus(RADIENT_STATUS_INVALID_OPERATION);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
             PendingTextureLoadGuard.Reset();
             const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
             if (Status != RADIENT_STATUS_PENDING)
-                pTextureAsset->GetStorage().LoadStatus.store(Status, std::memory_order_release);
+                pTextureAsset->GetStorage().SetLoadStatus(Status);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -279,21 +352,7 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pT
     if (!pImpl)
         return nullptr;
 
-    const TextureStorage& Texture = pImpl->GetStorage();
-    if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
-        !Texture.GPUCopyEnqueued.load(std::memory_order_acquire))
-    {
-        return nullptr;
-    }
-
-    ITexture* pTexture = Texture.pTexture;
-    if (pTexture == nullptr && Texture.pAtlasSuballocation != nullptr)
-    {
-        if (IDynamicTextureAtlas* pAtlas = Texture.pAtlasSuballocation->GetAtlas())
-            pTexture = pAtlas->GetTexture();
-    }
-
-    return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+    return pImpl->GetStorage().GetTextureSRV();
 }
 
 RADIENT_STATUS RadientTextureAssetManager::GetLoadStatus(IRadientAsset* pTextureAsset)
@@ -314,11 +373,7 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
     if (!pImpl)
         return false;
 
-    const TextureStorage& Texture = pImpl->GetStorage();
-    if (Texture.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK)
-        return false;
-
-    ITextureAtlasSuballocation* pAtlasSuballocation = Texture.pAtlasSuballocation;
+    ITextureAtlasSuballocation* pAtlasSuballocation = pImpl->GetStorage().GetAtlasSuballocation();
     if (pAtlasSuballocation == nullptr)
         return false;
 
@@ -334,9 +389,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
 {
     DecrementCounterGuard PendingTextureLoadGuard{m_Stats.PendingTextureLoads};
 
-    RefCntAutoPtr<TextureAssetImpl> pTextureAsset{
-        &TextureAsset,
-        IID_TextureAssetImpl};
+    RefCntAutoPtr<TextureAssetImpl> pTextureAsset{&TextureAsset, IID_TextureAssetImpl};
     if (!pTextureAsset)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -354,28 +407,29 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
     };
 
-    Texture.PendingUploads.store(0, std::memory_order_release);
-    Texture.GPUCopyEnqueued.store(false, std::memory_order_release);
-    Texture.pTexture.Release();
-    Texture.pAtlasSuballocation.Release();
+    Texture.ResetGPUResourceState();
 
     if (TexDesc.Type != RESOURCE_DIM_TEX_2D || TexDesc.GetArraySize() != 1)
     {
-        Loader.CreateTexture(m_pDevice, &Texture.pTexture);
-        Texture.GPUCopyEnqueued.store(Texture.pTexture != nullptr, std::memory_order_release);
-        return Texture.pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+        RefCntAutoPtr<ITexture> pTexture;
+        Loader.CreateTexture(m_pDevice, &pTexture);
+        const RADIENT_STATUS Status = pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+        Texture.SetTexture(std::move(pTexture));
+        return Status;
     }
 
-    Texture.pAtlasSuballocation = ResourceManager.AllocateTextureSpace(TexDesc.Format,
+    Texture.SetAtlasSuballocation(ResourceManager.AllocateTextureSpace(TexDesc.Format,
                                                                        TexDesc.Width,
                                                                        TexDesc.Height,
-                                                                       TextureAsset.GetReference().URI);
-    if (Texture.pAtlasSuballocation == nullptr)
+                                                                       TextureAsset.GetReference().URI));
+
+    ITextureAtlasSuballocation* pAtlasSuballocation = Texture.GetAtlasSuballocation();
+    if (pAtlasSuballocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const TextureDesc&          AtlasDesc       = Texture.pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
+    const TextureDesc&          AtlasDesc       = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
     const TextureFormatAttribs& FmtAttribs      = GetTextureFormatAttribs(TexDesc.Format);
-    const uint2                 Origin          = Texture.pAtlasSuballocation->GetOrigin();
+    const uint2                 Origin          = pAtlasSuballocation->GetOrigin();
     const Uint32                MipLevels       = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
     Uint32                      UploadMipLevels = 0;
 
@@ -394,9 +448,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         }
     }
 
-    Texture.PendingUploads.store(UploadMipLevels, std::memory_order_release);
-    Texture.GPUUploadsSucceeded.store(true, std::memory_order_release);
-    Texture.GPUCopyEnqueued.store(UploadMipLevels == 0, std::memory_order_release);
+    Texture.BeginSubresourceUploads(UploadMipLevels);
 
     const Uint32 PendingUploadScheduling = UploadMipLevels != 0 ? 1u : 0u;
     IncrementCounter(m_Stats.PendingUploadScheduling, PendingUploadScheduling);
@@ -413,7 +465,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
             shared_from_this(),
             pTextureAsset,
             &Texture,
-            Texture.pAtlasSuballocation,
+            RefCntAutoPtr<ITextureAtlasSuballocation>{pAtlasSuballocation},
         };
 
         ScheduleTextureUpdateInfo UpdateInfo;
@@ -422,7 +474,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         UpdateInfo.Stride      = SubRes.Stride;
         UpdateInfo.DepthStride = SubRes.DepthStride;
         UpdateInfo.DstMipLevel = Mip;
-        UpdateInfo.DstSlice    = Texture.pAtlasSuballocation->GetSlice();
+        UpdateInfo.DstSlice    = pAtlasSuballocation->GetSlice();
 
         UpdateInfo.DstBox.MinX      = Origin.x >> Mip;
         UpdateInfo.DstBox.MaxX      = UpdateInfo.DstBox.MinX + MipProps.LogicalWidth;
@@ -439,7 +491,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                void*                    pUserData) {
                 std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
 
-                bool CopyScheduled = false;
+                bool CopyEnqueued = false;
                 if (pContext != nullptr)
                 {
                     ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pManager->m_pDevice, pContext);
@@ -448,14 +500,14 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                         pContext->UpdateTexture(pAtlasTexture, DstMipLevel, DstSlice, DstBox, SrcData,
                                                 RESOURCE_STATE_TRANSITION_MODE_VERIFY,
                                                 RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                        CopyScheduled = true;
+                        CopyEnqueued = true;
                     }
                 }
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
                 {
-                    if (Data->pStorage->UpdateUploadProgress(CopyScheduled))
+                    if (Data->pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
                         DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
                 }
 
@@ -473,7 +525,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                void*           pUserData) {
                 std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
 
-                bool CopyScheduled = false;
+                bool CopyEnqueued = false;
                 if (pContext != nullptr && pSrcTexture != nullptr)
                 {
                     ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pManager->m_pDevice, pContext);
@@ -501,14 +553,14 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                         CopyAttribs.pSrcBox = &SrcBox;
 
                         pContext->CopyTexture(CopyAttribs);
-                        CopyScheduled = true;
+                        CopyEnqueued = true;
                     }
                 }
 
                 VERIFY_EXPR(Data->pStorage != nullptr);
                 if (Data->pStorage != nullptr)
                 {
-                    if (Data->pStorage->UpdateUploadProgress(CopyScheduled))
+                    if (Data->pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
                         DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
                 }
 
