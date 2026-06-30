@@ -236,6 +236,119 @@ namespace
 using TextureAssetImpl =
     RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TexturePayloadImpl>;
 
+struct TextureCopyData
+{
+    RadientTextureAssetManagerSharedPtr       pManager;
+    RefCntAutoPtr<IRenderDevice>              pDevice;
+    RefCntAutoPtr<TextureAssetImpl>           pTexture;
+    TextureStorage*                           pStorage = nullptr;
+    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+    std::atomic<Uint32>&                      PendingTextureLoads;
+    std::atomic<Uint32>&                      PendingGPUUploads;
+
+    static void CopyTextureCallback(IDeviceContext*          pContext,
+                                    Uint32                   DstMipLevel,
+                                    Uint32                   DstSlice,
+                                    const Box&               DstBox,
+                                    const TextureSubResData& SrcData,
+                                    void*                    pUserData)
+    {
+        std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
+        Data->CopyTexture(pContext, DstMipLevel, DstSlice, DstBox, SrcData);
+    }
+
+    static void CopyD3D11TextureCallback(IDeviceContext* pContext,
+                                         Uint32          DstMipLevel,
+                                         Uint32          DstSlice,
+                                         const Box&      DstBox,
+                                         ITexture*       pSrcTexture,
+                                         Uint32          SrcX,
+                                         Uint32          SrcY,
+                                         void*           pUserData)
+    {
+        std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
+        Data->CopyD3D11Texture(pContext, DstMipLevel, DstSlice, DstBox, pSrcTexture, SrcX, SrcY);
+    }
+
+private:
+    void RecordCopyCommandEnqueueResult(bool CopyEnqueued)
+    {
+        VERIFY_EXPR(pStorage != nullptr);
+        if (pStorage != nullptr)
+        {
+            if (pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
+                DecrementCounter(PendingTextureLoads);
+        }
+
+        DecrementCounter(PendingGPUUploads);
+    }
+
+    void CopyTexture(IDeviceContext*          pContext,
+                     Uint32                   DstMipLevel,
+                     Uint32                   DstSlice,
+                     const Box&               DstBox,
+                     const TextureSubResData& SrcData)
+    {
+        bool CopyEnqueued = false;
+        if (pContext != nullptr)
+        {
+            ITexture* pAtlasTexture = pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
+            if (pAtlasTexture != nullptr)
+            {
+                pContext->UpdateTexture(pAtlasTexture, DstMipLevel, DstSlice, DstBox, SrcData,
+                                        RESOURCE_STATE_TRANSITION_MODE_VERIFY,
+                                        RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                CopyEnqueued = true;
+            }
+        }
+
+        RecordCopyCommandEnqueueResult(CopyEnqueued);
+    }
+
+    void CopyD3D11Texture(IDeviceContext* pContext,
+                          Uint32          DstMipLevel,
+                          Uint32          DstSlice,
+                          const Box&      DstBox,
+                          ITexture*       pSrcTexture,
+                          Uint32          SrcX,
+                          Uint32          SrcY)
+    {
+        bool CopyEnqueued = false;
+        if (pContext != nullptr && pSrcTexture != nullptr)
+        {
+            ITexture* pAtlasTexture = pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
+            if (pAtlasTexture != nullptr)
+            {
+                CopyTextureAttribs CopyAttribs;
+                CopyAttribs.pSrcTexture              = pSrcTexture;
+                CopyAttribs.pDstTexture              = pAtlasTexture;
+                CopyAttribs.DstMipLevel              = DstMipLevel;
+                CopyAttribs.DstSlice                 = DstSlice;
+                CopyAttribs.DstX                     = DstBox.MinX;
+                CopyAttribs.DstY                     = DstBox.MinY;
+                CopyAttribs.DstZ                     = DstBox.MinZ;
+                CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_VERIFY;
+                CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+
+                const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(pAtlasTexture->GetDesc().Format);
+
+                Box SrcBox;
+                SrcBox.MinX = SrcX;
+                SrcBox.MinY = SrcY;
+                SrcBox.MaxX = AlignUp(SrcX + DstBox.Width(), FmtAttribs.BlockWidth);
+                SrcBox.MaxY = AlignUp(SrcY + DstBox.Height(), FmtAttribs.BlockHeight);
+
+                CopyAttribs.pSrcBox = &SrcBox;
+
+                pContext->CopyTexture(CopyAttribs);
+                CopyEnqueued = true;
+            }
+        }
+
+        RecordCopyCommandEnqueueResult(CopyEnqueued);
+    }
+};
+
 } // namespace
 
 RadientTextureAssetManagerStats RadientTextureAssetManager::AtomicStats::GetSnapshot() const noexcept
@@ -399,14 +512,6 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     TextureStorage&    Texture = pTextureAsset->GetStorage();
     const TextureDesc& TexDesc = Loader.GetTextureDesc();
 
-    struct TextureCopyData
-    {
-        RadientTextureAssetManagerSharedPtr       pManager;
-        RefCntAutoPtr<TextureAssetImpl>           pTexture;
-        TextureStorage*                           pStorage = nullptr;
-        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-    };
-
     Texture.ResetGPUResourceState();
 
     if (TexDesc.Type != RESOURCE_DIM_TEX_2D || TexDesc.GetArraySize() != 1)
@@ -463,9 +568,12 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
 
         TextureCopyData* pCopyData = new TextureCopyData{
             shared_from_this(),
+            m_pDevice,
             pTextureAsset,
             &Texture,
             RefCntAutoPtr<ITextureAtlasSuballocation>{pAtlasSuballocation},
+            m_Stats.PendingTextureLoads,
+            m_Stats.PendingGPUUploads,
         };
 
         ScheduleTextureUpdateInfo UpdateInfo;
@@ -482,90 +590,8 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         UpdateInfo.DstBox.MaxY      = UpdateInfo.DstBox.MinY + MipProps.LogicalHeight;
         UpdateInfo.pCopyTextureData = pCopyData;
 
-        UpdateInfo.CopyTexture =
-            [](IDeviceContext*          pContext,
-               Uint32                   DstMipLevel,
-               Uint32                   DstSlice,
-               const Box&               DstBox,
-               const TextureSubResData& SrcData,
-               void*                    pUserData) {
-                std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-
-                bool CopyEnqueued = false;
-                if (pContext != nullptr)
-                {
-                    ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pManager->m_pDevice, pContext);
-                    if (pAtlasTexture != nullptr)
-                    {
-                        pContext->UpdateTexture(pAtlasTexture, DstMipLevel, DstSlice, DstBox, SrcData,
-                                                RESOURCE_STATE_TRANSITION_MODE_VERIFY,
-                                                RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                        CopyEnqueued = true;
-                    }
-                }
-
-                VERIFY_EXPR(Data->pStorage != nullptr);
-                if (Data->pStorage != nullptr)
-                {
-                    if (Data->pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
-                        DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
-                }
-
-                DecrementCounter(Data->pManager->m_Stats.PendingGPUUploads);
-            };
-
-        UpdateInfo.CopyD3D11Texture =
-            [](IDeviceContext* pContext,
-               Uint32          DstMipLevel,
-               Uint32          DstSlice,
-               const Box&      DstBox,
-               ITexture*       pSrcTexture,
-               Uint32          SrcX,
-               Uint32          SrcY,
-               void*           pUserData) {
-                std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-
-                bool CopyEnqueued = false;
-                if (pContext != nullptr && pSrcTexture != nullptr)
-                {
-                    ITexture* pAtlasTexture = Data->pAtlasSuballocation->GetAtlas()->Update(Data->pManager->m_pDevice, pContext);
-                    if (pAtlasTexture != nullptr)
-                    {
-                        CopyTextureAttribs CopyAttribs;
-                        CopyAttribs.pSrcTexture              = pSrcTexture;
-                        CopyAttribs.pDstTexture              = pAtlasTexture;
-                        CopyAttribs.DstMipLevel              = DstMipLevel;
-                        CopyAttribs.DstSlice                 = DstSlice;
-                        CopyAttribs.DstX                     = DstBox.MinX;
-                        CopyAttribs.DstY                     = DstBox.MinY;
-                        CopyAttribs.DstZ                     = DstBox.MinZ;
-                        CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_VERIFY;
-                        CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-
-                        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(pAtlasTexture->GetDesc().Format);
-
-                        Box SrcBox;
-                        SrcBox.MinX = SrcX;
-                        SrcBox.MinY = SrcY;
-                        SrcBox.MaxX = AlignUp(SrcX + DstBox.Width(), FmtAttribs.BlockWidth);
-                        SrcBox.MaxY = AlignUp(SrcY + DstBox.Height(), FmtAttribs.BlockHeight);
-
-                        CopyAttribs.pSrcBox = &SrcBox;
-
-                        pContext->CopyTexture(CopyAttribs);
-                        CopyEnqueued = true;
-                    }
-                }
-
-                VERIFY_EXPR(Data->pStorage != nullptr);
-                if (Data->pStorage != nullptr)
-                {
-                    if (Data->pStorage->RecordCopyCommandEnqueueResult(CopyEnqueued))
-                        DecrementCounter(Data->pManager->m_Stats.PendingTextureLoads);
-                }
-
-                DecrementCounter(Data->pManager->m_Stats.PendingGPUUploads);
-            };
+        UpdateInfo.CopyTexture      = TextureCopyData::CopyTextureCallback;
+        UpdateInfo.CopyD3D11Texture = TextureCopyData::CopyD3D11TextureCallback;
 
         UploadManager.ScheduleTextureUpdate(UpdateInfo);
     }
