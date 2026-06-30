@@ -532,7 +532,9 @@ MeshStorage::MeshStorage(MeshStorage&& Rhs) noexcept :
 }
 
 RadientMeshAssetManager::RadientMeshAssetManager(const CreateInfo& CI) noexcept :
-    m_pDevice{CI.pDevice}
+    m_pDevice{CI.pDevice},
+    m_WeakResourceManager{CI.pResourceManager},
+    m_WeakUploadManager{CI.pUploadManager}
 {
 }
 
@@ -544,8 +546,6 @@ RadientMeshAssetManagerSharedPtr RadientMeshAssetManager::Create(const CreateInf
 }
 
 RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 ThreadPool,
-                                                   GLTF::ResourceManager*       pResourceManager,
-                                                   IGPUUploadManager*           pUploadManager,
                                                    const RadientMeshCreateInfo& MeshCI,
                                                    IRadientMeshAsset**          ppMesh)
 {
@@ -567,15 +567,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
-    RefCntWeakPtr<GLTF::ResourceManager> WeakResourceManager{pResourceManager};
-    RefCntWeakPtr<IGPUUploadManager>     WeakUploadManager{pUploadManager};
-
     EnqueueAsyncWork(
         &ThreadPool,
         [pMeshAsset,
-         pSelf = shared_from_this(),
-         WeakResourceManager,
-         WeakUploadManager,
+         pSelf       = shared_from_this(),
          pMeshSource = std::move(pMeshSource)](Uint32) mutable //
         {
             const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
@@ -608,8 +603,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = WeakResourceManager.Lock();
-            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = WeakUploadManager.Lock();
+            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
+            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
             if (!pSelf->m_pDevice || !pResourceManager || !pUploadManager)
             {
                 SetMeshLoadStatus(*pMeshPayloadRaw, RADIENT_STATUS_INVALID_OPERATION);

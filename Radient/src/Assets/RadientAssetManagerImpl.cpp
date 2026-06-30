@@ -164,6 +164,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
         RadientMeshAssetManager::Create(
             RadientMeshAssetManager::CreateInfo{
                 m_pDevice,
+                m_pResourceManager,
+                m_pUploadManager,
             })},
     m_pMaterialManager{RadientMaterialAssetManager::Create()},
     m_pTextureManager{
@@ -197,7 +199,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
                                                    IRadientMeshAsset**          ppMesh)
 {
     return m_pThreadPool ?
-        m_pMeshManager->CreateMesh(*m_pThreadPool, m_pResourceManager, m_pUploadManager, MeshCI, ppMesh) :
+        m_pMeshManager->CreateMesh(*m_pThreadPool, MeshCI, ppMesh) :
         RADIENT_STATUS_INVALID_OPERATION;
 }
 

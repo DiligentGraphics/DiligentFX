@@ -57,7 +57,9 @@ class RadientMeshAssetManager final : public std::enable_shared_from_this<Radien
 public:
     struct CreateInfo
     {
-        IRenderDevice* pDevice = nullptr;
+        IRenderDevice*         pDevice          = nullptr;
+        GLTF::ResourceManager* pResourceManager = nullptr;
+        IGPUUploadManager*     pUploadManager   = nullptr;
     };
 
     ~RadientMeshAssetManager();
@@ -65,8 +67,6 @@ public:
     static RadientMeshAssetManagerSharedPtr Create(const CreateInfo& CI);
 
     RADIENT_STATUS CreateMesh(IThreadPool&                 ThreadPool,
-                              GLTF::ResourceManager*       pResourceManager,
-                              IGPUUploadManager*           pUploadManager,
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
@@ -86,7 +86,9 @@ public:
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI) noexcept;
 
-    RefCntAutoPtr<IRenderDevice> m_pDevice;
+    RefCntAutoPtr<IRenderDevice>         m_pDevice;
+    RefCntWeakPtr<GLTF::ResourceManager> m_WeakResourceManager;
+    RefCntWeakPtr<IGPUUploadManager>     m_WeakUploadManager;
 
     RadientAssetCache<MeshPayloadImpl> m_MeshCache;
     RadientAssetCache<MeshPayloadImpl> m_GLTFMeshCache;
