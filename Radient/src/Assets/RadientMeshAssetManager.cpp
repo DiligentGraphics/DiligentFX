@@ -591,9 +591,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
                 pSelf->m_MeshCache.GetOrCreate(
                     CacheKey.c_str(),
                     []() {
-                        return MeshPayloadImpl::Create(MeshAssetStorage{
-                            MeshStorage{RADIENT_STATUS_PENDING},
-                        });
+                        return MeshPayloadImpl::Create(std::in_place_type<MeshStorage>, RADIENT_STATUS_PENDING);
                     });
 
             MeshPayloadImpl* const pMeshPayloadRaw = pMeshPayload.RawPtr();
@@ -660,7 +658,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshFromGLTFMesh(IRadientSceneAsse
                 if (RADIENT_FAILED(CreateStatus))
                     return RefCntAutoPtr<MeshPayloadImpl>{};
 
-                return MeshPayloadImpl::Create(MeshAssetStorage{std::move(GLTFMeshData)});
+                return MeshPayloadImpl::Create(std::in_place_type<GLTFMeshStorage>, std::move(GLTFMeshData));
             });
 
     (void)PayloadCreated;

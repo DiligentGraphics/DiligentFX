@@ -264,7 +264,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
                 pSelf->m_GLTFAssetCache.GetOrCreate(
                     CacheKey.c_str(),
                     []() {
-                        return ScenePayloadImpl::Create(GLTFModelStorage{RADIENT_STATUS_PENDING});
+                        return ScenePayloadImpl::Create(RADIENT_STATUS_PENDING);
                     });
 
             if (!pModelAsset->SetPayload(std::move(pModelPayload)))

@@ -51,14 +51,9 @@ struct TestTextureStorage
     {
     }
 
-    TestTextureStorage(TestTextureStorage&& Rhs) noexcept :
-        Value{Rhs.Value},
-        LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)}
-    {
-    }
-
     // clang-format off
     TestTextureStorage& operator=(TestTextureStorage&&)      = delete;
+    TestTextureStorage(TestTextureStorage&&)                 = delete;
     TestTextureStorage(const TestTextureStorage&)            = delete;
     TestTextureStorage& operator=(const TestTextureStorage&) = delete;
     // clang-format on
@@ -85,7 +80,7 @@ using TestTextureAssetImpl =
 RefCntAutoPtr<TestTexturePayloadImpl> CreatePayload(Uint32         Value,
                                                     RADIENT_STATUS LoadStatus = RADIENT_STATUS_OK)
 {
-    return TestTexturePayloadImpl::Create(TestTextureStorage{Value, LoadStatus});
+    return TestTexturePayloadImpl::Create(Value, LoadStatus);
 }
 
 class TestCacheRemovalHandler final : public IRadientAssetCacheRemovalHandler

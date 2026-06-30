@@ -56,17 +56,19 @@ public:
     using Storage = StorageType;
     using Payload = PayloadType;
 
+    template <typename... StorageCtorArgTypes>
     RadientAssetPayloadImpl(IReferenceCounters* pRefCounters,
-                            StorageType&&       Storage) :
+                            StorageCtorArgTypes&&... StorageCtorArgs) :
         TBase{pRefCounters},
-        m_Storage{std::move(Storage)}
+        m_Storage{std::forward<StorageCtorArgTypes>(StorageCtorArgs)...}
     {
     }
 
-    static RefCntAutoPtr<PayloadType> Create(StorageType&& Storage)
+    template <typename... StorageCtorArgTypes>
+    static RefCntAutoPtr<PayloadType> Create(StorageCtorArgTypes&&... StorageCtorArgs)
     {
         return RefCntAutoPtr<PayloadType>{
-            MakeNewRCObj<PayloadType>()(std::move(Storage))};
+            MakeNewRCObj<PayloadType>()(std::forward<StorageCtorArgTypes>(StorageCtorArgs)...)};
     }
 
     StorageType& GetStorage()

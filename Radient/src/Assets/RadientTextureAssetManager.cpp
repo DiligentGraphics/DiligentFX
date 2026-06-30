@@ -59,19 +59,10 @@ public:
     {
     }
 
-    TextureStorage(TextureStorage&& Rhs) noexcept :
-        m_pTexture{std::move(Rhs.m_pTexture)},
-        m_pAtlasSuballocation{std::move(Rhs.m_pAtlasSuballocation)},
-        m_LoadStatus{Rhs.m_LoadStatus.load(std::memory_order_relaxed)},
-        m_AllCopyCommandsEnqueued{Rhs.m_AllCopyCommandsEnqueued.load(std::memory_order_relaxed)},
-        m_AnyCopyCommandEnqueueFailed{Rhs.m_AnyCopyCommandEnqueueFailed.load(std::memory_order_relaxed)},
-        m_PendingSubresourceUploads{Rhs.m_PendingSubresourceUploads.load(std::memory_order_relaxed)}
-    {
-    }
-
-    TextureStorage& operator=(TextureStorage&& Rhs)  = delete;
     TextureStorage(const TextureStorage&)            = delete;
     TextureStorage& operator=(const TextureStorage&) = delete;
+    TextureStorage(TextureStorage&&)                 = delete;
+    TextureStorage& operator=(TextureStorage&&)      = delete;
 
     void SetLoadStatus(RADIENT_STATUS Status) noexcept
     {
@@ -456,7 +447,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
                 pSelf->m_TextureCache.GetOrCreate(
                     TextureCacheKey.c_str(),
                     []() {
-                        return TexturePayloadImpl::Create(TextureStorage{RADIENT_STATUS_PENDING});
+                        return TexturePayloadImpl::Create(RADIENT_STATUS_PENDING);
                     });
 
             if (!pTextureAsset->SetPayload(std::move(pTexturePayload)))

@@ -55,7 +55,7 @@ public:
 
 RefCntAutoPtr<TestTexturePayloadImpl> CreateTestTexturePayload(Uint32 Value)
 {
-    return TestTexturePayloadImpl::Create(TestTextureStorage{Value});
+    return TestTexturePayloadImpl::Create(Value);
 }
 
 class ThreadStartGate
