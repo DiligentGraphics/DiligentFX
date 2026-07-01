@@ -319,7 +319,12 @@ void VerifyUploadedStandaloneTextureData(IDeviceContext&           Context,
     ASSERT_NE(pUploadedTexture, nullptr);
 
     GLTF::Material::TextureShaderAttribs TextureAttribs;
-    EXPECT_FALSE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(&Texture, TextureAttribs));
+    EXPECT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(&Texture, TextureAttribs));
+    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.x, 1.f);
+    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.y, 1.f);
+    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.z, 0.f);
+    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.w, 0.f);
+    EXPECT_FLOAT_EQ(TextureAttribs.TextureSlice, 0.f);
 
     const TextureDesc& UploadedDesc = pUploadedTexture->GetDesc();
     ASSERT_EQ(UploadedDesc.Width, ExpectedData.Width);

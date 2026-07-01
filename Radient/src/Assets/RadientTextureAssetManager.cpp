@@ -30,7 +30,7 @@
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientTextureSource.hpp"
-#include "Cast.hpp"
+#include "Atomics.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
@@ -39,6 +39,7 @@
 #include "ThreadPool.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <utility>
@@ -76,6 +77,7 @@ public:
 
     void ResetGPUResourceState()
     {
+        ClearTextureAttribs();
         m_PendingSubresourceUploads.store(0, std::memory_order_release);
         m_AllCopyCommandsEnqueued.store(false, std::memory_order_release);
         m_pTexture.Release();
@@ -91,6 +93,10 @@ public:
             pDevice->CreateTexture(Desc, nullptr, pTexture.GetAddressOfEmpty());
 
         m_pTexture = std::move(pTexture);
+        if (m_pTexture != nullptr)
+            SetTextureAttribs(float4{1, 1, 0, 0}, 0);
+        else
+            ClearTextureAttribs();
         m_AllCopyCommandsEnqueued.store(m_pTexture != nullptr, std::memory_order_release);
         return m_pTexture;
     }
@@ -102,6 +108,16 @@ public:
 
     void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation)
     {
+        if (pAtlasSuballocation != nullptr)
+        {
+            const float4 UVScaleBias = pAtlasSuballocation->GetUVScaleBias();
+            SetTextureAttribs(UVScaleBias, static_cast<float>(pAtlasSuballocation->GetSlice()));
+        }
+        else
+        {
+            ClearTextureAttribs();
+        }
+
         m_pAtlasSuballocation = std::move(pAtlasSuballocation);
     }
 
@@ -132,6 +148,25 @@ public:
         return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
     }
 
+    bool GetTextureAtlasAttribs(GLTF::Material::TextureShaderAttribs& Attribs) const noexcept
+    {
+        if (!m_TextureAttribsInitialized.load(std::memory_order_acquire))
+        {
+            Attribs.AtlasUVScaleAndBias = float4{};
+            Attribs.TextureSlice        = 0;
+            return false;
+        }
+
+        Attribs.AtlasUVScaleAndBias = float4{
+            m_AtlasUVScaleX.load(std::memory_order_relaxed),
+            m_AtlasUVScaleY.load(std::memory_order_relaxed),
+            m_AtlasUVBiasX.load(std::memory_order_relaxed),
+            m_AtlasUVBiasY.load(std::memory_order_relaxed),
+        };
+        Attribs.TextureSlice = m_TextureSlice.load(std::memory_order_relaxed);
+        return true;
+    }
+
     void BeginSubresourceUploads(Uint32 SubresourceUploadCount)
     {
         m_PendingSubresourceUploads.store(SubresourceUploadCount, std::memory_order_release);
@@ -160,10 +195,37 @@ public:
     }
 
 private:
+    void SetTextureAttribs(const float4& AtlasUVScaleAndBias, float TextureSlice) noexcept
+    {
+        m_TextureSlice.store(TextureSlice, std::memory_order_relaxed);
+        m_AtlasUVScaleX.store(AtlasUVScaleAndBias.x, std::memory_order_relaxed);
+        m_AtlasUVScaleY.store(AtlasUVScaleAndBias.y, std::memory_order_relaxed);
+        m_AtlasUVBiasX.store(AtlasUVScaleAndBias.z, std::memory_order_relaxed);
+        m_AtlasUVBiasY.store(AtlasUVScaleAndBias.w, std::memory_order_relaxed);
+        m_TextureAttribsInitialized.store(true, std::memory_order_release);
+    }
+
+    void ClearTextureAttribs() noexcept
+    {
+        m_TextureAttribsInitialized.store(false, std::memory_order_release);
+        m_TextureSlice.store(0.f, std::memory_order_relaxed);
+        m_AtlasUVScaleX.store(0.f, std::memory_order_relaxed);
+        m_AtlasUVScaleY.store(0.f, std::memory_order_relaxed);
+        m_AtlasUVBiasX.store(0.f, std::memory_order_relaxed);
+        m_AtlasUVBiasY.store(0.f, std::memory_order_relaxed);
+    }
+
     RefCntAutoPtr<ITexture>                   m_pTexture;
     RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
 
     std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
+
+    std::atomic_bool m_TextureAttribsInitialized{false};
+    AtomicFloat      m_TextureSlice{0.f};
+    AtomicFloat      m_AtlasUVScaleX{0.f};
+    AtomicFloat      m_AtlasUVScaleY{0.f};
+    AtomicFloat      m_AtlasUVBiasX{0.f};
+    AtomicFloat      m_AtlasUVBiasY{0.f};
 
     // True when no deferred copy is required or all required copy callbacks
     // have enqueued commands. This is not a GPU completion fence.
@@ -508,13 +570,7 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
     if (!pImpl)
         return false;
 
-    ITextureAtlasSuballocation* pAtlasSuballocation = pImpl->GetStorage().GetAtlasSuballocation();
-    if (pAtlasSuballocation == nullptr)
-        return false;
-
-    Attribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
-    Attribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
-    return true;
+    return pImpl->GetStorage().GetTextureAtlasAttribs(Attribs);
 }
 
 RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
