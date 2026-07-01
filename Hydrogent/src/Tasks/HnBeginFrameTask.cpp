@@ -435,7 +435,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     // Write shadow casting light attributes first to initialize shadow cating light indices
     if (const HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
     {
-        const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
+        const TextureDesc ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
 
         const auto& Lights = RenderDelegate->GetLights();
         for (auto light_it : Lights)

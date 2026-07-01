@@ -109,7 +109,7 @@ void HnShadowMapManager::Commit(IRenderDevice* pDevice, IDeviceContext* pCtx)
     m_AtlasVersion = AtlasVersion;
 }
 
-const TextureDesc& HnShadowMapManager::GetAtlasDesc() const
+TextureDesc HnShadowMapManager::GetAtlasDesc() const
 {
     return m_ShadowMapAtlas->GetAtlasDesc();
 }

@@ -58,7 +58,7 @@ public:
 
     Uint32 GetAtlasVersion() const;
 
-    const TextureDesc& GetAtlasDesc() const;
+    TextureDesc GetAtlasDesc() const;
 
     ITexture*     GetShadowTexture() const;
     ITextureView* GetShadowDSV(Uint32 Slice) const { return m_DSVs[Slice]; }

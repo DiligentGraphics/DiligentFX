@@ -563,7 +563,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
             return RADIENT_STATUS_INVALID_OPERATION;
         Texture.SetAtlasSuballocation(pAtlasSuballocation);
 
-        const TextureDesc&          AtlasDesc  = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
+        const TextureDesc           AtlasDesc  = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
         const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TexDesc.Format);
         const Uint32                MipLevels  = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
 

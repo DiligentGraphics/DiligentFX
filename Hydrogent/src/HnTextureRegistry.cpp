@@ -112,7 +112,7 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*                
 
         IDynamicTextureAtlas*       pAtlas      = m_pAtlasSuballocation->GetAtlas();
         ITexture*                   pDstTex     = pAtlas->GetTexture();
-        const TextureDesc&          AtlasDesc   = pAtlas->GetAtlasDesc();
+        const TextureDesc           AtlasDesc   = pAtlas->GetAtlasDesc();
         const TextureFormatAttribs& FmtAttribs  = GetTextureFormatAttribs(AtlasDesc.Format);
         const TextureData           UploadData  = pLoader->GetTextureData();
         const TextureDesc&          SrcDataDesc = pLoader->GetTextureDesc();
@@ -288,7 +288,7 @@ HN_LOAD_TEXTURE_STATUS HnTextureRegistry::LoadTexture(const pxr::TfToken        
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
     if (m_pResourceManager != nullptr)
     {
-        const TextureDesc& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
+        const TextureDesc AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
         if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
         {
             pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);

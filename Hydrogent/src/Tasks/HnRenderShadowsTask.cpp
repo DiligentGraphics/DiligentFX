@@ -309,7 +309,7 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Shadow map manager is null, which indicates that shadows are disabled");
     }
 
-    const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
+    const TextureDesc ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
     m_RPState.SetDepthStencilFormat(ShadowAtlasDesc.Format);
 
     IRenderDevice*          pDevice    = RenderDelegate->GetDevice();

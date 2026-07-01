@@ -551,7 +551,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
     {
         if (ShadowMapMgr != nullptr)
         {
-            const TextureDesc& ShadowMapDesc = ShadowMapMgr->GetAtlasDesc();
+            const TextureDesc ShadowMapDesc = ShadowMapMgr->GetAtlasDesc();
 
             const pxr::VtValue ShadowResolutionVal = SceneDelegate->GetLightParamValue(Id, HnLightPrivateTokens->shadowResolution);
             if (ShadowResolutionVal.IsHolding<int>())
