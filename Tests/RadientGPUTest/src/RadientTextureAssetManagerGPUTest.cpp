@@ -188,7 +188,7 @@ bool IsTextureManagerIdle(const RadientTextureAssetManagerStats& Stats)
     return Stats.PendingTextureLoads == 0 &&
         Stats.PendingTextureSourceLoads == 0 &&
         Stats.PendingUploadScheduling == 0 &&
-        Stats.PendingGPUUploads == 0;
+        Stats.PendingCopyCommandEnqueueCallbacks == 0;
 }
 
 bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manager,
@@ -202,7 +202,7 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
             return true;
 
         if (Stats.PendingUploadScheduling != 0 ||
-            Stats.PendingGPUUploads != 0)
+            Stats.PendingCopyCommandEnqueueCallbacks != 0)
         {
             PumpUploadManager(UploadManager, Context);
         }

@@ -57,21 +57,21 @@ struct RadientTextureAssetManagerStats
 {
     // Total number of texture loads that are still active in any stage. A load
     // is counted until it either fails, reuses an existing payload, completes an
-    // immediate texture creation path, or all scheduled GPU upload callbacks finish.
+    // immediate texture creation path, or all scheduled copy-command callbacks finish.
     Uint32 PendingTextureLoads = 0;
 
     // Number of texture source loads currently queued or running on the worker
     // thread. This covers source key creation, cache lookup, loader creation,
-    // and upload scheduling preparation, but not render-thread GPU upload callbacks.
+    // and upload scheduling preparation, but not render-thread copy-command callbacks.
     Uint32 PendingTextureSourceLoads = 0;
 
     // Number of worker-side upload scheduling operations still in progress.
-    // This remains non-zero while the worker is enqueueing GPU upload callbacks.
+    // This remains non-zero while the worker is scheduling copy-command callbacks.
     Uint32 PendingUploadScheduling = 0;
 
-    // Number of scheduled GPU upload callbacks that have not reported completion.
-    // The texture load is still pending while this value is non-zero.
-    Uint32 PendingGPUUploads = 0;
+    // Number of scheduled upload-manager callbacks that have not yet reported
+    // whether the copy command was enqueued. This does not track GPU completion.
+    Uint32 PendingCopyCommandEnqueueCallbacks = 0;
 };
 
 class RadientTextureAssetManager final : public std::enable_shared_from_this<RadientTextureAssetManager>
@@ -98,8 +98,8 @@ public:
 
     // Reports texture source loading and upload scheduling status. OK means
     // required copy commands were enqueued, but does not imply GPU completion.
-    // Use GetTextureSRV() to retrieve the texture view.
-    static RADIENT_STATUS            GetLoadStatus(IRadientAsset* pTextureAsset);
+    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pTextureAsset);
+
     static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
 
     static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
@@ -115,7 +115,7 @@ private:
         std::atomic<Uint32> PendingTextureLoads{0};
         std::atomic<Uint32> PendingTextureSourceLoads{0};
         std::atomic<Uint32> PendingUploadScheduling{0};
-        std::atomic<Uint32> PendingGPUUploads{0};
+        std::atomic<Uint32> PendingCopyCommandEnqueueCallbacks{0};
     };
 
     RADIENT_STATUS ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
