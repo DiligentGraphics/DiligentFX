@@ -98,6 +98,9 @@ public:
 
     static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
 
+    // Sets atlas texture coordinates. Returns true when the texture storage
+    // placement is known and the values were set, or false if storage has not
+    // been created yet. This does not imply that texture data has been uploaded.
     static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
                                          GLTF::Material::TextureShaderAttribs& Attribs);
 

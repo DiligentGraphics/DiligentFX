@@ -113,7 +113,7 @@ public:
         if (pAtlasSuballocation != nullptr)
         {
             const float4 UVScaleBias = pAtlasSuballocation->GetUVScaleBias();
-            SetTextureAttribs(UVScaleBias, static_cast<float>(pAtlasSuballocation->GetSlice()));
+            SetTextureAttribs(UVScaleBias, pAtlasSuballocation->GetSlice());
         }
         else
         {
@@ -136,6 +136,8 @@ public:
             return nullptr;
         }
 
+        // Once the load status is OK and all copy commands have been enqueued,
+        // no worker/upload callback will continue modifying the texture storage.
         ITexture* pTexture = m_pTexture;
         if (pTexture == nullptr)
         {
@@ -197,9 +199,9 @@ public:
     }
 
 private:
-    void SetTextureAttribs(const float4& AtlasUVScaleAndBias, float TextureSlice) noexcept
+    void SetTextureAttribs(const float4& AtlasUVScaleAndBias, Uint32 TextureSlice) noexcept
     {
-        m_TextureSlice.store(TextureSlice, std::memory_order_relaxed);
+        m_TextureSlice.store(static_cast<float>(TextureSlice), std::memory_order_relaxed);
         m_AtlasUVScaleX.store(AtlasUVScaleAndBias.x, std::memory_order_relaxed);
         m_AtlasUVScaleY.store(AtlasUVScaleAndBias.y, std::memory_order_relaxed);
         m_AtlasUVBiasX.store(AtlasUVScaleAndBias.z, std::memory_order_relaxed);
@@ -369,7 +371,10 @@ private:
     void RecordCopyCommandEnqueueResult(bool CopyEnqueued)
     {
         if (pTexture->GetStorage().RecordCopyCommandEnqueueResult(CopyEnqueued))
+        {
+            // This was the last pending subresource upload and the final load status has been set.
             DecrementCounter(PendingTextureLoads);
+        }
 
         DecrementCounter(PendingCopyCommandEnqueueCallbacks);
     }
@@ -538,6 +543,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             }
 
             PendingTextureLoadGuard.Reset();
+            // ScheduleTextureGPUUpload will decrement PendingTextureLoads when all copy commands have been enqueued.
             const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
             if (Status != RADIENT_STATUS_PENDING)
                 pTextureAsset->GetStorage().SetLoadStatus(Status);
@@ -709,6 +715,8 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
             UpdateInfo.CopyTexture      = TextureCopyData::CopyTextureCallback;
             UpdateInfo.CopyD3D11Texture = TextureCopyData::CopyD3D11TextureCallback;
 
+            // If ScheduleTextureUpdate fails, it will call the copy callback immediately with a
+            // null context, which will delete pCopyData and decrement the counters.
             UploadManager.ScheduleTextureUpdate(UpdateInfo);
         }
     }
