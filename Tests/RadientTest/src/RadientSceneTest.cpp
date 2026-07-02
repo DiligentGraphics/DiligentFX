@@ -386,19 +386,14 @@ TEST(RadientAssetManagerTest, CreateMaterial)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture = MakeTestTextureAsset("texture://base-color", 1);
-    RefCntAutoPtr<IRadientTextureAsset> pNormalTexture    = MakeTestTextureAsset("texture://normal", 2);
-
     RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.Name              = "Radient test material";
-    MaterialCI.BaseColorFactor   = {0.25f, 0.5f, 0.75f, 0.8f};
-    MaterialCI.MetallicFactor    = 0.2f;
-    MaterialCI.RoughnessFactor   = 0.7f;
-    MaterialCI.EmissiveFactor    = {1.f, 2.f, 3.f};
-    MaterialCI.AlphaCutoff       = 0.33f;
-    MaterialCI.DoubleSided       = True;
-    MaterialCI.pBaseColorTexture = pBaseColorTexture;
-    MaterialCI.pNormalTexture    = pNormalTexture;
+    MaterialCI.Name            = "Radient test material";
+    MaterialCI.BaseColorFactor = {0.25f, 0.5f, 0.75f, 0.8f};
+    MaterialCI.MetallicFactor  = 0.2f;
+    MaterialCI.RoughnessFactor = 0.7f;
+    MaterialCI.EmissiveFactor  = {1.f, 2.f, 3.f};
+    MaterialCI.AlphaCutoff     = 0.33f;
+    MaterialCI.DoubleSided     = True;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
@@ -421,10 +416,8 @@ TEST(RadientAssetManagerTest, CreateMaterial)
     EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.AlphaCutoff, MaterialCI.AlphaCutoff);
     EXPECT_TRUE(pGLTFMaterial->DoubleSided);
 
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
-    EXPECT_EQ(pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId).GetUVSelector(), 0);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 1);
-    EXPECT_EQ(pGLTFMaterial->GetTextureAttrib(GLTF::DefaultNormalTextureAttribId).GetUVSelector(), 0);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), -1);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), -1);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultMetallicRoughnessTextureAttribId), -1);
 }
 

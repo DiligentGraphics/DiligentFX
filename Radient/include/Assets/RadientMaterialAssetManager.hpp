@@ -49,6 +49,7 @@ public:
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);
 
+    static RADIENT_STATUS        GetLoadStatus(IRadientAsset* pMaterial);
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
 private:

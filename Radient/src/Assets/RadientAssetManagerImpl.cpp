@@ -486,6 +486,9 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
         case RADIENT_ASSET_TYPE_TEXTURE:
             return RadientTextureAssetManager::GetLoadStatus(pAsset);
 
+        case RADIENT_ASSET_TYPE_MATERIAL:
+            return RadientMaterialAssetManager::GetLoadStatus(pAsset);
+
         default:
             return RADIENT_STATUS_OK;
     }

@@ -26,6 +26,7 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
@@ -404,6 +405,76 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
     ProcessUploads(*pUploadManager, *pContext, *pTexture);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
     VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TestTextureData);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerGPUTest, MaterialWaitsForTextureStorage)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    Threading::Signal         ReleaseWorker;
+    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
+    ASSERT_NE(pBlocker, nullptr);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pTextureManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pTextureManager, nullptr);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+
+    RadientMaterialCreateInfo MaterialCI{};
+    MaterialCI.pBaseColorTexture = pTexture;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    // The texture worker is blocked, so the material must not expose texture
+    // attributes that depend on texture storage placement.
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+
+    ReleaseWorker.Trigger();
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pTextureManager, *pUploadManager, *pContext));
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    ASSERT_NE(pGLTFMaterial, nullptr);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
+
+    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
+    ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
+
+    const GLTF::Material::TextureShaderAttribs& ActualAttribs =
+        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
+    EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
+    EXPECT_FLOAT_EQ(ActualAttribs.TextureSlice, ExpectedAttribs.TextureSlice);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.x, ExpectedAttribs.AtlasUVScaleAndBias.x);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.y, ExpectedAttribs.AtlasUVScaleAndBias.y);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.z, ExpectedAttribs.AtlasUVScaleAndBias.z);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.w, ExpectedAttribs.AtlasUVScaleAndBias.w);
 
     pThreadPool->StopThreads();
 }
