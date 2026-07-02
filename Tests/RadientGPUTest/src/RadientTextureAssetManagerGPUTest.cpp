@@ -26,10 +26,9 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 
-#include "Assets/RadientMaterialAssetManager.hpp"
-#include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
+#include "RadientGPUTestHelpers.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
@@ -37,202 +36,18 @@
 #include "gtest/gtest.h"
 
 #include <array>
-#include <chrono>
 #include <cstring>
 #include <thread>
 #include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
-using namespace std::chrono_literals;
+using namespace Diligent::Testing::RadientGPUTest;
 
 namespace
 {
 
-static constexpr Uint32 TestTextureWidth     = 64;
-static constexpr Uint32 TestTextureHeight    = 64;
-static constexpr Uint32 TestTextureStride    = TestTextureWidth * 4;
-static constexpr Uint32 TestTexturePixelSize = 4;
-
-std::array<Uint8, TestTextureStride * TestTextureHeight> MakeTexturePixels(Uint32 Seed = 0)
-{
-    std::array<Uint8, TestTextureStride * TestTextureHeight> Pixels{};
-
-    for (Uint32 y = 0; y < TestTextureHeight; ++y)
-    {
-        for (Uint32 x = 0; x < TestTextureWidth; ++x)
-        {
-            const Uint32 Offset = y * TestTextureStride + x * TestTexturePixelSize;
-            Pixels[Offset + 0]  = static_cast<Uint8>((x * 3 + y * 5 + Seed * 29) & 0xFF);
-            Pixels[Offset + 1]  = static_cast<Uint8>((x * 11 + y * 7 + (x ^ y) + Seed * 31) & 0xFF);
-            Pixels[Offset + 2]  = static_cast<Uint8>((x * y + x * 13 + y * 17 + Seed * 37) & 0xFF);
-            Pixels[Offset + 3]  = static_cast<Uint8>(127 + ((x + y + Seed * 3) & 0x7F));
-        }
-    }
-
-    return Pixels;
-}
-
-static const std::array<Uint8, (TestTextureStride * TestTextureHeight)> TexturePixels = MakeTexturePixels();
-
-static const RadientTextureData TestTextureData{
-    TestTextureWidth,
-    TestTextureHeight,
-    RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-    TexturePixels.data(),
-    TestTextureStride,
-};
-
-RadientTextureLoadInfo MakeTextureDataLoadInfo(const RadientTextureData& TextureData)
-{
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pTextureData = &TextureData;
-    LoadInfo.IsSRGB       = False;
-    return LoadInfo;
-}
-
-RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
-                                            Threading::Signal& ReleaseWorker)
-{
-    RefCntAutoPtr<IAsyncTask> pTask =
-        EnqueueAsyncWork(
-            &ThreadPool,
-            [&ReleaseWorker](Uint32) //
-            {
-                ReleaseWorker.Wait();
-                return ASYNC_TASK_STATUS_COMPLETE;
-            });
-    pTask->WaitUntilRunning();
-    return pTask;
-}
-
-GLTF::ResourceManager::CreateInfo MakeResourceManagerCI(Uint32 TextureAtlasSize = 1024)
-{
-    static constexpr Uint64 IndexBufferSize      = 1024 * 1024;
-    static constexpr Uint32 TextureAtlasMaxSlice = 16;
-
-    GLTF::ResourceManager::CreateInfo CreateInfo;
-
-    CreateInfo.IndexAllocatorCI.Desc.Name      = "Radient texture test index pool";
-    CreateInfo.IndexAllocatorCI.Desc.Size      = IndexBufferSize;
-    CreateInfo.IndexAllocatorCI.Desc.Usage     = USAGE_DEFAULT;
-    CreateInfo.IndexAllocatorCI.Desc.BindFlags = BIND_INDEX_BUFFER;
-    CreateInfo.IndexAllocatorCI.ExpansionSize  = static_cast<Uint32>(IndexBufferSize);
-    CreateInfo.IndexAllocatorCI.MaxSize        = IndexBufferSize;
-
-    CreateInfo.DefaultAtlasDesc.Desc.Name      = "Radient texture test atlas";
-    CreateInfo.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-    CreateInfo.DefaultAtlasDesc.Desc.Width     = TextureAtlasSize;
-    CreateInfo.DefaultAtlasDesc.Desc.Height    = TextureAtlasSize;
-    CreateInfo.DefaultAtlasDesc.Desc.ArraySize = 1;
-    CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
-    CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
-    CreateInfo.DefaultAtlasDesc.MaxSliceCount  = TextureAtlasMaxSlice;
-    CreateInfo.DefaultAtlasDesc.MinAlignment   = 1;
-
-    return CreateInfo;
-}
-
-RefCntAutoPtr<GLTF::ResourceManager> CreateTestResourceManager(IRenderDevice* pDevice,
-                                                               Uint32         TextureAtlasSize = 1024)
-{
-    return GLTF::ResourceManager::Create(pDevice, MakeResourceManagerCI(TextureAtlasSize));
-}
-
-RefCntAutoPtr<IGPUUploadManager> CreateTestUploadManager(IRenderDevice*  pDevice,
-                                                         IDeviceContext* pContext)
-{
-    RefCntAutoPtr<IGPUUploadManager> pUploadManager;
-    GPUUploadManagerCreateInfo       CreateInfo;
-    CreateInfo.pDevice  = pDevice;
-    CreateInfo.pContext = pContext;
-    CreateGPUUploadManager(CreateInfo, &pUploadManager);
-    return pUploadManager;
-}
-
-RadientTextureAssetManager::CreateInfo MakeTextureManagerCI(IRenderDevice*         pDevice,
-                                                            GLTF::ResourceManager* pResourceManager,
-                                                            IGPUUploadManager*     pUploadManager)
-{
-    RadientTextureAssetManager::CreateInfo CI;
-    CI.pDevice          = pDevice;
-    CI.pResourceManager = pResourceManager;
-    CI.pUploadManager   = pUploadManager;
-    return CI;
-}
-
-RadientTextureAssetManagerSharedPtr CreateTextureManager(IRenderDevice*         pDevice,
-                                                         GLTF::ResourceManager* pResourceManager,
-                                                         IGPUUploadManager*     pUploadManager)
-{
-    return RadientTextureAssetManager::Create(MakeTextureManagerCI(pDevice, pResourceManager, pUploadManager));
-}
-
-void PumpUploadManager(IGPUUploadManager& UploadManager,
-                       IDeviceContext&    Context)
-{
-    UploadManager.RenderThreadUpdate(&Context);
-    Context.Flush();
-    Context.FinishFrame();
-}
-
-void ProcessUploads(IGPUUploadManager&    UploadManager,
-                    IDeviceContext&       Context,
-                    IRadientTextureAsset& Texture)
-{
-    for (Uint32 i = 0; i < 32 && RadientTextureAssetManager::GetTextureSRV(&Texture) == nullptr; ++i)
-        PumpUploadManager(UploadManager, Context);
-}
-
-bool IsTextureManagerIdle(const RadientTextureAssetManagerStats& Stats)
-{
-    return Stats.PendingTextureLoads == 0 &&
-        Stats.PendingTextureSourceLoads == 0 &&
-        Stats.PendingCopyCommandEnqueueCallbacks == 0;
-}
-
-bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manager,
-                               IGPUUploadManager&                         UploadManager,
-                               IDeviceContext&                            Context)
-{
-    for (Uint32 i = 0; i < 256; ++i)
-    {
-        const RadientTextureAssetManagerStats Stats = Manager->GetStats();
-        if (IsTextureManagerIdle(Stats))
-            return true;
-
-        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
-        {
-            PumpUploadManager(UploadManager, Context);
-        }
-        else
-        {
-            std::this_thread::sleep_for(1ms);
-        }
-    }
-
-    return IsTextureManagerIdle(Manager->GetStats());
-}
-
-bool WaitForPendingCopyCommandEnqueueCallbacks(const RadientTextureAssetManagerSharedPtr& Manager)
-{
-    for (Uint32 i = 0; i < 256; ++i)
-    {
-        const RadientTextureAssetManagerStats Stats = Manager->GetStats();
-        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
-            return true;
-
-        std::this_thread::sleep_for(1ms);
-    }
-
-    return Manager->GetStats().PendingCopyCommandEnqueueCallbacks != 0;
-}
-
-bool IsPendingOrOK(RADIENT_STATUS Status)
-{
-    return Status == RADIENT_STATUS_PENDING ||
-        Status == RADIENT_STATUS_OK;
-}
+static constexpr Uint32 TestTexturePixelSize = TestTextureParams{}.PixelSize;
 
 void VerifyUploadedTextureData(IDeviceContext&           Context,
                                ISwapChain&               SwapChain,
@@ -395,8 +210,11 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
 
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
@@ -404,77 +222,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
 
     ProcessUploads(*pUploadManager, *pContext, *pTexture);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
-    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TestTextureData);
-
-    pThreadPool->StopThreads();
-}
-
-TEST(RadientTextureAssetManagerGPUTest, MaterialWaitsForTextureStorage)
-{
-    GPUTestingEnvironment::ScopedReset AutoReset;
-
-    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
-    IRenderDevice*         pDevice  = pEnv->GetDevice();
-    IDeviceContext*        pContext = pEnv->GetDeviceContext();
-    ASSERT_NE(pDevice, nullptr);
-    ASSERT_NE(pContext, nullptr);
-
-    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
-    ASSERT_NE(pThreadPool, nullptr);
-
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
-
-    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
-    ASSERT_NE(pResourceManager, nullptr);
-
-    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
-    ASSERT_NE(pUploadManager, nullptr);
-
-    RadientTextureAssetManagerSharedPtr pTextureManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
-    ASSERT_NE(pTextureManager, nullptr);
-
-    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
-    ASSERT_NE(pMaterialManager, nullptr);
-
-    RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
-    ASSERT_NE(pTexture, nullptr);
-
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.pBaseColorTexture = pTexture;
-
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
-    ASSERT_NE(pMaterial, nullptr);
-
-    // The texture worker is blocked, so the material must not expose texture
-    // attributes that depend on texture storage placement.
-    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
-
-    ReleaseWorker.Trigger();
-
-    ASSERT_TRUE(WaitForTextureManagerIdle(pTextureManager, *pUploadManager, *pContext));
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
-    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
-
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
-
-    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
-    ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
-
-    const GLTF::Material::TextureShaderAttribs& ActualAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
-    EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
-    EXPECT_FLOAT_EQ(ActualAttribs.TextureSlice, ExpectedAttribs.TextureSlice);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.x, ExpectedAttribs.AtlasUVScaleAndBias.x);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.y, ExpectedAttribs.AtlasUVScaleAndBias.y);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.z, ExpectedAttribs.AtlasUVScaleAndBias.z);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.w, ExpectedAttribs.AtlasUVScaleAndBias.w);
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();
 }
@@ -492,7 +240,10 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice, TestTextureWidth / 2);
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice, TextureData.Width / 2);
     ASSERT_NE(pResourceManager, nullptr);
 
     RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
@@ -502,7 +253,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
     ASSERT_NE(pManager, nullptr);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
@@ -510,7 +261,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
 
     ProcessUploads(*pUploadManager, *pContext, *pTexture);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
-    VerifyUploadedStandaloneTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TestTextureData);
+    VerifyUploadedStandaloneTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();
 }
@@ -537,12 +288,15 @@ TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
 
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
-    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture0)));
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture0)));
     ASSERT_NE(pTexture0, nullptr);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture1;
-    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture1)));
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture1)));
     ASSERT_NE(pTexture1, nullptr);
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
@@ -554,7 +308,7 @@ TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload
     ProcessUploads(*pUploadManager, *pContext, *pTexture0);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture0), nullptr);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture1), nullptr);
-    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture0, TestTextureData);
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture0, TextureData);
 
     pThreadPool->StopThreads();
 }
@@ -583,21 +337,15 @@ TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
 
-    std::array<std::array<Uint8, TestTextureStride * TestTextureHeight>, NumTextures> TexturePixelData;
-    std::array<RadientTextureData, NumTextures>                                       TextureData;
-    std::array<RefCntAutoPtr<IRadientTextureAsset>, NumTextures>                      Textures;
-    std::array<RADIENT_STATUS, NumTextures>                                           LoadStatuses{};
+    std::array<std::vector<Uint8>, NumTextures>                  TexturePixelData;
+    std::array<RadientTextureData, NumTextures>                  TextureData;
+    std::array<RefCntAutoPtr<IRadientTextureAsset>, NumTextures> Textures;
+    std::array<RADIENT_STATUS, NumTextures>                      LoadStatuses{};
 
     for (size_t i = 0; i < NumTextures; ++i)
     {
         TexturePixelData[i] = MakeTexturePixels(static_cast<Uint32>(i + 1));
-        TextureData[i]      = RadientTextureData{
-            TestTextureWidth,
-            TestTextureHeight,
-            RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-            TexturePixelData[i].data(),
-            TestTextureStride,
-        };
+        TextureData[i]      = MakeTextureData(TexturePixelData[i]);
     }
 
     Threading::Signal        StartSignal;
@@ -661,6 +409,9 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
     RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
     ASSERT_NE(pBlocker, nullptr);
 
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
@@ -672,7 +423,7 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
         RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
         ASSERT_NE(pManager, nullptr);
 
-        EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+        EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
         ASSERT_NE(pTexture, nullptr);
         ASSERT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
     }
@@ -708,8 +459,11 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
 
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
     const bool PendingCopyCommandEnqueueCallbacks = WaitForPendingCopyCommandEnqueueCallbacks(pManager);
@@ -749,12 +503,15 @@ TEST(RadientTextureAssetManagerGPUTest, TextureHandleMayOutliveManagerAfterUploa
     RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
     ASSERT_NE(pUploadManager, nullptr);
 
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
         ASSERT_NE(pManager, nullptr);
 
-        EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
+        EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
         ASSERT_NE(pTexture, nullptr);
 
         ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
@@ -764,7 +521,7 @@ TEST(RadientTextureAssetManagerGPUTest, TextureHandleMayOutliveManagerAfterUploa
 
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
-    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TestTextureData);
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();
 }
