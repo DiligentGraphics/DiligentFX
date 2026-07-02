@@ -55,9 +55,6 @@ public:
 private:
     RadientMaterialAssetManager() = default;
 
-    static GLTF::Material CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI);
-
-private:
     std::atomic<RadientHandle> m_NextAssetID{1};
 };
 

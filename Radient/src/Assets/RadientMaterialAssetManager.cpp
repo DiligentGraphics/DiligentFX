@@ -35,6 +35,7 @@
 
 #include <atomic>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -46,9 +47,20 @@ static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4
 
 struct MaterialStorage
 {
+    void SetTexture(Uint32 TextureAttribId, IRadientTextureAsset* pTexture)
+    {
+        if (pTexture == nullptr)
+            return;
+
+        if (Textures.size() <= TextureAttribId)
+            Textures.resize(TextureAttribId + 1);
+
+        Textures[TextureAttribId] = pTexture;
+    }
+
     void InitLoadStatus() noexcept
     {
-        LoadStatus.store(HasTextureDependencies() ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK,
+        LoadStatus.store(!Textures.empty() ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK,
                          std::memory_order_release);
     }
 
@@ -65,38 +77,22 @@ struct MaterialStorage
         return Status;
     }
 
-    bool HasTextureDependencies() const noexcept
-    {
-        return pBaseColorTexture != nullptr ||
-            pMetallicRoughnessTexture != nullptr ||
-            pNormalTexture != nullptr ||
-            pOcclusionTexture != nullptr ||
-            pEmissiveTexture != nullptr;
-    }
-
     RADIENT_STATUS GetTextureDependenciesStatus() const noexcept
     {
         RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
-        auto AccumulateTextureStatus =
-            [&Status](IRadientTextureAsset* pTexture) //
+        for (IRadientTextureAsset* pTexture : Textures)
         {
             if (pTexture == nullptr)
-                return;
+                continue;
 
             const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetLoadStatus(pTexture);
             if (TextureStatus == RADIENT_STATUS_OK)
-                return;
+                continue;
 
             if (TextureStatus != RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK)
                 Status = TextureStatus;
-        };
-
-        AccumulateTextureStatus(pBaseColorTexture);
-        AccumulateTextureStatus(pMetallicRoughnessTexture);
-        AccumulateTextureStatus(pNormalTexture);
-        AccumulateTextureStatus(pOcclusionTexture);
-        AccumulateTextureStatus(pEmissiveTexture);
+        }
 
         return Status;
     }
@@ -105,11 +101,7 @@ struct MaterialStorage
     bool                                TextureAttribsReady = false;
     mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
 
-    RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;
-    RefCntAutoPtr<IRadientTextureAsset> pMetallicRoughnessTexture;
-    RefCntAutoPtr<IRadientTextureAsset> pNormalTexture;
-    RefCntAutoPtr<IRadientTextureAsset> pOcclusionTexture;
-    RefCntAutoPtr<IRadientTextureAsset> pEmissiveTexture;
+    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
 };
 
 class MaterialPayloadImpl final : public RadientAssetPayloadImpl<MaterialStorage, MaterialPayloadImpl>
@@ -122,17 +114,6 @@ public:
 using MaterialAssetImpl =
     RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialPayloadImpl>;
 
-bool ApplyTextureAtlasAttribs(GLTF::MaterialBuilder& Builder,
-                              Uint32                 TextureAttribId,
-                              IRadientTextureAsset*  pTexture)
-{
-    if (pTexture == nullptr)
-        return true;
-
-    GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
-    return RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, TextureAttribs);
-}
-
 bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 {
     if (MaterialData.TextureAttribsReady)
@@ -143,13 +124,15 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 
     GLTF::MaterialBuilder Builder{MaterialData.Material};
 
-    if (!ApplyTextureAtlasAttribs(Builder, GLTF::DefaultBaseColorTextureAttribId, MaterialData.pBaseColorTexture) ||
-        !ApplyTextureAtlasAttribs(Builder, GLTF::DefaultMetallicRoughnessTextureAttribId, MaterialData.pMetallicRoughnessTexture) ||
-        !ApplyTextureAtlasAttribs(Builder, GLTF::DefaultNormalTextureAttribId, MaterialData.pNormalTexture) ||
-        !ApplyTextureAtlasAttribs(Builder, GLTF::DefaultOcclusionTextureAttribId, MaterialData.pOcclusionTexture) ||
-        !ApplyTextureAtlasAttribs(Builder, GLTF::DefaultEmissiveTextureAttribId, MaterialData.pEmissiveTexture))
+    for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.Textures.size(); ++TextureAttribId)
     {
-        return false;
+        IRadientTextureAsset* pTexture = MaterialData.Textures[TextureAttribId];
+        if (pTexture == nullptr)
+            continue;
+
+        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(static_cast<Uint32>(TextureAttribId));
+        if (!RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, TextureAttribs))
+            return false;
     }
 
     Builder.Finalize();
@@ -176,13 +159,38 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
 
     RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create();
 
-    MaterialStorage& MaterialData          = pPayload->GetStorage();
-    MaterialData.Material                  = CreateGLTFMaterial(MaterialCI);
-    MaterialData.pBaseColorTexture         = MaterialCI.pBaseColorTexture;
-    MaterialData.pMetallicRoughnessTexture = MaterialCI.pMetallicRoughnessTexture;
-    MaterialData.pNormalTexture            = MaterialCI.pNormalTexture;
-    MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
-    MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
+    MaterialStorage&      MaterialData = pPayload->GetStorage();
+    GLTF::MaterialBuilder Builder{MaterialData.Material};
+
+    GLTF::Material::ShaderAttribs& Attribs = Builder.GetShaderAttribs();
+    Attribs.BaseColorFactor                = RadientMath::ToFloat4(MaterialCI.BaseColorFactor);
+    Attribs.MetallicFactor                 = MaterialCI.MetallicFactor;
+    Attribs.RoughnessFactor                = MaterialCI.RoughnessFactor;
+    Attribs.EmissiveFactor                 = RadientMath::ToFloat3(MaterialCI.EmissiveFactor);
+    Attribs.AlphaCutoff                    = MaterialCI.AlphaCutoff;
+
+    MaterialData.Material.DoubleSided = MaterialCI.DoubleSided != False;
+
+    int  TextureId = 0;
+    auto AddMaterialTexture =
+        [&](Uint32 TextureAttribId, IRadientTextureAsset* pTexture) //
+    {
+        if (pTexture == nullptr)
+            return;
+
+        MaterialData.SetTexture(TextureAttribId, pTexture);
+        Builder.SetTextureId(TextureAttribId, TextureId++);
+        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
+        TextureAttribs.SetUVSelector(0);
+    };
+
+    AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
+    AddMaterialTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, MaterialCI.pMetallicRoughnessTexture);
+    AddMaterialTexture(GLTF::DefaultNormalTextureAttribId, MaterialCI.pNormalTexture);
+    AddMaterialTexture(GLTF::DefaultOcclusionTextureAttribId, MaterialCI.pOcclusionTexture);
+    AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
+
+    Builder.Finalize();
     MaterialData.InitLoadStatus();
 
     RefCntAutoPtr<MaterialAssetImpl> pMaterial =
@@ -205,42 +213,6 @@ const GLTF::Material* RadientMaterialAssetManager::GetMaterial(IRadientMaterialA
 
     MaterialStorage& MaterialData = pImpl->GetStorage();
     return UpdateTextureAtlasAttribs(MaterialData) ? &MaterialData.Material : nullptr;
-}
-
-GLTF::Material RadientMaterialAssetManager::CreateGLTFMaterial(const RadientMaterialCreateInfo& MaterialCI)
-{
-    GLTF::Material        Material;
-    GLTF::MaterialBuilder Builder{Material};
-
-    GLTF::Material::ShaderAttribs& Attribs = Builder.GetShaderAttribs();
-    Attribs.BaseColorFactor                = RadientMath::ToFloat4(MaterialCI.BaseColorFactor);
-    Attribs.MetallicFactor                 = MaterialCI.MetallicFactor;
-    Attribs.RoughnessFactor                = MaterialCI.RoughnessFactor;
-    Attribs.EmissiveFactor                 = RadientMath::ToFloat3(MaterialCI.EmissiveFactor);
-    Attribs.AlphaCutoff                    = MaterialCI.AlphaCutoff;
-
-    Material.DoubleSided = MaterialCI.DoubleSided != False;
-
-    int  TextureId = 0;
-    auto AddMaterialTexture =
-        [&](Uint32 TextureAttribId, IRadientTextureAsset* pTexture) //
-    {
-        if (pTexture == nullptr)
-            return;
-
-        Builder.SetTextureId(TextureAttribId, TextureId++);
-        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
-        TextureAttribs.SetUVSelector(0);
-    };
-
-    AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
-    AddMaterialTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, MaterialCI.pMetallicRoughnessTexture);
-    AddMaterialTexture(GLTF::DefaultNormalTextureAttribId, MaterialCI.pNormalTexture);
-    AddMaterialTexture(GLTF::DefaultOcclusionTextureAttribId, MaterialCI.pOcclusionTexture);
-    AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
-
-    Builder.Finalize();
-    return Material;
 }
 
 } // namespace Diligent
