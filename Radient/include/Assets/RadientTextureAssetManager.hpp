@@ -65,10 +65,6 @@ struct RadientTextureAssetManagerStats
     // and upload scheduling preparation, but not render-thread copy-command callbacks.
     Uint32 PendingTextureSourceLoads = 0;
 
-    // Number of worker-side upload scheduling operations still in progress.
-    // This remains non-zero while the worker is scheduling copy-command callbacks.
-    Uint32 PendingUploadScheduling = 0;
-
     // Number of scheduled upload-manager callbacks that have not yet reported
     // whether the copy command was enqueued. This does not track GPU completion.
     Uint32 PendingCopyCommandEnqueueCallbacks = 0;
@@ -114,7 +110,6 @@ private:
 
         std::atomic<Uint32> PendingTextureLoads{0};
         std::atomic<Uint32> PendingTextureSourceLoads{0};
-        std::atomic<Uint32> PendingUploadScheduling{0};
         std::atomic<Uint32> PendingCopyCommandEnqueueCallbacks{0};
     };
 

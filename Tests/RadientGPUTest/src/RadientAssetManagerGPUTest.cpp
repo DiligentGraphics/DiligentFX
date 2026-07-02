@@ -97,18 +97,18 @@ bool IsPendingOrOK(RADIENT_STATUS Status)
         Status == RADIENT_STATUS_OK;
 }
 
-bool WaitForTextureUploadScheduling(RadientAssetManagerImpl& AssetManager)
+bool WaitForPendingCopyCommandEnqueueCallbacks(RadientAssetManagerImpl& AssetManager)
 {
     for (Uint32 i = 0; i < 256; ++i)
     {
         const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
-        if (Stats.PendingUploadScheduling != 0)
+        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
         std::this_thread::sleep_for(1ms);
     }
 
-    return AssetManager.GetTextureManagerStats().PendingUploadScheduling != 0;
+    return AssetManager.GetTextureManagerStats().PendingCopyCommandEnqueueCallbacks != 0;
 }
 
 RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
@@ -212,7 +212,7 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
     RadientTextureData TextureData   = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TexturePixels.data());
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    bool                                EnteredUploadScheduling = false;
+    bool                                PendingCopyCommandEnqueueCallbacks = false;
 
     {
         RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
@@ -225,8 +225,8 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
         EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadTexture(MakeTextureLoadInfo(TextureData), &pTexture)));
         ASSERT_NE(pTexture, nullptr);
 
-        EnteredUploadScheduling = WaitForTextureUploadScheduling(*pAssetManager);
-        ASSERT_TRUE(EnteredUploadScheduling);
+        PendingCopyCommandEnqueueCallbacks = WaitForPendingCopyCommandEnqueueCallbacks(*pAssetManager);
+        ASSERT_TRUE(PendingCopyCommandEnqueueCallbacks);
 
         // The worker has queued upload callbacks, but they have not reported
         // success or failure yet, so the texture load remains pending.

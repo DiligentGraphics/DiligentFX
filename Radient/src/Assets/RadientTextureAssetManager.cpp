@@ -445,7 +445,6 @@ RadientTextureAssetManagerStats RadientTextureAssetManager::AtomicStats::GetSnap
     RadientTextureAssetManagerStats Stats;
     Stats.PendingTextureLoads                = PendingTextureLoads.load(std::memory_order_acquire);
     Stats.PendingTextureSourceLoads          = PendingTextureSourceLoads.load(std::memory_order_acquire);
-    Stats.PendingUploadScheduling            = PendingUploadScheduling.load(std::memory_order_acquire);
     Stats.PendingCopyCommandEnqueueCallbacks = PendingCopyCommandEnqueueCallbacks.load(std::memory_order_acquire);
     return Stats;
 }
@@ -659,9 +658,6 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     // reaching zero and marking the texture ready before the complete batch is queued.
     Texture.BeginSubresourceUploads(UploadSubresourceCount);
 
-    const Uint32 PendingUploadScheduling = UploadSubresourceCount != 0 ? 1u : 0u;
-    IncrementCounter(m_Stats.PendingUploadScheduling, PendingUploadScheduling);
-    DecrementCounterGuard PendingUploadScheduleGuard{m_Stats.PendingUploadScheduling, PendingUploadScheduling};
     IncrementCounter(m_Stats.PendingCopyCommandEnqueueCallbacks, UploadSubresourceCount);
 
     RadientTextureAssetManagerSharedPtr pSelf = shared_from_this();

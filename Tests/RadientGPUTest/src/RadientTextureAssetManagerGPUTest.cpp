@@ -187,7 +187,6 @@ bool IsTextureManagerIdle(const RadientTextureAssetManagerStats& Stats)
 {
     return Stats.PendingTextureLoads == 0 &&
         Stats.PendingTextureSourceLoads == 0 &&
-        Stats.PendingUploadScheduling == 0 &&
         Stats.PendingCopyCommandEnqueueCallbacks == 0;
 }
 
@@ -201,8 +200,7 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
         if (IsTextureManagerIdle(Stats))
             return true;
 
-        if (Stats.PendingUploadScheduling != 0 ||
-            Stats.PendingCopyCommandEnqueueCallbacks != 0)
+        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
         {
             PumpUploadManager(UploadManager, Context);
         }
@@ -215,18 +213,18 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
     return IsTextureManagerIdle(Manager->GetStats());
 }
 
-bool WaitForTextureUploadScheduling(const RadientTextureAssetManagerSharedPtr& Manager)
+bool WaitForPendingCopyCommandEnqueueCallbacks(const RadientTextureAssetManagerSharedPtr& Manager)
 {
     for (Uint32 i = 0; i < 256; ++i)
     {
         const RadientTextureAssetManagerStats Stats = Manager->GetStats();
-        if (Stats.PendingUploadScheduling != 0)
+        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
         std::this_thread::sleep_for(1ms);
     }
 
-    return Manager->GetStats().PendingUploadScheduling != 0;
+    return Manager->GetStats().PendingCopyCommandEnqueueCallbacks != 0;
 }
 
 bool IsPendingOrOK(RADIENT_STATUS Status)
@@ -643,8 +641,8 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TestTextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
-    const bool EnteredUploadScheduling = WaitForTextureUploadScheduling(pManager);
-    ASSERT_TRUE(EnteredUploadScheduling);
+    const bool PendingCopyCommandEnqueueCallbacks = WaitForPendingCopyCommandEnqueueCallbacks(pManager);
+    ASSERT_TRUE(PendingCopyCommandEnqueueCallbacks);
 
     // Upload callbacks are queued but have not reported whether they could
     // enqueue copy commands, so the asset must still be pending.
