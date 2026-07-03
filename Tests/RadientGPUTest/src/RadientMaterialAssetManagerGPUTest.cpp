@@ -42,6 +42,81 @@ using namespace Diligent::Testing::RadientGPUTest;
 namespace
 {
 
+void ExpectTextureAttribsEqual(const GLTF::Material::TextureShaderAttribs& ActualAttribs,
+                               const GLTF::Material::TextureShaderAttribs& ExpectedAttribs)
+{
+    EXPECT_FLOAT_EQ(ActualAttribs.TextureSlice, ExpectedAttribs.TextureSlice);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.x, ExpectedAttribs.AtlasUVScaleAndBias.x);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.y, ExpectedAttribs.AtlasUVScaleAndBias.y);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.z, ExpectedAttribs.AtlasUVScaleAndBias.z);
+    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.w, ExpectedAttribs.AtlasUVScaleAndBias.w);
+}
+
+struct MaterialWithTextureManagers
+{
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager;
+    RefCntAutoPtr<IGPUUploadManager>     pUploadManager;
+    RadientTextureAssetManagerSharedPtr  pTextureManager;
+    RadientMaterialAssetManagerSharedPtr pMaterialManager;
+};
+
+bool CreateMaterialWithBaseColorTexture(IRenderDevice*                        pDevice,
+                                        IDeviceContext*                       pContext,
+                                        IThreadPool&                          ThreadPool,
+                                        const RadientTextureData&             TextureData,
+                                        MaterialWithTextureManagers&          Managers,
+                                        RefCntAutoPtr<IRadientTextureAsset>&  pTexture,
+                                        RefCntAutoPtr<IRadientMaterialAsset>& pMaterial)
+{
+    Managers.pResourceManager = CreateTestResourceManager(pDevice);
+    if (Managers.pResourceManager == nullptr)
+    {
+        ADD_FAILURE() << "Failed to create resource manager";
+        return false;
+    }
+
+    Managers.pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    if (Managers.pUploadManager == nullptr)
+    {
+        ADD_FAILURE() << "Failed to create upload manager";
+        return false;
+    }
+
+    Managers.pTextureManager = CreateTextureManager(pDevice, Managers.pResourceManager, Managers.pUploadManager);
+    if (Managers.pTextureManager == nullptr)
+    {
+        ADD_FAILURE() << "Failed to create texture manager";
+        return false;
+    }
+
+    Managers.pMaterialManager = RadientMaterialAssetManager::Create();
+    if (Managers.pMaterialManager == nullptr)
+    {
+        ADD_FAILURE() << "Failed to create material manager";
+        return false;
+    }
+
+    const RADIENT_STATUS TextureStatus =
+        Managers.pTextureManager->LoadTexture(ThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture);
+    if (!IsPendingOrOK(TextureStatus) || pTexture == nullptr)
+    {
+        ADD_FAILURE() << "Failed to load texture: " << TextureStatus;
+        return false;
+    }
+
+    RadientMaterialCreateInfo MaterialCI{};
+    MaterialCI.pBaseColorTexture = pTexture;
+
+    const RADIENT_STATUS MaterialStatus = Managers.pMaterialManager->CreateMaterial(MaterialCI, &pMaterial);
+    if (MaterialStatus != RADIENT_STATUS_OK || pMaterial == nullptr)
+    {
+        ADD_FAILURE() << "Failed to create material: " << MaterialStatus;
+        return false;
+    }
+
+    return true;
+}
+
 TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
@@ -106,13 +181,102 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     const GLTF::Material::TextureShaderAttribs& ActualAttribs =
         pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
     EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
-    EXPECT_FLOAT_EQ(ActualAttribs.TextureSlice, ExpectedAttribs.TextureSlice);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.x, ExpectedAttribs.AtlasUVScaleAndBias.x);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.y, ExpectedAttribs.AtlasUVScaleAndBias.y);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.z, ExpectedAttribs.AtlasUVScaleAndBias.z);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.w, ExpectedAttribs.AtlasUVScaleAndBias.w);
+    ExpectTextureAttribsEqual(ActualAttribs, ExpectedAttribs);
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTextureUpload)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
+    RefCntAutoPtr<IRadientTextureAsset>  pTexture;
+    {
+        MaterialWithTextureManagers Managers;
+        ASSERT_TRUE(CreateMaterialWithBaseColorTexture(pDevice, pContext, *pThreadPool, TextureData, Managers, pTexture, pMaterial));
+
+        ASSERT_TRUE(WaitForTextureManagerIdle(Managers.pTextureManager, *Managers.pUploadManager, *pContext));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+        ProcessUploads(*Managers.pUploadManager, *pContext, *pTexture);
+        ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
+
+        // Drop the explicit texture handle. The material payload keeps the
+        // texture dependency alive after all managers leave this scope.
+        pTexture.Release();
+    }
+
+    pThreadPool->StopThreads();
+
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    ASSERT_NE(pGLTFMaterial, nullptr);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
+
+    const GLTF::Material::TextureShaderAttribs& ActualAttribs =
+        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
+    EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
+    ExpectTextureAttribsEqual(ActualAttribs, ExpectedAttribs);
+}
+
+TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeTextureUpload)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    Threading::Signal         ReleaseWorker;
+    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
+    ASSERT_NE(pBlocker, nullptr);
+
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    RefCntAutoPtr<IRadientTextureAsset>  pTexture;
+    {
+        MaterialWithTextureManagers Managers;
+        ASSERT_TRUE(CreateMaterialWithBaseColorTexture(pDevice, pContext, *pThreadPool, TextureData, Managers, pTexture, pMaterial));
+
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+
+        // Drop the explicit texture handle before managers are destroyed. The
+        // material payload must keep the pending texture dependency alive.
+        pTexture.Release();
+    }
+
+    // The queued texture load now runs without the resource/upload managers.
+    // The material asset must remain valid and report the dependency failure.
+    ReleaseWorker.Trigger();
+    pThreadPool->StopThreads();
+
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
 }
 
 } // namespace

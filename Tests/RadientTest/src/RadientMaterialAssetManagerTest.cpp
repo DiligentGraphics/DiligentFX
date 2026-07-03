@@ -33,13 +33,8 @@ using namespace Diligent;
 namespace
 {
 
-TEST(RadientMaterialAssetManagerTest, CreateMaterial)
+RadientMaterialCreateInfo MakeTestMaterialCreateInfo()
 {
-    // Creating a material should allocate a stable asset reference and build the
-    // internal GLTF material representation used by the renderer.
-    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
-    ASSERT_NE(pMaterialManager, nullptr);
-
     RadientMaterialCreateInfo MaterialCI{};
     MaterialCI.Name            = "Radient test material";
     MaterialCI.BaseColorFactor = {0.25f, 0.5f, 0.75f, 0.8f};
@@ -48,6 +43,37 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     MaterialCI.EmissiveFactor  = {1.f, 2.f, 3.f};
     MaterialCI.AlphaCutoff     = 0.33f;
     MaterialCI.DoubleSided     = True;
+    return MaterialCI;
+}
+
+void VerifyTestMaterial(const GLTF::Material&            GLTFMaterial,
+                        const RadientMaterialCreateInfo& MaterialCI)
+{
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.x, MaterialCI.BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.y, MaterialCI.BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.z, MaterialCI.BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.w, MaterialCI.BaseColorFactor.w);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.MetallicFactor, MaterialCI.MetallicFactor);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.RoughnessFactor, MaterialCI.RoughnessFactor);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.x, MaterialCI.EmissiveFactor.x);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.y, MaterialCI.EmissiveFactor.y);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.z, MaterialCI.EmissiveFactor.z);
+    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.AlphaCutoff, MaterialCI.AlphaCutoff);
+    EXPECT_TRUE(GLTFMaterial.DoubleSided);
+
+    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultBaseColorTextureAttribId), -1);
+    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultNormalTextureAttribId), -1);
+    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultMetallicRoughnessTextureAttribId), -1);
+}
+
+TEST(RadientMaterialAssetManagerTest, CreateMaterial)
+{
+    // Creating a material should allocate a stable asset reference and build the
+    // internal GLTF material representation used by the renderer.
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    const RadientMaterialCreateInfo MaterialCI = MakeTestMaterialCreateInfo();
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
@@ -58,21 +84,38 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
     ASSERT_NE(pGLTFMaterial, nullptr);
 
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.x, MaterialCI.BaseColorFactor.x);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.y, MaterialCI.BaseColorFactor.y);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.z, MaterialCI.BaseColorFactor.z);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.w, MaterialCI.BaseColorFactor.w);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.MetallicFactor, MaterialCI.MetallicFactor);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.RoughnessFactor, MaterialCI.RoughnessFactor);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.x, MaterialCI.EmissiveFactor.x);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.y, MaterialCI.EmissiveFactor.y);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.EmissiveFactor.z, MaterialCI.EmissiveFactor.z);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.AlphaCutoff, MaterialCI.AlphaCutoff);
-    EXPECT_TRUE(pGLTFMaterial->DoubleSided);
+    VerifyTestMaterial(*pGLTFMaterial, MaterialCI);
+}
 
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), -1);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), -1);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultMetallicRoughnessTextureAttribId), -1);
+TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    EXPECT_EQ(pMaterialManager->CreateMaterial(MakeTestMaterialCreateInfo(), nullptr),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
+{
+    const RadientMaterialCreateInfo MaterialCI = MakeTestMaterialCreateInfo();
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    {
+        RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+        ASSERT_NE(pMaterialManager, nullptr);
+
+        ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+        ASSERT_NE(pMaterial, nullptr);
+    }
+
+    // The asset owns its payload, so the material must remain readable after
+    // the manager that created it has been destroyed.
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    ASSERT_NE(pGLTFMaterial, nullptr);
+    VerifyTestMaterial(*pGLTFMaterial, MaterialCI);
 }
 
 } // namespace
