@@ -90,9 +90,13 @@ public:
                                const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
+    // Returns the texture SRV if the texture status is OK (i.e., all
+    // required copy commands were enqueued), or nullptr otherwise.
+    // This method must not race with render-thread operations that may access
+    // the texture.
     static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
 
-    // Reports texture source loading and upload scheduling status. OK means
+    // Reports texture source loading and upload scheduling status. OK means all
     // required copy commands were enqueued, but does not imply GPU completion.
     static RADIENT_STATUS GetLoadStatus(IRadientAsset* pTextureAsset);
 

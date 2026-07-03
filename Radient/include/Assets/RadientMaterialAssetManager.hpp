@@ -49,7 +49,13 @@ public:
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);
 
-    static RADIENT_STATUS        GetLoadStatus(IRadientAsset* pMaterial);
+    // Reports material dependency status. OK means all dependent textures have
+    // status OK (i.e., all required copy commands were enqueued). Once the
+    // status becomes terminal, it is cached and no longer rechecks texture dependencies.
+    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMaterial);
+
+    // Returns the GLTF material if the material status is OK (i.e., all
+    // dependent texture copy commands were enqueued), or nullptr otherwise.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
 private:

@@ -64,11 +64,12 @@ struct MeshStorage
     {
     }
 
-    MeshStorage(MeshStorage&& Rhs) noexcept;
-
+    // clang-format off
+    MeshStorage           (MeshStorage&& Rhs)  = delete;
     MeshStorage& operator=(MeshStorage&& Rhs)  = delete;
-    MeshStorage(const MeshStorage&)            = delete;
+    MeshStorage           (const MeshStorage&) = delete;
     MeshStorage& operator=(const MeshStorage&) = delete;
+    // clang-format on
 
     RadientDrawableMesh DrawableMesh;
 
@@ -529,22 +530,11 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
                                                      bool         RequireGPUResourcesReady);
 RadientDrawableMeshResolveResult ResolveDrawableMesh(const GLTFMeshStorage& Mesh,
                                                      bool                   RequireGPUResourcesReady);
-RADIENT_STATUS                   GetMeshMaterialStatus(MeshStorage& Mesh);
-RADIENT_STATUS                   ResolveMeshMaterialDependencies(MeshStorage& Mesh);
+
+RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh);
+RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh);
 
 } // namespace
-
-MeshStorage::MeshStorage(MeshStorage&& Rhs) noexcept :
-    DrawableMesh{std::move(Rhs.DrawableMesh)},
-    pIndexAllocation{std::move(Rhs.pIndexAllocation)},
-    pVertexAllocation{std::move(Rhs.pVertexAllocation)},
-    Materials{std::move(Rhs.Materials)},
-    LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-    MaterialStatus{Rhs.MaterialStatus.load(std::memory_order_relaxed)},
-    GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
-    PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
-{
-}
 
 RadientMeshAssetManager::RadientMeshAssetManager(const CreateInfo& CI) noexcept :
     m_pDevice{CI.pDevice},

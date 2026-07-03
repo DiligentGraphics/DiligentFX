@@ -75,6 +75,8 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
+    // Returns drawable mesh data when the mesh asset is ready. This method
+    // accesses render data and must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 

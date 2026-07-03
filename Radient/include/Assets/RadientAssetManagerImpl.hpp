@@ -102,9 +102,11 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
+    // Must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
+    // Returns the GLTF material if the material status is OK, or nullptr otherwise.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
     static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
@@ -113,7 +115,12 @@ public:
     // Reports GLTF model load and upload-scheduling status. OK does not imply
     // that render-thread GPU upload callbacks have completed.
     static RADIENT_STATUS GetGLTFLoadStatus(IRadientSceneAsset* pModel);
-    static ITextureView*  GetTextureSRV(IRadientTextureAsset* pTexture);
+
+    // Returns the texture SRV if the texture status is OK (i.e., all
+    // required copy commands were enqueued), or nullptr otherwise.
+    // This method must not race with render-thread operations that may access
+    // the texture.
+    static ITextureView* GetTextureSRV(IRadientTextureAsset* pTexture);
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
