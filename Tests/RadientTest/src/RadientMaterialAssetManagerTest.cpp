@@ -28,6 +28,8 @@
 
 #include "gtest/gtest.h"
 
+#include <utility>
+
 using namespace Diligent;
 
 namespace
@@ -94,6 +96,48 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)
 
     EXPECT_EQ(pMaterialManager->CreateMaterial(MakeTestMaterialCreateInfo(), nullptr),
               RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependencies)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    const float4 BaseColorFactor{0.1f, 0.2f, 0.3f, 0.4f};
+
+    GLTF::Material Material;
+    Material.Attribs.BaseColorFactor = BaseColorFactor;
+    Material.DoubleSided             = true;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pMaterialManager->CreateGLTFMaterial(std::move(Material), nullptr, 0, &pMaterial),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    ASSERT_NE(pGLTFMaterial, nullptr);
+    EXPECT_EQ(pGLTFMaterial->GetNumActiveTextureAttribs(), 0u);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.x, BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.y, BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.z, BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.w, BaseColorFactor.w);
+    EXPECT_TRUE(pGLTFMaterial->DoubleSided);
+}
+
+TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialRejectsInvalidArguments)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    EXPECT_EQ(pMaterialManager->CreateGLTFMaterial(GLTF::Material{}, nullptr, 0, nullptr),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    EXPECT_EQ(pMaterialManager->CreateGLTFMaterial(GLTF::Material{}, nullptr, 1, &pMaterial),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial, nullptr);
 }
 
 TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)

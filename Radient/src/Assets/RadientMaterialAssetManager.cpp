@@ -114,6 +114,23 @@ public:
 using MaterialAssetImpl =
     RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialPayloadImpl>;
 
+RADIENT_STATUS CreateMaterialAsset(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
+                                   std::atomic<RadientHandle>&        NextAssetID,
+                                   IRadientMaterialAsset**            ppMaterial)
+{
+    VERIFY_EXPR(pPayload != nullptr);
+    VERIFY_EXPR(ppMaterial != nullptr);
+    VERIFY_EXPR(*ppMaterial == nullptr);
+
+    pPayload->GetStorage().InitLoadStatus();
+
+    RefCntAutoPtr<MaterialAssetImpl> pMaterial =
+        MaterialAssetImpl::Create(MakeRadientAssetURI("material", NextAssetID.fetch_add(1, std::memory_order_relaxed)),
+                                  std::move(pPayload));
+    *ppMaterial = pMaterial.Detach();
+    return RADIENT_STATUS_OK;
+}
+
 bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 {
     if (MaterialData.TextureAttribsReady)
@@ -191,13 +208,34 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
 
     Builder.Finalize();
-    MaterialData.InitLoadStatus();
+    return CreateMaterialAsset(std::move(pPayload), m_NextAssetID, ppMaterial);
+}
 
-    RefCntAutoPtr<MaterialAssetImpl> pMaterial =
-        MaterialAssetImpl::Create(MakeRadientAssetURI("material", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)),
-                                  std::move(pPayload));
-    *ppMaterial = pMaterial.Detach();
-    return RADIENT_STATUS_OK;
+RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
+    GLTF::Material               Material,
+    IRadientTextureAsset* const* ppTextures,
+    Uint32                       TextureCount,
+    IRadientMaterialAsset**      ppMaterial)
+{
+    if (ppMaterial == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    if (ppTextures == nullptr && TextureCount != 0)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMaterial = nullptr;
+
+    RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create();
+
+    MaterialStorage& MaterialData = pPayload->GetStorage();
+    Material.ProcessActiveTextureAttibs(
+        [&](Uint32 TextureAttribId, const GLTF::Material::TextureShaderAttribs&, int TextureId) //
+        {
+            if (TextureId >= 0 && static_cast<Uint32>(TextureId) < TextureCount)
+                MaterialData.SetTexture(TextureAttribId, ppTextures[TextureId]);
+            return true;
+        });
+    MaterialData.Material = std::move(Material);
+    return CreateMaterialAsset(std::move(pPayload), m_NextAssetID, ppMaterial);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)
