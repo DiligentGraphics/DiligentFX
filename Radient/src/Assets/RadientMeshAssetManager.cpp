@@ -41,6 +41,7 @@
 #include "BufferSuballocator.h"
 #include "VertexPool.h"
 
+#include <atomic>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -76,6 +77,7 @@ struct MeshStorage
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
     std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
+    std::atomic<RADIENT_STATUS> MaterialStatus{RADIENT_STATUS_OK};
     std::atomic_bool            GPUResourcesReady{false};
     std::atomic<Uint32>         PendingUploads{0};
 };
@@ -199,10 +201,13 @@ RADIENT_STATUS InitializeMeshStorage(GLTF::ResourceManager*   pResourceManager,
     Storage.DrawableMesh.VertexAttribFlags = Source.GetVertexAttribFlags();
     Storage.DrawableMesh.Primitives.clear();
     Storage.Materials.clear();
+    Storage.MaterialStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
 
     const Uint32 PrimitiveCount = Source.GetPrimitiveCount();
     Storage.DrawableMesh.Primitives.reserve(PrimitiveCount);
     Storage.Materials.reserve(PrimitiveCount);
+
+    RADIENT_STATUS MaterialStatus = RADIENT_STATUS_OK;
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < PrimitiveCount; ++PrimitiveIndex)
     {
@@ -211,19 +216,26 @@ RADIENT_STATUS InitializeMeshStorage(GLTF::ResourceManager*   pResourceManager,
         const GLTF::Material* pMaterial = nullptr;
         if (IRadientMaterialAsset* pMaterialAsset = PrimitiveCI.pMaterial)
         {
-            pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
-            if (pMaterial == nullptr)
-                return RADIENT_STATUS_INVALID_ARGUMENT;
+            const RADIENT_STATUS MaterialLoadStatus = RadientMaterialAssetManager::GetLoadStatus(pMaterialAsset);
+            if (RADIENT_FAILED(MaterialLoadStatus))
+                return MaterialLoadStatus;
 
-            Storage.Materials.emplace_back(pMaterialAsset);
+            // Pending materials are resolved lazily by GetDrawableMesh().
+            if (MaterialLoadStatus == RADIENT_STATUS_OK)
+                pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
+            else if (MaterialLoadStatus == RADIENT_STATUS_PENDING)
+                MaterialStatus = RADIENT_STATUS_PENDING;
         }
 
+        Storage.Materials.emplace_back(PrimitiveCI.pMaterial);
         Storage.DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
             true,
             PrimitiveCI.FirstIndex,
             PrimitiveCI.IndexCount});
     }
+
+    Storage.MaterialStatus.store(MaterialStatus, std::memory_order_release);
 
     Storage.pIndexAllocation = pResourceManager->AllocateIndices(Source.GetIndexDataSize(),
                                                                  alignof(Uint32));
@@ -513,10 +525,12 @@ std::string MakeGLTFMeshCacheKey(const IRadientSceneAsset& Model,
     return std::string{"gltf-mesh:"} + ModelRef.URI + ":mesh:" + std::to_string(MeshIndex);
 }
 
-RadientDrawableMeshResolveResult ResolveDrawableMesh(const MeshStorage& Mesh,
-                                                     bool               RequireGPUResourcesReady);
+RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
+                                                     bool         RequireGPUResourcesReady);
 RadientDrawableMeshResolveResult ResolveDrawableMesh(const GLTFMeshStorage& Mesh,
                                                      bool                   RequireGPUResourcesReady);
+RADIENT_STATUS                   GetMeshMaterialStatus(MeshStorage& Mesh);
+RADIENT_STATUS                   ResolveMeshMaterialDependencies(MeshStorage& Mesh);
 
 } // namespace
 
@@ -526,6 +540,7 @@ MeshStorage::MeshStorage(MeshStorage&& Rhs) noexcept :
     pVertexAllocation{std::move(Rhs.pVertexAllocation)},
     Materials{std::move(Rhs.Materials)},
     LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
+    MaterialStatus{Rhs.MaterialStatus.load(std::memory_order_relaxed)},
     GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
     PendingUploads{Rhs.PendingUploads.load(std::memory_order_relaxed)}
 {
@@ -683,8 +698,8 @@ RadientDrawableMeshResolveResult RadientMeshAssetManager::GetDrawableMesh(IRadie
     if (!pMeshImpl)
         return Result;
 
-    const MeshAssetStorage& Storage = pMeshImpl->GetStorage();
-    if (const MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
+    MeshAssetStorage& Storage = pMeshImpl->GetStorage();
+    if (MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
         return ResolveDrawableMesh(*pMeshStorage, RequireGPUResourcesReady);
     if (const GLTFMeshStorage* pGLTFMeshStorage = std::get_if<GLTFMeshStorage>(&Storage))
         return ResolveDrawableMesh(*pGLTFMeshStorage, RequireGPUResourcesReady);
@@ -694,7 +709,7 @@ RadientDrawableMeshResolveResult RadientMeshAssetManager::GetDrawableMesh(IRadie
 
 RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
 {
-    const MeshAssetImpl* pMesh = ClassPtrCast<const MeshAssetImpl>(pMeshAsset);
+    MeshAssetImpl* pMesh = ClassPtrCast<MeshAssetImpl>(pMeshAsset);
     if (!pMesh)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -702,9 +717,14 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
     if (PayloadStatus != RADIENT_STATUS_OK)
         return PayloadStatus;
 
-    const MeshAssetStorage& Storage = pMesh->GetStorage();
-    if (const MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
-        return pMeshStorage->LoadStatus.load(std::memory_order_acquire);
+    MeshAssetStorage& Storage = pMesh->GetStorage();
+    if (MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
+    {
+        const RADIENT_STATUS MeshStatus = pMeshStorage->LoadStatus.load(std::memory_order_acquire);
+        return MeshStatus == RADIENT_STATUS_OK ?
+            GetMeshMaterialStatus(*pMeshStorage) :
+            MeshStatus;
+    }
 
     if (const GLTFMeshStorage* pGLTFMeshStorage = std::get_if<GLTFMeshStorage>(&Storage))
         return pGLTFMeshStorage->pModel ? RadientAssetManagerImpl::GetGLTFLoadStatus(pGLTFMeshStorage->pModel) : RADIENT_STATUS_INVALID_OPERATION;
@@ -721,8 +741,71 @@ const MeshPayloadImpl* RadientMeshAssetManager::GetMeshPayload(IRadientMeshAsset
 namespace
 {
 
-RadientDrawableMeshResolveResult ResolveDrawableMesh(const MeshStorage& Mesh,
-                                                     bool               RequireGPUResourcesReady)
+RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh)
+{
+    RADIENT_STATUS Status = Mesh.MaterialStatus.load(std::memory_order_acquire);
+    if (Status != RADIENT_STATUS_PENDING)
+        return Status;
+
+    if (Mesh.Materials.empty())
+        return RADIENT_STATUS_OK;
+
+    if (Mesh.Materials.size() != Mesh.DrawableMesh.Primitives.size())
+    {
+        Mesh.MaterialStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    Status = RADIENT_STATUS_OK;
+
+    for (IRadientMaterialAsset* pMaterialAsset : Mesh.Materials)
+    {
+        if (pMaterialAsset == nullptr)
+            continue;
+
+        const RADIENT_STATUS MaterialLoadStatus = RadientMaterialAssetManager::GetLoadStatus(pMaterialAsset);
+        if (MaterialLoadStatus == RADIENT_STATUS_OK)
+            continue;
+
+        if (MaterialLoadStatus != RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK)
+            Status = MaterialLoadStatus;
+    }
+
+    if (Status != RADIENT_STATUS_PENDING)
+        Mesh.MaterialStatus.store(Status, std::memory_order_release);
+
+    return Status;
+}
+
+RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh)
+{
+    RADIENT_STATUS Status = GetMeshMaterialStatus(Mesh);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    // Once all material dependencies report OK, attach the final GLTF material
+    // pointers to the drawable primitives.
+    for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Materials.size(); ++PrimitiveIndex)
+    {
+        if (Mesh.DrawableMesh.Primitives[PrimitiveIndex].pMaterial != nullptr)
+            continue;
+
+        IRadientMaterialAsset* pMaterialAsset = Mesh.Materials[PrimitiveIndex];
+        if (pMaterialAsset == nullptr)
+            continue;
+
+        const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
+        if (pMaterial == nullptr)
+            return RADIENT_STATUS_PENDING;
+
+        Mesh.DrawableMesh.Primitives[PrimitiveIndex].pMaterial = pMaterial;
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
+RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
+                                                     bool         RequireGPUResourcesReady)
 {
     RadientDrawableMeshResolveResult Result;
 
@@ -730,6 +813,13 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(const MeshStorage& Mesh,
     if (LoadStatus != RADIENT_STATUS_OK)
     {
         Result.Status = LoadStatus;
+        return Result;
+    }
+
+    const RADIENT_STATUS MaterialStatus = ResolveMeshMaterialDependencies(Mesh);
+    if (MaterialStatus != RADIENT_STATUS_OK)
+    {
+        Result.Status = MaterialStatus;
         return Result;
     }
 
