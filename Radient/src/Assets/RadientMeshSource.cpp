@@ -452,38 +452,11 @@ std::string RadientMeshSource::MakeCacheKey() const
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{4}, // Packed mesh cache key version.
+    Hasher.Update(Uint32{5}, // Packed mesh cache key version.
                   m_VertexCount,
                   m_IndexCount,
                   m_IndexType,
                   m_ActiveVertexBufferMask);
-
-    std::vector<const Char*> AttributeNames;
-    AttributeNames.reserve(m_SrcAttributes.size());
-    for (const auto& SrcAttrib : m_SrcAttributes)
-        AttributeNames.push_back(SrcAttrib.first.GetStr());
-    std::sort(AttributeNames.begin(), AttributeNames.end(), [](const Char* Lhs, const Char* Rhs) //
-              {
-                  return std::strcmp(Lhs, Rhs) < 0;
-              });
-
-    Hasher.Update(static_cast<Uint64>(AttributeNames.size()));
-    for (const Char* Name : AttributeNames)
-    {
-        const auto SrcAttribIt = m_SrcAttributes.find(Name);
-        VERIFY_EXPR(SrcAttribIt != m_SrcAttributes.end());
-        if (SrcAttribIt == m_SrcAttributes.end())
-            continue;
-
-        const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
-        UpdateString(Hasher, Name);
-        Hasher.Update(SrcAttrib.Type,
-                      SrcAttrib.NumComponents,
-                      SrcAttrib.IsNormalized,
-                      SrcAttrib.ElementSize,
-                      Uint64{m_VertexCount} * SrcAttrib.ElementSize);
-        UpdateStridedRaw(Hasher, SrcAttrib.pData, m_VertexCount, SrcAttrib.ElementSize, SrcAttrib.Stride);
-    }
 
     const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
     Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
@@ -501,20 +474,48 @@ std::string RadientMeshSource::MakeCacheKey() const
     for (Uint32 Stride : m_VertexStrides)
         Hasher.Update(Stride);
 
-    Hasher.Update(static_cast<Uint64>(m_DstAttributes.size()));
+    std::vector<const GLTF::VertexAttributeDesc*> UsedDstAttributes;
+    UsedDstAttributes.reserve(m_DstAttributes.size());
     for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
     {
+        const auto SrcAttribIt = m_SrcAttributes.find(DstAttrib.Name);
+        const bool HasSource   = SrcAttribIt != m_SrcAttributes.end();
+        const bool UsesDefault = !HasSource &&
+            DstAttrib.pDefaultValue != nullptr &&
+            IsActiveVertexBuffer(m_ActiveVertexBufferMask, DstAttrib.BufferId);
+
+        if (HasSource || UsesDefault)
+            UsedDstAttributes.push_back(&DstAttrib);
+    }
+
+    Hasher.Update(static_cast<Uint64>(UsedDstAttributes.size()));
+    for (const GLTF::VertexAttributeDesc* pDstAttrib : UsedDstAttributes)
+    {
+        const GLTF::VertexAttributeDesc& DstAttrib = *pDstAttrib;
         UpdateString(Hasher, DstAttrib.Name);
         Hasher.Update(DstAttrib.BufferId,
                       DstAttrib.ValueType,
                       DstAttrib.NumComponents,
                       DstAttrib.RelativeOffset);
 
-        const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
-        const bool   HasDefault    = DstAttrib.pDefaultValue != nullptr;
-        Hasher.Update(HasDefault);
-        if (HasDefault)
+        const auto SrcAttribIt = m_SrcAttributes.find(DstAttrib.Name);
+        if (SrcAttribIt != m_SrcAttributes.end())
+        {
+            const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
+            Hasher.Update(true,
+                          SrcAttrib.Type,
+                          SrcAttrib.NumComponents,
+                          SrcAttrib.IsNormalized,
+                          SrcAttrib.ElementSize,
+                          Uint64{m_VertexCount} * SrcAttrib.ElementSize);
+            UpdateStridedRaw(Hasher, SrcAttrib.pData, m_VertexCount, SrcAttrib.ElementSize, SrcAttrib.Stride);
+        }
+        else
+        {
+            const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+            Hasher.Update(false);
             UpdateRawIfNotEmpty(Hasher, DstAttrib.pDefaultValue, DstAttribSize);
+        }
     }
 
     return std::string{"packed-mesh:"} + Hasher.Digest().ToString();
