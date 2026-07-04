@@ -47,6 +47,7 @@ class ResourceManager;
 } // namespace GLTF
 
 class RadientMeshSource;
+class MeshGPUData;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
 
@@ -90,7 +91,7 @@ public:
     static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
 
 private:
-    explicit RadientMeshAssetManager(const CreateInfo& CI) noexcept;
+    explicit RadientMeshAssetManager(const CreateInfo& CI);
 
     RefCntAutoPtr<IRenderDevice>         m_pDevice;
     RefCntWeakPtr<GLTF::ResourceManager> m_WeakResourceManager;
@@ -98,6 +99,7 @@ private:
 
     RadientAssetCache<MeshPayloadImpl> m_MeshCache;
     RadientAssetCache<MeshPayloadImpl> m_GLTFMeshCache;
+    RadientAssetCache<MeshGPUData>     m_MeshGPUDataCache;
     std::atomic<RadientHandle>         m_NextAssetID{1};
 };
 

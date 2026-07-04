@@ -57,13 +57,24 @@ namespace
 
 static constexpr INTERFACE_ID IID_MeshAssetImpl = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
 
+} // namespace
+
 // GPU allocation and upload state for mesh geometry. It is separate from
 // MeshStorage so mesh views can later share the same uploaded data.
-struct MeshGPUData
+class MeshGPUData final : public RadientAssetPayloadImpl<std::monostate, MeshGPUData>
 {
-    explicit MeshGPUData(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
+public:
+    using TBase = RadientAssetPayloadImpl<std::monostate, MeshGPUData>;
+
+    MeshGPUData(IReferenceCounters* pRefCounters, RADIENT_STATUS InitLoadStatus) :
+        TBase{pRefCounters},
         LoadStatus{InitLoadStatus}
     {
+    }
+
+    static RefCntAutoPtr<MeshGPUData> Create(RADIENT_STATUS InitLoadStatus)
+    {
+        return TBase::Create(InitLoadStatus);
     }
 
     // clang-format off
@@ -81,10 +92,13 @@ struct MeshGPUData
     std::atomic<Uint32>         PendingUploads{0};
 };
 
+namespace
+{
+
 struct MeshStorage
 {
-    explicit MeshStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
-        pGPUData{std::make_shared<MeshGPUData>(InitLoadStatus)}
+    explicit MeshStorage(RefCntAutoPtr<MeshGPUData> pMeshGPUData) :
+        pGPUData{std::move(pMeshGPUData)}
     {
     }
 
@@ -97,7 +111,7 @@ struct MeshStorage
 
     RadientDrawableMesh DrawableMesh;
 
-    std::shared_ptr<MeshGPUData>                      pGPUData;
+    RefCntAutoPtr<MeshGPUData>                        pGPUData;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
     std::atomic<RADIENT_STATUS> MaterialStatus{RADIENT_STATUS_OK};
@@ -140,7 +154,7 @@ struct MeshVertexBufferWriteData
 struct MeshIndexBufferCopyData
 {
     RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
-    std::shared_ptr<MeshGPUData>   pGPUData;
+    RefCntAutoPtr<MeshGPUData>     pGPUData;
     RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IBufferSuballocation> pIndexAllocation;
@@ -149,7 +163,7 @@ struct MeshIndexBufferCopyData
 struct MeshVertexBufferCopyData
 {
     RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
-    std::shared_ptr<MeshGPUData>   pGPUData;
+    RefCntAutoPtr<MeshGPUData>     pGPUData;
     RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IVertexPoolAllocation> pVertexAllocation;
@@ -368,11 +382,11 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         UpdateMeshUploadProgress(*Data->pGPUData, CopyScheduled);
 }
 
-void ScheduleMeshIndexUpload(IGPUUploadManager*                  pUploadManager,
-                             IRenderDevice*                      pDevice,
-                             MeshPayloadImpl&                    MeshPayload,
-                             const RadientMeshSource&            Source,
-                             const std::shared_ptr<MeshGPUData>& pGPUData)
+void ScheduleMeshIndexUpload(IGPUUploadManager*       pUploadManager,
+                             IRenderDevice*           pDevice,
+                             MeshPayloadImpl&         MeshPayload,
+                             const RadientMeshSource& Source,
+                             MeshGPUData*             pGPUData)
 {
     std::unique_ptr<MeshIndexBufferCopyData> pCopyData{new MeshIndexBufferCopyData{}};
     pCopyData->pMeshPayload     = &MeshPayload;
@@ -396,12 +410,12 @@ void ScheduleMeshIndexUpload(IGPUUploadManager*                  pUploadManager,
     pCopyData.release();
 }
 
-void ScheduleMeshVertexUpload(IGPUUploadManager*                  pUploadManager,
-                              IRenderDevice*                      pDevice,
-                              MeshPayloadImpl&                    MeshPayload,
-                              const RadientMeshSource&            Source,
-                              const std::shared_ptr<MeshGPUData>& pGPUData,
-                              Uint32                              VertexBufferIndex)
+void ScheduleMeshVertexUpload(IGPUUploadManager*       pUploadManager,
+                              IRenderDevice*           pDevice,
+                              MeshPayloadImpl&         MeshPayload,
+                              const RadientMeshSource& Source,
+                              MeshGPUData*             pGPUData,
+                              Uint32                   VertexBufferIndex)
 {
     std::unique_ptr<MeshVertexBufferCopyData> pCopyData{new MeshVertexBufferCopyData{}};
     pCopyData->pMeshPayload      = &MeshPayload;
@@ -495,7 +509,7 @@ void SetMeshLoadStatus(MeshPayloadImpl& Mesh,
         return;
 
     if (pMeshStorage->pGPUData == nullptr)
-        pMeshStorage->pGPUData = std::make_shared<MeshGPUData>();
+        pMeshStorage->pGPUData = MeshGPUData::Create(RADIENT_STATUS_OK);
 
     pMeshStorage->pGPUData->GPUResourcesReady.store(false, std::memory_order_release);
     pMeshStorage->pGPUData->LoadStatus.store(Status, std::memory_order_release);
@@ -560,7 +574,7 @@ RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh);
 
 } // namespace
 
-RadientMeshAssetManager::RadientMeshAssetManager(const CreateInfo& CI) noexcept :
+RadientMeshAssetManager::RadientMeshAssetManager(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_WeakResourceManager{CI.pResourceManager},
     m_WeakUploadManager{CI.pUploadManager}
@@ -637,11 +651,25 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
+            auto MeshGPUDataResult =
+                pSelf->m_MeshGPUDataCache.GetOrCreate(
+                    CacheKey.c_str(),
+                    []() {
+                        return MeshGPUData::Create(RADIENT_STATUS_PENDING);
+                    });
+            RefCntAutoPtr<MeshGPUData> pMeshGPUData = std::move(MeshGPUDataResult.first);
+
+            if (pMeshGPUData == nullptr)
+            {
+                pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
             auto [pMeshPayload, PayloadCreated] =
                 pSelf->m_MeshCache.GetOrCreate(
                     CacheKey.c_str(),
-                    []() {
-                        return MeshPayloadImpl::Create(std::in_place_type<MeshStorage>, RADIENT_STATUS_PENDING);
+                    [&pMeshGPUData]() {
+                        return MeshPayloadImpl::Create(std::in_place_type<MeshStorage>, pMeshGPUData);
                     });
 
             MeshPayloadImpl* const pMeshPayloadRaw = pMeshPayload.RawPtr();
