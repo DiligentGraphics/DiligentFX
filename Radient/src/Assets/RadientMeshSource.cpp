@@ -382,11 +382,15 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
 
         if (BorrowSourceData)
         {
+            // Keep the original source layout; the owner supplied in CreateInfo
+            // keeps these spans alive.
             Data.Stride = SrcStride;
             Data.pData  = pSrcBytes;
         }
         else
         {
+            // Store each copied attribute tightly packed, even when it came
+            // from an interleaved source vertex stream.
             Data.Stride = ElementSize;
             Data.OwnedBytes.resize(size_t{m_VertexCount} * ElementSize);
 
@@ -431,6 +435,8 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
     const Uint8* const pSrcIndices = static_cast<const Uint8*>(CI.Indices.pData);
     if (BorrowSourceData)
     {
+        // Index data is tightly packed by contract, so the source bytes can be
+        // referenced directly when the source owner is retained.
         m_pIndexData = pSrcIndices;
     }
     else
@@ -459,9 +465,12 @@ std::string RadientMeshSource::MakeCacheKey() const
                   m_ActiveVertexBufferMask);
 
     const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
+    // Keep the source index representation in the key for now. PackIndexData()
+    // always expands UINT16 indices to UINT32 during upload.
     Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
     UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
+    // MeshStorage includes primitive material state, not just geometry buffers.
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
     {
@@ -480,6 +489,8 @@ std::string RadientMeshSource::MakeCacheKey() const
     {
         const auto SrcAttribIt = m_SrcAttributes.find(DstAttrib.Name);
         const bool HasSource   = SrcAttribIt != m_SrcAttributes.end();
+        // Default values only matter when they are written into an active
+        // vertex buffer. Source-backed attributes ignore defaults.
         const bool UsesDefault = !HasSource &&
             DstAttrib.pDefaultValue != nullptr &&
             IsActiveVertexBuffer(m_ActiveVertexBufferMask, DstAttrib.BufferId);
@@ -558,6 +569,8 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     {
         Uint32& BufferStride   = VertexStrides[DstAttrib.BufferId];
         Uint32& RelativeOffset = DstAttrib.RelativeOffset;
+        // Resolve automatic offsets before validating ranges and computing
+        // final strides.
         if (RelativeOffset == GLTF::VertexAttributeDesc{}.RelativeOffset)
             RelativeOffset = BufferStride;
 
@@ -575,6 +588,8 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
 
     for (std::vector<VertexAttributeRange>& Ranges : VertexAttributeRanges)
     {
+        // Attributes in the same destination buffer must not overwrite each
+        // other during PackVertexData().
         if (HasOverlappingRanges(Ranges))
         {
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
@@ -604,6 +619,8 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     Uint32 ActiveVertexBufferMask = 0;
     for (const GLTF::VertexAttributeDesc& DstAttrib : DstAttributes)
     {
+        // Only buffers with source-backed attributes are uploaded. Default-only
+        // attributes in inactive buffers do not create GPU vertex buffers.
         if (m_SrcAttributes.find(DstAttrib.Name) != m_SrcAttributes.end())
             ActiveVertexBufferMask |= Uint32{1} << DstAttrib.BufferId;
     }
@@ -658,6 +675,9 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     std::vector<std::unique_ptr<Uint8[]>> DstAttributeDefaultValues(DstAttributes.size());
     for (size_t AttribIndex = 0; AttribIndex < DstAttributes.size(); ++AttribIndex)
     {
+        // VertexAttributeDesc contains borrowed pointers. Copy their backing
+        // storage so packing and cache-key generation do not depend on caller
+        // lifetime.
         const GLTF::VertexAttributeDesc& DstAttrib = DstAttributes[AttribIndex];
         DstAttributeNames[AttribIndex]             = DstAttrib.Name;
 
@@ -674,6 +694,7 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     m_DstAttributeDefaultValues = std::move(DstAttributeDefaultValues);
     for (size_t AttribIndex = 0; AttribIndex < m_DstAttributes.size(); ++AttribIndex)
     {
+        // Repoint descriptors to the final member storage after the moves.
         m_DstAttributes[AttribIndex].Name = m_DstAttributeNames[AttribIndex].c_str();
 
         m_DstAttributes[AttribIndex].pDefaultValue = m_DstAttributeDefaultValues[AttribIndex].get();
@@ -741,6 +762,7 @@ RADIENT_STATUS RadientMeshSource::PackVertexData(Uint32          VertexBufferInd
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
+    // Missing attributes without explicit defaults remain zero-filled.
     std::memset(Destination.pData, 0, m_VertexBufferDataSizes[VertexBufferIndex]);
 
     for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
