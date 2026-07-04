@@ -177,6 +177,29 @@ bool IsActiveVertexBuffer(Uint32 ActiveVertexBufferMask, Uint32 BufferIndex)
         (ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
 }
 
+struct VertexAttributeRange
+{
+    Uint32 Begin = 0;
+    Uint32 End   = 0;
+};
+
+bool HasOverlappingRanges(std::vector<VertexAttributeRange>& Ranges)
+{
+    std::sort(Ranges.begin(), Ranges.end(), [](const VertexAttributeRange& Lhs, const VertexAttributeRange& Rhs) //
+              {
+                  return Lhs.Begin < Rhs.Begin ||
+                      (Lhs.Begin == Rhs.Begin && Lhs.End < Rhs.End);
+              });
+
+    for (size_t RangeIndex = 1; RangeIndex < Ranges.size(); ++RangeIndex)
+    {
+        if (Ranges[RangeIndex].Begin < Ranges[RangeIndex - 1].End)
+            return true;
+    }
+
+    return false;
+}
+
 void UpdateRawIfNotEmpty(XXH128State& Hasher, const void* pData, size_t Size)
 {
     if (pData != nullptr && Size != 0)
@@ -507,7 +530,8 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
         MaxBufferId = std::max<Uint32>(MaxBufferId, DstAttrib.BufferId);
     }
 
-    std::vector<Uint32> VertexStrides(size_t{MaxBufferId} + 1, 0);
+    std::vector<Uint32>                            VertexStrides(size_t{MaxBufferId} + 1, 0);
+    std::vector<std::vector<VertexAttributeRange>> VertexAttributeRanges(size_t{MaxBufferId} + 1);
     for (GLTF::VertexAttributeDesc& DstAttrib : DstAttributes)
     {
         Uint32& BufferStride   = VertexStrides[DstAttrib.BufferId];
@@ -522,7 +546,18 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
             return m_Status;
         }
 
-        BufferStride = std::max(BufferStride, RelativeOffset + DstAttribSize);
+        const Uint32 DstAttribEnd = RelativeOffset + DstAttribSize;
+        VertexAttributeRanges[DstAttrib.BufferId].push_back(VertexAttributeRange{RelativeOffset, DstAttribEnd});
+        BufferStride = std::max(BufferStride, DstAttribEnd);
+    }
+
+    for (std::vector<VertexAttributeRange>& Ranges : VertexAttributeRanges)
+    {
+        if (HasOverlappingRanges(Ranges))
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
     }
 
     auto HasSourceBackedDstAttribute = [this, &DstAttributes](const char* Name) //

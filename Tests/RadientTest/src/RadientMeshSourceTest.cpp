@@ -220,9 +220,13 @@ TEST(RadientMeshSourceTest, RejectsInvalidCreateInfo)
     std::array<RadientFloat3, 2> Positions{
         RadientFloat3{1.f, 2.f, 3.f},
         RadientFloat3{4.f, 5.f, 6.f}};
-    std::array<Uint16, 3> Indices{0, 1, 0};
+    std::array<Uint16, 3>            Indices{0, 1, 0};
+    std::array<RadientColorRGBA8, 2> Colors{
+        RadientColorRGBA8{255, 128, 0, 64},
+        RadientColorRGBA8{0, 64, 128, 255}};
 
-    RadientMeshCreateInfo          MeshCI = MakeMeshCI(Positions, Indices);
+    RadientMeshCreateInfo MeshCI = MakeMeshCI(Positions, Indices);
+    MeshCI.pColors0              = Colors.data();
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
     SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
 
@@ -352,6 +356,11 @@ TEST(RadientMeshSourceTest, RejectsInvalidVertexAttributes)
     const std::array<GLTF::VertexAttributeDesc, 1> TooManyComponents{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 5}};
     ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()));
+
+    const std::array<GLTF::VertexAttributeDesc, 2> OverlappingSameBuffer{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
+        GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{0}}};
+    ExpectInvalidAttributes(OverlappingSameBuffer.data(), static_cast<Uint32>(OverlappingSameBuffer.size()));
 }
 
 TEST(RadientMeshSourceTest, PacksStridedSourceAttributesAndTightlyPackedIndices)
