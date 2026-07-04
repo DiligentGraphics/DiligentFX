@@ -33,6 +33,7 @@
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -40,10 +41,70 @@
 namespace Diligent
 {
 
-/// Owns the temporary CPU-side mesh upload payload derived from RadientMeshCreateInfo.
+/// Owns CPU-side mesh source data that is packed into mesh vertex and index buffers.
 class RadientMeshSource final
 {
 public:
+    struct SourceAttribute
+    {
+        /// Attribute name (`"POSITION"`, `"NORMAL"`, `"TEXCOORD_0"`, etc.).
+        const Char* Name = nullptr;
+
+        /// Source component type.
+        VALUE_TYPE Type = VT_UNDEFINED;
+
+        /// Number of source components.
+        Uint8 NumComponents = 0;
+
+        /// Indicates if integer source values are normalized.
+        bool IsNormalized = false;
+
+        /// Pointer to the first attribute element.
+        const void* pData = nullptr;
+
+        /// Distance, in bytes, between consecutive elements. Zero means tightly packed.
+        Uint32 Stride = 0;
+    };
+
+    struct SourceIndexData
+    {
+        /// Pointer to the first tightly packed index.
+        const void* pData = nullptr;
+
+        /// Source index type.
+        RADIENT_INDEX_TYPE Type = RADIENT_INDEX_TYPE_NONE;
+    };
+
+    struct CreateInfo
+    {
+        /// Source vertex attributes.
+        const SourceAttribute* pAttributes = nullptr;
+
+        /// Number of source vertex attributes.
+        Uint32 AttributeCount = 0;
+
+        /// Number of source vertices.
+        Uint32 VertexCount = 0;
+
+        /// Source index data.
+        SourceIndexData Indices;
+
+        /// Number of source indices.
+        Uint32 IndexCount = 0;
+
+        /// Mesh primitives.
+        const RadientMeshPrimitiveCreateInfo* pPrimitives = nullptr;
+
+        /// Number of primitives.
+        Uint32 PrimitiveCount = 0;
+
+        /// Keeps borrowed source memory alive.
+        /// If null, source data is copied into RadientMeshSource.
+        /// If non-null, source data is borrowed and this owner must keep all source spans alive.
+        std::shared_ptr<const void> pSourceDataOwner;
+    };
+
+    explicit RadientMeshSource(const CreateInfo& CI);
     explicit RadientMeshSource(const RadientMeshCreateInfo& MeshCI);
 
     RadientMeshSource(const RadientMeshSource&)            = delete;
@@ -141,9 +202,14 @@ private:
         Uint8      NumComponents = 0;
         bool       IsNormalized  = false;
         Uint32     ElementSize   = 0;
+        Uint32     Stride        = 0;
 
-        std::vector<Uint8> Bytes;
+        const Uint8* pData = nullptr;
+
+        std::vector<Uint8> OwnedBytes;
     };
+
+    void Initialize(const CreateInfo& CI);
 
     void VerifyVertexAttributesSet() const
     {
@@ -161,6 +227,7 @@ private:
     Uint32             m_IndexCount             = 0;
     Uint32             m_ActiveVertexBufferMask = 0;
     RADIENT_INDEX_TYPE m_IndexType              = RADIENT_INDEX_TYPE_NONE;
+    const Uint8*       m_pIndexData             = nullptr;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
     std::vector<Uint32>                    m_VertexStrides;
@@ -173,6 +240,8 @@ private:
 
     // Keeps material assets alive while m_Primitives stores the public raw pointers.
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> m_PrimitiveMaterials;
+
+    std::shared_ptr<const void> m_pSourceDataOwner;
 };
 
 } // namespace Diligent

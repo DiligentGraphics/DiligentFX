@@ -69,6 +69,15 @@ void SetWholeMeshPrimitive(RadientMeshCreateInfo&          MeshCI,
     MeshCI.PrimitiveCount  = 1;
 }
 
+void SetWholeSourcePrimitive(RadientMeshSource::CreateInfo&  CI,
+                             RadientMeshPrimitiveCreateInfo& PrimitiveCI)
+{
+    PrimitiveCI.FirstIndex = 0;
+    PrimitiveCI.IndexCount = CI.IndexCount;
+    CI.pPrimitives         = &PrimitiveCI;
+    CI.PrimitiveCount      = 1;
+}
+
 void ExpectFloat2Eq(const RadientFloat2& Actual, const RadientFloat2& Expected)
 {
     EXPECT_FLOAT_EQ(Actual.x, Expected.x);
@@ -256,6 +265,59 @@ TEST(RadientMeshSourceTest, RejectsInvalidCreateInfo)
     ExpectInvalid(InvalidMeshCI);
 }
 
+TEST(RadientMeshSourceTest, RejectsInvalidSourceCreateInfo)
+{
+    struct SourceVertex
+    {
+        RadientFloat3 Position;
+        RadientFloat2 TexCoord0;
+    };
+
+    std::array<SourceVertex, 2> Vertices{
+        SourceVertex{RadientFloat3{1.f, 2.f, 3.f}, RadientFloat2{0.25f, 0.5f}},
+        SourceVertex{RadientFloat3{4.f, 5.f, 6.f}, RadientFloat2{0.75f, 1.f}}};
+    std::array<Uint16, 3>                             Indices{0, 1, 0};
+    std::array<RadientMeshSource::SourceAttribute, 2> Attributes{
+        RadientMeshSource::SourceAttribute{GLTF::PositionAttributeName, VT_FLOAT32, 3, false, &Vertices[0].Position, sizeof(SourceVertex)},
+        RadientMeshSource::SourceAttribute{GLTF::Texcoord0AttributeName, VT_FLOAT32, 2, false, &Vertices[0].TexCoord0, sizeof(SourceVertex)}};
+
+    RadientMeshSource::CreateInfo CI{};
+    CI.pAttributes    = Attributes.data();
+    CI.AttributeCount = static_cast<Uint32>(Attributes.size());
+    CI.VertexCount    = static_cast<Uint32>(Vertices.size());
+    CI.Indices.pData  = Indices.data();
+    CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
+    CI.IndexCount     = static_cast<Uint32>(Indices.size());
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    SetWholeSourcePrimitive(CI, PrimitiveCI);
+
+    auto ExpectInvalid = [](const RadientMeshSource::CreateInfo& InvalidCI) //
+    {
+        RadientMeshSource Source{InvalidCI};
+        EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
+    };
+
+    RadientMeshSource::CreateInfo InvalidCI = CI;
+    InvalidCI.pAttributes                   = nullptr;
+    ExpectInvalid(InvalidCI);
+
+    InvalidCI             = CI;
+    Attributes[0].Stride  = sizeof(RadientFloat3) - 1;
+    InvalidCI.pAttributes = Attributes.data();
+    ExpectInvalid(InvalidCI);
+    Attributes[0].Stride = sizeof(SourceVertex);
+
+    InvalidCI             = CI;
+    Attributes[1].Name    = GLTF::PositionAttributeName;
+    InvalidCI.pAttributes = Attributes.data();
+    ExpectInvalid(InvalidCI);
+    Attributes[1].Name = GLTF::Texcoord0AttributeName;
+
+    InvalidCI              = CI;
+    InvalidCI.Indices.Type = RADIENT_INDEX_TYPE_NONE;
+    ExpectInvalid(InvalidCI);
+}
+
 TEST(RadientMeshSourceTest, RejectsInvalidVertexAttributes)
 {
     std::array<RadientFloat3, 2> Positions{
@@ -290,6 +352,164 @@ TEST(RadientMeshSourceTest, RejectsInvalidVertexAttributes)
     const std::array<GLTF::VertexAttributeDesc, 1> TooManyComponents{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 5}};
     ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()));
+}
+
+TEST(RadientMeshSourceTest, PacksStridedSourceAttributesAndTightlyPackedIndices)
+{
+    struct SourceVertex
+    {
+        RadientFloat3     Position;
+        RadientColorRGBA8 Color;
+        RadientFloat2     TexCoord0;
+    };
+
+    std::array<SourceVertex, 2> Vertices{
+        SourceVertex{RadientFloat3{1.f, 2.f, 3.f}, RadientColorRGBA8{255, 128, 0, 64}, RadientFloat2{0.25f, 0.5f}},
+        SourceVertex{RadientFloat3{4.f, 5.f, 6.f}, RadientColorRGBA8{0, 64, 128, 255}, RadientFloat2{0.75f, 1.f}}};
+    std::array<Uint16, 3> Indices{0, 1, 0};
+
+    std::array<RadientMeshSource::SourceAttribute, 3> SourceAttributes{
+        RadientMeshSource::SourceAttribute{GLTF::PositionAttributeName, VT_FLOAT32, 3, false, &Vertices[0].Position, sizeof(SourceVertex)},
+        RadientMeshSource::SourceAttribute{GLTF::VertexColorAttributeName, VT_UINT8, 4, true, &Vertices[0].Color, sizeof(SourceVertex)},
+        RadientMeshSource::SourceAttribute{GLTF::Texcoord0AttributeName, VT_FLOAT32, 2, false, &Vertices[0].TexCoord0, sizeof(SourceVertex)}};
+
+    RadientMeshSource::CreateInfo CI{};
+    CI.pAttributes    = SourceAttributes.data();
+    CI.AttributeCount = static_cast<Uint32>(SourceAttributes.size());
+    CI.VertexCount    = static_cast<Uint32>(Vertices.size());
+    CI.Indices.pData  = Indices.data();
+    CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
+    CI.IndexCount     = static_cast<Uint32>(Indices.size());
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    SetWholeSourcePrimitive(CI, PrimitiveCI);
+
+    RadientMeshSource Source{CI};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+
+    Vertices[0] = {};
+    Indices[0]  = 7;
+
+    const std::array<GLTF::VertexAttributeDesc, 3> Attributes{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3},
+        GLTF::VertexAttributeDesc{GLTF::Texcoord0AttributeName, 0, VT_FLOAT32, 2},
+        GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 1, VT_FLOAT32, 4}};
+    ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Source.GetVertexBufferCount(), 2u);
+    EXPECT_EQ(Source.GetActiveVertexBufferMask(), 1u | 2u);
+    EXPECT_EQ(Source.GetVertexStride(0), 20u);
+    EXPECT_EQ(Source.GetVertexStride(1), 16u);
+
+    std::vector<Uint32> PackedIndices(Source.GetIndexCount());
+    std::vector<Uint8>  Buffer0(Source.GetVertexBufferDataSize(0));
+    std::vector<Uint8>  Buffer1(Source.GetVertexBufferDataSize(1));
+
+    ASSERT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{
+                  PackedIndices.data(),
+                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.PackVertexData(1,
+                                    RadientMeshSource::PackDestination{Buffer1.data(),
+                                                                       static_cast<Uint32>(Buffer1.size())}),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(PackedIndices[0], 0u);
+    EXPECT_EQ(PackedIndices[1], 1u);
+    EXPECT_EQ(PackedIndices[2], 0u);
+
+    ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), RadientFloat3{1.f, 2.f, 3.f});
+    ExpectFloat2Eq(ReadValue<RadientFloat2>(Buffer0, 12), RadientFloat2{0.25f, 0.5f});
+    ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 20), RadientFloat3{4.f, 5.f, 6.f});
+    ExpectFloat2Eq(ReadValue<RadientFloat2>(Buffer0, 32), RadientFloat2{0.75f, 1.f});
+
+    ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffer1, 0),
+                   RadientFloat4{1.f, 128.f / 255.f, 0.f, 64.f / 255.f});
+    ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffer1, 16),
+                   RadientFloat4{0.f, 64.f / 255.f, 128.f / 255.f, 1.f});
+}
+
+TEST(RadientMeshSourceTest, BorrowsSourceDataAndKeepsOwnerAlive)
+{
+    struct SourceVertex
+    {
+        RadientFloat3 Position;
+        RadientFloat2 TexCoord0;
+    };
+
+    struct SourceData
+    {
+        std::array<SourceVertex, 2> Vertices;
+        std::array<Uint16, 3>       Indices;
+    };
+
+    std::weak_ptr<const void> WeakOwner;
+
+    {
+        auto Data      = std::make_shared<SourceData>();
+        Data->Vertices = {
+            SourceVertex{RadientFloat3{1.f, 2.f, 3.f}, RadientFloat2{0.25f, 0.5f}},
+            SourceVertex{RadientFloat3{4.f, 5.f, 6.f}, RadientFloat2{0.75f, 1.f}}};
+        Data->Indices = {0, 1, 0};
+
+        std::shared_ptr<const void> Owner = Data;
+        WeakOwner                         = Owner;
+
+        std::array<RadientMeshSource::SourceAttribute, 2> SourceAttributes{
+            RadientMeshSource::SourceAttribute{GLTF::PositionAttributeName, VT_FLOAT32, 3, false, &Data->Vertices[0].Position, sizeof(SourceVertex)},
+            RadientMeshSource::SourceAttribute{GLTF::Texcoord0AttributeName, VT_FLOAT32, 2, false, &Data->Vertices[0].TexCoord0, sizeof(SourceVertex)}};
+
+        RadientMeshSource::CreateInfo CI{};
+        CI.pAttributes      = SourceAttributes.data();
+        CI.AttributeCount   = static_cast<Uint32>(SourceAttributes.size());
+        CI.VertexCount      = static_cast<Uint32>(Data->Vertices.size());
+        CI.Indices.pData    = Data->Indices.data();
+        CI.Indices.Type     = RADIENT_INDEX_TYPE_UINT16;
+        CI.IndexCount       = static_cast<Uint32>(Data->Indices.size());
+        CI.pSourceDataOwner = Owner;
+        RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+        SetWholeSourcePrimitive(CI, PrimitiveCI);
+
+        RadientMeshSource Source{CI};
+        ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+
+        Data->Vertices[0].Position  = RadientFloat3{7.f, 8.f, 9.f};
+        Data->Vertices[0].TexCoord0 = RadientFloat2{0.125f, 0.875f};
+        Data->Indices[0]            = 1;
+
+        Data.reset();
+        Owner.reset();
+        EXPECT_FALSE(WeakOwner.expired());
+
+        const std::array<GLTF::VertexAttributeDesc, 2> Attributes{
+            GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3},
+            GLTF::VertexAttributeDesc{GLTF::Texcoord0AttributeName, 0, VT_FLOAT32, 2}};
+        ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())), RADIENT_STATUS_OK);
+
+        std::vector<Uint32> PackedIndices(Source.GetIndexCount());
+        std::vector<Uint8>  Buffer0(Source.GetVertexBufferDataSize(0));
+
+        ASSERT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{
+                      PackedIndices.data(),
+                      static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(Source.PackVertexData(0,
+                                        RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                           static_cast<Uint32>(Buffer0.size())}),
+                  RADIENT_STATUS_OK);
+
+        EXPECT_EQ(PackedIndices[0], 1u);
+        EXPECT_EQ(PackedIndices[1], 1u);
+        EXPECT_EQ(PackedIndices[2], 0u);
+
+        ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), RadientFloat3{7.f, 8.f, 9.f});
+        ExpectFloat2Eq(ReadValue<RadientFloat2>(Buffer0, 12), RadientFloat2{0.125f, 0.875f});
+    }
+
+    EXPECT_TRUE(WeakOwner.expired());
 }
 
 TEST(RadientMeshSourceTest, RejectsInvalidPackDestination)
@@ -479,10 +699,7 @@ TEST(RadientMeshSourceTest, CopiesAndPacksMinimalMesh)
 
     RadientMeshCreateInfo          MeshCI = MakeMeshCI(Positions, Indices);
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
 
     RadientMeshSource Source{MeshCI};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
@@ -538,10 +755,7 @@ TEST(RadientMeshSourceTest, StagesOnlyPresentAttributeBuffers)
     RadientMeshCreateInfo MeshCI = MakeMeshCI(Positions, Indices);
     MeshCI.pColors0              = Colors.data();
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
 
     RadientMeshSource Source{MeshCI};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
@@ -595,10 +809,7 @@ TEST(RadientMeshSourceTest, PacksCustomVertexAttributeLayout)
     RadientMeshCreateInfo MeshCI = MakeMeshCI(Positions, Indices);
     MeshCI.pColors0              = Colors.data();
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
 
     const std::array<GLTF::VertexAttributeDesc, 2> Attributes{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{16}},

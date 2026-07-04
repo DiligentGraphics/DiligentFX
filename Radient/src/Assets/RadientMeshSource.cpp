@@ -32,6 +32,7 @@
 #include "XXH128Hasher.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -53,11 +54,116 @@ bool CheckByteOffset(Uint32 Offset, Uint32 Size)
     return Offset <= (std::numeric_limits<Uint32>::max)() - Size;
 }
 
+bool CheckStridedByteSize(Uint32 Count, Uint32 Stride, Uint32 ElementSize)
+{
+    if (Count == 0)
+        return true;
+
+    return Uint64{Count - 1} * Stride + ElementSize <= (std::numeric_limits<Uint32>::max)();
+}
+
 template <typename ValueType>
 void CopyArray(std::vector<ValueType>& Dst, const ValueType* pSrc, Uint32 Count)
 {
     if (pSrc != nullptr && Count != 0)
         Dst.assign(pSrc, pSrc + Count);
+}
+
+Uint32 GetIndexElementSize(RADIENT_INDEX_TYPE IndexType)
+{
+    switch (IndexType)
+    {
+        case RADIENT_INDEX_TYPE_UINT16:
+            return sizeof(Uint16);
+
+        case RADIENT_INDEX_TYPE_UINT32:
+            return sizeof(Uint32);
+
+        default:
+            return 0;
+    }
+}
+
+bool GetSourceAttributeLayout(const RadientMeshSource::SourceAttribute& Attribute,
+                              Uint32                                    VertexCount,
+                              Uint32&                                   ElementSize,
+                              Uint32&                                   Stride)
+{
+    if (Attribute.Name == nullptr ||
+        Attribute.pData == nullptr ||
+        Attribute.Type <= VT_UNDEFINED ||
+        Attribute.Type >= VT_NUM_TYPES ||
+        Attribute.NumComponents == 0 ||
+        Attribute.NumComponents > 4)
+    {
+        return false;
+    }
+
+    const Uint32 ValueSize = GetValueSize(Attribute.Type);
+    if (ValueSize == 0 || !CheckByteSize(Attribute.NumComponents, ValueSize))
+        return false;
+
+    ElementSize = ValueSize * Attribute.NumComponents;
+    Stride      = Attribute.Stride != 0 ? Attribute.Stride : ElementSize;
+
+    return Stride >= ElementSize &&
+        CheckByteSize(VertexCount, ElementSize) &&
+        CheckStridedByteSize(VertexCount, Stride, ElementSize);
+}
+
+bool GetSourceIndexLayout(const RadientMeshSource::SourceIndexData& Indices,
+                          Uint32                                    IndexCount,
+                          Uint32&                                   ElementSize)
+{
+    if (Indices.pData == nullptr)
+        return false;
+
+    ElementSize = GetIndexElementSize(Indices.Type);
+    if (ElementSize == 0)
+        return false;
+
+    return CheckByteSize(IndexCount, ElementSize);
+}
+
+bool ValidateMeshSourceCI(const RadientMeshSource::CreateInfo& CI)
+{
+    if (CI.VertexCount == 0 ||
+        CI.AttributeCount == 0 ||
+        CI.pAttributes == nullptr ||
+        CI.IndexCount == 0 ||
+        CI.PrimitiveCount == 0 ||
+        CI.pPrimitives == nullptr)
+    {
+        return false;
+    }
+
+    if (!CheckByteSize(CI.IndexCount, sizeof(Uint32)))
+        return false;
+
+    Uint32 IndexElementSize = 0;
+    if (!GetSourceIndexLayout(CI.Indices, CI.IndexCount, IndexElementSize))
+        return false;
+
+    for (Uint32 AttributeIndex = 0; AttributeIndex < CI.AttributeCount; ++AttributeIndex)
+    {
+        Uint32 ElementSize = 0;
+        Uint32 Stride      = 0;
+        if (!GetSourceAttributeLayout(CI.pAttributes[AttributeIndex], CI.VertexCount, ElementSize, Stride))
+            return false;
+    }
+
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
+    {
+        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = CI.pPrimitives[PrimitiveIndex];
+        if (PrimitiveCI.IndexCount == 0 ||
+            PrimitiveCI.FirstIndex >= CI.IndexCount ||
+            PrimitiveCI.IndexCount > CI.IndexCount - PrimitiveCI.FirstIndex)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool IsAttributeName(const GLTF::VertexAttributeDesc& DstAttrib, const char* Name)
@@ -75,6 +181,22 @@ void UpdateRawIfNotEmpty(XXH128State& Hasher, const void* pData, size_t Size)
 {
     if (pData != nullptr && Size != 0)
         Hasher.UpdateRaw(pData, static_cast<Uint64>(Size));
+}
+
+void UpdateStridedRaw(XXH128State& Hasher, const Uint8* pData, Uint32 Count, Uint32 ElementSize, Uint32 Stride)
+{
+    if (pData == nullptr || Count == 0 || ElementSize == 0)
+        return;
+
+    if (Stride == ElementSize)
+    {
+        UpdateRawIfNotEmpty(Hasher, pData, size_t{Count} * ElementSize);
+    }
+    else
+    {
+        for (Uint32 Elem = 0; Elem < Count; ++Elem)
+            Hasher.UpdateRaw(pData + size_t{Elem} * Stride, ElementSize);
+    }
 }
 
 void UpdateString(XXH128State& Hasher, const Char* Str)
@@ -106,7 +228,7 @@ void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
     }
 }
 
-bool ValidateRadientMeshCI(const RadientMeshCreateInfo& MeshCI)
+bool ValidateRadientMeshSourceCI(const RadientMeshCreateInfo& MeshCI)
 {
     if (MeshCI.VertexCount == 0 ||
         MeshCI.pPositions == nullptr ||
@@ -148,33 +270,35 @@ bool ValidateRadientMeshCI(const RadientMeshCreateInfo& MeshCI)
 
 } // namespace
 
+RadientMeshSource::RadientMeshSource(const CreateInfo& CI)
+{
+    Initialize(CI);
+}
 
 RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
 {
-    if (!ValidateRadientMeshCI(MeshCI))
+    if (!ValidateRadientMeshSourceCI(MeshCI))
     {
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
 
-    m_VertexCount = MeshCI.VertexCount;
-    m_IndexCount  = MeshCI.IndexCount;
-    m_IndexType   = MeshCI.IndexType;
+    std::array<SourceAttribute, 7> Attributes{};
 
-    auto AddAttribute =
-        [this](const char* Name, VALUE_TYPE Type, Uint8 NumComponents, bool IsNormalized, const auto* pSrcData) //
+    Uint32 AttributeCount = 0;
+    auto   AddAttribute =
+        [&Attributes, &AttributeCount](const char* Name, VALUE_TYPE Type, Uint8 NumComponents, bool IsNormalized, const auto* pSrcData) //
     {
         if (pSrcData == nullptr)
             return;
 
-        SrcAttributeData Data;
-        Data.Type          = Type;
-        Data.NumComponents = NumComponents;
-        Data.IsNormalized  = IsNormalized;
-        Data.ElementSize   = sizeof(*pSrcData);
-        Data.Bytes.resize(size_t{m_VertexCount} * Data.ElementSize);
-        std::memcpy(Data.Bytes.data(), pSrcData, Data.Bytes.size());
-        m_SrcAttributes.emplace(HashMapStringKey{Name, true}, std::move(Data));
+        SourceAttribute& Attribute = Attributes[AttributeCount++];
+        Attribute.Name             = Name;
+        Attribute.Type             = Type;
+        Attribute.NumComponents    = NumComponents;
+        Attribute.IsNormalized     = IsNormalized;
+        Attribute.pData            = pSrcData;
+        Attribute.Stride           = sizeof(*pSrcData);
     };
 
     AddAttribute(GLTF::PositionAttributeName, VT_FLOAT32, 3, false, MeshCI.pPositions);
@@ -185,15 +309,135 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
     AddAttribute(GLTF::JointsAttributeName, VT_UINT16, 4, false, MeshCI.pBoneIndices0);
     AddAttribute(GLTF::WeightsAttributeName, VT_FLOAT32, 4, false, MeshCI.pBoneWeights0);
 
-    if (MeshCI.IndexType == RADIENT_INDEX_TYPE_UINT32)
-        CopyArray(m_Indices32, static_cast<const Uint32*>(MeshCI.pIndices), MeshCI.IndexCount);
-    else
-        CopyArray(m_Indices16, static_cast<const Uint16*>(MeshCI.pIndices), MeshCI.IndexCount);
+    CreateInfo CI;
+    CI.pAttributes    = Attributes.data();
+    CI.AttributeCount = AttributeCount;
+    CI.VertexCount    = MeshCI.VertexCount;
+    CI.Indices.pData  = MeshCI.pIndices;
+    CI.Indices.Type   = MeshCI.IndexType;
+    CI.IndexCount     = MeshCI.IndexCount;
+    CI.pPrimitives    = MeshCI.pPrimitives;
+    CI.PrimitiveCount = MeshCI.PrimitiveCount;
 
-    CopyArray(m_Primitives, MeshCI.pPrimitives, MeshCI.PrimitiveCount);
-    m_PrimitiveMaterials.reserve(MeshCI.PrimitiveCount);
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
-        m_PrimitiveMaterials.emplace_back(MeshCI.pPrimitives[PrimitiveIndex].pMaterial);
+    Initialize(CI);
+}
+
+void RadientMeshSource::Initialize(const CreateInfo& CI)
+{
+    if (!ValidateMeshSourceCI(CI))
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return;
+    }
+
+    m_VertexCount = CI.VertexCount;
+    m_IndexCount  = CI.IndexCount;
+    m_IndexType   = CI.Indices.Type;
+
+    const bool BorrowSourceData = CI.pSourceDataOwner != nullptr;
+    if (BorrowSourceData)
+        m_pSourceDataOwner = CI.pSourceDataOwner;
+
+    for (Uint32 AttributeIndex = 0; AttributeIndex < CI.AttributeCount; ++AttributeIndex)
+    {
+        const SourceAttribute& Attribute = CI.pAttributes[AttributeIndex];
+
+        Uint32 ElementSize = 0;
+        Uint32 SrcStride   = 0;
+        if (!GetSourceAttributeLayout(Attribute, m_VertexCount, ElementSize, SrcStride))
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return;
+        }
+
+        SrcAttributeData Data;
+        Data.Type                    = Attribute.Type;
+        Data.NumComponents           = Attribute.NumComponents;
+        Data.IsNormalized            = Attribute.IsNormalized;
+        Data.ElementSize             = ElementSize;
+        const Uint8* const pSrcBytes = static_cast<const Uint8*>(Attribute.pData);
+
+        if (BorrowSourceData)
+        {
+            Data.Stride = SrcStride;
+            Data.pData  = pSrcBytes;
+        }
+        else
+        {
+            Data.Stride = ElementSize;
+            Data.OwnedBytes.resize(size_t{m_VertexCount} * ElementSize);
+
+            Uint8* const pDstBytes = Data.OwnedBytes.data();
+            if (SrcStride == ElementSize)
+            {
+                std::memcpy(pDstBytes, pSrcBytes, Data.OwnedBytes.size());
+            }
+            else
+            {
+                for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
+                {
+                    std::memcpy(pDstBytes + size_t{Vertex} * ElementSize,
+                                pSrcBytes + size_t{Vertex} * SrcStride,
+                                ElementSize);
+                }
+            }
+            Data.pData = Data.OwnedBytes.data();
+        }
+
+        auto [It, Inserted] = m_SrcAttributes.emplace(HashMapStringKey{Attribute.Name, true}, std::move(Data));
+        if (!Inserted)
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return;
+        }
+    }
+
+    if (m_SrcAttributes.find(GLTF::PositionAttributeName) == m_SrcAttributes.end())
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return;
+    }
+
+    Uint32 IndexElementSize = 0;
+    if (!GetSourceIndexLayout(CI.Indices, m_IndexCount, IndexElementSize))
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return;
+    }
+
+    const Uint8* const pSrcIndices = static_cast<const Uint8*>(CI.Indices.pData);
+    if (BorrowSourceData)
+    {
+        m_pIndexData = pSrcIndices;
+    }
+    else
+    {
+        if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
+        {
+            m_Indices32.resize(m_IndexCount);
+            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
+            {
+                std::memcpy(&m_Indices32[Index],
+                            pSrcIndices + size_t{Index} * IndexElementSize,
+                            sizeof(m_Indices32[Index]));
+            }
+        }
+        else
+        {
+            m_Indices16.resize(m_IndexCount);
+            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
+            {
+                std::memcpy(&m_Indices16[Index],
+                            pSrcIndices + size_t{Index} * IndexElementSize,
+                            sizeof(m_Indices16[Index]));
+            }
+        }
+    }
+
+    CopyArray(m_Primitives, CI.pPrimitives, CI.PrimitiveCount);
+    m_PrimitiveMaterials.reserve(CI.PrimitiveCount);
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
+        m_PrimitiveMaterials.emplace_back(CI.pPrimitives[PrimitiveIndex].pMaterial);
 }
 
 std::string RadientMeshSource::MakeCacheKey() const
@@ -202,44 +446,47 @@ std::string RadientMeshSource::MakeCacheKey() const
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{2}, // Raw mesh cache key version.
+    Hasher.Update(Uint32{3}, // Raw mesh cache key version.
                   m_VertexCount,
                   m_IndexCount,
                   m_IndexType);
 
-    auto HashSourceAttribute =
-        [this, &Hasher](const char* Name, Uint32 AttributeId) //
-    {
-        Hasher.Update(AttributeId);
+    std::vector<const Char*> AttributeNames;
+    AttributeNames.reserve(m_SrcAttributes.size());
+    for (const auto& SrcAttrib : m_SrcAttributes)
+        AttributeNames.push_back(SrcAttrib.first.GetStr());
+    std::sort(AttributeNames.begin(), AttributeNames.end(), [](const Char* Lhs, const Char* Rhs) //
+              {
+                  return std::strcmp(Lhs, Rhs) < 0;
+              });
 
+    Hasher.Update(static_cast<Uint64>(AttributeNames.size()));
+    for (const Char* Name : AttributeNames)
+    {
         const auto SrcAttribIt = m_SrcAttributes.find(Name);
-        const bool HasAttrib   = SrcAttribIt != m_SrcAttributes.end();
-        Hasher.Update(HasAttrib);
-        if (!HasAttrib)
-            return;
+        VERIFY_EXPR(SrcAttribIt != m_SrcAttributes.end());
+        if (SrcAttribIt == m_SrcAttributes.end())
+            continue;
 
         const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
+        UpdateString(Hasher, Name);
         Hasher.Update(SrcAttrib.Type,
                       SrcAttrib.NumComponents,
                       SrcAttrib.IsNormalized,
                       SrcAttrib.ElementSize,
-                      static_cast<Uint64>(SrcAttrib.Bytes.size()));
-        UpdateRawIfNotEmpty(Hasher, SrcAttrib.Bytes.data(), SrcAttrib.Bytes.size());
-    };
+                      Uint64{m_VertexCount} * SrcAttrib.ElementSize);
+        UpdateStridedRaw(Hasher, SrcAttrib.pData, m_VertexCount, SrcAttrib.ElementSize, SrcAttrib.Stride);
+    }
 
-    HashSourceAttribute(GLTF::PositionAttributeName, 0);
-    HashSourceAttribute(GLTF::NormalAttributeName, 1);
-    HashSourceAttribute(GLTF::TangentAttributeName, 2);
-    HashSourceAttribute(GLTF::Texcoord0AttributeName, 3);
-    HashSourceAttribute(GLTF::VertexColorAttributeName, 4);
-    HashSourceAttribute(GLTF::JointsAttributeName, 5);
-    HashSourceAttribute(GLTF::WeightsAttributeName, 6);
+    const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
+    const Uint8* pIndexData       = m_pIndexData;
+    if (!m_Indices16.empty())
+        pIndexData = reinterpret_cast<const Uint8*>(m_Indices16.data());
+    else if (!m_Indices32.empty())
+        pIndexData = reinterpret_cast<const Uint8*>(m_Indices32.data());
 
-    Hasher.Update(static_cast<Uint64>(m_Indices16.size()));
-    UpdateRawIfNotEmpty(Hasher, m_Indices16.data(), m_Indices16.size() * sizeof(m_Indices16[0]));
-
-    Hasher.Update(static_cast<Uint64>(m_Indices32.size()));
-    UpdateRawIfNotEmpty(Hasher, m_Indices32.data(), m_Indices32.size() * sizeof(m_Indices32[0]));
+    Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
+    UpdateStridedRaw(Hasher, pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
@@ -398,13 +645,36 @@ RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) con
     {
         std::memcpy(pDstIndices, m_Indices32.data(), GetIndexDataSize());
     }
-    else
+    else if (!m_Indices16.empty())
     {
         for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
         {
             const Uint32 Value = m_Indices16[Index];
             std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
         }
+    }
+    else if (m_pIndexData != nullptr)
+    {
+        const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
+        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
+        {
+            Uint32 Value = 0;
+            if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
+            {
+                std::memcpy(&Value, m_pIndexData + size_t{Index} * IndexElementSize, sizeof(Value));
+            }
+            else
+            {
+                Uint16 Value16 = 0;
+                std::memcpy(&Value16, m_pIndexData + size_t{Index} * IndexElementSize, sizeof(Value16));
+                Value = Value16;
+            }
+            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
+        }
+    }
+    else
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
     return RADIENT_STATUS_OK;
@@ -440,10 +710,10 @@ RADIENT_STATUS RadientMeshSource::PackVertexData(Uint32          VertexBufferInd
         {
             const SrcAttributeData& SrcAttrib = SrcAttribIt->second;
             const bool              Written   = GLTF::VertexDataConverter::Write({
-                SrcAttrib.Bytes.data(),
+                SrcAttrib.pData,
                 SrcAttrib.Type,
                 SrcAttrib.NumComponents,
-                SrcAttrib.ElementSize,
+                SrcAttrib.Stride,
                 pDstAttribData,
                 DstAttrib.ValueType,
                 DstAttrib.NumComponents,
