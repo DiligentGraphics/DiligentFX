@@ -223,8 +223,11 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    Uint32 m_VertexCount            = 0;
-    Uint32 m_IndexCount             = 0;
+    Uint32 m_VertexCount = 0;
+    Uint32 m_IndexCount  = 0;
+
+    static_assert(GLTF::ModelCreateInfo::MaxBuffers <= sizeof(Uint32) * 8,
+                  "RadientMeshSource active vertex buffer mask must fit all GLTF vertex buffers.");
     Uint32 m_ActiveVertexBufferMask = 0;
 
     RADIENT_INDEX_TYPE m_IndexType  = RADIENT_INDEX_TYPE_NONE;
