@@ -57,10 +57,34 @@ namespace
 
 static constexpr INTERFACE_ID IID_MeshAssetImpl = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
 
+// GPU allocation and upload state for mesh geometry. It is separate from
+// MeshStorage so mesh views can later share the same uploaded data.
+struct MeshGPUData
+{
+    explicit MeshGPUData(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
+        LoadStatus{InitLoadStatus}
+    {
+    }
+
+    // clang-format off
+    MeshGPUData           (MeshGPUData&& Rhs)  = delete;
+    MeshGPUData& operator=(MeshGPUData&& Rhs)  = delete;
+    MeshGPUData           (const MeshGPUData&) = delete;
+    MeshGPUData& operator=(const MeshGPUData&) = delete;
+    // clang-format on
+
+    RefCntAutoPtr<IBufferSuballocation>  pIndexAllocation;
+    RefCntAutoPtr<IVertexPoolAllocation> pVertexAllocation;
+
+    std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
+    std::atomic_bool            GPUResourcesReady{false};
+    std::atomic<Uint32>         PendingUploads{0};
+};
+
 struct MeshStorage
 {
     explicit MeshStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
-        LoadStatus{InitLoadStatus}
+        pGPUData{std::make_shared<MeshGPUData>(InitLoadStatus)}
     {
     }
 
@@ -73,14 +97,10 @@ struct MeshStorage
 
     RadientDrawableMesh DrawableMesh;
 
-    RefCntAutoPtr<IBufferSuballocation>               pIndexAllocation;
-    RefCntAutoPtr<IVertexPoolAllocation>              pVertexAllocation;
+    std::shared_ptr<MeshGPUData>                      pGPUData;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
-    std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> MaterialStatus{RADIENT_STATUS_OK};
-    std::atomic_bool            GPUResourcesReady{false};
-    std::atomic<Uint32>         PendingUploads{0};
 };
 
 struct GLTFMeshStorage
@@ -120,7 +140,7 @@ struct MeshVertexBufferWriteData
 struct MeshIndexBufferCopyData
 {
     RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
-    MeshStorage*                   pMeshStorage = nullptr;
+    std::shared_ptr<MeshGPUData>   pGPUData;
     RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IBufferSuballocation> pIndexAllocation;
@@ -129,7 +149,7 @@ struct MeshIndexBufferCopyData
 struct MeshVertexBufferCopyData
 {
     RefCntAutoPtr<MeshPayloadImpl> pMeshPayload;
-    MeshStorage*                   pMeshStorage = nullptr;
+    std::shared_ptr<MeshGPUData>   pGPUData;
     RefCntAutoPtr<IRenderDevice>   pDevice;
 
     RefCntAutoPtr<IVertexPoolAllocation> pVertexAllocation;
@@ -166,18 +186,18 @@ PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
     return Flags;
 }
 
-void UpdateMeshUploadProgress(MeshStorage& Storage,
+void UpdateMeshUploadProgress(MeshGPUData& GPUData,
                               bool         CopyScheduled)
 {
     if (!CopyScheduled)
-        Storage.LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+        GPUData.LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
 
-    const Uint32 PrevPendingUploads = Storage.PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
+    const Uint32 PrevPendingUploads = GPUData.PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
     VERIFY_EXPR(PrevPendingUploads > 0);
     if (PrevPendingUploads == 1)
     {
-        const bool Ready = Storage.LoadStatus.load(std::memory_order_acquire) == RADIENT_STATUS_OK;
-        Storage.GPUResourcesReady.store(Ready, std::memory_order_release);
+        const bool Ready = GPUData.LoadStatus.load(std::memory_order_acquire) == RADIENT_STATUS_OK;
+        GPUData.GPUResourcesReady.store(Ready, std::memory_order_release);
     }
 }
 
@@ -238,9 +258,14 @@ RADIENT_STATUS InitializeMeshStorage(GLTF::ResourceManager*   pResourceManager,
 
     Storage.MaterialStatus.store(MaterialStatus, std::memory_order_release);
 
-    Storage.pIndexAllocation = pResourceManager->AllocateIndices(Source.GetIndexDataSize(),
+    if (Storage.pGPUData == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    MeshGPUData& GPUData = *Storage.pGPUData;
+
+    GPUData.pIndexAllocation = pResourceManager->AllocateIndices(Source.GetIndexDataSize(),
                                                                  alignof(Uint32));
-    if (Storage.pIndexAllocation == nullptr)
+    if (GPUData.pIndexAllocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const Uint32                           VertexBufferCount = Source.GetVertexBufferCount();
@@ -249,14 +274,14 @@ RADIENT_STATUS InitializeMeshStorage(GLTF::ResourceManager*   pResourceManager,
     for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
         LayoutKey.Elements.emplace_back(Source.GetVertexStride(BufferIndex), BIND_VERTEX_BUFFER);
 
-    Storage.pVertexAllocation = pResourceManager->AllocateVertices(LayoutKey, Source.GetVertexCount());
-    if (Storage.pVertexAllocation == nullptr)
+    GPUData.pVertexAllocation = pResourceManager->AllocateVertices(LayoutKey, Source.GetVertexCount());
+    if (GPUData.pVertexAllocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    Storage.DrawableMesh.pVertexPool        = Storage.pVertexAllocation->GetPool();
-    Storage.DrawableMesh.FirstIndexLocation = Storage.pIndexAllocation->GetOffset() / sizeof(Uint32);
-    Storage.DrawableMesh.BaseVertex         = Storage.pVertexAllocation->GetStartVertex();
-    Storage.GPUResourcesReady.store(false, std::memory_order_release);
+    Storage.DrawableMesh.pVertexPool        = GPUData.pVertexAllocation->GetPool();
+    Storage.DrawableMesh.FirstIndexLocation = GPUData.pIndexAllocation->GetOffset() / sizeof(Uint32);
+    Storage.DrawableMesh.BaseVertex         = GPUData.pVertexAllocation->GetStartVertex();
+    GPUData.GPUResourcesReady.store(false, std::memory_order_release);
 
     return RADIENT_STATUS_OK;
 }
@@ -309,9 +334,9 @@ void CopyMeshIndexBuffer(IDeviceContext* pContext,
         }
     }
 
-    VERIFY_EXPR(Data->pMeshStorage != nullptr);
-    if (Data->pMeshStorage != nullptr)
-        UpdateMeshUploadProgress(*Data->pMeshStorage, CopyScheduled);
+    VERIFY_EXPR(Data->pGPUData != nullptr);
+    if (Data->pGPUData != nullptr)
+        UpdateMeshUploadProgress(*Data->pGPUData, CopyScheduled);
 }
 
 void CopyMeshVertexBuffer(IDeviceContext* pContext,
@@ -338,22 +363,22 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         }
     }
 
-    VERIFY_EXPR(Data->pMeshStorage != nullptr);
-    if (Data->pMeshStorage != nullptr)
-        UpdateMeshUploadProgress(*Data->pMeshStorage, CopyScheduled);
+    VERIFY_EXPR(Data->pGPUData != nullptr);
+    if (Data->pGPUData != nullptr)
+        UpdateMeshUploadProgress(*Data->pGPUData, CopyScheduled);
 }
 
-void ScheduleMeshIndexUpload(IGPUUploadManager*       pUploadManager,
-                             IRenderDevice*           pDevice,
-                             MeshPayloadImpl&         MeshPayload,
-                             const RadientMeshSource& Source,
-                             MeshStorage&             Storage)
+void ScheduleMeshIndexUpload(IGPUUploadManager*                  pUploadManager,
+                             IRenderDevice*                      pDevice,
+                             MeshPayloadImpl&                    MeshPayload,
+                             const RadientMeshSource&            Source,
+                             const std::shared_ptr<MeshGPUData>& pGPUData)
 {
     std::unique_ptr<MeshIndexBufferCopyData> pCopyData{new MeshIndexBufferCopyData{}};
     pCopyData->pMeshPayload     = &MeshPayload;
-    pCopyData->pMeshStorage     = &Storage;
+    pCopyData->pGPUData         = pGPUData;
     pCopyData->pDevice          = pDevice;
-    pCopyData->pIndexAllocation = Storage.pIndexAllocation;
+    pCopyData->pIndexAllocation = pGPUData->pIndexAllocation;
 
     MeshIndexBufferWriteData WriteData;
     WriteData.pSource = &Source;
@@ -371,18 +396,18 @@ void ScheduleMeshIndexUpload(IGPUUploadManager*       pUploadManager,
     pCopyData.release();
 }
 
-void ScheduleMeshVertexUpload(IGPUUploadManager*       pUploadManager,
-                              IRenderDevice*           pDevice,
-                              MeshPayloadImpl&         MeshPayload,
-                              const RadientMeshSource& Source,
-                              MeshStorage&             Storage,
-                              Uint32                   VertexBufferIndex)
+void ScheduleMeshVertexUpload(IGPUUploadManager*                  pUploadManager,
+                              IRenderDevice*                      pDevice,
+                              MeshPayloadImpl&                    MeshPayload,
+                              const RadientMeshSource&            Source,
+                              const std::shared_ptr<MeshGPUData>& pGPUData,
+                              Uint32                              VertexBufferIndex)
 {
     std::unique_ptr<MeshVertexBufferCopyData> pCopyData{new MeshVertexBufferCopyData{}};
     pCopyData->pMeshPayload      = &MeshPayload;
-    pCopyData->pMeshStorage      = &Storage;
+    pCopyData->pGPUData          = pGPUData;
     pCopyData->pDevice           = pDevice;
-    pCopyData->pVertexAllocation = Storage.pVertexAllocation;
+    pCopyData->pVertexAllocation = pGPUData->pVertexAllocation;
     pCopyData->VertexBufferIndex = VertexBufferIndex;
     pCopyData->VertexStride      = Source.GetVertexStride(VertexBufferIndex);
 
@@ -411,18 +436,22 @@ RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
 {
     if (pDevice == nullptr ||
         pUploadManager == nullptr ||
-        Storage.pIndexAllocation == nullptr ||
-        Storage.pVertexAllocation == nullptr ||
+        Storage.pGPUData == nullptr ||
+        Storage.pGPUData->pIndexAllocation == nullptr ||
+        Storage.pGPUData->pVertexAllocation == nullptr ||
         Source.GetIndexCount() == 0)
     {
-        Storage.LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
+        if (Storage.pGPUData != nullptr)
+            Storage.pGPUData->LoadStatus.store(RADIENT_STATUS_INVALID_OPERATION, std::memory_order_release);
         return RADIENT_STATUS_INVALID_OPERATION;
     }
+
+    MeshGPUData& GPUData = *Storage.pGPUData;
 
     const Uint32 VertexBufferCount = Source.GetVertexBufferCount();
     if (VertexBufferCount == 0)
     {
-        Storage.LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+        GPUData.LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
@@ -433,25 +462,25 @@ RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
         {
             if (Source.GetVertexBufferDataSize(BufferIndex) == 0)
             {
-                Storage.LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+                GPUData.LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
             ++UploadCount;
         }
     }
 
-    Storage.PendingUploads.store(UploadCount, std::memory_order_release);
-    Storage.GPUResourcesReady.store(false, std::memory_order_release);
-    Storage.LoadStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
+    GPUData.PendingUploads.store(UploadCount, std::memory_order_release);
+    GPUData.GPUResourcesReady.store(false, std::memory_order_release);
+    GPUData.LoadStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
 
-    ScheduleMeshIndexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage);
+    ScheduleMeshIndexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage.pGPUData);
 
     for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
     {
         if (!Source.IsVertexBufferActive(BufferIndex))
             continue;
 
-        ScheduleMeshVertexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage, BufferIndex);
+        ScheduleMeshVertexUpload(pUploadManager, pDevice, MeshPayload, Source, Storage.pGPUData, BufferIndex);
     }
 
     return RADIENT_STATUS_OK;
@@ -465,8 +494,11 @@ void SetMeshLoadStatus(MeshPayloadImpl& Mesh,
     if (pMeshStorage == nullptr)
         return;
 
-    pMeshStorage->GPUResourcesReady.store(false, std::memory_order_release);
-    pMeshStorage->LoadStatus.store(Status, std::memory_order_release);
+    if (pMeshStorage->pGPUData == nullptr)
+        pMeshStorage->pGPUData = std::make_shared<MeshGPUData>();
+
+    pMeshStorage->pGPUData->GPUResourcesReady.store(false, std::memory_order_release);
+    pMeshStorage->pGPUData->LoadStatus.store(Status, std::memory_order_release);
 }
 
 void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
@@ -590,7 +622,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
             if (!pMeshSource->HasVertexAttributes())
             {
                 RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
+                                                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
                 if (RADIENT_FAILED(Status))
                 {
                     pMeshAsset->Fail(Status);
@@ -723,7 +755,10 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
     MeshAssetStorage& Storage = pMesh->GetStorage();
     if (MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
     {
-        const RADIENT_STATUS MeshStatus = pMeshStorage->LoadStatus.load(std::memory_order_acquire);
+        if (pMeshStorage->pGPUData == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        const RADIENT_STATUS MeshStatus = pMeshStorage->pGPUData->LoadStatus.load(std::memory_order_acquire);
         return MeshStatus == RADIENT_STATUS_OK ?
             GetMeshMaterialStatus(*pMeshStorage) :
             MeshStatus;
@@ -812,7 +847,13 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
 {
     RadientDrawableMeshResolveResult Result;
 
-    const RADIENT_STATUS LoadStatus = Mesh.LoadStatus.load(std::memory_order_acquire);
+    if (Mesh.pGPUData == nullptr)
+    {
+        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+        return Result;
+    }
+
+    const RADIENT_STATUS LoadStatus = Mesh.pGPUData->LoadStatus.load(std::memory_order_acquire);
     if (LoadStatus != RADIENT_STATUS_OK)
     {
         Result.Status = LoadStatus;
@@ -827,7 +868,7 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
     }
 
     if (RequireGPUResourcesReady &&
-        !Mesh.GPUResourcesReady.load(std::memory_order_acquire))
+        !Mesh.pGPUData->GPUResourcesReady.load(std::memory_order_acquire))
     {
         Result.Status = RADIENT_STATUS_PENDING;
         return Result;
