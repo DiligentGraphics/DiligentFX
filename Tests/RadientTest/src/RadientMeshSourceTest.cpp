@@ -864,6 +864,55 @@ TEST(RadientMeshSourceTest, PacksCustomVertexAttributeLayout)
     EXPECT_FLOAT_EQ(Color1.w, 1.f);
 }
 
+TEST(RadientMeshSourceTest, CacheKeyIncludesDestinationVertexLayout)
+{
+    RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);
+
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
+
+    std::array<GLTF::VertexAttributeDesc, 1> TightPosition{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3}};
+    std::array<GLTF::VertexAttributeDesc, 1> PaddedPosition{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{16}}};
+
+    RadientMeshSource TightSource{MeshCI};
+    RadientMeshSource SameTightSource{MeshCI};
+    RadientMeshSource PaddedSource{MeshCI};
+
+    EXPECT_TRUE(TightSource.MakeCacheKey().empty());
+
+    ASSERT_EQ(TightSource.SetVertexAttributes(TightPosition.data(), static_cast<Uint32>(TightPosition.size())),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(SameTightSource.SetVertexAttributes(TightPosition.data(), static_cast<Uint32>(TightPosition.size())),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(PaddedSource.SetVertexAttributes(PaddedPosition.data(), static_cast<Uint32>(PaddedPosition.size())),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(TightSource.MakeCacheKey(), SameTightSource.MakeCacheKey());
+    EXPECT_NE(TightSource.MakeCacheKey(), PaddedSource.MakeCacheKey());
+
+    const RadientFloat4 Red{1.f, 0.f, 0.f, 1.f};
+    const RadientFloat4 Green{0.f, 1.f, 0.f, 1.f};
+
+    std::array<GLTF::VertexAttributeDesc, 2> RedDefaultColor{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
+        GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{12}, &Red}};
+    std::array<GLTF::VertexAttributeDesc, 2> GreenDefaultColor{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
+        GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{12}, &Green}};
+
+    RadientMeshSource RedDefaultSource{MeshCI};
+    RadientMeshSource GreenDefaultSource{MeshCI};
+
+    ASSERT_EQ(RedDefaultSource.SetVertexAttributes(RedDefaultColor.data(), static_cast<Uint32>(RedDefaultColor.size())),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(GreenDefaultSource.SetVertexAttributes(GreenDefaultColor.data(), static_cast<Uint32>(GreenDefaultColor.size())),
+              RADIENT_STATUS_OK);
+
+    EXPECT_NE(RedDefaultSource.MakeCacheKey(), GreenDefaultSource.MakeCacheKey());
+}
+
 TEST(RadientMeshSourceTest, PacksUnsortedExplicitVertexAttributeOffsets)
 {
     RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);

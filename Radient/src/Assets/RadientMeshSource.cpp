@@ -448,14 +448,15 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
 
 std::string RadientMeshSource::MakeCacheKey() const
 {
-    if (RADIENT_FAILED(m_Status))
+    if (RADIENT_FAILED(m_Status) || m_DstAttributes.empty())
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{3}, // Raw mesh cache key version.
+    Hasher.Update(Uint32{4}, // Packed mesh cache key version.
                   m_VertexCount,
                   m_IndexCount,
-                  m_IndexType);
+                  m_IndexType,
+                  m_ActiveVertexBufferMask);
 
     std::vector<const Char*> AttributeNames;
     AttributeNames.reserve(m_SrcAttributes.size());
@@ -496,7 +497,27 @@ std::string RadientMeshSource::MakeCacheKey() const
         HashMaterial(Hasher, Primitive.pMaterial);
     }
 
-    return std::string{"raw-mesh:"} + Hasher.Digest().ToString();
+    Hasher.Update(static_cast<Uint64>(m_VertexStrides.size()));
+    for (Uint32 Stride : m_VertexStrides)
+        Hasher.Update(Stride);
+
+    Hasher.Update(static_cast<Uint64>(m_DstAttributes.size()));
+    for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
+    {
+        UpdateString(Hasher, DstAttrib.Name);
+        Hasher.Update(DstAttrib.BufferId,
+                      DstAttrib.ValueType,
+                      DstAttrib.NumComponents,
+                      DstAttrib.RelativeOffset);
+
+        const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+        const bool   HasDefault    = DstAttrib.pDefaultValue != nullptr;
+        Hasher.Update(HasDefault);
+        if (HasDefault)
+            UpdateRawIfNotEmpty(Hasher, DstAttrib.pDefaultValue, DstAttribSize);
+    }
+
+    return std::string{"packed-mesh:"} + Hasher.Digest().ToString();
 }
 
 RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,

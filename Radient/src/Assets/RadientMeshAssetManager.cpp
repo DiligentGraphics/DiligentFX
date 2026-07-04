@@ -486,15 +486,7 @@ void LoadMeshFromSource(MeshPayloadImpl&                   Mesh,
         return;
     }
 
-    RADIENT_STATUS Status = pSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
-    if (RADIENT_FAILED(Status))
-    {
-        SetMeshLoadStatus(Mesh, Status);
-        return;
-    }
-
-    Status = InitializeMeshStorage(pResourceManager, *pSource, *pMeshStorage);
+    RADIENT_STATUS Status = InitializeMeshStorage(pResourceManager, *pSource, *pMeshStorage);
     if (RADIENT_FAILED(Status))
     {
         SetMeshLoadStatus(Mesh, Status);
@@ -582,6 +574,14 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
             if (RADIENT_FAILED(SourceStatus))
             {
                 pMeshAsset->Fail(SourceStatus);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
+            RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
+                                                                      static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
+            if (RADIENT_FAILED(Status))
+            {
+                pMeshAsset->Fail(Status);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
