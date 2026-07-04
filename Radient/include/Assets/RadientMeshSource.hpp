@@ -136,6 +136,11 @@ public:
 
     RADIENT_STATUS SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes);
 
+    bool HasVertexAttributes() const
+    {
+        return !m_DstAttributes.empty();
+    }
+
     PBR_Renderer::PSO_FLAGS GetVertexAttribFlags() const
     {
         VerifyVertexAttributesSet();

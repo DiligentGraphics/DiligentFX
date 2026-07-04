@@ -70,6 +70,10 @@ public:
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
+    RADIENT_STATUS CreateMesh(IThreadPool&                       ThreadPool,
+                              std::unique_ptr<RadientMeshSource> pMeshSource,
+                              IRadientMeshAsset**                ppMesh);
+
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
                                           Uint32              MeshIndex,
                                           const Char*         Name,

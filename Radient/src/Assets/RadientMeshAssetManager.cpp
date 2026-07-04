@@ -554,13 +554,30 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    return CreateMesh(ThreadPool, std::make_unique<RadientMeshSource>(MeshCI), ppMesh);
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                       ThreadPool,
+                                                   std::unique_ptr<RadientMeshSource> pMeshSource,
+                                                   IRadientMeshAsset**                ppMesh)
+{
+    if (ppMesh == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMesh = nullptr;
+
+    if (pMeshSource == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
+    if (RADIENT_FAILED(SourceStatus))
+        return SourceStatus;
+
     RefCntAutoPtr<MeshAssetImpl> pMeshAsset =
         MeshAssetImpl::Create(MakeRadientAssetURI("mesh", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)));
     VERIFY_EXPR(pMeshAsset != nullptr);
     if (!pMeshAsset)
         return RADIENT_STATUS_INVALID_OPERATION;
-
-    std::unique_ptr<RadientMeshSource> pMeshSource = std::make_unique<RadientMeshSource>(MeshCI);
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
@@ -570,19 +587,15 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
          pSelf       = shared_from_this(),
          pMeshSource = std::move(pMeshSource)](Uint32) mutable //
         {
-            const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
-            if (RADIENT_FAILED(SourceStatus))
+            if (!pMeshSource->HasVertexAttributes())
             {
-                pMeshAsset->Fail(SourceStatus);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                                                      static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
-            if (RADIENT_FAILED(Status))
-            {
-                pMeshAsset->Fail(Status);
-                return ASYNC_TASK_STATUS_COMPLETE;
+                RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
+                                                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
+                if (RADIENT_FAILED(Status))
+                {
+                    pMeshAsset->Fail(Status);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
             }
 
             const std::string CacheKey = pMeshSource->MakeCacheKey();
