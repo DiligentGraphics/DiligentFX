@@ -31,6 +31,7 @@
 #include <array>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace Diligent;
@@ -911,6 +912,43 @@ TEST(RadientMeshSourceTest, CacheKeyIncludesDestinationVertexLayout)
               RADIENT_STATUS_OK);
 
     EXPECT_NE(RedDefaultSource.MakeCacheKey(), GreenDefaultSource.MakeCacheKey());
+}
+
+TEST(RadientMeshSourceTest, CopiesDestinationVertexAttributeDescriptors)
+{
+    RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);
+
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    SetWholeMeshPrimitive(MeshCI, PrimitiveCI);
+
+    std::string   PositionName{GLTF::PositionAttributeName};
+    RadientFloat4 DefaultColor{1.f, 0.f, 0.f, 1.f};
+
+    std::array<GLTF::VertexAttributeDesc, 2> Attributes{
+        GLTF::VertexAttributeDesc{PositionName.c_str(), 0, VT_FLOAT32, 3, Uint32{0}},
+        GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{12}, &DefaultColor}};
+
+    RadientMeshSource Source{MeshCI};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())),
+              RADIENT_STATUS_OK);
+
+    const std::string CacheKey = Source.MakeCacheKey();
+    ASSERT_FALSE(CacheKey.empty());
+
+    PositionName[0] = 'X';
+    DefaultColor    = RadientFloat4{0.f, 1.f, 0.f, 1.f};
+
+    EXPECT_EQ(Source.MakeCacheKey(), CacheKey);
+
+    std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
+    ASSERT_EQ(Source.PackVertexData(0,
+                                    RadientMeshSource::PackDestination{Buffer0.data(),
+                                                                       static_cast<Uint32>(Buffer0.size())}),
+              RADIENT_STATUS_OK);
+
+    ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), DefaultAttribPositions[0]);
+    ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffer0, 12), RadientFloat4{1.f, 0.f, 0.f, 1.f});
 }
 
 TEST(RadientMeshSourceTest, PacksUnsortedExplicitVertexAttributeOffsets)

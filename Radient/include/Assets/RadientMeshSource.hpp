@@ -231,6 +231,8 @@ private:
     const Uint8*       m_pIndexData = nullptr;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
+    std::vector<std::string>               m_DstAttributeNames;
+    std::vector<std::unique_ptr<Uint8[]>>  m_DstAttributeDefaultValues;
     std::vector<Uint32>                    m_VertexStrides;
     std::vector<Uint32>                    m_VertexBufferDataSizes;
 

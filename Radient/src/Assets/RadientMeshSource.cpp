@@ -653,7 +653,31 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
         VertexBufferDataSizes[BufferIndex] = m_VertexCount * VertexStride;
     }
 
-    m_DstAttributes          = std::move(DstAttributes);
+    std::vector<std::string>              DstAttributeNames(DstAttributes.size());
+    std::vector<std::unique_ptr<Uint8[]>> DstAttributeDefaultValues(DstAttributes.size());
+    for (size_t AttribIndex = 0; AttribIndex < DstAttributes.size(); ++AttribIndex)
+    {
+        const GLTF::VertexAttributeDesc& DstAttrib = DstAttributes[AttribIndex];
+        DstAttributeNames[AttribIndex]             = DstAttrib.Name;
+
+        if (DstAttrib.pDefaultValue != nullptr)
+        {
+            const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+            DstAttributeDefaultValues[AttribIndex].reset(new Uint8[DstAttribSize]);
+            std::memcpy(DstAttributeDefaultValues[AttribIndex].get(), DstAttrib.pDefaultValue, DstAttribSize);
+        }
+    }
+
+    m_DstAttributes             = std::move(DstAttributes);
+    m_DstAttributeNames         = std::move(DstAttributeNames);
+    m_DstAttributeDefaultValues = std::move(DstAttributeDefaultValues);
+    for (size_t AttribIndex = 0; AttribIndex < m_DstAttributes.size(); ++AttribIndex)
+    {
+        m_DstAttributes[AttribIndex].Name = m_DstAttributeNames[AttribIndex].c_str();
+
+        m_DstAttributes[AttribIndex].pDefaultValue = m_DstAttributeDefaultValues[AttribIndex].get();
+    }
+
     m_VertexAttribFlags      = VertexAttribFlags;
     m_ActiveVertexBufferMask = ActiveVertexBufferMask;
     m_VertexStrides          = std::move(VertexStrides);
