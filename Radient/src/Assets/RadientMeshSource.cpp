@@ -412,26 +412,9 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
     }
     else
     {
-        if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
-        {
-            m_Indices32.resize(m_IndexCount);
-            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-            {
-                std::memcpy(&m_Indices32[Index],
-                            pSrcIndices + size_t{Index} * IndexElementSize,
-                            sizeof(m_Indices32[Index]));
-            }
-        }
-        else
-        {
-            m_Indices16.resize(m_IndexCount);
-            for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-            {
-                std::memcpy(&m_Indices16[Index],
-                            pSrcIndices + size_t{Index} * IndexElementSize,
-                            sizeof(m_Indices16[Index]));
-            }
-        }
+        m_Indices.resize(size_t{m_IndexCount} * IndexElementSize);
+        std::memcpy(m_Indices.data(), pSrcIndices, m_Indices.size());
+        m_pIndexData = m_Indices.data();
     }
 
     CopyArray(m_Primitives, CI.pPrimitives, CI.PrimitiveCount);
@@ -479,14 +462,8 @@ std::string RadientMeshSource::MakeCacheKey() const
     }
 
     const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
-    const Uint8* pIndexData       = m_pIndexData;
-    if (!m_Indices16.empty())
-        pIndexData = reinterpret_cast<const Uint8*>(m_Indices16.data());
-    else if (!m_Indices32.empty())
-        pIndexData = reinterpret_cast<const Uint8*>(m_Indices32.data());
-
     Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
-    UpdateStridedRaw(Hasher, pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
+    UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
@@ -641,34 +618,21 @@ RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) con
     }
 
     Uint8* const pDstIndices = static_cast<Uint8*>(Destination.pData);
-    if (!m_Indices32.empty())
+    if (m_pIndexData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
     {
-        std::memcpy(pDstIndices, m_Indices32.data(), GetIndexDataSize());
+        std::memcpy(pDstIndices, m_pIndexData, GetIndexDataSize());
     }
-    else if (!m_Indices16.empty())
+    else if (m_IndexType == RADIENT_INDEX_TYPE_UINT16)
     {
         for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
         {
-            const Uint32 Value = m_Indices16[Index];
-            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
-        }
-    }
-    else if (m_pIndexData != nullptr)
-    {
-        const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
-        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-        {
-            Uint32 Value = 0;
-            if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
-            {
-                std::memcpy(&Value, m_pIndexData + size_t{Index} * IndexElementSize, sizeof(Value));
-            }
-            else
-            {
-                Uint16 Value16 = 0;
-                std::memcpy(&Value16, m_pIndexData + size_t{Index} * IndexElementSize, sizeof(Value16));
-                Value = Value16;
-            }
+            Uint16 Value16 = 0;
+            std::memcpy(&Value16, m_pIndexData + size_t{Index} * sizeof(Value16), sizeof(Value16));
+
+            const Uint32 Value = Value16;
             std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
         }
     }

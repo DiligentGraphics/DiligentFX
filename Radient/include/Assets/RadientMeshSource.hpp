@@ -223,18 +223,18 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    Uint32             m_VertexCount            = 0;
-    Uint32             m_IndexCount             = 0;
-    Uint32             m_ActiveVertexBufferMask = 0;
-    RADIENT_INDEX_TYPE m_IndexType              = RADIENT_INDEX_TYPE_NONE;
-    const Uint8*       m_pIndexData             = nullptr;
+    Uint32 m_VertexCount            = 0;
+    Uint32 m_IndexCount             = 0;
+    Uint32 m_ActiveVertexBufferMask = 0;
+
+    RADIENT_INDEX_TYPE m_IndexType  = RADIENT_INDEX_TYPE_NONE;
+    const Uint8*       m_pIndexData = nullptr;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
     std::vector<Uint32>                    m_VertexStrides;
     std::vector<Uint32>                    m_VertexBufferDataSizes;
 
-    std::vector<Uint16> m_Indices16;
-    std::vector<Uint32> m_Indices32;
+    std::vector<Uint8> m_Indices;
 
     std::vector<RadientMeshPrimitiveCreateInfo> m_Primitives;
 
