@@ -30,6 +30,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 namespace Diligent
 {
@@ -102,10 +103,40 @@ RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI
     }
 
     m_Primitives.assign(CI.pPrimitives, CI.pPrimitives + CI.PrimitiveCount);
+    m_PrimitiveNames.resize(CI.PrimitiveCount);
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
+    {
+        const Char* const Name = CI.pPrimitives[PrimitiveIndex].Name;
+        if (Name != nullptr)
+            m_PrimitiveNames[PrimitiveIndex] = Name;
+    }
+    BindPrimitiveNames();
 
     m_Materials.reserve(CI.PrimitiveCount);
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
         m_Materials.emplace_back(CI.pPrimitives[PrimitiveIndex].pMaterial);
+}
+
+RadientMeshViewSource::RadientMeshViewSource(RadientMeshViewSource&& Rhs) noexcept :
+    m_Status{Rhs.m_Status},
+    m_Primitives{std::move(Rhs.m_Primitives)},
+    m_PrimitiveNames{std::move(Rhs.m_PrimitiveNames)},
+    m_Materials{std::move(Rhs.m_Materials)}
+{
+    BindPrimitiveNames();
+}
+
+void RadientMeshViewSource::BindPrimitiveNames() noexcept
+{
+    VERIFY_EXPR(m_Primitives.size() == m_PrimitiveNames.size());
+    if (m_Primitives.size() != m_PrimitiveNames.size())
+        return;
+
+    for (size_t PrimitiveIndex = 0; PrimitiveIndex < m_Primitives.size(); ++PrimitiveIndex)
+    {
+        m_Primitives[PrimitiveIndex].Name =
+            m_Primitives[PrimitiveIndex].Name != nullptr ? m_PrimitiveNames[PrimitiveIndex].c_str() : nullptr;
+    }
 }
 
 std::string RadientMeshViewSource::MakeCacheKey(const char* MeshSourceCacheKey) const

@@ -49,6 +49,8 @@ public:
     RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
                           Uint32                           IndexCount);
 
+    RadientMeshViewSource(RadientMeshViewSource&& Rhs) noexcept;
+
     RADIENT_STATUS GetStatus() const
     {
         return m_Status;
@@ -74,9 +76,13 @@ public:
     std::string MakeCacheKey(const char* MeshSourceCacheKey) const;
 
 private:
+    void BindPrimitiveNames() noexcept;
+
+private:
     RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
 
     std::vector<RadientMeshPrimitiveCreateInfo>       m_Primitives;
+    std::vector<std::string>                          m_PrimitiveNames;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> m_Materials;
 };
 

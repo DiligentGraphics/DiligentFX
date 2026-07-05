@@ -29,6 +29,9 @@
 
 #include "gtest/gtest.h"
 
+#include <string>
+#include <utility>
+
 using namespace Diligent;
 
 namespace
@@ -104,22 +107,66 @@ TEST(RadientMeshViewSourceTest, CopiesPrimitiveRangesAndKeepsMaterialsAlive)
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager, "mesh view material");
     ASSERT_NE(pMaterial, nullptr);
 
+    std::string PrimitiveName{"mesh view primitive"};
+
     RadientMeshPrimitiveCreateInfo Primitive = MakePrimitive(1, 2);
+    Primitive.Name                           = PrimitiveName.c_str();
     Primitive.pMaterial                      = pMaterial;
 
     RadientMeshViewSource View{MakeViewCI(&Primitive, 1), 3};
     ASSERT_EQ(View.GetStatus(), RADIENT_STATUS_OK);
 
+    PrimitiveName[0]     = 'X';
     Primitive.FirstIndex = 0;
     Primitive.IndexCount = 1;
+    Primitive.Name       = nullptr;
     Primitive.pMaterial  = nullptr;
     pMaterial.Release();
 
     ASSERT_EQ(View.GetPrimitiveCount(), 1u);
     EXPECT_EQ(View.GetPrimitive(0).FirstIndex, 1u);
     EXPECT_EQ(View.GetPrimitive(0).IndexCount, 2u);
+    ASSERT_NE(View.GetPrimitive(0).Name, nullptr);
+    EXPECT_STREQ(View.GetPrimitive(0).Name, "mesh view primitive");
+    EXPECT_NE(View.GetPrimitive(0).Name, PrimitiveName.c_str());
 
     IRadientMaterialAsset* pKeptMaterial = View.GetMaterial(0);
+    ASSERT_NE(pKeptMaterial, nullptr);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pKeptMaterial), RADIENT_STATUS_OK);
+}
+
+TEST(RadientMeshViewSourceTest, MoveConstructorRebindsPrimitiveNames)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager, "mesh view move material");
+    ASSERT_NE(pMaterial, nullptr);
+
+    std::string PrimitiveName{"mesh view moved primitive"};
+
+    RadientMeshPrimitiveCreateInfo Primitive = MakePrimitive(1, 2);
+    Primitive.Name                           = PrimitiveName.c_str();
+    Primitive.pMaterial                      = pMaterial;
+
+    RadientMeshViewSource View{MakeViewCI(&Primitive, 1), 3};
+    ASSERT_EQ(View.GetStatus(), RADIENT_STATUS_OK);
+
+    RadientMeshViewSource MovedView = std::move(View);
+
+    PrimitiveName[0]    = 'X';
+    Primitive.Name      = nullptr;
+    Primitive.pMaterial = nullptr;
+    pMaterial.Release();
+
+    ASSERT_EQ(MovedView.GetPrimitiveCount(), 1u);
+    EXPECT_EQ(MovedView.GetPrimitive(0).FirstIndex, 1u);
+    EXPECT_EQ(MovedView.GetPrimitive(0).IndexCount, 2u);
+    ASSERT_NE(MovedView.GetPrimitive(0).Name, nullptr);
+    EXPECT_STREQ(MovedView.GetPrimitive(0).Name, "mesh view moved primitive");
+    EXPECT_NE(MovedView.GetPrimitive(0).Name, PrimitiveName.c_str());
+
+    IRadientMaterialAsset* pKeptMaterial = MovedView.GetMaterial(0);
     ASSERT_NE(pKeptMaterial, nullptr);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pKeptMaterial), RADIENT_STATUS_OK);
 }
