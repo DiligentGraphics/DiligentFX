@@ -236,7 +236,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromExternalImageURI)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();
 }
 
@@ -273,7 +274,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesContinuesAfterUnresolvedTextureSource)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[1]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[1]), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[1]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[1]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();
 }
 
@@ -297,7 +299,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromDataURIImage)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();
 }
 
@@ -321,7 +324,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromBufferViewImage)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();
 }
 
@@ -351,6 +355,10 @@ TEST(RadientGLTFLoaderTest, IdenticalDataURIAndBufferViewTexturesSharePayload)
     const TexturePayloadImpl* pBufferViewPayload = RadientTextureAssetManager::GetTexturePayload(Textures[0]);
     ASSERT_NE(pBufferViewPayload, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(Textures[1]), pBufferViewPayload);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[1]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[1]), RADIENT_STATUS_NO_GPU_DATA);
 }
 
 TEST(RadientGLTFLoaderTest, IdenticalTexturesFromDifferentGLTFsSharePayload)
@@ -382,4 +390,8 @@ TEST(RadientGLTFLoaderTest, IdenticalTexturesFromDifferentGLTFsSharePayload)
     const TexturePayloadImpl* pBufferViewPayload = RadientTextureAssetManager::GetTexturePayload(BufferViewTextures[0]);
     ASSERT_NE(pBufferViewPayload, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(DataURITextures[0]), pBufferViewPayload);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(BufferViewTextures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(BufferViewTextures[0]), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(DataURITextures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(DataURITextures[0]), RADIENT_STATUS_NO_GPU_DATA);
 }

@@ -365,11 +365,13 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     }
 
     // The queued texture load now runs without the resource/upload managers.
-    // The material asset must remain valid and report the dependency failure.
+    // The material asset must remain valid; source load succeeds, while the
+    // dependent GPU resource status reports the failure.
     ReleaseWorker.Trigger();
     pThreadPool->StopThreads();
 
-    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
 }
 

@@ -41,11 +41,10 @@ namespace
 
 bool IsAcceptedOrMissingGPU(RADIENT_STATUS Status)
 {
-    // This unit test does not provide GPU managers, so scheduling may fail
-    // after the mesh asset handle has been accepted.
+    // This unit test does not provide GPU managers. Mesh source loading should
+    // still be accepted; GPU availability is reported separately.
     return (Status == RADIENT_STATUS_OK ||
-            Status == RADIENT_STATUS_PENDING ||
-            Status == RADIENT_STATUS_INVALID_OPERATION);
+            Status == RADIENT_STATUS_PENDING);
 }
 
 std::unique_ptr<RadientMeshSource> MakeMeshSource()
@@ -130,6 +129,13 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMeshSource)
 
     pThreadPool->WaitForAllTasks();
 
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pDefaultMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pDefaultMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pCustomMesh0), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pCustomMesh0), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pCustomMesh1), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pCustomMesh1), RADIENT_STATUS_NO_GPU_DATA);
+
     const MeshPayloadImpl* pDefaultPayload = RadientMeshAssetManager::GetMeshPayload(pDefaultMesh);
     const MeshPayloadImpl* pCustomPayload0 = RadientMeshAssetManager::GetMeshPayload(pCustomMesh0);
     const MeshPayloadImpl* pCustomPayload1 = RadientMeshAssetManager::GetMeshPayload(pCustomMesh1);
@@ -168,6 +174,11 @@ TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
     ASSERT_NE(pSubrangeMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pWholeMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pWholeMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pSubrangeMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pSubrangeMesh), RADIENT_STATUS_NO_GPU_DATA);
 
     const MeshPayloadImpl* pWholePayload    = RadientMeshAssetManager::GetMeshPayload(pWholeMesh);
     const MeshPayloadImpl* pSubrangePayload = RadientMeshAssetManager::GetMeshPayload(pSubrangeMesh);

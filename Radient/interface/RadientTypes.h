@@ -67,6 +67,9 @@ DILIGENT_TYPED_ENUM(RADIENT_STATUS, Int32)
     /// The operation has been accepted, but the requested data is not available yet.
     RADIENT_STATUS_PENDING = 3,
 
+    /// Source data was processed successfully, but GPU resources were not created.
+    RADIENT_STATUS_NO_GPU_DATA = 4,
+
     /// The requested entity, component, or resource was not found.
     RADIENT_STATUS_NOT_FOUND = -1,
 

@@ -112,9 +112,12 @@ public:
     static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
                                            bool                RequireGPUResourcesReady = false);
 
-    // Reports GLTF model load and upload-scheduling status. OK does not imply
-    // that render-thread GPU upload callbacks have completed.
+    // Reports GLTF model source load status. OK does not imply GPU resources exist.
     static RADIENT_STATUS GetGLTFLoadStatus(IRadientSceneAsset* pModel);
+
+    // Reports GLTF model GPU resource status. OK means GPU resources are ready.
+    // NO_GPU_DATA means the model loaded successfully without a GPU backend.
+    static RADIENT_STATUS GetGLTFGPUResourceStatus(IRadientSceneAsset* pModel);
 
     // Returns the texture SRV if the texture status is OK (i.e., all
     // required copy commands were enqueued), or nullptr otherwise.
@@ -130,7 +133,7 @@ public:
 
 private:
     // Dispatches to the asset-type-specific load status. OK means source data
-    // has been processed and GPU upload work has been scheduled when needed.
+    // has been processed.
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
     void LoadGLTFModel(ScenePayloadImpl&  Model,

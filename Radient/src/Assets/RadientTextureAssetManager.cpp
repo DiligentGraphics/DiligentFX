@@ -56,7 +56,8 @@ class TextureStorage
 {
 public:
     explicit TextureStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
-        m_LoadStatus{InitLoadStatus}
+        m_LoadStatus{InitLoadStatus},
+        m_GPUResourceStatus{InitLoadStatus}
     {
     }
 
@@ -72,9 +73,30 @@ public:
         m_LoadStatus.store(Status, std::memory_order_release);
     }
 
+    void SetGPUResourceStatus(RADIENT_STATUS Status) noexcept
+    {
+        m_GPUResourceStatus.store(Status, std::memory_order_release);
+    }
+
+    void SetFailedStatus(RADIENT_STATUS Status) noexcept
+    {
+        VERIFY_EXPR(RADIENT_FAILED(Status));
+        SetGPUResourceStatus(Status);
+        SetLoadStatus(Status);
+    }
+
     RADIENT_STATUS GetLoadStatus() const noexcept
     {
         return m_LoadStatus.load(std::memory_order_acquire);
+    }
+
+    RADIENT_STATUS GetGPUResourceStatus() const noexcept
+    {
+        const RADIENT_STATUS LoadStatus = GetLoadStatus();
+        if (LoadStatus != RADIENT_STATUS_OK)
+            return LoadStatus;
+
+        return m_GPUResourceStatus.load(std::memory_order_acquire);
     }
 
     void ResetGPUResourceState()
@@ -82,6 +104,7 @@ public:
         ClearTextureAttribs();
         m_PendingSubresourceUploads.store(0, std::memory_order_release);
         m_AllCopyCommandsEnqueued.store(false, std::memory_order_release);
+        SetGPUResourceStatus(RADIENT_STATUS_PENDING);
         m_pTexture.Release();
         m_pAtlasSuballocation.Release();
     }
@@ -100,6 +123,7 @@ public:
         else
             ClearTextureAttribs();
         m_AllCopyCommandsEnqueued.store(m_pTexture != nullptr, std::memory_order_release);
+        SetGPUResourceStatus(m_pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
         return m_pTexture;
     }
 
@@ -130,14 +154,14 @@ public:
 
     ITextureView* GetTextureSRV() const
     {
-        if (GetLoadStatus() != RADIENT_STATUS_OK ||
+        if (GetGPUResourceStatus() != RADIENT_STATUS_OK ||
             !m_AllCopyCommandsEnqueued.load(std::memory_order_acquire))
         {
             return nullptr;
         }
 
-        // Once the load status is OK and all copy commands have been enqueued,
-        // no worker/upload callback will continue modifying the texture storage.
+        // Once the GPU resource status is OK and all copy commands have been
+        // enqueued, no worker/upload callback will continue modifying the texture storage.
         ITexture* pTexture = m_pTexture;
         if (pTexture == nullptr)
         {
@@ -176,10 +200,11 @@ public:
         m_PendingSubresourceUploads.store(SubresourceUploadCount, std::memory_order_release);
         m_AnyCopyCommandEnqueueFailed.store(false, std::memory_order_release);
         m_AllCopyCommandsEnqueued.store(SubresourceUploadCount == 0, std::memory_order_release);
+        SetGPUResourceStatus(SubresourceUploadCount == 0 ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING);
     }
 
     // Records the result of a copy command enqueue operation.
-    // Returns true if this was the last pending subresource upload and the final load status has been set.
+    // Returns true if this was the last pending subresource upload and the final GPU resource status has been set.
     bool RecordCopyCommandEnqueueResult(bool CopyEnqueued)
     {
         if (!CopyEnqueued)
@@ -191,7 +216,7 @@ public:
         {
             const bool AllCopiesEnqueued = !m_AnyCopyCommandEnqueueFailed.load(std::memory_order_acquire);
             m_AllCopyCommandsEnqueued.store(AllCopiesEnqueued, std::memory_order_release);
-            SetLoadStatus(AllCopiesEnqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
+            SetGPUResourceStatus(AllCopiesEnqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
             return true;
         }
 
@@ -224,6 +249,7 @@ private:
     RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
 
     std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
+    std::atomic<RADIENT_STATUS> m_GPUResourceStatus{RADIENT_STATUS_OK};
 
     std::atomic_bool m_TextureAttribsInitialized{false};
     AtomicFloat      m_TextureSlice{0.f};
@@ -372,7 +398,7 @@ private:
     {
         if (pTexture->GetStorage().RecordCopyCommandEnqueueResult(CopyEnqueued))
         {
-            // This was the last pending subresource upload and the final load status has been set.
+            // This was the last pending subresource upload and the final GPU resource status has been set.
             DecrementCounter(PendingTextureLoads);
         }
 
@@ -530,7 +556,16 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
             if (pLoader == nullptr)
             {
-                pTextureAsset->GetStorage().SetLoadStatus(RADIENT_STATUS_INVALID_OPERATION);
+                pTextureAsset->GetStorage().SetFailedStatus(RADIENT_STATUS_INVALID_OPERATION);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
+            TextureStorage& TextureStorage = pTextureAsset->GetStorage();
+            TextureStorage.SetLoadStatus(RADIENT_STATUS_OK);
+
+            if (pSelf->m_pDevice == nullptr)
+            {
+                TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
@@ -538,7 +573,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
             if (!pResourceManager || !pUploadManager)
             {
-                pTextureAsset->GetStorage().SetLoadStatus(RADIENT_STATUS_INVALID_OPERATION);
+                TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
@@ -546,7 +581,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             // ScheduleTextureGPUUpload will decrement PendingTextureLoads when all copy commands have been enqueued.
             const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
             if (Status != RADIENT_STATUS_PENDING)
-                pTextureAsset->GetStorage().SetLoadStatus(Status);
+                TextureStorage.SetGPUResourceStatus(Status);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -564,6 +599,19 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pT
 RADIENT_STATUS RadientTextureAssetManager::GetLoadStatus(IRadientAsset* pTextureAsset)
 {
     return TextureAssetImpl::GetLoadStatus(pTextureAsset);
+}
+
+RADIENT_STATUS RadientTextureAssetManager::GetGPUResourceStatus(IRadientAsset* pTextureAsset)
+{
+    RefCntAutoPtr<TextureAssetImpl> pImpl{pTextureAsset, IID_TextureAssetImpl};
+    if (!pImpl)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS PayloadStatus = pImpl->GetPayloadStatus();
+    if (PayloadStatus != RADIENT_STATUS_OK)
+        return PayloadStatus;
+
+    return pImpl->GetStorage().GetGPUResourceStatus();
 }
 
 const TexturePayloadImpl* RadientTextureAssetManager::GetTexturePayload(IRadientTextureAsset* pTextureAsset)

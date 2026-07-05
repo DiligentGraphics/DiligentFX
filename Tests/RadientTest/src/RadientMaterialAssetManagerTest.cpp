@@ -115,6 +115,7 @@ TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependenci
     ASSERT_NE(pMaterial, nullptr);
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
     const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
     ASSERT_NE(pGLTFMaterial, nullptr);
@@ -156,6 +157,7 @@ TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
     // The asset owns its payload, so the material must remain readable after
     // the manager that created it has been destroyed.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
     const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
     ASSERT_NE(pGLTFMaterial, nullptr);

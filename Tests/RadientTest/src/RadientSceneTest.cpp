@@ -413,8 +413,10 @@ TEST(RadientAssetManagerTest, CreateMeshDeduplicatesIdenticalRawData)
     ASSERT_NE(pMesh1, nullptr);
     const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
     const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
-    EXPECT_TRUE(MeshStatus0 == RADIENT_STATUS_OK || MeshStatus0 == RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_TRUE(MeshStatus1 == RADIENT_STATUS_OK || MeshStatus1 == RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(MeshStatus0, RADIENT_STATUS_OK);
+    EXPECT_EQ(MeshStatus1, RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh0), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh1), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
 
     const MeshPayloadImpl* pMeshPayload0 = RadientMeshAssetManager::GetMeshPayload(pMesh0);
@@ -440,8 +442,10 @@ TEST(RadientAssetManagerTest, CreateMeshDifferentRawDataUsesDifferentPayload)
     ASSERT_NE(pMesh1, nullptr);
     const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
     const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
-    EXPECT_TRUE(MeshStatus0 == RADIENT_STATUS_OK || MeshStatus0 == RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_TRUE(MeshStatus1 == RADIENT_STATUS_OK || MeshStatus1 == RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(MeshStatus0, RADIENT_STATUS_OK);
+    EXPECT_EQ(MeshStatus1, RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh0), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh1), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(pMesh0.RawPtr(), pMesh1.RawPtr());
 
     const MeshPayloadImpl* pMeshPayload0 = RadientMeshAssetManager::GetMeshPayload(pMesh0);
@@ -479,6 +483,7 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     EXPECT_STREQ(pGLTFModel->GetReference().URI, GLTFLoadInfo.URI);
     EXPECT_NE(pGLTFModel->GetReference().Version, 0u);
     EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pGLTFModel), RADIENT_STATUS_NO_GPU_DATA);
 }
 
 TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
@@ -525,12 +530,14 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     ASSERT_TRUE(FirstLoadStatus == RADIENT_STATUS_OK || FirstLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pFirstModel, nullptr);
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pFirstModel), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pFirstModel), RADIENT_STATUS_NO_GPU_DATA);
 
     RefCntAutoPtr<IRadientSceneAsset> pSecondModel;
     const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadGLTF(LoadInfo, &pSecondModel);
     EXPECT_TRUE(SecondLoadStatus == RADIENT_STATUS_OK || SecondLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondModel, nullptr);
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pSecondModel), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pSecondModel), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(pSecondModel.RawPtr(), pFirstModel.RawPtr());
     ASSERT_NE(pSecondModel->GetReference().URI, nullptr);
     ASSERT_NE(pFirstModel->GetReference().URI, nullptr);

@@ -45,6 +45,25 @@ namespace
 
 static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4d, {0xb8, 0xcd, 0x48, 0x89, 0xa4, 0x65, 0xa, 0x50}};
 
+RADIENT_STATUS CombineDependencyStatus(RADIENT_STATUS Status,
+                                       RADIENT_STATUS DependencyStatus) noexcept
+{
+    if (DependencyStatus == RADIENT_STATUS_OK)
+        return Status;
+
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    if (RADIENT_FAILED(DependencyStatus))
+        return DependencyStatus;
+
+    if (Status == RADIENT_STATUS_OK ||
+        DependencyStatus == RADIENT_STATUS_PENDING)
+        return DependencyStatus;
+
+    return Status;
+}
+
 struct MaterialStorage
 {
     void SetTexture(Uint32 TextureAttribId, IRadientTextureAsset* pTexture)
@@ -60,8 +79,9 @@ struct MaterialStorage
 
     void InitLoadStatus() noexcept
     {
-        LoadStatus.store(!Textures.empty() ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK,
-                         std::memory_order_release);
+        const RADIENT_STATUS InitStatus = !Textures.empty() ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
+        LoadStatus.store(InitStatus, std::memory_order_release);
+        GPUResourceStatus.store(InitStatus, std::memory_order_release);
     }
 
     RADIENT_STATUS GetLoadStatus() const noexcept
@@ -87,11 +107,40 @@ struct MaterialStorage
                 continue;
 
             const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetLoadStatus(pTexture);
-            if (TextureStatus == RADIENT_STATUS_OK)
+            Status                             = CombineDependencyStatus(Status, TextureStatus);
+        }
+
+        return Status;
+    }
+
+    RADIENT_STATUS GetGPUResourceStatus() const noexcept
+    {
+        const RADIENT_STATUS Status = GetLoadStatus();
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        RADIENT_STATUS GPUStatus = GPUResourceStatus.load(std::memory_order_acquire);
+        if (GPUStatus != RADIENT_STATUS_PENDING)
+            return GPUStatus;
+
+        GPUStatus = GetTextureDependenciesGPUResourceStatus();
+        if (GPUStatus != RADIENT_STATUS_PENDING)
+            GPUResourceStatus.store(GPUStatus, std::memory_order_release);
+
+        return GPUStatus;
+    }
+
+    RADIENT_STATUS GetTextureDependenciesGPUResourceStatus() const noexcept
+    {
+        RADIENT_STATUS Status = RADIENT_STATUS_OK;
+
+        for (IRadientTextureAsset* pTexture : Textures)
+        {
+            if (pTexture == nullptr)
                 continue;
 
-            if (TextureStatus != RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK)
-                Status = TextureStatus;
+            const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetGPUResourceStatus(pTexture);
+            Status                             = CombineDependencyStatus(Status, TextureStatus);
         }
 
         return Status;
@@ -100,6 +149,7 @@ struct MaterialStorage
     GLTF::Material                      Material;
     bool                                TextureAttribsReady = false;
     mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
+    mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
 
     std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
 };
@@ -241,6 +291,19 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)
 {
     return MaterialAssetImpl::GetLoadStatus(pMaterial);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::GetGPUResourceStatus(IRadientAsset* pMaterial)
+{
+    RefCntAutoPtr<MaterialAssetImpl> pImpl{pMaterial, IID_MaterialAssetImpl};
+    if (!pImpl)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS PayloadStatus = pImpl->GetPayloadStatus();
+    if (PayloadStatus != RADIENT_STATUS_OK)
+        return PayloadStatus;
+
+    return pImpl->GetStorage().GetGPUResourceStatus();
 }
 
 const GLTF::Material* RadientMaterialAssetManager::GetMaterial(IRadientMaterialAsset* pMaterial)

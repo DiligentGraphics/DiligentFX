@@ -186,7 +186,8 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     for (size_t i = 0; i < NumTextures; ++i)
     {
         EXPECT_NE(Textures[i], nullptr) << i;
-        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_INVALID_OPERATION) << i;
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_OK) << i;
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[i]), RADIENT_STATUS_INVALID_OPERATION) << i;
         EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(Textures[i]), nullptr) << i;
     }
 }
@@ -228,17 +229,19 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
         PendingCopyCommandEnqueueCallbacks = WaitForPendingCopyCommandEnqueueCallbacks(*pAssetManager);
         ASSERT_TRUE(PendingCopyCommandEnqueueCallbacks);
 
-        // The worker has queued upload callbacks, but they have not reported
-        // success or failure yet, so the texture load remains pending.
-        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
+        // The worker has loaded the source and queued upload callbacks, but
+        // they have not reported success or failure yet.
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
         EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     }
 
     pThreadPool->StopThreads();
 
     // Stop() shuts down the upload manager and drains the blocked callbacks.
-    // No texture copy was enqueued, so the load reaches a terminal failure.
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    // No texture copy was enqueued, so the GPU resource status reaches a terminal failure.
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(pTexture), nullptr);
 }
 

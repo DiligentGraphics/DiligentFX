@@ -58,14 +58,15 @@ static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, 
 struct GLTFModelStorage
 {
     explicit GLTFModelStorage(RADIENT_STATUS InitLoadStatus = RADIENT_STATUS_OK) :
-        LoadStatus{InitLoadStatus}
+        LoadStatus{InitLoadStatus},
+        GPUResourceStatus{InitLoadStatus}
     {
     }
 
     GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
         pModel{std::move(Rhs.pModel)},
         LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
-        GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+        GPUResourceStatus{Rhs.GPUResourceStatus.load(std::memory_order_relaxed)},
         GPUUpdateQueued{Rhs.GPUUpdateQueued.load(std::memory_order_relaxed)}
     {
     }
@@ -79,9 +80,18 @@ struct GLTFModelStorage
         return LoadStatus.load(std::memory_order_acquire);
     }
 
+    RADIENT_STATUS GetGPUResourceStatus() const noexcept
+    {
+        const RADIENT_STATUS Status = GetLoadStatus();
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        return GPUResourceStatus.load(std::memory_order_acquire);
+    }
+
     std::unique_ptr<GLTF::Model> pModel;
     std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
-    std::atomic_bool             GPUResourcesReady{false};
+    std::atomic<RADIENT_STATUS>  GPUResourceStatus{RADIENT_STATUS_OK};
     std::atomic_bool             GPUUpdateQueued{false};
 };
 
@@ -348,7 +358,7 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pMo
 
     const GLTFModelStorage& GLTFModel = pImpl->GetStorage();
     if (GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
-        (RequireGPUResourcesReady && !GLTFModel.GPUResourcesReady.load(std::memory_order_acquire)))
+        (RequireGPUResourcesReady && GLTFModel.GetGPUResourceStatus() != RADIENT_STATUS_OK))
     {
         return nullptr;
     }
@@ -363,6 +373,19 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pM
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     return pImpl->GetLoadStatus();
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::GetGLTFGPUResourceStatus(IRadientSceneAsset* pModel)
+{
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
+    if (!pImpl)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS PayloadStatus = pImpl->GetPayloadStatus();
+    if (PayloadStatus != RADIENT_STATUS_OK)
+        return PayloadStatus;
+
+    return pImpl->GetStorage().GetGPUResourceStatus();
 }
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
@@ -411,7 +434,7 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
         GLTFModelStorage& GLTFModel = pPayload->GetStorage();
 
-        if (GLTFModel.GPUResourcesReady.load(std::memory_order_acquire) ||
+        if (GLTFModel.GetGPUResourceStatus() == RADIENT_STATUS_OK ||
             GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
             GLTFModel.pModel == nullptr)
         {
@@ -452,7 +475,7 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
         if (GLTFModelStorage* pGLTFModel = GetQueuedGLTFModel(Model))
         {
-            pGLTFModel->GPUResourcesReady.store(true, std::memory_order_release);
+            pGLTFModel->GPUResourceStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
             pGLTFModel->GPUUpdateQueued.store(false, std::memory_order_release);
         }
     }
@@ -517,13 +540,17 @@ void RadientAssetManagerImpl::LoadGLTFModel(ScenePayloadImpl&  Model,
     }
 
     const RADIENT_STATUS Status = pModelData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    const RADIENT_STATUS GPUStatus =
+        Status != RADIENT_STATUS_OK ? Status :
+        m_pDevice == nullptr        ? RADIENT_STATUS_NO_GPU_DATA :
+                                      RADIENT_STATUS_PENDING;
 
     GLTFModel.pModel = std::move(pModelData);
-    GLTFModel.GPUResourcesReady.store(false, std::memory_order_release);
-    GLTFModel.GPUUpdateQueued.store(Status == RADIENT_STATUS_OK, std::memory_order_release);
+    GLTFModel.GPUResourceStatus.store(GPUStatus, std::memory_order_release);
+    GLTFModel.GPUUpdateQueued.store(GPUStatus == RADIENT_STATUS_PENDING, std::memory_order_release);
     GLTFModel.LoadStatus.store(Status, std::memory_order_release);
 
-    if (Status == RADIENT_STATUS_OK)
+    if (GPUStatus == RADIENT_STATUS_PENDING)
         m_PendingGPUResourceUpdates.Enqueue(RefCntWeakPtr<ScenePayloadImpl>{&Model});
 }
 

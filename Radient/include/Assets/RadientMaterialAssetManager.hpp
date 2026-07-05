@@ -54,13 +54,17 @@ public:
                                       Uint32                       TextureCount,
                                       IRadientMaterialAsset**      ppMaterial);
 
-    // Reports material dependency status. OK means all dependent textures have
-    // status OK (i.e., all required copy commands were enqueued). Once the
-    // status becomes terminal, it is cached and no longer rechecks texture dependencies.
+    // Reports material source/dependency status. OK means all dependent texture
+    // sources have loaded. Once the status becomes terminal, it is cached and
+    // no longer rechecks texture dependencies.
     static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMaterial);
 
-    // Returns the GLTF material if the material status is OK (i.e., all
-    // dependent texture copy commands were enqueued), or nullptr otherwise.
+    // Reports material GPU resource status. OK means all dependent texture GPU
+    // resources are available. NO_GPU_DATA means all sources loaded without a GPU backend.
+    static RADIENT_STATUS GetGPUResourceStatus(IRadientAsset* pMaterial);
+
+    // Returns the GLTF material if the material source status is OK and texture
+    // atlas attributes are available, or nullptr otherwise.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
 private:

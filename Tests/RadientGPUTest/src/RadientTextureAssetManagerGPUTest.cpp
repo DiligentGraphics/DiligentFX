@@ -469,9 +469,10 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     const bool PendingCopyCommandEnqueueCallbacks = WaitForPendingCopyCommandEnqueueCallbacks(pManager);
     ASSERT_TRUE(PendingCopyCommandEnqueueCallbacks);
 
-    // Upload callbacks are queued but have not reported whether they could
-    // enqueue copy commands, so the asset must still be pending.
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
+    // The source has loaded, but upload callbacks have not reported whether
+    // they could enqueue copy commands, so GPU resource status remains pending.
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
 
     pUploadManager->Stop(pContext);
     pThreadPool->StopThreads();
@@ -479,8 +480,9 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     EXPECT_TRUE(IsTextureManagerIdle(pManager->GetStats()));
 
     // Stop() drains the pending callbacks with no upload context; since no
-    // copy command was enqueued, the load must finish as a failure, not OK.
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    // copy command was enqueued, GPU resource creation must fail.
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
 }
 

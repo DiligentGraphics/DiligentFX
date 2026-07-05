@@ -62,14 +62,14 @@ bool WaitForMeshDrawableStatus(IRadientMeshAsset* pMesh,
     for (Uint32 i = 0; i < 256; ++i)
     {
         const RadientDrawableMeshResolveResult Result =
-            RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+            RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
         if (Result.Status == ExpectedStatus)
             return true;
 
         std::this_thread::sleep_for(1ms);
     }
 
-    return RadientMeshAssetManager::GetDrawableMesh(pMesh, false).Status == ExpectedStatus;
+    return RadientMeshAssetManager::GetDrawableMesh(pMesh, true).Status == ExpectedStatus;
 }
 
 TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
@@ -109,9 +109,10 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_NE(pTexture, nullptr);
 
     // Keep the texture copy callback queued so the material remains pending
-    // while the mesh source itself can still be processed.
+    // for GPU resource readiness while the mesh source itself can still be processed.
     ASSERT_TRUE(WaitForPendingCopyCommandEnqueueCallbacks(pTextureManager));
-    ASSERT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
 
     RadientMaterialCreateInfo MaterialCI{};
     MaterialCI.pBaseColorTexture = pTexture;
@@ -119,7 +120,8 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
-    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_PENDING);
 
     const RadientFloat3 Positions[] =
         {
@@ -157,24 +159,27 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));
     ASSERT_NE(pMesh, nullptr);
 
-    // The mesh payload is available, but drawable resolution must stay pending
-    // until the material can expose its final GLTF attributes.
+    // The mesh payload is available, but render-ready drawable resolution must
+    // stay pending until dependent texture GPU work has been enqueued.
     ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_PENDING));
-    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_PENDING);
     {
         const RadientDrawableMeshResolveResult Result =
-            RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+            RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
         EXPECT_EQ(Result.Status, RADIENT_STATUS_PENDING);
         EXPECT_EQ(Result.pMesh, nullptr);
     }
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pTextureManager, *pUploadManager, *pContext));
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
     ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK));
     const RadientDrawableMeshResolveResult Result =
-        RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+        RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pMesh, nullptr);
     ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);

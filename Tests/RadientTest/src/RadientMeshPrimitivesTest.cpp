@@ -58,7 +58,8 @@ void ExpectCreateMeshAccepted(RADIENT_STATUS Status)
 void ExpectMeshLoadFinished(IRadientAssetManager* pAssetManager, IRadientMeshAsset* pMesh)
 {
     const RADIENT_STATUS Status = pAssetManager->WaitForAssetLoad(pMesh);
-    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
 }
 
 void ExpectValidMeshAsset(IRadientMeshAsset* pMesh)

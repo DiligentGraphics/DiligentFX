@@ -137,7 +137,9 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     WaitForAllTasksAndStop(*pThreadPool);
 
     EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
 }
 
 TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
@@ -272,7 +274,9 @@ TEST(RadientTextureAssetManagerTest, TextureHandleMayOutliveManager)
     }
 
     EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
 }
 
 TEST(RadientTextureAssetManagerTest, ManagerMayDieBeforeWorkerRuns)
@@ -301,7 +305,9 @@ TEST(RadientTextureAssetManagerTest, ManagerMayDieBeforeWorkerRuns)
     WaitForAllTasksAndStop(*pThreadPool);
 
     EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
-    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
 }
 
 } // namespace

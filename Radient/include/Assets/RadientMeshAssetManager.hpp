@@ -87,9 +87,10 @@ public:
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
-    // Reports mesh source processing and upload-scheduling status. OK does not
-    // imply GPU buffers are ready unless queried through GetDrawableMesh().
+    // Reports mesh source/view processing status. OK does not imply GPU buffers
+    // exist or that GPU copy commands have been enqueued.
     static RADIENT_STATUS         GetLoadStatus(IRadientAsset* pMeshAsset);
+    static RADIENT_STATUS         GetGPUResourceStatus(IRadientAsset* pMeshAsset);
     static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
     static const MeshGPUData*     GetMeshGPUData(IRadientMeshAsset* pMeshAsset);
 
