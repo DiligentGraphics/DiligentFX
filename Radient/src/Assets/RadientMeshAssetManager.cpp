@@ -104,10 +104,9 @@ namespace
 
 struct MeshStorage
 {
-    explicit MeshStorage(RefCntAutoPtr<MeshGPUData> pMeshGPUData) :
-        pGPUData{std::move(pMeshGPUData)}
-    {
-    }
+    MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
+                const RadientMeshSource&     Source,
+                const RadientMeshViewSource& View);
 
     // clang-format off
     MeshStorage           (MeshStorage&& Rhs)  = delete;
@@ -221,62 +220,66 @@ void UpdateMeshUploadProgress(MeshGPUData& GPUData,
     }
 }
 
-RADIENT_STATUS InitializeMeshViewStorage(const RadientMeshSource&     Source,
-                                         const RadientMeshViewSource& View,
-                                         MeshStorage&                 Storage)
+MeshStorage::MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
+                         const RadientMeshSource&     Source,
+                         const RadientMeshViewSource& View) :
+    pGPUData{std::move(pMeshGPUData)}
 {
     const RADIENT_STATUS SourceStatus = Source.GetStatus();
     if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
+    {
+        LoadStatus.store(SourceStatus, std::memory_order_release);
+        return;
+    }
 
     if (Source.GetIndexDataSize() == 0 ||
         Source.GetVertexCount() == 0 ||
         Source.GetVertexBufferCount() == 0)
     {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
+        LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+        return;
     }
 
-    Storage.DrawableMesh.VertexAttribFlags = Source.GetVertexAttribFlags();
-    Storage.DrawableMesh.Primitives.clear();
-    Storage.Materials.clear();
-    Storage.LoadStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
-    Storage.MaterialStatus.store(RADIENT_STATUS_OK, std::memory_order_release);
+    DrawableMesh.VertexAttribFlags = Source.GetVertexAttribFlags();
 
     const Uint32 PrimitiveCount = View.GetPrimitiveCount();
-    Storage.DrawableMesh.Primitives.reserve(PrimitiveCount);
-    Storage.Materials.reserve(PrimitiveCount);
+    DrawableMesh.Primitives.reserve(PrimitiveCount);
+    Materials.reserve(PrimitiveCount);
 
-    RADIENT_STATUS MaterialStatus = RADIENT_STATUS_OK;
+    RADIENT_STATUS MaterialStatusValue = RADIENT_STATUS_OK;
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < PrimitiveCount; ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = View.GetPrimitive(PrimitiveIndex);
 
-        const GLTF::Material* pMaterial = nullptr;
-        if (IRadientMaterialAsset* pMaterialAsset = View.GetMaterial(PrimitiveIndex))
+        IRadientMaterialAsset* pMaterialAsset = View.GetMaterial(PrimitiveIndex);
+        const GLTF::Material*  pMaterial      = nullptr;
+
+        if (pMaterialAsset != nullptr)
         {
             const RADIENT_STATUS MaterialLoadStatus = RadientMaterialAssetManager::GetLoadStatus(pMaterialAsset);
             if (RADIENT_FAILED(MaterialLoadStatus))
-                return MaterialLoadStatus;
+            {
+                LoadStatus.store(MaterialLoadStatus, std::memory_order_release);
+                return;
+            }
 
             // Pending materials are resolved lazily by GetDrawableMesh().
             if (MaterialLoadStatus == RADIENT_STATUS_OK)
                 pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
             else if (MaterialLoadStatus == RADIENT_STATUS_PENDING)
-                MaterialStatus = RADIENT_STATUS_PENDING;
+                MaterialStatusValue = RADIENT_STATUS_PENDING;
         }
 
-        Storage.Materials.emplace_back(View.GetMaterial(PrimitiveIndex));
-        Storage.DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
+        Materials.emplace_back(pMaterialAsset);
+        DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
             true,
             PrimitiveCI.FirstIndex,
             PrimitiveCI.IndexCount});
     }
 
-    Storage.MaterialStatus.store(MaterialStatus, std::memory_order_release);
-
-    return RADIENT_STATUS_OK;
+    MaterialStatus.store(MaterialStatusValue, std::memory_order_release);
 }
 
 RADIENT_STATUS InitializeMeshGPUData(GLTF::ResourceManager*   pResourceManager,
@@ -504,17 +507,6 @@ RADIENT_STATUS ScheduleMeshGPUUpload(IRenderDevice*           pDevice,
     return RADIENT_STATUS_OK;
 }
 
-void SetMeshLoadStatus(MeshPayloadImpl& Mesh,
-                       RADIENT_STATUS   Status)
-{
-    MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Mesh.GetStorage());
-    VERIFY_EXPR(pMeshStorage != nullptr);
-    if (pMeshStorage == nullptr)
-        return;
-
-    pMeshStorage->LoadStatus.store(Status, std::memory_order_release);
-}
-
 void CreateMeshGPUDataFromSource(const RadientMeshSource& Source,
                                  MeshGPUData&             GPUData,
                                  IRenderDevice*           pDevice,
@@ -534,22 +526,6 @@ void CreateMeshGPUDataFromSource(const RadientMeshSource& Source,
                                    GPUData);
     if (RADIENT_FAILED(Status))
         GPUData.SetStatus(Status);
-}
-
-void LoadMeshFromSource(MeshPayloadImpl&             Mesh,
-                        const RadientMeshSource&     Source,
-                        const RadientMeshViewSource& View)
-{
-    MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Mesh.GetStorage());
-    VERIFY_EXPR(pMeshStorage != nullptr);
-    if (pMeshStorage == nullptr)
-        return;
-
-    RADIENT_STATUS Status = InitializeMeshViewStorage(Source, View, *pMeshStorage);
-    if (RADIENT_FAILED(Status))
-    {
-        SetMeshLoadStatus(Mesh, Status);
-    }
 }
 
 RefCntAutoPtr<MeshAssetImpl> CreateCachedMeshAsset(const char*                      CacheKey,
@@ -685,11 +661,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
                 pSelf->m_MeshCache.GetOrCreate(
                     MeshCacheKey.c_str(),
                     [&pMeshGPUData, &pMeshSource, &MeshView]() {
-                        RefCntAutoPtr<MeshPayloadImpl> pPayload =
-                            MeshPayloadImpl::Create(std::in_place_type<MeshStorage>, pMeshGPUData);
-                        if (pPayload)
-                            LoadMeshFromSource(*pPayload, *pMeshSource, MeshView);
-                        return pPayload;
+                        return MeshPayloadImpl::Create(std::in_place_type<MeshStorage>,
+                                                       pMeshGPUData,
+                                                       *pMeshSource,
+                                                       MeshView);
                     });
 
             if (!pMeshAsset->SetPayload(std::move(pMeshPayload)))
