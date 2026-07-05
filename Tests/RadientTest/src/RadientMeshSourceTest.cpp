@@ -70,15 +70,6 @@ void SetWholeMeshPrimitive(RadientMeshCreateInfo&          MeshCI,
     MeshCI.PrimitiveCount  = 1;
 }
 
-void SetWholeSourcePrimitive(RadientMeshSource::CreateInfo&  CI,
-                             RadientMeshPrimitiveCreateInfo& PrimitiveCI)
-{
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = CI.IndexCount;
-    CI.pPrimitives         = &PrimitiveCI;
-    CI.PrimitiveCount      = 1;
-}
-
 void ExpectFloat2Eq(const RadientFloat2& Actual, const RadientFloat2& Expected)
 {
     EXPECT_FLOAT_EQ(Actual.x, Expected.x);
@@ -249,19 +240,8 @@ TEST(RadientMeshSourceTest, RejectsInvalidCreateInfo)
     InvalidMeshCI.pIndices = nullptr;
     ExpectInvalid(InvalidMeshCI);
 
-    InvalidMeshCI                = MeshCI;
-    InvalidMeshCI.PrimitiveCount = 0;
-    ExpectInvalid(InvalidMeshCI);
-
     InvalidMeshCI           = MeshCI;
     InvalidMeshCI.IndexType = RADIENT_INDEX_TYPE_NONE;
-    ExpectInvalid(InvalidMeshCI);
-
-    RadientMeshPrimitiveCreateInfo InvalidPrimitiveCI = PrimitiveCI;
-    InvalidPrimitiveCI.FirstIndex                     = 2;
-    InvalidPrimitiveCI.IndexCount                     = 2;
-    InvalidMeshCI                                     = MeshCI;
-    InvalidMeshCI.pPrimitives                         = &InvalidPrimitiveCI;
     ExpectInvalid(InvalidMeshCI);
 
     std::array<RadientBoneIndices4, 2> BoneIndices{};
@@ -293,8 +273,6 @@ TEST(RadientMeshSourceTest, RejectsInvalidSourceCreateInfo)
     CI.Indices.pData  = Indices.data();
     CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount     = static_cast<Uint32>(Indices.size());
-    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    SetWholeSourcePrimitive(CI, PrimitiveCI);
 
     auto ExpectInvalid = [](const RadientMeshSource::CreateInfo& InvalidCI) //
     {
@@ -390,8 +368,6 @@ TEST(RadientMeshSourceTest, PacksStridedSourceAttributesAndTightlyPackedIndices)
     CI.Indices.pData  = Indices.data();
     CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount     = static_cast<Uint32>(Indices.size());
-    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    SetWholeSourcePrimitive(CI, PrimitiveCI);
 
     RadientMeshSource Source{CI};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
@@ -480,8 +456,6 @@ TEST(RadientMeshSourceTest, BorrowsSourceDataAndKeepsOwnerAlive)
         CI.Indices.Type     = RADIENT_INDEX_TYPE_UINT16;
         CI.IndexCount       = static_cast<Uint32>(Data->Indices.size());
         CI.pSourceDataOwner = Owner;
-        RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-        SetWholeSourcePrimitive(CI, PrimitiveCI);
 
         RadientMeshSource Source{CI};
         ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
@@ -978,7 +952,7 @@ TEST(RadientMeshSourceTest, CacheKeyIgnoresUnusedMeshInputs)
     EXPECT_EQ(RedInactiveDefaultSource.MakeCacheKey(), GreenInactiveDefaultSource.MakeCacheKey());
 }
 
-TEST(RadientMeshSourceTest, GeometryCacheKeyIgnoresPrimitives)
+TEST(RadientMeshSourceTest, GeometrySourceIgnoresMeshPrimitives)
 {
     RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);
 
@@ -1002,8 +976,7 @@ TEST(RadientMeshSourceTest, GeometryCacheKeyIgnoresPrimitives)
     ASSERT_EQ(SubrangeSource.SetVertexAttributes(PositionOnly.data(), static_cast<Uint32>(PositionOnly.size())),
               RADIENT_STATUS_OK);
 
-    EXPECT_EQ(WholeSource.MakeGeometryCacheKey(), SubrangeSource.MakeGeometryCacheKey());
-    EXPECT_NE(WholeSource.MakeCacheKey(), SubrangeSource.MakeCacheKey());
+    EXPECT_EQ(WholeSource.MakeCacheKey(), SubrangeSource.MakeCacheKey());
 }
 
 TEST(RadientMeshSourceTest, CopiesDestinationVertexAttributeDescriptors)

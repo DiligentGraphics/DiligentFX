@@ -50,6 +50,7 @@ class RadientMeshSource;
 class MeshGPUData;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
+struct RadientMeshViewCreateInfo;
 
 using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager>;
 
@@ -73,6 +74,7 @@ public:
 
     RADIENT_STATUS CreateMesh(IThreadPool&                       ThreadPool,
                               std::unique_ptr<RadientMeshSource> pMeshSource,
+                              const RadientMeshViewCreateInfo&   ViewCI,
                               IRadientMeshAsset**                ppMesh);
 
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,

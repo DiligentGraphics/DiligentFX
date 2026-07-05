@@ -62,13 +62,6 @@ bool CheckStridedByteSize(Uint32 Count, Uint32 Stride, Uint32 ElementSize)
     return Uint64{Count - 1} * Stride + ElementSize <= (std::numeric_limits<Uint32>::max)();
 }
 
-template <typename ValueType>
-void CopyArray(std::vector<ValueType>& Dst, const ValueType* pSrc, Uint32 Count)
-{
-    if (pSrc != nullptr && Count != 0)
-        Dst.assign(pSrc, pSrc + Count);
-}
-
 Uint32 GetIndexElementSize(RADIENT_INDEX_TYPE IndexType)
 {
     switch (IndexType)
@@ -130,9 +123,7 @@ bool ValidateMeshSourceCI(const RadientMeshSource::CreateInfo& CI)
     if (CI.VertexCount == 0 ||
         CI.AttributeCount == 0 ||
         CI.pAttributes == nullptr ||
-        CI.IndexCount == 0 ||
-        CI.PrimitiveCount == 0 ||
-        CI.pPrimitives == nullptr)
+        CI.IndexCount == 0)
     {
         return false;
     }
@@ -150,17 +141,6 @@ bool ValidateMeshSourceCI(const RadientMeshSource::CreateInfo& CI)
         Uint32 Stride      = 0;
         if (!GetSourceAttributeLayout(CI.pAttributes[AttributeIndex], CI.VertexCount, ElementSize, Stride))
             return false;
-    }
-
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
-    {
-        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = CI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.IndexCount == 0 ||
-            PrimitiveCI.FirstIndex >= CI.IndexCount ||
-            PrimitiveCI.IndexCount > CI.IndexCount - PrimitiveCI.FirstIndex)
-        {
-            return false;
-        }
     }
 
     return true;
@@ -230,35 +210,12 @@ void UpdateString(XXH128State& Hasher, const Char* Str)
         Hasher.UpdateRaw(Str, Len);
 }
 
-void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
-{
-    const bool HasMaterial = pMaterial != nullptr;
-    Hasher.Update(HasMaterial);
-    if (!HasMaterial)
-        return;
-
-    const RadientAssetReference& MaterialRef = pMaterial->GetReference();
-    const bool                   HasURI      = MaterialRef.URI != nullptr && MaterialRef.URI[0] != '\0';
-    Hasher.Update(HasURI);
-    if (HasURI)
-    {
-        UpdateString(Hasher, MaterialRef.URI);
-        Hasher.Update(MaterialRef.Version);
-    }
-    else
-    {
-        Hasher.Update(reinterpret_cast<uintptr_t>(pMaterial));
-    }
-}
-
 bool ValidateRadientMeshSourceCI(const RadientMeshCreateInfo& MeshCI)
 {
     if (MeshCI.VertexCount == 0 ||
         MeshCI.pPositions == nullptr ||
         MeshCI.IndexCount == 0 ||
-        MeshCI.pIndices == nullptr ||
-        MeshCI.PrimitiveCount == 0 ||
-        MeshCI.pPrimitives == nullptr)
+        MeshCI.pIndices == nullptr)
     {
         return false;
     }
@@ -275,17 +232,6 @@ bool ValidateRadientMeshSourceCI(const RadientMeshCreateInfo& MeshCI)
         MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32)
     {
         return false;
-    }
-
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
-    {
-        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = MeshCI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.IndexCount == 0 ||
-            PrimitiveCI.FirstIndex >= MeshCI.IndexCount ||
-            PrimitiveCI.IndexCount > MeshCI.IndexCount - PrimitiveCI.FirstIndex)
-        {
-            return false;
-        }
     }
 
     return true;
@@ -339,8 +285,6 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
     CI.Indices.pData  = MeshCI.pIndices;
     CI.Indices.Type   = MeshCI.IndexType;
     CI.IndexCount     = MeshCI.IndexCount;
-    CI.pPrimitives    = MeshCI.pPrimitives;
-    CI.PrimitiveCount = MeshCI.PrimitiveCount;
 
     Initialize(CI);
 }
@@ -445,14 +389,9 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
         std::memcpy(m_Indices.data(), pSrcIndices, m_Indices.size());
         m_pIndexData = m_Indices.data();
     }
-
-    CopyArray(m_Primitives, CI.pPrimitives, CI.PrimitiveCount);
-    m_PrimitiveMaterials.reserve(CI.PrimitiveCount);
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
-        m_PrimitiveMaterials.emplace_back(CI.pPrimitives[PrimitiveIndex].pMaterial);
 }
 
-std::string RadientMeshSource::MakeGeometryCacheKey() const
+std::string RadientMeshSource::MakeCacheKey() const
 {
     if (RADIENT_FAILED(m_Status) || m_DstAttributes.empty())
         return {};
@@ -521,28 +460,6 @@ std::string RadientMeshSource::MakeGeometryCacheKey() const
     }
 
     return std::string{"mesh-geometry:"} + Hasher.Digest().ToString();
-}
-
-std::string RadientMeshSource::MakeCacheKey() const
-{
-    const std::string GeometryCacheKey = MakeGeometryCacheKey();
-    if (GeometryCacheKey.empty())
-        return {};
-
-    XXH128State Hasher;
-    Hasher.Update(Uint32{7}); // Mesh view cache key version.
-    UpdateString(Hasher, GeometryCacheKey.c_str());
-
-    // The mesh view is the shared geometry plus primitive ranges/materials.
-    Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
-    for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
-    {
-        Hasher.Update(Primitive.FirstIndex,
-                      Primitive.IndexCount);
-        HashMaterial(Hasher, Primitive.pMaterial);
-    }
-
-    return std::string{"mesh-view:"} + Hasher.Digest().ToString();
 }
 
 RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,

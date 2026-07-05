@@ -29,7 +29,6 @@
 #include "GLTFLoader.hpp"
 #include "HashUtils.hpp"
 #include "RadientAssets.h"
-#include "RefCntAutoPtr.hpp"
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
@@ -92,12 +91,6 @@ public:
         /// Number of source indices.
         Uint32 IndexCount = 0;
 
-        /// Mesh primitives.
-        const RadientMeshPrimitiveCreateInfo* pPrimitives = nullptr;
-
-        /// Number of primitives.
-        Uint32 PrimitiveCount = 0;
-
         /// Keeps borrowed source memory alive.
         /// If null, source data is copied into RadientMeshSource.
         /// If non-null, source data is borrowed and this owner must keep all source spans alive.
@@ -121,17 +114,6 @@ public:
     RADIENT_STATUS GetStatus() const
     {
         return m_Status;
-    }
-
-    Uint32 GetPrimitiveCount() const
-    {
-        return static_cast<Uint32>(m_Primitives.size());
-    }
-
-    const RadientMeshPrimitiveCreateInfo& GetPrimitive(Uint32 PrimitiveIndex) const
-    {
-        VERIFY(PrimitiveIndex < m_Primitives.size(), "Invalid primitive index");
-        return m_Primitives[PrimitiveIndex];
     }
 
     RADIENT_STATUS SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes);
@@ -200,10 +182,6 @@ public:
 
     /// Returns a key for packed GPU vertex/index data. Primitive ranges and
     /// materials are intentionally not part of this key.
-    std::string MakeGeometryCacheKey() const;
-
-    /// Returns a key for the mesh view: packed geometry plus primitive ranges
-    /// and material references.
     std::string MakeCacheKey() const;
 
 private:
@@ -251,11 +229,6 @@ private:
     std::vector<Uint32>                    m_VertexBufferDataSizes;
 
     std::vector<Uint8> m_Indices;
-
-    std::vector<RadientMeshPrimitiveCreateInfo> m_Primitives;
-
-    // Keeps material assets alive while m_Primitives stores the public raw pointers.
-    std::vector<RefCntAutoPtr<IRadientMaterialAsset>> m_PrimitiveMaterials;
 
     std::shared_ptr<const void> m_pSourceDataOwner;
 };
