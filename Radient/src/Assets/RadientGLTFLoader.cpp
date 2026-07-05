@@ -26,12 +26,16 @@
 
 #include "Assets/RadientGLTFLoader.hpp"
 
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Errors.hpp"
 #include "GLTFDocument.hpp"
+#include "GLTFLoader.hpp"
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -108,6 +112,40 @@ TextureAssetList LoadTextures(IThreadPool&                           ThreadPool,
     }
 
     return Textures;
+}
+
+MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
+                                const std::shared_ptr<GLTF::Document>& pDocument,
+                                const TextureAssetList&                Textures)
+{
+    VERIFY_EXPR(pDocument != nullptr);
+    if (pDocument == nullptr)
+        return {};
+
+    std::vector<IRadientTextureAsset*> RawTextures(Textures.size());
+    for (size_t TextureIndex = 0; TextureIndex < Textures.size(); ++TextureIndex)
+        RawTextures[TextureIndex] = Textures[TextureIndex];
+
+    const Uint32      MaterialCount = pDocument->GetMaterialCount();
+    MaterialAssetList Materials(MaterialCount);
+
+    for (Uint32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+    {
+        GLTF::Material Material = GLTF::LoadMaterial(*pDocument, MaterialIndex);
+
+        const RADIENT_STATUS Status =
+            MaterialManager.CreateGLTFMaterial(std::move(Material),
+                                               RawTextures.empty() ? nullptr : RawTextures.data(),
+                                               static_cast<Uint32>(RawTextures.size()),
+                                               Materials[MaterialIndex].GetAddressOfEmpty());
+        if (RADIENT_FAILED(Status) || Materials[MaterialIndex] == nullptr)
+        {
+            LOG_ERROR_MESSAGE("Failed to create Radient material asset for GLTF material ", MaterialIndex);
+            Materials[MaterialIndex].Release();
+        }
+    }
+
+    return Materials;
 }
 
 } // namespace RadientGLTFLoader

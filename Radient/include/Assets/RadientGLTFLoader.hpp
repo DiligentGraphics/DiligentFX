@@ -38,6 +38,7 @@ namespace Diligent
 
 struct IThreadPool;
 class RadientTextureAssetManager;
+class RadientMaterialAssetManager;
 
 namespace GLTF
 {
@@ -49,12 +50,17 @@ class Document;
 namespace RadientGLTFLoader
 {
 
-using TextureAssetList = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+using TextureAssetList  = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+using MaterialAssetList = std::vector<RefCntAutoPtr<IRadientMaterialAsset>>;
 
 TextureAssetList LoadTextures(IThreadPool&                           ThreadPool,
                               RadientTextureAssetManager&            TextureManager,
                               const std::string&                     SourceURI,
                               const std::shared_ptr<GLTF::Document>& pDocument);
+
+MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
+                                const std::shared_ptr<GLTF::Document>& pDocument,
+                                const TextureAssetList&                Textures);
 
 } // namespace RadientGLTFLoader
 
