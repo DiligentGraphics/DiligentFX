@@ -452,13 +452,13 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
         m_PrimitiveMaterials.emplace_back(CI.pPrimitives[PrimitiveIndex].pMaterial);
 }
 
-std::string RadientMeshSource::MakeCacheKey() const
+std::string RadientMeshSource::MakeGeometryCacheKey() const
 {
     if (RADIENT_FAILED(m_Status) || m_DstAttributes.empty())
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{5}, // Packed mesh cache key version.
+    Hasher.Update(Uint32{6}, // Packed mesh geometry cache key version.
                   m_VertexCount,
                   m_IndexCount,
                   m_IndexType,
@@ -469,15 +469,6 @@ std::string RadientMeshSource::MakeCacheKey() const
     // always expands UINT16 indices to UINT32 during upload.
     Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
     UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
-
-    // MeshStorage includes primitive material state, not just geometry buffers.
-    Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
-    for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
-    {
-        Hasher.Update(Primitive.FirstIndex,
-                      Primitive.IndexCount);
-        HashMaterial(Hasher, Primitive.pMaterial);
-    }
 
     Hasher.Update(static_cast<Uint64>(m_VertexStrides.size()));
     for (Uint32 Stride : m_VertexStrides)
@@ -529,7 +520,29 @@ std::string RadientMeshSource::MakeCacheKey() const
         }
     }
 
-    return std::string{"packed-mesh:"} + Hasher.Digest().ToString();
+    return std::string{"mesh-geometry:"} + Hasher.Digest().ToString();
+}
+
+std::string RadientMeshSource::MakeCacheKey() const
+{
+    const std::string GeometryCacheKey = MakeGeometryCacheKey();
+    if (GeometryCacheKey.empty())
+        return {};
+
+    XXH128State Hasher;
+    Hasher.Update(Uint32{7}); // Mesh view cache key version.
+    UpdateString(Hasher, GeometryCacheKey.c_str());
+
+    // The mesh view is the shared geometry plus primitive ranges/materials.
+    Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
+    for (const RadientMeshPrimitiveCreateInfo& Primitive : m_Primitives)
+    {
+        Hasher.Update(Primitive.FirstIndex,
+                      Primitive.IndexCount);
+        HashMaterial(Hasher, Primitive.pMaterial);
+    }
+
+    return std::string{"mesh-view:"} + Hasher.Digest().ToString();
 }
 
 RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,

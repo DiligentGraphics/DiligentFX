@@ -978,6 +978,34 @@ TEST(RadientMeshSourceTest, CacheKeyIgnoresUnusedMeshInputs)
     EXPECT_EQ(RedInactiveDefaultSource.MakeCacheKey(), GreenInactiveDefaultSource.MakeCacheKey());
 }
 
+TEST(RadientMeshSourceTest, GeometryCacheKeyIgnoresPrimitives)
+{
+    RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);
+
+    RadientMeshPrimitiveCreateInfo WholePrimitive{};
+    SetWholeMeshPrimitive(MeshCI, WholePrimitive);
+
+    RadientMeshCreateInfo          SubrangeMeshCI = MeshCI;
+    RadientMeshPrimitiveCreateInfo SubrangePrimitive{};
+    SubrangePrimitive.FirstIndex = 1;
+    SubrangePrimitive.IndexCount = 2;
+    SubrangeMeshCI.pPrimitives   = &SubrangePrimitive;
+
+    const std::array<GLTF::VertexAttributeDesc, 1> PositionOnly{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3}};
+
+    RadientMeshSource WholeSource{MeshCI};
+    RadientMeshSource SubrangeSource{SubrangeMeshCI};
+
+    ASSERT_EQ(WholeSource.SetVertexAttributes(PositionOnly.data(), static_cast<Uint32>(PositionOnly.size())),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(SubrangeSource.SetVertexAttributes(PositionOnly.data(), static_cast<Uint32>(PositionOnly.size())),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(WholeSource.MakeGeometryCacheKey(), SubrangeSource.MakeGeometryCacheKey());
+    EXPECT_NE(WholeSource.MakeCacheKey(), SubrangeSource.MakeCacheKey());
+}
+
 TEST(RadientMeshSourceTest, CopiesDestinationVertexAttributeDescriptors)
 {
     RadientMeshCreateInfo MeshCI = MakeMeshCI(DefaultAttribPositions, DefaultAttribIndices);

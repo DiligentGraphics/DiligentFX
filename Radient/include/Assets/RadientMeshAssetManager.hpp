@@ -89,6 +89,7 @@ public:
     // imply GPU buffers are ready unless queried through GetDrawableMesh().
     static RADIENT_STATUS         GetLoadStatus(IRadientAsset* pMeshAsset);
     static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
+    static const MeshGPUData*     GetMeshGPUData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);

@@ -47,7 +47,8 @@ bool IsAcceptedOrMissingGPU(RADIENT_STATUS Status)
             Status == RADIENT_STATUS_INVALID_OPERATION);
 }
 
-std::unique_ptr<RadientMeshSource> MakeMeshSource()
+std::unique_ptr<RadientMeshSource> MakeMeshSource(Uint32 FirstIndex = 0,
+                                                  Uint32 IndexCount = 3)
 {
     // Leave destination vertex attributes unset. RadientMeshAssetManager should
     // resolve the default GLTF layout before computing the mesh cache key.
@@ -58,8 +59,8 @@ std::unique_ptr<RadientMeshSource> MakeMeshSource()
     static constexpr std::array<Uint32, 3> Indices{0, 1, 2};
 
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
+    PrimitiveCI.FirstIndex = FirstIndex;
+    PrimitiveCI.IndexCount = IndexCount;
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.pPositions     = Positions.data();
@@ -126,6 +127,39 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMeshSource)
     // custom layouts deduplicate to the same payload.
     EXPECT_NE(pCustomPayload0, pDefaultPayload);
     EXPECT_EQ(pCustomPayload1, pCustomPayload0);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
+{
+    // CreateMesh() should cache the mesh view separately from the uploaded
+    // geometry. Two meshes may use different primitive ranges while sharing
+    // the same vertex/index buffer data.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pWholeMesh;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMesh(*pThreadPool, MakeMeshSource(0, 3), &pWholeMesh)));
+    ASSERT_NE(pWholeMesh, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pSubrangeMesh;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMesh(*pThreadPool, MakeMeshSource(1, 2), &pSubrangeMesh)));
+    ASSERT_NE(pSubrangeMesh, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    const MeshPayloadImpl* pWholePayload    = RadientMeshAssetManager::GetMeshPayload(pWholeMesh);
+    const MeshPayloadImpl* pSubrangePayload = RadientMeshAssetManager::GetMeshPayload(pSubrangeMesh);
+    ASSERT_NE(pWholePayload, nullptr);
+    ASSERT_NE(pSubrangePayload, nullptr);
+
+    EXPECT_NE(pWholePayload, pSubrangePayload);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGPUData(pWholeMesh),
+              RadientMeshAssetManager::GetMeshGPUData(pSubrangeMesh));
 
     pThreadPool->StopThreads();
 }

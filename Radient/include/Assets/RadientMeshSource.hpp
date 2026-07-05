@@ -198,6 +198,12 @@ public:
     RADIENT_STATUS PackIndexData(PackDestination Destination) const;
     RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const;
 
+    /// Returns a key for packed GPU vertex/index data. Primitive ranges and
+    /// materials are intentionally not part of this key.
+    std::string MakeGeometryCacheKey() const;
+
+    /// Returns a key for the mesh view: packed geometry plus primitive ranges
+    /// and material references.
     std::string MakeCacheKey() const;
 
 private:
