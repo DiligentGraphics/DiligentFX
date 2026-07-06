@@ -27,6 +27,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 
 #include "Assets/RadientAssetImpl.hpp"
+#include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
@@ -44,25 +45,6 @@ namespace
 {
 
 static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4d, {0xb8, 0xcd, 0x48, 0x89, 0xa4, 0x65, 0xa, 0x50}};
-
-RADIENT_STATUS CombineDependencyStatus(RADIENT_STATUS Status,
-                                       RADIENT_STATUS DependencyStatus) noexcept
-{
-    if (DependencyStatus == RADIENT_STATUS_OK)
-        return Status;
-
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    if (RADIENT_FAILED(DependencyStatus))
-        return DependencyStatus;
-
-    if (Status == RADIENT_STATUS_OK ||
-        DependencyStatus == RADIENT_STATUS_PENDING)
-        return DependencyStatus;
-
-    return Status;
-}
 
 struct MaterialStorage
 {

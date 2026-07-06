@@ -27,6 +27,7 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 
 #include "Assets/RadientAssetImpl.hpp"
+#include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
@@ -216,25 +217,6 @@ PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
     }
 
     return Flags;
-}
-
-RADIENT_STATUS CombineDependencyStatus(RADIENT_STATUS Status,
-                                       RADIENT_STATUS DependencyStatus) noexcept
-{
-    if (DependencyStatus == RADIENT_STATUS_OK)
-        return Status;
-
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    if (RADIENT_FAILED(DependencyStatus))
-        return DependencyStatus;
-
-    if (Status == RADIENT_STATUS_OK ||
-        DependencyStatus == RADIENT_STATUS_PENDING)
-        return DependencyStatus;
-
-    return Status;
 }
 
 void UpdateMeshUploadProgress(MeshGPUData& GPUData,
