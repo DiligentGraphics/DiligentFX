@@ -41,10 +41,11 @@ RADIENT_STATUS CreateGLTFDrawableMesh(const GLTF::Model&      Model,
     if (MeshIndex >= Model.Meshes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    Mesh.pVertexPool        = Model.GetVertexPool();
-    Mesh.VertexAttribFlags  = VertexAttribFlags;
-    Mesh.FirstIndexLocation = Model.GetFirstIndexLocation();
-    Mesh.BaseVertex         = Model.GetBaseVertex();
+    Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
+        Model.GetVertexPool(),
+        VertexAttribFlags,
+        Model.GetFirstIndexLocation(),
+        Model.GetBaseVertex()});
 
     return ConvertGLTFDrawableMeshPrimitives(Model.Meshes[MeshIndex].Primitives,
                                              Model.Materials,
@@ -71,6 +72,7 @@ RADIENT_STATUS ConvertGLTFDrawableMeshPrimitives(const std::vector<GLTF::Primiti
 
         DrawablePrimitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
+            0,
             IsIndexed,
             FirstElement,
             ElementCount});

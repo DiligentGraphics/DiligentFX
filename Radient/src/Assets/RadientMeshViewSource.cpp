@@ -68,9 +68,11 @@ void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
 }
 
 bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
-                                Uint32                           IndexCount)
+                                const Uint32*                    pGeometryIndexCounts,
+                                Uint32                           GeometryCount)
 {
-    if (IndexCount == 0 ||
+    if (GeometryCount == 0 ||
+        pGeometryIndexCounts == nullptr ||
         CI.PrimitiveCount == 0 ||
         CI.pPrimitives == nullptr)
     {
@@ -79,8 +81,14 @@ bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
     {
+        const Uint32 GeometryIndex = CI.pGeometryIndices != nullptr ? CI.pGeometryIndices[PrimitiveIndex] : 0;
+        if (GeometryIndex >= GeometryCount)
+            return false;
+
+        const Uint32                          IndexCount  = pGeometryIndexCounts[GeometryIndex];
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = CI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.IndexCount == 0 ||
+        if (IndexCount == 0 ||
+            PrimitiveCI.IndexCount == 0 ||
             PrimitiveCI.FirstIndex >= IndexCount ||
             PrimitiveCI.IndexCount > IndexCount - PrimitiveCI.FirstIndex)
         {
@@ -94,18 +102,28 @@ bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
 } // namespace
 
 RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
-                                             Uint32                           IndexCount)
+                                             Uint32                           IndexCount) :
+    RadientMeshViewSource{CI, &IndexCount, 1}
 {
-    if (!ValidateMeshViewCreateInfo(CI, IndexCount))
+}
+
+RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
+                                             const Uint32*                    pGeometryIndexCounts,
+                                             Uint32                           GeometryCount)
+{
+    if (!ValidateMeshViewCreateInfo(CI, pGeometryIndexCounts, GeometryCount))
     {
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
 
     m_Primitives.assign(CI.pPrimitives, CI.pPrimitives + CI.PrimitiveCount);
+    m_GeometryIndices.resize(CI.PrimitiveCount);
     m_PrimitiveNames.resize(CI.PrimitiveCount);
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < CI.PrimitiveCount; ++PrimitiveIndex)
     {
+        m_GeometryIndices[PrimitiveIndex] = CI.pGeometryIndices != nullptr ? CI.pGeometryIndices[PrimitiveIndex] : 0;
+
         const Char* const Name = CI.pPrimitives[PrimitiveIndex].Name;
         if (Name != nullptr)
             m_PrimitiveNames[PrimitiveIndex] = Name;
@@ -120,6 +138,7 @@ RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI
 RadientMeshViewSource::RadientMeshViewSource(RadientMeshViewSource&& Rhs) noexcept :
     m_Status{Rhs.m_Status},
     m_Primitives{std::move(Rhs.m_Primitives)},
+    m_GeometryIndices{std::move(Rhs.m_GeometryIndices)},
     m_PrimitiveNames{std::move(Rhs.m_PrimitiveNames)},
     m_Materials{std::move(Rhs.m_Materials)}
 {
@@ -141,21 +160,38 @@ void RadientMeshViewSource::BindPrimitiveNames() noexcept
 
 std::string RadientMeshViewSource::MakeCacheKey(const char* MeshSourceCacheKey) const
 {
+    if (MeshSourceCacheKey == nullptr)
+        return {};
+
+    return MakeCacheKey({std::string{MeshSourceCacheKey}});
+}
+
+std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& MeshSourceCacheKeys) const
+{
     if (RADIENT_FAILED(m_Status) ||
-        MeshSourceCacheKey == nullptr ||
-        MeshSourceCacheKey[0] == '\0')
+        MeshSourceCacheKeys.empty() ||
+        m_GeometryIndices.size() != m_Primitives.size())
     {
         return {};
     }
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{1}); // Mesh view cache key version.
-    UpdateString(Hasher, MeshSourceCacheKey);
+    Hasher.Update(Uint32{2}); // Mesh view cache key version.
+
+    Hasher.Update(static_cast<Uint64>(MeshSourceCacheKeys.size()));
+    for (const std::string& MeshSourceCacheKey : MeshSourceCacheKeys)
+    {
+        if (MeshSourceCacheKey.empty())
+            return {};
+
+        UpdateString(Hasher, MeshSourceCacheKey.c_str());
+    }
 
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < m_Primitives.size(); ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& Primitive = m_Primitives[PrimitiveIndex];
+        Hasher.Update(m_GeometryIndices[PrimitiveIndex]);
         Hasher.Update(Primitive.FirstIndex,
                       Primitive.IndexCount);
         HashMaterial(Hasher, m_Materials[PrimitiveIndex]);

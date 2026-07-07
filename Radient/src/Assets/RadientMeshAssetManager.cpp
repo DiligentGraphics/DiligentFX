@@ -116,11 +116,20 @@ public:
 namespace
 {
 
+struct MeshGeometryStorage
+{
+    RefCntAutoPtr<MeshGPUData> pGPUData;
+};
+
 struct MeshStorage
 {
     MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
                 const RadientMeshSource&     Source,
                 const RadientMeshViewSource& View);
+
+    MeshStorage(std::vector<RefCntAutoPtr<MeshGPUData>>      pMeshGPUData,
+                const std::vector<const RadientMeshSource*>& Sources,
+                const RadientMeshViewSource&                 View);
 
     // clang-format off
     MeshStorage           (MeshStorage&& Rhs)  = delete;
@@ -131,11 +140,15 @@ struct MeshStorage
 
     RadientDrawableMesh DrawableMesh;
 
-    RefCntAutoPtr<MeshGPUData>                        pGPUData;
+    std::vector<MeshGeometryStorage>                  Geometries;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
     std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> MaterialStatus{RADIENT_STATUS_OK};
+
+private:
+    void Initialize(const std::vector<const RadientMeshSource*>& Sources,
+                    const RadientMeshViewSource&                 View);
 };
 
 struct GLTFMeshStorage
@@ -236,25 +249,63 @@ void UpdateMeshUploadProgress(MeshGPUData& GPUData,
 
 MeshStorage::MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
                          const RadientMeshSource&     Source,
-                         const RadientMeshViewSource& View) :
-    pGPUData{std::move(pMeshGPUData)}
+                         const RadientMeshViewSource& View)
 {
-    const RADIENT_STATUS SourceStatus = Source.GetStatus();
-    if (RADIENT_FAILED(SourceStatus))
-    {
-        LoadStatus.store(SourceStatus, std::memory_order_release);
-        return;
-    }
+    Geometries.push_back(MeshGeometryStorage{std::move(pMeshGPUData)});
+    const std::vector<const RadientMeshSource*> Sources{&Source};
+    Initialize(Sources, View);
+}
 
-    if (Source.GetIndexDataSize() == 0 ||
-        Source.GetVertexCount() == 0 ||
-        Source.GetVertexBufferCount() == 0)
+MeshStorage::MeshStorage(std::vector<RefCntAutoPtr<MeshGPUData>>      pMeshGPUData,
+                         const std::vector<const RadientMeshSource*>& Sources,
+                         const RadientMeshViewSource&                 View)
+{
+    Geometries.reserve(pMeshGPUData.size());
+    for (RefCntAutoPtr<MeshGPUData>& pGPUData : pMeshGPUData)
+        Geometries.push_back(MeshGeometryStorage{std::move(pGPUData)});
+
+    Initialize(Sources, View);
+}
+
+void MeshStorage::Initialize(const std::vector<const RadientMeshSource*>& Sources,
+                             const RadientMeshViewSource&                 View)
+{
+    if (Sources.empty() || Sources.size() != Geometries.size())
     {
         LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
         return;
     }
 
-    DrawableMesh.VertexAttribFlags = Source.GetVertexAttribFlags();
+    DrawableMesh.Geometries.reserve(Sources.size());
+    for (const RadientMeshSource* pSource : Sources)
+    {
+        if (pSource == nullptr)
+        {
+            LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+            return;
+        }
+
+        const RADIENT_STATUS SourceStatus = pSource->GetStatus();
+        if (RADIENT_FAILED(SourceStatus))
+        {
+            LoadStatus.store(SourceStatus, std::memory_order_release);
+            return;
+        }
+
+        if (pSource->GetIndexDataSize() == 0 ||
+            pSource->GetVertexCount() == 0 ||
+            pSource->GetVertexBufferCount() == 0)
+        {
+            LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+            return;
+        }
+
+        DrawableMesh.Geometries.push_back(RadientDrawableMeshGeometry{
+            nullptr,
+            pSource->GetVertexAttribFlags(),
+            0,
+            0});
+    }
 
     const Uint32 PrimitiveCount = View.GetPrimitiveCount();
     DrawableMesh.Primitives.reserve(PrimitiveCount);
@@ -264,7 +315,13 @@ MeshStorage::MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < PrimitiveCount; ++PrimitiveIndex)
     {
-        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = View.GetPrimitive(PrimitiveIndex);
+        const RadientMeshPrimitiveCreateInfo& PrimitiveCI   = View.GetPrimitive(PrimitiveIndex);
+        const Uint32                          GeometryIndex = View.GetGeometryIndex(PrimitiveIndex);
+        if (GeometryIndex >= Geometries.size())
+        {
+            LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
+            return;
+        }
 
         IRadientMaterialAsset* pMaterialAsset = View.GetMaterial(PrimitiveIndex);
         const GLTF::Material*  pMaterial      = nullptr;
@@ -288,6 +345,7 @@ MeshStorage::MeshStorage(RefCntAutoPtr<MeshGPUData>   pMeshGPUData,
         Materials.emplace_back(pMaterialAsset);
         DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
+            GeometryIndex,
             true,
             PrimitiveCI.FirstIndex,
             PrimitiveCI.IndexCount});
@@ -585,6 +643,8 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
 RadientDrawableMeshResolveResult ResolveDrawableMesh(const GLTFMeshStorage& Mesh,
                                                      bool                   RequireGPUResourcesReady);
 
+RADIENT_STATUS GetMeshGeometryLoadStatus(const MeshStorage& Mesh);
+RADIENT_STATUS GetMeshGeometryGPUResourceStatus(const MeshStorage& Mesh);
 RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh);
 RADIENT_STATUS GetMeshMaterialGPUResourceStatus(MeshStorage& Mesh);
 RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh);
@@ -629,19 +689,42 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
                                                    const RadientMeshViewCreateInfo&   ViewCI,
                                                    IRadientMeshAsset**                ppMesh)
 {
+    std::vector<std::unique_ptr<RadientMeshSource>> MeshSources;
+    MeshSources.emplace_back(std::move(pMeshSource));
+    return CreateMesh(ThreadPool, std::move(MeshSources), ViewCI, ppMesh);
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                                    ThreadPool,
+                                                   std::vector<std::unique_ptr<RadientMeshSource>> pMeshSources,
+                                                   const RadientMeshViewCreateInfo&                ViewCI,
+                                                   IRadientMeshAsset**                             ppMesh)
+{
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
-    if (pMeshSource == nullptr)
+    if (pMeshSources.empty())
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
-    if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
+    std::vector<Uint32> GeometryIndexCounts;
+    GeometryIndexCounts.reserve(pMeshSources.size());
+    for (const std::unique_ptr<RadientMeshSource>& pMeshSource : pMeshSources)
+    {
+        if (pMeshSource == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RadientMeshViewSource MeshView{ViewCI, pMeshSource->GetIndexCount()};
+        const RADIENT_STATUS SourceStatus = pMeshSource->GetStatus();
+        if (RADIENT_FAILED(SourceStatus))
+            return SourceStatus;
+
+        GeometryIndexCounts.push_back(pMeshSource->GetIndexCount());
+    }
+
+    RadientMeshViewSource MeshView{
+        ViewCI,
+        GeometryIndexCounts.data(),
+        static_cast<Uint32>(GeometryIndexCounts.size())};
     if (RADIENT_FAILED(MeshView.GetStatus()))
         return MeshView.GetStatus();
 
@@ -656,64 +739,93 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     EnqueueAsyncWork(
         &ThreadPool,
         [pMeshAsset,
-         pSelf       = shared_from_this(),
-         pMeshSource = std::move(pMeshSource),
-         MeshView    = std::move(MeshView)](Uint32) mutable //
+         pSelf        = shared_from_this(),
+         pMeshSources = std::move(pMeshSources),
+         MeshView     = std::move(MeshView)](Uint32) mutable //
         {
-            if (!pMeshSource->HasVertexAttributes())
+            for (std::unique_ptr<RadientMeshSource>& pMeshSource : pMeshSources)
             {
-                RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
-                if (RADIENT_FAILED(Status))
+                if (!pMeshSource->HasVertexAttributes())
                 {
-                    pMeshAsset->Fail(Status);
+                    RADIENT_STATUS Status = pMeshSource->SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
+                                                                             static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
+                    if (RADIENT_FAILED(Status))
+                    {
+                        pMeshAsset->Fail(Status);
+                        return ASYNC_TASK_STATUS_COMPLETE;
+                    }
+                }
+            }
+
+            std::vector<std::string> MeshSourceCacheKeys;
+            MeshSourceCacheKeys.reserve(pMeshSources.size());
+            for (const std::unique_ptr<RadientMeshSource>& pMeshSource : pMeshSources)
+            {
+                MeshSourceCacheKeys.push_back(pMeshSource->MakeCacheKey());
+                if (MeshSourceCacheKeys.back().empty())
+                {
+                    pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
             }
 
-            const std::string MeshSourceCacheKey = pMeshSource->MakeCacheKey();
-            const std::string MeshCacheKey       = MeshView.MakeCacheKey(MeshSourceCacheKey.c_str());
-            if (MeshSourceCacheKey.empty() || MeshCacheKey.empty())
+            const std::string MeshCacheKey = MeshView.MakeCacheKey(MeshSourceCacheKeys);
+            if (MeshCacheKey.empty())
             {
                 pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 
-            auto MeshGPUDataResult =
-                pSelf->m_MeshGPUDataCache.GetOrCreate(
-                    MeshSourceCacheKey.c_str(),
-                    []() {
-                        return MeshGPUData::Create(RADIENT_STATUS_PENDING);
-                    });
-            RefCntAutoPtr<MeshGPUData> pMeshGPUData   = std::move(MeshGPUDataResult.first);
-            const bool                 GPUDataCreated = MeshGPUDataResult.second;
-
-            if (pMeshGPUData == nullptr)
+            std::vector<RefCntAutoPtr<MeshGPUData>> MeshGPUData;
+            std::vector<bool>                       GPUDataCreated;
+            MeshGPUData.reserve(MeshSourceCacheKeys.size());
+            GPUDataCreated.reserve(MeshSourceCacheKeys.size());
+            for (const std::string& MeshSourceCacheKey : MeshSourceCacheKeys)
             {
-                pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
+                auto MeshGPUDataResult =
+                    pSelf->m_MeshGPUDataCache.GetOrCreate(
+                        MeshSourceCacheKey.c_str(),
+                        []() {
+                            return MeshGPUData::Create(RADIENT_STATUS_PENDING);
+                        });
+
+                if (MeshGPUDataResult.first == nullptr)
+                {
+                    pMeshAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+
+                MeshGPUData.emplace_back(std::move(MeshGPUDataResult.first));
+                GPUDataCreated.push_back(MeshGPUDataResult.second);
             }
+
+            std::vector<const RadientMeshSource*> MeshSourcePtrs;
+            MeshSourcePtrs.reserve(pMeshSources.size());
+            for (const std::unique_ptr<RadientMeshSource>& pMeshSource : pMeshSources)
+                MeshSourcePtrs.push_back(pMeshSource.get());
 
             auto [pMeshPayload, PayloadCreated] =
                 pSelf->m_MeshCache.GetOrCreate(
                     MeshCacheKey.c_str(),
-                    [&pMeshGPUData, &pMeshSource, &MeshView]() {
+                    [&MeshGPUData, &MeshSourcePtrs, &MeshView]() {
                         return MeshPayloadImpl::Create(std::in_place_type<MeshStorage>,
-                                                       pMeshGPUData,
-                                                       *pMeshSource,
+                                                       MeshGPUData,
+                                                       MeshSourcePtrs,
                                                        MeshView);
                     });
 
             if (!pMeshAsset->SetPayload(std::move(pMeshPayload)))
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            if (GPUDataCreated)
+            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
+            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
+            for (size_t GeometryIndex = 0; GeometryIndex < MeshGPUData.size(); ++GeometryIndex)
             {
-                RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
-                RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
+                if (!GPUDataCreated[GeometryIndex])
+                    continue;
 
-                CreateMeshGPUDataFromSource(*pMeshSource,
-                                            *pMeshGPUData,
+                CreateMeshGPUDataFromSource(*pMeshSources[GeometryIndex],
+                                            *MeshGPUData[GeometryIndex],
                                             pSelf->m_pDevice,
                                             pResourceManager,
                                             pUploadManager);
@@ -815,10 +927,7 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientAsset* pMeshAsset)
         if (ViewStatus != RADIENT_STATUS_OK)
             return ViewStatus;
 
-        if (pMeshStorage->pGPUData == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        const RADIENT_STATUS MeshStatus = pMeshStorage->pGPUData->LoadStatus.load(std::memory_order_acquire);
+        const RADIENT_STATUS MeshStatus = GetMeshGeometryLoadStatus(*pMeshStorage);
         if (MeshStatus != RADIENT_STATUS_OK)
             return MeshStatus;
 
@@ -848,14 +957,11 @@ RADIENT_STATUS RadientMeshAssetManager::GetGPUResourceStatus(IRadientAsset* pMes
         if (ViewStatus != RADIENT_STATUS_OK)
             return ViewStatus;
 
-        if (pMeshStorage->pGPUData == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        const RADIENT_STATUS MeshStatus = pMeshStorage->pGPUData->LoadStatus.load(std::memory_order_acquire);
+        const RADIENT_STATUS MeshStatus = GetMeshGeometryLoadStatus(*pMeshStorage);
         if (MeshStatus != RADIENT_STATUS_OK)
             return MeshStatus;
 
-        RADIENT_STATUS Status = pMeshStorage->pGPUData->GPUResourceStatus.load(std::memory_order_acquire);
+        RADIENT_STATUS Status = GetMeshGeometryGPUResourceStatus(*pMeshStorage);
         Status                = CombineDependencyStatus(Status, GetMeshMaterialGPUResourceStatus(*pMeshStorage));
         return Status;
     }
@@ -880,11 +986,50 @@ const MeshGPUData* RadientMeshAssetManager::GetMeshGPUData(IRadientMeshAsset* pM
 
     MeshAssetStorage& Storage      = pMesh->GetStorage();
     MeshStorage*      pMeshStorage = std::get_if<MeshStorage>(&Storage);
-    return pMeshStorage != nullptr ? pMeshStorage->pGPUData.RawPtr() : nullptr;
+    if (pMeshStorage == nullptr || pMeshStorage->Geometries.empty())
+        return nullptr;
+
+    return pMeshStorage->Geometries.front().pGPUData.RawPtr();
 }
 
 namespace
 {
+
+RADIENT_STATUS GetMeshGeometryLoadStatus(const MeshStorage& Mesh)
+{
+    if (Mesh.Geometries.empty())
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (const MeshGeometryStorage& Geometry : Mesh.Geometries)
+    {
+        if (Geometry.pGPUData == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        Status = CombineDependencyStatus(Status, Geometry.pGPUData->LoadStatus.load(std::memory_order_acquire));
+    }
+
+    return Status;
+}
+
+RADIENT_STATUS GetMeshGeometryGPUResourceStatus(const MeshStorage& Mesh)
+{
+    const RADIENT_STATUS LoadStatus = GetMeshGeometryLoadStatus(Mesh);
+    if (LoadStatus != RADIENT_STATUS_OK)
+        return LoadStatus;
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (const MeshGeometryStorage& Geometry : Mesh.Geometries)
+    {
+        VERIFY_EXPR(Geometry.pGPUData != nullptr);
+        if (Geometry.pGPUData == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        Status = CombineDependencyStatus(Status, Geometry.pGPUData->GPUResourceStatus.load(std::memory_order_acquire));
+    }
+
+    return Status;
+}
 
 RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh)
 {
@@ -974,7 +1119,8 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
 {
     RadientDrawableMeshResolveResult Result;
 
-    if (Mesh.pGPUData == nullptr)
+    if (Mesh.Geometries.empty() ||
+        Mesh.DrawableMesh.Geometries.size() != Mesh.Geometries.size())
     {
         Result.Status = RADIENT_STATUS_INVALID_OPERATION;
         return Result;
@@ -987,14 +1133,14 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
         return Result;
     }
 
-    const RADIENT_STATUS LoadStatus = Mesh.pGPUData->LoadStatus.load(std::memory_order_acquire);
+    const RADIENT_STATUS LoadStatus = GetMeshGeometryLoadStatus(Mesh);
     if (LoadStatus != RADIENT_STATUS_OK)
     {
         Result.Status = LoadStatus;
         return Result;
     }
 
-    const RADIENT_STATUS GPUStatus = Mesh.pGPUData->GPUResourceStatus.load(std::memory_order_acquire);
+    const RADIENT_STATUS GPUStatus = GetMeshGeometryGPUResourceStatus(Mesh);
     if (GPUStatus != RADIENT_STATUS_OK &&
         (GPUStatus != RADIENT_STATUS_PENDING || RequireGPUResourcesReady))
     {
@@ -1003,19 +1149,30 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
     }
 
     // LoadStatus publishes the non-atomic allocation pointers. Only read them
-    // after the acquire load above has observed OK.
-    IBufferSuballocation* const  pIndexAllocation  = Mesh.pGPUData->pIndexAllocation;
-    IVertexPoolAllocation* const pVertexAllocation = Mesh.pGPUData->pVertexAllocation;
-    IVertexPool* const           pVertexPool       = pVertexAllocation != nullptr ? pVertexAllocation->GetPool() : nullptr;
-    if (pIndexAllocation == nullptr || pVertexAllocation == nullptr || pVertexPool == nullptr)
+    // after the acquire loads above have observed OK.
+    for (size_t GeometryIndex = 0; GeometryIndex < Mesh.Geometries.size(); ++GeometryIndex)
     {
-        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
-        return Result;
-    }
+        MeshGPUData* const pGPUData = Mesh.Geometries[GeometryIndex].pGPUData;
+        if (pGPUData == nullptr)
+        {
+            Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+            return Result;
+        }
 
-    Mesh.DrawableMesh.pVertexPool        = pVertexPool;
-    Mesh.DrawableMesh.FirstIndexLocation = pIndexAllocation->GetOffset() / sizeof(Uint32);
-    Mesh.DrawableMesh.BaseVertex         = pVertexAllocation->GetStartVertex();
+        IBufferSuballocation* const  pIndexAllocation  = pGPUData->pIndexAllocation;
+        IVertexPoolAllocation* const pVertexAllocation = pGPUData->pVertexAllocation;
+        IVertexPool* const           pVertexPool       = pVertexAllocation != nullptr ? pVertexAllocation->GetPool() : nullptr;
+        if (pIndexAllocation == nullptr || pVertexAllocation == nullptr || pVertexPool == nullptr)
+        {
+            Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+            return Result;
+        }
+
+        RadientDrawableMeshGeometry& DrawableGeometry = Mesh.DrawableMesh.Geometries[GeometryIndex];
+        DrawableGeometry.pVertexPool                  = pVertexPool;
+        DrawableGeometry.FirstIndexLocation           = pIndexAllocation->GetOffset() / sizeof(Uint32);
+        DrawableGeometry.BaseVertex                   = pVertexAllocation->GetStartVertex();
+    }
 
     const RADIENT_STATUS MaterialStatus = ResolveMeshMaterialDependencies(Mesh);
     if (MaterialStatus != RADIENT_STATUS_OK)
@@ -1041,10 +1198,16 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
         return Result;
     }
 
-    if (RequireGPUResourcesReady && Mesh.DrawableMesh.pVertexPool == nullptr)
+    if (RequireGPUResourcesReady)
     {
-        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
-        return Result;
+        for (const RadientDrawableMeshGeometry& Geometry : Mesh.DrawableMesh.Geometries)
+        {
+            if (Geometry.pVertexPool == nullptr)
+            {
+                Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+                return Result;
+            }
+        }
     }
 
     Result.pMesh  = &Mesh.DrawableMesh;
@@ -1083,10 +1246,16 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(const GLTFMeshStorage& Mesh
         }
     }
 
-    if (RequireGPUResourcesReady && Mesh.DrawableMesh.pVertexPool == nullptr)
+    if (RequireGPUResourcesReady)
     {
-        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
-        return Result;
+        for (const RadientDrawableMeshGeometry& Geometry : Mesh.DrawableMesh.Geometries)
+        {
+            if (Geometry.pVertexPool == nullptr)
+            {
+                Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+                return Result;
+            }
+        }
     }
 
     Result.pMesh  = &Mesh.DrawableMesh;

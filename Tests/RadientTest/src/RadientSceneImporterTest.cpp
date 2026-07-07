@@ -605,10 +605,11 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
             RadientAssetManagerImpl::GetDrawableMesh(pMesh, false);
         EXPECT_EQ(Result.Status, RADIENT_STATUS_OK);
         ASSERT_NE(Result.pMesh, nullptr);
-        EXPECT_EQ(Result.pMesh->pVertexPool, pExpectedModel->GetVertexPool());
-        EXPECT_EQ(Result.pMesh->VertexAttribFlags, PBR_Renderer::PSO_FLAG_NONE);
-        EXPECT_EQ(Result.pMesh->FirstIndexLocation, pExpectedModel->GetFirstIndexLocation());
-        EXPECT_EQ(Result.pMesh->BaseVertex, pExpectedModel->GetBaseVertex());
+        ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+        EXPECT_EQ(Result.pMesh->Geometries[0].pVertexPool, pExpectedModel->GetVertexPool());
+        EXPECT_EQ(Result.pMesh->Geometries[0].VertexAttribFlags, PBR_Renderer::PSO_FLAG_NONE);
+        EXPECT_EQ(Result.pMesh->Geometries[0].FirstIndexLocation, pExpectedModel->GetFirstIndexLocation());
+        EXPECT_EQ(Result.pMesh->Geometries[0].BaseVertex, pExpectedModel->GetBaseVertex());
 
         ASSERT_EQ(Result.pMesh->Primitives.size(), pExpectedModel->Meshes[0].Primitives.size());
         for (size_t PrimitiveIndex = 0; PrimitiveIndex < Result.pMesh->Primitives.size(); ++PrimitiveIndex)
@@ -617,6 +618,7 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
             const GLTF::Primitive&              ExpectedPrimitive = pExpectedModel->Meshes[0].Primitives[PrimitiveIndex];
 
             EXPECT_EQ(ResolvedPrimitive.pMaterial, &pExpectedModel->Materials[ExpectedPrimitive.MaterialId]);
+            EXPECT_EQ(ResolvedPrimitive.GeometryIndex, 0u);
             EXPECT_EQ(ResolvedPrimitive.IsIndexed, ExpectedPrimitive.HasIndices());
             EXPECT_EQ(ResolvedPrimitive.FirstElement, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.FirstIndex : ExpectedPrimitive.FirstVertex);
             EXPECT_EQ(ResolvedPrimitive.ElementCount, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.IndexCount : ExpectedPrimitive.VertexCount);

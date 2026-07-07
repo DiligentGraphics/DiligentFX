@@ -40,23 +40,29 @@ struct RadientDrawableMeshPrimitive
 {
     const GLTF::Material* pMaterial = nullptr;
 
+    Uint32 GeometryIndex = 0;
+
     bool IsIndexed = false;
 
     Uint32 FirstElement = 0;
     Uint32 ElementCount = 0;
 };
 
-/// Resolved mesh data needed to expand one scene renderable into drawable primitive slots.
-struct RadientDrawableMesh
+struct RadientDrawableMeshGeometry
 {
-    std::vector<RadientDrawableMeshPrimitive> Primitives;
-
     IVertexPool* pVertexPool = nullptr;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
+};
+
+/// Resolved mesh data needed to expand one scene renderable into drawable primitive slots.
+struct RadientDrawableMesh
+{
+    std::vector<RadientDrawableMeshGeometry>  Geometries;
+    std::vector<RadientDrawableMeshPrimitive> Primitives;
 };
 
 struct RadientDrawableMeshResolveResult

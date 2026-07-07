@@ -33,6 +33,7 @@
 
 #include <atomic>
 #include <memory>
+#include <vector>
 
 namespace Diligent
 {
@@ -76,6 +77,11 @@ public:
                               std::unique_ptr<RadientMeshSource> pMeshSource,
                               const RadientMeshViewCreateInfo&   ViewCI,
                               IRadientMeshAsset**                ppMesh);
+
+    RADIENT_STATUS CreateMesh(IThreadPool&                                    ThreadPool,
+                              std::vector<std::unique_ptr<RadientMeshSource>> pMeshSources,
+                              const RadientMeshViewCreateInfo&                ViewCI,
+                              IRadientMeshAsset**                             ppMesh);
 
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
                                           Uint32              MeshIndex,

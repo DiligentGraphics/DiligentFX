@@ -66,11 +66,12 @@ public:
                       IVertexPool*            pVertexPool        = TestVertexPool)
     {
         MeshData Data;
-        Data.Status                  = Status;
-        Data.Mesh.pVertexPool        = pVertexPool;
-        Data.Mesh.VertexAttribFlags  = VertexAttribFlags;
-        Data.Mesh.FirstIndexLocation = FirstIndexLocation;
-        Data.Mesh.BaseVertex         = BaseVertex;
+        Data.Status = Status;
+        Data.Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
+            pVertexPool,
+            VertexAttribFlags,
+            FirstIndexLocation,
+            BaseVertex});
 
         const RADIENT_STATUS ConvertStatus =
             !Model.Meshes.empty() ?
@@ -432,6 +433,21 @@ const RadientDrawableSlot* GetFirstDrawableSlot(const RadientSceneDrawableCache&
     return Cache.GetDrawableSlot(Items.front().DrawableID);
 }
 
+const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientSceneDrawableCache& Cache,
+                                                          GLTF::Material::ALPHA_MODE       AlphaMode,
+                                                          Uint32                           FirstElement)
+{
+    const RadientDrawList::ItemListType& Items = Cache.GetDrawList(AlphaMode).GetItems();
+    for (const RadientDrawItem& Item : Items)
+    {
+        const RadientDrawableSlot* pSlot = Cache.GetDrawableSlot(Item.DrawableID);
+        if (pSlot != nullptr && pSlot->FirstElement == FirstElement)
+            return pSlot;
+    }
+
+    return nullptr;
+}
+
 } // namespace
 
 TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
@@ -623,6 +639,80 @@ TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
         EXPECT_EQ(pSlot->Entity, Entity);
         EXPECT_EQ(pSlot->AlphaMode, GLTF::Material::ALPHA_MODE_OPAQUE);
     }
+}
+
+TEST(RadientSceneDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeometry)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    Model.Materials.resize(1);
+    Model.Materials[0].Attribs.AlphaMode = GLTF::Material::ALPHA_MODE_OPAQUE;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].Primitives.emplace_back(MakePrimitive(0, 3, 0, 0, 0));
+    Model.Meshes[0].Primitives.emplace_back(MakePrimitive(3, 3, 0, 0, 0));
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-geometry-index", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+
+    auto MeshIt = MeshProvider.Meshes.find(pMesh.RawPtr());
+    ASSERT_NE(MeshIt, MeshProvider.Meshes.end());
+
+    // The same drawable mesh may contain primitives backed by different GPU
+    // geometry records. The cache must copy draw-state from the primitive's
+    // selected geometry, not from a mesh-wide vertex/index allocation.
+    RadientDrawableMesh& Mesh = MeshIt->second.Mesh;
+    ASSERT_EQ(Mesh.Geometries.size(), 1u);
+    ASSERT_EQ(Mesh.Primitives.size(), 2u);
+
+    IVertexPool* const Geometry0Pool = reinterpret_cast<IVertexPool*>(size_t{11});
+    IVertexPool* const Geometry1Pool = reinterpret_cast<IVertexPool*>(size_t{22});
+
+    Mesh.Geometries[0] = RadientDrawableMeshGeometry{
+        Geometry0Pool,
+        PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS,
+        17,
+        5};
+    Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
+        Geometry1Pool,
+        PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS,
+        29,
+        8});
+
+    Mesh.Primitives[0].GeometryIndex = 0;
+    Mesh.Primitives[1].GeometryIndex = 1;
+
+    const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
+    ASSERT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
+
+    const RadientDrawableSlot* pGeometry0Slot =
+        FindDrawableSlotByFirstElement(DrawableCache, GLTF::Material::ALPHA_MODE_OPAQUE, 0);
+    ASSERT_NE(pGeometry0Slot, nullptr);
+    EXPECT_EQ(pGeometry0Slot->Entity, Entity);
+    EXPECT_EQ(pGeometry0Slot->pVertexPool, Geometry0Pool);
+    EXPECT_EQ(pGeometry0Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS);
+    EXPECT_EQ(pGeometry0Slot->FirstIndexLocation, 17u);
+    EXPECT_EQ(pGeometry0Slot->BaseVertex, 5u);
+    EXPECT_EQ(pGeometry0Slot->ElementCount, 3u);
+
+    const RadientDrawableSlot* pGeometry1Slot =
+        FindDrawableSlotByFirstElement(DrawableCache, GLTF::Material::ALPHA_MODE_OPAQUE, 3);
+    ASSERT_NE(pGeometry1Slot, nullptr);
+    EXPECT_EQ(pGeometry1Slot->Entity, Entity);
+    EXPECT_EQ(pGeometry1Slot->pVertexPool, Geometry1Pool);
+    EXPECT_EQ(pGeometry1Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS);
+    EXPECT_EQ(pGeometry1Slot->FirstIndexLocation, 29u);
+    EXPECT_EQ(pGeometry1Slot->BaseVertex, 8u);
+    EXPECT_EQ(pGeometry1Slot->ElementCount, 3u);
 }
 
 TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)

@@ -305,6 +305,13 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         if (Primitive.pMaterial == nullptr)
             continue;
 
+        if (Primitive.GeometryIndex >= Mesh.Geometries.size())
+            continue;
+
+        const RadientDrawableMeshGeometry& Geometry = Mesh.Geometries[Primitive.GeometryIndex];
+        if (Geometry.pVertexPool == nullptr)
+            continue;
+
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
 
@@ -314,10 +321,10 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
         Slot.IsIndexed          = Primitive.IsIndexed;
         Slot.pMaterial          = Primitive.pMaterial;
-        Slot.pVertexPool        = Mesh.pVertexPool;
-        Slot.VertexAttribFlags  = Mesh.VertexAttribFlags;
-        Slot.FirstIndexLocation = Mesh.FirstIndexLocation;
-        Slot.BaseVertex         = Mesh.BaseVertex;
+        Slot.pVertexPool        = Geometry.pVertexPool;
+        Slot.VertexAttribFlags  = Geometry.VertexAttribFlags;
+        Slot.FirstIndexLocation = Geometry.FirstIndexLocation;
+        Slot.BaseVertex         = Geometry.BaseVertex;
         Slot.FirstElement       = Primitive.FirstElement;
         Slot.ElementCount       = Primitive.ElementCount;
         Slot.AlphaMode          = CorrectMaterialAlphaMode(Primitive.pMaterial->Attribs.AlphaMode);

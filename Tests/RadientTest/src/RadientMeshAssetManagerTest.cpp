@@ -33,6 +33,7 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 using namespace Diligent;
 
@@ -188,6 +189,47 @@ TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
     EXPECT_NE(pWholePayload, pSubrangePayload);
     EXPECT_EQ(RadientMeshAssetManager::GetMeshGPUData(pWholeMesh),
               RadientMeshAssetManager::GetMeshGPUData(pSubrangeMesh));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
+{
+    // A single drawable mesh view may reference multiple geometry sources. This
+    // is the shape needed by GLTF imports where one logical mesh can contain
+    // primitives backed by different vertex layouts.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    std::vector<std::unique_ptr<RadientMeshSource>> Sources;
+    Sources.emplace_back(MakeMeshSource());
+    Sources.emplace_back(MakeCustomLayoutMeshSource());
+
+    std::array<RadientMeshPrimitiveCreateInfo, 2> Primitives{};
+    Primitives[0].FirstIndex = 0;
+    Primitives[0].IndexCount = 3;
+    Primitives[1].FirstIndex = 0;
+    Primitives[1].IndexCount = 3;
+
+    const std::array<Uint32, 2> GeometryIndices{0, 1};
+
+    RadientMeshViewCreateInfo ViewCI{};
+    ViewCI.pPrimitives      = Primitives.data();
+    ViewCI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
+    ViewCI.pGeometryIndices = GeometryIndices.data();
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMesh(*pThreadPool, std::move(Sources), ViewCI, &pMesh)));
+    ASSERT_NE(pMesh, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
 
     pThreadPool->StopThreads();
 }

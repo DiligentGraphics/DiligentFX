@@ -40,6 +40,9 @@ struct RadientMeshViewCreateInfo
 {
     const RadientMeshPrimitiveCreateInfo* pPrimitives    = nullptr;
     Uint32                                PrimitiveCount = 0;
+
+    /// Optional per-primitive geometry indices. If null, all primitives use geometry 0.
+    const Uint32* pGeometryIndices = nullptr;
 };
 
 /// Owns mesh primitive ranges and material references that view shared mesh geometry.
@@ -48,6 +51,10 @@ class RadientMeshViewSource final
 public:
     RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
                           Uint32                           IndexCount);
+
+    RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
+                          const Uint32*                    pGeometryIndexCounts,
+                          Uint32                           GeometryCount);
 
     RadientMeshViewSource(RadientMeshViewSource&& Rhs) noexcept;
 
@@ -67,6 +74,12 @@ public:
         return m_Primitives[PrimitiveIndex];
     }
 
+    Uint32 GetGeometryIndex(Uint32 PrimitiveIndex) const
+    {
+        VERIFY(PrimitiveIndex < m_GeometryIndices.size(), "Invalid primitive index");
+        return PrimitiveIndex < m_GeometryIndices.size() ? m_GeometryIndices[PrimitiveIndex] : 0;
+    }
+
     IRadientMaterialAsset* GetMaterial(Uint32 PrimitiveIndex) const
     {
         VERIFY(PrimitiveIndex < m_Materials.size(), "Invalid primitive index");
@@ -74,6 +87,7 @@ public:
     }
 
     std::string MakeCacheKey(const char* MeshSourceCacheKey) const;
+    std::string MakeCacheKey(const std::vector<std::string>& MeshSourceCacheKeys) const;
 
 private:
     void BindPrimitiveNames() noexcept;
@@ -82,6 +96,7 @@ private:
     RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
 
     std::vector<RadientMeshPrimitiveCreateInfo>       m_Primitives;
+    std::vector<Uint32>                               m_GeometryIndices;
     std::vector<std::string>                          m_PrimitiveNames;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> m_Materials;
 };
