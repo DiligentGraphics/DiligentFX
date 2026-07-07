@@ -62,18 +62,25 @@ bool CheckStridedByteSize(Uint32 Count, Uint32 Stride, Uint32 ElementSize)
     return Uint64{Count - 1} * Stride + ElementSize <= (std::numeric_limits<Uint32>::max)();
 }
 
-Uint32 GetIndexElementSize(RADIENT_INDEX_TYPE IndexType)
+bool IsSupportedSourceIndexType(VALUE_TYPE IndexType)
+{
+    return (IndexType == VT_UINT8 ||
+            IndexType == VT_UINT16 ||
+            IndexType == VT_UINT32);
+}
+
+VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
 {
     switch (IndexType)
     {
         case RADIENT_INDEX_TYPE_UINT16:
-            return sizeof(Uint16);
+            return VT_UINT16;
 
         case RADIENT_INDEX_TYPE_UINT32:
-            return sizeof(Uint32);
+            return VT_UINT32;
 
         default:
-            return 0;
+            return VT_UNDEFINED;
     }
 }
 
@@ -111,7 +118,10 @@ bool GetSourceIndexLayout(const RadientMeshSource::SourceIndexData& Indices,
     if (Indices.pData == nullptr)
         return false;
 
-    ElementSize = GetIndexElementSize(Indices.Type);
+    if (!IsSupportedSourceIndexType(Indices.Type))
+        return false;
+
+    ElementSize = GetValueSize(Indices.Type);
     if (ElementSize == 0)
         return false;
 
@@ -283,7 +293,7 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
     CI.AttributeCount = AttributeCount;
     CI.VertexCount    = MeshCI.VertexCount;
     CI.Indices.pData  = MeshCI.pIndices;
-    CI.Indices.Type   = MeshCI.IndexType;
+    CI.Indices.Type   = GetSourceIndexType(MeshCI.IndexType);
     CI.IndexCount     = MeshCI.IndexCount;
 
     Initialize(CI);
@@ -403,9 +413,9 @@ std::string RadientMeshSource::MakeCacheKey() const
                   m_IndexType,
                   m_ActiveVertexBufferMask);
 
-    const Uint32 IndexElementSize = GetIndexElementSize(m_IndexType);
+    const Uint32 IndexElementSize = GetValueSize(m_IndexType);
     // Keep the source index representation in the key for now. PackIndexData()
-    // always expands UINT16 indices to UINT32 during upload.
+    // always expands UINT8/UINT16 indices to UINT32 during upload.
     Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
     UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
@@ -653,11 +663,11 @@ RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) con
     if (m_pIndexData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (m_IndexType == RADIENT_INDEX_TYPE_UINT32)
+    if (m_IndexType == VT_UINT32)
     {
         std::memcpy(pDstIndices, m_pIndexData, GetIndexDataSize());
     }
-    else if (m_IndexType == RADIENT_INDEX_TYPE_UINT16)
+    else if (m_IndexType == VT_UINT16)
     {
         for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
         {
@@ -665,6 +675,14 @@ RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) con
             std::memcpy(&Value16, m_pIndexData + size_t{Index} * sizeof(Value16), sizeof(Value16));
 
             const Uint32 Value = Value16;
+            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
+        }
+    }
+    else if (m_IndexType == VT_UINT8)
+    {
+        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
+        {
+            const Uint32 Value = m_pIndexData[Index];
             std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
         }
     }

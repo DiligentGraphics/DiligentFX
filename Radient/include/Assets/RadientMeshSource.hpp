@@ -70,8 +70,8 @@ public:
         /// Pointer to the first tightly packed index.
         const void* pData = nullptr;
 
-        /// Source index type.
-        RADIENT_INDEX_TYPE Type = RADIENT_INDEX_TYPE_NONE;
+        /// Source index type. VT_UINT8, VT_UINT16, and VT_UINT32 are supported.
+        VALUE_TYPE Type = VT_UNDEFINED;
     };
 
     struct CreateInfo
@@ -219,8 +219,8 @@ private:
                   "RadientMeshSource active vertex buffer mask must fit all GLTF vertex buffers.");
     Uint32 m_ActiveVertexBufferMask = 0;
 
-    RADIENT_INDEX_TYPE m_IndexType  = RADIENT_INDEX_TYPE_NONE;
-    const Uint8*       m_pIndexData = nullptr;
+    VALUE_TYPE   m_IndexType  = VT_UNDEFINED;
+    const Uint8* m_pIndexData = nullptr;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
     std::vector<std::string>               m_DstAttributeNames;

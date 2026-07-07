@@ -271,7 +271,7 @@ TEST(RadientMeshSourceTest, RejectsInvalidSourceCreateInfo)
     CI.AttributeCount = static_cast<Uint32>(Attributes.size());
     CI.VertexCount    = static_cast<Uint32>(Vertices.size());
     CI.Indices.pData  = Indices.data();
-    CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
+    CI.Indices.Type   = VT_UINT16;
     CI.IndexCount     = static_cast<Uint32>(Indices.size());
 
     auto ExpectInvalid = [](const RadientMeshSource::CreateInfo& InvalidCI) //
@@ -297,7 +297,7 @@ TEST(RadientMeshSourceTest, RejectsInvalidSourceCreateInfo)
     Attributes[1].Name = GLTF::Texcoord0AttributeName;
 
     InvalidCI              = CI;
-    InvalidCI.Indices.Type = RADIENT_INDEX_TYPE_NONE;
+    InvalidCI.Indices.Type = VT_UNDEFINED;
     ExpectInvalid(InvalidCI);
 }
 
@@ -366,7 +366,7 @@ TEST(RadientMeshSourceTest, PacksStridedSourceAttributesAndTightlyPackedIndices)
     CI.AttributeCount = static_cast<Uint32>(SourceAttributes.size());
     CI.VertexCount    = static_cast<Uint32>(Vertices.size());
     CI.Indices.pData  = Indices.data();
-    CI.Indices.Type   = RADIENT_INDEX_TYPE_UINT16;
+    CI.Indices.Type   = VT_UINT16;
     CI.IndexCount     = static_cast<Uint32>(Indices.size());
 
     RadientMeshSource Source{CI};
@@ -418,6 +418,42 @@ TEST(RadientMeshSourceTest, PacksStridedSourceAttributesAndTightlyPackedIndices)
                    RadientFloat4{0.f, 64.f / 255.f, 128.f / 255.f, 1.f});
 }
 
+TEST(RadientMeshSourceTest, PacksUint8SourceIndicesAsUint32)
+{
+    std::array<RadientFloat3, 3> Positions{
+        RadientFloat3{0.f, 0.f, 0.f},
+        RadientFloat3{1.f, 0.f, 0.f},
+        RadientFloat3{0.f, 1.f, 0.f}};
+    std::array<Uint8, 3> Indices{2, 1, 0};
+
+    std::array<RadientMeshSource::SourceAttribute, 1> SourceAttributes{
+        RadientMeshSource::SourceAttribute{GLTF::PositionAttributeName, VT_FLOAT32, 3, false, Positions.data(), sizeof(RadientFloat3)}};
+
+    RadientMeshSource::CreateInfo CI{};
+    CI.pAttributes    = SourceAttributes.data();
+    CI.AttributeCount = static_cast<Uint32>(SourceAttributes.size());
+    CI.VertexCount    = static_cast<Uint32>(Positions.size());
+    CI.Indices.pData  = Indices.data();
+    CI.Indices.Type   = VT_UINT8;
+    CI.IndexCount     = static_cast<Uint32>(Indices.size());
+
+    RadientMeshSource Source{CI};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
+                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
+              RADIENT_STATUS_OK);
+
+    std::array<Uint32, 3> PackedIndices{};
+    ASSERT_EQ(Source.PackIndexData(RadientMeshSource::PackDestination{
+                  PackedIndices.data(),
+                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(PackedIndices[0], 2u);
+    EXPECT_EQ(PackedIndices[1], 1u);
+    EXPECT_EQ(PackedIndices[2], 0u);
+}
+
 TEST(RadientMeshSourceTest, BorrowsSourceDataAndKeepsOwnerAlive)
 {
     struct SourceVertex
@@ -453,7 +489,7 @@ TEST(RadientMeshSourceTest, BorrowsSourceDataAndKeepsOwnerAlive)
         CI.AttributeCount   = static_cast<Uint32>(SourceAttributes.size());
         CI.VertexCount      = static_cast<Uint32>(Data->Vertices.size());
         CI.Indices.pData    = Data->Indices.data();
-        CI.Indices.Type     = RADIENT_INDEX_TYPE_UINT16;
+        CI.Indices.Type     = VT_UINT16;
         CI.IndexCount       = static_cast<Uint32>(Data->Indices.size());
         CI.pSourceDataOwner = Owner;
 
