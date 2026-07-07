@@ -67,6 +67,9 @@ struct RadientDrawableMesh
 
 struct RadientDrawableMeshResolveResult
 {
+    // PENDING is a generic "not render-ready yet" status. It may come from
+    // mesh source/view processing, geometry GPU resources, or material/texture
+    // GPU resources.
     const RadientDrawableMesh* pMesh  = nullptr;
     RADIENT_STATUS             Status = RADIENT_STATUS_INVALID_OPERATION;
 };

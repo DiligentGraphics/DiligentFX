@@ -33,7 +33,6 @@
 
 #include <atomic>
 #include <memory>
-#include <vector>
 
 namespace Diligent
 {
@@ -55,6 +54,12 @@ struct RadientMeshViewCreateInfo;
 
 using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager>;
 
+// Opaque handle to shared mesh GPU data. The implementation details are private
+// to RadientMeshAssetManager.
+class IRadientMeshGPUData : public IObject
+{
+};
+
 class RadientMeshAssetManager final : public std::enable_shared_from_this<RadientMeshAssetManager>
 {
 public:
@@ -73,32 +78,38 @@ public:
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
-    RADIENT_STATUS CreateMesh(IThreadPool&                       ThreadPool,
-                              std::unique_ptr<RadientMeshSource> pMeshSource,
-                              const RadientMeshViewCreateInfo&   ViewCI,
-                              IRadientMeshAsset**                ppMesh);
+    RADIENT_STATUS CreateMeshGPUData(IThreadPool&                       ThreadPool,
+                                     std::unique_ptr<RadientMeshSource> pMeshSource,
+                                     IRadientMeshGPUData**              ppMeshGPUData);
 
-    RADIENT_STATUS CreateMesh(IThreadPool&                                    ThreadPool,
-                              std::vector<std::unique_ptr<RadientMeshSource>> pMeshSources,
-                              const RadientMeshViewCreateInfo&                ViewCI,
-                              IRadientMeshAsset**                             ppMesh);
+    RADIENT_STATUS CreateMeshView(IRadientMeshGPUData* const*      ppMeshGPUData,
+                                  Uint32                           MeshGPUDataCount,
+                                  const RadientMeshViewCreateInfo& ViewCI,
+                                  IRadientMeshAsset**              ppMesh);
 
     RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
                                           Uint32              MeshIndex,
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
-    // Returns drawable mesh data when the mesh asset is ready. This method
-    // accesses render data and must be called from the render thread.
+    // Returns drawable mesh data when the mesh asset is ready. A pending status
+    // means that any mesh dependency may still be unresolved: source/view
+    // processing, geometry GPU resources, or material/texture GPU resources.
+    // This method accesses render data and must be called from the render
+    // thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
-    // Reports mesh source/view processing status. OK does not imply GPU buffers
-    // exist or that GPU copy commands have been enqueued.
-    static RADIENT_STATUS         GetLoadStatus(IRadientAsset* pMeshAsset);
-    static RADIENT_STATUS         GetGPUResourceStatus(IRadientAsset* pMeshAsset);
-    static const MeshPayloadImpl* GetMeshPayload(IRadientMeshAsset* pMeshAsset);
-    static const MeshGPUData*     GetMeshGPUData(IRadientMeshAsset* pMeshAsset);
+    // Reports CPU-side mesh readiness: mesh source/view processing and material
+    // load dependencies. OK does not imply GPU buffers exist or that GPU copy
+    // commands have been enqueued.
+    static RADIENT_STATUS             GetLoadStatus(IRadientAsset* pMeshAsset);
+
+    // Reports render-resource readiness. This follows GetLoadStatus(), then
+    // checks geometry GPU resources and material/texture GPU resources.
+    static RADIENT_STATUS             GetGPUResourceStatus(IRadientAsset* pMeshAsset);
+    static const MeshPayloadImpl*     GetMeshPayload(IRadientMeshAsset* pMeshAsset);
+    static const IRadientMeshGPUData* GetMeshGPUData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);

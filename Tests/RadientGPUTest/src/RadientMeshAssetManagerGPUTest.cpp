@@ -57,7 +57,9 @@ RadientMeshAssetManagerSharedPtr CreateMeshManager(IRenderDevice*         pDevic
 }
 
 bool WaitForMeshDrawableStatus(IRadientMeshAsset* pMesh,
-                               RADIENT_STATUS     ExpectedStatus)
+                               RADIENT_STATUS     ExpectedStatus,
+                               IGPUUploadManager* pUploadManager = nullptr,
+                               IDeviceContext*    pContext       = nullptr)
 {
     for (Uint32 i = 0; i < 256; ++i)
     {
@@ -66,10 +68,27 @@ bool WaitForMeshDrawableStatus(IRadientMeshAsset* pMesh,
         if (Result.Status == ExpectedStatus)
             return true;
 
+        if (pUploadManager != nullptr && pContext != nullptr)
+            PumpUploadManager(*pUploadManager, *pContext);
+
         std::this_thread::sleep_for(1ms);
     }
 
     return RadientMeshAssetManager::GetDrawableMesh(pMesh, true).Status == ExpectedStatus;
+}
+
+bool WaitForMeshLoadStatus(IRadientMeshAsset* pMesh,
+                           RADIENT_STATUS     ExpectedStatus)
+{
+    for (Uint32 i = 0; i < 256; ++i)
+    {
+        if (RadientMeshAssetManager::GetLoadStatus(pMesh) == ExpectedStatus)
+            return true;
+
+        std::this_thread::sleep_for(1ms);
+    }
+
+    return RadientMeshAssetManager::GetLoadStatus(pMesh) == ExpectedStatus;
 }
 
 TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
@@ -159,10 +178,15 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));
     ASSERT_NE(pMesh, nullptr);
 
+    // Mesh geometry loading is asynchronous. Wait until source/view processing
+    // has completed so a pending drawable status below comes from GPU/material
+    // readiness, not from the mesh source task still being in flight.
+    ASSERT_TRUE(WaitForMeshLoadStatus(pMesh, RADIENT_STATUS_OK));
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+
     // The mesh payload is available, but render-ready drawable resolution must
     // stay pending until dependent texture GPU work has been enqueued.
     ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_PENDING));
-    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_PENDING);
     {
         const RadientDrawableMeshResolveResult Result =
@@ -177,7 +201,7 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
-    ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK));
+    ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK, pUploadManager, pContext));
     const RadientDrawableMeshResolveResult Result =
         RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);

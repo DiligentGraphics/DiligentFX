@@ -48,11 +48,11 @@ protected:
     ~IRadientAssetCacheRemovalHandler() = default;
 };
 
-template <typename StorageType, typename PayloadType>
-class RadientAssetPayloadImpl : public ObjectBase<IObject>
+template <typename StorageType, typename PayloadType, typename BaseInterface = IObject>
+class RadientAssetPayloadImpl : public ObjectBase<BaseInterface>
 {
 public:
-    using TBase   = ObjectBase<IObject>;
+    using TBase   = ObjectBase<BaseInterface>;
     using Storage = StorageType;
     using Payload = PayloadType;
 
