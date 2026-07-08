@@ -11,6 +11,7 @@ set(SOURCE
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Assets/RadientMeshSource.cpp
+    src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
     src/Assets/RadientMeshViewSource.cpp
     src/Assets/RadientTextureAssetManager.cpp
     src/Assets/RadientTextureSource.cpp
