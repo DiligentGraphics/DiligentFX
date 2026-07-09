@@ -33,7 +33,8 @@
 
 #include <array>
 #include <memory>
-#include <vector>
+#include <string>
+#include <utility>
 
 using namespace Diligent;
 
@@ -46,6 +47,18 @@ bool IsAcceptedOrMissingGPU(RADIENT_STATUS Status)
     // still be accepted; GPU availability is reported separately.
     return (Status == RADIENT_STATUS_OK ||
             Status == RADIENT_STATUS_PENDING);
+}
+
+void DrainThreadPool(IThreadPool& ThreadPool)
+{
+    // The zero-thread pool gives the test deterministic scheduling. A task may
+    // be requeued if its prerequisites are not ready yet, so drain with a guard
+    // instead of assuming a fixed number of ProcessTask() calls.
+    for (Uint32 Iteration = 0; ThreadPool.GetQueueSize() != 0 && Iteration < 16; ++Iteration)
+    {
+        ASSERT_TRUE(ThreadPool.ProcessTask(0, false));
+    }
+    EXPECT_EQ(ThreadPool.GetQueueSize(), 0u);
 }
 
 std::unique_ptr<RadientMeshSource> MakeMeshSource()
@@ -122,7 +135,7 @@ RADIENT_STATUS CreateMeshViewFromSource(RadientMeshAssetManager&            Mesh
         *pCreatedGPUData = pGPUData;
 
     IRadientMeshGPUData* const pGPUDataArray[] = {pGPUData.RawPtr()};
-    return MeshManager.CreateMeshView(pGPUDataArray, 1, ViewCI, &pMesh);
+    return MeshManager.CreateMeshView(ThreadPool, pGPUDataArray, 1, ViewCI, &pMesh);
 }
 
 } // namespace
@@ -199,13 +212,13 @@ TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGPUData)
     const RadientMeshViewCreateInfo  WholeView = MakeMeshView(WholePrimitive, 0, 3);
     RefCntAutoPtr<IRadientMeshAsset> pWholeMesh;
     IRadientMeshGPUData* const       pGPUDataArray[] = {pGPUData.RawPtr()};
-    EXPECT_EQ(pMeshManager->CreateMeshView(pGPUDataArray, 1, WholeView, &pWholeMesh), RADIENT_STATUS_OK);
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, WholeView, &pWholeMesh)));
     ASSERT_NE(pWholeMesh, nullptr);
 
     RadientMeshPrimitiveCreateInfo   SubrangePrimitive{};
     const RadientMeshViewCreateInfo  SubrangeView = MakeMeshView(SubrangePrimitive, 1, 2);
     RefCntAutoPtr<IRadientMeshAsset> pSubrangeMesh;
-    EXPECT_EQ(pMeshManager->CreateMeshView(pGPUDataArray, 1, SubrangeView, &pSubrangeMesh), RADIENT_STATUS_OK);
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, SubrangeView, &pSubrangeMesh)));
     ASSERT_NE(pSubrangeMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -245,7 +258,7 @@ TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
     const RadientMeshViewCreateInfo  SubrangeView = MakeMeshView(SubrangePrimitive, 1, 2);
     RefCntAutoPtr<IRadientMeshAsset> pSubrangeMesh;
     IRadientMeshGPUData* const       pGPUDataArray[] = {pGPUData.RawPtr()};
-    EXPECT_EQ(pMeshManager->CreateMeshView(pGPUDataArray, 1, SubrangeView, &pSubrangeMesh), RADIENT_STATUS_OK);
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, SubrangeView, &pSubrangeMesh)));
     ASSERT_NE(pSubrangeMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -303,7 +316,7 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     const std::array<IRadientMeshGPUData*, 2> MeshGPUData{
         pDefaultGPUData.RawPtr(),
         pCustomGPUData.RawPtr()};
-    EXPECT_EQ(pMeshManager->CreateMeshView(MeshGPUData.data(), static_cast<Uint32>(MeshGPUData.size()), ViewCI, &pMesh), RADIENT_STATUS_OK);
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, MeshGPUData.data(), static_cast<Uint32>(MeshGPUData.size()), ViewCI, &pMesh)));
     ASSERT_NE(pMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -313,4 +326,79 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
+{
+    // The view task runs asynchronously, so CreateMeshView() must copy primitive
+    // ranges, optional geometry indices, primitive names, and material refs
+    // before returning. This test lets all caller-owned input memory go out of
+    // scope before the queued view task executes.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshGPUData> pGPUData;
+    EXPECT_EQ(CreateMeshGPUDataHandle(*pMeshManager, *pThreadPool, MakeMeshSource(), pGPUData),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pGPUData, nullptr);
+
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(pThreadPool->GetQueueSize(), 0u);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    {
+        const std::string PrimitiveName = "temporary primitive name";
+
+        std::array<RadientMeshPrimitiveCreateInfo, 1> Primitives{};
+        Primitives[0].Name       = PrimitiveName.c_str();
+        Primitives[0].FirstIndex = 0;
+        Primitives[0].IndexCount = 3;
+
+        std::array<Uint32, 1> GeometryIndices{0};
+
+        RadientMeshViewCreateInfo ViewCI{};
+        ViewCI.pPrimitives      = Primitives.data();
+        ViewCI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
+        ViewCI.pGeometryIndices = GeometryIndices.data();
+
+        IRadientMeshGPUData* const pGPUDataArray[] = {pGPUData.RawPtr()};
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, ViewCI, &pMesh)));
+        ASSERT_NE(pMesh, nullptr);
+    }
+
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
+}
+
+TEST(RadientMeshAssetManagerTest, MeshTasksKeepManagerAliveUntilCompletion)
+{
+    // CreateMeshGPUData() and CreateMeshView() both enqueue work that captures
+    // the manager. Releasing the caller's shared_ptr before the tasks run must
+    // not leave the returned mesh handle pending or touch a destroyed manager.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    {
+        RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+        ASSERT_NE(pMeshManager, nullptr);
+
+        RadientMeshPrimitiveCreateInfo  Primitive{};
+        const RadientMeshViewCreateInfo ViewCI = MakeMeshView(Primitive);
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshViewFromSource(*pMeshManager, *pThreadPool, MakeMeshSource(), ViewCI, pMesh)));
+        ASSERT_NE(pMesh, nullptr);
+    }
+
+    DrainThreadPool(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
 }

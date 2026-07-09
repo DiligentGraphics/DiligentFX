@@ -117,7 +117,7 @@ template <typename InterfaceType,
           const INTERFACE_ID& ImplID,
           RADIENT_ASSET_TYPE  AssetType,
           typename PayloadType>
-class RadientAssetImpl final : public ObjectBase<InterfaceType>
+class RadientAssetImpl : public ObjectBase<InterfaceType>
 {
 public:
     using TBase   = ObjectBase<InterfaceType>;

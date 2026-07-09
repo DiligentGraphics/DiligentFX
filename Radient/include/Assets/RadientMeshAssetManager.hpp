@@ -47,7 +47,7 @@ class ResourceManager;
 } // namespace GLTF
 
 class RadientMeshSource;
-class MeshGPUData;
+class MeshGPUDataPayloadImpl;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
 struct RadientMeshViewCreateInfo;
@@ -56,7 +56,7 @@ using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager
 
 // Opaque handle to shared mesh GPU data. The implementation details are private
 // to RadientMeshAssetManager.
-class IRadientMeshGPUData : public IObject
+class IRadientMeshGPUData : public IRadientAsset
 {
 };
 
@@ -82,7 +82,11 @@ public:
                                      std::unique_ptr<RadientMeshSource> pMeshSource,
                                      IRadientMeshGPUData**              ppMeshGPUData);
 
-    RADIENT_STATUS CreateMeshView(IRadientMeshGPUData* const*      ppMeshGPUData,
+    // Creates a mesh handle and schedules mesh-view payload creation. When
+    // GPU data is still loading, the view task depends on the corresponding
+    // geometry tasks if they are still available.
+    RADIENT_STATUS CreateMeshView(IThreadPool&                     ThreadPool,
+                                  IRadientMeshGPUData* const*      ppMeshGPUData,
                                   Uint32                           MeshGPUDataCount,
                                   const RadientMeshViewCreateInfo& ViewCI,
                                   IRadientMeshAsset**              ppMesh);
@@ -103,7 +107,7 @@ public:
     // Reports CPU-side mesh readiness: mesh source/view processing and material
     // load dependencies. OK does not imply GPU buffers exist or that GPU copy
     // commands have been enqueued.
-    static RADIENT_STATUS             GetLoadStatus(IRadientAsset* pMeshAsset);
+    static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMeshAsset);
 
     // Reports render-resource readiness. This follows GetLoadStatus(), then
     // checks geometry GPU resources and material/texture GPU resources.
@@ -118,10 +122,10 @@ private:
     RefCntWeakPtr<GLTF::ResourceManager> m_WeakResourceManager;
     RefCntWeakPtr<IGPUUploadManager>     m_WeakUploadManager;
 
-    RadientAssetCache<MeshPayloadImpl> m_MeshCache;
-    RadientAssetCache<MeshPayloadImpl> m_GLTFMeshCache;
-    RadientAssetCache<MeshGPUData>     m_MeshGPUDataCache;
-    std::atomic<RadientHandle>         m_NextAssetID{1};
+    RadientAssetCache<MeshPayloadImpl>        m_MeshCache;
+    RadientAssetCache<MeshPayloadImpl>        m_GLTFMeshCache;
+    RadientAssetCache<MeshGPUDataPayloadImpl> m_MeshGPUDataCache;
+    std::atomic<RadientHandle>                m_NextAssetID{1};
 };
 
 } // namespace Diligent
