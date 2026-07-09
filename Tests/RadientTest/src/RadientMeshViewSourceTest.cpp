@@ -179,7 +179,7 @@ TEST(RadientMeshViewSourceTest, MoveConstructorRebindsPrimitiveNames)
 
 TEST(RadientMeshViewSourceTest, CacheKeyIncludesPrimitiveRangesAndMaterials)
 {
-    static constexpr const char* MeshSourceCacheKey = "mesh-source:test";
+    static constexpr const char* GeometryCacheKey = "mesh-geometry:test";
 
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
@@ -206,19 +206,19 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesPrimitiveRangesAndMaterials)
     RadientMeshViewSource DifferentRangeView{MakeViewCI(&DifferentRange, 1), 3};
     RadientMeshViewSource DifferentMaterialView{MakeViewCI(&DifferentMaterial, 1), 3};
 
-    const std::string CacheKey = View.MakeCacheKey(MeshSourceCacheKey);
+    const std::string CacheKey = View.MakeCacheKey(GeometryCacheKey);
     ASSERT_FALSE(CacheKey.empty());
 
-    EXPECT_EQ(CacheKey, SameView.MakeCacheKey(MeshSourceCacheKey));
-    EXPECT_NE(CacheKey, DifferentRangeView.MakeCacheKey(MeshSourceCacheKey));
-    EXPECT_NE(CacheKey, DifferentMaterialView.MakeCacheKey(MeshSourceCacheKey));
-    EXPECT_NE(CacheKey, View.MakeCacheKey("mesh-source:other"));
+    EXPECT_EQ(CacheKey, SameView.MakeCacheKey(GeometryCacheKey));
+    EXPECT_NE(CacheKey, DifferentRangeView.MakeCacheKey(GeometryCacheKey));
+    EXPECT_NE(CacheKey, DifferentMaterialView.MakeCacheKey(GeometryCacheKey));
+    EXPECT_NE(CacheKey, View.MakeCacheKey("mesh-geometry:other"));
 
     EXPECT_TRUE(View.MakeCacheKey(nullptr).empty());
     EXPECT_TRUE(View.MakeCacheKey("").empty());
 
     RadientMeshViewSource InvalidView{MakeViewCI(nullptr, 1), 3};
-    EXPECT_TRUE(InvalidView.MakeCacheKey(MeshSourceCacheKey).empty());
+    EXPECT_TRUE(InvalidView.MakeCacheKey(GeometryCacheKey).empty());
 }
 
 TEST(RadientMeshViewSourceTest, GeometryIndicesSelectValidationRanges)
@@ -262,9 +262,9 @@ TEST(RadientMeshViewSourceTest, GeometryIndicesSelectValidationRanges)
 TEST(RadientMeshViewSourceTest, CacheKeyIncludesGeometrySourcesAndIndices)
 {
     const std::array<Uint32, 2>    GeometryIndexCounts{3, 3};
-    const std::vector<std::string> MeshSourceKeys{
-        "mesh-source:geometry-0",
-        "mesh-source:geometry-1"};
+    const std::vector<std::string> GeometryKeys{
+        "mesh-geometry:0",
+        "mesh-geometry:1"};
 
     RadientMeshPrimitiveCreateInfo Primitive = MakePrimitive();
 
@@ -280,16 +280,16 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesGeometrySourcesAndIndices)
         GeometryIndexCounts.data(),
         static_cast<Uint32>(GeometryIndexCounts.size())};
 
-    const std::string CacheKey = View0.MakeCacheKey(MeshSourceKeys);
+    const std::string CacheKey = View0.MakeCacheKey(GeometryKeys);
     ASSERT_FALSE(CacheKey.empty());
 
-    EXPECT_NE(CacheKey, View1.MakeCacheKey(MeshSourceKeys));
+    EXPECT_NE(CacheKey, View1.MakeCacheKey(GeometryKeys));
 
-    std::vector<std::string> DifferentSourceKeys = MeshSourceKeys;
-    DifferentSourceKeys[1]                       = "mesh-source:other-geometry";
-    EXPECT_NE(CacheKey, View0.MakeCacheKey(DifferentSourceKeys));
+    std::vector<std::string> DifferentGeometryKeys = GeometryKeys;
+    DifferentGeometryKeys[1]                       = "mesh-geometry:other";
+    EXPECT_NE(CacheKey, View0.MakeCacheKey(DifferentGeometryKeys));
 
-    std::vector<std::string> EmptySourceKey = MeshSourceKeys;
-    EmptySourceKey[0].clear();
-    EXPECT_TRUE(View0.MakeCacheKey(EmptySourceKey).empty());
+    std::vector<std::string> EmptyGeometryKey = GeometryKeys;
+    EmptyGeometryKey[0].clear();
+    EXPECT_TRUE(View0.MakeCacheKey(EmptyGeometryKey).empty());
 }

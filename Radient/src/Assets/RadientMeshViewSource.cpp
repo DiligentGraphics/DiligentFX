@@ -158,18 +158,18 @@ void RadientMeshViewSource::BindPrimitiveNames() noexcept
     }
 }
 
-std::string RadientMeshViewSource::MakeCacheKey(const char* MeshSourceCacheKey) const
+std::string RadientMeshViewSource::MakeCacheKey(const char* GeometryCacheKey) const
 {
-    if (MeshSourceCacheKey == nullptr)
+    if (GeometryCacheKey == nullptr)
         return {};
 
-    return MakeCacheKey({std::string{MeshSourceCacheKey}});
+    return MakeCacheKey({std::string{GeometryCacheKey}});
 }
 
-std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& MeshSourceCacheKeys) const
+std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& GeometryCacheKeys) const
 {
     if (RADIENT_FAILED(m_Status) ||
-        MeshSourceCacheKeys.empty() ||
+        GeometryCacheKeys.empty() ||
         m_GeometryIndices.size() != m_Primitives.size())
     {
         return {};
@@ -178,13 +178,13 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
     XXH128State Hasher;
     Hasher.Update(Uint32{2}); // Mesh view cache key version.
 
-    Hasher.Update(static_cast<Uint64>(MeshSourceCacheKeys.size()));
-    for (const std::string& MeshSourceCacheKey : MeshSourceCacheKeys)
+    Hasher.Update(static_cast<Uint64>(GeometryCacheKeys.size()));
+    for (const std::string& GeometryCacheKey : GeometryCacheKeys)
     {
-        if (MeshSourceCacheKey.empty())
+        if (GeometryCacheKey.empty())
             return {};
 
-        UpdateString(Hasher, MeshSourceCacheKey.c_str());
+        UpdateString(Hasher, GeometryCacheKey.c_str());
     }
 
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));

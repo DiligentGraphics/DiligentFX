@@ -26,7 +26,9 @@
 
 #pragma once
 
+#include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
+#include "GraphicsTypes.h"
 #include "HashUtils.hpp"
 #include "RadientAssets.h"
 
@@ -40,8 +42,8 @@
 namespace Diligent
 {
 
-/// Owns CPU-side mesh source data that is packed into mesh vertex and index buffers.
-class RadientMeshSource final
+/// Owns CPU-side vertex attribute source data and packs it into destination vertex buffers.
+class RadientMeshVertexSource final
 {
 public:
     struct SourceAttribute
@@ -65,15 +67,6 @@ public:
         Uint32 Stride = 0;
     };
 
-    struct SourceIndexData
-    {
-        /// Pointer to the first tightly packed index.
-        const void* pData = nullptr;
-
-        /// Source index type. VT_UINT8, VT_UINT16, and VT_UINT32 are supported.
-        VALUE_TYPE Type = VT_UNDEFINED;
-    };
-
     struct CreateInfo
     {
         /// Source vertex attributes.
@@ -85,31 +78,27 @@ public:
         /// Number of source vertices.
         Uint32 VertexCount = 0;
 
-        /// Source index data.
-        SourceIndexData Indices;
-
-        /// Number of source indices.
-        Uint32 IndexCount = 0;
-
         /// Keeps borrowed source memory alive.
-        /// If null, source data is copied into RadientMeshSource.
+        /// If null, source data is copied into RadientMeshVertexSource.
         /// If non-null, source data is borrowed and this owner must keep all source spans alive.
         std::shared_ptr<const void> pSourceDataOwner;
     };
-
-    explicit RadientMeshSource(const CreateInfo& CI);
-    explicit RadientMeshSource(const RadientMeshCreateInfo& MeshCI);
-
-    RadientMeshSource(const RadientMeshSource&)            = delete;
-    RadientMeshSource(RadientMeshSource&&)                 = delete;
-    RadientMeshSource& operator=(const RadientMeshSource&) = delete;
-    RadientMeshSource& operator=(RadientMeshSource&&)      = delete;
 
     struct PackDestination
     {
         void*  pData    = nullptr;
         Uint32 DataSize = 0;
     };
+
+    explicit RadientMeshVertexSource(const CreateInfo& CI);
+    explicit RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI);
+
+    // clang-format off
+    RadientMeshVertexSource(const RadientMeshVertexSource&)            = delete;
+    RadientMeshVertexSource(RadientMeshVertexSource&&)                 = delete;
+    RadientMeshVertexSource& operator=(const RadientMeshVertexSource&) = delete;
+    RadientMeshVertexSource& operator=(RadientMeshVertexSource&&)      = delete;
+    // clang-format on
 
     RADIENT_STATUS GetStatus() const
     {
@@ -132,16 +121,6 @@ public:
     Uint32 GetVertexCount() const
     {
         return m_VertexCount;
-    }
-
-    Uint32 GetIndexCount() const
-    {
-        return m_IndexCount;
-    }
-
-    Uint32 GetIndexDataSize() const
-    {
-        return m_IndexCount * sizeof(Uint32);
     }
 
     Uint32 GetVertexBufferCount() const
@@ -177,11 +156,9 @@ public:
             (m_ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
     }
 
-    RADIENT_STATUS PackIndexData(PackDestination Destination) const;
     RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const;
 
-    /// Returns a key for packed GPU vertex/index data. Primitive ranges and
-    /// materials are intentionally not part of this key.
+    /// Returns a key for packed GPU vertex data.
     std::string MakeCacheKey() const;
 
 private:
@@ -206,29 +183,23 @@ private:
     }
 
 private:
-    RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
+    RADIENT_STATUS m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
 
     std::unordered_map<HashMapStringKey, SrcAttributeData, HashMapStringKey::Hasher> m_SrcAttributes;
 
     PBR_Renderer::PSO_FLAGS m_VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
     Uint32 m_VertexCount = 0;
-    Uint32 m_IndexCount  = 0;
 
     static_assert(GLTF::ModelCreateInfo::MaxBuffers <= sizeof(Uint32) * 8,
-                  "RadientMeshSource active vertex buffer mask must fit all GLTF vertex buffers.");
+                  "RadientMeshVertexSource active vertex buffer mask must fit all GLTF vertex buffers.");
     Uint32 m_ActiveVertexBufferMask = 0;
-
-    VALUE_TYPE   m_IndexType  = VT_UNDEFINED;
-    const Uint8* m_pIndexData = nullptr;
 
     std::vector<GLTF::VertexAttributeDesc> m_DstAttributes;
     std::vector<std::string>               m_DstAttributeNames;
     std::vector<std::unique_ptr<Uint8[]>>  m_DstAttributeDefaultValues;
     std::vector<Uint32>                    m_VertexStrides;
     std::vector<Uint32>                    m_VertexBufferDataSizes;
-
-    std::vector<Uint8> m_Indices;
 
     std::shared_ptr<const void> m_pSourceDataOwner;
 };

@@ -8,9 +8,10 @@ set(SOURCE
     src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
+    src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
-    src/Assets/RadientMeshSource.cpp
+    src/Assets/RadientMeshVertexSource.cpp
     src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
     src/Assets/RadientMeshViewSource.cpp
     src/Assets/RadientTextureAssetManager.cpp
@@ -46,8 +47,9 @@ set(INCLUDE
     include/Assets/RadientDrawableMeshConverter.hpp
     include/Assets/RadientGLTFLoader.hpp
     include/Assets/RadientMaterialAssetManager.hpp
+    include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
-    include/Assets/RadientMeshSource.hpp
+    include/Assets/RadientMeshVertexSource.hpp
     include/Assets/RadientMeshViewSource.hpp
     include/Assets/RadientTextureAssetManager.hpp
     include/Assets/RadientTextureFormat.hpp

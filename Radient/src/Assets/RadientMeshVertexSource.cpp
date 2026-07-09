@@ -24,16 +24,14 @@
  *  of the possibility of such damages.
  */
 
-#include "Assets/RadientMeshSource.hpp"
+#include "Assets/RadientMeshVertexSource.hpp"
 
-#include "DebugUtilities.hpp"
 #include "GLTFVertexDataConverter.hpp"
 #include "GraphicsAccessories.hpp"
 #include "XXH128Hasher.hpp"
 
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -62,32 +60,10 @@ bool CheckStridedByteSize(Uint32 Count, Uint32 Stride, Uint32 ElementSize)
     return Uint64{Count - 1} * Stride + ElementSize <= (std::numeric_limits<Uint32>::max)();
 }
 
-bool IsSupportedSourceIndexType(VALUE_TYPE IndexType)
-{
-    return (IndexType == VT_UINT8 ||
-            IndexType == VT_UINT16 ||
-            IndexType == VT_UINT32);
-}
-
-VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
-{
-    switch (IndexType)
-    {
-        case RADIENT_INDEX_TYPE_UINT16:
-            return VT_UINT16;
-
-        case RADIENT_INDEX_TYPE_UINT32:
-            return VT_UINT32;
-
-        default:
-            return VT_UNDEFINED;
-    }
-}
-
-bool GetSourceAttributeLayout(const RadientMeshSource::SourceAttribute& Attribute,
-                              Uint32                                    VertexCount,
-                              Uint32&                                   ElementSize,
-                              Uint32&                                   Stride)
+bool GetSourceAttributeLayout(const RadientMeshVertexSource::SourceAttribute& Attribute,
+                              Uint32                                          VertexCount,
+                              Uint32&                                         ElementSize,
+                              Uint32&                                         Stride)
 {
     if (Attribute.Name == nullptr ||
         Attribute.pData == nullptr ||
@@ -111,39 +87,14 @@ bool GetSourceAttributeLayout(const RadientMeshSource::SourceAttribute& Attribut
         CheckStridedByteSize(VertexCount, Stride, ElementSize);
 }
 
-bool GetSourceIndexLayout(const RadientMeshSource::SourceIndexData& Indices,
-                          Uint32                                    IndexCount,
-                          Uint32&                                   ElementSize)
-{
-    if (Indices.pData == nullptr)
-        return false;
-
-    if (!IsSupportedSourceIndexType(Indices.Type))
-        return false;
-
-    ElementSize = GetValueSize(Indices.Type);
-    if (ElementSize == 0)
-        return false;
-
-    return CheckByteSize(IndexCount, ElementSize);
-}
-
-bool ValidateMeshSourceCI(const RadientMeshSource::CreateInfo& CI)
+bool ValidateMeshVertexSourceCI(const RadientMeshVertexSource::CreateInfo& CI)
 {
     if (CI.VertexCount == 0 ||
         CI.AttributeCount == 0 ||
-        CI.pAttributes == nullptr ||
-        CI.IndexCount == 0)
+        CI.pAttributes == nullptr)
     {
         return false;
     }
-
-    if (!CheckByteSize(CI.IndexCount, sizeof(Uint32)))
-        return false;
-
-    Uint32 IndexElementSize = 0;
-    if (!GetSourceIndexLayout(CI.Indices, CI.IndexCount, IndexElementSize))
-        return false;
 
     for (Uint32 AttributeIndex = 0; AttributeIndex < CI.AttributeCount; ++AttributeIndex)
     {
@@ -152,6 +103,22 @@ bool ValidateMeshSourceCI(const RadientMeshSource::CreateInfo& CI)
         if (!GetSourceAttributeLayout(CI.pAttributes[AttributeIndex], CI.VertexCount, ElementSize, Stride))
             return false;
     }
+
+    return true;
+}
+
+bool ValidateRadientMeshVertexSourceCI(const RadientMeshCreateInfo& MeshCI)
+{
+    if (MeshCI.VertexCount == 0 ||
+        MeshCI.pPositions == nullptr)
+    {
+        return false;
+    }
+
+    const bool HasBoneIndices = MeshCI.pBoneIndices0 != nullptr;
+    const bool HasBoneWeights = MeshCI.pBoneWeights0 != nullptr;
+    if (HasBoneIndices != HasBoneWeights)
+        return false;
 
     return true;
 }
@@ -220,43 +187,16 @@ void UpdateString(XXH128State& Hasher, const Char* Str)
         Hasher.UpdateRaw(Str, Len);
 }
 
-bool ValidateRadientMeshSourceCI(const RadientMeshCreateInfo& MeshCI)
-{
-    if (MeshCI.VertexCount == 0 ||
-        MeshCI.pPositions == nullptr ||
-        MeshCI.IndexCount == 0 ||
-        MeshCI.pIndices == nullptr)
-    {
-        return false;
-    }
-
-    if (!CheckByteSize(MeshCI.IndexCount, sizeof(Uint32)))
-        return false;
-
-    const bool HasBoneIndices = MeshCI.pBoneIndices0 != nullptr;
-    const bool HasBoneWeights = MeshCI.pBoneWeights0 != nullptr;
-    if (HasBoneIndices != HasBoneWeights)
-        return false;
-
-    if (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
-        MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32)
-    {
-        return false;
-    }
-
-    return true;
-}
-
 } // namespace
 
-RadientMeshSource::RadientMeshSource(const CreateInfo& CI)
+RadientMeshVertexSource::RadientMeshVertexSource(const CreateInfo& CI)
 {
     Initialize(CI);
 }
 
-RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
+RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI)
 {
-    if (!ValidateRadientMeshSourceCI(MeshCI))
+    if (!ValidateRadientMeshVertexSourceCI(MeshCI))
     {
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
@@ -292,24 +232,31 @@ RadientMeshSource::RadientMeshSource(const RadientMeshCreateInfo& MeshCI)
     CI.pAttributes    = Attributes.data();
     CI.AttributeCount = AttributeCount;
     CI.VertexCount    = MeshCI.VertexCount;
-    CI.Indices.pData  = MeshCI.pIndices;
-    CI.Indices.Type   = GetSourceIndexType(MeshCI.IndexType);
-    CI.IndexCount     = MeshCI.IndexCount;
 
     Initialize(CI);
 }
 
-void RadientMeshSource::Initialize(const CreateInfo& CI)
+void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
 {
-    if (!ValidateMeshSourceCI(CI))
+    m_Status = RADIENT_STATUS_OK;
+    m_SrcAttributes.clear();
+    m_VertexAttribFlags      = PBR_Renderer::PSO_FLAG_NONE;
+    m_VertexCount            = 0;
+    m_ActiveVertexBufferMask = 0;
+    m_DstAttributes.clear();
+    m_DstAttributeNames.clear();
+    m_DstAttributeDefaultValues.clear();
+    m_VertexStrides.clear();
+    m_VertexBufferDataSizes.clear();
+    m_pSourceDataOwner.reset();
+
+    if (!ValidateMeshVertexSourceCI(CI))
     {
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
 
     m_VertexCount = CI.VertexCount;
-    m_IndexCount  = CI.IndexCount;
-    m_IndexType   = CI.Indices.Type;
 
     const bool BorrowSourceData = CI.pSourceDataOwner != nullptr;
     if (BorrowSourceData)
@@ -378,46 +325,17 @@ void RadientMeshSource::Initialize(const CreateInfo& CI)
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
-
-    Uint32 IndexElementSize = 0;
-    if (!GetSourceIndexLayout(CI.Indices, m_IndexCount, IndexElementSize))
-    {
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
-        return;
-    }
-
-    const Uint8* const pSrcIndices = static_cast<const Uint8*>(CI.Indices.pData);
-    if (BorrowSourceData)
-    {
-        // Index data is tightly packed by contract, so the source bytes can be
-        // referenced directly when the source owner is retained.
-        m_pIndexData = pSrcIndices;
-    }
-    else
-    {
-        m_Indices.resize(size_t{m_IndexCount} * IndexElementSize);
-        std::memcpy(m_Indices.data(), pSrcIndices, m_Indices.size());
-        m_pIndexData = m_Indices.data();
-    }
 }
 
-std::string RadientMeshSource::MakeCacheKey() const
+std::string RadientMeshVertexSource::MakeCacheKey() const
 {
     if (RADIENT_FAILED(m_Status) || m_DstAttributes.empty())
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{6}, // Packed mesh geometry cache key version.
+    Hasher.Update(Uint32{1}, // Mesh vertex source cache key version.
                   m_VertexCount,
-                  m_IndexCount,
-                  m_IndexType,
                   m_ActiveVertexBufferMask);
-
-    const Uint32 IndexElementSize = GetValueSize(m_IndexType);
-    // Keep the source index representation in the key for now. PackIndexData()
-    // always expands UINT8/UINT16 indices to UINT32 during upload.
-    Hasher.Update(Uint64{m_IndexCount} * IndexElementSize);
-    UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
     Hasher.Update(static_cast<Uint64>(m_VertexStrides.size()));
     for (Uint32 Stride : m_VertexStrides)
@@ -469,11 +387,11 @@ std::string RadientMeshSource::MakeCacheKey() const
         }
     }
 
-    return std::string{"mesh-geometry:"} + Hasher.Digest().ToString();
+    return std::string{"mesh-vertex:"} + Hasher.Digest().ToString();
 }
 
-RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,
-                                                      Uint32                           NumDstAttributes)
+RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAttributeDesc* pDstAttributes,
+                                                            Uint32                           NumDstAttributes)
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;
@@ -648,54 +566,8 @@ RADIENT_STATUS RadientMeshSource::SetVertexAttributes(const GLTF::VertexAttribut
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientMeshSource::PackIndexData(PackDestination Destination) const
-{
-    if (RADIENT_FAILED(m_Status))
-        return m_Status;
-
-    if (Destination.pData == nullptr ||
-        Destination.DataSize < GetIndexDataSize())
-    {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    Uint8* const pDstIndices = static_cast<Uint8*>(Destination.pData);
-    if (m_pIndexData == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (m_IndexType == VT_UINT32)
-    {
-        std::memcpy(pDstIndices, m_pIndexData, GetIndexDataSize());
-    }
-    else if (m_IndexType == VT_UINT16)
-    {
-        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-        {
-            Uint16 Value16 = 0;
-            std::memcpy(&Value16, m_pIndexData + size_t{Index} * sizeof(Value16), sizeof(Value16));
-
-            const Uint32 Value = Value16;
-            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
-        }
-    }
-    else if (m_IndexType == VT_UINT8)
-    {
-        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-        {
-            const Uint32 Value = m_pIndexData[Index];
-            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
-        }
-    }
-    else
-    {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS RadientMeshSource::PackVertexData(Uint32          VertexBufferIndex,
-                                                 PackDestination Destination) const
+RADIENT_STATUS RadientMeshVertexSource::PackVertexData(Uint32          VertexBufferIndex,
+                                                       PackDestination Destination) const
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;

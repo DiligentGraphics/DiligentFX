@@ -46,7 +46,8 @@ namespace GLTF
 class ResourceManager;
 } // namespace GLTF
 
-class RadientMeshSource;
+class RadientMeshIndexSource;
+class RadientMeshVertexSource;
 class MeshGPUDataPayloadImpl;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
@@ -78,9 +79,10 @@ public:
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
-    RADIENT_STATUS CreateMeshGPUData(IThreadPool&                       ThreadPool,
-                                     std::unique_ptr<RadientMeshSource> pMeshSource,
-                                     IRadientMeshGPUData**              ppMeshGPUData);
+    RADIENT_STATUS CreateMeshGPUData(IThreadPool&                             ThreadPool,
+                                     std::unique_ptr<RadientMeshVertexSource> pVertexSource,
+                                     std::unique_ptr<RadientMeshIndexSource>  pIndexSource,
+                                     IRadientMeshGPUData**                    ppMeshGPUData);
 
     // Creates a mesh handle and schedules mesh-view payload creation. When
     // GPU data is still loading, the view task depends on the corresponding

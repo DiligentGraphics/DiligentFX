@@ -86,8 +86,8 @@ public:
         return PrimitiveIndex < m_Materials.size() ? m_Materials[PrimitiveIndex].RawPtr() : nullptr;
     }
 
-    std::string MakeCacheKey(const char* MeshSourceCacheKey) const;
-    std::string MakeCacheKey(const std::vector<std::string>& MeshSourceCacheKeys) const;
+    std::string MakeCacheKey(const char* GeometryCacheKey) const;
+    std::string MakeCacheKey(const std::vector<std::string>& GeometryCacheKeys) const;
 
 private:
     void BindPrimitiveNames() noexcept;
