@@ -88,6 +88,8 @@ public:
         return m_IndexCount * sizeof(Uint32);
     }
 
+    static bool IsSupportedIndexType(VALUE_TYPE IndexType);
+
     RADIENT_STATUS PackIndexData(PackDestination Destination) const;
 
     /// Returns a key for packed GPU index data.

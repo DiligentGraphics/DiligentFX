@@ -43,13 +43,6 @@ bool CheckByteSize(Uint32 Count, Uint32 Stride)
     return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
 }
 
-bool IsSupportedSourceIndexType(VALUE_TYPE IndexType)
-{
-    return (IndexType == VT_UINT8 ||
-            IndexType == VT_UINT16 ||
-            IndexType == VT_UINT32);
-}
-
 VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
 {
     switch (IndexType)
@@ -73,7 +66,7 @@ bool GetSourceIndexLayout(const void* pData,
     if (pData == nullptr)
         return false;
 
-    if (!IsSupportedSourceIndexType(Type))
+    if (!RadientMeshIndexSource::IsSupportedIndexType(Type))
         return false;
 
     ElementSize = GetValueSize(Type);
@@ -131,6 +124,13 @@ RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshCreateInfo& Mesh
     CI.Type       = GetSourceIndexType(MeshCI.IndexType);
     CI.IndexCount = MeshCI.IndexCount;
     Initialize(CI);
+}
+
+bool RadientMeshIndexSource::IsSupportedIndexType(VALUE_TYPE IndexType)
+{
+    return (IndexType == VT_UINT8 ||
+            IndexType == VT_UINT16 ||
+            IndexType == VT_UINT32);
 }
 
 void RadientMeshIndexSource::Initialize(const CreateInfo& CI)
