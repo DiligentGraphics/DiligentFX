@@ -68,7 +68,7 @@ struct MeshSources
     std::unique_ptr<RadientMeshIndexSource>  pIndexSource;
 };
 
-MeshSources MakeMeshSources()
+MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2})
 {
     // Leave destination vertex attributes unset. RadientMeshAssetManager should
     // resolve the default GLTF layout before computing the mesh cache key.
@@ -76,8 +76,6 @@ MeshSources MakeMeshSources()
         RadientFloat3{0.f, 0.f, 0.f},
         RadientFloat3{1.f, 0.f, 0.f},
         RadientFloat3{0.f, 1.f, 0.f}};
-    static constexpr std::array<Uint32, 3> Indices{0, 1, 2};
-
     RadientMeshCreateInfo MeshCI{};
     MeshCI.pPositions  = Positions.data();
     MeshCI.VertexCount = static_cast<Uint32>(Positions.size());
@@ -118,46 +116,93 @@ MeshSources MakeCustomLayoutMeshSources()
     return Sources;
 }
 
-RADIENT_STATUS CreateMeshGPUDataHandle(RadientMeshAssetManager&            MeshManager,
-                                       IThreadPool&                        ThreadPool,
-                                       MeshSources                         Sources,
-                                       RefCntAutoPtr<IRadientMeshGPUData>& pGPUData)
+struct MeshGeometryHandles
 {
-    IRadientMeshGPUData* pRawGPUData = nullptr;
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+    RefCntAutoPtr<IRadientMeshIndexData>  pIndexData;
+};
 
-    const RADIENT_STATUS Status = MeshManager.CreateMeshGPUData(
+RADIENT_STATUS CreateMeshVertexDataHandle(RadientMeshAssetManager&                 MeshManager,
+                                          IThreadPool&                             ThreadPool,
+                                          std::unique_ptr<RadientMeshVertexSource> pVertexSource,
+                                          RefCntAutoPtr<IRadientMeshVertexData>&   pVertexData)
+{
+    IRadientMeshVertexData* pRawVertexData = nullptr;
+    const RADIENT_STATUS    Status         = MeshManager.CreateMeshVertexData(
         ThreadPool,
-        std::move(Sources.pVertexSource),
-        std::move(Sources.pIndexSource),
-        &pRawGPUData);
-    pGPUData.Attach(pRawGPUData);
+        std::move(pVertexSource),
+        &pRawVertexData);
+    pVertexData.Attach(pRawVertexData);
     return Status;
 }
 
-RADIENT_STATUS CreateMeshViewFromSource(RadientMeshAssetManager&            MeshManager,
-                                        IThreadPool&                        ThreadPool,
-                                        MeshSources                         Sources,
-                                        const RadientMeshViewCreateInfo&    ViewCI,
-                                        RefCntAutoPtr<IRadientMeshAsset>&   pMesh,
-                                        RefCntAutoPtr<IRadientMeshGPUData>* pCreatedGPUData = nullptr)
+RADIENT_STATUS CreateMeshIndexDataHandle(RadientMeshAssetManager&                MeshManager,
+                                         IThreadPool&                            ThreadPool,
+                                         std::unique_ptr<RadientMeshIndexSource> pIndexSource,
+                                         RefCntAutoPtr<IRadientMeshIndexData>&   pIndexData)
 {
-    RefCntAutoPtr<IRadientMeshGPUData> pGPUData;
-    const RADIENT_STATUS               Status = CreateMeshGPUDataHandle(MeshManager, ThreadPool, std::move(Sources), pGPUData);
-    if (RADIENT_FAILED(Status) || pGPUData == nullptr)
+    IRadientMeshIndexData* pRawIndexData = nullptr;
+    const RADIENT_STATUS   Status        = MeshManager.CreateMeshIndexData(
+        ThreadPool,
+        std::move(pIndexSource),
+        &pRawIndexData);
+    pIndexData.Attach(pRawIndexData);
+    return Status;
+}
+
+RADIENT_STATUS CreateMeshGeometryData(RadientMeshAssetManager& MeshManager,
+                                      IThreadPool&             ThreadPool,
+                                      MeshSources              Sources,
+                                      MeshGeometryHandles&     Geometry)
+{
+    RADIENT_STATUS Status = CreateMeshVertexDataHandle(MeshManager,
+                                                       ThreadPool,
+                                                       std::move(Sources.pVertexSource),
+                                                       Geometry.pVertexData);
+    if (RADIENT_FAILED(Status) || Geometry.pVertexData == nullptr)
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
 
-    if (pCreatedGPUData != nullptr)
-        *pCreatedGPUData = pGPUData;
+    Status = CreateMeshIndexDataHandle(MeshManager,
+                                       ThreadPool,
+                                       std::move(Sources.pIndexSource),
+                                       Geometry.pIndexData);
+    if (RADIENT_FAILED(Status) || Geometry.pIndexData == nullptr)
+        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
 
-    IRadientMeshGPUData* const pGPUDataArray[] = {pGPUData.RawPtr()};
-    return MeshManager.CreateMeshView(ThreadPool, pGPUDataArray, 1, ViewCI, &pMesh);
+    return Status;
+}
+
+RadientMeshGeometryData MakeGeometryData(const MeshGeometryHandles& Geometry)
+{
+    return RadientMeshGeometryData{
+        Geometry.pVertexData.RawPtr(),
+        Geometry.pIndexData.RawPtr()};
+}
+
+RADIENT_STATUS CreateMeshViewFromSource(RadientMeshAssetManager&          MeshManager,
+                                        IThreadPool&                      ThreadPool,
+                                        MeshSources                       Sources,
+                                        const RadientMeshViewCreateInfo&  ViewCI,
+                                        RefCntAutoPtr<IRadientMeshAsset>& pMesh,
+                                        MeshGeometryHandles*              pCreatedGeometry = nullptr)
+{
+    MeshGeometryHandles  Geometry;
+    const RADIENT_STATUS Status = CreateMeshGeometryData(MeshManager, ThreadPool, std::move(Sources), Geometry);
+    if (RADIENT_FAILED(Status))
+        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+
+    if (pCreatedGeometry != nullptr)
+        *pCreatedGeometry = Geometry;
+
+    const RadientMeshGeometryData GeometryData = MakeGeometryData(Geometry);
+    return MeshManager.CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, &pMesh);
 }
 
 } // namespace
 
-TEST(RadientMeshAssetManagerTest, CreateMeshGPUDataAcceptsVertexAndIndexSources)
+TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
 {
-    // Mesh GPU data creation enqueues asynchronous work, so the test needs at
+    // Mesh data creation enqueues asynchronous work, so the test needs at
     // least one worker thread before waiting for all tasks to finish.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
@@ -209,7 +254,7 @@ TEST(RadientMeshAssetManagerTest, CreateMeshGPUDataAcceptsVertexAndIndexSources)
     pThreadPool->StopThreads();
 }
 
-TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGPUData)
+TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGeometryData)
 {
     // This exercises the split path used by GLTF planning: geometry data is
     // created once, while multiple mesh views can reference it independently.
@@ -219,21 +264,22 @@ TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGPUData)
     RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
     ASSERT_NE(pMeshManager, nullptr);
 
-    RefCntAutoPtr<IRadientMeshGPUData> pGPUData;
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGPUDataHandle(*pMeshManager, *pThreadPool, MakeMeshSources(), pGPUData)));
-    ASSERT_NE(pGPUData, nullptr);
+    MeshGeometryHandles Geometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry)));
+    ASSERT_NE(Geometry.pVertexData, nullptr);
+    ASSERT_NE(Geometry.pIndexData, nullptr);
+    const RadientMeshGeometryData GeometryData = MakeGeometryData(Geometry);
 
     RadientMeshPrimitiveCreateInfo   WholePrimitive{};
     const RadientMeshViewCreateInfo  WholeView = MakeMeshView(WholePrimitive, 0, 3);
     RefCntAutoPtr<IRadientMeshAsset> pWholeMesh;
-    IRadientMeshGPUData* const       pGPUDataArray[] = {pGPUData.RawPtr()};
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, WholeView, &pWholeMesh)));
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, WholeView, &pWholeMesh)));
     ASSERT_NE(pWholeMesh, nullptr);
 
     RadientMeshPrimitiveCreateInfo   SubrangePrimitive{};
     const RadientMeshViewCreateInfo  SubrangeView = MakeMeshView(SubrangePrimitive, 1, 2);
     RefCntAutoPtr<IRadientMeshAsset> pSubrangeMesh;
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, SubrangeView, &pSubrangeMesh)));
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, SubrangeView, &pSubrangeMesh)));
     ASSERT_NE(pSubrangeMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -243,15 +289,17 @@ TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGPUData)
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pSubrangeMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pSubrangeMesh), RADIENT_STATUS_NO_GPU_DATA);
 
-    EXPECT_EQ(RadientMeshAssetManager::GetMeshGPUData(pWholeMesh), pGPUData.RawPtr());
-    EXPECT_EQ(RadientMeshAssetManager::GetMeshGPUData(pSubrangeMesh), pGPUData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pWholeMesh), Geometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pWholeMesh), Geometry.pIndexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pSubrangeMesh), Geometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pSubrangeMesh), Geometry.pIndexData.RawPtr());
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pWholeMesh),
               RadientMeshAssetManager::GetMeshPayload(pSubrangeMesh));
 
     pThreadPool->StopThreads();
 }
 
-TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
+TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGeometryData)
 {
     // Mesh views should cache separately from uploaded geometry. Two meshes
     // may use different primitive ranges while sharing vertex/index data.
@@ -261,19 +309,20 @@ TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
     RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
     ASSERT_NE(pMeshManager, nullptr);
 
-    RadientMeshPrimitiveCreateInfo     WholePrimitive{};
-    const RadientMeshViewCreateInfo    WholeView = MakeMeshView(WholePrimitive, 0, 3);
-    RefCntAutoPtr<IRadientMeshAsset>   pWholeMesh;
-    RefCntAutoPtr<IRadientMeshGPUData> pGPUData;
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshViewFromSource(*pMeshManager, *pThreadPool, MakeMeshSources(), WholeView, pWholeMesh, std::addressof(pGPUData))));
+    RadientMeshPrimitiveCreateInfo   WholePrimitive{};
+    const RadientMeshViewCreateInfo  WholeView = MakeMeshView(WholePrimitive, 0, 3);
+    RefCntAutoPtr<IRadientMeshAsset> pWholeMesh;
+    MeshGeometryHandles              Geometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshViewFromSource(*pMeshManager, *pThreadPool, MakeMeshSources(), WholeView, pWholeMesh, std::addressof(Geometry))));
     ASSERT_NE(pWholeMesh, nullptr);
-    ASSERT_NE(pGPUData, nullptr);
+    ASSERT_NE(Geometry.pVertexData, nullptr);
+    ASSERT_NE(Geometry.pIndexData, nullptr);
 
     RadientMeshPrimitiveCreateInfo   SubrangePrimitive{};
     const RadientMeshViewCreateInfo  SubrangeView = MakeMeshView(SubrangePrimitive, 1, 2);
     RefCntAutoPtr<IRadientMeshAsset> pSubrangeMesh;
-    IRadientMeshGPUData* const       pGPUDataArray[] = {pGPUData.RawPtr()};
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, SubrangeView, &pSubrangeMesh)));
+    const RadientMeshGeometryData    GeometryData = MakeGeometryData(Geometry);
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, SubrangeView, &pSubrangeMesh)));
     ASSERT_NE(pSubrangeMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -289,8 +338,81 @@ TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGPUData)
     ASSERT_NE(pSubrangePayload, nullptr);
 
     EXPECT_NE(pWholePayload, pSubrangePayload);
-    EXPECT_EQ(RadientMeshAssetManager::GetMeshGPUData(pWholeMesh),
-              RadientMeshAssetManager::GetMeshGPUData(pSubrangeMesh));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pWholeMesh),
+              RadientMeshAssetManager::GetMeshVertexData(pSubrangeMesh));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pWholeMesh),
+              RadientMeshAssetManager::GetMeshIndexData(pSubrangeMesh));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, MeshViewsCanShareVertexDataWithDifferentIndexData)
+{
+    // Vertex and index data are independent assets. Two geometries can reuse
+    // the same vertex upload while drawing through different index buffers.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    MeshSources SourcesA = MakeMeshSources({0, 1, 2});
+    MeshSources SourcesB = MakeMeshSources({0, 2, 1});
+
+    RefCntAutoPtr<IRadientMeshVertexData> pSharedVertexData;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshVertexDataHandle(*pMeshManager,
+                                                                  *pThreadPool,
+                                                                  std::move(SourcesA.pVertexSource),
+                                                                  pSharedVertexData)));
+    ASSERT_NE(pSharedVertexData, nullptr);
+
+    RefCntAutoPtr<IRadientMeshIndexData> pIndexDataA;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshIndexDataHandle(*pMeshManager,
+                                                                 *pThreadPool,
+                                                                 std::move(SourcesA.pIndexSource),
+                                                                 pIndexDataA)));
+    ASSERT_NE(pIndexDataA, nullptr);
+
+    RefCntAutoPtr<IRadientMeshIndexData> pIndexDataB;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshIndexDataHandle(*pMeshManager,
+                                                                 *pThreadPool,
+                                                                 std::move(SourcesB.pIndexSource),
+                                                                 pIndexDataB)));
+    ASSERT_NE(pIndexDataB, nullptr);
+
+    RadientMeshPrimitiveCreateInfo  PrimitiveA{};
+    const RadientMeshViewCreateInfo ViewA = MakeMeshView(PrimitiveA);
+    const RadientMeshGeometryData   GeometryA{
+        pSharedVertexData.RawPtr(),
+        pIndexDataA.RawPtr()};
+
+    RefCntAutoPtr<IRadientMeshAsset> pMeshA;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryA, 1, ViewA, &pMeshA)));
+    ASSERT_NE(pMeshA, nullptr);
+
+    RadientMeshPrimitiveCreateInfo  PrimitiveB{};
+    const RadientMeshViewCreateInfo ViewB = MakeMeshView(PrimitiveB);
+    const RadientMeshGeometryData   GeometryB{
+        pSharedVertexData.RawPtr(),
+        pIndexDataB.RawPtr()};
+
+    RefCntAutoPtr<IRadientMeshAsset> pMeshB;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryB, 1, ViewB, &pMeshB)));
+    ASSERT_NE(pMeshB, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshA), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshB), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMeshA), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMeshB), RADIENT_STATUS_NO_GPU_DATA);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshA), pSharedVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshB), pSharedVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshA), pIndexDataA.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshB), pIndexDataB.RawPtr());
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMeshA),
+              RadientMeshAssetManager::GetMeshPayload(pMeshB));
 
     pThreadPool->StopThreads();
 }
@@ -306,13 +428,15 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
     ASSERT_NE(pMeshManager, nullptr);
 
-    RefCntAutoPtr<IRadientMeshGPUData> pDefaultGPUData;
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGPUDataHandle(*pMeshManager, *pThreadPool, MakeMeshSources(), pDefaultGPUData)));
-    ASSERT_NE(pDefaultGPUData, nullptr);
+    MeshGeometryHandles DefaultGeometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), DefaultGeometry)));
+    ASSERT_NE(DefaultGeometry.pVertexData, nullptr);
+    ASSERT_NE(DefaultGeometry.pIndexData, nullptr);
 
-    RefCntAutoPtr<IRadientMeshGPUData> pCustomGPUData;
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGPUDataHandle(*pMeshManager, *pThreadPool, MakeCustomLayoutMeshSources(), pCustomGPUData)));
-    ASSERT_NE(pCustomGPUData, nullptr);
+    MeshGeometryHandles CustomGeometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeCustomLayoutMeshSources(), CustomGeometry)));
+    ASSERT_NE(CustomGeometry.pVertexData, nullptr);
+    ASSERT_NE(CustomGeometry.pIndexData, nullptr);
 
     std::array<RadientMeshPrimitiveCreateInfo, 2> Primitives{};
     Primitives[0].FirstIndex = 0;
@@ -327,11 +451,11 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     ViewCI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
     ViewCI.pGeometryIndices = GeometryIndices.data();
 
-    RefCntAutoPtr<IRadientMeshAsset>          pMesh;
-    const std::array<IRadientMeshGPUData*, 2> MeshGPUData{
-        pDefaultGPUData.RawPtr(),
-        pCustomGPUData.RawPtr()};
-    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, MeshGPUData.data(), static_cast<Uint32>(MeshGPUData.size()), ViewCI, &pMesh)));
+    RefCntAutoPtr<IRadientMeshAsset>             pMesh;
+    const std::array<RadientMeshGeometryData, 2> GeometryData{
+        MakeGeometryData(DefaultGeometry),
+        MakeGeometryData(CustomGeometry)};
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, GeometryData.data(), static_cast<Uint32>(GeometryData.size()), ViewCI, &pMesh)));
     ASSERT_NE(pMesh, nullptr);
 
     pThreadPool->WaitForAllTasks();
@@ -355,11 +479,13 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
     RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
     ASSERT_NE(pMeshManager, nullptr);
 
-    RefCntAutoPtr<IRadientMeshGPUData> pGPUData;
-    EXPECT_EQ(CreateMeshGPUDataHandle(*pMeshManager, *pThreadPool, MakeMeshSources(), pGPUData),
+    MeshGeometryHandles Geometry;
+    EXPECT_EQ(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry),
               RADIENT_STATUS_PENDING);
-    ASSERT_NE(pGPUData, nullptr);
+    ASSERT_NE(Geometry.pVertexData, nullptr);
+    ASSERT_NE(Geometry.pIndexData, nullptr);
 
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
     ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
     ASSERT_EQ(pThreadPool->GetQueueSize(), 0u);
 
@@ -379,8 +505,8 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
         ViewCI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
         ViewCI.pGeometryIndices = GeometryIndices.data();
 
-        IRadientMeshGPUData* const pGPUDataArray[] = {pGPUData.RawPtr()};
-        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, pGPUDataArray, 1, ViewCI, &pMesh)));
+        const RadientMeshGeometryData GeometryData = MakeGeometryData(Geometry);
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewCI, &pMesh)));
         ASSERT_NE(pMesh, nullptr);
     }
 
@@ -394,7 +520,7 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
 
 TEST(RadientMeshAssetManagerTest, MeshTasksKeepManagerAliveUntilCompletion)
 {
-    // CreateMeshGPUData() and CreateMeshView() both enqueue work that captures
+    // Mesh data creation and CreateMeshView() enqueue work that captures
     // the manager. Releasing the caller's shared_ptr before the tasks run must
     // not leave the returned mesh handle pending or touch a destroyed manager.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});

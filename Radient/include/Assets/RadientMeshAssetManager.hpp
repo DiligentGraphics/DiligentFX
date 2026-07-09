@@ -48,17 +48,31 @@ class ResourceManager;
 
 class RadientMeshIndexSource;
 class RadientMeshVertexSource;
-class MeshGPUDataPayloadImpl;
+class MeshIndexDataPayloadImpl;
+class MeshVertexDataPayloadImpl;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
 struct RadientMeshViewCreateInfo;
 
 using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager>;
 
-// Opaque handle to shared mesh GPU data. The implementation details are private
-// to RadientMeshAssetManager.
-class IRadientMeshGPUData : public IRadientAsset
+// Opaque handle to shared mesh index data. The implementation details are
+// private to RadientMeshAssetManager.
+class IRadientMeshIndexData : public IRadientAsset
 {
+};
+
+// Opaque handle to shared mesh vertex data. The implementation details are
+// private to RadientMeshAssetManager.
+class IRadientMeshVertexData : public IRadientAsset
+{
+};
+
+struct RadientMeshGeometryData
+{
+    /// Vertex and index data that together form one drawable geometry.
+    IRadientMeshVertexData* pVertexData = nullptr;
+    IRadientMeshIndexData*  pIndexData  = nullptr;
 };
 
 class RadientMeshAssetManager final : public std::enable_shared_from_this<RadientMeshAssetManager>
@@ -79,17 +93,20 @@ public:
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
-    RADIENT_STATUS CreateMeshGPUData(IThreadPool&                             ThreadPool,
-                                     std::unique_ptr<RadientMeshVertexSource> pVertexSource,
-                                     std::unique_ptr<RadientMeshIndexSource>  pIndexSource,
-                                     IRadientMeshGPUData**                    ppMeshGPUData);
+    RADIENT_STATUS CreateMeshIndexData(IThreadPool&                            ThreadPool,
+                                       std::unique_ptr<RadientMeshIndexSource> pIndexSource,
+                                       IRadientMeshIndexData**                 ppIndexData);
+
+    RADIENT_STATUS CreateMeshVertexData(IThreadPool&                             ThreadPool,
+                                        std::unique_ptr<RadientMeshVertexSource> pVertexSource,
+                                        IRadientMeshVertexData**                 ppVertexData);
 
     // Creates a mesh handle and schedules mesh-view payload creation. When
-    // GPU data is still loading, the view task depends on the corresponding
-    // geometry tasks if they are still available.
+    // vertex or index data is still loading, the view task depends on the
+    // corresponding data tasks if they are still available.
     RADIENT_STATUS CreateMeshView(IThreadPool&                     ThreadPool,
-                                  IRadientMeshGPUData* const*      ppMeshGPUData,
-                                  Uint32                           MeshGPUDataCount,
+                                  const RadientMeshGeometryData*   pGeometryData,
+                                  Uint32                           GeometryCount,
                                   const RadientMeshViewCreateInfo& ViewCI,
                                   IRadientMeshAsset**              ppMesh);
 
@@ -113,9 +130,10 @@ public:
 
     // Reports render-resource readiness. This follows GetLoadStatus(), then
     // checks geometry GPU resources and material/texture GPU resources.
-    static RADIENT_STATUS             GetGPUResourceStatus(IRadientAsset* pMeshAsset);
-    static const MeshPayloadImpl*     GetMeshPayload(IRadientMeshAsset* pMeshAsset);
-    static const IRadientMeshGPUData* GetMeshGPUData(IRadientMeshAsset* pMeshAsset);
+    static RADIENT_STATUS                GetGPUResourceStatus(IRadientAsset* pMeshAsset);
+    static const MeshPayloadImpl*        GetMeshPayload(IRadientMeshAsset* pMeshAsset);
+    static const IRadientMeshIndexData*  GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
+    static const IRadientMeshVertexData* GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);
@@ -124,10 +142,11 @@ private:
     RefCntWeakPtr<GLTF::ResourceManager> m_WeakResourceManager;
     RefCntWeakPtr<IGPUUploadManager>     m_WeakUploadManager;
 
-    RadientAssetCache<MeshPayloadImpl>        m_MeshCache;
-    RadientAssetCache<MeshPayloadImpl>        m_GLTFMeshCache;
-    RadientAssetCache<MeshGPUDataPayloadImpl> m_MeshGPUDataCache;
-    std::atomic<RadientHandle>                m_NextAssetID{1};
+    RadientAssetCache<MeshPayloadImpl>           m_MeshCache;
+    RadientAssetCache<MeshPayloadImpl>           m_GLTFMeshCache;
+    RadientAssetCache<MeshIndexDataPayloadImpl>  m_MeshIndexDataCache;
+    RadientAssetCache<MeshVertexDataPayloadImpl> m_MeshVertexDataCache;
+    std::atomic<RadientHandle>                   m_NextAssetID{1};
 };
 
 } // namespace Diligent
