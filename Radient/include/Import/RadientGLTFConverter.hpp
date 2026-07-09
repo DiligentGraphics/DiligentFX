@@ -26,23 +26,80 @@
 
 #pragma once
 
+#include "BasicMath.hpp"
 #include "RadientSceneImporter.h"
+
+#include <memory>
 
 namespace Diligent
 {
 
 struct IRadientSceneWriter;
 class RadientAssetManagerImpl;
+class RadientMeshIndexSource;
+class RadientMeshVertexSource;
 
 namespace GLTF
 {
 
+class Document;
 struct Model;
+struct TinyGltfModelView;
+struct TinyGltfPrimitiveView;
 
 } // namespace GLTF
 
 namespace RadientGLTFConverter
 {
+
+struct MeshVertexSourceResult
+{
+    /// Conversion status. On failure, the whole result remains default-initialized.
+    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_ARGUMENT;
+
+    /// CPU vertex source created from the GLTF primitive.
+    std::unique_ptr<RadientMeshVertexSource> pSource;
+
+    /// Primitive bounds computed from the POSITION accessor.
+    float3 BBMin{};
+    float3 BBMax{};
+};
+
+struct MeshIndexSourceResult
+{
+    /// Conversion status. On failure, the whole result remains default-initialized.
+    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_ARGUMENT;
+
+    /// CPU index source created from the GLTF primitive.
+    std::unique_ptr<RadientMeshIndexSource> pSource;
+};
+
+/// Creates a Radient vertex source for a GLTF primitive.
+///
+/// The primitive must have a valid POSITION accessor. Other supported default
+/// GLTF attributes are added when present. The returned source borrows GLTF
+/// buffer spans, but keeps \p pDocument alive internally, so the caller may
+/// release its document reference after this function succeeds.
+///
+/// Returns a default MeshVertexSourceResult on failure.
+MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&               GltfModel,
+                                              const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                              const std::shared_ptr<const GLTF::Document>& pDocument);
+
+/// Creates a Radient index source for a GLTF primitive.
+///
+/// If the primitive has an index accessor, it must use a supported tightly
+/// packed unsigned index type. If the primitive is not indexed, sequential
+/// Uint32 indices are generated for \p VertexCount vertices. The returned
+/// source borrows GLTF buffer spans or generated index storage, but keeps
+/// \p pDocument alive internally, so the caller may release its document
+/// reference after this function succeeds.
+///
+/// Returns a default MeshIndexSourceResult on failure.
+MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&               GltfModel,
+                                            const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                            const std::shared_ptr<const GLTF::Document>& pDocument,
+                                            Uint32                                       VertexCount);
 
 RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&       GLTFModel,
                                      IRadientSceneAsset*      pModel,

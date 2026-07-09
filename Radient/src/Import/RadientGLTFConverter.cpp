@@ -27,20 +27,44 @@
 #include "Import/RadientGLTFConverter.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMeshIndexSource.hpp"
+#include "Assets/RadientMeshVertexSource.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientSceneWriter.h"
 
+#include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
+#include "GraphicsAccessories.hpp"
 #include "Errors.hpp"
 
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+#include "../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
+
+#include "TinyGltfModelView.hpp"
+
 #include <cmath>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Diligent
 {
 
 namespace
 {
+
+struct MeshSourceDataOwner
+{
+    explicit MeshSourceDataOwner(std::shared_ptr<const GLTF::Document> pDoc) :
+        pDocument{std::move(pDoc)}
+    {
+    }
+
+    std::shared_ptr<const GLTF::Document> pDocument;
+    std::vector<Uint32>                   GeneratedIndices;
+};
 
 RadientTransform ToRadientTransform(const GLTF::Node& Node)
 {
@@ -246,6 +270,144 @@ RADIENT_STATUS ResolveSceneIndex(const GLTF::Model& Model,
 
 namespace RadientGLTFConverter
 {
+
+MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&               GltfModel,
+                                              const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                              const std::shared_ptr<const GLTF::Document>& pDocument)
+{
+    if (pDocument == nullptr)
+        return {};
+
+    const int* pPositionAccessor = GltfPrimitive.GetAttribute(GLTF::PositionAttributeName);
+    if (pPositionAccessor == nullptr)
+        return {};
+
+    const auto PositionData = GLTF::GetGltfDataInfo(GltfModel, *pPositionAccessor);
+    if (PositionData.pData == nullptr ||
+        PositionData.ByteStride <= 0 ||
+        PositionData.Count == 0)
+    {
+        return {};
+    }
+
+    float3 BBMin;
+    float3 BBMax;
+    if (!GLTF::ComputePrimitiveBoundingBox(PositionData, BBMin, BBMax))
+        return {};
+
+    std::shared_ptr<MeshSourceDataOwner>                  pOwner = std::make_shared<MeshSourceDataOwner>(pDocument);
+    std::vector<RadientMeshVertexSource::SourceAttribute> SourceAttributes;
+    SourceAttributes.reserve(GLTF::DefaultVertexAttributes.size());
+
+    const Uint32 VertexCount = static_cast<Uint32>(PositionData.Count);
+
+    for (size_t AttribIndex = 0; AttribIndex < GLTF::DefaultVertexAttributes.size(); ++AttribIndex)
+    {
+        const GLTF::VertexAttributeDesc& DstAttrib = GLTF::DefaultVertexAttributes[AttribIndex];
+        const int*                       pAccessor = GltfPrimitive.GetAttribute(DstAttrib.Name);
+        if (pAccessor == nullptr)
+            continue;
+
+        const auto GltfData = GLTF::GetGltfDataInfo(GltfModel, *pAccessor);
+        if (GltfData.pData == nullptr ||
+            GltfData.ByteStride <= 0 ||
+            static_cast<Uint32>(GltfData.Count) != VertexCount)
+        {
+            return {};
+        }
+
+        RadientMeshVertexSource::SourceAttribute& SrcAttrib = SourceAttributes.emplace_back();
+
+        SrcAttrib.Name          = DstAttrib.Name;
+        SrcAttrib.Type          = GltfData.Accessor.GetComponentType();
+        SrcAttrib.NumComponents = static_cast<Uint8>(GltfData.Accessor.GetNumComponents());
+        SrcAttrib.IsNormalized  = GltfData.Accessor.IsNormalized();
+        SrcAttrib.pData         = GltfData.pData;
+        SrcAttrib.Stride        = static_cast<Uint32>(GltfData.ByteStride);
+    }
+
+    if (SourceAttributes.empty())
+        return {};
+
+    RadientMeshVertexSource::CreateInfo VertexCI;
+    VertexCI.pAttributes      = SourceAttributes.data();
+    VertexCI.AttributeCount   = static_cast<Uint32>(SourceAttributes.size());
+    VertexCI.VertexCount      = VertexCount;
+    VertexCI.pSourceDataOwner = pOwner;
+
+    std::unique_ptr<RadientMeshVertexSource> pSource = std::make_unique<RadientMeshVertexSource>(VertexCI);
+    if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)
+        return {};
+
+    MeshVertexSourceResult Result;
+    Result.Status  = RADIENT_STATUS_OK;
+    Result.pSource = std::move(pSource);
+    Result.BBMin   = BBMin;
+    Result.BBMax   = BBMax;
+    return Result;
+}
+
+MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&               GltfModel,
+                                            const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                            const std::shared_ptr<const GLTF::Document>& pDocument,
+                                            Uint32                                       VertexCount)
+{
+    if (pDocument == nullptr)
+        return {};
+
+    std::shared_ptr<MeshSourceDataOwner> pOwner = std::make_shared<MeshSourceDataOwner>(pDocument);
+    RadientMeshIndexSource::CreateInfo   IndexCI;
+    Uint32                               IndexCount    = 0;
+    const int                            IndexAccessor = GltfPrimitive.GetIndicesId();
+    if (IndexAccessor >= 0)
+    {
+        const auto GltfIndexData = GLTF::GetGltfDataInfo(GltfModel, IndexAccessor);
+        if (GltfIndexData.pData == nullptr ||
+            GltfIndexData.ByteStride <= 0)
+        {
+            return {};
+        }
+
+        const VALUE_TYPE IndexType       = GltfIndexData.Accessor.GetComponentType();
+        const Uint32     IndexValueSize  = GetValueSize(IndexType);
+        const Uint32     IndexByteStride = static_cast<Uint32>(GltfIndexData.ByteStride);
+        if (!RadientMeshIndexSource::IsSupportedIndexType(IndexType) ||
+            IndexValueSize == 0 ||
+            IndexByteStride != IndexValueSize)
+        {
+            return {};
+        }
+
+        IndexCI.pData = GltfIndexData.pData;
+        IndexCI.Type  = IndexType;
+        IndexCount    = static_cast<Uint32>(GltfIndexData.Count);
+    }
+    else
+    {
+        pOwner->GeneratedIndices.resize(VertexCount);
+        for (Uint32 Index = 0; Index < VertexCount; ++Index)
+            pOwner->GeneratedIndices[Index] = Index;
+
+        IndexCI.pData = pOwner->GeneratedIndices.data();
+        IndexCI.Type  = VT_UINT32;
+        IndexCount    = VertexCount;
+    }
+
+    if (IndexCount == 0)
+        return {};
+
+    IndexCI.IndexCount       = IndexCount;
+    IndexCI.pSourceDataOwner = pOwner;
+
+    std::unique_ptr<RadientMeshIndexSource> pSource = std::make_unique<RadientMeshIndexSource>(IndexCI);
+    if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)
+        return {};
+
+    MeshIndexSourceResult Result;
+    Result.Status  = RADIENT_STATUS_OK;
+    Result.pSource = std::move(pSource);
+    return Result;
+}
 
 RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&       GLTFModel,
                                      IRadientSceneAsset*      pModel,
