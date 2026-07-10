@@ -49,6 +49,8 @@ using namespace Diligent::Testing;
 namespace
 {
 
+static constexpr float EPSILON = 1e-5f;
+
 static constexpr std::array<Uint8, 67> TransparentPng{
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -75,6 +77,19 @@ const std::array<float, 9> WideTrianglePositions{
 
 const std::array<Uint16, 3> TriangleIndices{0, 1, 2};
 const std::array<Uint16, 3> ReversedTriangleIndices{0, 2, 1};
+
+void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
+}
+
+void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+}
 
 template <typename ValueType, size_t Size>
 void AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& Values)
@@ -122,8 +137,8 @@ std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial)
     GLTF << R"GLTF({
     "asset": {"version": "2.0"},
     "scene": 0,
-    "scenes": [{"nodes": [0]}],
-    "nodes": [{"name": "TriangleNode", "mesh": 0}],
+    "scenes": [{"name": "MainScene", "nodes": [0]}],
+    "nodes": [{"name": "TriangleNode", "mesh": 0, "translation": [1, 2, 3], "scale": [2, 3, 4]}],
     "buffers": [{"uri": "mesh.bin", "byteLength": )GLTF"
          << Buffer.size() << R"GLTF(}],
     "bufferViews": [
@@ -165,6 +180,35 @@ std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial)
 })GLTF";
 
     return WriteGLTFFile(TempDir, WithMaterial ? "mesh_with_material.gltf" : "mesh.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFSceneGraphFile(const TempDirectory& TempDir)
+{
+    return WriteGLTFFile(TempDir, "scene_graph.gltf",
+                         R"GLTF({
+    "asset": {"version": "2.0"},
+    "extensionsUsed": ["KHR_lights_punctual"],
+    "extensions": {
+        "KHR_lights_punctual": {
+            "lights": [
+                {"name": "PointLight", "type": "point", "color": [0.25, 0.5, 1.0], "intensity": 3.0, "range": 10.0}
+            ]
+        }
+    },
+    "scene": 1,
+    "scenes": [
+        {"name": "UnusedScene", "nodes": [2]},
+        {"name": "DefaultScene", "nodes": [0]}
+    ],
+    "cameras": [
+        {"name": "Camera", "type": "orthographic", "orthographic": {"xmag": 4.0, "ymag": 3.0, "znear": 0.5, "zfar": 100.0}}
+    ],
+    "nodes": [
+        {"name": "RootNode", "translation": [1, 2, 3], "children": [1]},
+        {"name": "CameraLightNode", "camera": 0, "extensions": {"KHR_lights_punctual": {"light": 0}}},
+        {"name": "UnusedNode", "scale": [2, 2, 2]}
+    ]
+})GLTF");
 }
 
 std::string WriteGLTFMeshWithShiftedAccessorsFile(const TempDirectory& TempDir)
@@ -1016,6 +1060,60 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsTracksTextureDependencies)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientGLTFLoaderTest, LoadSceneExtractsSceneGraphComponents)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFSceneGraphFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    EXPECT_TRUE(Scene.Meshes.empty());
+    EXPECT_EQ(Scene.DefaultSceneId, 1u);
+
+    ASSERT_EQ(Scene.Scenes.size(), 2u);
+    EXPECT_EQ(Scene.Scenes[0].Name, "UnusedScene");
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[1].Name, "DefaultScene");
+    ASSERT_EQ(Scene.Scenes[1].RootNodes.size(), 1u);
+
+    ASSERT_EQ(Scene.Nodes.size(), 3u);
+    const Uint32 UnusedNodeIndex = Scene.Scenes[0].RootNodes[0];
+    ASSERT_LT(UnusedNodeIndex, Scene.Nodes.size());
+    EXPECT_EQ(Scene.Nodes[UnusedNodeIndex].Name, "UnusedNode");
+    ExpectFloat3Near(Scene.Nodes[UnusedNodeIndex].Transform.Scale, {2.f, 2.f, 2.f});
+
+    const Uint32 RootNodeIndex = Scene.Scenes[1].RootNodes[0];
+    ASSERT_LT(RootNodeIndex, Scene.Nodes.size());
+    EXPECT_EQ(Scene.Nodes[RootNodeIndex].Name, "RootNode");
+    ASSERT_EQ(Scene.Nodes[RootNodeIndex].Children.size(), 1u);
+    ExpectFloat3Near(Scene.Nodes[RootNodeIndex].Transform.Position, {1.f, 2.f, 3.f});
+
+    const Uint32 CameraLightNodeIndex = Scene.Nodes[RootNodeIndex].Children[0];
+    ASSERT_LT(CameraLightNodeIndex, Scene.Nodes.size());
+    EXPECT_EQ(Scene.Nodes[CameraLightNodeIndex].Name, "CameraLightNode");
+    ASSERT_TRUE(Scene.Nodes[CameraLightNodeIndex].Camera.has_value());
+    EXPECT_EQ(Scene.Nodes[CameraLightNodeIndex].Camera->Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->HorizontalAperture, 4.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->VerticalAperture, 3.f, EPSILON);
+    ExpectFloat2Near(Scene.Nodes[CameraLightNodeIndex].Camera->ClippingRange, {0.5f, 100.f});
+
+    ASSERT_TRUE(Scene.Nodes[CameraLightNodeIndex].Light.has_value());
+    EXPECT_EQ(Scene.Nodes[CameraLightNodeIndex].Light->Type, RADIENT_LIGHT_TYPE_POINT);
+    ExpectFloat3Near(Scene.Nodes[CameraLightNodeIndex].Light->Color, {0.25f, 0.5f, 1.f});
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Light->Intensity, 3.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Light->Range, 10.f, EPSILON);
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAsset)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
@@ -1033,6 +1131,20 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAsset)
 
     ASSERT_EQ(Scene.Meshes.size(), 1u);
     ASSERT_NE(Scene.Meshes[0], nullptr);
+    EXPECT_EQ(Scene.DefaultSceneId, 0u);
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].Name, "MainScene");
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "TriangleNode");
+    EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+    EXPECT_FALSE(Scene.Nodes[0].Camera.has_value());
+    EXPECT_FALSE(Scene.Nodes[0].Light.has_value());
+    EXPECT_TRUE(Scene.Nodes[0].Children.empty());
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Position, {1.f, 2.f, 3.f});
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Scale, {2.f, 3.f, 4.f});
 
     ProcessQueuedTasks(*pThreadPool);
 
@@ -1043,8 +1155,8 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAsset)
 
     const RadientDrawableMeshResolveResult DrawableMesh =
         RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
-    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_NO_GPU_DATA);
-    EXPECT_EQ(DrawableMesh.pMesh, nullptr);
+    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
+    EXPECT_NE(DrawableMesh.pMesh, nullptr);
 
     pThreadPool->StopThreads();
 }
@@ -1341,6 +1453,11 @@ TEST(RadientGLTFLoaderTest, LoadSceneDeduplicatesAlternatingPrimitiveGeometries)
 
     ASSERT_EQ(Scene.Meshes.size(), 1u);
     ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+    EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
 
     ProcessQueuedTasks(*pThreadPool);
 
@@ -1379,6 +1496,13 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAssetWithMaterial)
 
     ASSERT_EQ(Scene.Meshes.size(), 1u);
     ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "TriangleNode");
+    EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Position, {1.f, 2.f, 3.f});
 
     ProcessQueuedTasks(*pThreadPool);
 
@@ -1390,8 +1514,8 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAssetWithMaterial)
 
     const RadientDrawableMeshResolveResult DrawableMesh =
         RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
-    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_NO_GPU_DATA);
-    EXPECT_EQ(DrawableMesh.pMesh, nullptr);
+    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
+    EXPECT_NE(DrawableMesh.pMesh, nullptr);
 
     pThreadPool->StopThreads();
 }

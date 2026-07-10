@@ -110,11 +110,6 @@ public:
                                   const RadientMeshViewCreateInfo& ViewCI,
                                   IRadientMeshAsset**              ppMesh);
 
-    RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
-                                          Uint32              MeshIndex,
-                                          const Char*         Name,
-                                          IRadientMeshAsset** ppMesh);
-
     // Returns drawable mesh data when the mesh asset is ready. A pending status
     // means that any mesh dependency may still be unresolved: source/view
     // processing, geometry GPU resources, or material/texture GPU resources.
@@ -146,7 +141,6 @@ private:
     RefCntWeakPtr<IGPUUploadManager>     m_WeakUploadManager;
 
     RadientAssetCache<MeshPayloadImpl>           m_MeshCache;
-    RadientAssetCache<MeshPayloadImpl>           m_GLTFMeshCache;
     RadientAssetCache<MeshIndexDataPayloadImpl>  m_MeshIndexDataCache;
     RadientAssetCache<MeshVertexDataPayloadImpl> m_MeshVertexDataCache;
     std::atomic<RadientHandle>                   m_NextAssetID{1};

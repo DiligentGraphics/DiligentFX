@@ -594,97 +594,29 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     // Both nodes reference the same converted Radient mesh asset.
     EXPECT_EQ(RenderableMeshes[0], RenderableMeshes[1]);
 
-    const GLTF::Model* pExpectedModel = RadientAssetManagerImpl::GetGLTFModel(ImportResult.pModel);
-    ASSERT_NE(pExpectedModel, nullptr);
-
     for (IRadientMeshAsset* pMesh : RenderableMeshes)
     {
-        // The asset manager should expose renderer-ready mesh data for each
-        // converted Radient mesh without leaking GLTF mesh/model details.
+        // The asset manager should expose mesh metadata even without a GPU
+        // device. GPU buffer fields stay empty until a GPU-backed manager is
+        // used.
         const RadientDrawableMeshResolveResult Result =
             RadientAssetManagerImpl::GetDrawableMesh(pMesh, false);
         EXPECT_EQ(Result.Status, RADIENT_STATUS_OK);
         ASSERT_NE(Result.pMesh, nullptr);
         ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
-        EXPECT_EQ(Result.pMesh->Geometries[0].pVertexPool, pExpectedModel->GetVertexPool());
+        EXPECT_EQ(Result.pMesh->Geometries[0].pVertexPool, nullptr);
         EXPECT_EQ(Result.pMesh->Geometries[0].VertexAttribFlags, PBR_Renderer::PSO_FLAG_NONE);
-        EXPECT_EQ(Result.pMesh->Geometries[0].FirstIndexLocation, pExpectedModel->GetFirstIndexLocation());
-        EXPECT_EQ(Result.pMesh->Geometries[0].BaseVertex, pExpectedModel->GetBaseVertex());
+        EXPECT_EQ(Result.pMesh->Geometries[0].FirstIndexLocation, 0u);
+        EXPECT_EQ(Result.pMesh->Geometries[0].BaseVertex, 0u);
 
-        ASSERT_EQ(Result.pMesh->Primitives.size(), pExpectedModel->Meshes[0].Primitives.size());
-        for (size_t PrimitiveIndex = 0; PrimitiveIndex < Result.pMesh->Primitives.size(); ++PrimitiveIndex)
-        {
-            const RadientDrawableMeshPrimitive& ResolvedPrimitive = Result.pMesh->Primitives[PrimitiveIndex];
-            const GLTF::Primitive&              ExpectedPrimitive = pExpectedModel->Meshes[0].Primitives[PrimitiveIndex];
-
-            EXPECT_EQ(ResolvedPrimitive.pMaterial, &pExpectedModel->Materials[ExpectedPrimitive.MaterialId]);
-            EXPECT_EQ(ResolvedPrimitive.GeometryIndex, 0u);
-            EXPECT_EQ(ResolvedPrimitive.IsIndexed, ExpectedPrimitive.HasIndices());
-            EXPECT_EQ(ResolvedPrimitive.FirstElement, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.FirstIndex : ExpectedPrimitive.FirstVertex);
-            EXPECT_EQ(ResolvedPrimitive.ElementCount, ExpectedPrimitive.HasIndices() ? ExpectedPrimitive.IndexCount : ExpectedPrimitive.VertexCount);
-        }
+        ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
+        const RadientDrawableMeshPrimitive& ResolvedPrimitive = Result.pMesh->Primitives[0];
+        EXPECT_EQ(ResolvedPrimitive.pMaterial, nullptr);
+        EXPECT_EQ(ResolvedPrimitive.GeometryIndex, 0u);
+        EXPECT_EQ(ResolvedPrimitive.IsIndexed, true);
+        EXPECT_EQ(ResolvedPrimitive.FirstElement, 0u);
+        EXPECT_EQ(ResolvedPrimitive.ElementCount, 3u);
     }
-}
-
-TEST(RadientSceneImporterTest, CreateMeshFromGLTFMeshUsesCache)
-{
-    TempDirectory TempDir{"RadientSceneImporterTest"};
-
-    const float  Positions[] = {0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.f};
-    const Uint16 Indices[]   = {0u, 1u, 2u};
-
-    std::vector<Uint8> Buffer(sizeof(Positions) + sizeof(Indices));
-    std::memcpy(Buffer.data(), Positions, sizeof(Positions));
-    std::memcpy(Buffer.data() + sizeof(Positions), Indices, sizeof(Indices));
-    WriteBinaryFile(TempDir, "cached_mesh.bin", Buffer);
-
-    const std::string GLTFPath = WriteGLTFFile(TempDir, "cached_mesh.gltf",
-                                               R"GLTF({
-    "asset": {"version": "2.0"},
-    "scene": 0,
-    "scenes": [{"nodes": [0]}],
-    "buffers": [{"uri": "cached_mesh.bin", "byteLength": 42}],
-    "bufferViews": [
-        {"buffer": 0, "byteOffset": 0, "byteLength": 36},
-        {"buffer": 0, "byteOffset": 36, "byteLength": 6}
-    ],
-    "accessors": [
-        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
-        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
-    ],
-    "meshes": [{"name": "CachedTriangle", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
-    "nodes": [{"name": "MeshNode", "mesh": 0}]
-})GLTF");
-
-    ImportFixture Fixture = CreateImportFixture();
-    ASSERT_NE(Fixture.pAssetManager, nullptr);
-
-    RadientGLTFLoadInfo LoadInfo{};
-    LoadInfo.URI = GLTFPath.c_str();
-
-    RefCntAutoPtr<IRadientSceneAsset> pModel;
-    const RADIENT_STATUS              LoadStatus = Fixture.pAssetManager->LoadGLTF(LoadInfo, &pModel);
-    ASSERT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
-    ASSERT_NE(pModel, nullptr);
-    ASSERT_EQ(ProcessGLTFLoad(Fixture, pModel), RADIENT_STATUS_OK);
-
-    RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
-    ASSERT_NE(pAssetManagerImpl, nullptr);
-
-    RefCntAutoPtr<IRadientMeshAsset> pMesh0;
-    RefCntAutoPtr<IRadientMeshAsset> pMesh1;
-    EXPECT_EQ(pAssetManagerImpl->CreateMeshFromGLTFMesh(pModel, 0, "CachedTriangle", &pMesh0), RADIENT_STATUS_OK);
-    EXPECT_EQ(pAssetManagerImpl->CreateMeshFromGLTFMesh(pModel, 0, "CachedTriangle", &pMesh1), RADIENT_STATUS_OK);
-
-    ASSERT_NE(pMesh0, nullptr);
-    ASSERT_NE(pMesh1, nullptr);
-
-    const RadientDrawableMeshResolveResult Mesh0 = RadientAssetManagerImpl::GetDrawableMesh(pMesh0, false);
-    const RadientDrawableMeshResolveResult Mesh1 = RadientAssetManagerImpl::GetDrawableMesh(pMesh1, false);
-    EXPECT_EQ(Mesh0.Status, RADIENT_STATUS_OK);
-    EXPECT_EQ(Mesh1.Status, RADIENT_STATUS_OK);
-    EXPECT_NE(Mesh0.pMesh, nullptr);
-    EXPECT_EQ(Mesh0.pMesh, Mesh1.pMesh);
 }
 
 TEST(RadientSceneImporterTest, ImportsLights)

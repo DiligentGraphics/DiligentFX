@@ -681,7 +681,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
     if (RADIENT_FAILED(MeshStatus))
         return MeshStatus;
 
-    return RADIENT_STATUS_OK;
+    return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene);
 }
 
 } // namespace RadientGLTFLoader

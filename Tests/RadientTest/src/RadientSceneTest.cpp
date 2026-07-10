@@ -544,7 +544,7 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     EXPECT_STREQ(pFirstModel->GetReference().URI, LoadInfo.URI);
     EXPECT_STREQ(pSecondModel->GetReference().URI, LoadInfo.URI);
     EXPECT_STREQ(pSecondModel->GetReference().URI, pFirstModel->GetReference().URI);
-    EXPECT_EQ(RadientAssetManagerImpl::GetGLTFModel(pSecondModel), RadientAssetManagerImpl::GetGLTFModel(pFirstModel));
+    EXPECT_EQ(RadientAssetManagerImpl::GetImportedGLTF(pSecondModel), RadientAssetManagerImpl::GetImportedGLTF(pFirstModel));
 }
 
 TEST(RadientAssetManagerTest, TextureWithSourceURIKeepsSourceURI)

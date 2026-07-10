@@ -178,18 +178,14 @@ RADIENT_STATUS RadientSceneImporterImpl::PopulateGLTFRoot(IRadientSceneAsset* pM
                                                           Uint32              SceneIndex,
                                                           RadientEntityID     RootEntity)
 {
-    if (m_pWriter == nullptr || m_pAssetManager == nullptr)
+    if (m_pWriter == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    RadientAssetManagerImpl* pAssetManagerImpl = m_pAssetManager.RawPtr<RadientAssetManagerImpl>();
-    if (pAssetManagerImpl == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const GLTF::Model* pGLTFModel = RadientAssetManagerImpl::GetGLTFModel(pModel);
-    if (pGLTFModel == nullptr)
+    const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedGLTF(pModel);
+    if (pImportedScene == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return RadientGLTFConverter::InstantiateSceneGraph(*pGLTFModel, pModel, SceneIndex, *pAssetManagerImpl, *m_pWriter, RootEntity);
+    return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity);
 }
 
 void RadientSceneImporterImpl::AddPendingGLTFInstantiation(IRadientSceneAsset*               pModel,

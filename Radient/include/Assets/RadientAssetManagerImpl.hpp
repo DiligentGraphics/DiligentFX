@@ -33,7 +33,6 @@
 #include "RadientTextureAssetManager.hpp"
 #include "ThreadPool.h"
 #include "Cast.hpp"
-#include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -53,9 +52,13 @@ struct ITextureView;
 namespace GLTF
 {
 struct Material;
-struct Model;
 class ResourceManager;
 } // namespace GLTF
+
+namespace RadientImport
+{
+struct ImportedDocument;
+} // namespace RadientImport
 
 class ScenePayloadImpl;
 
@@ -97,11 +100,6 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
 
-    RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
-                                          Uint32              MeshIndex,
-                                          const Char*         Name,
-                                          IRadientMeshAsset** ppMesh);
-
     // Must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
@@ -109,8 +107,7 @@ public:
     // Returns the GLTF material if the material status is OK, or nullptr otherwise.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
-    static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
-                                           bool                RequireGPUResourcesReady = false);
+    static const RadientImport::ImportedDocument* GetImportedGLTF(IRadientSceneAsset* pModel);
 
     // Reports GLTF model source load status. OK does not imply GPU resources exist.
     static RADIENT_STATUS GetGLTFLoadStatus(IRadientSceneAsset* pModel);
@@ -152,8 +149,6 @@ private:
     RadientTextureAssetManagerSharedPtr  m_pTextureManager;
 
     RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
-
-    MPSCQueue<RefCntWeakPtr<ScenePayloadImpl>> m_PendingGPUResourceUpdates;
 
     bool m_Stopped = false;
 };

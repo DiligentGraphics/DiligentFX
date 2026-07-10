@@ -32,6 +32,7 @@
 #include "GLTFDocument.hpp"
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -40,6 +41,7 @@
 #include "TinyGltfModelView.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
@@ -55,6 +57,7 @@ namespace
 {
 
 static constexpr Uint32 TestVertexCount = 3;
+static constexpr float  EPSILON         = 1e-5f;
 
 const std::array<float, 9> TestPositions{
     -1.f, 2.f, 3.f,
@@ -133,6 +136,27 @@ void ExpectFloat4Eq(const float4& Actual, const float4& Expected)
     EXPECT_FLOAT_EQ(Actual.y, Expected.y);
     EXPECT_FLOAT_EQ(Actual.z, Expected.z);
     EXPECT_FLOAT_EQ(Actual.w, Expected.w);
+}
+
+void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
+}
+
+void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+}
+
+void ExpectQuaternionNear(const RadientQuaternion& Value, const RadientQuaternion& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
+    EXPECT_NEAR(Value.w, Reference.w, EPSILON);
 }
 
 void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexSourceResult& Result)
@@ -683,4 +707,187 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexSourceGeneratesSequentialIndices)
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pSource, nullptr);
     ExpectPackedIndices(*Result.pSource, {0, 1, 2});
+}
+
+TEST(RadientGLTFConverterTest, ExtractSceneGraphCopiesScenesNodesMeshesAndTransforms)
+{
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://extract-scene-graph", 7);
+    ASSERT_NE(pMesh, nullptr);
+
+    GLTF::Model Model;
+    Model.DefaultSceneId = 1;
+
+    Model.Meshes.resize(1);
+    Model.Meshes[0].Name      = "Triangle";
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh.RawPtr(), IID_Unknown};
+
+    Model.Nodes.reserve(3);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes.emplace_back(2);
+
+    Model.Nodes[0].Name        = "Root";
+    Model.Nodes[0].Translation = {1.f, 2.f, 3.f};
+    Model.Nodes[0].Rotation    = QuaternionF::RotationFromAxisAngle(float3{0.f, 0.f, 1.f}, 0.5f);
+    Model.Nodes[0].Scale       = {2.f, 3.f, 4.f};
+    Model.Nodes[0].pMesh       = &Model.Meshes[0];
+    Model.Nodes[0].Children    = {&Model.Nodes[1], &Model.Nodes[2]};
+
+    Model.Nodes[1].Name        = "ChildA";
+    Model.Nodes[1].Parent      = &Model.Nodes[0];
+    Model.Nodes[1].Translation = {4.f, 5.f, 6.f};
+
+    Model.Nodes[2].Name   = "ChildB";
+    Model.Nodes[2].Parent = &Model.Nodes[0];
+    Model.Nodes[2].Scale  = {0.5f, 0.25f, 0.125f};
+
+    Model.Scenes.resize(2);
+    Model.Scenes[0].Name      = "UnusedScene";
+    Model.Scenes[0].RootNodes = {&Model.Nodes[2]};
+    Model.Scenes[1].Name      = "DefaultScene";
+    Model.Scenes[1].RootNodes = {&Model.Nodes[0]};
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Scene.DefaultSceneId, 1u);
+
+    ASSERT_EQ(Scene.Scenes.size(), 2u);
+    EXPECT_EQ(Scene.Scenes[0].Name, "UnusedScene");
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 2u);
+    EXPECT_EQ(Scene.Scenes[1].Name, "DefaultScene");
+    ASSERT_EQ(Scene.Scenes[1].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[1].RootNodes[0], 0u);
+
+    ASSERT_EQ(Scene.Nodes.size(), 3u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "Root");
+    EXPECT_EQ(Scene.Nodes[0].pMesh, pMesh);
+    ASSERT_EQ(Scene.Nodes[0].Children.size(), 2u);
+    EXPECT_EQ(Scene.Nodes[0].Children[0], 1u);
+    EXPECT_EQ(Scene.Nodes[0].Children[1], 2u);
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Position, {1.f, 2.f, 3.f});
+    ExpectQuaternionNear(Scene.Nodes[0].Transform.Rotation,
+                         {Model.Nodes[0].Rotation.q.x, Model.Nodes[0].Rotation.q.y, Model.Nodes[0].Rotation.q.z, Model.Nodes[0].Rotation.q.w});
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Scale, {2.f, 3.f, 4.f});
+
+    EXPECT_EQ(Scene.Nodes[1].Name, "ChildA");
+    EXPECT_EQ(Scene.Nodes[1].pMesh, nullptr);
+    EXPECT_TRUE(Scene.Nodes[1].Children.empty());
+    ExpectFloat3Near(Scene.Nodes[1].Transform.Position, {4.f, 5.f, 6.f});
+
+    EXPECT_EQ(Scene.Nodes[2].Name, "ChildB");
+    ExpectFloat3Near(Scene.Nodes[2].Transform.Scale, {0.5f, 0.25f, 0.125f});
+}
+
+TEST(RadientGLTFConverterTest, ExtractSceneGraphConvertsCameras)
+{
+    GLTF::Model Model;
+
+    Model.Cameras.resize(2);
+    Model.Cameras[0].Name                    = "Perspective";
+    Model.Cameras[0].Type                    = GLTF::Camera::Projection::Perspective;
+    Model.Cameras[0].Perspective.AspectRatio = 1.5f;
+    Model.Cameras[0].Perspective.YFov        = 0.7f;
+    Model.Cameras[0].Perspective.ZNear       = 0.2f;
+    Model.Cameras[0].Perspective.ZFar        = 250.f;
+
+    Model.Cameras[1].Name               = "Orthographic";
+    Model.Cameras[1].Type               = GLTF::Camera::Projection::Orthographic;
+    Model.Cameras[1].Orthographic.XMag  = 4.f;
+    Model.Cameras[1].Orthographic.YMag  = 3.f;
+    Model.Cameras[1].Orthographic.ZNear = 0.5f;
+    Model.Cameras[1].Orthographic.ZFar  = 500.f;
+
+    Model.Nodes.reserve(2);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes[0].Name    = "PerspectiveNode";
+    Model.Nodes[0].pCamera = &Model.Cameras[0];
+    Model.Nodes[1].Name    = "OrthographicNode";
+    Model.Nodes[1].pCamera = &Model.Cameras[1];
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[1]};
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Nodes.size(), 2u);
+    ASSERT_TRUE(Scene.Nodes[0].Camera.has_value());
+    EXPECT_EQ(Scene.Nodes[0].Camera->Projection, RADIENT_CAMERA_PROJECTION_PERSPECTIVE);
+    ExpectFloat2Near(Scene.Nodes[0].Camera->ClippingRange, {0.2f, 250.f});
+    EXPECT_NEAR(Scene.Nodes[0].Camera->HorizontalAperture,
+                Scene.Nodes[0].Camera->VerticalAperture * 1.5f,
+                EPSILON);
+    EXPECT_NEAR(Scene.Nodes[0].Camera->FocalLength,
+                Scene.Nodes[0].Camera->VerticalAperture / (2.f * std::tan(0.7f * 0.5f)),
+                EPSILON);
+
+    ASSERT_TRUE(Scene.Nodes[1].Camera.has_value());
+    EXPECT_EQ(Scene.Nodes[1].Camera->Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
+    EXPECT_NEAR(Scene.Nodes[1].Camera->HorizontalAperture, 4.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[1].Camera->VerticalAperture, 3.f, EPSILON);
+    ExpectFloat2Near(Scene.Nodes[1].Camera->ClippingRange, {0.5f, 500.f});
+}
+
+TEST(RadientGLTFConverterTest, ExtractSceneGraphConvertsLights)
+{
+    GLTF::Model Model;
+
+    Model.Lights.resize(3);
+    Model.Lights[0].Name      = "Sun";
+    Model.Lights[0].Type      = GLTF::Light::TYPE::DIRECTIONAL;
+    Model.Lights[0].Color     = {1.f, 0.8f, 0.6f};
+    Model.Lights[0].Intensity = 2.f;
+
+    Model.Lights[1].Name      = "Point";
+    Model.Lights[1].Type      = GLTF::Light::TYPE::POINT;
+    Model.Lights[1].Color     = {0.2f, 0.3f, 1.f};
+    Model.Lights[1].Intensity = 3.f;
+    Model.Lights[1].Range     = 10.f;
+
+    Model.Lights[2].Name           = "Spot";
+    Model.Lights[2].Type           = GLTF::Light::TYPE::SPOT;
+    Model.Lights[2].Color          = {1.f, 1.f, 1.f};
+    Model.Lights[2].Intensity      = 4.f;
+    Model.Lights[2].InnerConeAngle = 0.1f;
+    Model.Lights[2].OuterConeAngle = 0.4f;
+
+    Model.Nodes.reserve(3);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes.emplace_back(2);
+    Model.Nodes[0].Name   = "DirectionalNode";
+    Model.Nodes[0].pLight = &Model.Lights[0];
+    Model.Nodes[1].Name   = "PointNode";
+    Model.Nodes[1].pLight = &Model.Lights[1];
+    Model.Nodes[2].Name   = "SpotNode";
+    Model.Nodes[2].pLight = &Model.Lights[2];
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[1], &Model.Nodes[2]};
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Nodes.size(), 3u);
+
+    ASSERT_TRUE(Scene.Nodes[0].Light.has_value());
+    EXPECT_EQ(Scene.Nodes[0].Light->Type, RADIENT_LIGHT_TYPE_DIRECTIONAL);
+    ExpectFloat3Near(Scene.Nodes[0].Light->Color, {1.f, 0.8f, 0.6f});
+    EXPECT_NEAR(Scene.Nodes[0].Light->Intensity, 2.f, EPSILON);
+
+    ASSERT_TRUE(Scene.Nodes[1].Light.has_value());
+    EXPECT_EQ(Scene.Nodes[1].Light->Type, RADIENT_LIGHT_TYPE_POINT);
+    ExpectFloat3Near(Scene.Nodes[1].Light->Color, {0.2f, 0.3f, 1.f});
+    EXPECT_NEAR(Scene.Nodes[1].Light->Intensity, 3.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[1].Light->Range, 10.f, EPSILON);
+
+    ASSERT_TRUE(Scene.Nodes[2].Light.has_value());
+    EXPECT_EQ(Scene.Nodes[2].Light->Type, RADIENT_LIGHT_TYPE_SPOT);
+    ExpectFloat3Near(Scene.Nodes[2].Light->Color, {1.f, 1.f, 1.f});
+    EXPECT_NEAR(Scene.Nodes[2].Light->Intensity, 4.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[2].Light->InnerConeAngle, 0.1f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[2].Light->OuterConeAngle, 0.4f, EPSILON);
 }
