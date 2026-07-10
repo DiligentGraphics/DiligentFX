@@ -58,6 +58,7 @@ set(INCLUDE
     include/Core/RadientEngineImpl.hpp
     include/Core/RadientViewImpl.hpp
     include/Import/RadientGLTFConverter.hpp
+    include/Import/RadientImportedScene.hpp
     include/Import/RadientSceneImporterImpl.hpp
     include/Math/RadientMath.hpp
     include/Render/Passes/RadientGeometryPass.hpp

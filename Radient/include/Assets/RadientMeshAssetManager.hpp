@@ -130,10 +130,13 @@ public:
 
     // Reports render-resource readiness. This follows GetLoadStatus(), then
     // checks geometry GPU resources and material/texture GPU resources.
-    static RADIENT_STATUS                GetGPUResourceStatus(IRadientAsset* pMeshAsset);
-    static const MeshPayloadImpl*        GetMeshPayload(IRadientMeshAsset* pMeshAsset);
-    static const IRadientMeshIndexData*  GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
-    static const IRadientMeshVertexData* GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
+    static RADIENT_STATUS                   GetGPUResourceStatus(IRadientAsset* pMeshAsset);
+    static const MeshPayloadImpl*           GetMeshPayload(IRadientMeshAsset* pMeshAsset);
+    static Uint32                           GetMeshGeometryCount(IRadientMeshAsset* pMeshAsset);
+    static const MeshIndexDataPayloadImpl*  GetMeshIndexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
+    static const MeshVertexDataPayloadImpl* GetMeshVertexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
+    static const IRadientMeshIndexData*     GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
+    static const IRadientMeshVertexData*    GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);

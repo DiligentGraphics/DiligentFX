@@ -26,46 +26,58 @@
 
 #pragma once
 
-#include "Import/RadientImportedScene.hpp"
+#include "RadientAssets.h"
+#include "RadientScene.h"
+#include "RefCntAutoPtr.hpp"
 
-#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace Diligent
 {
 
-struct IThreadPool;
-class RadientTextureAssetManager;
-class RadientMaterialAssetManager;
-class RadientMeshAssetManager;
-
-namespace GLTF
+namespace RadientImport
 {
 
-class Document;
+using TextureAssetList  = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+using MaterialAssetList = std::vector<RefCntAutoPtr<IRadientMaterialAsset>>;
+using MeshAssetList     = std::vector<RefCntAutoPtr<IRadientMeshAsset>>;
 
-} // namespace GLTF
-
-namespace RadientGLTFLoader
+struct ImportedNode
 {
+    std::string Name;
 
-RadientImport::TextureAssetList LoadTextures(IThreadPool&                           ThreadPool,
-                                             RadientTextureAssetManager&            TextureManager,
-                                             const std::string&                     SourceURI,
-                                             const std::shared_ptr<GLTF::Document>& pDocument);
+    RadientTransform Transform{};
 
-RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
-                                               const std::shared_ptr<GLTF::Document>& pDocument,
-                                               const RadientImport::TextureAssetList& Textures);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
 
-RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
-                         RadientMeshAssetManager&                MeshManager,
-                         const std::string&                      SourceURI,
-                         const std::shared_ptr<GLTF::Document>&  pDocument,
-                         const RadientImport::MaterialAssetList& Materials,
-                         RadientImport::ImportedDocument&        Scene);
+    std::optional<RadientCameraComponent> Camera;
+    std::optional<RadientLightComponent>  Light;
 
-} // namespace RadientGLTFLoader
+    std::vector<Uint32> Children;
+};
+
+struct ImportedScene
+{
+    std::string         Name;
+    std::vector<Uint32> RootNodes;
+};
+
+/// Radient-native data produced by an asset importer. Source-format documents
+/// are temporary loading artifacts and are not retained here.
+struct ImportedDocument
+{
+    TextureAssetList  Textures;
+    MaterialAssetList Materials;
+    MeshAssetList     Meshes;
+
+    std::vector<ImportedNode>  Nodes;
+    std::vector<ImportedScene> Scenes;
+
+    Uint32 DefaultSceneId = 0;
+};
+
+} // namespace RadientImport
 
 } // namespace Diligent

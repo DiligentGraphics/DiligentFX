@@ -1398,6 +1398,49 @@ const MeshPayloadImpl* RadientMeshAssetManager::GetMeshPayload(IRadientMeshAsset
     return pMesh ? pMesh->GetPayload().RawPtr() : nullptr;
 }
 
+Uint32 RadientMeshAssetManager::GetMeshGeometryCount(IRadientMeshAsset* pMeshAsset)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    if (!pMesh)
+        return 0;
+
+    MeshAssetStorage& Storage = pMesh->GetStorage();
+    if (const MeshStorage* pMeshStorage = std::get_if<MeshStorage>(&Storage))
+        return static_cast<Uint32>(pMeshStorage->Geometries.size());
+    if (const GLTFMeshStorage* pGLTFMeshStorage = std::get_if<GLTFMeshStorage>(&Storage))
+        return static_cast<Uint32>(pGLTFMeshStorage->DrawableMesh.Geometries.size());
+
+    return 0;
+}
+
+const MeshIndexDataPayloadImpl* RadientMeshAssetManager::GetMeshIndexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    if (!pMesh)
+        return nullptr;
+
+    MeshAssetStorage& Storage      = pMesh->GetStorage();
+    MeshStorage*      pMeshStorage = std::get_if<MeshStorage>(&Storage);
+    if (pMeshStorage == nullptr || GeometryIndex >= pMeshStorage->Geometries.size())
+        return nullptr;
+
+    return pMeshStorage->Geometries[GeometryIndex].pIndexDataPayload.RawPtr();
+}
+
+const MeshVertexDataPayloadImpl* RadientMeshAssetManager::GetMeshVertexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    if (!pMesh)
+        return nullptr;
+
+    MeshAssetStorage& Storage      = pMesh->GetStorage();
+    MeshStorage*      pMeshStorage = std::get_if<MeshStorage>(&Storage);
+    if (pMeshStorage == nullptr || GeometryIndex >= pMeshStorage->Geometries.size())
+        return nullptr;
+
+    return pMeshStorage->Geometries[GeometryIndex].pVertexDataPayload.RawPtr();
+}
+
 const IRadientMeshIndexData* RadientMeshAssetManager::GetMeshIndexData(IRadientMeshAsset* pMeshAsset)
 {
     RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);

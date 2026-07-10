@@ -250,6 +250,10 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
     // custom layouts deduplicate to the same payload.
     EXPECT_NE(pCustomPayload0, pDefaultPayload);
     EXPECT_EQ(pCustomPayload1, pCustomPayload0);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshVertexDataPayload(pCustomMesh0, 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(pDefaultMesh, 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pCustomMesh0, 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(pDefaultMesh, 0));
 
     pThreadPool->StopThreads();
 }

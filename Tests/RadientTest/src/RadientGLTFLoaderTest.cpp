@@ -30,14 +30,18 @@
 
 #include "Assets/RadientGLTFLoader.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
+#include <cstring>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -59,6 +63,27 @@ static constexpr std::array<Uint8, 67> TransparentPng{
 static constexpr const char* TransparentPngBase64 =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==";
 
+const std::array<float, 9> TrianglePositions{
+    0.f, 0.f, 0.f,
+    1.f, 0.f, 0.f,
+    0.f, 1.f, 0.f};
+
+const std::array<float, 9> WideTrianglePositions{
+    0.f, 0.f, 0.f,
+    2.f, 0.f, 0.f,
+    0.f, 2.f, 0.f};
+
+const std::array<Uint16, 3> TriangleIndices{0, 1, 2};
+const std::array<Uint16, 3> ReversedTriangleIndices{0, 2, 1};
+
+template <typename ValueType, size_t Size>
+void AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& Values)
+{
+    const size_t OldSize = Buffer.size();
+    Buffer.resize(OldSize + sizeof(ValueType) * Values.size());
+    std::memcpy(Buffer.data() + OldSize, Values.data(), Buffer.size() - OldSize);
+}
+
 std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
 {
     const std::string Path = TempDir.Get() + "/" + FileName;
@@ -68,6 +93,475 @@ std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, co
     File << Contents;
 
     return Path;
+}
+
+void WriteBinaryFile(const TempDirectory& TempDir, const char* FileName, const std::vector<Uint8>& Data)
+{
+    const std::string Path = TempDir.Get() + "/" + FileName;
+
+    std::ofstream File{Path, std::ios::binary};
+    EXPECT_TRUE(File.is_open());
+    if (!Data.empty())
+        File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
+}
+
+std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size());
+
+    const size_t PositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "mesh.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "TriangleNode", "mesh": 0}],
+    "buffers": [{"uri": "mesh.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ])GLTF";
+
+    if (WithMaterial)
+    {
+        GLTF << R"GLTF(,
+    "materials": [{
+        "name": "MeshMaterial",
+        "pbrMetallicRoughness": {
+            "baseColorFactor": [1.0, 0.25, 0.5, 1.0]
+        }
+    }])GLTF";
+    }
+
+    GLTF << R"GLTF(,
+    "meshes": [{
+        "name": "TriangleMesh",
+        "primitives": [{
+            "attributes": {"POSITION": 0},
+            "indices": 1)GLTF";
+    if (WithMaterial)
+        GLTF << R"GLTF(,
+            "material": 0)GLTF";
+    GLTF << R"GLTF(
+        }]
+    }]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, WithMaterial ? "mesh_with_material.gltf" : "mesh.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshWithShiftedAccessorsFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(2 * (sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size()));
+
+    const size_t UnusedPositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t UnusedIndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    const size_t PositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "mesh_shifted_accessors.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "ShiftedAccessorNode", "mesh": 0}],
+    "buffers": [{"uri": "mesh_shifted_accessors.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << UnusedPositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << UnusedIndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [{
+        "name": "ShiftedAccessorMesh",
+        "primitives": [{
+            "attributes": {"POSITION": 2},
+            "indices": 3
+        }]
+    }]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "mesh_shifted_accessors.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshesWithSameGeometryDifferentIndicesFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * TrianglePositions.size() +
+                   sizeof(Uint16) * (TriangleIndices.size() + ReversedTriangleIndices.size()));
+
+    const size_t PositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexAByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    const size_t IndexBByteOffset = Buffer.size();
+    AppendBytes(Buffer, ReversedTriangleIndices);
+
+    WriteBinaryFile(TempDir, "same_geometry_different_indices.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "IndexMeshA", "mesh": 0},
+        {"name": "IndexMeshB", "mesh": 1}
+    ],
+    "buffers": [{"uri": "same_geometry_different_indices.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexAByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexBByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * ReversedTriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 2, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [
+        {"name": "IndexMeshA", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]},
+        {"name": "IndexMeshB", "primitives": [{"attributes": {"POSITION": 0}, "indices": 2}]}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "same_geometry_different_indices.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshesWithSameIndicesDifferentGeometryFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * (TrianglePositions.size() + WideTrianglePositions.size()) +
+                   sizeof(Uint16) * TriangleIndices.size());
+
+    const size_t PositionAByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t PositionBByteOffset = Buffer.size();
+    AppendBytes(Buffer, WideTrianglePositions);
+
+    const size_t IndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "same_indices_different_geometry.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "GeometryMeshA", "mesh": 0},
+        {"name": "GeometryMeshB", "mesh": 1}
+    ],
+    "buffers": [{"uri": "same_indices_different_geometry.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionAByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionBByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * WideTrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [2, 2, 0]},
+        {"bufferView": 2, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [
+        {"name": "GeometryMeshA", "primitives": [{"attributes": {"POSITION": 0}, "indices": 2}]},
+        {"name": "GeometryMeshB", "primitives": [{"attributes": {"POSITION": 1}, "indices": 2}]}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "same_indices_different_geometry.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshesWithSameGeometryDifferentMaterialsFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size());
+
+    const size_t PositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "same_geometry_different_materials.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "MaterialMeshA", "mesh": 0},
+        {"name": "MaterialMeshB", "mesh": 1}
+    ],
+    "buffers": [{"uri": "same_geometry_different_materials.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "materials": [
+        {"name": "Red", "pbrMetallicRoughness": {"baseColorFactor": [1, 0, 0, 1]}},
+        {"name": "Green", "pbrMetallicRoughness": {"baseColorFactor": [0, 1, 0, 1]}}
+    ],
+    "meshes": [
+        {"name": "MaterialMeshA", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1, "material": 0}]},
+        {"name": "MaterialMeshB", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1, "material": 1}]}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "same_geometry_different_materials.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshesWithSameGeometryDifferentPrimitiveListsFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size());
+
+    const size_t PositionByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "same_geometry_different_primitive_lists.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "PrimitiveListMeshA", "mesh": 0},
+        {"name": "PrimitiveListMeshB", "mesh": 1}
+    ],
+    "buffers": [{"uri": "same_geometry_different_primitive_lists.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [
+        {"name": "PrimitiveListMeshA", "primitives": [
+            {"attributes": {"POSITION": 0}, "indices": 1}
+        ]},
+        {"name": "PrimitiveListMeshB", "primitives": [
+            {"attributes": {"POSITION": 0}, "indices": 1},
+            {"attributes": {"POSITION": 0}, "indices": 1}
+        ]}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "same_geometry_different_primitive_lists.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFTwoMeshesWithIdenticalPrimitiveDataFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(2 * (sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size()));
+
+    const size_t Position0ByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t Index0ByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    const size_t Position1ByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t Index1ByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "two_identical_meshes.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "TriangleNodeA", "mesh": 0},
+        {"name": "TriangleNodeB", "mesh": 1}
+    ],
+    "buffers": [{"uri": "two_identical_meshes.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Position0ByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Index0ByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Position1ByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Index1ByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [
+        {
+            "name": "TriangleMeshA",
+            "primitives": [{
+                "attributes": {"POSITION": 0},
+                "indices": 1
+            }]
+        },
+        {
+            "name": "TriangleMeshB",
+            "primitives": [{
+                "attributes": {"POSITION": 2},
+                "indices": 3
+            }]
+        }
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "two_identical_meshes.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshWithAlternatingPrimitiveGeometryFile(const TempDirectory& TempDir)
+{
+    std::vector<Uint8> Buffer;
+    Buffer.reserve(sizeof(float) * (TrianglePositions.size() + WideTrianglePositions.size()) +
+                   2 * sizeof(Uint16) * TriangleIndices.size());
+
+    const size_t PositionAByteOffset = Buffer.size();
+    AppendBytes(Buffer, TrianglePositions);
+
+    const size_t IndexAByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    const size_t PositionBByteOffset = Buffer.size();
+    AppendBytes(Buffer, WideTrianglePositions);
+
+    const size_t IndexBByteOffset = Buffer.size();
+    AppendBytes(Buffer, TriangleIndices);
+
+    WriteBinaryFile(TempDir, "alternating_geometry.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "AlternatingNode", "mesh": 0}],
+    "buffers": [{"uri": "alternating_geometry.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionAByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * TrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexAByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionBByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(float) * WideTrianglePositions.size() << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexBByteOffset << R"GLTF(, "byteLength": )GLTF"
+         << sizeof(Uint16) * TriangleIndices.size() << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [2, 2, 0]},
+        {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [{
+        "name": "AlternatingGeometryMesh",
+        "primitives": [
+            {"attributes": {"POSITION": 0}, "indices": 1},
+            {"attributes": {"POSITION": 2}, "indices": 3},
+            {"attributes": {"POSITION": 0}, "indices": 1},
+            {"attributes": {"POSITION": 2}, "indices": 3}
+        ]
+    }]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "alternating_geometry.gltf", GLTF.str().c_str());
 }
 
 std::string WriteGLTFDataURITextureFile(const TempDirectory& TempDir)
@@ -240,9 +734,9 @@ void WaitForAllTasksAndStop(IThreadPool& ThreadPool)
     ThreadPool.StopThreads();
 }
 
-RadientGLTFLoader::TextureAssetList LoadTextures(IThreadPool&                ThreadPool,
-                                                 RadientTextureAssetManager& TextureManager,
-                                                 const std::string&          GLTFPath)
+RadientImport::TextureAssetList LoadTextures(IThreadPool&                ThreadPool,
+                                             RadientTextureAssetManager& TextureManager,
+                                             const std::string&          GLTFPath)
 {
     return RadientGLTFLoader::LoadTextures(ThreadPool,
                                            TextureManager,
@@ -250,11 +744,21 @@ RadientGLTFLoader::TextureAssetList LoadTextures(IThreadPool&                Thr
                                            LoadMetadataOnlyDocument(GLTFPath));
 }
 
-RadientGLTFLoader::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&               MaterialManager,
-                                                   const std::shared_ptr<GLTF::Document>&     pDocument,
-                                                   const RadientGLTFLoader::TextureAssetList& Textures)
+RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
+                                               const std::shared_ptr<GLTF::Document>& pDocument,
+                                               const RadientImport::TextureAssetList& Textures)
 {
     return RadientGLTFLoader::LoadMaterials(MaterialManager, pDocument, Textures);
+}
+
+RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
+                         RadientMeshAssetManager&                MeshManager,
+                         const std::string&                      GLTFPath,
+                         const std::shared_ptr<GLTF::Document>&  pDocument,
+                         const RadientImport::MaterialAssetList& Materials,
+                         RadientImport::ImportedDocument&        Scene)
+{
+    return RadientGLTFLoader::LoadScene(ThreadPool, MeshManager, GLTFPath, pDocument, Materials, Scene);
 }
 
 } // namespace
@@ -270,7 +774,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromExternalImageURI)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFExternalTextureFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
+    RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -298,7 +802,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesContinuesAfterUnresolvedTextureSource)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFWithMissingAndValidTextureSourcesFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList Textures;
+    RadientImport::TextureAssetList Textures;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Failed to resolve GLTF texture source 0"};
         Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
@@ -336,7 +840,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromDataURIImage)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFDataURITextureFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
+    RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -361,7 +865,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromBufferViewImage)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFBufferViewTextureFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
+    RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -386,7 +890,7 @@ TEST(RadientGLTFLoaderTest, IdenticalDataURIAndBufferViewTexturesSharePayload)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFDataURIAndBufferViewTexturesFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
+    RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
 
     ASSERT_EQ(Textures.size(), 2u);
     ASSERT_NE(Textures[0], nullptr);
@@ -419,8 +923,8 @@ TEST(RadientGLTFLoaderTest, IdenticalTexturesFromDifferentGLTFsSharePayload)
     const std::string BufferViewGLTFPath = WriteGLTFBufferViewTextureFile(TempDir);
     const std::string DataURIGLTFPath    = WriteGLTFDataURITextureFile(TempDir);
 
-    RadientGLTFLoader::TextureAssetList BufferViewTextures = LoadTextures(*pThreadPool, *pTextureManager, BufferViewGLTFPath);
-    RadientGLTFLoader::TextureAssetList DataURITextures    = LoadTextures(*pThreadPool, *pTextureManager, DataURIGLTFPath);
+    RadientImport::TextureAssetList BufferViewTextures = LoadTextures(*pThreadPool, *pTextureManager, BufferViewGLTFPath);
+    RadientImport::TextureAssetList DataURITextures    = LoadTextures(*pThreadPool, *pTextureManager, DataURIGLTFPath);
 
     ASSERT_EQ(BufferViewTextures.size(), 1u);
     ASSERT_EQ(DataURITextures.size(), 1u);
@@ -451,7 +955,7 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsCreatesMaterialAssetWithoutTextures)
     const std::string GLTFPath  = WriteGLTFMaterialWithoutTexturesFile(TempDir);
     auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
 
-    RadientGLTFLoader::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
 
     ASSERT_EQ(Materials.size(), 1u);
     ASSERT_NE(Materials[0], nullptr);
@@ -484,9 +988,9 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsTracksTextureDependencies)
     const std::string GLTFPath  = WriteGLTFMaterialWithTextureDependencyFile(TempDir);
     auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
 
-    RadientGLTFLoader::TextureAssetList Textures =
+    RadientImport::TextureAssetList Textures =
         RadientGLTFLoader::LoadTextures(*pThreadPool, *pTextureManager, GLTFPath, pDocument);
-    RadientGLTFLoader::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, Textures);
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, Textures);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -509,5 +1013,385 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsTracksTextureDependencies)
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(Materials[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(Materials[0]), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(Materials[0]), nullptr);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAsset)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshFile(TempDir, false);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshVertexData(Scene.Meshes[0]), nullptr);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[0]), nullptr);
+
+    const RadientDrawableMeshResolveResult DrawableMesh =
+        RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
+    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(DrawableMesh.pMesh, nullptr);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneReloadsSameMeshSharesPayload)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath = WriteGLTFMeshFile(TempDir, false);
+
+    RadientImport::ImportedDocument FirstScene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, LoadMetadataOnlyDocument(GLTFPath), {}, FirstScene),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(FirstScene.Meshes.size(), 1u);
+    ASSERT_NE(FirstScene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    const MeshPayloadImpl* pFirstPayload = RadientMeshAssetManager::GetMeshPayload(FirstScene.Meshes[0]);
+    ASSERT_NE(pFirstPayload, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(FirstScene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(FirstScene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+
+    RadientImport::ImportedDocument SecondScene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, LoadMetadataOnlyDocument(GLTFPath), {}, SecondScene),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(SecondScene.Meshes.size(), 1u);
+    ASSERT_NE(SecondScene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(SecondScene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(SecondScene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(SecondScene.Meshes[0]), pFirstPayload);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSharesPayloadForIdenticalMeshesFromDifferentGLTFs)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPathA = WriteGLTFMeshFile(TempDir, false);
+    const std::string GLTFPathB = WriteGLTFMeshWithShiftedAccessorsFile(TempDir);
+
+    RadientImport::ImportedDocument SceneA;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPathA, LoadMetadataOnlyDocument(GLTFPathA), {}, SceneA),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(SceneA.Meshes.size(), 1u);
+    ASSERT_NE(SceneA.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    const MeshPayloadImpl* pPayloadA = RadientMeshAssetManager::GetMeshPayload(SceneA.Meshes[0]);
+    ASSERT_NE(pPayloadA, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(SceneA.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(SceneA.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+
+    RadientImport::ImportedDocument SceneB;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPathB, LoadMetadataOnlyDocument(GLTFPathB), {}, SceneB),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(SceneB.Meshes.size(), 1u);
+    ASSERT_NE(SceneB.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(SceneB.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(SceneB.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+
+    // The second GLTF uses different accessor ids and buffer views, but the
+    // source bytes and resolved mesh view are identical to the first GLTF.
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(SceneB.Meshes[0]), pPayloadA);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(SceneB.Meshes[0]),
+              RadientMeshAssetManager::GetMeshVertexData(SceneA.Meshes[0]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(SceneB.Meshes[0]),
+              RadientMeshAssetManager::GetMeshIndexData(SceneA.Meshes[0]));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSharesVertexPayloadForSameGeometryDifferentIndices)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshesWithSameGeometryDifferentIndicesFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 2u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_NE(Scene.Meshes[1], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[1]), RADIENT_STATUS_OK);
+
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[0]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSharesIndexPayloadForSameIndicesDifferentGeometry)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshesWithSameIndicesDifferentGeometryFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 2u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_NE(Scene.Meshes[1], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[1]), RADIENT_STATUS_OK);
+
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[0]));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSameGeometryDifferentMaterialsShareGeometryPayloadsOnly)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshesWithSameGeometryDifferentMaterialsFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
+    ASSERT_EQ(Materials.size(), 2u);
+    ASSERT_NE(Materials[0], nullptr);
+    ASSERT_NE(Materials[1], nullptr);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, Materials, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 2u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_NE(Scene.Meshes[1], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[1]), RADIENT_STATUS_OK);
+
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[0]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSameGeometryDifferentPrimitiveListsShareGeometryPayloadsOnly)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshesWithSameGeometryDifferentPrimitiveListsFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 2u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_NE(Scene.Meshes[1], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[1]), RADIENT_STATUS_OK);
+
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[0]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGeometryCount(Scene.Meshes[0]), 1u);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGeometryCount(Scene.Meshes[1]), 1u);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 1), nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 1), nullptr);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSharesGPUDataForIdenticalPrimitiveData)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFTwoMeshesWithIdenticalPrimitiveDataFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 2u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    ASSERT_NE(Scene.Meshes[1], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[1]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[1]), RADIENT_STATUS_NO_GPU_DATA);
+
+    const MeshPayloadImpl* pMeshPayload = RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[0]);
+    ASSERT_NE(pMeshPayload, nullptr);
+
+    // The GLTF primitives use different accessors and buffer views, but the
+    // source bytes are identical. The loader should therefore resolve both
+    // meshes to the same cached mesh/GPU-data payload.
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(Scene.Meshes[1]), pMeshPayload);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshVertexData(Scene.Meshes[0]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[0]));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneDeduplicatesAlternatingPrimitiveGeometries)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshWithAlternatingPrimitiveGeometryFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+
+    // The GLTF primitive order is A, B, A, B. The loader should group by
+    // planned vertex/index data before constructing the mesh view, otherwise
+    // a last-geometry check would create four geometry records instead of two.
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGeometryCount(Scene.Meshes[0]), 2u);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAssetWithMaterial)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshFile(TempDir, true);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
+    ASSERT_EQ(Materials.size(), 1u);
+    ASSERT_NE(Materials[0], nullptr);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool, *pMeshManager, GLTFPath, pDocument, Materials, Scene), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
+
+    const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetMaterial(Materials[0]);
+    ASSERT_NE(pMaterial, nullptr);
+
+    const RadientDrawableMeshResolveResult DrawableMesh =
+        RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
+    EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(DrawableMesh.pMesh, nullptr);
+
     pThreadPool->StopThreads();
 }
