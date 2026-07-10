@@ -38,8 +38,10 @@
 #include "ThreadPool.hpp"
 
 #include <atomic>
+#include <cctype>
 #include <exception>
 #include <memory>
+#include <string>
 #include <thread>
 #include <utility>
 
@@ -228,9 +230,54 @@ RefCntAutoPtr<IGPUUploadManager> CreateRadientGPUUploadManager(IRenderDevice* pD
     return pUploadManager;
 }
 
-std::string MakeGLTFCacheKey(const char* URI)
+std::string MakeSceneCacheKey(RADIENT_SCENE_FORMAT Format, const char* URI)
 {
-    return std::string{"gltf:"} + URI;
+    const char* Prefix = "scene:";
+    switch (Format)
+    {
+        case RADIENT_SCENE_FORMAT_GLTF:
+            Prefix = "gltf:";
+            break;
+
+        default:
+            break;
+    }
+
+    return std::string{Prefix} + URI;
+}
+
+bool EndsWithCaseInsensitive(const std::string& Text, const char* Suffix)
+{
+    const size_t SuffixLength = std::char_traits<char>::length(Suffix);
+    if (Text.size() < SuffixLength)
+        return false;
+
+    const size_t Offset = Text.size() - SuffixLength;
+    for (size_t Index = 0; Index < SuffixLength; ++Index)
+    {
+        const unsigned char Lhs = static_cast<unsigned char>(Text[Offset + Index]);
+        const unsigned char Rhs = static_cast<unsigned char>(Suffix[Index]);
+        if (std::tolower(Lhs) != std::tolower(Rhs))
+            return false;
+    }
+
+    return true;
+}
+
+RADIENT_SCENE_FORMAT DetectSceneFormatFromURI(const char* URI)
+{
+    if (URI == nullptr)
+        return RADIENT_SCENE_FORMAT_AUTO;
+
+    std::string  Path{URI};
+    const size_t QueryPos = Path.find_first_of("?#");
+    if (QueryPos != std::string::npos)
+        Path.resize(QueryPos);
+
+    if (EndsWithCaseInsensitive(Path, ".gltf") || EndsWithCaseInsensitive(Path, ".glb"))
+        return RADIENT_SCENE_FORMAT_GLTF;
+
+    return RADIENT_SCENE_FORMAT_AUTO;
 }
 
 } // namespace
@@ -316,21 +363,38 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
         RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
-                                                 IRadientSceneAsset**       ppModel)
+RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& LoadInfo,
+                                                  IRadientSceneAsset**        ppScene)
 {
-    if (ppModel == nullptr)
+    if (ppScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppModel == nullptr, "Output GLTF model pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppModel = nullptr;
+    DEV_CHECK_ERR(*ppScene == nullptr, "Output scene pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppScene = nullptr;
 
-    if (!ValidateGLTFLoadInfo(LoadInfo))
+    if (!ValidateSceneLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     if (m_pThreadPool == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const std::string SourceURI = LoadInfo.URI;
+
+    const RADIENT_SCENE_FORMAT SceneFormat =
+        LoadInfo.Format == RADIENT_SCENE_FORMAT_AUTO ?
+        DetectSceneFormatFromURI(SourceURI.c_str()) :
+        LoadInfo.Format;
+
+    if (SceneFormat == RADIENT_SCENE_FORMAT_AUTO)
+    {
+        LOG_ERROR_MESSAGE("Failed to infer scene format from URI '", SourceURI, "'");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (SceneFormat != RADIENT_SCENE_FORMAT_GLTF)
+    {
+        LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(SceneFormat), " is not supported yet.");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
     RefCntAutoPtr<SceneAssetImpl>          pModelAsset =
@@ -339,11 +403,11 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
     if (!pModelAsset)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    pModelAsset->QueryInterface(IID_RadientSceneAsset, ppModel);
+    pModelAsset->QueryInterface(IID_RadientSceneAsset, ppScene);
 
     EnqueueAsyncWork(
         m_pThreadPool,
-        [pWeakSelf, pModelAsset, SourceURI](Uint32) mutable //
+        [pWeakSelf, pModelAsset, SourceURI, SceneFormat](Uint32) mutable //
         {
             RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
             if (pSelf == nullptr)
@@ -352,10 +416,10 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
                 return ASYNC_TASK_STATUS_CANCELLED;
             }
 
-            const std::string CacheKey = MakeGLTFCacheKey(SourceURI.c_str());
+            const std::string CacheKey = MakeSceneCacheKey(SceneFormat, SourceURI.c_str());
 
             auto [pModelPayload, PayloadCreated] =
-                pSelf->m_GLTFAssetCache.GetOrCreate(
+                pSelf->m_SceneAssetCache.GetOrCreate(
                     CacheKey.c_str(),
                     []() {
                         return ScenePayloadImpl::Create(RADIENT_STATUS_PENDING);
@@ -367,7 +431,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            pSelf->LoadGLTFModel(*pModelAsset->GetPayload(), SourceURI);
+            pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -425,9 +489,9 @@ const GLTF::Material* RadientAssetManagerImpl::GetMaterial(IRadientMaterialAsset
     return RadientMaterialAssetManager::GetMaterial(pMaterial);
 }
 
-const RadientImport::ImportedDocument* RadientAssetManagerImpl::GetImportedGLTF(IRadientSceneAsset* pModel)
+const RadientImport::ImportedDocument* RadientAssetManagerImpl::GetImportedScene(IRadientSceneAsset* pScene)
 {
-    RefCntAutoPtr<SceneAssetImpl> pImpl = SceneAssetImpl::ResolveAsset(pModel);
+    RefCntAutoPtr<SceneAssetImpl> pImpl = SceneAssetImpl::ResolveAsset(pScene);
     if (!pImpl)
         return nullptr;
 
@@ -438,18 +502,18 @@ const RadientImport::ImportedDocument* RadientAssetManagerImpl::GetImportedGLTF(
     return &Scene.Scene;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel)
+RADIENT_STATUS RadientAssetManagerImpl::GetSceneLoadStatus(IRadientSceneAsset* pScene)
 {
-    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pScene);
     if (!pImpl)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     return pImpl->GetLoadStatus();
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetGLTFGPUResourceStatus(IRadientSceneAsset* pModel)
+RADIENT_STATUS RadientAssetManagerImpl::GetSceneGPUResourceStatus(IRadientSceneAsset* pScene)
 {
-    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pScene);
     if (!pImpl)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -526,46 +590,59 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
     }
 }
 
-void RadientAssetManagerImpl::LoadGLTFModel(ScenePayloadImpl&  Model,
-                                            const std::string& SourceURI)
+void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
+                                             RADIENT_SCENE_FORMAT Format,
+                                             const std::string&   SourceURI)
 {
-    ImportedSceneStorage& SceneStorage = Model.GetStorage();
+    ImportedSceneStorage& SceneStorage = Scene.GetStorage();
 
     RadientImport::ImportedDocument ImportedScene;
     RADIENT_STATUS                  Status = RADIENT_STATUS_INVALID_OPERATION;
     try
     {
-        GLTF::DocumentLoadInfo DocLoadInfo;
-        DocLoadInfo.FileName     = SourceURI.c_str();
-        DocLoadInfo.DecodeImages = false;
+        switch (Format)
+        {
+            case RADIENT_SCENE_FORMAT_GLTF:
+            {
+                GLTF::DocumentLoadInfo DocLoadInfo;
+                DocLoadInfo.FileName     = SourceURI.c_str();
+                DocLoadInfo.DecodeImages = false;
 
-        std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
+                std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
 
-        ImportedScene.Textures =
-            RadientGLTFLoader::LoadTextures(*m_pThreadPool,
-                                            *m_pTextureManager,
-                                            SourceURI,
-                                            pDocument);
+                ImportedScene.Textures =
+                    RadientGLTFLoader::LoadTextures(*m_pThreadPool,
+                                                    *m_pTextureManager,
+                                                    SourceURI,
+                                                    pDocument);
 
-        ImportedScene.Materials =
-            RadientGLTFLoader::LoadMaterials(*m_pMaterialManager,
-                                             pDocument,
-                                             ImportedScene.Textures);
+                ImportedScene.Materials =
+                    RadientGLTFLoader::LoadMaterials(*m_pMaterialManager,
+                                                     pDocument,
+                                                     ImportedScene.Textures);
 
-        Status = RadientGLTFLoader::LoadScene(*m_pThreadPool,
-                                              *m_pMeshManager,
-                                              SourceURI,
-                                              pDocument,
-                                              ImportedScene.Materials,
-                                              ImportedScene);
+                Status = RadientGLTFLoader::LoadScene(*m_pThreadPool,
+                                                      *m_pMeshManager,
+                                                      SourceURI,
+                                                      pDocument,
+                                                      ImportedScene.Materials,
+                                                      ImportedScene);
+                break;
+            }
+
+            default:
+                LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(Format), " is not supported yet.");
+                Status = RADIENT_STATUS_INVALID_OPERATION;
+                break;
+        }
     }
     catch (const std::exception& Error)
     {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "': ", Error.what());
+        LOG_ERROR_MESSAGE("Failed to load Radient scene asset '", SourceURI, "': ", Error.what());
     }
     catch (...)
     {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
+        LOG_ERROR_MESSAGE("Failed to load Radient scene asset '", SourceURI, "'");
     }
 
     if (RADIENT_FAILED(Status))

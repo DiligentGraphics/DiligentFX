@@ -52,41 +52,41 @@ public:
     static RefCntAutoPtr<IRadientSceneImporter> Create(IRadientAssetManager* pAssetManager,
                                                        IRadientSceneWriter*  pWriter);
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ImportGLTF(const RadientGLTFLoadInfo&        LoadInfo,
-                                                         const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                         IRadientSceneAsset**              ppModel,
-                                                         RadientEntityID&                  RootEntity) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ImportScene(const RadientSceneLoadInfo&        LoadInfo,
+                                                          const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                          IRadientSceneAsset**               ppScene,
+                                                          RadientEntityID&                   RootEntity) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(IRadientSceneAsset*               pModel,
-                                                              const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                              RadientEntityID&                  RootEntity) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateScene(IRadientSceneAsset*                pScene,
+                                                               const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                               RadientEntityID&                   RootEntity) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE ProcessPendingImports() override final;
 
 private:
-    struct PendingGLTFInstantiation
+    struct PendingSceneInstantiation
     {
         RefCntAutoPtr<IRadientSceneAsset> pModel;
-        Uint32                            SceneIndex = InvalidRadientGLTFSceneIndex;
+        Uint32                            SceneIndex = InvalidRadientSceneIndex;
         RadientEntityID                   RootEntity = InvalidRadientEntityID;
     };
 
-    RADIENT_STATUS CreateGLTFRoot(IRadientSceneAsset*               pModel,
-                                  const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                  RadientEntityID&                  RootEntity);
+    RADIENT_STATUS CreateSceneRoot(IRadientSceneAsset*                pModel,
+                                   const RadientSceneInstantiateInfo& InstantiateInfo,
+                                   RadientEntityID&                   RootEntity);
 
-    RADIENT_STATUS PopulateGLTFRoot(IRadientSceneAsset* pModel,
-                                    Uint32              SceneIndex,
-                                    RadientEntityID     RootEntity);
+    RADIENT_STATUS PopulateSceneRoot(IRadientSceneAsset* pModel,
+                                     Uint32              SceneIndex,
+                                     RadientEntityID     RootEntity);
 
-    void AddPendingGLTFInstantiation(IRadientSceneAsset*               pModel,
-                                     const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                     RadientEntityID                   RootEntity);
+    void AddPendingSceneInstantiation(IRadientSceneAsset*                pModel,
+                                      const RadientSceneInstantiateInfo& InstantiateInfo,
+                                      RadientEntityID                    RootEntity);
 
     RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
     RefCntAutoPtr<IRadientSceneWriter>  m_pWriter;
 
-    std::vector<PendingGLTFInstantiation> m_PendingGLTFInstantiations;
+    std::vector<PendingSceneInstantiation> m_PendingSceneInstantiations;
 };
 
 } // namespace Diligent

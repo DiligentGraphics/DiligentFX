@@ -125,8 +125,8 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo&,
-                                                       IRadientSceneAsset**) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadScene(const RadientSceneLoadInfo&,
+                                                        IRadientSceneAsset**) override final
     {
         return RADIENT_STATUS_INVALID_OPERATION;
     }

@@ -33,6 +33,9 @@ static_assert(RADIENT_ASSET_TYPE_MATERIAL == 1, "Unexpected RADIENT_ASSET_TYPE_M
 static_assert(RADIENT_ASSET_TYPE_TEXTURE == 2, "Unexpected RADIENT_ASSET_TYPE_TEXTURE value");
 static_assert(RADIENT_ASSET_TYPE_SCENE == 3, "Unexpected RADIENT_ASSET_TYPE_SCENE value");
 
+static_assert(RADIENT_SCENE_FORMAT_AUTO == 0, "Unexpected RADIENT_SCENE_FORMAT_AUTO value");
+static_assert(RADIENT_SCENE_FORMAT_GLTF == 1, "Unexpected RADIENT_SCENE_FORMAT_GLTF value");
+
 static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
 static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
 static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
@@ -44,9 +47,9 @@ void RadientAssets_CPP_UseMeshCreateInfo()
 {
     RadientMeshPrimitiveCreateInfo Primitive;
     RadientMeshCreateInfo          MeshCI;
-    RadientGLTFLoadInfo            GLTFLoadInfo;
+    RadientSceneLoadInfo           SceneLoadInfo;
 
     (void)Primitive;
     (void)MeshCI;
-    (void)GLTFLoadInfo;
+    (void)SceneLoadInfo;
 }

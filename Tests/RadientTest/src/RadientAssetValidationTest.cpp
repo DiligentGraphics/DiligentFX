@@ -145,22 +145,28 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoInvalidPrimitiveRanges)
                                 });
 }
 
-TEST(RadientAssetValidationTest, ValidatesGLTFLoadInfo)
+TEST(RadientAssetValidationTest, ValidatesSceneLoadInfo)
 {
-    RadientGLTFLoadInfo LoadInfo{};
+    RadientSceneLoadInfo LoadInfo{};
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
-        EXPECT_FALSE(ValidateGLTFLoadInfo(LoadInfo));
+        EXPECT_FALSE(ValidateSceneLoadInfo(LoadInfo));
     }
 
     LoadInfo.URI = "";
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
-        EXPECT_FALSE(ValidateGLTFLoadInfo(LoadInfo));
+        EXPECT_FALSE(ValidateSceneLoadInfo(LoadInfo));
     }
 
     LoadInfo.URI = "scene.gltf";
-    EXPECT_TRUE(ValidateGLTFLoadInfo(LoadInfo));
+    EXPECT_TRUE(ValidateSceneLoadInfo(LoadInfo));
+
+    LoadInfo.Format = static_cast<RADIENT_SCENE_FORMAT>(255);
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"Format is invalid"};
+        EXPECT_FALSE(ValidateSceneLoadInfo(LoadInfo));
+    }
 }
 
 TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)

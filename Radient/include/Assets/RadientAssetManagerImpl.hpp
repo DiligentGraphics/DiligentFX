@@ -93,8 +93,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                           IRadientTextureAsset**        ppTexture) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
-                                                       IRadientSceneAsset**       ppModel) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadScene(const RadientSceneLoadInfo& LoadInfo,
+                                                        IRadientSceneAsset**        ppScene) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset* pAsset) override final;
 
@@ -107,14 +107,14 @@ public:
     // Returns the GLTF material if the material status is OK, or nullptr otherwise.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
-    static const RadientImport::ImportedDocument* GetImportedGLTF(IRadientSceneAsset* pModel);
+    static const RadientImport::ImportedDocument* GetImportedScene(IRadientSceneAsset* pScene);
 
-    // Reports GLTF model source load status. OK does not imply GPU resources exist.
-    static RADIENT_STATUS GetGLTFLoadStatus(IRadientSceneAsset* pModel);
+    // Reports scene source load status. OK does not imply GPU resources exist.
+    static RADIENT_STATUS GetSceneLoadStatus(IRadientSceneAsset* pScene);
 
-    // Reports GLTF model GPU resource status. OK means GPU resources are ready.
-    // NO_GPU_DATA means the model loaded successfully without a GPU backend.
-    static RADIENT_STATUS GetGLTFGPUResourceStatus(IRadientSceneAsset* pModel);
+    // Reports scene GPU resource status. OK means GPU resources are ready.
+    // NO_GPU_DATA means the scene loaded successfully without a GPU backend.
+    static RADIENT_STATUS GetSceneGPUResourceStatus(IRadientSceneAsset* pScene);
 
     // Returns the texture SRV if the texture status is OK (i.e., all
     // required copy commands were enqueued), or nullptr otherwise.
@@ -133,8 +133,9 @@ private:
     // has been processed.
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
-    void LoadGLTFModel(ScenePayloadImpl&  Model,
-                       const std::string& SourceURI);
+    void LoadSceneAsset(ScenePayloadImpl&    Scene,
+                        RADIENT_SCENE_FORMAT Format,
+                        const std::string&   SourceURI);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
@@ -148,7 +149,7 @@ private:
     RadientMaterialAssetManagerSharedPtr m_pMaterialManager;
     RadientTextureAssetManagerSharedPtr  m_pTextureManager;
 
-    RadientAssetCache<ScenePayloadImpl> m_GLTFAssetCache;
+    RadientAssetCache<ScenePayloadImpl> m_SceneAssetCache;
 
     bool m_Stopped = false;
 };

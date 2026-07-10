@@ -217,7 +217,7 @@ RADIENT_STATUS ResolveSceneIndex(const RadientImport::ImportedDocument& Scene,
                                  Uint32                                 RequestedSceneIndex,
                                  Uint32&                                SceneIndex)
 {
-    if (RequestedSceneIndex == InvalidRadientGLTFSceneIndex)
+    if (RequestedSceneIndex == InvalidRadientSceneIndex)
     {
         SceneIndex = GetDefaultSceneIndex(Scene);
         return RADIENT_STATUS_OK;

@@ -453,9 +453,9 @@ TEST(RadientAssetManagerTest, CreateMeshDifferentRawDataUsesDifferentPayload)
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh1), pMeshPayload0);
 }
 
-TEST(RadientAssetManagerTest, LoadGLTF)
+TEST(RadientAssetManagerTest, LoadScene)
 {
-    // LoadGLTF should reject missing input, then accept a valid URI and finish
+    // LoadScene should reject missing input, then accept a valid URI and finish
     // through WaitForAssetLoad.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -463,27 +463,27 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientGLTFLoadInfo               GLTFLoadInfo{};
+    RadientSceneLoadInfo              SceneLoadInfo{};
     RefCntAutoPtr<IRadientSceneAsset> pGLTFModel;
     // A missing URI is invalid and should not create an asset reference.
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
-        EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pAssetManager->LoadScene(SceneLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
     }
 
     TempDirectory     TempDir{"RadientAssetManagerTest"};
     const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
 
-    GLTFLoadInfo.URI                = GLTFPath.c_str();
-    const RADIENT_STATUS LoadStatus = pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel);
+    SceneLoadInfo.URI               = GLTFPath.c_str();
+    const RADIENT_STATUS LoadStatus = pAssetManager->LoadScene(SceneLoadInfo, &pGLTFModel);
     // Depending on threading, the load may complete immediately or remain pending.
     EXPECT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pGLTFModel, nullptr);
     EXPECT_NE(pGLTFModel->GetReference().URI, nullptr);
-    EXPECT_STREQ(pGLTFModel->GetReference().URI, GLTFLoadInfo.URI);
+    EXPECT_STREQ(pGLTFModel->GetReference().URI, SceneLoadInfo.URI);
     EXPECT_NE(pGLTFModel->GetReference().Version, 0u);
     EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
-    EXPECT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pGLTFModel), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pGLTFModel), RADIENT_STATUS_NO_GPU_DATA);
 }
 
 TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
@@ -491,11 +491,11 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientGLTFLoadInfo GLTFLoadInfo{};
-    GLTFLoadInfo.URI = "no_thread_pool.gltf";
+    RadientSceneLoadInfo SceneLoadInfo{};
+    SceneLoadInfo.URI = "no_thread_pool.gltf";
 
     RefCntAutoPtr<IRadientSceneAsset> pGLTFModel;
-    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pAssetManager->LoadScene(SceneLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pGLTFModel, nullptr);
 
     std::array<Uint8, 4> TextureData{1, 2, 3, 4};
@@ -522,29 +522,29 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     TempDirectory     TempDir{"RadientAssetManagerTest"};
     const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
 
-    RadientGLTFLoadInfo LoadInfo{};
+    RadientSceneLoadInfo LoadInfo{};
     LoadInfo.URI = GLTFPath.c_str();
 
     RefCntAutoPtr<IRadientSceneAsset> pFirstModel;
-    const RADIENT_STATUS              FirstLoadStatus = pAssetManager->LoadGLTF(LoadInfo, &pFirstModel);
+    const RADIENT_STATUS              FirstLoadStatus = pAssetManager->LoadScene(LoadInfo, &pFirstModel);
     ASSERT_TRUE(FirstLoadStatus == RADIENT_STATUS_OK || FirstLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pFirstModel, nullptr);
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pFirstModel), RADIENT_STATUS_OK);
-    ASSERT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pFirstModel), RADIENT_STATUS_NO_GPU_DATA);
+    ASSERT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pFirstModel), RADIENT_STATUS_NO_GPU_DATA);
 
     RefCntAutoPtr<IRadientSceneAsset> pSecondModel;
-    const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadGLTF(LoadInfo, &pSecondModel);
+    const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadScene(LoadInfo, &pSecondModel);
     EXPECT_TRUE(SecondLoadStatus == RADIENT_STATUS_OK || SecondLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondModel, nullptr);
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pSecondModel), RADIENT_STATUS_OK);
-    ASSERT_EQ(RadientAssetManagerImpl::GetGLTFGPUResourceStatus(pSecondModel), RADIENT_STATUS_NO_GPU_DATA);
+    ASSERT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pSecondModel), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(pSecondModel.RawPtr(), pFirstModel.RawPtr());
     ASSERT_NE(pSecondModel->GetReference().URI, nullptr);
     ASSERT_NE(pFirstModel->GetReference().URI, nullptr);
     EXPECT_STREQ(pFirstModel->GetReference().URI, LoadInfo.URI);
     EXPECT_STREQ(pSecondModel->GetReference().URI, LoadInfo.URI);
     EXPECT_STREQ(pSecondModel->GetReference().URI, pFirstModel->GetReference().URI);
-    EXPECT_EQ(RadientAssetManagerImpl::GetImportedGLTF(pSecondModel), RadientAssetManagerImpl::GetImportedGLTF(pFirstModel));
+    EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pSecondModel), RadientAssetManagerImpl::GetImportedScene(pFirstModel));
 }
 
 TEST(RadientAssetManagerTest, TextureWithSourceURIKeepsSourceURI)
@@ -702,9 +702,9 @@ TEST(RadientEngineTest, CreateSceneImporter)
     EXPECT_NE(pImporter, nullptr);
 }
 
-TEST(RadientSceneImporterTest, ImportGLTF)
+TEST(RadientSceneImporterTest, ImportScene)
 {
-    // Public ImportGLTF should reject invalid load info and then import a
+    // Public ImportScene should reject invalid load info and then import a
     // simple valid glTF into a live scene root.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -721,7 +721,7 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RefCntAutoPtr<IRadientSceneImporter> pImporter = CreateTestSceneImporter(*pEngine, pWriter);
     ASSERT_NE(pImporter, nullptr);
 
-    RadientGLTFInstantiateInfo InstantiateInfo{};
+    RadientSceneInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Radient imported GLTF root";
 
     RefCntAutoPtr<IRadientSceneAsset> ImportedModel;
@@ -729,16 +729,16 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     // Empty load info is invalid and should not instantiate anything.
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"URI must not be null or empty"};
-        EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, &ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pImporter->ImportScene({}, InstantiateInfo, &ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
     }
 
     TempDirectory     ImportTempDir{"RadientSceneTest"};
-    const std::string ImportGLTFPath = WriteBasicGLTFFile(ImportTempDir);
+    const std::string ImportScenePath = WriteBasicGLTFFile(ImportTempDir);
 
-    RadientGLTFLoadInfo GLTFLoadInfo{};
-    GLTFLoadInfo.URI = ImportGLTFPath.c_str();
+    RadientSceneLoadInfo SceneLoadInfo{};
+    SceneLoadInfo.URI = ImportScenePath.c_str();
 
-    RADIENT_STATUS ImportStatus = pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, &ImportedModel, ImportedRoot);
+    RADIENT_STATUS ImportStatus = pImporter->ImportScene(SceneLoadInfo, InstantiateInfo, &ImportedModel, ImportedRoot);
     if (ImportStatus == RADIENT_STATUS_PENDING)
     {
         // Pending loads are completed explicitly in tests so the imported root

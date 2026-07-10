@@ -112,10 +112,16 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     return true;
 }
 
-bool ValidateGLTFLoadInfo(const RadientGLTFLoadInfo& LoadInfo)
+bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo)
 {
     if (LoadInfo.URI == nullptr || *LoadInfo.URI == 0)
-        return LogValidationError("RadientGLTFLoadInfo", "URI must not be null or empty.");
+        return LogValidationError("RadientSceneLoadInfo", "URI must not be null or empty.");
+
+    if (LoadInfo.Format != RADIENT_SCENE_FORMAT_AUTO &&
+        LoadInfo.Format != RADIENT_SCENE_FORMAT_GLTF)
+    {
+        return LogValidationError("RadientSceneLoadInfo", "Format is invalid.");
+    }
 
     return true;
 }

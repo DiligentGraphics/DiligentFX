@@ -56,33 +56,33 @@ RefCntAutoPtr<IRadientSceneImporter> RadientSceneImporterImpl::Create(IRadientAs
     return RefCntAutoPtr<RadientSceneImporterImpl>{MakeNewRCObj<RadientSceneImporterImpl>()(pAssetManager, pWriter)};
 }
 
-RADIENT_STATUS RadientSceneImporterImpl::ImportGLTF(const RadientGLTFLoadInfo&        LoadInfo,
-                                                    const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                    IRadientSceneAsset**              ppModel,
-                                                    RadientEntityID&                  RootEntity)
+RADIENT_STATUS RadientSceneImporterImpl::ImportScene(const RadientSceneLoadInfo&        LoadInfo,
+                                                     const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                     IRadientSceneAsset**               ppScene,
+                                                     RadientEntityID&                   RootEntity)
 {
-    if (ppModel == nullptr)
+    if (ppScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppModel == nullptr, "Output GLTF model pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppModel   = nullptr;
+    DEV_CHECK_ERR(*ppScene == nullptr, "Output scene pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppScene   = nullptr;
     RootEntity = InvalidRadientEntityID;
 
     if (m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    RefCntAutoPtr<IRadientSceneAsset> pModel;
-    const RADIENT_STATUS              LoadStatus = m_pAssetManager->LoadGLTF(LoadInfo, &pModel);
+    RefCntAutoPtr<IRadientSceneAsset> pScene;
+    const RADIENT_STATUS              LoadStatus = m_pAssetManager->LoadScene(LoadInfo, &pScene);
     if (RADIENT_FAILED(LoadStatus))
         return LoadStatus;
 
-    const RADIENT_STATUS Status = InstantiateGLTF(pModel, InstantiateInfo, RootEntity);
-    *ppModel                    = pModel.Detach();
+    const RADIENT_STATUS Status = InstantiateScene(pScene, InstantiateInfo, RootEntity);
+    *ppScene                    = pScene.Detach();
     return Status;
 }
 
-RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(IRadientSceneAsset*               pModel,
-                                                         const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                         RadientEntityID&                  RootEntity)
+RADIENT_STATUS RadientSceneImporterImpl::InstantiateScene(IRadientSceneAsset*                pModel,
+                                                          const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                          RadientEntityID&                   RootEntity)
 {
     RootEntity = InvalidRadientEntityID;
 
@@ -92,21 +92,21 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(IRadientSceneAsset*    
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(pModel);
+    const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetSceneLoadStatus(pModel);
     if (RADIENT_FAILED(LoadStatus))
         return LoadStatus;
 
-    RADIENT_STATUS Status = CreateGLTFRoot(pModel, InstantiateInfo, RootEntity);
+    RADIENT_STATUS Status = CreateSceneRoot(pModel, InstantiateInfo, RootEntity);
     if (RADIENT_FAILED(Status))
         return Status;
 
     if (LoadStatus == RADIENT_STATUS_PENDING)
     {
-        AddPendingGLTFInstantiation(pModel, InstantiateInfo, RootEntity);
+        AddPendingSceneInstantiation(pModel, InstantiateInfo, RootEntity);
         return RADIENT_STATUS_PENDING;
     }
 
-    Status = PopulateGLTFRoot(pModel, InstantiateInfo.SceneIndex, RootEntity);
+    Status = PopulateSceneRoot(pModel, InstantiateInfo.SceneIndex, RootEntity);
     if (RADIENT_FAILED(Status))
     {
         m_pWriter->DestroyEntity(RootEntity);
@@ -118,7 +118,7 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(IRadientSceneAsset*    
 
 RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
 {
-    if (m_PendingGLTFInstantiations.empty())
+    if (m_PendingSceneInstantiations.empty())
         return RADIENT_STATUS_OK;
 
     if (m_pWriter == nullptr || m_pAssetManager == nullptr)
@@ -126,11 +126,11 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
 
     RADIENT_STATUS Result = RADIENT_STATUS_OK;
 
-    for (size_t Index = 0; Index < m_PendingGLTFInstantiations.size();)
+    for (size_t Index = 0; Index < m_PendingSceneInstantiations.size();)
     {
-        const PendingGLTFInstantiation& Pending = m_PendingGLTFInstantiations[Index];
+        const PendingSceneInstantiation& Pending = m_PendingSceneInstantiations[Index];
 
-        const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(Pending.pModel);
+        const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetSceneLoadStatus(Pending.pModel);
         if (LoadStatus == RADIENT_STATUS_PENDING)
         {
             Result = Result == RADIENT_STATUS_OK ? RADIENT_STATUS_PENDING : Result;
@@ -140,7 +140,7 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
 
         RADIENT_STATUS Status = LoadStatus;
         if (!RADIENT_FAILED(Status))
-            Status = PopulateGLTFRoot(Pending.pModel, Pending.SceneIndex, Pending.RootEntity);
+            Status = PopulateSceneRoot(Pending.pModel, Pending.SceneIndex, Pending.RootEntity);
 
         if (RADIENT_FAILED(Status))
             m_pWriter->DestroyEntity(Pending.RootEntity);
@@ -148,17 +148,17 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
         if (RADIENT_FAILED(Status) && !RADIENT_FAILED(Result))
             Result = Status;
 
-        if (Index + 1 < m_PendingGLTFInstantiations.size())
-            m_PendingGLTFInstantiations[Index] = std::move(m_PendingGLTFInstantiations.back());
-        m_PendingGLTFInstantiations.pop_back();
+        if (Index + 1 < m_PendingSceneInstantiations.size())
+            m_PendingSceneInstantiations[Index] = std::move(m_PendingSceneInstantiations.back());
+        m_PendingSceneInstantiations.pop_back();
     }
 
     return Result;
 }
 
-RADIENT_STATUS RadientSceneImporterImpl::CreateGLTFRoot(IRadientSceneAsset*               pModel,
-                                                        const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                        RadientEntityID&                  RootEntity)
+RADIENT_STATUS RadientSceneImporterImpl::CreateSceneRoot(IRadientSceneAsset*                pModel,
+                                                         const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                         RadientEntityID&                   RootEntity)
 {
     RootEntity = InvalidRadientEntityID;
 
@@ -174,30 +174,30 @@ RADIENT_STATUS RadientSceneImporterImpl::CreateGLTFRoot(IRadientSceneAsset*     
     return m_pWriter->CreateEntity(RootDesc, RootEntity);
 }
 
-RADIENT_STATUS RadientSceneImporterImpl::PopulateGLTFRoot(IRadientSceneAsset* pModel,
-                                                          Uint32              SceneIndex,
-                                                          RadientEntityID     RootEntity)
+RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset* pModel,
+                                                           Uint32              SceneIndex,
+                                                           RadientEntityID     RootEntity)
 {
     if (m_pWriter == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedGLTF(pModel);
+    const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pModel);
     if (pImportedScene == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity);
 }
 
-void RadientSceneImporterImpl::AddPendingGLTFInstantiation(IRadientSceneAsset*               pModel,
-                                                           const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                           RadientEntityID                   RootEntity)
+void RadientSceneImporterImpl::AddPendingSceneInstantiation(IRadientSceneAsset*                pModel,
+                                                            const RadientSceneInstantiateInfo& InstantiateInfo,
+                                                            RadientEntityID                    RootEntity)
 {
-    PendingGLTFInstantiation Pending;
+    PendingSceneInstantiation Pending;
     Pending.pModel     = pModel;
     Pending.SceneIndex = InstantiateInfo.SceneIndex;
     Pending.RootEntity = RootEntity;
 
-    m_PendingGLTFInstantiations.emplace_back(std::move(Pending));
+    m_PendingSceneInstantiations.emplace_back(std::move(Pending));
 }
 
 } // namespace Diligent

@@ -36,12 +36,11 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 struct IRadientSceneImporter;
 
-/// Uses the GLTF model default scene.
-static DILIGENT_CONSTEXPR Uint32 InvalidRadientGLTFSceneIndex = ~0u;
+/// Uses the imported scene asset's default scene.
+static DILIGENT_CONSTEXPR Uint32 InvalidRadientSceneIndex = ~0u;
 
-
-/// GLTF model instantiation attributes.
-struct RadientGLTFInstantiateInfo
+/// Imported scene instantiation attributes.
+struct RadientSceneInstantiateInfo
 {
     /// Optional name for the root entity created by the import.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
@@ -55,10 +54,10 @@ struct RadientGLTFInstantiateInfo
     /// Root entity local transform.
     RadientTransform RootTransform DEFAULT_INITIALIZER({});
 
-    /// Optional GLTF scene index to instantiate. InvalidRadientGLTFSceneIndex uses the model default scene.
-    Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientGLTFSceneIndex);
+    /// Optional scene index to instantiate. InvalidRadientSceneIndex uses the asset default scene.
+    Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientSceneIndex);
 };
-typedef struct RadientGLTFInstantiateInfo RadientGLTFInstantiateInfo;
+typedef struct RadientSceneInstantiateInfo RadientSceneInstantiateInfo;
 
 
 // {8A6DE7D7-7588-48C6-8AE0-827DB3DA7C19}
@@ -78,22 +77,22 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneImporter =
 /// Imports external scene descriptions into a Radient scene.
 DILIGENT_BEGIN_INTERFACE(IRadientSceneImporter, IObject)
 {
-    /// Loads a GLTF model asset from a URI and instantiates its scene graph.
+    /// Loads a scene asset from a URI and instantiates its scene graph.
     /// If loading continues asynchronously, this method creates the import root,
-    /// schedules the GLTF scene graph instantiation, and returns RADIENT_STATUS_PENDING.
-    VIRTUAL RADIENT_STATUS METHOD(ImportGLTF)(THIS_
-                                              const RadientGLTFLoadInfo REF        LoadInfo,
-                                              const RadientGLTFInstantiateInfo REF InstantiateInfo,
-                                              IRadientSceneAsset**                 ppModel,
-                                              RadientEntityID REF                  RootEntity) PURE;
+    /// schedules the scene graph instantiation, and returns RADIENT_STATUS_PENDING.
+    VIRTUAL RADIENT_STATUS METHOD(ImportScene)(THIS_
+                                               const RadientSceneLoadInfo REF        LoadInfo,
+                                               const RadientSceneInstantiateInfo REF InstantiateInfo,
+                                               IRadientSceneAsset**                  ppScene,
+                                               RadientEntityID REF                   RootEntity) PURE;
 
-    /// Instantiates a previously loaded GLTF model asset into the scene graph.
-    /// If the model metadata is still loading, this method creates the import root,
-    /// schedules the GLTF scene graph instantiation, and returns RADIENT_STATUS_PENDING.
-    VIRTUAL RADIENT_STATUS METHOD(InstantiateGLTF)(THIS_
-                                                   IRadientSceneAsset*                  pModel,
-                                                   const RadientGLTFInstantiateInfo REF InstantiateInfo,
-                                                   RadientEntityID REF                  RootEntity) PURE;
+    /// Instantiates a previously loaded scene asset into the scene graph.
+    /// If the scene metadata is still loading, this method creates the import root,
+    /// schedules the scene graph instantiation, and returns RADIENT_STATUS_PENDING.
+    VIRTUAL RADIENT_STATUS METHOD(InstantiateScene)(THIS_
+                                                    IRadientSceneAsset*                   pScene,
+                                                    const RadientSceneInstantiateInfo REF InstantiateInfo,
+                                                    RadientEntityID REF                   RootEntity) PURE;
 
     /// Completes pending asynchronous imports whose assets have finished loading.
     VIRTUAL RADIENT_STATUS METHOD(ProcessPendingImports)(THIS) PURE;
@@ -104,8 +103,8 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientSceneImporter_ImportGLTF(This, ...)              CALL_IFACE_METHOD(RadientSceneImporter, ImportGLTF,             This, __VA_ARGS__)
-#    define IRadientSceneImporter_InstantiateGLTF(This, ...)         CALL_IFACE_METHOD(RadientSceneImporter, InstantiateGLTF,        This, __VA_ARGS__)
+#    define IRadientSceneImporter_ImportScene(This, ...)             CALL_IFACE_METHOD(RadientSceneImporter, ImportScene,            This, __VA_ARGS__)
+#    define IRadientSceneImporter_InstantiateScene(This, ...)        CALL_IFACE_METHOD(RadientSceneImporter, InstantiateScene,       This, __VA_ARGS__)
 #    define IRadientSceneImporter_ProcessPendingImports(This)        CALL_IFACE_METHOD(RadientSceneImporter, ProcessPendingImports,  This)
 
 #endif

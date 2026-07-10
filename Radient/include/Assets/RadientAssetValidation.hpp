@@ -32,7 +32,7 @@ namespace Diligent
 {
 
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI);
-bool ValidateGLTFLoadInfo(const RadientGLTFLoadInfo& LoadInfo);
+bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo);
 bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo);
 
 } // namespace Diligent

@@ -60,6 +60,16 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_SCENE
 };
 
+/// Authored scene/model source format.
+DILIGENT_TYPED_ENUM(RADIENT_SCENE_FORMAT, Uint8)
+{
+    /// Infer the source format from the URI or source metadata.
+    RADIENT_SCENE_FORMAT_AUTO = 0,
+
+    /// GL Transmission Format (.gltf/.glb).
+    RADIENT_SCENE_FORMAT_GLTF
+};
+
 
 /// Mesh index buffer element type.
 DILIGENT_TYPED_ENUM(RADIENT_INDEX_TYPE, Uint8)
@@ -373,13 +383,16 @@ struct RadientTextureLoadInfo
 typedef struct RadientTextureLoadInfo RadientTextureLoadInfo;
 
 
-/// GLTF model load attributes.
-struct RadientGLTFLoadInfo
+/// Scene/model load attributes.
+struct RadientSceneLoadInfo
 {
     /// Source URI. The scheme may identify a local file, remote resource, or memory-backed source.
     const Char* URI DEFAULT_INITIALIZER(nullptr);
+
+    /// Source format. AUTO infers the format from the URI.
+    RADIENT_SCENE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_SCENE_FORMAT_AUTO);
 };
-typedef struct RadientGLTFLoadInfo RadientGLTFLoadInfo;
+typedef struct RadientSceneLoadInfo RadientSceneLoadInfo;
 
 // {81E53AF7-3CBD-4750-ACA9-72D301E8E286}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAsset =
@@ -490,14 +503,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;
 
-    /// Starts loading a GLTF model asset from a URI.
+    /// Starts loading an authored scene asset from a URI.
     ///
-    /// The returned status reports model loading and GPU upload scheduling. A successful status
-    /// does not guarantee that all GPU resources referenced by the model are ready.
+    /// The returned status reports scene loading and GPU upload scheduling. A successful status
+    /// does not guarantee that all GPU resources referenced by the scene are ready.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
-    VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
-                                            const RadientGLTFLoadInfo REF LoadInfo,
-                                            IRadientSceneAsset**          ppModel) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(LoadScene)(THIS_
+                                             const RadientSceneLoadInfo REF LoadInfo,
+                                             IRadientSceneAsset**           ppScene) PURE;
 
     /// Blocks the calling thread until asset payload loading and GPU upload scheduling have completed.
     ///
@@ -525,7 +538,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
-#    define IRadientAssetManager_LoadGLTF(This, ...)           CALL_IFACE_METHOD(RadientAssetManager, LoadGLTF,       This, __VA_ARGS__)
+#    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 #    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)
 

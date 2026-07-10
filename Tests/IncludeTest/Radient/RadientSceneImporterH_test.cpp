@@ -30,7 +30,7 @@ using namespace Diligent;
 
 void RadientSceneImporter_CPP_UseTypes()
 {
-    RadientGLTFInstantiateInfo InstantiateInfo;
+    RadientSceneInstantiateInfo InstantiateInfo;
 
     (void)InstantiateInfo;
 }
