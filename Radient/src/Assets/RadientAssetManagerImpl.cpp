@@ -590,6 +590,34 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
     }
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
+                                                           const std::string&               SourceURI)
+{
+    GLTF::DocumentLoadInfo DocLoadInfo;
+    DocLoadInfo.FileName     = SourceURI.c_str();
+    DocLoadInfo.DecodeImages = false;
+
+    std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
+
+    ImportedScene.Textures =
+        RadientGLTFLoader::LoadTextures(*m_pThreadPool,
+                                        *m_pTextureManager,
+                                        SourceURI,
+                                        pDocument);
+
+    ImportedScene.Materials =
+        RadientGLTFLoader::LoadMaterials(*m_pMaterialManager,
+                                         pDocument,
+                                         ImportedScene.Textures);
+
+    return RadientGLTFLoader::LoadScene(*m_pThreadPool,
+                                        *m_pMeshManager,
+                                        SourceURI,
+                                        pDocument,
+                                        ImportedScene.Materials,
+                                        ImportedScene);
+}
+
 void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
                                              RADIENT_SCENE_FORMAT Format,
                                              const std::string&   SourceURI)
@@ -603,32 +631,8 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
         switch (Format)
         {
             case RADIENT_SCENE_FORMAT_GLTF:
-            {
-                GLTF::DocumentLoadInfo DocLoadInfo;
-                DocLoadInfo.FileName     = SourceURI.c_str();
-                DocLoadInfo.DecodeImages = false;
-
-                std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
-
-                ImportedScene.Textures =
-                    RadientGLTFLoader::LoadTextures(*m_pThreadPool,
-                                                    *m_pTextureManager,
-                                                    SourceURI,
-                                                    pDocument);
-
-                ImportedScene.Materials =
-                    RadientGLTFLoader::LoadMaterials(*m_pMaterialManager,
-                                                     pDocument,
-                                                     ImportedScene.Textures);
-
-                Status = RadientGLTFLoader::LoadScene(*m_pThreadPool,
-                                                      *m_pMeshManager,
-                                                      SourceURI,
-                                                      pDocument,
-                                                      ImportedScene.Materials,
-                                                      ImportedScene);
+                Status = LoadGLTFSceneAsset(ImportedScene, SourceURI);
                 break;
-            }
 
             default:
                 LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(Format), " is not supported yet.");

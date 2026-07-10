@@ -137,6 +137,9 @@ private:
                         RADIENT_SCENE_FORMAT Format,
                         const std::string&   SourceURI);
 
+    RADIENT_STATUS LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
+                                      const std::string&               SourceURI);
+
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
