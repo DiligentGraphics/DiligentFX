@@ -37,6 +37,7 @@ namespace Diligent
 {
 
 struct ITextureLoader;
+struct IRadientAssetLocation;
 struct IRadientAssetResolver;
 
 /// Describes the valid readable span of RadientTextureData::pData.
@@ -126,11 +127,12 @@ public:
 
     void MakeMemoryCopy();
 
-    RefCntAutoPtr<ITextureLoader> CreateLoader(IRadientAssetResolver* pAssetResolver = nullptr) const;
+    RefCntAutoPtr<ITextureLoader> CreateLoader(IRadientAssetResolver* pAssetResolver = nullptr,
+                                               IRadientAssetLocation* pAssetLocation = nullptr) const;
 
     static std::string GetURI(const RadientTextureLoadInfo& LoadInfo);
 
-    std::string MakeCacheKey() const;
+    std::string MakeCacheKey(IRadientAssetLocation* pAssetLocation = nullptr) const;
 
 private:
     void ReleaseMemory();

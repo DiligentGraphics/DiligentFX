@@ -26,6 +26,7 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 
+#include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 
@@ -37,6 +38,7 @@
 #include <vector>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
@@ -169,6 +171,47 @@ TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
     const TexturePayloadImpl* pPayload0 = RadientTextureAssetManager::GetTexturePayload(pTexture0);
     ASSERT_NE(pPayload0, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture1), pPayload0);
+}
+
+TEST(RadientTextureAssetManagerTest, CanonicalURIAliasesSharePayload)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
+    const std::vector<Uint8>                TextureData{TransparentPng.begin(), TransparentPng.end()};
+    pResolver->AddAsset("textures/albedo.png", "memory://assets/albedo.png", TextureData);
+    pResolver->AddAsset("textures/../textures/albedo.png", "memory://assets/albedo.png", TextureData);
+
+    RadientTextureAssetManager::CreateInfo ManagerCI;
+    ManagerCI.pAssetResolver                     = pResolver;
+    RadientTextureAssetManagerSharedPtr pManager = RadientTextureAssetManager::Create(ManagerCI);
+    ASSERT_NE(pManager, nullptr);
+
+    RadientTextureLoadInfo LoadInfo0;
+    LoadInfo0.URI = "textures/albedo.png";
+    RefCntAutoPtr<IRadientTextureAsset> pTexture0;
+    ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo0, &pTexture0));
+    ASSERT_NE(pTexture0, nullptr);
+
+    RadientTextureLoadInfo LoadInfo1;
+    LoadInfo1.URI = "textures/../textures/albedo.png";
+    RefCntAutoPtr<IRadientTextureAsset> pTexture1;
+    ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo1, &pTexture1));
+    ASSERT_NE(pTexture1, nullptr);
+
+    WaitForAllTasksAndStop(*pThreadPool);
+
+    const TexturePayloadImpl* pPayload0 = RadientTextureAssetManager::GetTexturePayload(pTexture0);
+    ASSERT_NE(pPayload0, nullptr);
+    EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture1), pPayload0);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture0), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture1), RADIENT_STATUS_OK);
+
+    // Both requests resolve their canonical identity, but only the cache creator
+    // opens the shared texture bytes.
+    EXPECT_EQ(pResolver->GetStats().ResolveLocationCount, 2u);
+    EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
 }
 
 TEST(RadientTextureAssetManagerTest, DifferentTextureOptionsUseDifferentPayloads)

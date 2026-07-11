@@ -32,7 +32,9 @@ void RadientAssetResolver_CPP_UseTypes()
 {
     RadientAssetResolveInfo ResolveInfo;
     IRadientAssetResolver*  pAssetResolver = nullptr;
+    IRadientAssetLocation*  pLocation      = nullptr;
     IRadientAssetData*      pAssetData     = nullptr;
+    const char*             LocationURI    = pLocation != nullptr ? pLocation->GetLocation() : nullptr;
     const void*             pData          = pAssetData != nullptr ? pAssetData->GetData() : nullptr;
     size_t                  DataSize       = pAssetData != nullptr ? pAssetData->GetSize() : 0;
     const char*             ResolvedURI    = pAssetData != nullptr ? pAssetData->GetResolvedURI() : nullptr;
@@ -40,13 +42,18 @@ void RadientAssetResolver_CPP_UseTypes()
 
     if (pAssetResolver != nullptr)
     {
-        Status = pAssetResolver->CheckAsset(ResolveInfo);
-        Status = pAssetResolver->ResolveAsset(ResolveInfo, &pAssetData);
+        Status = pAssetResolver->ResolveAssetLocation(ResolveInfo, &pLocation);
+        Status = pAssetResolver->CheckAsset(pLocation);
+        Status = pAssetResolver->OpenAsset(pLocation, &pAssetData);
+        Status = CheckAsset(pAssetResolver, ResolveInfo);
+        Status = OpenAsset(pAssetResolver, ResolveInfo, &pAssetData);
     }
 
     (void)ResolveInfo;
     (void)pAssetResolver;
+    (void)pLocation;
     (void)pAssetData;
+    (void)LocationURI;
     (void)pData;
     (void)DataSize;
     (void)ResolvedURI;

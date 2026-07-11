@@ -29,26 +29,34 @@
 void RadientAssetResolver_C_UseTypes(void)
 {
     RadientAssetResolveInfo ResolveInfo    = {0};
+    IRadientAssetLocation*  pLocation      = 0;
     IRadientAssetData*      pAssetData     = 0;
     IRadientAssetResolver*  pAssetResolver = 0;
 
     (void)ResolveInfo;
+    (void)pLocation;
     (void)pAssetData;
     (void)pAssetResolver;
 }
 
 void RadientAssetResolver_C_TestMacros(IRadientAssetResolver* pAssetResolver,
+                                       IRadientAssetLocation* pLocation,
                                        IRadientAssetData*     pAssetData)
 {
     RadientAssetResolveInfo ResolveInfo = {0};
+    const char*             LocationURI = IRadientAssetLocation_GetLocation(pLocation);
     const void*             pData       = IRadientAssetData_GetData(pAssetData);
     size_t                  DataSize    = IRadientAssetData_GetSize(pAssetData);
     const char*             ResolvedURI = IRadientAssetData_GetResolvedURI(pAssetData);
     RADIENT_STATUS          Status      = RADIENT_STATUS_OK;
 
-    Status = IRadientAssetResolver_CheckAsset(pAssetResolver, &ResolveInfo);
-    Status = IRadientAssetResolver_ResolveAsset(pAssetResolver, &ResolveInfo, &pAssetData);
+    Status = IRadientAssetResolver_ResolveAssetLocation(pAssetResolver, &ResolveInfo, &pLocation);
+    Status = IRadientAssetResolver_CheckAsset(pAssetResolver, pLocation);
+    Status = IRadientAssetResolver_OpenAsset(pAssetResolver, pLocation, &pAssetData);
+    Status = Diligent_CheckAsset(pAssetResolver, &ResolveInfo);
+    Status = Diligent_OpenAsset(pAssetResolver, &ResolveInfo, &pAssetData);
 
+    (void)LocationURI;
     (void)pData;
     (void)DataSize;
     (void)ResolvedURI;

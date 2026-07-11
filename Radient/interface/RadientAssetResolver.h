@@ -35,6 +35,7 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
+typedef struct IRadientAssetLocation IRadientAssetLocation;
 typedef struct IRadientAssetData     IRadientAssetData;
 typedef struct IRadientAssetResolver IRadientAssetResolver;
 
@@ -51,6 +52,10 @@ struct RadientAssetResolveInfo
 };
 typedef struct RadientAssetResolveInfo RadientAssetResolveInfo;
 
+// {61A897A7-0EF4-4F5F-B769-406DA98B3B5A}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetLocation =
+    {0x61a897a7, 0xef4, 0x4f5f, {0xb7, 0x69, 0x40, 0x6d, 0xa9, 0x8b, 0x3b, 0x5a}};
+
 // {D2D9530F-ACF3-4CBB-81E0-66A7AC2A12BB}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetData =
     {0xd2d9530f, 0xacf3, 0x4cbb, {0x81, 0xe0, 0x66, 0xa7, 0xac, 0x2a, 0x12, 0xbb}};
@@ -58,6 +63,35 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetData =
 // {2600DD0C-32BF-423A-A513-9863DEFEA40C}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetResolver =
     {0x2600dd0c, 0x32bf, 0x423a, {0xa5, 0x13, 0x98, 0x63, 0xde, 0xfe, 0xa4, 0xc}};
+
+
+#define DILIGENT_INTERFACE_NAME IRadientAssetLocation
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientAssetLocationInclusiveMethods \
+    IObjectInclusiveMethods;                  \
+    IRadientAssetLocationMethods RadientAssetLocation
+
+// clang-format off
+
+/// Lightweight resolved asset identity. Resolving a location does not load asset contents.
+DILIGENT_BEGIN_INTERFACE(IRadientAssetLocation, IObject)
+{
+    /// Returns the canonical resolver-defined location used for cache keys and diagnostics.
+    /// The returned string is never null.
+    VIRTUAL const Char* METHOD(GetLocation)(THIS) CONST PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientAssetLocation_GetLocation(This) CALL_IFACE_METHOD(RadientAssetLocation, GetLocation, This)
+
+#endif
+
+// clang-format on
 
 
 #define DILIGENT_INTERFACE_NAME IRadientAssetData
@@ -79,8 +113,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetData, IObject)
     VIRTUAL size_t METHOD(GetSize)(THIS) CONST PURE;
 
     /// Returns the canonical resolved URI used for cache keys and diagnostics.
-    /// The returned string is never null. If the resolver has no better identity,
-    /// it returns the URI from the corresponding ResolveAsset() request.
+    /// The returned string is never null and matches the location passed to OpenAsset().
     VIRTUAL const Char* METHOD(GetResolvedURI)(THIS) CONST PURE;
 };
 DILIGENT_END_INTERFACE
@@ -107,21 +140,28 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Resolves asset URIs to byte data.
+/// Resolves asset identities and opens their byte data.
 DILIGENT_BEGIN_INTERFACE(IRadientAssetResolver, IObject)
 {
-    /// Checks whether an asset can be resolved without loading its contents.
+    /// Checks whether an asset location can be opened without loading its contents.
     /// Returns RADIENT_STATUS_OK when the asset exists, RADIENT_STATUS_NOT_FOUND
     /// when it does not exist, or another failure status when the check fails.
     /// This operation is synchronous and never returns RADIENT_STATUS_PENDING.
     VIRTUAL RADIENT_STATUS METHOD(CheckAsset)(THIS_
-                                              const RadientAssetResolveInfo REF ResolveInfo) PURE;
+                                              IRadientAssetLocation* pLocation) PURE;
 
-    /// Resolves a URI to an asset data object. ppData must not be null. On
-    /// success, ppData is initialized and its resolved URI is never null.
-    VIRTUAL RADIENT_STATUS METHOD(ResolveAsset)(THIS_
-                                                const RadientAssetResolveInfo REF ResolveInfo,
-                                                IRadientAssetData**               ppData) PURE;
+    /// Resolves an asset request to its canonical location without loading asset
+    /// contents. ppLocation must not be null. A successful resolution does not
+    /// necessarily guarantee that the asset can subsequently be opened.
+    VIRTUAL RADIENT_STATUS METHOD(ResolveAssetLocation)(THIS_
+                                                        const RadientAssetResolveInfo REF ResolveInfo,
+                                                        IRadientAssetLocation**           ppLocation) PURE;
+
+    /// Opens an asset location returned by this resolver. ppData must not be null.
+    /// On success, the resolved URI reported by ppData matches pLocation.
+    VIRTUAL RADIENT_STATUS METHOD(OpenAsset)(THIS_
+                                             IRadientAssetLocation* pLocation,
+                                             IRadientAssetData**    ppData) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -129,11 +169,25 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientAssetResolver_CheckAsset(This, ...)    CALL_IFACE_METHOD(RadientAssetResolver, CheckAsset, This, __VA_ARGS__)
-#    define IRadientAssetResolver_ResolveAsset(This, ...)  CALL_IFACE_METHOD(RadientAssetResolver, ResolveAsset, This, __VA_ARGS__)
+#    define IRadientAssetResolver_CheckAsset(This, ...)            CALL_IFACE_METHOD(RadientAssetResolver, CheckAsset, This, __VA_ARGS__)
+#    define IRadientAssetResolver_ResolveAssetLocation(This, ...)  CALL_IFACE_METHOD(RadientAssetResolver, ResolveAssetLocation, This, __VA_ARGS__)
+#    define IRadientAssetResolver_OpenAsset(This, ...)             CALL_IFACE_METHOD(RadientAssetResolver, OpenAsset, This, __VA_ARGS__)
 
 #endif
 
 // clang-format on
+
+#include "../../../DiligentCore/Primitives/interface/DefineGlobalFuncHelperMacros.h"
+
+/// Resolves ResolveInfo and checks whether the resulting asset location can be opened.
+RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CheckAsset)(IRadientAssetResolver*            pResolver,
+                                                    const RadientAssetResolveInfo REF ResolveInfo);
+
+/// Resolves ResolveInfo and opens the resulting asset location.
+RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(OpenAsset)(IRadientAssetResolver*            pResolver,
+                                                   const RadientAssetResolveInfo REF ResolveInfo,
+                                                   IRadientAssetData**               ppData);
+
+#include "../../../DiligentCore/Primitives/interface/UndefGlobalFuncHelperMacros.h"
 
 DILIGENT_END_NAMESPACE // namespace Diligent

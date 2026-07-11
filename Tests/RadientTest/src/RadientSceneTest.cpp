@@ -500,8 +500,8 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
 
 TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
 {
-    // Loading the same glTF URI twice should create distinct lightweight asset
-    // handles that resolve to the same cached model payload.
+    // Loading two aliases of the same glTF should create distinct lightweight
+    // asset handles that resolve to the same cached scene payload.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -514,6 +514,14 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     RadientSceneLoadInfo LoadInfo{};
     LoadInfo.URI = GLTFPath.c_str();
 
+    const size_t FileNamePos = GLTFPath.find_last_of("/\\");
+    ASSERT_NE(FileNamePos, std::string::npos);
+    const std::string GLTFAliasPath =
+        GLTFPath.substr(0, FileNamePos + 1) + "unused/../" + GLTFPath.substr(FileNamePos + 1);
+
+    RadientSceneLoadInfo AliasLoadInfo = LoadInfo;
+    AliasLoadInfo.URI                  = GLTFAliasPath.c_str();
+
     RefCntAutoPtr<IRadientSceneAsset> pFirstModel;
     const RADIENT_STATUS              FirstLoadStatus = pAssetManager->LoadScene(LoadInfo, &pFirstModel);
     ASSERT_TRUE(FirstLoadStatus == RADIENT_STATUS_OK || FirstLoadStatus == RADIENT_STATUS_PENDING);
@@ -522,7 +530,7 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     ASSERT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pFirstModel), RADIENT_STATUS_NO_GPU_DATA);
 
     RefCntAutoPtr<IRadientSceneAsset> pSecondModel;
-    const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadScene(LoadInfo, &pSecondModel);
+    const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadScene(AliasLoadInfo, &pSecondModel);
     EXPECT_TRUE(SecondLoadStatus == RADIENT_STATUS_OK || SecondLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondModel, nullptr);
     ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pSecondModel), RADIENT_STATUS_OK);
@@ -531,8 +539,8 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     ASSERT_NE(pSecondModel->GetReference().URI, nullptr);
     ASSERT_NE(pFirstModel->GetReference().URI, nullptr);
     EXPECT_STREQ(pFirstModel->GetReference().URI, LoadInfo.URI);
-    EXPECT_STREQ(pSecondModel->GetReference().URI, LoadInfo.URI);
-    EXPECT_STREQ(pSecondModel->GetReference().URI, pFirstModel->GetReference().URI);
+    EXPECT_STREQ(pSecondModel->GetReference().URI, AliasLoadInfo.URI);
+    EXPECT_STRNE(pSecondModel->GetReference().URI, pFirstModel->GetReference().URI);
     EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pSecondModel), RadientAssetManagerImpl::GetImportedScene(pFirstModel));
 }
 

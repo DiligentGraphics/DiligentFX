@@ -66,43 +66,34 @@ std::vector<Uint8> ReadSourceBytes(const RadientTextureSource& Source)
 
 } // namespace
 
-TEST(RadientTextureSourceTest, BuildsStableURITextureCacheKey)
+TEST(RadientTextureSourceTest, BuildsCanonicalURITextureCacheKey)
 {
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI    = "Textures/Albedo.png";
     LoadInfo.IsSRGB = True;
 
     RadientTextureSource Source{LoadInfo};
-    RadientTextureSource SameSource{LoadInfo};
-    EXPECT_EQ(Source.MakeCacheKey(), SameSource.MakeCacheKey());
+    EXPECT_TRUE(Source.MakeCacheKey().empty());
+
+    RefCntAutoPtr<TestRadientAssetLocation> pLocation{
+        MakeNewRCObj<TestRadientAssetLocation>()("file:///textures/albedo.png")};
+    RefCntAutoPtr<TestRadientAssetLocation> pSameLocation{
+        MakeNewRCObj<TestRadientAssetLocation>()("file:///textures/albedo.png")};
+    RefCntAutoPtr<TestRadientAssetLocation> pDifferentLocation{
+        MakeNewRCObj<TestRadientAssetLocation>()("file:///other/albedo.png")};
+
+    EXPECT_EQ(Source.MakeCacheKey(pLocation), Source.MakeCacheKey(pSameLocation));
+    EXPECT_NE(Source.MakeCacheKey(pLocation), Source.MakeCacheKey(pDifferentLocation));
 
     RadientTextureLoadInfo BaseLoadInfo = LoadInfo;
     BaseLoadInfo.BaseURI                = "Scenes/SceneA.gltf";
     RadientTextureSource BaseSource{BaseLoadInfo};
-    RadientTextureSource SameBaseSource{BaseLoadInfo};
-    EXPECT_EQ(BaseSource.MakeCacheKey(), SameBaseSource.MakeCacheKey());
-    EXPECT_NE(Source.MakeCacheKey(), BaseSource.MakeCacheKey());
-
-    RadientTextureLoadInfo DifferentBaseLoadInfo = BaseLoadInfo;
-    DifferentBaseLoadInfo.BaseURI                = "Scenes/SceneB.gltf";
-    RadientTextureSource DifferentBaseSource{DifferentBaseLoadInfo};
-    EXPECT_NE(BaseSource.MakeCacheKey(), DifferentBaseSource.MakeCacheKey());
+    EXPECT_EQ(Source.MakeCacheKey(pLocation), BaseSource.MakeCacheKey(pLocation));
 
     RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
     LinearLoadInfo.IsSRGB                 = False;
     RadientTextureSource LinearSource{LinearLoadInfo};
-    EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
-
-    RadientTextureLoadInfo DelimitedURIInfo{};
-    DelimitedURIInfo.URI = "a:base=b";
-    RadientTextureSource DelimitedURISource{DelimitedURIInfo};
-
-    RadientTextureLoadInfo SeparateBaseURIInfo{};
-    SeparateBaseURIInfo.URI     = "a";
-    SeparateBaseURIInfo.BaseURI = "b";
-    RadientTextureSource SeparateBaseURISource{SeparateBaseURIInfo};
-
-    EXPECT_NE(DelimitedURISource.MakeCacheKey(), SeparateBaseURISource.MakeCacheKey());
+    EXPECT_NE(Source.MakeCacheKey(pLocation), LinearSource.MakeCacheKey(pLocation));
 }
 
 TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
@@ -600,13 +591,25 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
                         "memory://resolved/albedo.png",
                         std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
 
-    const TestRadientAssetResolverStats& Stats   = pResolver->GetStats();
-    RefCntAutoPtr<ITextureLoader>        pLoader = Source.CreateLoader(pResolver);
+    const TestRadientAssetResolverStats& Stats = pResolver->GetStats();
+
+    RefCntAutoPtr<IRadientAssetLocation> pLocation;
+    ASSERT_EQ(pResolver->ResolveAssetLocation(
+                  {LoadInfo.URI, LoadInfo.BaseURI},
+                  pLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pLocation, nullptr);
+    EXPECT_EQ(Stats.ResolveLocationCount, 1u);
+    EXPECT_EQ(Stats.OpenCount, 0u);
+
+    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader(pResolver, pLocation);
 
     ASSERT_NE(pLoader, nullptr);
-    EXPECT_EQ(Stats.ResolveCount, 1u);
+    EXPECT_EQ(Stats.ResolveLocationCount, 1u);
+    EXPECT_EQ(Stats.OpenCount, 1u);
     EXPECT_EQ(Stats.LastURI, LoadInfo.URI);
     EXPECT_EQ(Stats.LastBaseURI, LoadInfo.BaseURI);
+    EXPECT_EQ(Stats.LastResolvedURI, pLocation->GetLocation());
 
     const TextureDesc& Desc = pLoader->GetTextureDesc();
     EXPECT_EQ(Desc.Type, RESOURCE_DIM_TEX_2D);

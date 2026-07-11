@@ -107,17 +107,66 @@ TEST(RadientAssetResolverTest, ChecksFilesystemAssetAvailability)
     RefCntAutoPtr<IRadientAssetResolver> pResolver = CreateDefaultRadientAssetResolver();
     ASSERT_NE(pResolver, nullptr);
 
-    EXPECT_EQ(pResolver->CheckAsset({AssetPath.c_str(), nullptr}), RADIENT_STATUS_OK);
-    EXPECT_EQ(pResolver->CheckAsset({"asset.bin", BaseURI.c_str()}), RADIENT_STATUS_OK);
-    EXPECT_EQ(pResolver->CheckAsset({"missing.bin", BaseURI.c_str()}), RADIENT_STATUS_NOT_FOUND);
-    EXPECT_EQ(pResolver->CheckAsset({nullptr, BaseURI.c_str()}), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pResolver->CheckAsset({"", BaseURI.c_str()}), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(CheckAsset(nullptr, {AssetPath.c_str(), nullptr}), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(OpenAsset(pResolver, {AssetPath.c_str(), nullptr}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pResolver->CheckAsset(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientAssetLocation> pInvalidLocation;
+    EXPECT_EQ(pResolver->ResolveAssetLocation(
+                  {nullptr, BaseURI.c_str()},
+                  pInvalidLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pResolver->ResolveAssetLocation(
+                  {"", BaseURI.c_str()},
+                  pInvalidLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientAssetLocation> pLocation;
+    ASSERT_EQ(pResolver->ResolveAssetLocation(
+                  {AssetPath.c_str(), nullptr},
+                  pLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pLocation, nullptr);
+    ASSERT_NE(pLocation->GetLocation(), nullptr);
+    EXPECT_EQ(pLocation->GetLocation(), FileSystem::SimplifyPath(AssetPath.c_str()));
+    EXPECT_EQ(pResolver->CheckAsset(pLocation), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAssetLocation> pAliasLocation;
+    ASSERT_EQ(pResolver->ResolveAssetLocation(
+                  {"subdir/../asset.bin", BaseURI.c_str()},
+                  pAliasLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pAliasLocation, nullptr);
+    EXPECT_STREQ(pAliasLocation->GetLocation(), pLocation->GetLocation());
+    EXPECT_EQ(pResolver->CheckAsset(pAliasLocation), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientAssetData> pAssetData;
-    ASSERT_EQ(pResolver->ResolveAsset({AssetPath.c_str(), nullptr}, pAssetData.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pResolver->OpenAsset(pLocation, pAssetData.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pAssetData, nullptr);
     ASSERT_NE(pAssetData->GetData(), nullptr);
     EXPECT_EQ(pAssetData->GetSize(), 1u);
     EXPECT_EQ(*static_cast<const Uint8*>(pAssetData->GetData()), 0u);
-    EXPECT_NE(pAssetData->GetResolvedURI(), nullptr);
+    EXPECT_STREQ(pAssetData->GetResolvedURI(), pLocation->GetLocation());
+
+    EXPECT_EQ(CheckAsset(pResolver, {"asset.bin", BaseURI.c_str()}), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAssetData> pConvenienceData;
+    ASSERT_EQ(OpenAsset(pResolver,
+                        {"asset.bin", BaseURI.c_str()},
+                        pConvenienceData.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pConvenienceData, nullptr);
+    EXPECT_EQ(pConvenienceData->GetSize(), 1u);
+    EXPECT_STREQ(pConvenienceData->GetResolvedURI(), pLocation->GetLocation());
+
+    // Resolving a location is intentionally metadata-only; CheckAsset performs
+    // the separate existence check without loading the contents.
+    RefCntAutoPtr<IRadientAssetLocation> pMissingLocation;
+    ASSERT_EQ(pResolver->ResolveAssetLocation(
+                  {"missing.bin", BaseURI.c_str()},
+                  pMissingLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pMissingLocation, nullptr);
+    EXPECT_EQ(pResolver->CheckAsset(pMissingLocation), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(CheckAsset(pResolver, {"missing.bin", BaseURI.c_str()}), RADIENT_STATUS_NOT_FOUND);
 }

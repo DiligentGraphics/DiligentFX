@@ -206,7 +206,8 @@ void RadientTextureSource::MakeMemoryCopy()
         m_TextureData.pData = m_pData;
 }
 
-RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver) const
+RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver,
+                                                                 IRadientAssetLocation* pAssetLocation) const
 {
     TextureLoadInfo LoadInfo{m_URI.empty() ? nullptr : m_URI.c_str()};
     LoadInfo.Usage     = USAGE_DEFAULT;
@@ -246,13 +247,12 @@ RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetRe
     }
     else
     {
-        if (pAssetResolver == nullptr || m_URI.empty())
+        if (pAssetResolver == nullptr || pAssetLocation == nullptr)
             return {};
 
         RefCntAutoPtr<IRadientAssetData> pAssetData;
         const RADIENT_STATUS             Status =
-            pAssetResolver->ResolveAsset({m_URI.c_str(), m_BaseURI.empty() ? nullptr : m_BaseURI.c_str()},
-                                         pAssetData.GetAddressOfEmpty());
+            pAssetResolver->OpenAsset(pAssetLocation, pAssetData.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) ||
             pAssetData == nullptr ||
             pAssetData->GetData() == nullptr ||
@@ -278,7 +278,7 @@ std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
     return LoadInfo.URI != nullptr ? LoadInfo.URI : "";
 }
 
-std::string RadientTextureSource::MakeCacheKey() const
+std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLocation) const
 {
     RadientCacheKeyBuilder Builder{"texture", 1};
     if (m_SourceType == SourceType::TextureData)
@@ -304,9 +304,15 @@ std::string RadientTextureSource::MakeCacheKey() const
     }
     else
     {
+        if (pAssetLocation == nullptr ||
+            pAssetLocation->GetLocation() == nullptr ||
+            pAssetLocation->GetLocation()[0] == '\0')
+        {
+            return {};
+        }
+
         Builder.AddString("type", "uri")
-            .AddString("uri", m_URI)
-            .AddString("base", m_BaseURI);
+            .AddString("location", pAssetLocation->GetLocation());
     }
     Builder.AddBool("srgb", m_IsSRGB);
     return Builder.GetKey();

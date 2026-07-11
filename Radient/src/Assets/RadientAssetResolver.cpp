@@ -30,6 +30,45 @@
 namespace Diligent
 {
 
+RADIENT_STATUS CheckAsset(IRadientAssetResolver*         pResolver,
+                          const RadientAssetResolveInfo& ResolveInfo)
+{
+    if (pResolver == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<IRadientAssetLocation> pLocation;
+    const RADIENT_STATUS                 Status =
+        pResolver->ResolveAssetLocation(ResolveInfo, pLocation.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    return pLocation != nullptr ?
+        pResolver->CheckAsset(pLocation) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS OpenAsset(IRadientAssetResolver*         pResolver,
+                         const RadientAssetResolveInfo& ResolveInfo,
+                         IRadientAssetData**            ppData)
+{
+    if (ppData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppData = nullptr;
+
+    if (pResolver == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<IRadientAssetLocation> pLocation;
+    const RADIENT_STATUS                 Status =
+        pResolver->ResolveAssetLocation(ResolveInfo, pLocation.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    return pLocation != nullptr ?
+        pResolver->OpenAsset(pLocation, ppData) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
 // Creates the built-in resolver for filesystem paths and file:// URIs.
 RefCntAutoPtr<IRadientAssetResolver> CreateDefaultRadientAssetResolver()
 {
@@ -47,3 +86,22 @@ RefCntAutoPtr<IRadientAssetResolver> GetRadientAssetResolverOrDefault(IRadientAs
 }
 
 } // namespace Diligent
+
+extern "C"
+{
+
+    Diligent::RADIENT_STATUS Diligent_CheckAsset(
+        Diligent::IRadientAssetResolver*         pResolver,
+        const Diligent::RadientAssetResolveInfo& ResolveInfo)
+    {
+        return Diligent::CheckAsset(pResolver, ResolveInfo);
+    }
+
+    Diligent::RADIENT_STATUS Diligent_OpenAsset(
+        Diligent::IRadientAssetResolver*         pResolver,
+        const Diligent::RadientAssetResolveInfo& ResolveInfo,
+        Diligent::IRadientAssetData**            ppData)
+    {
+        return Diligent::OpenAsset(pResolver, ResolveInfo, ppData);
+    }
+}

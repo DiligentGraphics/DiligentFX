@@ -858,7 +858,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
                                         GLTFPath,
                                         LoadMetadataOnlyDocument(GLTFPath));
 
-    EXPECT_EQ(pResolver->GetStats().ResolveCount, 0u);
+    EXPECT_EQ(pResolver->GetStats().ResolveLocationCount, 0u);
+    EXPECT_EQ(pResolver->GetStats().OpenCount, 0u);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -867,7 +868,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(pResolver->GetStats().ResolveCount, 1u);
+    EXPECT_EQ(pResolver->GetStats().ResolveLocationCount, 1u);
+    EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
     EXPECT_NE(pResolver->GetStats().LastURI.find("external.png"), std::string::npos);
     EXPECT_EQ(pResolver->GetStats().LastBaseURI, GLTFPath);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);

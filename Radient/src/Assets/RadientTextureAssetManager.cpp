@@ -540,7 +540,27 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             DecrementCounterGuard PendingTextureLoadGuard{pSelf->m_Stats.PendingTextureLoads};
             DecrementCounterGuard PendingSourceLoadGuard{pSelf->m_Stats.PendingTextureSourceLoads};
 
-            const std::string TextureCacheKey = TextureSource.MakeCacheKey();
+            RefCntAutoPtr<IRadientAssetLocation> pAssetLocation;
+            if (!TextureSource.IsMemory())
+            {
+                const RADIENT_STATUS Status =
+                    pSelf->m_pAssetResolver->ResolveAssetLocation(
+                        {TextureSource.GetURI().c_str(),
+                         TextureSource.GetBaseURI().empty() ? nullptr : TextureSource.GetBaseURI().c_str()},
+                        pAssetLocation.GetAddressOfEmpty());
+                if (Status != RADIENT_STATUS_OK || pAssetLocation == nullptr)
+                {
+                    pTextureAsset->Fail(Status != RADIENT_STATUS_OK ? Status : RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+            }
+
+            const std::string TextureCacheKey = TextureSource.MakeCacheKey(pAssetLocation);
+            if (TextureCacheKey.empty())
+            {
+                pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
 
             auto [pTexturePayload, PayloadCreated] =
                 pSelf->m_TextureCache.GetOrCreate(
@@ -555,7 +575,8 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader(pSelf->m_pAssetResolver);
+            RefCntAutoPtr<ITextureLoader> pLoader =
+                TextureSource.CreateLoader(pSelf->m_pAssetResolver, pAssetLocation);
             if (pLoader == nullptr)
             {
                 pTextureAsset->GetStorage().SetFailedStatus(RADIENT_STATUS_INVALID_OPERATION);

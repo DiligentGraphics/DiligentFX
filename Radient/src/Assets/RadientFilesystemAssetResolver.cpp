@@ -41,6 +41,41 @@ namespace Diligent
 namespace
 {
 
+// {C2AADFDA-8741-404A-85C2-C21E20C5D727}
+static constexpr INTERFACE_ID IID_RadientFilesystemAssetLocation =
+    {0xc2aadfda, 0x8741, 0x404a, {0x85, 0xc2, 0xc2, 0x1e, 0x20, 0xc5, 0xd7, 0x27}};
+
+class RadientFilesystemAssetLocation final : public ObjectBase<IRadientAssetLocation>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetLocation>;
+
+    RadientFilesystemAssetLocation(IReferenceCounters* pRefCounters,
+                                   std::string         Location,
+                                   std::string         ReadPath) :
+        TBase{pRefCounters},
+        m_Location{std::move(Location)},
+        m_ReadPath{std::move(ReadPath)}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientAssetLocation, IID_RadientFilesystemAssetLocation, TBase)
+
+    virtual const Char* DILIGENT_CALL_TYPE GetLocation() const override final
+    {
+        return m_Location.c_str();
+    }
+
+    const std::string& GetReadPath() const
+    {
+        return m_ReadPath;
+    }
+
+private:
+    std::string m_Location;
+    std::string m_ReadPath;
+};
+
 // Owns resolved bytes together with the canonical URI that identifies them.
 class RadientAssetDataImpl final : public ObjectBase<IRadientAssetData>
 {
@@ -143,22 +178,26 @@ std::string RadientFilesystemAssetResolver::ResolveFilesystemPathForRead(const c
     return Path;
 }
 
-RADIENT_STATUS RadientFilesystemAssetResolver::CheckAsset(const RadientAssetResolveInfo& ResolveInfo)
+RADIENT_STATUS RadientFilesystemAssetResolver::CheckAsset(IRadientAssetLocation* pLocation)
 {
-    if (ResolveInfo.URI == nullptr || *ResolveInfo.URI == 0)
+    if (pLocation == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const std::string ResolvedURI = ResolveFilesystemURI(ResolveInfo.URI, ResolveInfo.BaseURI);
-    if (ResolvedURI.empty() || HasURIScheme(ResolvedURI))
+    RefCntAutoPtr<RadientFilesystemAssetLocation> pFilesystemLocation{pLocation, IID_RadientFilesystemAssetLocation};
+    if (pFilesystemLocation == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (FileSystem::FileExists(ResolvedURI.c_str()))
+    const char* Location = pFilesystemLocation->GetLocation();
+    if (Location == nullptr || Location[0] == '\0')
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (FileSystem::FileExists(Location))
         return RADIENT_STATUS_OK;
 
     // Retry the original path spelling when normalization changed it.
-    const std::string ReadPath = ResolveFilesystemPathForRead(ResolveInfo.URI, ResolveInfo.BaseURI);
+    const std::string& ReadPath = pFilesystemLocation->GetReadPath();
     if (!ReadPath.empty() &&
-        ReadPath != ResolvedURI &&
+        ReadPath != Location &&
         FileSystem::FileExists(ReadPath.c_str()))
     {
         return RADIENT_STATUS_OK;
@@ -167,12 +206,12 @@ RADIENT_STATUS RadientFilesystemAssetResolver::CheckAsset(const RadientAssetReso
     return RADIENT_STATUS_NOT_FOUND;
 }
 
-RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
-                                                            IRadientAssetData**            ppData)
+RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAssetLocation(const RadientAssetResolveInfo& ResolveInfo,
+                                                                    IRadientAssetLocation**        ppLocation)
 {
-    if (ppData == nullptr)
+    if (ppLocation == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppData = nullptr;
+    *ppLocation = nullptr;
 
     if (ResolveInfo.URI == nullptr || *ResolveInfo.URI == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -181,13 +220,39 @@ RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAsset(const RadientAssetRe
     if (ResolvedURI.empty() || HasURIScheme(ResolvedURI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    RefCntAutoPtr<RadientFilesystemAssetLocation> pLocation{
+        MakeNewRCObj<RadientFilesystemAssetLocation>()(
+            ResolvedURI,
+            ResolveFilesystemPathForRead(ResolveInfo.URI, ResolveInfo.BaseURI))};
+    pLocation->QueryInterface(IID_RadientAssetLocation, ppLocation);
+    return *ppLocation != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS RadientFilesystemAssetResolver::OpenAsset(IRadientAssetLocation* pLocation,
+                                                         IRadientAssetData**    ppData)
+{
+    if (ppData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppData = nullptr;
+
+    if (pLocation == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<RadientFilesystemAssetLocation> pFilesystemLocation{pLocation, IID_RadientFilesystemAssetLocation};
+    if (pFilesystemLocation == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const char* Location = pFilesystemLocation->GetLocation();
+    if (Location == nullptr || Location[0] == '\0')
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     std::vector<Uint8> Data;
-    if (!FileWrapper::ReadWholeFile(ResolvedURI.c_str(), Data, true))
+    if (!FileWrapper::ReadWholeFile(Location, Data, true))
     {
-        // Retry the original path spelling, but retain ResolvedURI as the asset identity.
-        const std::string ReadPath = ResolveFilesystemPathForRead(ResolveInfo.URI, ResolveInfo.BaseURI);
+        // Retry the original path spelling, but retain Location as the asset identity.
+        const std::string& ReadPath = pFilesystemLocation->GetReadPath();
         if (ReadPath.empty() ||
-            ReadPath == ResolvedURI ||
+            ReadPath == Location ||
             !FileWrapper::ReadWholeFile(ReadPath.c_str(), Data, true))
         {
             return RADIENT_STATUS_NOT_FOUND;
@@ -196,7 +261,7 @@ RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAsset(const RadientAssetRe
 
     // The data object keeps the loaded bytes alive for all consumers.
     RefCntAutoPtr<RadientAssetDataImpl> pAssetData{
-        MakeNewRCObj<RadientAssetDataImpl>()(std::move(Data), ResolvedURI)};
+        MakeNewRCObj<RadientAssetDataImpl>()(std::move(Data), Location)};
     pAssetData->QueryInterface(IID_RadientAssetData, ppData);
     return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
 }

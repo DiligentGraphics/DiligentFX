@@ -97,10 +97,34 @@ using TestSceneAsset    = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneA
 struct TestRadientAssetResolverStats
 {
     Uint32      CheckCount            = 0;
-    Uint32      ResolveCount          = 0;
+    Uint32      ResolveLocationCount  = 0;
+    Uint32      OpenCount             = 0;
     Uint32      AssetDataDestroyCount = 0;
     std::string LastURI;
     std::string LastBaseURI;
+    std::string LastResolvedURI;
+};
+
+class TestRadientAssetLocation final : public ObjectBase<IRadientAssetLocation>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetLocation>;
+
+    TestRadientAssetLocation(IReferenceCounters* pRefCounters, std::string Location) :
+        TBase{pRefCounters},
+        m_Location{std::move(Location)}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetLocation, TBase)
+
+    virtual const Char* DILIGENT_CALL_TYPE GetLocation() const override final
+    {
+        return m_Location.c_str();
+    }
+
+private:
+    std::string m_Location;
 };
 
 class TestRadientAssetData final : public ObjectBase<IRadientAssetData>
@@ -171,28 +195,26 @@ public:
         return *m_pStats;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(IRadientAssetLocation* pLocation) override final
     {
         ++m_pStats->CheckCount;
-        m_pStats->LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
-        m_pStats->LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
-
-        if (m_pStats->LastURI.empty())
+        if (pLocation == nullptr || pLocation->GetLocation() == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        return FindAsset(m_pStats->LastURI) != nullptr ?
+        m_pStats->LastResolvedURI = pLocation->GetLocation();
+        return FindResolvedAsset(m_pStats->LastResolvedURI) != nullptr ?
             RADIENT_STATUS_OK :
             RADIENT_STATUS_NOT_FOUND;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
-                                                           IRadientAssetData**            ppData) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAssetLocation(const RadientAssetResolveInfo& ResolveInfo,
+                                                                   IRadientAssetLocation**        ppLocation) override final
     {
-        if (ppData == nullptr)
+        if (ppLocation == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
-        *ppData = nullptr;
+        *ppLocation = nullptr;
 
-        ++m_pStats->ResolveCount;
+        ++m_pStats->ResolveLocationCount;
         m_pStats->LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
         m_pStats->LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
 
@@ -200,6 +222,29 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         const Entry* pEntry = FindAsset(m_pStats->LastURI);
+        if (pEntry == nullptr)
+            return RADIENT_STATUS_NOT_FOUND;
+
+        RefCntAutoPtr<TestRadientAssetLocation> pLocation{
+            MakeNewRCObj<TestRadientAssetLocation>()(pEntry->ResolvedURI)};
+        pLocation->QueryInterface(IID_RadientAssetLocation, ppLocation);
+        return *ppLocation != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE OpenAsset(IRadientAssetLocation* pLocation,
+                                                        IRadientAssetData**    ppData) override final
+    {
+        if (ppData == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppData = nullptr;
+
+        if (pLocation == nullptr || pLocation->GetLocation() == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        ++m_pStats->OpenCount;
+        m_pStats->LastResolvedURI = pLocation->GetLocation();
+
+        const Entry* pEntry = FindResolvedAsset(m_pStats->LastResolvedURI);
         if (pEntry == nullptr)
             return RADIENT_STATUS_NOT_FOUND;
 
@@ -226,6 +271,16 @@ private:
                 It = m_Assets.find(URI.substr(SlashPos + 1));
         }
         return It != m_Assets.end() ? &It->second : nullptr;
+    }
+
+    const Entry* FindResolvedAsset(const std::string& ResolvedURI) const
+    {
+        for (const auto& Asset : m_Assets)
+        {
+            if (Asset.second.ResolvedURI == ResolvedURI)
+                return &Asset.second;
+        }
+        return nullptr;
     }
 
     std::map<std::string, Entry>                   m_Assets;

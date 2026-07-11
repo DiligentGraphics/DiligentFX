@@ -58,10 +58,13 @@ public:
     /// Resolves a relative filesystem URI without normalizing the resulting path.
     static std::string ResolveFilesystemPathForRead(const char* URI, const char* BaseURI);
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(IRadientAssetLocation* pLocation) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
-                                                           IRadientAssetData**            ppData) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAssetLocation(const RadientAssetResolveInfo& ResolveInfo,
+                                                                   IRadientAssetLocation**        ppLocation) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE OpenAsset(IRadientAssetLocation* pLocation,
+                                                        IRadientAssetData**    ppData) override final;
 };
 
 } // namespace Diligent
