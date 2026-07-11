@@ -313,6 +313,61 @@ TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload
     pThreadPool->StopThreads();
 }
 
+TEST(RadientTextureAssetManagerGPUTest, DifferentPayloadsWithSameAssetURIUseSeparateAtlasAllocations)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    const std::vector<Uint8> TexturePixels0 = MakeTexturePixels(0);
+    const std::vector<Uint8> TexturePixels1 = MakeTexturePixels(1);
+    const RadientTextureData TextureData0   = MakeTextureData(TexturePixels0);
+    const RadientTextureData TextureData1   = MakeTextureData(TexturePixels1);
+
+    RadientTextureLoadInfo LoadInfo0 = MakeTextureDataLoadInfo(TextureData0);
+    RadientTextureLoadInfo LoadInfo1 = MakeTextureDataLoadInfo(TextureData1);
+    // The handle URI is intentionally the same, but the source data and payload keys differ.
+    LoadInfo0.URI = "textures/shared-name.png";
+    LoadInfo1.URI = "textures/shared-name.png";
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture0;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo0, &pTexture0)));
+    ASSERT_NE(pTexture0, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture1;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo1, &pTexture1)));
+    ASSERT_NE(pTexture1, nullptr);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(pTexture0),
+              RadientTextureAssetManager::GetTexturePayload(pTexture1));
+
+    ProcessUploads(*pUploadManager, *pContext, *pTexture0);
+    ProcessUploads(*pUploadManager, *pContext, *pTexture1);
+
+    // Each asset must retain its own atlas region after both uploads complete.
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture0, TextureData0);
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture1, TextureData1);
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;

@@ -626,7 +626,8 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
 
     PendingTextureLoadGuard.Reset();
     // ScheduleTextureGPUUpload will decrement PendingTextureLoads when all copy commands have been enqueued.
-    const RADIENT_STATUS Status = ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
+    const RADIENT_STATUS Status =
+        ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader, TextureCacheKey);
     if (Status != RADIENT_STATUS_PENDING)
         TextureStorage.SetGPUResourceStatus(Status);
     return ASYNC_TASK_STATUS_COMPLETE;
@@ -676,7 +677,8 @@ bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset* 
 RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
                                                                     IGPUUploadManager&     UploadManager,
                                                                     IRadientTextureAsset&  TextureAsset,
-                                                                    ITextureLoader&        Loader)
+                                                                    ITextureLoader&        Loader,
+                                                                    const std::string&     TextureCacheKey)
 {
     DecrementCounterGuard PendingTextureLoadGuard{m_Stats.PendingTextureLoads};
 
@@ -717,7 +719,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         pAtlasSuballocation = ResourceManager.AllocateTextureSpace(TexDesc.Format,
                                                                    TexDesc.Width,
                                                                    TexDesc.Height,
-                                                                   TextureAsset.GetReference().URI);
+                                                                   TextureCacheKey.c_str());
         if (pAtlasSuballocation == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
         Texture.SetAtlasSuballocation(pAtlasSuballocation);

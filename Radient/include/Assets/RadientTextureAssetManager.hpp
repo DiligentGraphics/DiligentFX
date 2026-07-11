@@ -33,6 +33,7 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
 
 namespace Diligent
 {
@@ -131,7 +132,8 @@ private:
     RADIENT_STATUS ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
                                             IGPUUploadManager&     UploadManager,
                                             IRadientTextureAsset&  TextureAsset,
-                                            ITextureLoader&        Loader);
+                                            ITextureLoader&        Loader,
+                                            const std::string&     TextureCacheKey);
 
     ASYNC_TASK_STATUS LoadTextureFromSource(IRadientTextureAsset& TextureAsset,
                                             RadientTextureSource  TextureSource);
