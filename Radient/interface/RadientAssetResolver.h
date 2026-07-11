@@ -141,6 +141,9 @@ DILIGENT_END_INTERFACE
 // clang-format off
 
 /// Resolves asset identities and opens their byte data.
+/// All methods may be called concurrently from multiple threads, including
+/// simultaneous calls on the same resolver instance. Implementations must be
+/// thread-safe.
 DILIGENT_BEGIN_INTERFACE(IRadientAssetResolver, IObject)
 {
     /// Checks whether an asset location can be opened without loading its contents.

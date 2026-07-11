@@ -245,6 +245,7 @@ typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 /// RadientTextureLoadInfo::pTextureData->pData.
 /// The callback is invoked when Radient no longer needs the source memory.
 /// The callback may be invoked from any thread.
+/// The callback must not throw exceptions.
 typedef void (*RadientTextureReleaseDataCallbackType)(const void* pData, Uint64 DataSize, void* pUserData);
 
 /// Texture format.
@@ -380,7 +381,9 @@ struct RadientTextureLoadInfo
     /// Optional callback to release pData or pTextureData->pData when Radient no longer needs it.
     /// For pTextureData, DataSize is the minimum source span described by RadientTextureData::pData.
     /// If this callback is null and memory-backed source data is not null, Radient makes an internal copy of the data.
-    /// The callback may be invoked from any thread.
+    /// If this callback is non-null and the load is accepted, ownership of the source memory transfers to Radient.
+    /// The caller must not read, write, reuse, or release the source memory until the callback is invoked.
+    /// The callback may be invoked from any thread and must not throw exceptions.
     RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);
 
     /// User data passed to ReleaseData.
