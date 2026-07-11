@@ -195,6 +195,11 @@ public:
         return *m_pStats;
     }
 
+    void SetOpenAssetStatus(RADIENT_STATUS Status)
+    {
+        m_OpenAssetStatus = Status;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(IRadientAssetLocation* pLocation) override final
     {
         ++m_pStats->CheckCount;
@@ -244,6 +249,9 @@ public:
         ++m_pStats->OpenCount;
         m_pStats->LastResolvedURI = pLocation->GetLocation();
 
+        if (m_OpenAssetStatus != RADIENT_STATUS_OK)
+            return m_OpenAssetStatus;
+
         const Entry* pEntry = FindResolvedAsset(m_pStats->LastResolvedURI);
         if (pEntry == nullptr)
             return RADIENT_STATUS_NOT_FOUND;
@@ -285,6 +293,7 @@ private:
 
     std::map<std::string, Entry>                   m_Assets;
     std::shared_ptr<TestRadientAssetResolverStats> m_pStats;
+    RADIENT_STATUS                                 m_OpenAssetStatus = RADIENT_STATUS_OK;
 };
 
 inline constexpr size_t TransparentPngSize = 67;

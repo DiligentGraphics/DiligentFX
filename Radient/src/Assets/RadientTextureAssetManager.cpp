@@ -575,11 +575,16 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            RefCntAutoPtr<ITextureLoader> pLoader =
-                TextureSource.CreateLoader(pSelf->m_pAssetResolver, pAssetLocation);
-            if (pLoader == nullptr)
+            RefCntAutoPtr<ITextureLoader> pLoader;
+            const RADIENT_STATUS          LoaderStatus =
+                TextureSource.CreateLoader(
+                    pSelf->m_pAssetResolver,
+                    pAssetLocation,
+                    pLoader.GetAddressOfEmpty());
+            if (LoaderStatus != RADIENT_STATUS_OK || pLoader == nullptr)
             {
-                pTextureAsset->GetStorage().SetFailedStatus(RADIENT_STATUS_INVALID_OPERATION);
+                pTextureAsset->GetStorage().SetFailedStatus(
+                    RADIENT_FAILED(LoaderStatus) ? LoaderStatus : RADIENT_STATUS_INVALID_OPERATION);
                 return ASYNC_TASK_STATUS_COMPLETE;
             }
 

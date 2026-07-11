@@ -127,8 +127,9 @@ public:
 
     void MakeMemoryCopy();
 
-    RefCntAutoPtr<ITextureLoader> CreateLoader(IRadientAssetResolver* pAssetResolver = nullptr,
-                                               IRadientAssetLocation* pAssetLocation = nullptr) const;
+    RADIENT_STATUS CreateLoader(IRadientAssetResolver* pAssetResolver,
+                                IRadientAssetLocation* pAssetLocation,
+                                ITextureLoader**       ppLoader) const;
 
     static std::string GetURI(const RadientTextureLoadInfo& LoadInfo);
 

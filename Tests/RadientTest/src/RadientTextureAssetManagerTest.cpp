@@ -214,6 +214,36 @@ TEST(RadientTextureAssetManagerTest, CanonicalURIAliasesSharePayload)
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
 }
 
+TEST(RadientTextureAssetManagerTest, PreservesAssetOpenFailureStatus)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
+    pResolver->AddAsset("textures/missing.png",
+                        "memory://assets/missing.png",
+                        std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
+    pResolver->SetOpenAssetStatus(RADIENT_STATUS_NOT_FOUND);
+
+    RadientTextureAssetManager::CreateInfo ManagerCI;
+    ManagerCI.pAssetResolver                     = pResolver;
+    RadientTextureAssetManagerSharedPtr pManager = RadientTextureAssetManager::Create(ManagerCI);
+    ASSERT_NE(pManager, nullptr);
+
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.URI = "textures/missing.png";
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture));
+    ASSERT_NE(pTexture, nullptr);
+
+    WaitForAllTasksAndStop(*pThreadPool);
+
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
+}
+
 TEST(RadientTextureAssetManagerTest, DifferentTextureOptionsUseDifferentPayloads)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();

@@ -290,7 +290,8 @@ TEST(RadientTextureSourceTest, SupportsRGBA8_UNORM_SRGBTextureDataFormat)
     RadientTextureSource Source{LoadInfo};
     EXPECT_EQ(Source.GetDataSize(), Data.size());
 
-    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, pLoader.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pLoader, nullptr);
     EXPECT_EQ(pLoader->GetTextureDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
 
@@ -320,7 +321,8 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromIntegerTextureData)
     LoadInfo.pTextureData = &TextureData;
 
     RadientTextureSource          Source{LoadInfo};
-    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, pLoader.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pLoader, nullptr);
     EXPECT_EQ(pLoader->GetTextureDesc().Format, TEX_FORMAT_R16_UINT);
 }
@@ -545,7 +547,8 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
     LoadInfo.pTextureData = &TextureData;
 
     RadientTextureSource          Source{LoadInfo};
-    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader();
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, pLoader.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pLoader, nullptr);
 
     const TextureDesc& Desc = pLoader->GetTextureDesc();
@@ -602,7 +605,8 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
     EXPECT_EQ(Stats.ResolveLocationCount, 1u);
     EXPECT_EQ(Stats.OpenCount, 0u);
 
-    RefCntAutoPtr<ITextureLoader> pLoader = Source.CreateLoader(pResolver, pLocation);
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    ASSERT_EQ(Source.CreateLoader(pResolver, pLocation, pLoader.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     ASSERT_NE(pLoader, nullptr);
     EXPECT_EQ(Stats.ResolveLocationCount, 1u);
@@ -620,4 +624,30 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
     EXPECT_EQ(Stats.AssetDataDestroyCount, 0u);
     pLoader.Release();
     EXPECT_EQ(Stats.AssetDataDestroyCount, 1u);
+}
+
+TEST(RadientTextureSourceTest, RequiresOKAssetOpenStatus)
+{
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI = "textures/albedo.png";
+
+    RadientTextureSource Source{LoadInfo};
+
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
+    pResolver->AddAsset(LoadInfo.URI,
+                        "memory://resolved/albedo.png",
+                        std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
+
+    RefCntAutoPtr<IRadientAssetLocation> pLocation;
+    ASSERT_EQ(pResolver->ResolveAssetLocation(
+                  {LoadInfo.URI, nullptr},
+                  pLocation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pLocation, nullptr);
+
+    pResolver->SetOpenAssetStatus(RADIENT_STATUS_OUT_OF_DATE);
+
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    EXPECT_EQ(Source.CreateLoader(pResolver, pLocation, pLoader.GetAddressOfEmpty()), RADIENT_STATUS_OUT_OF_DATE);
+    EXPECT_EQ(pLoader, nullptr);
 }

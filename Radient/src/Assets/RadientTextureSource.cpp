@@ -206,9 +206,14 @@ void RadientTextureSource::MakeMemoryCopy()
         m_TextureData.pData = m_pData;
 }
 
-RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver,
-                                                                 IRadientAssetLocation* pAssetLocation) const
+RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver,
+                                                  IRadientAssetLocation* pAssetLocation,
+                                                  ITextureLoader**       ppLoader) const
 {
+    if (ppLoader == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppLoader = nullptr;
+
     TextureLoadInfo LoadInfo{m_URI.empty() ? nullptr : m_URI.c_str()};
     LoadInfo.Usage     = USAGE_DEFAULT;
     LoadInfo.BindFlags = BIND_SHADER_RESOURCE;
@@ -248,17 +253,19 @@ RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetRe
     else
     {
         if (pAssetResolver == nullptr || pAssetLocation == nullptr)
-            return {};
+            return RADIENT_STATUS_INVALID_ARGUMENT;
 
         RefCntAutoPtr<IRadientAssetData> pAssetData;
         const RADIENT_STATUS             Status =
             pAssetResolver->OpenAsset(pAssetLocation, pAssetData.GetAddressOfEmpty());
-        if (RADIENT_FAILED(Status) ||
-            pAssetData == nullptr ||
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        if (pAssetData == nullptr ||
             pAssetData->GetData() == nullptr ||
             pAssetData->GetSize() == 0)
         {
-            return {};
+            return RADIENT_STATUS_INVALID_OPERATION;
         }
 
         LoadInfo.Name = pAssetData->GetResolvedURI();
@@ -270,7 +277,11 @@ RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetRe
         CreateTextureLoaderFromDataBlob(std::move(pDataBlob), LoadInfo, &pLoader);
     }
 
-    return pLoader;
+    if (pLoader == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    *ppLoader = pLoader.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
