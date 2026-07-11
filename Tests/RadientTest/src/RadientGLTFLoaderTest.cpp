@@ -33,14 +33,12 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
-#include "ObjectBase.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
 #include <cstring>
 #include <fstream>
-#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -90,120 +88,6 @@ void AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& 
     Buffer.resize(OldSize + sizeof(ValueType) * Values.size());
     std::memcpy(Buffer.data() + OldSize, Values.data(), Buffer.size() - OldSize);
 }
-
-class TestAssetData final : public ObjectBase<IRadientAssetData>
-{
-public:
-    using TBase = ObjectBase<IRadientAssetData>;
-
-    TestAssetData(IReferenceCounters* pRefCounters,
-                  std::vector<Uint8>  Data,
-                  std::string         ResolvedURI) :
-        TBase{pRefCounters},
-        m_Data{std::move(Data)},
-        m_ResolvedURI{std::move(ResolvedURI)}
-    {
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
-
-    virtual const void* DILIGENT_CALL_TYPE GetData() const override final
-    {
-        return !m_Data.empty() ? m_Data.data() : nullptr;
-    }
-
-    virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
-    {
-        return m_Data.size();
-    }
-
-    virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
-    {
-        return m_ResolvedURI.c_str();
-    }
-
-private:
-    std::vector<Uint8> m_Data;
-    std::string        m_ResolvedURI;
-};
-
-class TestAssetResolver final : public ObjectBase<IRadientAssetResolver>
-{
-public:
-    using TBase = ObjectBase<IRadientAssetResolver>;
-
-    explicit TestAssetResolver(IReferenceCounters* pRefCounters) :
-        TBase{pRefCounters}
-    {
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
-
-    void AddAsset(std::string URI, std::string ResolvedURI, std::vector<Uint8> Data)
-    {
-        m_Assets.emplace(std::move(URI), Entry{std::move(ResolvedURI), std::move(Data)});
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final
-    {
-        ++CheckCount;
-        LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
-        LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
-
-        if (LastURI.empty())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        auto It = m_Assets.find(LastURI);
-        if (It == m_Assets.end())
-        {
-            const size_t SlashPos = LastURI.find_last_of("/\\");
-            if (SlashPos != std::string::npos)
-                It = m_Assets.find(LastURI.substr(SlashPos + 1));
-        }
-        return It != m_Assets.end() ? RADIENT_STATUS_OK : RADIENT_STATUS_NOT_FOUND;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
-                                                           IRadientAssetData**            ppData) override final
-    {
-        if (ppData == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        *ppData = nullptr;
-
-        ++ResolveCount;
-        LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
-        LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
-
-        auto It = m_Assets.find(LastURI);
-        if (It == m_Assets.end())
-        {
-            const size_t SlashPos = LastURI.find_last_of("/\\");
-            if (SlashPos != std::string::npos)
-                It = m_Assets.find(LastURI.substr(SlashPos + 1));
-        }
-        if (It == m_Assets.end())
-            return RADIENT_STATUS_NOT_FOUND;
-
-        RefCntAutoPtr<TestAssetData> pData{
-            MakeNewRCObj<TestAssetData>()(It->second.Data, It->second.ResolvedURI)};
-        pData->QueryInterface(IID_RadientAssetData, ppData);
-        return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    Uint32      CheckCount   = 0;
-    Uint32      ResolveCount = 0;
-    std::string LastURI;
-    std::string LastBaseURI;
-
-private:
-    struct Entry
-    {
-        std::string        ResolvedURI;
-        std::vector<Uint8> Data;
-    };
-
-    std::map<std::string, Entry> m_Assets;
-};
 
 std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
 {
@@ -957,7 +841,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
     TempDirectory     TempDir{"RadientGLTFLoaderTest"};
     const std::string GLTFPath = WriteGLTFExternalTextureFile(TempDir);
 
-    RefCntAutoPtr<TestAssetResolver> pResolver{MakeNewRCObj<TestAssetResolver>()()};
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
     pResolver->AddAsset("external.png",
                         "memory://resolved/external.png",
                         std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
@@ -974,7 +858,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
                                         GLTFPath,
                                         LoadMetadataOnlyDocument(GLTFPath));
 
-    EXPECT_EQ(pResolver->ResolveCount, 0u);
+    EXPECT_EQ(pResolver->GetStats().ResolveCount, 0u);
 
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
@@ -983,9 +867,9 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
 
     ProcessQueuedTasks(*pThreadPool);
-    EXPECT_EQ(pResolver->ResolveCount, 1u);
-    EXPECT_NE(pResolver->LastURI.find("external.png"), std::string::npos);
-    EXPECT_EQ(pResolver->LastBaseURI, GLTFPath);
+    EXPECT_EQ(pResolver->GetStats().ResolveCount, 1u);
+    EXPECT_NE(pResolver->GetStats().LastURI.find("external.png"), std::string::npos);
+    EXPECT_EQ(pResolver->GetStats().LastBaseURI, GLTFPath);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();

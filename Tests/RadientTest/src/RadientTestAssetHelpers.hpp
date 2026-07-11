@@ -31,7 +31,11 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <array>
+#include <map>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -89,6 +93,144 @@ using TestMeshAsset     = TestRadientAsset<IRadientMeshAsset, IID_RadientMeshAss
 using TestMaterialAsset = TestRadientAsset<IRadientMaterialAsset, IID_RadientMaterialAsset, RADIENT_ASSET_TYPE_MATERIAL>;
 using TestTextureAsset  = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
 using TestSceneAsset    = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+
+struct TestRadientAssetResolverStats
+{
+    Uint32      CheckCount            = 0;
+    Uint32      ResolveCount          = 0;
+    Uint32      AssetDataDestroyCount = 0;
+    std::string LastURI;
+    std::string LastBaseURI;
+};
+
+class TestRadientAssetData final : public ObjectBase<IRadientAssetData>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetData>;
+
+    TestRadientAssetData(IReferenceCounters*                            pRefCounters,
+                         std::vector<Uint8>                             Data,
+                         std::string                                    ResolvedURI,
+                         std::shared_ptr<TestRadientAssetResolverStats> pStats) :
+        TBase{pRefCounters},
+        m_Data{std::move(Data)},
+        m_ResolvedURI{std::move(ResolvedURI)},
+        m_pStats{std::move(pStats)}
+    {
+    }
+
+    ~TestRadientAssetData()
+    {
+        ++m_pStats->AssetDataDestroyCount;
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
+
+    virtual const void* DILIGENT_CALL_TYPE GetData() const override final
+    {
+        return !m_Data.empty() ? m_Data.data() : nullptr;
+    }
+
+    virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
+    {
+        return m_Data.size();
+    }
+
+    virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
+    {
+        return m_ResolvedURI.c_str();
+    }
+
+private:
+    std::vector<Uint8>                             m_Data;
+    std::string                                    m_ResolvedURI;
+    std::shared_ptr<TestRadientAssetResolverStats> m_pStats;
+};
+
+/// In-memory asset resolver used to verify URI resolution and resolved-data lifetime.
+class TestRadientAssetResolver final : public ObjectBase<IRadientAssetResolver>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetResolver>;
+
+    explicit TestRadientAssetResolver(IReferenceCounters* pRefCounters) :
+        TBase{pRefCounters},
+        m_pStats{std::make_shared<TestRadientAssetResolverStats>()}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
+
+    void AddAsset(std::string URI, std::string ResolvedURI, std::vector<Uint8> Data)
+    {
+        m_Assets.emplace(std::move(URI), Entry{std::move(ResolvedURI), std::move(Data)});
+    }
+
+    const TestRadientAssetResolverStats& GetStats() const
+    {
+        return *m_pStats;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final
+    {
+        ++m_pStats->CheckCount;
+        m_pStats->LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
+        m_pStats->LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
+
+        if (m_pStats->LastURI.empty())
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        return FindAsset(m_pStats->LastURI) != nullptr ?
+            RADIENT_STATUS_OK :
+            RADIENT_STATUS_NOT_FOUND;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
+                                                           IRadientAssetData**            ppData) override final
+    {
+        if (ppData == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppData = nullptr;
+
+        ++m_pStats->ResolveCount;
+        m_pStats->LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
+        m_pStats->LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
+
+        if (m_pStats->LastURI.empty())
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        const Entry* pEntry = FindAsset(m_pStats->LastURI);
+        if (pEntry == nullptr)
+            return RADIENT_STATUS_NOT_FOUND;
+
+        RefCntAutoPtr<TestRadientAssetData> pData{
+            MakeNewRCObj<TestRadientAssetData>()(pEntry->Data, pEntry->ResolvedURI, m_pStats)};
+        pData->QueryInterface(IID_RadientAssetData, ppData);
+        return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+private:
+    struct Entry
+    {
+        std::string        ResolvedURI;
+        std::vector<Uint8> Data;
+    };
+
+    const Entry* FindAsset(const std::string& URI) const
+    {
+        auto It = m_Assets.find(URI);
+        if (It == m_Assets.end())
+        {
+            const size_t SlashPos = URI.find_last_of("/\\");
+            if (SlashPos != std::string::npos)
+                It = m_Assets.find(URI.substr(SlashPos + 1));
+        }
+        return It != m_Assets.end() ? &It->second : nullptr;
+    }
+
+    std::map<std::string, Entry>                   m_Assets;
+    std::shared_ptr<TestRadientAssetResolverStats> m_pStats;
+};
 
 inline constexpr size_t TransparentPngSize = 67;
 
