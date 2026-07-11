@@ -27,6 +27,7 @@
 #include "Assets/RadientTextureSource.hpp"
 
 #include "Assets/RadientAssetResolver.hpp"
+#include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientTextureFormat.hpp"
 #include "GraphicsAccessories.hpp"
 #include "ProxyDataBlob.hpp"
@@ -279,46 +280,36 @@ std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
 
 std::string RadientTextureSource::MakeCacheKey() const
 {
-    std::string Key{"texture:"};
+    RadientCacheKeyBuilder Builder{"texture", 1};
     if (m_SourceType == SourceType::TextureData)
     {
-        Key += "data:";
-        Key += std::to_string(m_TextureData.Width);
-        Key += 'x';
-        Key += std::to_string(m_TextureData.Height);
-        Key += ":format=";
-        Key += std::to_string(static_cast<Uint32>(m_TextureData.Format));
-        Key += ":row=";
-        Key += std::to_string(m_TextureDataActiveRowSize);
-        Key += ":rows=";
-        Key += std::to_string(m_TextureDataRowCount);
-        Key += ":hash=";
         const XXH128Hash Hash = ComputeTextureDataHash(m_pData,
                                                        m_TextureDataActiveRowSize,
                                                        m_TextureDataRowCount,
                                                        m_TextureData.Stride);
-        Key += Hash.ToString();
+        Builder.AddString("type", "data")
+            .AddInteger("width", m_TextureData.Width)
+            .AddInteger("height", m_TextureData.Height)
+            .AddInteger("format", m_TextureData.Format)
+            .AddInteger("row", m_TextureDataActiveRowSize)
+            .AddInteger("rows", m_TextureDataRowCount)
+            .AddString("hash", Hash.ToString());
     }
     else if (m_SourceType == SourceType::EncodedMemory)
     {
-        Key += "memory:";
-        Key += std::to_string(m_DataSize);
-        Key += ':';
         const XXH128Hash Hash = ComputeDataHash(m_pData, m_DataSize);
-        Key += Hash.ToString();
+        Builder.AddString("type", "memory")
+            .AddInteger("size", m_DataSize)
+            .AddString("hash", Hash.ToString());
     }
-    else if (!m_URI.empty())
+    else
     {
-        Key += "uri:";
-        Key += m_URI;
-        if (!m_BaseURI.empty())
-        {
-            Key += ":base=";
-            Key += m_BaseURI;
-        }
+        Builder.AddString("type", "uri")
+            .AddString("uri", m_URI)
+            .AddString("base", m_BaseURI);
     }
-    Key += m_IsSRGB ? ":srgb=1" : ":srgb=0";
-    return Key;
+    Builder.AddBool("srgb", m_IsSRGB);
+    return Builder.GetKey();
 }
 
 void RadientTextureSource::ReleaseMemory()

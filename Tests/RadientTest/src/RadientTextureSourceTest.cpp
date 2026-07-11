@@ -92,6 +92,17 @@ TEST(RadientTextureSourceTest, BuildsStableURITextureCacheKey)
     LinearLoadInfo.IsSRGB                 = False;
     RadientTextureSource LinearSource{LinearLoadInfo};
     EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
+
+    RadientTextureLoadInfo DelimitedURIInfo{};
+    DelimitedURIInfo.URI = "a:base=b";
+    RadientTextureSource DelimitedURISource{DelimitedURIInfo};
+
+    RadientTextureLoadInfo SeparateBaseURIInfo{};
+    SeparateBaseURIInfo.URI     = "a";
+    SeparateBaseURIInfo.BaseURI = "b";
+    RadientTextureSource SeparateBaseURISource{SeparateBaseURIInfo};
+
+    EXPECT_NE(DelimitedURISource.MakeCacheKey(), SeparateBaseURISource.MakeCacheKey());
 }
 
 TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
