@@ -32,6 +32,7 @@
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
+#include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
@@ -771,7 +772,10 @@ std::string MakeMeshGeometryCacheKey(const MeshVertexDataStorage& VertexData,
     if (VertexData.CacheKey.empty() || IndexData.CacheKey.empty())
         return {};
 
-    return std::string{"mesh-geometry:"} + VertexData.CacheKey + ":" + IndexData.CacheKey;
+    RadientCacheKeyBuilder Builder{"mesh-geometry", 1};
+    Builder.AddString("vertex", VertexData.CacheKey)
+        .AddString("index", IndexData.CacheKey);
+    return Builder.GetKey();
 }
 
 RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,

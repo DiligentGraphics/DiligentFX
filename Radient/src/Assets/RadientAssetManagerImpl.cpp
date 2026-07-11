@@ -30,6 +30,7 @@
 #include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetValidation.hpp"
+#include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientGLTFLoader.hpp"
 #include "Errors.hpp"
 #include "GLTFDocument.hpp"
@@ -232,20 +233,15 @@ RefCntAutoPtr<IGPUUploadManager> CreateRadientGPUUploadManager(IRenderDevice* pD
     return pUploadManager;
 }
 
-std::string MakeSceneCacheKey(RADIENT_SCENE_FORMAT Format, const char* URI)
+std::string MakeSceneCacheKey(RADIENT_SCENE_FORMAT Format, const char* Location)
 {
-    const char* Prefix = "scene:";
-    switch (Format)
-    {
-        case RADIENT_SCENE_FORMAT_GLTF:
-            Prefix = "gltf:";
-            break;
+    if (Location == nullptr || Location[0] == '\0')
+        return {};
 
-        default:
-            break;
-    }
-
-    return std::string{Prefix} + URI;
+    RadientCacheKeyBuilder Builder{"scene", 1};
+    Builder.AddInteger("format", Format)
+        .AddString("location", Location);
+    return Builder.GetKey();
 }
 
 bool EndsWithCaseInsensitive(const std::string& Text, const char* Suffix)
