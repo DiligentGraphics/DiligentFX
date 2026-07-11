@@ -25,7 +25,9 @@
  */
 
 #include "Assets/RadientAssetResolver.hpp"
+#include "Assets/RadientFilesystemAssetResolver.hpp"
 
+#include "FileSystem.hpp"
 #include "TempDirectory.hpp"
 #include "gtest/gtest.h"
 
@@ -34,6 +36,61 @@
 
 using namespace Diligent;
 using namespace Diligent::Testing;
+
+TEST(RadientAssetResolverTest, DetectsURISchemes)
+{
+    EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme(""));
+    EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme("asset.bin"));
+    EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme("assets/asset:name.bin"));
+    EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme("C:/assets/asset.bin"));
+    EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme(R"(C:\assets\asset.bin)"));
+
+    EXPECT_TRUE(RadientFilesystemAssetResolver::HasURIScheme("file://assets/asset.bin"));
+    EXPECT_TRUE(RadientFilesystemAssetResolver::HasURIScheme("memory://assets/asset.bin"));
+    EXPECT_TRUE(RadientFilesystemAssetResolver::HasURIScheme("https://example.com/asset.bin"));
+}
+
+TEST(RadientAssetResolverTest, GetsBaseDirectory)
+{
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory(nullptr), "");
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory(""), "");
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory("scene.gltf"), "");
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory("assets/scene.gltf"), "assets/");
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory(R"(assets\scene.gltf)"), R"(assets\)");
+    EXPECT_EQ(RadientFilesystemAssetResolver::GetBaseDirectory("memory://assets/scene.gltf"), "memory://assets/");
+}
+
+TEST(RadientAssetResolverTest, ResolvesFilesystemURI)
+{
+    EXPECT_EQ(RadientFilesystemAssetResolver::ResolveFilesystemURI(nullptr, nullptr), "");
+    EXPECT_EQ(RadientFilesystemAssetResolver::ResolveFilesystemURI("", "assets/scene.gltf"), "");
+
+    EXPECT_EQ(
+        RadientFilesystemAssetResolver::ResolveFilesystemURI("textures/../albedo.png", "assets/scenes/scene.gltf"),
+        FileSystem::SimplifyPath("assets/scenes/textures/../albedo.png"));
+
+    EXPECT_EQ(
+        RadientFilesystemAssetResolver::ResolveFilesystemURI("file://assets/textures/albedo.png", nullptr),
+        FileSystem::SimplifyPath("assets/textures/albedo.png"));
+
+    TempDirectory     TempDir{"RadientAssetResolverTest"};
+    const std::string AbsolutePath = TempDir.Get() + "/asset.bin";
+    EXPECT_EQ(
+        RadientFilesystemAssetResolver::ResolveFilesystemURI(AbsolutePath.c_str(), "ignored/scene.gltf"),
+        FileSystem::SimplifyPath(AbsolutePath.c_str()));
+}
+
+TEST(RadientAssetResolverTest, ResolvesFilesystemPathForRead)
+{
+    EXPECT_EQ(RadientFilesystemAssetResolver::ResolveFilesystemPathForRead(nullptr, nullptr), "");
+    EXPECT_EQ(RadientFilesystemAssetResolver::ResolveFilesystemPathForRead("", "assets/scene.gltf"), "");
+    EXPECT_EQ(
+        RadientFilesystemAssetResolver::ResolveFilesystemPathForRead("textures/../albedo.png", "assets/scenes/scene.gltf"),
+        "assets/scenes/textures/../albedo.png");
+    EXPECT_EQ(
+        RadientFilesystemAssetResolver::ResolveFilesystemPathForRead("file://assets/textures/albedo.png", nullptr),
+        "assets/textures/albedo.png");
+}
 
 TEST(RadientAssetResolverTest, ChecksFilesystemAssetAvailability)
 {
