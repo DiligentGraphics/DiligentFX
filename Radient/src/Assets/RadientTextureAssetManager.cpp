@@ -123,8 +123,10 @@ public:
             SetTextureAttribs(float4{1, 1, 0, 0}, 0);
         else
             ClearTextureAttribs();
-        m_AllCopyCommandsEnqueued.store(m_pTexture != nullptr, std::memory_order_release);
-        SetGPUResourceStatus(m_pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
+
+        // BeginSubresourceUploads() and RecordCopyCommandEnqueueResult() own
+        // readiness publication. Creating the resource does not imply that its
+        // required copy commands have been enqueued.
         return m_pTexture;
     }
 
@@ -745,7 +747,15 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
             }
         }
     }
-    else
+
+    const Uint32 UploadSubresourceCount = UploadSlices * UploadMipLevels;
+
+    // Render-thread callbacks may run while this worker is still scheduling uploads.
+    // Publish the full pending count before creating a standalone texture or scheduling
+    // any subresource to avoid transiently marking the texture ready too early.
+    Texture.BeginSubresourceUploads(UploadSubresourceCount);
+
+    if (!UseTextureAtlas)
     {
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation != DEVICE_FEATURE_STATE_DISABLED)
         {
@@ -753,13 +763,6 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                 return RADIENT_STATUS_INVALID_OPERATION;
         }
     }
-
-    const Uint32 UploadSubresourceCount = UploadSlices * UploadMipLevels;
-
-    // Render-thread callbacks may run while this worker is still scheduling uploads.
-    // Publish the full pending count before scheduling any subresource to avoid transiently
-    // reaching zero and marking the texture ready before the complete batch is queued.
-    Texture.BeginSubresourceUploads(UploadSubresourceCount);
 
     IncrementCounter(m_Stats.PendingCopyCommandEnqueueCallbacks, UploadSubresourceCount);
 
