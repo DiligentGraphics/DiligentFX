@@ -519,6 +519,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     if (AssetURI.empty())
         AssetURI = MakeRadientAssetURI("texture", m_NextAssetID.fetch_add(1, std::memory_order_relaxed));
 
+    // AssetURI identifies this light asset handle. Payload caching uses the resolver-derived key below.
     RefCntAutoPtr<TextureAssetImpl> pTextureAsset = TextureAssetImpl::Create(std::move(AssetURI));
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!pTextureAsset)
@@ -537,83 +538,98 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
          pSelf         = shared_from_this(),
          TextureSource = std::move(TextureSource)](Uint32) mutable //
         {
-            DecrementCounterGuard PendingTextureLoadGuard{pSelf->m_Stats.PendingTextureLoads};
-            DecrementCounterGuard PendingSourceLoadGuard{pSelf->m_Stats.PendingTextureSourceLoads};
-
-            RefCntAutoPtr<IRadientAssetLocation> pAssetLocation;
-            if (!TextureSource.IsMemory())
-            {
-                const RADIENT_STATUS Status =
-                    pSelf->m_pAssetResolver->ResolveAssetLocation(
-                        {TextureSource.GetURI().c_str(),
-                         TextureSource.GetBaseURI().empty() ? nullptr : TextureSource.GetBaseURI().c_str()},
-                        pAssetLocation.GetAddressOfEmpty());
-                if (Status != RADIENT_STATUS_OK || pAssetLocation == nullptr)
-                {
-                    pTextureAsset->Fail(Status != RADIENT_STATUS_OK ? Status : RADIENT_STATUS_INVALID_OPERATION);
-                    return ASYNC_TASK_STATUS_COMPLETE;
-                }
-            }
-
-            const std::string TextureCacheKey = TextureSource.MakeCacheKey(pAssetLocation);
-            if (TextureCacheKey.empty())
-            {
-                pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            auto [pTexturePayload, PayloadCreated] =
-                pSelf->m_TextureCache.GetOrCreate(
-                    TextureCacheKey.c_str(),
-                    []() {
-                        return TexturePayloadImpl::Create(RADIENT_STATUS_PENDING);
-                    });
-
-            if (!pTextureAsset->SetPayload(std::move(pTexturePayload)))
-                return ASYNC_TASK_STATUS_COMPLETE;
-
-            if (!PayloadCreated)
-                return ASYNC_TASK_STATUS_COMPLETE;
-
-            RefCntAutoPtr<ITextureLoader> pLoader;
-            const RADIENT_STATUS          LoaderStatus =
-                TextureSource.CreateLoader(
-                    pSelf->m_pAssetResolver,
-                    pAssetLocation,
-                    pLoader.GetAddressOfEmpty());
-            if (LoaderStatus != RADIENT_STATUS_OK || pLoader == nullptr)
-            {
-                pTextureAsset->GetStorage().SetFailedStatus(
-                    RADIENT_FAILED(LoaderStatus) ? LoaderStatus : RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            TextureStorage& TextureStorage = pTextureAsset->GetStorage();
-            TextureStorage.SetLoadStatus(RADIENT_STATUS_OK);
-
-            if (pSelf->m_pDevice == nullptr)
-            {
-                TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
-            RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
-            if (!pResourceManager || !pUploadManager)
-            {
-                TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            PendingTextureLoadGuard.Reset();
-            // ScheduleTextureGPUUpload will decrement PendingTextureLoads when all copy commands have been enqueued.
-            const RADIENT_STATUS Status = pSelf->ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
-            if (Status != RADIENT_STATUS_PENDING)
-                TextureStorage.SetGPUResourceStatus(Status);
-            return ASYNC_TASK_STATUS_COMPLETE;
+            return pSelf->LoadTextureFromSource(*pTextureAsset, std::move(TextureSource));
         });
 
     return pTextureAsset->GetPayloadStatus();
+}
+
+ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientTextureAsset& TextureAsset,
+                                                                    RadientTextureSource  TextureSource)
+{
+    DecrementCounterGuard PendingTextureLoadGuard{m_Stats.PendingTextureLoads};
+    DecrementCounterGuard PendingSourceLoadGuard{m_Stats.PendingTextureSourceLoads};
+
+    RefCntAutoPtr<TextureAssetImpl> pTextureAsset{&TextureAsset, IID_TextureAssetImpl};
+    if (!pTextureAsset)
+    {
+        UNEXPECTED("Failed to resolve texture asset implementation");
+        return ASYNC_TASK_STATUS_COMPLETE;
+    }
+
+    RefCntAutoPtr<IRadientAssetLocation> pAssetLocation;
+    if (!TextureSource.IsMemory())
+    {
+        const RADIENT_STATUS Status =
+            m_pAssetResolver->ResolveAssetLocation(
+                {
+                    TextureSource.GetURI().c_str(),
+                    TextureSource.GetBaseURI().empty() ? nullptr : TextureSource.GetBaseURI().c_str(),
+                },
+                pAssetLocation.GetAddressOfEmpty());
+        if (Status != RADIENT_STATUS_OK || pAssetLocation == nullptr)
+        {
+            pTextureAsset->Fail(Status != RADIENT_STATUS_OK ? Status : RADIENT_STATUS_INVALID_OPERATION);
+            return ASYNC_TASK_STATUS_COMPLETE;
+        }
+    }
+
+    const std::string TextureCacheKey = TextureSource.MakeCacheKey(pAssetLocation);
+    if (TextureCacheKey.empty())
+    {
+        pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+        return ASYNC_TASK_STATUS_COMPLETE;
+    }
+
+    auto [pTexturePayload, PayloadCreated] =
+        m_TextureCache.GetOrCreate(
+            TextureCacheKey.c_str(),
+            []() {
+                return TexturePayloadImpl::Create(RADIENT_STATUS_PENDING);
+            });
+
+    if (!pTextureAsset->SetPayload(std::move(pTexturePayload)))
+        return ASYNC_TASK_STATUS_COMPLETE;
+
+    if (!PayloadCreated)
+        return ASYNC_TASK_STATUS_COMPLETE;
+
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    const RADIENT_STATUS          LoaderStatus =
+        TextureSource.CreateLoader(
+            m_pAssetResolver,
+            pAssetLocation,
+            pLoader.GetAddressOfEmpty());
+    if (LoaderStatus != RADIENT_STATUS_OK || pLoader == nullptr)
+    {
+        pTextureAsset->GetStorage().SetFailedStatus(
+            RADIENT_FAILED(LoaderStatus) ? LoaderStatus : RADIENT_STATUS_INVALID_OPERATION);
+        return ASYNC_TASK_STATUS_COMPLETE;
+    }
+
+    TextureStorage& TextureStorage = pTextureAsset->GetStorage();
+    TextureStorage.SetLoadStatus(RADIENT_STATUS_OK);
+
+    if (m_pDevice == nullptr)
+    {
+        TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
+        return ASYNC_TASK_STATUS_COMPLETE;
+    }
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = m_WeakResourceManager.Lock();
+    RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = m_WeakUploadManager.Lock();
+    if (!pResourceManager || !pUploadManager)
+    {
+        TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        return ASYNC_TASK_STATUS_COMPLETE;
+    }
+
+    PendingTextureLoadGuard.Reset();
+    // ScheduleTextureGPUUpload will decrement PendingTextureLoads when all copy commands have been enqueued.
+    const RADIENT_STATUS Status = ScheduleTextureGPUUpload(*pResourceManager, *pUploadManager, *pTextureAsset, *pLoader);
+    if (Status != RADIENT_STATUS_PENDING)
+        TextureStorage.SetGPUResourceStatus(Status);
+    return ASYNC_TASK_STATUS_COMPLETE;
 }
 
 ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
@@ -666,7 +682,10 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
 
     RefCntAutoPtr<TextureAssetImpl> pTextureAsset{&TextureAsset, IID_TextureAssetImpl};
     if (!pTextureAsset)
+    {
+        UNEXPECTED("Failed to resolve texture asset implementation");
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     if (m_pDevice == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;

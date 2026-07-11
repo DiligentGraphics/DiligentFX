@@ -50,6 +50,7 @@ class ResourceManager;
 } // namespace GLTF
 
 class TexturePayloadImpl;
+class RadientTextureSource;
 class RadientTextureAssetManager;
 
 using RadientTextureAssetManagerSharedPtr = std::shared_ptr<RadientTextureAssetManager>;
@@ -131,6 +132,9 @@ private:
                                             IGPUUploadManager&     UploadManager,
                                             IRadientTextureAsset&  TextureAsset,
                                             ITextureLoader&        Loader);
+
+    ASYNC_TASK_STATUS LoadTextureFromSource(IRadientTextureAsset& TextureAsset,
+                                            RadientTextureSource  TextureSource);
 
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
     RefCntAutoPtr<IRadientAssetResolver>  m_pAssetResolver;
