@@ -27,6 +27,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 
 #include "Assets/RadientAssetImpl.hpp"
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientGLTFLoader.hpp"
@@ -38,12 +39,13 @@
 #include "ThreadPool.hpp"
 
 #include <atomic>
-#include <cctype>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -304,6 +306,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     m_Desc{CreateInfo.Assets.Desc},
     m_pThreadPool{CreateInfo.pThreadPool},
     m_pDevice{CreateInfo.pDevice},
+    m_pAssetResolver{GetRadientAssetResolverOrDefault(CreateInfo.Assets.pAssetResolver)},
     m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice)},
     m_pUploadManager{CreateRadientGPUUploadManager(CreateInfo.pDevice)},
     m_pMeshManager{
@@ -320,6 +323,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
                 m_pDevice,
                 m_pResourceManager,
                 m_pUploadManager,
+                m_pAssetResolver,
             })}
 {
     m_Desc.Name = m_Name.c_str();
@@ -358,9 +362,15 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                     IRadientTextureAsset**        ppTexture)
 {
-    return m_pThreadPool ?
-        m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture) :
-        RADIENT_STATUS_INVALID_OPERATION;
+    if (ppTexture == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppTexture == nullptr, "Output texture pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppTexture = nullptr;
+
+    if (m_pThreadPool == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& LoadInfo,
@@ -416,7 +426,24 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                 return ASYNC_TASK_STATUS_CANCELLED;
             }
 
-            const std::string CacheKey = MakeSceneCacheKey(SceneFormat, SourceURI.c_str());
+            RefCntAutoPtr<IRadientAssetData> pSceneData;
+
+            const RADIENT_STATUS ResolveStatus =
+                pSelf->m_pAssetResolver->ResolveAsset({SourceURI.c_str(), nullptr}, pSceneData.GetAddressOfEmpty());
+            if (RADIENT_FAILED(ResolveStatus))
+            {
+                pModelAsset->Fail(ResolveStatus);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+            if (pSceneData == nullptr)
+            {
+                pModelAsset->Fail(RADIENT_STATUS_NOT_FOUND);
+                return ASYNC_TASK_STATUS_COMPLETE;
+            }
+
+            const char* ResolvedSourceURI = pSceneData->GetResolvedURI();
+
+            const std::string CacheKey = MakeSceneCacheKey(SceneFormat, ResolvedSourceURI);
 
             auto [pModelPayload, PayloadCreated] =
                 pSelf->m_SceneAssetCache.GetOrCreate(
@@ -431,7 +458,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI);
+            pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI, pSceneData);
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -591,18 +618,57 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
-                                                           const std::string&               SourceURI)
+                                                           IRadientAssetData*               pSceneData)
 {
+    const char* ResolvedSourceURI = pSceneData->GetResolvedURI();
+
     GLTF::DocumentLoadInfo DocLoadInfo;
-    DocLoadInfo.FileName     = SourceURI.c_str();
-    DocLoadInfo.DecodeImages = false;
+    DocLoadInfo.FileName           = ResolvedSourceURI;
+    DocLoadInfo.DecodeImages       = false;
+    DocLoadInfo.FileExistsCallback = [pAssetResolver = m_pAssetResolver,
+                                      pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
+                                      ResolvedSourceURI](const char* FilePath) {
+        if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
+            return true;
+
+        return pAssetResolver->CheckAsset({FilePath, ResolvedSourceURI}) == RADIENT_STATUS_OK;
+    };
+    DocLoadInfo.ReadWholeFileCallback = [pAssetResolver = m_pAssetResolver,
+                                         pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
+                                         ResolvedSourceURI](const char* FilePath, std::vector<unsigned char>& Data, std::string& Error) {
+        RefCntAutoPtr<IRadientAssetData> pData;
+        if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
+        {
+            pData = pSceneData;
+        }
+        else
+        {
+            const RADIENT_STATUS Status =
+                pAssetResolver->ResolveAsset({FilePath, ResolvedSourceURI}, pData.GetAddressOfEmpty());
+            if (RADIENT_FAILED(Status))
+            {
+                Error += FormatString("Failed to resolve asset '", FilePath != nullptr ? FilePath : "", "'\n");
+                return false;
+            }
+        }
+
+        const size_t Size = pData->GetSize();
+        if (Size == 0)
+        {
+            Error += FormatString("Asset is empty: ", FilePath != nullptr ? FilePath : "", "\n");
+            return false;
+        }
+        Data.resize(Size);
+        std::memcpy(Data.data(), pData->GetData(), Size);
+        return true;
+    };
 
     std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
 
     ImportedScene.Textures =
         RadientGLTFLoader::LoadTextures(*m_pThreadPool,
                                         *m_pTextureManager,
-                                        SourceURI,
+                                        ResolvedSourceURI,
                                         pDocument);
 
     ImportedScene.Materials =
@@ -612,7 +678,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::Import
 
     return RadientGLTFLoader::LoadScene(*m_pThreadPool,
                                         *m_pMeshManager,
-                                        SourceURI,
+                                        ResolvedSourceURI,
                                         pDocument,
                                         ImportedScene.Materials,
                                         ImportedScene);
@@ -620,7 +686,8 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::Import
 
 void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
                                              RADIENT_SCENE_FORMAT Format,
-                                             const std::string&   SourceURI)
+                                             const std::string&   SourceURI,
+                                             IRadientAssetData*   pSceneData)
 {
     ImportedSceneStorage& SceneStorage = Scene.GetStorage();
 
@@ -631,7 +698,7 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
         switch (Format)
         {
             case RADIENT_SCENE_FORMAT_GLTF:
-                Status = LoadGLTFSceneAsset(ImportedScene, SourceURI);
+                Status = LoadGLTFSceneAsset(ImportedScene, pSceneData);
                 break;
 
             default:

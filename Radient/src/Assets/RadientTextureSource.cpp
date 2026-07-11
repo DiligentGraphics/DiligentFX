@@ -26,8 +26,10 @@
 
 #include "Assets/RadientTextureSource.hpp"
 
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientTextureFormat.hpp"
 #include "GraphicsAccessories.hpp"
+#include "ProxyDataBlob.hpp"
 #include "TextureLoader.h"
 #include "XXH128Hasher.hpp"
 
@@ -137,6 +139,7 @@ XXH128Hash ComputeTextureDataHash(const void* pData,
 
 RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInfo) :
     m_URI{GetURI(LoadInfo)},
+    m_BaseURI{LoadInfo.BaseURI != nullptr ? LoadInfo.BaseURI : ""},
     m_IsSRGB{LoadInfo.IsSRGB}
 {
     if (LoadInfo.pTextureData != nullptr)
@@ -202,7 +205,7 @@ void RadientTextureSource::MakeMemoryCopy()
         m_TextureData.pData = m_pData;
 }
 
-RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader() const
+RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver) const
 {
     TextureLoadInfo LoadInfo{m_URI.empty() ? nullptr : m_URI.c_str()};
     LoadInfo.Usage     = USAGE_DEFAULT;
@@ -242,7 +245,28 @@ RefCntAutoPtr<ITextureLoader> RadientTextureSource::CreateLoader() const
     }
     else
     {
-        CreateTextureLoaderFromFile(m_URI.c_str(), IMAGE_FILE_FORMAT_UNKNOWN, LoadInfo, &pLoader);
+        if (pAssetResolver == nullptr || m_URI.empty())
+            return {};
+
+        RefCntAutoPtr<IRadientAssetData> pAssetData;
+        const RADIENT_STATUS             Status =
+            pAssetResolver->ResolveAsset({m_URI.c_str(), m_BaseURI.empty() ? nullptr : m_BaseURI.c_str()},
+                                         pAssetData.GetAddressOfEmpty());
+        if (RADIENT_FAILED(Status) ||
+            pAssetData == nullptr ||
+            pAssetData->GetData() == nullptr ||
+            pAssetData->GetSize() == 0)
+        {
+            return {};
+        }
+
+        LoadInfo.Name = pAssetData->GetResolvedURI();
+
+        RefCntAutoPtr<IDataBlob> pDataBlob =
+            ProxyDataBlob::Create(pAssetData->GetData(),
+                                  pAssetData->GetSize(),
+                                  pAssetData);
+        CreateTextureLoaderFromDataBlob(std::move(pDataBlob), LoadInfo, &pLoader);
     }
 
     return pLoader;
@@ -285,7 +309,13 @@ std::string RadientTextureSource::MakeCacheKey() const
     }
     else if (!m_URI.empty())
     {
+        Key += "uri:";
         Key += m_URI;
+        if (!m_BaseURI.empty())
+        {
+            Key += ":base=";
+            Key += m_BaseURI;
+        }
     }
     Key += m_IsSRGB ? ":srgb=1" : ":srgb=0";
     return Key;
@@ -310,6 +340,7 @@ void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
 {
     m_SourceType               = Rhs.m_SourceType;
     m_URI                      = std::move(Rhs.m_URI);
+    m_BaseURI                  = std::move(Rhs.m_BaseURI);
     m_IsSRGB                   = Rhs.m_IsSRGB;
     m_Data                     = std::move(Rhs.m_Data);
     m_DataSize                 = Rhs.m_DataSize;
@@ -327,7 +358,9 @@ void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
     if (m_SourceType == SourceType::TextureData)
         m_TextureData.pData = m_pData;
 
-    Rhs.m_SourceType               = SourceType::URI;
+    Rhs.m_SourceType = SourceType::URI;
+    Rhs.m_URI.clear();
+    Rhs.m_BaseURI.clear();
     Rhs.m_pData                    = nullptr;
     Rhs.m_DataSize                 = 0;
     Rhs.m_TextureData              = {};

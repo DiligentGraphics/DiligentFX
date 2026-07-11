@@ -47,9 +47,11 @@ void RadientAssets_CPP_UseMeshCreateInfo()
 {
     RadientMeshPrimitiveCreateInfo Primitive;
     RadientMeshCreateInfo          MeshCI;
+    RadientTextureLoadInfo         TextureLoadInfo;
     RadientSceneLoadInfo           SceneLoadInfo;
 
     (void)Primitive;
     (void)MeshCI;
+    (void)TextureLoadInfo;
     (void)SceneLoadInfo;
 }

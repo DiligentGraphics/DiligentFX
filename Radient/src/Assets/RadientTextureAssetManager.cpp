@@ -27,6 +27,7 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 
 #include "Assets/RadientAssetImpl.hpp"
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientTextureSource.hpp"
@@ -482,6 +483,7 @@ RadientTextureAssetManagerStats RadientTextureAssetManager::AtomicStats::GetSnap
 
 RadientTextureAssetManager::RadientTextureAssetManager(const CreateInfo& CI) noexcept :
     m_pDevice{CI.pDevice},
+    m_pAssetResolver{GetRadientAssetResolverOrDefault(CI.pAssetResolver)},
     m_WeakResourceManager{CI.pResourceManager},
     m_WeakUploadManager{CI.pUploadManager}
 {
@@ -553,7 +555,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
             if (!PayloadCreated)
                 return ASYNC_TASK_STATUS_COMPLETE;
 
-            RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader();
+            RefCntAutoPtr<ITextureLoader> pLoader = TextureSource.CreateLoader(pSelf->m_pAssetResolver);
             if (pLoader == nullptr)
             {
                 pTextureAsset->GetStorage().SetFailedStatus(RADIENT_STATUS_INVALID_OPERATION);

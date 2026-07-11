@@ -590,6 +590,7 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
 
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.URI      = TextureURI.c_str();
+        LoadInfo.BaseURI  = !Source.URI.empty() ? SourceURI.c_str() : nullptr;
         LoadInfo.pData    = Source.pData;
         LoadInfo.DataSize = Source.DataSize;
         LoadInfo.IsSRGB   = False;

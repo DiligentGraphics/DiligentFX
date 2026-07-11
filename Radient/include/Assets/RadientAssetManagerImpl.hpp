@@ -135,16 +135,18 @@ private:
 
     void LoadSceneAsset(ScenePayloadImpl&    Scene,
                         RADIENT_SCENE_FORMAT Format,
-                        const std::string&   SourceURI);
+                        const std::string&   SourceURI,
+                        IRadientAssetData*   pSceneData);
 
     RADIENT_STATUS LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
-                                      const std::string&               SourceURI);
+                                      IRadientAssetData*               pSceneData);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
     RefCntAutoPtr<IThreadPool>           m_pThreadPool;
     RefCntAutoPtr<IRenderDevice>         m_pDevice;
+    RefCntAutoPtr<IRadientAssetResolver> m_pAssetResolver;
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 

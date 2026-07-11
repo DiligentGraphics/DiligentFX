@@ -42,6 +42,7 @@ struct IRenderDevice;
 struct IThreadPool;
 struct ITextureView;
 struct ITextureLoader;
+struct IRadientAssetResolver;
 
 namespace GLTF
 {
@@ -78,6 +79,7 @@ public:
         IRenderDevice*         pDevice          = nullptr;
         GLTF::ResourceManager* pResourceManager = nullptr;
         IGPUUploadManager*     pUploadManager   = nullptr;
+        IRadientAssetResolver* pAssetResolver   = nullptr;
     };
 
     ~RadientTextureAssetManager();
@@ -131,6 +133,7 @@ private:
                                             ITextureLoader&        Loader);
 
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
+    RefCntAutoPtr<IRadientAssetResolver>  m_pAssetResolver;
     RefCntWeakPtr<GLTF::ResourceManager>  m_WeakResourceManager;
     RefCntWeakPtr<IGPUUploadManager>      m_WeakUploadManager;
     RadientAssetCache<TexturePayloadImpl> m_TextureCache;

@@ -30,6 +30,7 @@
 /// Defines Radient asset creation interfaces.
 
 #include "RadientTypes.h"
+#include "RadientAssetResolver.h"
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
@@ -101,6 +102,10 @@ struct RadientAssetManagerCreateInfo
 {
     /// Asset manager description.
     RadientAssetManagerDesc Desc DEFAULT_INITIALIZER({});
+
+    /// Optional asset resolver used to obtain bytes for URI-backed assets.
+    /// If null, Radient uses a default filesystem resolver.
+    IRadientAssetResolver* pAssetResolver DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientAssetManagerCreateInfo RadientAssetManagerCreateInfo;
 
@@ -357,6 +362,10 @@ struct RadientTextureLoadInfo
     /// Source URI. For memory-backed textures, this is optional and may be used as the texture identity
     /// for asset cache lookup and debugging.
     const Char* URI DEFAULT_INITIALIZER(nullptr);
+
+    /// Optional URI of the asset that references URI. Relative URI sources are resolved against this
+    /// value by the active asset resolver.
+    const Char* BaseURI DEFAULT_INITIALIZER(nullptr);
 
     /// Optional pointer to encoded texture data.
     const void* pData DEFAULT_INITIALIZER(nullptr);

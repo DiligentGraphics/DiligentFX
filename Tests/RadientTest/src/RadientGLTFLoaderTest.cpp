@@ -33,11 +33,14 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
+#include "ObjectBase.hpp"
+#include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -50,17 +53,6 @@ namespace
 {
 
 static constexpr float EPSILON = 1e-5f;
-
-static constexpr std::array<Uint8, 67> TransparentPng{
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-    0x42, 0x60, 0x82};
 
 static constexpr const char* TransparentPngBase64 =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==";
@@ -98,6 +90,120 @@ void AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& 
     Buffer.resize(OldSize + sizeof(ValueType) * Values.size());
     std::memcpy(Buffer.data() + OldSize, Values.data(), Buffer.size() - OldSize);
 }
+
+class TestAssetData final : public ObjectBase<IRadientAssetData>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetData>;
+
+    TestAssetData(IReferenceCounters* pRefCounters,
+                  std::vector<Uint8>  Data,
+                  std::string         ResolvedURI) :
+        TBase{pRefCounters},
+        m_Data{std::move(Data)},
+        m_ResolvedURI{std::move(ResolvedURI)}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
+
+    virtual const void* DILIGENT_CALL_TYPE GetData() const override final
+    {
+        return !m_Data.empty() ? m_Data.data() : nullptr;
+    }
+
+    virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
+    {
+        return m_Data.size();
+    }
+
+    virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
+    {
+        return m_ResolvedURI.c_str();
+    }
+
+private:
+    std::vector<Uint8> m_Data;
+    std::string        m_ResolvedURI;
+};
+
+class TestAssetResolver final : public ObjectBase<IRadientAssetResolver>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetResolver>;
+
+    explicit TestAssetResolver(IReferenceCounters* pRefCounters) :
+        TBase{pRefCounters}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
+
+    void AddAsset(std::string URI, std::string ResolvedURI, std::vector<Uint8> Data)
+    {
+        m_Assets.emplace(std::move(URI), Entry{std::move(ResolvedURI), std::move(Data)});
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final
+    {
+        ++CheckCount;
+        LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
+        LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
+
+        if (LastURI.empty())
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        auto It = m_Assets.find(LastURI);
+        if (It == m_Assets.end())
+        {
+            const size_t SlashPos = LastURI.find_last_of("/\\");
+            if (SlashPos != std::string::npos)
+                It = m_Assets.find(LastURI.substr(SlashPos + 1));
+        }
+        return It != m_Assets.end() ? RADIENT_STATUS_OK : RADIENT_STATUS_NOT_FOUND;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
+                                                           IRadientAssetData**            ppData) override final
+    {
+        if (ppData == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppData = nullptr;
+
+        ++ResolveCount;
+        LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
+        LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
+
+        auto It = m_Assets.find(LastURI);
+        if (It == m_Assets.end())
+        {
+            const size_t SlashPos = LastURI.find_last_of("/\\");
+            if (SlashPos != std::string::npos)
+                It = m_Assets.find(LastURI.substr(SlashPos + 1));
+        }
+        if (It == m_Assets.end())
+            return RADIENT_STATUS_NOT_FOUND;
+
+        RefCntAutoPtr<TestAssetData> pData{
+            MakeNewRCObj<TestAssetData>()(It->second.Data, It->second.ResolvedURI)};
+        pData->QueryInterface(IID_RadientAssetData, ppData);
+        return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    Uint32      CheckCount   = 0;
+    Uint32      ResolveCount = 0;
+    std::string LastURI;
+    std::string LastBaseURI;
+
+private:
+    struct Entry
+    {
+        std::string        ResolvedURI;
+        std::vector<Uint8> Data;
+    };
+
+    std::map<std::string, Entry> m_Assets;
+};
 
 std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
 {
@@ -702,12 +808,16 @@ std::string WriteGLTFBufferViewTextureFile(const TempDirectory& TempDir)
         "uri": "data:application/octet-stream;base64,)GLTF"} +
         TransparentPngBase64 +
         R"GLTF(",
-        "byteLength": 67
+        "byteLength": )GLTF" +
+        std::to_string(TransparentPng.size()) +
+        R"GLTF(
     }],
     "bufferViews": [{
         "buffer": 0,
         "byteOffset": 0,
-        "byteLength": 67
+        "byteLength": )GLTF" +
+        std::to_string(TransparentPng.size()) +
+        R"GLTF(
     }],
     "images": [{
         "name": "BufferViewTexture",
@@ -729,12 +839,16 @@ std::string WriteGLTFDataURIAndBufferViewTexturesFile(const TempDirectory& TempD
         "uri": "data:application/octet-stream;base64,)GLTF"} +
         TransparentPngBase64 +
         R"GLTF(",
-        "byteLength": 67
+        "byteLength": )GLTF" +
+        std::to_string(TransparentPng.size()) +
+        R"GLTF(
     }],
     "bufferViews": [{
         "buffer": 0,
         "byteOffset": 0,
-        "byteLength": 67
+        "byteLength": )GLTF" +
+        std::to_string(TransparentPng.size()) +
+        R"GLTF(
     }],
     "images": [
         {
@@ -835,6 +949,48 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromExternalImageURI)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath = WriteGLTFExternalTextureFile(TempDir);
+
+    RefCntAutoPtr<TestAssetResolver> pResolver{MakeNewRCObj<TestAssetResolver>()()};
+    pResolver->AddAsset("external.png",
+                        "memory://resolved/external.png",
+                        std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
+
+    RadientTextureAssetManager::CreateInfo TextureManagerCI;
+    TextureManagerCI.pAssetResolver = pResolver;
+
+    RadientTextureAssetManagerSharedPtr pTextureManager = RadientTextureAssetManager::Create(TextureManagerCI);
+    ASSERT_NE(pTextureManager, nullptr);
+
+    RadientImport::TextureAssetList Textures =
+        RadientGLTFLoader::LoadTextures(*pThreadPool,
+                                        *pTextureManager,
+                                        GLTFPath,
+                                        LoadMetadataOnlyDocument(GLTFPath));
+
+    EXPECT_EQ(pResolver->ResolveCount, 0u);
+
+    ASSERT_EQ(Textures.size(), 1u);
+    ASSERT_NE(Textures[0], nullptr);
+    ASSERT_NE(Textures[0]->GetReference().URI, nullptr);
+    EXPECT_NE(std::string{Textures[0]->GetReference().URI}.find("external.png"), std::string::npos);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_PENDING);
+
+    ProcessQueuedTasks(*pThreadPool);
+    EXPECT_EQ(pResolver->ResolveCount, 1u);
+    EXPECT_NE(pResolver->LastURI.find("external.png"), std::string::npos);
+    EXPECT_EQ(pResolver->LastBaseURI, GLTFPath);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientGLTFLoaderTest, LoadTexturesContinuesAfterUnresolvedTextureSource)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
@@ -852,8 +1008,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesContinuesAfterUnresolvedTextureSource)
         Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
     }
 
-    // The first GLTF texture points to a missing image source. Keep its slot
-    // empty so later material binding can substitute a renderer stub.
+    // The first GLTF texture refers to an invalid image source index, so no
+    // texture worker is scheduled for that slot.
     ASSERT_EQ(Textures.size(), 2u);
     EXPECT_EQ(Textures[0], nullptr);
 

@@ -25,17 +25,22 @@
  */
 
 #include "Assets/RadientTextureFormat.hpp"
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientTextureSource.hpp"
 
+#include "ObjectBase.hpp"
+#include "RadientTestAssetHelpers.hpp"
 #include "TextureLoader.h"
 
 #include "gtest/gtest.h"
 
 #include <array>
+#include <string>
 #include <utility>
 #include <vector>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
@@ -45,6 +50,93 @@ struct ReleaseState
     Uint32      Count    = 0;
     const void* pData    = nullptr;
     Uint64      DataSize = 0;
+};
+
+class TestAssetData final : public ObjectBase<IRadientAssetData>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetData>;
+
+    TestAssetData(IReferenceCounters*                             pRefCounters,
+                  const std::array<Uint8, TransparentPng.size()>& Data,
+                  std::string                                     ResolvedURI,
+                  Uint32*                                         pDestroyCount) :
+        TBase{pRefCounters},
+        m_Data{Data},
+        m_ResolvedURI{std::move(ResolvedURI)},
+        m_pDestroyCount{pDestroyCount}
+    {
+    }
+
+    ~TestAssetData()
+    {
+        if (m_pDestroyCount != nullptr)
+            ++(*m_pDestroyCount);
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
+
+    virtual const void* DILIGENT_CALL_TYPE GetData() const override final
+    {
+        return m_Data.data();
+    }
+
+    virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
+    {
+        return m_Data.size();
+    }
+
+    virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
+    {
+        return m_ResolvedURI.c_str();
+    }
+
+private:
+    std::array<Uint8, TransparentPng.size()> m_Data;
+    std::string                              m_ResolvedURI;
+    Uint32* const                            m_pDestroyCount;
+};
+
+class TestAssetResolver final : public ObjectBase<IRadientAssetResolver>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetResolver>;
+
+    explicit TestAssetResolver(IReferenceCounters* pRefCounters) :
+        TBase{pRefCounters}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CheckAsset(const RadientAssetResolveInfo& ResolveInfo) override final
+    {
+        return ResolveInfo.URI != nullptr && *ResolveInfo.URI != 0 ?
+            RADIENT_STATUS_OK :
+            RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAsset(const RadientAssetResolveInfo& ResolveInfo,
+                                                           IRadientAssetData**            ppData) override final
+    {
+        if (ppData == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppData = nullptr;
+
+        ++ResolveCount;
+        LastURI     = ResolveInfo.URI != nullptr ? ResolveInfo.URI : "";
+        LastBaseURI = ResolveInfo.BaseURI != nullptr ? ResolveInfo.BaseURI : "";
+
+        RefCntAutoPtr<TestAssetData> pData{
+            MakeNewRCObj<TestAssetData>()(TransparentPng, "memory://resolved/albedo.png", &AssetDataDestroyCount)};
+        pData->QueryInterface(IID_RadientAssetData, ppData);
+        return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    Uint32      ResolveCount          = 0;
+    Uint32      AssetDataDestroyCount = 0;
+    std::string LastURI;
+    std::string LastBaseURI;
 };
 
 void ReleaseTextureData(const void* pData, Uint64 DataSize, void* pUserData)
@@ -72,6 +164,18 @@ TEST(RadientTextureSourceTest, BuildsStableURITextureCacheKey)
     RadientTextureSource Source{LoadInfo};
     RadientTextureSource SameSource{LoadInfo};
     EXPECT_EQ(Source.MakeCacheKey(), SameSource.MakeCacheKey());
+
+    RadientTextureLoadInfo BaseLoadInfo = LoadInfo;
+    BaseLoadInfo.BaseURI                = "Scenes/SceneA.gltf";
+    RadientTextureSource BaseSource{BaseLoadInfo};
+    RadientTextureSource SameBaseSource{BaseLoadInfo};
+    EXPECT_EQ(BaseSource.MakeCacheKey(), SameBaseSource.MakeCacheKey());
+    EXPECT_NE(Source.MakeCacheKey(), BaseSource.MakeCacheKey());
+
+    RadientTextureLoadInfo DifferentBaseLoadInfo = BaseLoadInfo;
+    DifferentBaseLoadInfo.BaseURI                = "Scenes/SceneB.gltf";
+    RadientTextureSource DifferentBaseSource{DifferentBaseLoadInfo};
+    EXPECT_NE(BaseSource.MakeCacheKey(), DifferentBaseSource.MakeCacheKey());
 
     RadientTextureLoadInfo LinearLoadInfo = LoadInfo;
     LinearLoadInfo.IsSRGB                 = False;
@@ -559,4 +663,31 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
     CheckMip(0, 4, 4, Data.data());
     CheckMip(1, 2, 2, ExpectedMip1.data());
     CheckMip(2, 1, 1, ExpectedMip2.data());
+}
+
+TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
+{
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.URI     = "textures/albedo.png";
+    LoadInfo.BaseURI = "memory://scenes/scene.gltf";
+
+    RadientTextureSource Source{LoadInfo};
+
+    RefCntAutoPtr<TestAssetResolver> pResolver{MakeNewRCObj<TestAssetResolver>()()};
+    RefCntAutoPtr<ITextureLoader>    pLoader = Source.CreateLoader(pResolver);
+
+    ASSERT_NE(pLoader, nullptr);
+    EXPECT_EQ(pResolver->ResolveCount, 1u);
+    EXPECT_EQ(pResolver->LastURI, LoadInfo.URI);
+    EXPECT_EQ(pResolver->LastBaseURI, LoadInfo.BaseURI);
+
+    const TextureDesc& Desc = pLoader->GetTextureDesc();
+    EXPECT_EQ(Desc.Type, RESOURCE_DIM_TEX_2D);
+    EXPECT_EQ(Desc.Width, 1u);
+    EXPECT_EQ(Desc.Height, 1u);
+    EXPECT_EQ(Desc.Format, TEX_FORMAT_RGBA8_UNORM);
+
+    EXPECT_EQ(pResolver->AssetDataDestroyCount, 0u);
+    pLoader.Release();
+    EXPECT_EQ(pResolver->AssetDataDestroyCount, 1u);
 }

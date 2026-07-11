@@ -4,6 +4,7 @@ project(Radient CXX)
 
 set(SOURCE
     src/Assets/RadientAssetManagerImpl.cpp
+    src/Assets/RadientAssetResolver.cpp
     src/Assets/RadientAssetValidation.cpp
     src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientGLTFLoader.cpp
@@ -42,6 +43,7 @@ set(INCLUDE
     include/Assets/RadientAssetImpl.hpp
     include/Assets/RadientAssetCache.hpp
     include/Assets/RadientAssetManagerImpl.hpp
+    include/Assets/RadientAssetResolver.hpp
     include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientDrawableMeshConverter.hpp
@@ -80,6 +82,7 @@ set(INCLUDE
 
 set(INTERFACE
     interface/Radient.h
+    interface/RadientAssetResolver.h
     interface/RadientAssets.h
     interface/RadientBackend.h
     interface/RadientEngine.h
