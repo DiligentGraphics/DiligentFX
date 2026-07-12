@@ -490,6 +490,8 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
         VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
     if (HasSourceBackedDstAttribute(GLTF::Texcoord0AttributeName))
         VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+    if (HasSourceBackedDstAttribute(GLTF::Texcoord1AttributeName))
+        VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
     if (HasSourceBackedDstAttribute(GLTF::VertexColorAttributeName))
         VertexAttribFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
     if (HasSourceBackedDstAttribute(GLTF::JointsAttributeName) &&

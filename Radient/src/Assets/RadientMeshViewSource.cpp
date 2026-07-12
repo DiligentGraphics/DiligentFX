@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <cstring>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -175,23 +176,46 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
         return {};
     }
 
-    XXH128State Hasher;
-    Hasher.Update(Uint32{2}); // Mesh view cache key version.
+    static constexpr Uint32 InvalidGeometryIndex = ~Uint32{0};
 
-    Hasher.Update(static_cast<Uint64>(GeometryCacheKeys.size()));
-    for (const std::string& GeometryCacheKey : GeometryCacheKeys)
+    // Only geometry referenced by primitives contributes to the view key. Keep
+    // the first-use order stable so unused geometry entries do not affect cache reuse.
+    std::vector<Uint32> UsedGeometryIndices;
+    UsedGeometryIndices.reserve(m_GeometryIndices.size());
+
+    // Map caller-provided geometry indices to compact indices used by this view.
+    // This preserves primitive-to-geometry relationships without hashing unused keys.
+    std::vector<Uint32> GeometryIndexMap(GeometryCacheKeys.size(), InvalidGeometryIndex);
+    for (const Uint32 GeometryIndex : m_GeometryIndices)
     {
-        if (GeometryCacheKey.empty())
+        if (GeometryIndex >= GeometryCacheKeys.size())
             return {};
 
-        UpdateString(Hasher, GeometryCacheKey.c_str());
+        if (GeometryCacheKeys[GeometryIndex].empty())
+            return {};
+
+        Uint32& MappedIndex = GeometryIndexMap[GeometryIndex];
+        if (MappedIndex == InvalidGeometryIndex)
+        {
+            MappedIndex = static_cast<Uint32>(UsedGeometryIndices.size());
+            UsedGeometryIndices.push_back(GeometryIndex);
+        }
+    }
+
+    XXH128State Hasher;
+    Hasher.Update(Uint32{3}); // Mesh view cache key version.
+
+    Hasher.Update(static_cast<Uint64>(UsedGeometryIndices.size()));
+    for (const Uint32 GeometryIndex : UsedGeometryIndices)
+    {
+        UpdateString(Hasher, GeometryCacheKeys[GeometryIndex].c_str());
     }
 
     Hasher.Update(static_cast<Uint64>(m_Primitives.size()));
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < m_Primitives.size(); ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& Primitive = m_Primitives[PrimitiveIndex];
-        Hasher.Update(m_GeometryIndices[PrimitiveIndex]);
+        Hasher.Update(GeometryIndexMap[m_GeometryIndices[PrimitiveIndex]]);
         Hasher.Update(Primitive.FirstIndex,
                       Primitive.IndexCount);
         HashMaterial(Hasher, m_Materials[PrimitiveIndex]);

@@ -287,7 +287,11 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesGeometrySourcesAndIndices)
 
     std::vector<std::string> DifferentGeometryKeys = GeometryKeys;
     DifferentGeometryKeys[1]                       = "mesh-geometry:other";
-    EXPECT_NE(CacheKey, View0.MakeCacheKey(DifferentGeometryKeys));
+    EXPECT_EQ(CacheKey, View0.MakeCacheKey(DifferentGeometryKeys));
+
+    std::vector<std::string> EmptyUnusedGeometryKey = GeometryKeys;
+    EmptyUnusedGeometryKey[1].clear();
+    EXPECT_EQ(CacheKey, View0.MakeCacheKey(EmptyUnusedGeometryKey));
 
     std::vector<std::string> EmptyGeometryKey = GeometryKeys;
     EmptyGeometryKey[0].clear();
