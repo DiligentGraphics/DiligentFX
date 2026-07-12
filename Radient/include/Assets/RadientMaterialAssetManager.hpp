@@ -65,6 +65,9 @@ public:
 
     // Returns the GLTF material if the material source status is OK and texture
     // atlas attributes are available, or nullptr otherwise.
+    // This method lazily updates texture atlas attributes in the stored
+    // material and must be called from the render thread. It is not thread-safe
+    // and must not race with another GetMaterial() call for the same material asset.
     static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
 
 private:
