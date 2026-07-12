@@ -327,7 +327,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
-    DEV_CHECK_ERR(m_pUploadManager == nullptr || m_Stopped,
+    DEV_CHECK_ERR(m_pUploadManager == nullptr || m_Stopped.load(std::memory_order_acquire),
                   "RadientAssetManagerImpl::Stop() must be called before destroying a GPU-backed asset manager");
 }
 
@@ -349,7 +349,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
     DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
-    if (m_Stopped)
+    if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return m_pThreadPool ?
@@ -365,7 +365,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMaterial = nullptr;
 
-    if (m_Stopped)
+    if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return m_pMaterialManager->CreateMaterial(MaterialCI, ppMaterial);
@@ -382,7 +382,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     if (m_pThreadPool == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    if (m_Stopped)
+    if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture);
@@ -402,7 +402,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
     if (m_pThreadPool == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    if (m_Stopped)
+    if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const std::string SourceURI = LoadInfo.URI;
@@ -439,6 +439,12 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
             {
                 RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
                 if (pSelf == nullptr)
+                {
+                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_CANCELLED;
+                }
+
+                if (pSelf->m_Stopped.load(std::memory_order_acquire))
                 {
                     pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
                     return ASYNC_TASK_STATUS_CANCELLED;
@@ -514,7 +520,7 @@ RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
         if (Status != RADIENT_STATUS_PENDING)
             return Status;
 
-        if (m_Stopped)
+        if (m_Stopped.load(std::memory_order_acquire))
             return RADIENT_STATUS_INVALID_OPERATION;
 
         if (m_pThreadPool == nullptr)
@@ -527,20 +533,19 @@ RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
 
 RADIENT_STATUS RadientAssetManagerImpl::Stop(IDeviceContext* pContext)
 {
-    if (m_Stopped)
+    if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_OK;
 
-    if (m_pUploadManager == nullptr)
-    {
-        m_Stopped = true;
-        return RADIENT_STATUS_OK;
-    }
-
-    if (pContext == nullptr)
+    if (m_pUploadManager != nullptr && pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    m_pUploadManager->Stop(pContext);
-    m_Stopped = true;
+    // Publish the stopped state before stopping uploads so queued scene tasks
+    // do not fan out into new texture/material/mesh work during shutdown.
+    if (m_Stopped.exchange(true, std::memory_order_acq_rel))
+        return RADIENT_STATUS_OK;
+
+    if (m_pUploadManager != nullptr)
+        m_pUploadManager->Stop(pContext);
 
     return RADIENT_STATUS_OK;
 }

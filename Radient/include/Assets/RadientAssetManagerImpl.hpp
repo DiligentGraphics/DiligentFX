@@ -36,6 +36,7 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <atomic>
 #include <string>
 
 namespace Diligent
@@ -156,7 +157,7 @@ private:
 
     RadientAssetCache<ScenePayloadImpl> m_SceneAssetCache;
 
-    bool m_Stopped = false;
+    std::atomic_bool m_Stopped{false};
 };
 
 } // namespace Diligent
