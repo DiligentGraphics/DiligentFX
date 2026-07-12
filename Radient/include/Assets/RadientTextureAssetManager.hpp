@@ -144,7 +144,6 @@ private:
     RefCntWeakPtr<IGPUUploadManager>      m_WeakUploadManager;
     RadientAssetCache<TexturePayloadImpl> m_TextureCache;
     AtomicStats                           m_Stats;
-    std::atomic<RadientHandle>            m_NextAssetID{1};
 };
 
 } // namespace Diligent

@@ -28,6 +28,7 @@
 
 #include "RadientTypes.h"
 
+#include <atomic>
 #include <string>
 
 namespace Diligent
@@ -37,6 +38,17 @@ inline std::string MakeRadientAssetURI(const char*   Type,
                                        RadientHandle AssetID)
 {
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
+}
+
+inline RadientHandle AllocateRadientAssetID() noexcept
+{
+    static std::atomic<RadientHandle> NextAssetID{1};
+    return NextAssetID.fetch_add(1, std::memory_order_relaxed);
+}
+
+inline std::string MakeRadientAssetURI(const char* Type)
+{
+    return MakeRadientAssetURI(Type, AllocateRadientAssetID());
 }
 
 inline std::string MakeRadientAssetCacheURI(const char*        Type,

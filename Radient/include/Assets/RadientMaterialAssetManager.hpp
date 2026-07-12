@@ -29,7 +29,6 @@
 #include "RadientAssets.h"
 #include "GLTFLoader.hpp"
 
-#include <atomic>
 #include <memory>
 
 namespace Diligent
@@ -72,8 +71,6 @@ public:
 
 private:
     RadientMaterialAssetManager() = default;
-
-    std::atomic<RadientHandle> m_NextAssetID{1};
 };
 
 } // namespace Diligent

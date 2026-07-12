@@ -147,7 +147,6 @@ using MaterialAssetImpl =
     RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialPayloadImpl>;
 
 RADIENT_STATUS CreateMaterialAsset(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
-                                   std::atomic<RadientHandle>&        NextAssetID,
                                    IRadientMaterialAsset**            ppMaterial)
 {
     VERIFY_EXPR(pPayload != nullptr);
@@ -157,8 +156,7 @@ RADIENT_STATUS CreateMaterialAsset(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
     pPayload->GetStorage().InitLoadStatus();
 
     RefCntAutoPtr<MaterialAssetImpl> pMaterial =
-        MaterialAssetImpl::Create(MakeRadientAssetURI("material", NextAssetID.fetch_add(1, std::memory_order_relaxed)),
-                                  std::move(pPayload));
+        MaterialAssetImpl::Create(MakeRadientAssetURI("material"), std::move(pPayload));
     *ppMaterial = pMaterial.Detach();
     return RADIENT_STATUS_OK;
 }
@@ -195,7 +193,7 @@ RadientMaterialAssetManager::~RadientMaterialAssetManager() = default;
 
 RadientMaterialAssetManagerSharedPtr RadientMaterialAssetManager::Create()
 {
-    return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager{}};
+    return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager()};
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
@@ -240,7 +238,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
 
     Builder.Finalize();
-    return CreateMaterialAsset(std::move(pPayload), m_NextAssetID, ppMaterial);
+    return CreateMaterialAsset(std::move(pPayload), ppMaterial);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
@@ -267,7 +265,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
             return true;
         });
     MaterialData.Material = std::move(Material);
-    return CreateMaterialAsset(std::move(pPayload), m_NextAssetID, ppMaterial);
+    return CreateMaterialAsset(std::move(pPayload), ppMaterial);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)

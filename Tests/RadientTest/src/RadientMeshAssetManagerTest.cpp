@@ -28,6 +28,7 @@
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "ThreadPool.hpp"
 #include "TestingEnvironment.hpp"
 
@@ -600,6 +601,80 @@ TEST(RadientMeshAssetManagerTest, MeshViewCacheUsesCanonicalGeometryPayload)
     EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshA), UsedGeometry.pIndexData.RawPtr());
     EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshB), UsedGeometry.pVertexData.RawPtr());
     EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshB), UsedGeometry.pIndexData.RawPtr());
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, MeshViewCacheDistinguishesMaterialsFromDifferentManagers)
+{
+    // Mesh-view cache keys include material asset references. Asset references
+    // must therefore be unique across manager instances, not only within one
+    // material manager.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    MeshGeometryHandles Geometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry)));
+    ASSERT_NE(Geometry.pVertexData, nullptr);
+    ASSERT_NE(Geometry.pIndexData, nullptr);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManagerA = RadientMaterialAssetManager::Create();
+    RadientMaterialAssetManagerSharedPtr pMaterialManagerB = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManagerA, nullptr);
+    ASSERT_NE(pMaterialManagerB, nullptr);
+
+    RadientMaterialCreateInfo MaterialCIA{};
+    MaterialCIA.Name            = "material from manager A";
+    MaterialCIA.BaseColorFactor = {1.f, 0.f, 0.f, 1.f};
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialA;
+    ASSERT_EQ(pMaterialManagerA->CreateMaterial(MaterialCIA, pMaterialA.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterialA, nullptr);
+
+    RadientMaterialCreateInfo MaterialCIB{};
+    MaterialCIB.Name            = "material from manager B";
+    MaterialCIB.BaseColorFactor = {0.f, 0.f, 1.f, 1.f};
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialB;
+    ASSERT_EQ(pMaterialManagerB->CreateMaterial(MaterialCIB, pMaterialB.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterialB, nullptr);
+
+    const RadientAssetReference& MaterialRefA = pMaterialA->GetReference();
+    const RadientAssetReference& MaterialRefB = pMaterialB->GetReference();
+    ASSERT_NE(MaterialRefA.URI, nullptr);
+    ASSERT_NE(MaterialRefB.URI, nullptr);
+    EXPECT_STRNE(MaterialRefA.URI, MaterialRefB.URI);
+    EXPECT_EQ(MaterialRefA.Version, MaterialRefB.Version);
+
+    RadientMeshPrimitiveCreateInfo  PrimitiveA{};
+    const RadientMeshViewCreateInfo ViewA = MakeMeshView(PrimitiveA);
+    PrimitiveA.pMaterial                  = pMaterialA;
+
+    RadientMeshPrimitiveCreateInfo  PrimitiveB{};
+    const RadientMeshViewCreateInfo ViewB = MakeMeshView(PrimitiveB);
+    PrimitiveB.pMaterial                  = pMaterialB;
+
+    const RadientMeshGeometryData GeometryData = MakeGeometryData(Geometry);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMeshA;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewA, &pMeshA)));
+    ASSERT_NE(pMeshA, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMeshB;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewB, &pMeshB)));
+    ASSERT_NE(pMeshB, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshA), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshB), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshA), Geometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshA), Geometry.pIndexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshB), Geometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshB), Geometry.pIndexData.RawPtr());
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMeshA),
+              RadientMeshAssetManager::GetMeshPayload(pMeshB));
 
     pThreadPool->StopThreads();
 }

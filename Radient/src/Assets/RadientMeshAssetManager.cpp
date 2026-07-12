@@ -816,7 +816,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&        
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RefCntAutoPtr<MeshIndexDataAssetImpl> pIndexDataAsset =
-        MeshIndexDataAssetImpl::Create(MakeRadientAssetURI("mesh-index-data", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)));
+        MeshIndexDataAssetImpl::Create(MakeRadientAssetURI("mesh-index-data"));
     if (pIndexDataAsset == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -904,7 +904,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RefCntAutoPtr<MeshVertexDataAssetImpl> pVertexDataAsset =
-        MeshVertexDataAssetImpl::Create(MakeRadientAssetURI("mesh-vertex-data", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)));
+        MeshVertexDataAssetImpl::Create(MakeRadientAssetURI("mesh-vertex-data"));
     if (pVertexDataAsset == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -1046,7 +1046,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
     }
 
     RefCntAutoPtr<MeshAssetImpl> pMeshAsset =
-        MeshAssetImpl::Create(MakeRadientAssetURI("mesh", m_NextAssetID.fetch_add(1, std::memory_order_relaxed)));
+        MeshAssetImpl::Create(MakeRadientAssetURI("mesh"));
     VERIFY_EXPR(pMeshAsset != nullptr);
     if (!pMeshAsset)
         return RADIENT_STATUS_INVALID_OPERATION;

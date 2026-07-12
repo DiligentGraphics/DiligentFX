@@ -31,7 +31,6 @@
 #include "RadientAssets.h"
 #include "RefCntAutoPtr.hpp"
 
-#include <atomic>
 #include <memory>
 
 namespace Diligent
@@ -147,7 +146,6 @@ private:
     RadientAssetCache<MeshPayloadImpl>           m_MeshCache;
     RadientAssetCache<MeshIndexDataPayloadImpl>  m_MeshIndexDataCache;
     RadientAssetCache<MeshVertexDataPayloadImpl> m_MeshVertexDataCache;
-    std::atomic<RadientHandle>                   m_NextAssetID{1};
 };
 
 } // namespace Diligent
