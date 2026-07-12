@@ -45,6 +45,34 @@ struct RadientMeshViewCreateInfo
     const Uint32* pGeometryIndices = nullptr;
 };
 
+struct RadientMeshViewGeometryRemap
+{
+    /// OK if the remap was built, INVALID_ARGUMENT if any primitive references
+    /// a geometry outside the caller-provided geometry array.
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+
+    /// Original geometry indices referenced by primitives, in first-use order.
+    /// Unused geometries are omitted so equivalent views produce equivalent
+    /// cache keys and payload representations.
+    std::vector<Uint32> UsedGeometryIndices;
+
+    /// Per-primitive geometry indices remapped into UsedGeometryIndices.
+    /// For example, original primitive geometry indices [3, 1, 3] produce
+    /// UsedGeometryIndices [3, 1] and PrimitiveGeometryIndices [0, 1, 0].
+    std::vector<Uint32> PrimitiveGeometryIndices;
+};
+
+/// Builds the canonical mesh-view geometry mapping used by both cache-key
+/// generation and payload construction.
+///
+/// pGeometryIndices is the optional per-primitive geometry index array from
+/// RadientMeshViewCreateInfo. If it is null, every primitive uses geometry 0.
+/// The returned mapping removes unused geometries and remaps primitive geometry
+/// indices into compact first-use order.
+RadientMeshViewGeometryRemap BuildMeshViewGeometryRemap(const Uint32* pGeometryIndices,
+                                                        Uint32        PrimitiveCount,
+                                                        Uint32        GeometryCount);
+
 /// Owns mesh primitive ranges and material references that view shared mesh geometry.
 class RadientMeshViewSource final
 {

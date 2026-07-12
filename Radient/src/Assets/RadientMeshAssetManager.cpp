@@ -998,14 +998,26 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
     if (pGeometryData == nullptr || GeometryCount == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    MeshViewCreateInfoSnapshot StableViewCI{ViewCI};
-    if (RADIENT_FAILED(StableViewCI.GetStatus()))
-        return StableViewCI.GetStatus();
+    // Keep the stored payload representation consistent with the mesh-view
+    // cache key: only geometries referenced by primitives are retained, and
+    // primitive geometry indices are remapped to compact first-use order.
+    RadientMeshViewGeometryRemap GeometryRemap =
+        BuildMeshViewGeometryRemap(ViewCI.pGeometryIndices,
+                                   ViewCI.PrimitiveCount,
+                                   GeometryCount);
+    if (RADIENT_FAILED(GeometryRemap.Status))
+        return GeometryRemap.Status;
+
+    RadientMeshViewCreateInfo CanonicalViewCI = ViewCI;
+    CanonicalViewCI.pGeometryIndices          = GeometryRemap.PrimitiveGeometryIndices.data();
+    MeshViewCreateInfoSnapshot CanonicalStableViewCI{CanonicalViewCI};
+    if (RADIENT_FAILED(CanonicalStableViewCI.GetStatus()))
+        return CanonicalStableViewCI.GetStatus();
 
     std::vector<MeshGeometryStorage> ConcreteGeometries;
-    ConcreteGeometries.reserve(GeometryCount);
+    ConcreteGeometries.reserve(GeometryRemap.UsedGeometryIndices.size());
 
-    for (Uint32 GeometryIndex = 0; GeometryIndex < GeometryCount; ++GeometryIndex)
+    for (Uint32 GeometryIndex : GeometryRemap.UsedGeometryIndices)
     {
         RefCntAutoPtr<MeshVertexDataAssetImpl> pVertexData{pGeometryData[GeometryIndex].pVertexData, IID_MeshVertexDataImpl};
         RefCntAutoPtr<MeshIndexDataAssetImpl>  pIndexData{pGeometryData[GeometryIndex].pIndexData, IID_MeshIndexDataImpl};
@@ -1056,8 +1068,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
         CreateAsyncWorkTask(
             [pSelf = shared_from_this(),
              pMeshAsset,
-             ConcreteGeometries = std::move(ConcreteGeometries),
-             StableViewCI       = std::move(StableViewCI)](Uint32) mutable //
+             ConcreteGeometries    = std::move(ConcreteGeometries),
+             CanonicalStableViewCI = std::move(CanonicalStableViewCI)](Uint32) mutable //
             {
                 std::vector<Uint32> GeometryIndexCounts;
                 GeometryIndexCounts.reserve(ConcreteGeometries.size());
@@ -1125,7 +1137,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                 }
 
                 RadientMeshViewSource MeshView{
-                    StableViewCI.GetCreateInfo(),
+                    CanonicalStableViewCI.GetCreateInfo(),
                     GeometryIndexCounts.data(),
                     static_cast<Uint32>(GeometryIndexCounts.size())};
                 if (RADIENT_FAILED(MeshView.GetStatus()))

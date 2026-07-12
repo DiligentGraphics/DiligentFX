@@ -102,6 +102,48 @@ bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
 
 } // namespace
 
+RadientMeshViewGeometryRemap BuildMeshViewGeometryRemap(const Uint32* pGeometryIndices,
+                                                        Uint32        PrimitiveCount,
+                                                        Uint32        GeometryCount)
+{
+    RadientMeshViewGeometryRemap Remap;
+    if (PrimitiveCount == 0 || GeometryCount == 0)
+    {
+        Remap.Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return Remap;
+    }
+
+    static constexpr Uint32 InvalidGeometryIndex = ~Uint32{0};
+
+    // Only geometry referenced by primitives contributes to the view identity.
+    // Keep first-use order stable so unused geometry entries do not affect
+    // cache reuse or the stored payload representation.
+    Remap.UsedGeometryIndices.reserve(PrimitiveCount);
+    Remap.PrimitiveGeometryIndices.resize(PrimitiveCount);
+
+    std::vector<Uint32> GeometryIndexMap(GeometryCount, InvalidGeometryIndex);
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < PrimitiveCount; ++PrimitiveIndex)
+    {
+        const Uint32 GeometryIndex = pGeometryIndices != nullptr ? pGeometryIndices[PrimitiveIndex] : 0;
+        if (GeometryIndex >= GeometryCount)
+        {
+            Remap.Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return Remap;
+        }
+
+        Uint32& MappedIndex = GeometryIndexMap[GeometryIndex];
+        if (MappedIndex == InvalidGeometryIndex)
+        {
+            MappedIndex = static_cast<Uint32>(Remap.UsedGeometryIndices.size());
+            Remap.UsedGeometryIndices.push_back(GeometryIndex);
+        }
+
+        Remap.PrimitiveGeometryIndices[PrimitiveIndex] = MappedIndex;
+    }
+
+    return Remap;
+}
+
 RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
                                              Uint32                           IndexCount) :
     RadientMeshViewSource{CI, &IndexCount, 1}
@@ -176,37 +218,24 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
         return {};
     }
 
-    static constexpr Uint32 InvalidGeometryIndex = ~Uint32{0};
+    const RadientMeshViewGeometryRemap Remap =
+        BuildMeshViewGeometryRemap(m_GeometryIndices.data(),
+                                   static_cast<Uint32>(m_GeometryIndices.size()),
+                                   static_cast<Uint32>(GeometryCacheKeys.size()));
+    if (RADIENT_FAILED(Remap.Status))
+        return {};
 
-    // Only geometry referenced by primitives contributes to the view key. Keep
-    // the first-use order stable so unused geometry entries do not affect cache reuse.
-    std::vector<Uint32> UsedGeometryIndices;
-    UsedGeometryIndices.reserve(m_GeometryIndices.size());
-
-    // Map caller-provided geometry indices to compact indices used by this view.
-    // This preserves primitive-to-geometry relationships without hashing unused keys.
-    std::vector<Uint32> GeometryIndexMap(GeometryCacheKeys.size(), InvalidGeometryIndex);
-    for (const Uint32 GeometryIndex : m_GeometryIndices)
+    for (const Uint32 GeometryIndex : Remap.UsedGeometryIndices)
     {
-        if (GeometryIndex >= GeometryCacheKeys.size())
-            return {};
-
         if (GeometryCacheKeys[GeometryIndex].empty())
             return {};
-
-        Uint32& MappedIndex = GeometryIndexMap[GeometryIndex];
-        if (MappedIndex == InvalidGeometryIndex)
-        {
-            MappedIndex = static_cast<Uint32>(UsedGeometryIndices.size());
-            UsedGeometryIndices.push_back(GeometryIndex);
-        }
     }
 
     XXH128State Hasher;
     Hasher.Update(Uint32{3}); // Mesh view cache key version.
 
-    Hasher.Update(static_cast<Uint64>(UsedGeometryIndices.size()));
-    for (const Uint32 GeometryIndex : UsedGeometryIndices)
+    Hasher.Update(static_cast<Uint64>(Remap.UsedGeometryIndices.size()));
+    for (const Uint32 GeometryIndex : Remap.UsedGeometryIndices)
     {
         UpdateString(Hasher, GeometryCacheKeys[GeometryIndex].c_str());
     }
@@ -215,7 +244,7 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < m_Primitives.size(); ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& Primitive = m_Primitives[PrimitiveIndex];
-        Hasher.Update(GeometryIndexMap[m_GeometryIndices[PrimitiveIndex]]);
+        Hasher.Update(Remap.PrimitiveGeometryIndices[PrimitiveIndex]);
         Hasher.Update(Primitive.FirstIndex,
                       Primitive.IndexCount);
         HashMaterial(Hasher, m_Materials[PrimitiveIndex]);

@@ -539,6 +539,71 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientMeshAssetManagerTest, MeshViewCacheUsesCanonicalGeometryPayload)
+{
+    // Unused geometries are intentionally ignored by the mesh-view cache key.
+    // The cached payload must use the same compact representation, otherwise
+    // public geometry counts and readiness depend on which equivalent request
+    // wins the cache race.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    MeshGeometryHandles UsedGeometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), UsedGeometry)));
+    ASSERT_NE(UsedGeometry.pVertexData, nullptr);
+    ASSERT_NE(UsedGeometry.pIndexData, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    RadientMeshPrimitiveCreateInfo  PrimitiveWithUnusedGeometry{};
+    const RadientMeshViewCreateInfo ViewWithUnusedGeometry = MakeMeshView(PrimitiveWithUnusedGeometry);
+    const std::array<Uint32, 1>     GeometryIndexOne{1};
+
+    RadientMeshViewCreateInfo ViewA = ViewWithUnusedGeometry;
+    ViewA.pGeometryIndices          = GeometryIndexOne.data();
+
+    const std::array<RadientMeshGeometryData, 2> GeometryDataWithUnused{
+        RadientMeshGeometryData{},
+        MakeGeometryData(UsedGeometry)};
+
+    RefCntAutoPtr<IRadientMeshAsset> pMeshA;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool,
+                                                                    GeometryDataWithUnused.data(),
+                                                                    static_cast<Uint32>(GeometryDataWithUnused.size()),
+                                                                    ViewA,
+                                                                    &pMeshA)));
+    ASSERT_NE(pMeshA, nullptr);
+
+    RadientMeshPrimitiveCreateInfo   PrimitiveCompact{};
+    const RadientMeshViewCreateInfo  ViewB               = MakeMeshView(PrimitiveCompact);
+    const RadientMeshGeometryData    CompactGeometryData = MakeGeometryData(UsedGeometry);
+    RefCntAutoPtr<IRadientMeshAsset> pMeshB;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool,
+                                                                    &CompactGeometryData,
+                                                                    1,
+                                                                    ViewB,
+                                                                    &pMeshB)));
+    ASSERT_NE(pMeshB, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshA), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMeshB), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMeshA),
+              RadientMeshAssetManager::GetMeshPayload(pMeshB));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGeometryCount(pMeshA), 1u);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshGeometryCount(pMeshB), 1u);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshA), UsedGeometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshA), UsedGeometry.pIndexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshB), UsedGeometry.pVertexData.RawPtr());
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshB), UsedGeometry.pIndexData.RawPtr());
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
 {
     // The view task runs asynchronously, so CreateMeshView() must copy primitive
