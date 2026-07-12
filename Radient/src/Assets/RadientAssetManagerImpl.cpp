@@ -344,6 +344,14 @@ const RadientAssetManagerDesc& RadientAssetManagerImpl::GetDesc() const
 RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& MeshCI,
                                                    IRadientMeshAsset**          ppMesh)
 {
+    if (ppMesh == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMesh = nullptr;
+
+    if (m_Stopped)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     return m_pThreadPool ?
         m_pMeshManager->CreateMesh(*m_pThreadPool, MeshCI, ppMesh) :
         RADIENT_STATUS_INVALID_OPERATION;
@@ -352,6 +360,14 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                        IRadientMaterialAsset**          ppMaterial)
 {
+    if (ppMaterial == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMaterial = nullptr;
+
+    if (m_Stopped)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     return m_pMaterialManager->CreateMaterial(MaterialCI, ppMaterial);
 }
 
@@ -364,6 +380,9 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     *ppTexture = nullptr;
 
     if (m_pThreadPool == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (m_Stopped)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture);
@@ -381,6 +400,9 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     if (m_pThreadPool == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (m_Stopped)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const std::string SourceURI = LoadInfo.URI;
@@ -491,6 +513,9 @@ RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
 
         if (Status != RADIENT_STATUS_PENDING)
             return Status;
+
+        if (m_Stopped)
+            return RADIENT_STATUS_INVALID_OPERATION;
 
         if (m_pThreadPool == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;

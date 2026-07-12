@@ -498,6 +498,48 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
     EXPECT_EQ(pTexture, nullptr);
 }
 
+TEST(RadientAssetManagerTest, MethodsFailAfterStop)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientEngineCreateInfo EngineCI{};
+    EngineCI.pThreadPool = pThreadPool;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    EXPECT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMeshAsset>     pMesh;
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    RefCntAutoPtr<IRadientTextureAsset>  pTexture;
+    RefCntAutoPtr<IRadientSceneAsset>    pScene;
+
+    static constexpr RadientMaterialCreateInfo MaterialCI{};
+    EXPECT_EQ(pAssetManager->CreateMaterial(MaterialCI, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMaterial, nullptr);
+
+    EXPECT_EQ(pAssetManager->CreateMesh(RadientMeshCreateInfo{}, pMesh.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMesh, nullptr);
+
+    static constexpr std::array<Uint8, 4> TextureData = {1, 2, 3, 4};
+    RadientTextureLoadInfo                TextureLoadInfo;
+    TextureLoadInfo.pData    = TextureData.data();
+    TextureLoadInfo.DataSize = static_cast<Uint64>(TextureData.size());
+    EXPECT_EQ(pAssetManager->LoadTexture(TextureLoadInfo, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pTexture, nullptr);
+
+    const RadientSceneLoadInfo SceneLoadInfo{"test://scene_after_stop.gltf"};
+    EXPECT_EQ(pAssetManager->LoadScene(SceneLoadInfo, pScene.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pScene, nullptr);
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
 {
     // Loading two aliases of the same glTF should create distinct lightweight
