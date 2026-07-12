@@ -596,88 +596,6 @@ void ScheduleMeshVertexUpload(IGPUUploadManager*             pUploadManager,
     pCopyData.release();
 }
 
-RADIENT_STATUS ScheduleMeshIndexUpload(IRenderDevice*                pDevice,
-                                       IGPUUploadManager*            pUploadManager,
-                                       const RadientMeshIndexSource& IndexSource,
-                                       MeshIndexDataPayloadImpl&     IndexDataPayload)
-{
-    MeshIndexDataStorage& IndexData = IndexDataPayload.GetStorage();
-
-    if (pDevice == nullptr ||
-        pUploadManager == nullptr ||
-        IndexData.pIndexAllocation == nullptr ||
-        IndexSource.GetIndexCount() == 0)
-    {
-        IndexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    IndexData.PendingUploads.store(1, std::memory_order_release);
-    IndexData.SetLoadStatus(RADIENT_STATUS_OK);
-    IndexData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
-
-    ScheduleMeshIndexUpload(pUploadManager, pDevice, IndexSource, &IndexDataPayload);
-
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS ScheduleMeshVertexUpload(IRenderDevice*                 pDevice,
-                                        IGPUUploadManager*             pUploadManager,
-                                        const RadientMeshVertexSource& VertexSource,
-                                        MeshVertexDataPayloadImpl&     VertexDataPayload)
-{
-    MeshVertexDataStorage& VertexData = VertexDataPayload.GetStorage();
-
-    if (pDevice == nullptr ||
-        pUploadManager == nullptr ||
-        VertexData.pVertexAllocation == nullptr)
-    {
-        VertexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    const Uint32 VertexBufferCount = VertexSource.GetVertexBufferCount();
-    if (VertexBufferCount == 0)
-    {
-        VertexData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    Uint32 UploadCount = 0;
-    for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
-    {
-        if (VertexSource.IsVertexBufferActive(BufferIndex))
-        {
-            if (VertexSource.GetVertexBufferDataSize(BufferIndex) == 0)
-            {
-                VertexData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-            }
-            ++UploadCount;
-        }
-    }
-
-    if (UploadCount == 0)
-    {
-        VertexData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    VertexData.PendingUploads.store(UploadCount, std::memory_order_release);
-    VertexData.SetLoadStatus(RADIENT_STATUS_OK);
-    VertexData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
-
-    for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
-    {
-        if (!VertexSource.IsVertexBufferActive(BufferIndex))
-            continue;
-
-        ScheduleMeshVertexUpload(pUploadManager, pDevice, VertexSource, &VertexDataPayload, BufferIndex);
-    }
-
-    return RADIENT_STATUS_OK;
-}
-
 void CreateMeshIndexDataFromSource(const RadientMeshIndexSource& IndexSource,
                                    MeshIndexDataPayloadImpl&     IndexDataPayload,
                                    IRenderDevice*                pDevice,
@@ -692,33 +610,37 @@ void CreateMeshIndexDataFromSource(const RadientMeshIndexSource& IndexSource,
         return;
     }
 
-    IndexData.SetLoadStatus(RADIENT_STATUS_OK);
-
     if (pDevice == nullptr)
     {
         IndexData.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
-        return;
     }
-
-    if (pResourceManager == nullptr || pUploadManager == nullptr)
+    else if (pResourceManager == nullptr || pUploadManager == nullptr)
     {
         IndexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
-        return;
     }
-
-    RADIENT_STATUS Status = InitializeMeshIndexData(pResourceManager, IndexSource, IndexData);
-    if (RADIENT_FAILED(Status))
+    else
     {
-        IndexData.SetGPUResourceStatus(Status);
-        return;
+        RADIENT_STATUS Status = InitializeMeshIndexData(pResourceManager, IndexSource, IndexData);
+        if (RADIENT_FAILED(Status))
+        {
+            IndexData.SetGPUResourceStatus(Status);
+        }
+        else if (IndexData.pIndexAllocation == nullptr ||
+                 IndexSource.GetIndexCount() == 0)
+        {
+            IndexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        }
+        else
+        {
+            IndexData.PendingUploads.store(1, std::memory_order_release);
+            IndexData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
+            ScheduleMeshIndexUpload(pUploadManager, pDevice, IndexSource, &IndexDataPayload);
+        }
     }
 
-    Status = ScheduleMeshIndexUpload(pDevice,
-                                     pUploadManager,
-                                     IndexSource,
-                                     IndexDataPayload);
-    if (RADIENT_FAILED(Status))
-        IndexData.SetGPUResourceStatus(Status);
+    // LoadStatus publishes GPU resource status and pIndexAllocation to readers.
+    // Keep this as the final release store after allocation/scheduling state is settled.
+    IndexData.SetLoadStatus(RADIENT_STATUS_OK);
 }
 
 void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
@@ -736,33 +658,65 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
         return;
     }
 
-    VertexData.SetLoadStatus(RADIENT_STATUS_OK);
-
     if (pDevice == nullptr)
     {
         VertexData.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
-        return;
     }
-
-    if (pResourceManager == nullptr || pUploadManager == nullptr)
+    else if (pResourceManager == nullptr || pUploadManager == nullptr)
     {
         VertexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
-        return;
     }
-
-    RADIENT_STATUS Status = InitializeMeshVertexData(pResourceManager, VertexSource, VertexData);
-    if (RADIENT_FAILED(Status))
+    else
     {
-        VertexData.SetGPUResourceStatus(Status);
-        return;
+        const Uint32 VertexBufferCount = VertexSource.GetVertexBufferCount();
+        Uint32       UploadCount       = 0;
+        for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
+        {
+            if (!VertexSource.IsVertexBufferActive(BufferIndex))
+                continue;
+
+            if (VertexSource.GetVertexBufferDataSize(BufferIndex) == 0)
+            {
+                VertexData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
+                return;
+            }
+
+            ++UploadCount;
+        }
+
+        if (UploadCount == 0)
+        {
+            VertexData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
+            return;
+        }
+
+        RADIENT_STATUS Status = InitializeMeshVertexData(pResourceManager, VertexSource, VertexData);
+        if (RADIENT_FAILED(Status))
+        {
+            VertexData.SetGPUResourceStatus(Status);
+        }
+        else if (VertexData.pVertexAllocation == nullptr)
+        {
+            VertexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        }
+        else
+        {
+            VertexData.PendingUploads.store(UploadCount, std::memory_order_release);
+            VertexData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
+
+            for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
+            {
+                if (!VertexSource.IsVertexBufferActive(BufferIndex))
+                    continue;
+
+                ScheduleMeshVertexUpload(pUploadManager, pDevice, VertexSource, &VertexDataPayload, BufferIndex);
+            }
+        }
     }
 
-    Status = ScheduleMeshVertexUpload(pDevice,
-                                      pUploadManager,
-                                      VertexSource,
-                                      VertexDataPayload);
-    if (RADIENT_FAILED(Status))
-        VertexData.SetGPUResourceStatus(Status);
+    // LoadStatus publishes GPU resource status and pVertexAllocation to readers.
+    // Keep this as the final release store after allocation/scheduling state is settled.
+    VertexData.SetLoadStatus(RADIENT_STATUS_OK);
 }
 
 std::string MakeMeshGeometryCacheKey(const MeshVertexDataStorage& VertexData,
