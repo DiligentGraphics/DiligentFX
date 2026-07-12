@@ -34,6 +34,7 @@
 #include "TextureLoader.h"
 #include "XXH128Hasher.hpp"
 
+#include <cstring>
 #include <limits>
 #include <utility>
 
@@ -145,7 +146,6 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
 {
     if (LoadInfo.pTextureData != nullptr)
     {
-        m_SourceType  = SourceType::TextureData;
         m_TextureData = *LoadInfo.pTextureData;
         m_pData       = m_TextureData.pData;
 
@@ -153,6 +153,8 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
         if (GetRadientTextureDataSpan(m_TextureData, Span) &&
             Span.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
         {
+            m_SourceType = SourceType::TextureData;
+
             if (m_TextureData.Stride == 0)
                 m_TextureData.Stride = static_cast<Uint32>(Span.ActiveRowSize);
 
@@ -166,11 +168,20 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
     }
     else if (LoadInfo.pData != nullptr)
     {
-        m_SourceType           = SourceType::EncodedMemory;
-        m_pData                = LoadInfo.pData;
-        m_DataSize             = static_cast<size_t>(LoadInfo.DataSize);
+        if (LoadInfo.DataSize != 0 &&
+            LoadInfo.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        {
+            m_SourceType = SourceType::EncodedMemory;
+            m_pData      = LoadInfo.pData;
+            m_DataSize   = static_cast<size_t>(LoadInfo.DataSize);
+        }
+
         m_ReleaseData          = LoadInfo.ReleaseData;
         m_pReleaseDataUserData = LoadInfo.pReleaseDataUserData;
+    }
+    else if (!m_URI.empty())
+    {
+        m_SourceType = SourceType::URI;
     }
 }
 
@@ -200,10 +211,30 @@ void RadientTextureSource::MakeMemoryCopy()
         return;
 
     const Uint8* pBytes = static_cast<const Uint8*>(m_pData);
-    m_Data.assign(pBytes, pBytes + m_DataSize);
-    m_pData = m_Data.data();
     if (m_SourceType == SourceType::TextureData)
-        m_TextureData.pData = m_pData;
+    {
+        const size_t ActiveRowSize = static_cast<size_t>(m_TextureDataActiveRowSize);
+        const size_t RowCount      = static_cast<size_t>(m_TextureDataRowCount);
+        const size_t PackedSize    = ActiveRowSize * RowCount;
+
+        m_Data.resize(PackedSize);
+        for (size_t Row = 0; Row < m_TextureDataRowCount; ++Row)
+        {
+            std::memcpy(m_Data.data() + Row * ActiveRowSize,
+                        pBytes + Row * m_TextureData.Stride,
+                        ActiveRowSize);
+        }
+
+        m_pData              = m_Data.data();
+        m_DataSize           = m_Data.size();
+        m_TextureData.pData  = m_pData;
+        m_TextureData.Stride = static_cast<Uint32>(m_TextureDataActiveRowSize);
+    }
+    else if (m_SourceType == SourceType::EncodedMemory)
+    {
+        m_Data.assign(pBytes, pBytes + m_DataSize);
+        m_pData = m_Data.data();
+    }
 }
 
 RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver,
@@ -250,7 +281,7 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
         constexpr bool MakeDataCopy = false;
         CreateTextureLoaderFromMemory(GetData(), GetDataSize(), MakeDataCopy, LoadInfo, &pLoader);
     }
-    else
+    else if (m_SourceType == SourceType::URI)
     {
         if (pAssetResolver == nullptr || pAssetLocation == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -275,6 +306,10 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
                                   pAssetData->GetSize(),
                                   pAssetData);
         CreateTextureLoaderFromDataBlob(std::move(pDataBlob), LoadInfo, &pLoader);
+    }
+    else
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
     if (pLoader == nullptr)
@@ -313,7 +348,7 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
             .AddInteger("size", m_DataSize)
             .AddString("hash", Hash.ToString());
     }
-    else
+    else if (m_SourceType == SourceType::URI)
     {
         if (pAssetLocation == nullptr ||
             pAssetLocation->GetLocation() == nullptr ||
@@ -325,6 +360,10 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
         Builder.AddString("type", "uri")
             .AddString("location", pAssetLocation->GetLocation());
     }
+    else
+    {
+        return {};
+    }
     Builder.AddBool("srgb", m_IsSRGB);
     return Builder.GetKey();
 }
@@ -334,7 +373,7 @@ void RadientTextureSource::ReleaseMemory()
     if (m_pData != nullptr && m_ReleaseData != nullptr)
         m_ReleaseData(m_pData, static_cast<Uint64>(m_DataSize), m_pReleaseDataUserData);
 
-    m_SourceType               = SourceType::URI;
+    m_SourceType               = SourceType::Invalid;
     m_pData                    = nullptr;
     m_DataSize                 = 0;
     m_TextureData              = {};
@@ -366,7 +405,7 @@ void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
     if (m_SourceType == SourceType::TextureData)
         m_TextureData.pData = m_pData;
 
-    Rhs.m_SourceType = SourceType::URI;
+    Rhs.m_SourceType = SourceType::Invalid;
     Rhs.m_URI.clear();
     Rhs.m_BaseURI.clear();
     Rhs.m_pData                    = nullptr;

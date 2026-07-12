@@ -71,6 +71,7 @@ class RadientTextureSource final
 public:
     enum class SourceType
     {
+        Invalid,
         URI,
         EncodedMemory,
         TextureData
@@ -139,7 +140,7 @@ private:
     void ReleaseMemory();
     void MoveFrom(RadientTextureSource&& Rhs) noexcept;
 
-    SourceType  m_SourceType = SourceType::URI;
+    SourceType  m_SourceType = SourceType::Invalid;
     std::string m_URI;
     std::string m_BaseURI;
     Bool        m_IsSRGB = False;

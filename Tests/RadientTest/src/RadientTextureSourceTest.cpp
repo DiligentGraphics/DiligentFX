@@ -369,7 +369,9 @@ TEST(RadientTextureSourceTest, CopiesTextureDataMemoryWhenRequested)
         1, 2, 3, 4,
         // Row 1 pixels, followed by unused final-row padding.
         5, 6, 7, 8};
-    const std::vector<Uint8> Expected{Data.begin(), Data.begin() + 6};
+    const std::vector<Uint8> Expected{
+        1, 2,
+        5, 6};
     // clang-format on
 
     RadientTextureData TextureData{};
@@ -394,7 +396,7 @@ TEST(RadientTextureSourceTest, CopiesTextureDataMemoryWhenRequested)
     EXPECT_EQ(ReadSourceBytes(Source), Expected);
 }
 
-TEST(RadientTextureSourceTest, CopiesOnlyValidTextureDataSpan)
+TEST(RadientTextureSourceTest, PacksTextureDataRowsWhenCopying)
 {
     constexpr Uint32 Width         = 3;
     constexpr Uint32 Height        = 2;
@@ -409,7 +411,9 @@ TEST(RadientTextureSourceTest, CopiesOnlyValidTextureDataSpan)
         90, 91, 92, 93,
         // Row 1 pixels. Final-row padding is not part of the valid source span.
         13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
-    const std::vector<Uint8> Expected{Data.begin(), Data.end()};
+    const std::vector<Uint8> Expected{
+        1, 2, 3, 4,     5, 6, 7, 8,     9, 10, 11, 12,
+        13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
     // clang-format on
 
     RadientTextureData TextureData{};
@@ -503,6 +507,44 @@ TEST(RadientTextureSourceTest, ReleasesCallbackOwnedTextureDataMemory)
     EXPECT_EQ(State.Count, 1u);
     EXPECT_EQ(State.pData, Data.data());
     EXPECT_EQ(State.DataSize, 6u);
+}
+
+TEST(RadientTextureSourceTest, InvalidTextureDataDoesNotFallbackToOtherSourceTypes)
+{
+    std::array<Uint8, 4> Data{1, 2, 3, 4};
+    ReleaseState         State;
+
+    RadientTextureData TextureData{};
+    TextureData.Width  = 2;
+    TextureData.Height = 2;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_UNKNOWN;
+    TextureData.pData  = Data.data();
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pTextureData         = &TextureData;
+    LoadInfo.ReleaseData          = ReleaseTextureData;
+    LoadInfo.pReleaseDataUserData = &State;
+
+    {
+        RadientTextureSource                    Source{LoadInfo};
+        RefCntAutoPtr<TestRadientAssetLocation> pLocation{
+            MakeNewRCObj<TestRadientAssetLocation>()("file:///invalid-texture-data")};
+
+        Source.MakeMemoryCopy();
+        EXPECT_TRUE(Source.IsMemory());
+        EXPECT_FALSE(Source.IsTextureData());
+        EXPECT_TRUE(Source.OwnsMemory());
+        EXPECT_TRUE(Source.MakeCacheKey(pLocation).empty());
+
+        RefCntAutoPtr<ITextureLoader> pLoader;
+        EXPECT_EQ(Source.CreateLoader(nullptr, nullptr, pLoader.GetAddressOfEmpty()),
+                  RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pLoader, nullptr);
+    }
+
+    EXPECT_EQ(State.Count, 1u);
+    EXPECT_EQ(State.pData, Data.data());
+    EXPECT_EQ(State.DataSize, 0u);
 }
 
 TEST(RadientTextureSourceTest, MoveTransfersReleaseCallbackOwnership)
