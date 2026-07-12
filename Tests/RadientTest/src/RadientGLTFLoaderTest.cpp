@@ -1143,8 +1143,8 @@ TEST(RadientGLTFLoaderTest, LoadSceneExtractsSceneGraphComponents)
     EXPECT_EQ(Scene.Nodes[CameraLightNodeIndex].Name, "CameraLightNode");
     ASSERT_TRUE(Scene.Nodes[CameraLightNodeIndex].Camera.has_value());
     EXPECT_EQ(Scene.Nodes[CameraLightNodeIndex].Camera->Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
-    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->HorizontalAperture, 4.f, EPSILON);
-    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->VerticalAperture, 3.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->HorizontalAperture, 8.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Camera->VerticalAperture, 6.f, EPSILON);
     ExpectFloat2Near(Scene.Nodes[CameraLightNodeIndex].Camera->ClippingRange, {0.5f, 100.f});
 
     ASSERT_TRUE(Scene.Nodes[CameraLightNodeIndex].Light.has_value());

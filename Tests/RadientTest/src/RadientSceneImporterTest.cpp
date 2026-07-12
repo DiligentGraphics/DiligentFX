@@ -493,11 +493,11 @@ TEST(RadientSceneImporterTest, ImportsCameras)
     EXPECT_NEAR(Camera.HorizontalAperture, Camera.VerticalAperture * 1.5f, EPSILON);
     EXPECT_NEAR(Camera.FocalLength, Camera.VerticalAperture / (2.f * std::tan(0.7f * 0.5f)), EPSILON);
 
-    // Orthographic xmag/ymag map directly to Radient aperture values.
+    // Orthographic xmag/ymag are glTF half-extents; Radient stores full view size.
     EXPECT_EQ(Fixture.pScene->GetCamera(CameraNodes[1], Camera), RADIENT_STATUS_OK);
     EXPECT_EQ(Camera.Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
-    EXPECT_NEAR(Camera.HorizontalAperture, 4.f, EPSILON);
-    EXPECT_NEAR(Camera.VerticalAperture, 3.f, EPSILON);
+    EXPECT_NEAR(Camera.HorizontalAperture, 8.f, EPSILON);
+    EXPECT_NEAR(Camera.VerticalAperture, 6.f, EPSILON);
     ExpectFloat2Near(Camera.ClippingRange, {0.5f, 500.f});
 }
 

@@ -826,8 +826,8 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphConvertsCameras)
 
     ASSERT_TRUE(Scene.Nodes[1].Camera.has_value());
     EXPECT_EQ(Scene.Nodes[1].Camera->Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
-    EXPECT_NEAR(Scene.Nodes[1].Camera->HorizontalAperture, 4.f, EPSILON);
-    EXPECT_NEAR(Scene.Nodes[1].Camera->VerticalAperture, 3.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[1].Camera->HorizontalAperture, 8.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[1].Camera->VerticalAperture, 6.f, EPSILON);
     ExpectFloat2Near(Scene.Nodes[1].Camera->ClippingRange, {0.5f, 500.f});
 }
 

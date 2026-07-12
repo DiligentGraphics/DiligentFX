@@ -87,8 +87,8 @@ RadientCameraComponent ToRadientCamera(const GLTF::Camera& Camera)
     if (Camera.Type == GLTF::Camera::Projection::Orthographic)
     {
         Result.Projection         = RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC;
-        Result.HorizontalAperture = Camera.Orthographic.XMag;
-        Result.VerticalAperture   = Camera.Orthographic.YMag;
+        Result.HorizontalAperture = 2.f * Camera.Orthographic.XMag;
+        Result.VerticalAperture   = 2.f * Camera.Orthographic.YMag;
         Result.ClippingRange      = {Camera.Orthographic.ZNear, Camera.Orthographic.ZFar};
     }
     else if (Camera.Type == GLTF::Camera::Projection::Perspective)
