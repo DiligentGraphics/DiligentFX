@@ -94,6 +94,8 @@ public:
                                const RadientTextureLoadInfo& LoadInfo,
                                IRadientTextureAsset**        ppTexture);
 
+    static RADIENT_STATUS RejectTextureLoad(const RadientTextureLoadInfo& LoadInfo);
+
     // Returns the texture SRV if the texture GPU resource status is OK (i.e.,
     // all required copy commands were enqueued), or nullptr otherwise.
     // This method must not race with render-thread operations that may access

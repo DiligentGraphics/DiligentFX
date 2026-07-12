@@ -488,14 +488,20 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
     EXPECT_EQ(pGLTFModel, nullptr);
 
     std::array<Uint8, 4> TextureData{1, 2, 3, 4};
+    TextureReleaseState  ReleaseState;
 
     RadientTextureLoadInfo TextureLoadInfo{};
-    TextureLoadInfo.pData    = TextureData.data();
-    TextureLoadInfo.DataSize = static_cast<Uint64>(TextureData.size());
+    TextureLoadInfo.pData                = TextureData.data();
+    TextureLoadInfo.DataSize             = static_cast<Uint64>(TextureData.size());
+    TextureLoadInfo.ReleaseData          = ReleaseTextureData;
+    TextureLoadInfo.pReleaseDataUserData = &ReleaseState;
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(TextureLoadInfo, &pTexture), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pTexture, nullptr);
+    EXPECT_EQ(ReleaseState.Count, 1u);
+    EXPECT_EQ(ReleaseState.pData, TextureData.data());
+    EXPECT_EQ(ReleaseState.DataSize, TextureData.size());
 }
 
 TEST(RadientAssetManagerTest, MethodsFailAfterStop)
@@ -527,11 +533,17 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     EXPECT_EQ(pMesh, nullptr);
 
     static constexpr std::array<Uint8, 4> TextureData = {1, 2, 3, 4};
+    TextureReleaseState                   ReleaseState;
     RadientTextureLoadInfo                TextureLoadInfo;
-    TextureLoadInfo.pData    = TextureData.data();
-    TextureLoadInfo.DataSize = static_cast<Uint64>(TextureData.size());
+    TextureLoadInfo.pData                = TextureData.data();
+    TextureLoadInfo.DataSize             = static_cast<Uint64>(TextureData.size());
+    TextureLoadInfo.ReleaseData          = ReleaseTextureData;
+    TextureLoadInfo.pReleaseDataUserData = &ReleaseState;
     EXPECT_EQ(pAssetManager->LoadTexture(TextureLoadInfo, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pTexture, nullptr);
+    EXPECT_EQ(ReleaseState.Count, 1u);
+    EXPECT_EQ(ReleaseState.pData, TextureData.data());
+    EXPECT_EQ(ReleaseState.DataSize, TextureData.size());
 
     const RadientSceneLoadInfo SceneLoadInfo{"test://scene_after_stop.gltf"};
     EXPECT_EQ(pAssetManager->LoadScene(SceneLoadInfo, pScene.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);

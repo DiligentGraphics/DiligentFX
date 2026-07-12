@@ -381,8 +381,12 @@ struct RadientTextureLoadInfo
     /// Optional callback to release pData or pTextureData->pData when Radient no longer needs it.
     /// For pTextureData, DataSize is the minimum source span described by RadientTextureData::pData.
     /// If this callback is null and memory-backed source data is not null, Radient makes an internal copy of the data.
-    /// If this callback is non-null and the load is accepted, ownership of the source memory transfers to Radient.
-    /// The caller must not read, write, reuse, or release the source memory until the callback is invoked.
+    /// If this callback is non-null and LoadTexture() validation accepts a memory-backed source, ownership
+    /// of the source memory transfers to Radient before LoadTexture() returns. The callback is invoked exactly
+    /// once even if a later loading step fails and LoadTexture() returns an error status. If LoadTexture()
+    /// returns RADIENT_STATUS_INVALID_ARGUMENT during input validation, ownership remains with the caller and
+    /// the callback is not invoked.
+    /// The caller must not read, write, reuse, or release transferred source memory until the callback is invoked.
     /// The callback may be invoked from any thread and must not throw exceptions.
     RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);
 
@@ -511,6 +515,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// The returned status reports source loading and GPU upload scheduling. A successful status
     /// does not guarantee that the texture is already available for sampling.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
+    /// If LoadInfo.ReleaseData is non-null and input validation accepts a memory-backed source, ownership
+    /// transfers to Radient before this method returns. The callback will be invoked exactly once even if
+    /// this method returns a non-INVALID_ARGUMENT failure caused by a later admission or loading step.
     VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;

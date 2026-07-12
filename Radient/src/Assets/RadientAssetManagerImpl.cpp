@@ -382,10 +382,10 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     *ppTexture = nullptr;
 
     if (m_pThreadPool == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RadientTextureAssetManager::RejectTextureLoad(LoadInfo);
 
     if (m_Stopped.load(std::memory_order_acquire))
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RadientTextureAssetManager::RejectTextureLoad(LoadInfo);
 
     return m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, ppTexture);
 }

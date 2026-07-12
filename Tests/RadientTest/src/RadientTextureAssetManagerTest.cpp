@@ -115,6 +115,21 @@ void ExpectStatusOkOrPending(RADIENT_STATUS Status)
         << "Unexpected status: " << static_cast<int>(Status);
 }
 
+struct TextureReleaseState
+{
+    Uint32      Count    = 0;
+    const void* pData    = nullptr;
+    Uint64      DataSize = 0;
+};
+
+void ReleaseTextureData(const void* pData, Uint64 DataSize, void* pUserData)
+{
+    auto& State = *static_cast<TextureReleaseState*>(pUserData);
+    ++State.Count;
+    State.pData    = pData;
+    State.DataSize = DataSize;
+}
+
 TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRuns)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
@@ -154,8 +169,11 @@ TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
     ASSERT_NE(pManager, nullptr);
 
-    const RadientTextureData     TextureData = MakeTextureData(TexturePixels.data());
-    const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+    TextureReleaseState      ReleaseState;
+    const RadientTextureData TextureData = MakeTextureData(TexturePixels.data());
+    RadientTextureLoadInfo   LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+    LoadInfo.ReleaseData                 = ReleaseTextureData;
+    LoadInfo.pReleaseDataUserData        = &ReleaseState;
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
@@ -166,6 +184,9 @@ TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
 
     ASSERT_NE(pTexture, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(ReleaseState.Count, 1u);
+    EXPECT_EQ(ReleaseState.pData, TexturePixels.data());
+    EXPECT_EQ(ReleaseState.DataSize, TexturePixels.size());
 
     const RadientTextureAssetManagerStats Stats = pManager->GetStats();
     EXPECT_EQ(Stats.PendingTextureLoads, 0u);

@@ -553,6 +553,19 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     return pTextureAsset->GetPayloadStatus();
 }
 
+RADIENT_STATUS RadientTextureAssetManager::RejectTextureLoad(const RadientTextureLoadInfo& LoadInfo)
+{
+    if (!ValidateTextureLoadInfo(LoadInfo))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (LoadInfo.ReleaseData != nullptr)
+    {
+        RadientTextureSource TextureSource{LoadInfo};
+    }
+
+    return RADIENT_STATUS_INVALID_OPERATION;
+}
+
 ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientTextureAsset& TextureAsset,
                                                                     RadientTextureSource  TextureSource)
 {
