@@ -81,9 +81,11 @@ struct ImportedSceneStorage
     {
         Scene = std::move(ImportedScene);
 
-        GPUResourceStatus.store(InitialGPUStatus, std::memory_order_release);
+        GPUResourceStatus.store(InitialGPUStatus, std::memory_order_relaxed);
+        LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_relaxed);
+        // Publish the scene and initial status values last. Readers use this
+        // acquire flag before scanning dependencies and caching terminal status.
         SceneDataReady.store(true, std::memory_order_release);
-        LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_release);
     }
 
     void SetFailedStatus(RADIENT_STATUS Status) noexcept
