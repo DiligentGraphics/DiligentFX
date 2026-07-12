@@ -156,7 +156,7 @@ public:
             (m_ActiveVertexBufferMask & (Uint32{1} << BufferIndex)) != 0;
     }
 
-    RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const;
+    RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const noexcept;
 
     /// Returns a key for packed GPU vertex data.
     std::string MakeCacheKey() const;

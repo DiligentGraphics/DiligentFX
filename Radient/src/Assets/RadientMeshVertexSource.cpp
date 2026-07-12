@@ -569,7 +569,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
 }
 
 RADIENT_STATUS RadientMeshVertexSource::PackVertexData(Uint32          VertexBufferIndex,
-                                                       PackDestination Destination) const
+                                                       PackDestination Destination) const noexcept
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;

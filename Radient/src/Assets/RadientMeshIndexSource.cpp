@@ -196,7 +196,7 @@ std::string RadientMeshIndexSource::MakeCacheKey() const
     return std::string{"mesh-index:"} + Hasher.Digest().ToString();
 }
 
-RADIENT_STATUS RadientMeshIndexSource::PackIndexData(PackDestination Destination) const
+RADIENT_STATUS RadientMeshIndexSource::PackIndexData(PackDestination Destination) const noexcept
 {
     if (RADIENT_FAILED(m_Status))
         return m_Status;

@@ -78,18 +78,18 @@ public:
     {
     }
 
-    void SetStatus(RADIENT_STATUS Status)
+    void SetStatus(RADIENT_STATUS Status) noexcept
     {
         SetGPUResourceStatus(Status);
         SetLoadStatus(Status);
     }
 
-    void SetLoadStatus(RADIENT_STATUS Status)
+    void SetLoadStatus(RADIENT_STATUS Status) noexcept
     {
         LoadStatus.store(Status, std::memory_order_release);
     }
 
-    void SetGPUResourceStatus(RADIENT_STATUS Status)
+    void SetGPUResourceStatus(RADIENT_STATUS Status) noexcept
     {
         GPUResourcesReady.store(Status == RADIENT_STATUS_OK, std::memory_order_release);
         GPUResourceStatus.store(Status, std::memory_order_release);
@@ -317,7 +317,7 @@ struct MeshVertexBufferCopyData
 };
 
 void UpdateMeshUploadProgress(MeshDataStatusStorage& Data,
-                              bool                   CopyScheduled)
+                              bool                   CopyScheduled) noexcept
 {
     if (!CopyScheduled)
         Data.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
@@ -463,7 +463,7 @@ RADIENT_STATUS InitializeMeshVertexData(GLTF::ResourceManager*         pResource
     return RADIENT_STATUS_OK;
 }
 
-void WriteMeshIndexData(void* pDstData, Uint32 NumBytes, void* pUserData)
+void WriteMeshIndexData(void* pDstData, Uint32 NumBytes, void* pUserData) noexcept
 {
     MeshIndexBufferWriteData* Data = static_cast<MeshIndexBufferWriteData*>(pUserData);
     VERIFY_EXPR(Data != nullptr && Data->pSource != nullptr);
@@ -475,7 +475,7 @@ void WriteMeshIndexData(void* pDstData, Uint32 NumBytes, void* pUserData)
     VERIFY_EXPR(Status == RADIENT_STATUS_OK);
 }
 
-void WriteMeshVertexData(void* pDstData, Uint32 NumBytes, void* pUserData)
+void WriteMeshVertexData(void* pDstData, Uint32 NumBytes, void* pUserData) noexcept
 {
     MeshVertexBufferWriteData* Data = static_cast<MeshVertexBufferWriteData*>(pUserData);
     VERIFY_EXPR(Data != nullptr && Data->pSource != nullptr);
@@ -492,12 +492,12 @@ void CopyMeshIndexBuffer(IDeviceContext* pContext,
                          IBuffer*        pSrcBuffer,
                          Uint32          SrcOffset,
                          Uint32          NumBytes,
-                         void*           pUserData)
+                         void*           pUserData) noexcept
 {
     std::unique_ptr<MeshIndexBufferCopyData> Data{static_cast<MeshIndexBufferCopyData*>(pUserData)};
 
     IBufferSuballocation* pIndexAllocation = nullptr;
-    if (Data->pIndexDataPayload != nullptr)
+    if (Data != nullptr && Data->pIndexDataPayload != nullptr)
         pIndexAllocation = Data->pIndexDataPayload->GetStorage().pIndexAllocation;
 
     bool CopyScheduled = false;
@@ -515,8 +515,8 @@ void CopyMeshIndexBuffer(IDeviceContext* pContext,
         }
     }
 
-    VERIFY_EXPR(Data->pIndexDataPayload != nullptr);
-    if (Data->pIndexDataPayload != nullptr)
+    VERIFY_EXPR(Data != nullptr && Data->pIndexDataPayload != nullptr);
+    if (Data != nullptr && Data->pIndexDataPayload != nullptr)
         UpdateMeshUploadProgress(Data->pIndexDataPayload->GetStorage(), CopyScheduled);
 }
 
@@ -524,12 +524,12 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
                           IBuffer*        pSrcBuffer,
                           Uint32          SrcOffset,
                           Uint32          NumBytes,
-                          void*           pUserData)
+                          void*           pUserData) noexcept
 {
     std::unique_ptr<MeshVertexBufferCopyData> Data{static_cast<MeshVertexBufferCopyData*>(pUserData)};
 
     IVertexPoolAllocation* pVertexAllocation = nullptr;
-    if (Data->pVertexDataPayload != nullptr)
+    if (Data != nullptr && Data->pVertexDataPayload != nullptr)
         pVertexAllocation = Data->pVertexDataPayload->GetStorage().pVertexAllocation;
 
     bool CopyScheduled = false;
@@ -548,8 +548,8 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         }
     }
 
-    VERIFY_EXPR(Data->pVertexDataPayload != nullptr);
-    if (Data->pVertexDataPayload != nullptr)
+    VERIFY_EXPR(Data != nullptr && Data->pVertexDataPayload != nullptr);
+    if (Data != nullptr && Data->pVertexDataPayload != nullptr)
         UpdateMeshUploadProgress(Data->pVertexDataPayload->GetStorage(), CopyScheduled);
 }
 

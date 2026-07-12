@@ -90,7 +90,7 @@ public:
 
     static bool IsSupportedIndexType(VALUE_TYPE IndexType);
 
-    RADIENT_STATUS PackIndexData(PackDestination Destination) const;
+    RADIENT_STATUS PackIndexData(PackDestination Destination) const noexcept;
 
     /// Returns a key for packed GPU index data.
     std::string MakeCacheKey() const;
