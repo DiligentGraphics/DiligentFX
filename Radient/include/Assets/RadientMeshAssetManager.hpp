@@ -122,6 +122,10 @@ public:
     // load dependencies. OK does not imply GPU buffers exist or that GPU copy
     // commands have been enqueued.
     static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMeshAsset);
+    // Reports CPU-side mesh data readiness for shared mesh index data handles.
+    static RADIENT_STATUS GetLoadStatus(IRadientMeshIndexData* pMeshIndexData);
+    // Reports CPU-side mesh data readiness for shared mesh vertex data handles.
+    static RADIENT_STATUS GetLoadStatus(IRadientMeshVertexData* pMeshVertexData);
 
     // Reports render-resource readiness. This follows GetLoadStatus(), then
     // checks geometry GPU resources and material/texture GPU resources.

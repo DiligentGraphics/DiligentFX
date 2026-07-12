@@ -29,6 +29,7 @@
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
+#include "TestingEnvironment.hpp"
 
 #include "gtest/gtest.h"
 
@@ -142,6 +143,33 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+}
+
+TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool(0);
+    ASSERT_NE(pThreadPool, nullptr);
+    pThreadPool->StopThreads();
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
+    ASSERT_NE(pManager, nullptr);
+
+    const RadientTextureData     TextureData = MakeTextureData(TexturePixels.data());
+    const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        EXPECT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture),
+                  RADIENT_STATUS_INVALID_OPERATION);
+    }
+
+    ASSERT_NE(pTexture, nullptr);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+
+    const RadientTextureAssetManagerStats Stats = pManager->GetStats();
+    EXPECT_EQ(Stats.PendingTextureLoads, 0u);
+    EXPECT_EQ(Stats.PendingTextureSourceLoads, 0u);
 }
 
 TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)

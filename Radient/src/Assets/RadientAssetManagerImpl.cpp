@@ -411,68 +411,71 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
 
     pModelAsset->QueryInterface(IID_RadientSceneAsset, ppScene);
 
-    EnqueueAsyncWork(
-        m_pThreadPool,
-        [pWeakSelf, pModelAsset, SourceURI, SceneFormat](Uint32) mutable //
-        {
-            RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
-            if (pSelf == nullptr)
+    RefCntAutoPtr<IAsyncTask> pLoadTask =
+        CreateAsyncWorkTask(
+            [pWeakSelf, pModelAsset, SourceURI, SceneFormat](Uint32) mutable //
             {
-                pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_CANCELLED;
-            }
+                RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
+                if (pSelf == nullptr)
+                {
+                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_CANCELLED;
+                }
 
-            RefCntAutoPtr<IRadientAssetLocation> pSceneLocation;
-            const RADIENT_STATUS                 ResolveStatus =
-                pSelf->m_pAssetResolver->ResolveAssetLocation(
-                    {SourceURI.c_str(), nullptr},
-                    pSceneLocation.GetAddressOfEmpty());
-            if (ResolveStatus != RADIENT_STATUS_OK)
-            {
-                pModelAsset->Fail(ResolveStatus);
+                RefCntAutoPtr<IRadientAssetLocation> pSceneLocation;
+                const RADIENT_STATUS                 ResolveStatus =
+                    pSelf->m_pAssetResolver->ResolveAssetLocation(
+                        {SourceURI.c_str(), nullptr},
+                        pSceneLocation.GetAddressOfEmpty());
+                if (ResolveStatus != RADIENT_STATUS_OK)
+                {
+                    pModelAsset->Fail(ResolveStatus);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+                if (pSceneLocation == nullptr)
+                {
+                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+
+                const char* ResolvedSourceURI = pSceneLocation->GetLocation();
+                if (ResolvedSourceURI == nullptr || ResolvedSourceURI[0] == '\0')
+                {
+                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+
+                const std::string CacheKey = MakeSceneCacheKey(SceneFormat, ResolvedSourceURI);
+
+                auto [pModelPayload, PayloadCreated] =
+                    pSelf->m_SceneAssetCache.GetOrCreate(
+                        CacheKey.c_str(),
+                        []() {
+                            return ScenePayloadImpl::Create(RADIENT_STATUS_PENDING);
+                        });
+
+                if (!pModelAsset->SetPayload(std::move(pModelPayload)))
+                    return ASYNC_TASK_STATUS_COMPLETE;
+
+                if (!PayloadCreated)
+                    return ASYNC_TASK_STATUS_COMPLETE;
+
+                RefCntAutoPtr<IRadientAssetData> pSceneData;
+                const RADIENT_STATUS             OpenStatus =
+                    pSelf->m_pAssetResolver->OpenAsset(pSceneLocation, pSceneData.GetAddressOfEmpty());
+                if (OpenStatus != RADIENT_STATUS_OK || pSceneData == nullptr)
+                {
+                    pModelAsset->GetStorage().SetFailedStatus(
+                        OpenStatus != RADIENT_STATUS_OK ? OpenStatus : RADIENT_STATUS_INVALID_OPERATION);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+
+                pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI, pSceneData);
                 return ASYNC_TASK_STATUS_COMPLETE;
-            }
-            if (pSceneLocation == nullptr)
-            {
-                pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
+            });
 
-            const char* ResolvedSourceURI = pSceneLocation->GetLocation();
-            if (ResolvedSourceURI == nullptr || ResolvedSourceURI[0] == '\0')
-            {
-                pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            const std::string CacheKey = MakeSceneCacheKey(SceneFormat, ResolvedSourceURI);
-
-            auto [pModelPayload, PayloadCreated] =
-                pSelf->m_SceneAssetCache.GetOrCreate(
-                    CacheKey.c_str(),
-                    []() {
-                        return ScenePayloadImpl::Create(RADIENT_STATUS_PENDING);
-                    });
-
-            if (!pModelAsset->SetPayload(std::move(pModelPayload)))
-                return ASYNC_TASK_STATUS_COMPLETE;
-
-            if (!PayloadCreated)
-                return ASYNC_TASK_STATUS_COMPLETE;
-
-            RefCntAutoPtr<IRadientAssetData> pSceneData;
-            const RADIENT_STATUS             OpenStatus =
-                pSelf->m_pAssetResolver->OpenAsset(pSceneLocation, pSceneData.GetAddressOfEmpty());
-            if (OpenStatus != RADIENT_STATUS_OK || pSceneData == nullptr)
-            {
-                pModelAsset->GetStorage().SetFailedStatus(
-                    OpenStatus != RADIENT_STATUS_OK ? OpenStatus : RADIENT_STATUS_INVALID_OPERATION);
-                return ASYNC_TASK_STATUS_COMPLETE;
-            }
-
-            pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI, pSceneData);
-            return ASYNC_TASK_STATUS_COMPLETE;
-        });
+    if (!m_pThreadPool->EnqueueTask(pLoadTask))
+        pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
 
     return pModelAsset->GetPayloadStatus();
 }

@@ -534,14 +534,21 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     IncrementCounter(m_Stats.PendingTextureLoads);
     IncrementCounter(m_Stats.PendingTextureSourceLoads);
 
-    EnqueueAsyncWork(
-        &ThreadPool,
-        [pTextureAsset,
-         pSelf         = shared_from_this(),
-         TextureSource = std::move(TextureSource)](Uint32) mutable //
-        {
-            return pSelf->LoadTextureFromSource(*pTextureAsset, std::move(TextureSource));
-        });
+    RefCntAutoPtr<IAsyncTask> pLoadTask =
+        CreateAsyncWorkTask(
+            [pTextureAsset,
+             pSelf         = shared_from_this(),
+             TextureSource = std::move(TextureSource)](Uint32) mutable //
+            {
+                return pSelf->LoadTextureFromSource(*pTextureAsset, std::move(TextureSource));
+            });
+
+    if (!ThreadPool.EnqueueTask(pLoadTask))
+    {
+        DecrementCounter(m_Stats.PendingTextureLoads);
+        DecrementCounter(m_Stats.PendingTextureSourceLoads);
+        pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+    }
 
     return pTextureAsset->GetPayloadStatus();
 }

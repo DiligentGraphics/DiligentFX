@@ -29,6 +29,7 @@
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
 #include "ThreadPool.hpp"
+#include "TestingEnvironment.hpp"
 
 #include "gtest/gtest.h"
 
@@ -258,6 +259,42 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientMeshAssetManagerTest, CreateMeshDataFailsWhenThreadPoolIsStopped)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    pThreadPool->StopThreads();
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    MeshSources Sources = MakeMeshSources();
+
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+    {
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        EXPECT_EQ(CreateMeshVertexDataHandle(*pMeshManager,
+                                             *pThreadPool,
+                                             std::move(Sources.pVertexSource),
+                                             pVertexData),
+                  RADIENT_STATUS_INVALID_OPERATION);
+    }
+    ASSERT_NE(pVertexData, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pVertexData), RADIENT_STATUS_INVALID_OPERATION);
+
+    RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
+    {
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        EXPECT_EQ(CreateMeshIndexDataHandle(*pMeshManager,
+                                            *pThreadPool,
+                                            std::move(Sources.pIndexSource),
+                                            pIndexData),
+                  RADIENT_STATUS_INVALID_OPERATION);
+    }
+    ASSERT_NE(pIndexData, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pIndexData), RADIENT_STATUS_INVALID_OPERATION);
+}
+
 TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGeometryData)
 {
     // This exercises the split path used by GLTF planning: geometry data is
@@ -301,6 +338,37 @@ TEST(RadientMeshAssetManagerTest, CreateMeshViewAcceptsPrecreatedGeometryData)
               RadientMeshAssetManager::GetMeshPayload(pSubrangeMesh));
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, CreateMeshViewFailsWhenThreadPoolIsStopped)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    MeshGeometryHandles Geometry;
+    EXPECT_TRUE(IsAcceptedOrMissingGPU(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry)));
+    ASSERT_NE(Geometry.pVertexData, nullptr);
+    ASSERT_NE(Geometry.pIndexData, nullptr);
+
+    pThreadPool->WaitForAllTasks();
+    pThreadPool->StopThreads();
+
+    const RadientMeshGeometryData   GeometryData = MakeGeometryData(Geometry);
+    RadientMeshPrimitiveCreateInfo  Primitive{};
+    const RadientMeshViewCreateInfo ViewCI = MakeMeshView(Primitive);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    {
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        EXPECT_EQ(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewCI, &pMesh),
+                  RADIENT_STATUS_INVALID_OPERATION);
+    }
+
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_INVALID_OPERATION);
 }
 
 TEST(RadientMeshAssetManagerTest, DifferentPrimitiveViewsShareGeometryData)
