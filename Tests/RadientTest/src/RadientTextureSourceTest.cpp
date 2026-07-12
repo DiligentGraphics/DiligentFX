@@ -50,12 +50,28 @@ struct ReleaseState
     Uint64      DataSize = 0;
 };
 
+struct ReentrantReleaseState
+{
+    RadientTextureSource* pSource       = nullptr;
+    Uint32                Count         = 0;
+    bool                  SourceHasData = true;
+    bool                  CacheKeyEmpty = false;
+};
+
 void ReleaseTextureData(const void* pData, Uint64 DataSize, void* pUserData)
 {
     auto& State = *static_cast<ReleaseState*>(pUserData);
     ++State.Count;
     State.pData    = pData;
     State.DataSize = DataSize;
+}
+
+void ReentrantReleaseTextureData(const void*, Uint64, void* pUserData)
+{
+    auto& State = *static_cast<ReentrantReleaseState*>(pUserData);
+    ++State.Count;
+    State.SourceHasData = State.pSource->IsMemory();
+    State.CacheKeyEmpty = State.pSource->MakeCacheKey().empty();
 }
 
 std::vector<Uint8> ReadSourceBytes(const RadientTextureSource& Source)
@@ -477,6 +493,28 @@ TEST(RadientTextureSourceTest, ReleasesCallbackOwnedMemory)
     EXPECT_EQ(State.Count, 1u);
     EXPECT_EQ(State.pData, Data.data());
     EXPECT_EQ(State.DataSize, Data.size());
+}
+
+TEST(RadientTextureSourceTest, DetachesReleaseCallbackStateBeforeInvokingCallback)
+{
+    std::array<Uint8, 4>  Data{1, 2, 3, 4};
+    ReentrantReleaseState State;
+
+    RadientTextureLoadInfo LoadInfo{};
+    LoadInfo.pData                = Data.data();
+    LoadInfo.DataSize             = static_cast<Uint64>(Data.size());
+    LoadInfo.ReleaseData          = ReentrantReleaseTextureData;
+    LoadInfo.pReleaseDataUserData = &State;
+
+    {
+        RadientTextureSource Source{LoadInfo};
+        State.pSource = &Source;
+        EXPECT_TRUE(Source.IsMemory());
+    }
+
+    EXPECT_EQ(State.Count, 1u);
+    EXPECT_FALSE(State.SourceHasData);
+    EXPECT_TRUE(State.CacheKeyEmpty);
 }
 
 TEST(RadientTextureSourceTest, ReleasesCallbackOwnedTextureDataMemory)

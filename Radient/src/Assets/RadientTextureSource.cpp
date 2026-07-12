@@ -29,6 +29,7 @@
 #include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientTextureFormat.hpp"
+#include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
 #include "ProxyDataBlob.hpp"
 #include "TextureLoader.h"
@@ -168,12 +169,12 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
     }
     else if (LoadInfo.pData != nullptr)
     {
-        if (LoadInfo.DataSize != 0 &&
-            LoadInfo.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        m_pData = LoadInfo.pData;
+        if (LoadInfo.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
         {
-            m_SourceType = SourceType::EncodedMemory;
-            m_pData      = LoadInfo.pData;
-            m_DataSize   = static_cast<size_t>(LoadInfo.DataSize);
+            m_DataSize = static_cast<size_t>(LoadInfo.DataSize);
+            if (m_DataSize != 0)
+                m_SourceType = SourceType::EncodedMemory;
         }
 
         m_ReleaseData          = LoadInfo.ReleaseData;
@@ -370,17 +371,27 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
 
 void RadientTextureSource::ReleaseMemory()
 {
-    if (m_pData != nullptr && m_ReleaseData != nullptr)
-        m_ReleaseData(m_pData, static_cast<Uint64>(m_DataSize), m_pReleaseDataUserData);
+    auto* const Callback = std::exchange(m_ReleaseData, nullptr);
+    auto* const UserData = std::exchange(m_pReleaseDataUserData, nullptr);
+    const void* pData    = std::exchange(m_pData, nullptr);
+    const auto  DataSize = std::exchange(m_DataSize, size_t{0});
 
     m_SourceType               = SourceType::Invalid;
-    m_pData                    = nullptr;
-    m_DataSize                 = 0;
     m_TextureData              = {};
     m_TextureDataActiveRowSize = 0;
     m_TextureDataRowCount      = 0;
-    m_ReleaseData              = nullptr;
-    m_pReleaseDataUserData     = nullptr;
+
+    if (pData != nullptr && Callback != nullptr)
+    {
+        try
+        {
+            Callback(pData, static_cast<Uint64>(DataSize), UserData);
+        }
+        catch (...)
+        {
+            LOG_ERROR_MESSAGE("Radient texture release callback threw an exception.");
+        }
+    }
 }
 
 void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
