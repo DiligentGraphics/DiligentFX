@@ -110,7 +110,7 @@ public:
         m_pAtlasSuballocation.Release();
     }
 
-    ITexture* CreateTexture(IRenderDevice* pDevice, const TextureDesc& Desc)
+    ITexture* CreateTexture(IRenderDevice* pDevice, const TextureDesc& Desc) noexcept
     {
         VERIFY_EXPR(pDevice != nullptr);
 
@@ -198,7 +198,7 @@ public:
         return true;
     }
 
-    void BeginSubresourceUploads(Uint32 SubresourceUploadCount)
+    void BeginSubresourceUploads(Uint32 SubresourceUploadCount) noexcept
     {
         m_PendingSubresourceUploads.store(SubresourceUploadCount, std::memory_order_release);
         m_AnyCopyCommandEnqueueFailed.store(false, std::memory_order_release);
@@ -208,7 +208,7 @@ public:
 
     // Records the result of a copy command enqueue operation.
     // Returns true if this was the last pending subresource upload and the final GPU resource status has been set.
-    bool RecordCopyCommandEnqueueResult(bool CopyEnqueued)
+    bool RecordCopyCommandEnqueueResult(bool CopyEnqueued) noexcept
     {
         if (!CopyEnqueued)
             m_AnyCopyCommandEnqueueFailed.store(true, std::memory_order_release);
@@ -356,10 +356,11 @@ struct TextureCopyData
                                     Uint32                   DstSlice,
                                     const Box&               DstBox,
                                     const TextureSubResData& SrcData,
-                                    void*                    pUserData)
+                                    void*                    pUserData) noexcept
     {
         std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-        Data->CopyTexture(pContext, DstMipLevel, DstSlice, DstBox, SrcData);
+        if (Data)
+            Data->CopyTexture(pContext, DstMipLevel, DstSlice, DstBox, SrcData);
     }
 
     static void CopyD3D11TextureCallback(IDeviceContext* pContext,
@@ -369,14 +370,15 @@ struct TextureCopyData
                                          ITexture*       pSrcTexture,
                                          Uint32          SrcX,
                                          Uint32          SrcY,
-                                         void*           pUserData)
+                                         void*           pUserData) noexcept
     {
         std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
-        Data->CopyD3D11Texture(pContext, DstMipLevel, DstSlice, DstBox, pSrcTexture, SrcX, SrcY);
+        if (Data)
+            Data->CopyD3D11Texture(pContext, DstMipLevel, DstSlice, DstBox, pSrcTexture, SrcX, SrcY);
     }
 
 private:
-    ITexture* GetDestinationTexture(IDeviceContext* pContext)
+    ITexture* GetDestinationTexture(IDeviceContext* pContext) noexcept
     {
         if (pContext == nullptr)
             return nullptr;
@@ -397,7 +399,7 @@ private:
         return pDstTexture;
     }
 
-    void RecordCopyCommandEnqueueResult(bool CopyEnqueued)
+    void RecordCopyCommandEnqueueResult(bool CopyEnqueued) noexcept
     {
         if (pTexture->GetStorage().RecordCopyCommandEnqueueResult(CopyEnqueued))
         {
@@ -412,7 +414,7 @@ private:
                      Uint32                   DstMipLevel,
                      Uint32                   DstSlice,
                      const Box&               DstBox,
-                     const TextureSubResData& SrcData)
+                     const TextureSubResData& SrcData) noexcept
     {
         bool CopyEnqueued = false;
         if (pContext != nullptr)
@@ -435,7 +437,7 @@ private:
                           const Box&      DstBox,
                           ITexture*       pSrcTexture,
                           Uint32          SrcX,
-                          Uint32          SrcY)
+                          Uint32          SrcY) noexcept
     {
         bool CopyEnqueued = false;
         if (pContext != nullptr && pSrcTexture != nullptr)
