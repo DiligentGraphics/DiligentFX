@@ -42,6 +42,8 @@ namespace Diligent
 namespace
 {
 
+constexpr Uint32 MeshVertexSourceCacheKeyVersion = 1;
+
 bool CheckByteSize(Uint32 Count, Uint32 Stride)
 {
     return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
@@ -136,11 +138,14 @@ bool IsActiveVertexBuffer(Uint32 ActiveVertexBufferMask, Uint32 BufferIndex)
 
 struct VertexAttributeRange
 {
-    Uint32 Begin = 0;
-    Uint32 End   = 0;
+    const Char* Name  = nullptr;
+    Uint32      Begin = 0;
+    Uint32      End   = 0;
 };
 
-bool HasOverlappingRanges(std::vector<VertexAttributeRange>& Ranges)
+bool FindOverlappingRanges(std::vector<VertexAttributeRange>& Ranges,
+                           VertexAttributeRange&              PrevRange,
+                           VertexAttributeRange&              CurrRange)
 {
     std::sort(Ranges.begin(), Ranges.end(), [](const VertexAttributeRange& Lhs, const VertexAttributeRange& Rhs) //
               {
@@ -151,7 +156,11 @@ bool HasOverlappingRanges(std::vector<VertexAttributeRange>& Ranges)
     for (size_t RangeIndex = 1; RangeIndex < Ranges.size(); ++RangeIndex)
     {
         if (Ranges[RangeIndex].Begin < Ranges[RangeIndex - 1].End)
+        {
+            PrevRange = Ranges[RangeIndex - 1];
+            CurrRange = Ranges[RangeIndex];
             return true;
+        }
     }
 
     return false;
@@ -252,6 +261,7 @@ void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
 
     if (!ValidateMeshVertexSourceCI(CI))
     {
+        LOG_ERROR_MESSAGE("Invalid Radient mesh vertex source create info.");
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
@@ -270,6 +280,11 @@ void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
         Uint32 SrcStride   = 0;
         if (!GetSourceAttributeLayout(Attribute, m_VertexCount, ElementSize, SrcStride))
         {
+            LOG_ERROR_MESSAGE("Invalid source vertex attribute at index ", AttributeIndex,
+                              ": name='", Attribute.Name != nullptr ? Attribute.Name : "<null>",
+                              "', value type=", static_cast<Int32>(Attribute.Type),
+                              ", component count=", static_cast<Uint32>(Attribute.NumComponents),
+                              ", stride=", Attribute.Stride, ".");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return;
         }
@@ -315,6 +330,7 @@ void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
         auto [It, Inserted] = m_SrcAttributes.emplace(HashMapStringKey{Attribute.Name, true}, std::move(Data));
         if (!Inserted)
         {
+            LOG_ERROR_MESSAGE("Duplicate source vertex attribute '", Attribute.Name, "'.");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return;
         }
@@ -322,6 +338,7 @@ void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
 
     if (m_SrcAttributes.find(GLTF::PositionAttributeName) == m_SrcAttributes.end())
     {
+        LOG_ERROR_MESSAGE("Radient mesh vertex source requires source POSITION attribute.");
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
@@ -333,7 +350,7 @@ std::string RadientMeshVertexSource::MakeCacheKey() const
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{1}, // Mesh vertex source cache key version.
+    Hasher.Update(MeshVertexSourceCacheKeyVersion,
                   m_VertexCount,
                   m_ActiveVertexBufferMask);
 
@@ -398,6 +415,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
 
     if (pDstAttributes == nullptr || NumDstAttributes == 0)
     {
+        LOG_ERROR_MESSAGE("Destination vertex attributes must not be empty.");
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return m_Status;
     }
@@ -414,6 +432,31 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
             DstAttrib.NumComponents > 4 ||
             DstAttrib.BufferId >= GLTF::ModelCreateInfo::MaxBuffers)
         {
+            LOG_ERROR_MESSAGE("Invalid destination vertex attribute at index ", AttribIndex,
+                              ": name='", DstAttrib.Name != nullptr ? DstAttrib.Name : "<null>",
+                              "', value type=", static_cast<Int32>(DstAttrib.ValueType),
+                              ", component count=", static_cast<Uint32>(DstAttrib.NumComponents),
+                              ", buffer id=", static_cast<Uint32>(DstAttrib.BufferId), ".");
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
+
+        for (Uint32 PrevAttribIndex = 0; PrevAttribIndex < AttribIndex; ++PrevAttribIndex)
+        {
+            if (std::strcmp(DstAttrib.Name, DstAttributes[PrevAttribIndex].Name) == 0)
+            {
+                LOG_ERROR_MESSAGE("Duplicate destination vertex attribute '", DstAttrib.Name,
+                                  "' at indices ", PrevAttribIndex, " and ", AttribIndex, ".");
+                m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+                return m_Status;
+            }
+        }
+
+        const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+        if (DstAttribSize == 0)
+        {
+            LOG_ERROR_MESSAGE("Invalid destination vertex attribute '", DstAttrib.Name,
+                              "': computed attribute size is zero.");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return m_Status;
         }
@@ -435,21 +478,31 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
         const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
         if (!CheckByteOffset(RelativeOffset, DstAttribSize))
         {
+            LOG_ERROR_MESSAGE("Destination vertex attribute '", DstAttrib.Name,
+                              "' range overflows 32-bit vertex buffer offset: offset=",
+                              RelativeOffset, ", size=", DstAttribSize, ".");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return m_Status;
         }
 
         const Uint32 DstAttribEnd = RelativeOffset + DstAttribSize;
-        VertexAttributeRanges[DstAttrib.BufferId].push_back(VertexAttributeRange{RelativeOffset, DstAttribEnd});
+        VertexAttributeRanges[DstAttrib.BufferId].push_back(VertexAttributeRange{DstAttrib.Name, RelativeOffset, DstAttribEnd});
         BufferStride = std::max(BufferStride, DstAttribEnd);
     }
 
-    for (std::vector<VertexAttributeRange>& Ranges : VertexAttributeRanges)
+    for (Uint32 BufferIndex = 0; BufferIndex < VertexAttributeRanges.size(); ++BufferIndex)
     {
         // Attributes in the same destination buffer must not overwrite each
         // other during PackVertexData().
-        if (HasOverlappingRanges(Ranges))
+        VertexAttributeRange PrevRange;
+        VertexAttributeRange CurrRange;
+        if (FindOverlappingRanges(VertexAttributeRanges[BufferIndex], PrevRange, CurrRange))
         {
+            LOG_ERROR_MESSAGE("Destination vertex attributes '", PrevRange.Name,
+                              "' [", PrevRange.Begin, ", ", PrevRange.End,
+                              ") and '", CurrRange.Name, "' [", CurrRange.Begin,
+                              ", ", CurrRange.End, ") overlap in vertex buffer ",
+                              BufferIndex, ".");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return m_Status;
         }
@@ -470,6 +523,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
 
     if (!HasSourceBackedDstAttribute(GLTF::PositionAttributeName))
     {
+        LOG_ERROR_MESSAGE("Destination vertex layout must include source-backed POSITION attribute.");
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return m_Status;
     }
@@ -524,6 +578,8 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
         const Uint32 VertexStride = VertexStrides[BufferIndex];
         if (VertexStride == 0 || !CheckByteSize(m_VertexCount, VertexStride))
         {
+            LOG_ERROR_MESSAGE("Invalid vertex buffer ", BufferIndex, " stride ",
+                              VertexStride, " for ", m_VertexCount, " vertices.");
             m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return m_Status;
         }

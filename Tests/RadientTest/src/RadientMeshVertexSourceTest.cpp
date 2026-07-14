@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMeshVertexSource.hpp"
 
+#include "TestingEnvironment.hpp"
+
 #include "gtest/gtest.h"
 
 #include <array>
@@ -221,58 +223,70 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidSourceCreateInfo)
     CI.AttributeCount = static_cast<Uint32>(Attributes.size());
     CI.VertexCount    = static_cast<Uint32>(Vertices.size());
 
-    auto ExpectInvalid = [](const RadientMeshVertexSource::CreateInfo& InvalidCI) //
+    auto ExpectInvalid = [](const RadientMeshVertexSource::CreateInfo& InvalidCI, const char* ExpectedError) //
     {
-        RadientMeshVertexSource Source{InvalidCI};
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{ExpectedError};
+        RadientMeshVertexSource                 Source{InvalidCI};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
     };
 
     RadientMeshVertexSource::CreateInfo InvalidCI = CI;
     InvalidCI.pAttributes                         = nullptr;
-    ExpectInvalid(InvalidCI);
+    ExpectInvalid(InvalidCI, "Invalid Radient mesh vertex source create info");
 
     InvalidCI             = CI;
     Attributes[0].Stride  = sizeof(RadientFloat3) - 1;
     InvalidCI.pAttributes = Attributes.data();
-    ExpectInvalid(InvalidCI);
+    ExpectInvalid(InvalidCI, "Invalid Radient mesh vertex source create info");
     Attributes[0].Stride = sizeof(SourceVertex);
 
     InvalidCI             = CI;
     Attributes[1].Name    = GLTF::PositionAttributeName;
     InvalidCI.pAttributes = Attributes.data();
-    ExpectInvalid(InvalidCI);
+    ExpectInvalid(InvalidCI, "Duplicate source vertex attribute 'POSITION'");
 }
 
 TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
 {
     auto ExpectInvalidAttributes =
-        [](const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes) //
+        [](const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes, const char* ExpectedError) //
     {
         RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions)};
         ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{ExpectedError};
         EXPECT_EQ(Source.SetVertexAttributes(pDstAttributes, NumDstAttributes), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
     };
 
-    ExpectInvalidAttributes(nullptr, 1);
-    ExpectInvalidAttributes(GLTF::DefaultVertexAttributes.data(), 0);
+    ExpectInvalidAttributes(nullptr, 1, "Destination vertex attributes must not be empty");
+    ExpectInvalidAttributes(GLTF::DefaultVertexAttributes.data(), 0, "Destination vertex attributes must not be empty");
 
     const std::array<GLTF::VertexAttributeDesc, 1> MissingPosition{
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4}};
-    ExpectInvalidAttributes(MissingPosition.data(), static_cast<Uint32>(MissingPosition.size()));
+    ExpectInvalidAttributes(MissingPosition.data(), static_cast<Uint32>(MissingPosition.size()),
+                            "Destination vertex layout must include source-backed POSITION attribute");
 
     const std::array<GLTF::VertexAttributeDesc, 1> UnsupportedDstType{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_UINT8, 3}};
-    ExpectInvalidAttributes(UnsupportedDstType.data(), static_cast<Uint32>(UnsupportedDstType.size()));
+    ExpectInvalidAttributes(UnsupportedDstType.data(), static_cast<Uint32>(UnsupportedDstType.size()),
+                            "Invalid destination vertex attribute at index 0");
 
     const std::array<GLTF::VertexAttributeDesc, 1> TooManyComponents{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 5}};
-    ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()));
+    ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()),
+                            "Invalid destination vertex attribute at index 0");
+
+    const std::array<GLTF::VertexAttributeDesc, 2> DuplicateDestinationAttributes{
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
+        GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 1, VT_FLOAT32, 3, Uint32{0}}};
+    ExpectInvalidAttributes(DuplicateDestinationAttributes.data(), static_cast<Uint32>(DuplicateDestinationAttributes.size()),
+                            "Duplicate destination vertex attribute 'POSITION'");
 
     const std::array<GLTF::VertexAttributeDesc, 2> OverlappingSameBuffer{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{0}}};
-    ExpectInvalidAttributes(OverlappingSameBuffer.data(), static_cast<Uint32>(OverlappingSameBuffer.size()));
+    ExpectInvalidAttributes(OverlappingSameBuffer.data(), static_cast<Uint32>(OverlappingSameBuffer.size()),
+                            "overlap in vertex buffer");
 }
 
 TEST(RadientMeshVertexSourceTest, PacksStridedSourceAttributes)

@@ -39,6 +39,8 @@ namespace Diligent
 namespace
 {
 
+constexpr Uint32 MeshViewSourceCacheKeyVersion = 3;
+
 void UpdateString(XXH128State& Hasher, const Char* Str)
 {
     const Uint64 Len = Str != nullptr ? static_cast<Uint64>(std::strlen(Str)) : 0;
@@ -232,7 +234,7 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
     }
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{3}); // Mesh view cache key version.
+    Hasher.Update(MeshViewSourceCacheKeyVersion);
 
     Hasher.Update(static_cast<Uint64>(Remap.UsedGeometryIndices.size()));
     for (const Uint32 GeometryIndex : Remap.UsedGeometryIndices)

@@ -38,6 +38,8 @@ namespace Diligent
 namespace
 {
 
+constexpr Uint32 MeshIndexSourceCacheKeyVersion = 1;
+
 bool CheckByteSize(Uint32 Count, Uint32 Stride)
 {
     return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
@@ -187,7 +189,7 @@ std::string RadientMeshIndexSource::MakeCacheKey() const
         return {};
 
     XXH128State Hasher;
-    Hasher.Update(Uint32{1}, // Mesh index source cache key version.
+    Hasher.Update(MeshIndexSourceCacheKeyVersion,
                   m_IndexCount,
                   m_IndexType,
                   Uint64{m_IndexCount} * IndexElementSize);

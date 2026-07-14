@@ -105,6 +105,8 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
 namespace
 {
 
+constexpr Uint32 TextureSourceCacheKeyVersion = 1;
+
 XXH128Hash ComputeDataHash(const void* pData, Uint64 DataSize)
 {
     if (pData == nullptr || DataSize == 0)
@@ -327,7 +329,7 @@ std::string RadientTextureSource::GetURI(const RadientTextureLoadInfo& LoadInfo)
 
 std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLocation) const
 {
-    RadientCacheKeyBuilder Builder{"texture", 1};
+    RadientCacheKeyBuilder Builder{"texture", TextureSourceCacheKeyVersion};
     if (m_SourceType == SourceType::TextureData)
     {
         const XXH128Hash Hash = ComputeTextureDataHash(m_pData,
