@@ -30,14 +30,18 @@
 #include "Assets/RadientMeshViewSource.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "ThreadPool.hpp"
+#include "ThreadSignal.hpp"
 #include "TestingEnvironment.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
+#include <vector>
 
 using namespace Diligent;
 
@@ -256,6 +260,100 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
               RadientMeshAssetManager::GetMeshVertexDataPayload(pDefaultMesh, 0));
     EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pCustomMesh0, 0),
               RadientMeshAssetManager::GetMeshIndexDataPayload(pDefaultMesh, 0));
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, ConcurrentIdenticalSourcesSharePayloads)
+{
+    // A storm of identical source requests should converge on one cached
+    // vertex payload and one cached index payload. This is CPU-only: without
+    // GPU managers, the geometry load succeeds and reports NO_GPU_DATA.
+    constexpr Uint32 ThreadCount = 32;
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{ThreadCount});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    std::vector<MeshGeometryHandles> Geometries(ThreadCount);
+    std::vector<RADIENT_STATUS>      VertexStatuses(ThreadCount, RADIENT_STATUS_INVALID_OPERATION);
+    std::vector<RADIENT_STATUS>      IndexStatuses(ThreadCount, RADIENT_STATUS_INVALID_OPERATION);
+    std::vector<std::thread>         Threads;
+    Threads.reserve(ThreadCount);
+
+    Threading::Signal   StartSignal;
+    std::atomic<Uint32> ReadyCount{0};
+
+    for (Uint32 ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
+    {
+        Threads.emplace_back(
+            [pMeshManager, pThreadPool, &Geometries, &VertexStatuses, &IndexStatuses, &StartSignal, &ReadyCount, ThreadIndex]() //
+            {
+                MeshSources Sources = MakeMeshSources();
+
+                ReadyCount.fetch_add(1, std::memory_order_release);
+                StartSignal.Wait(true, ThreadCount);
+
+                VertexStatuses[ThreadIndex] = CreateMeshVertexDataHandle(*pMeshManager,
+                                                                         *pThreadPool,
+                                                                         std::move(Sources.pVertexSource),
+                                                                         Geometries[ThreadIndex].pVertexData);
+
+                IndexStatuses[ThreadIndex] = CreateMeshIndexDataHandle(*pMeshManager,
+                                                                       *pThreadPool,
+                                                                       std::move(Sources.pIndexSource),
+                                                                       Geometries[ThreadIndex].pIndexData);
+            });
+    }
+
+    while (ReadyCount.load(std::memory_order_acquire) != ThreadCount)
+        std::this_thread::yield();
+
+    StartSignal.Trigger(true);
+
+    for (std::thread& Thread : Threads)
+        Thread.join();
+
+    pThreadPool->WaitForAllTasks();
+
+    for (Uint32 ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
+    {
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(VertexStatuses[ThreadIndex]));
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(IndexStatuses[ThreadIndex]));
+        ASSERT_NE(Geometries[ThreadIndex].pVertexData, nullptr);
+        ASSERT_NE(Geometries[ThreadIndex].pIndexData, nullptr);
+        EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Geometries[ThreadIndex].pVertexData), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Geometries[ThreadIndex].pIndexData), RADIENT_STATUS_OK);
+    }
+
+    std::vector<RefCntAutoPtr<IRadientMeshAsset>> Meshes(ThreadCount);
+    for (Uint32 ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
+    {
+        RadientMeshPrimitiveCreateInfo  Primitive{};
+        const RadientMeshViewCreateInfo ViewCI       = MakeMeshView(Primitive);
+        const RadientMeshGeometryData   GeometryData = MakeGeometryData(Geometries[ThreadIndex]);
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewCI, &Meshes[ThreadIndex])));
+        ASSERT_NE(Meshes[ThreadIndex], nullptr);
+    }
+
+    pThreadPool->WaitForAllTasks();
+
+    ASSERT_NE(Meshes[0], nullptr);
+    const MeshVertexDataPayloadImpl* const pVertexPayload = RadientMeshAssetManager::GetMeshVertexDataPayload(Meshes[0], 0);
+    const MeshIndexDataPayloadImpl* const  pIndexPayload  = RadientMeshAssetManager::GetMeshIndexDataPayload(Meshes[0], 0);
+    ASSERT_NE(pVertexPayload, nullptr);
+    ASSERT_NE(pIndexPayload, nullptr);
+
+    for (const RefCntAutoPtr<IRadientMeshAsset>& pMesh : Meshes)
+    {
+        ASSERT_NE(pMesh, nullptr);
+        EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+        EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(pMesh, 0), pVertexPayload);
+        EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 0), pIndexPayload);
+    }
 
     pThreadPool->StopThreads();
 }
