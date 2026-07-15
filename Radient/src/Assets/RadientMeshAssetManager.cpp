@@ -91,7 +91,6 @@ public:
 
     void SetGPUResourceStatus(RADIENT_STATUS Status) noexcept
     {
-        GPUResourcesReady.store(Status == RADIENT_STATUS_OK, std::memory_order_release);
         GPUResourceStatus.store(Status, std::memory_order_release);
     }
 
@@ -117,7 +116,6 @@ public:
 
     std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
-    std::atomic_bool            GPUResourcesReady{false};
     std::atomic<Uint32>         PendingUploads{0};
 };
 
@@ -430,8 +428,6 @@ RADIENT_STATUS InitializeMeshIndexData(GLTF::ResourceManager*        pResourceMa
     if (IndexData.pIndexAllocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    IndexData.GPUResourcesReady.store(false, std::memory_order_release);
-
     return RADIENT_STATUS_OK;
 }
 
@@ -457,8 +453,6 @@ RADIENT_STATUS InitializeMeshVertexData(GLTF::ResourceManager*         pResource
     VertexData.pVertexAllocation = pResourceManager->AllocateVertices(LayoutKey, VertexSource.GetVertexCount());
     if (VertexData.pVertexAllocation == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
-
-    VertexData.GPUResourcesReady.store(false, std::memory_order_release);
 
     return RADIENT_STATUS_OK;
 }
