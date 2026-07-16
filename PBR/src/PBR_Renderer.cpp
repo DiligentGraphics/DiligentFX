@@ -60,21 +60,26 @@ namespace HLSL
 
 } // namespace HLSL
 
-PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
-                             PSO_FLAGS            _Flags,
-                             ALPHA_MODE           _AlphaMode,
-                             CULL_MODE            _CullMode,
-                             DebugViewType        _DebugView,
-                             LoadingAnimationMode _LoadingAnimation,
-                             Uint64               _UserValue) noexcept :
-    Type{_Type},
+PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
+                             PSO_FLAGS                              _Flags,
+                             ALPHA_MODE                             _AlphaMode,
+                             CULL_MODE                              _CullMode,
+                             DebugViewType                          _DebugView,
+                             LoadingAnimationMode                   _LoadingAnimation,
+                             Uint64                                 _UserValue,
+                             const StaticShaderTextureIdsArrayType* _pStaticShaderTextureIds) noexcept :
     Flags{_Flags},
+    Type{_Type},
     AlphaMode{_AlphaMode},
     CullMode{_CullMode},
     DebugView{_DebugView},
     LoadingAnimation{_LoadingAnimation},
+    HasStaticShaderTextureIds{_pStaticShaderTextureIds != nullptr},
     UserValue{_UserValue}
 {
+    if (HasStaticShaderTextureIds)
+        StaticShaderTextureIds = *_pStaticShaderTextureIds;
+
     static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{38}, "Please handle the new flag below, if necessary");
     static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please handle the new render pass type below, if necessary");
     if (Type == RenderPassType::Shadow)
@@ -125,7 +130,9 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
         DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Type, Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), static_cast<Uint32>(LoadingAnimation), UserValue);
+    Hash = ComputeHash(Type, Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), static_cast<Uint32>(LoadingAnimation), UserValue, HasStaticShaderTextureIds);
+    if (HasStaticShaderTextureIds)
+        HashCombine(Hash, ComputeHashRaw(StaticShaderTextureIds.data(), StaticShaderTextureIds.size() * sizeof(StaticShaderTextureIds[0])));
 }
 
 static const char* GetTextureAttribString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
@@ -1091,8 +1098,9 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
         }
         else
         {
-            UNEXPECTED("Static material texture indices are not initialized, which indicates that the client uses a custom GetStaticShaderTextureIds function. "
-                       "In this case it is expected that the client binds the textures.");
+            UNEXPECTED("Renderer-wide static material texture indices are not initialized. "
+                       "This indicates that static texture indices are provided through PSOKey, "
+                       "in which case it is expected that the client binds the textures.");
         }
     }
     else if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
@@ -1133,7 +1141,7 @@ void PBR_Renderer::CreateSignature()
 
     Uint32& MaterialTexturesArraySize = m_Settings.MaterialTexturesArraySize;
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC &&
-        m_Settings.GetStaticShaderTextureIds == nullptr)
+        m_Settings.MaterialTexturesArraySize == 0)
     {
         MaterialTexturesArraySize = 0;
         m_StaticShaderTextureIds  = std::make_unique<StaticShaderTextureIdsArrayType>();
@@ -1528,9 +1536,18 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     MaterialTextureIds.fill(decltype(PBR_Renderer::InvalidMaterialTextureId){InvalidMaterialTextureId});
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
     {
-        MaterialTextureIds = m_Settings.GetStaticShaderTextureIds ?
-            m_Settings.GetStaticShaderTextureIds(Key) :
-            *m_StaticShaderTextureIds;
+        if (const StaticShaderTextureIdsArrayType* pKeyTextureIds = Key.GetStaticShaderTextureIds())
+        {
+            MaterialTextureIds = *pKeyTextureIds;
+        }
+        else if (m_StaticShaderTextureIds)
+        {
+            MaterialTextureIds = *m_StaticShaderTextureIds;
+        }
+        else if ((PSOFlags & PSO_FLAG_ALL_TEXTURES) != PSO_FLAG_NONE)
+        {
+            DEV_ERROR("Static material texture indices are not provided in the PSO key.");
+        }
     }
 
     // Tightly pack these attributes that are used by the shader

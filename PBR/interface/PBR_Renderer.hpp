@@ -233,8 +233,8 @@ public:
         ///
         /// \remarks    This parameter is ignored if ShaderTexturesArrayMode is SHADER_TEXTURE_ARRAY_MODE_NONE.
         ///             If this parameter is set to 0, the renderer will define the array size.
-        ///             If it is not zero, the client should provide the GetStaticShaderTextureIds
-        ///             callback function to define texture indices.
+        ///             If it is not zero and ShaderTexturesArrayMode is SHADER_TEXTURE_ARRAY_MODE_STATIC,
+        ///             the client should provide static texture indices in PSOKey.
         Uint32 MaterialTexturesArraySize = 0;
 
         /// The size of the shader primitive array.
@@ -352,16 +352,6 @@ public:
         /// shader's main function source code for the specified PSO flags. If null, the renderer
         /// will use the default implementation.
         std::function<PSMainSourceInfo(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
-
-        /// An optional user-provided callback function that returns static material texture indices
-        /// for the specified PSO key. If null, the renderer will assign the indices automatically.
-        ///
-        /// \remarks    This function is called only if ShaderTexturesArrayMode is set SHADER_TEXTURE_ARRAY_MODE_STATIC.
-        ///
-        ///             The main usage scenario for this function is to implement "static" bindless
-        ///             mode, where texture indices are assigned at shader compile time and hard-coded
-        ///             into PSO. The client can use the Key.UserValue to identify the shader indices.
-        std::function<StaticShaderTextureIdsArrayType(const PSOKey& Key)> GetStaticShaderTextureIds = nullptr;
 
         /// A pointer to the user-provided primitive attribs buffer.
         /// If null, the renderer will allocate the buffer.
@@ -634,49 +624,76 @@ public:
     public:
         constexpr PSOKey() noexcept {};
 
-        PSOKey(RenderPassType       _Type,
-               PSO_FLAGS            _Flags,
-               ALPHA_MODE           _AlphaMode,
-               CULL_MODE            _CullMode,
-               DebugViewType        _DebugView        = DebugViewType::None,
-               LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
-               Uint64               _UserValue        = 0) noexcept;
+        PSOKey(RenderPassType                         _Type,
+               PSO_FLAGS                              _Flags,
+               ALPHA_MODE                             _AlphaMode,
+               CULL_MODE                              _CullMode,
+               DebugViewType                          _DebugView               = DebugViewType::None,
+               LoadingAnimationMode                   _LoadingAnimation        = LoadingAnimationMode::None,
+               Uint64                                 _UserValue               = 0,
+               const StaticShaderTextureIdsArrayType* _pStaticShaderTextureIds = nullptr) noexcept;
 
-        PSOKey(RenderPassType       _Type,
-               PSO_FLAGS            _Flags,
-               CULL_MODE            _CullMode,
-               DebugViewType        _DebugView        = DebugViewType::None,
-               LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
-               Uint64               _UserValue        = 0) noexcept :
-            PSOKey{_Type, _Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _LoadingAnimation, _UserValue}
+        PSOKey(RenderPassType                         _Type,
+               PSO_FLAGS                              _Flags,
+               CULL_MODE                              _CullMode,
+               DebugViewType                          _DebugView               = DebugViewType::None,
+               LoadingAnimationMode                   _LoadingAnimation        = LoadingAnimationMode::None,
+               Uint64                                 _UserValue               = 0,
+               const StaticShaderTextureIdsArrayType* _pStaticShaderTextureIds = nullptr) noexcept :
+            PSOKey{
+                _Type,
+                _Flags,
+                ALPHA_MODE_OPAQUE,
+                _CullMode,
+                _DebugView,
+                _LoadingAnimation,
+                _UserValue,
+                _pStaticShaderTextureIds,
+            }
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
                CULL_MODE     _CullMode,
                const PSOKey& Other) noexcept :
-            PSOKey{Other.GetType(), _Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetLoadingAnimation(), Other.GetUserValue()}
+            PSOKey{
+                Other.GetType(),
+                _Flags,
+                _AlphaMode,
+                _CullMode,
+                Other.GetDebugView(),
+                Other.GetLoadingAnimation(),
+                Other.GetUserValue(),
+                Other.GetStaticShaderTextureIds(),
+            }
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                const PSOKey& Other) noexcept :
-            PSOKey{_Flags, Other.GetAlphaMode(), Other.GetCullMode(), Other}
+            PSOKey{
+                _Flags,
+                Other.GetAlphaMode(),
+                Other.GetCullMode(),
+                Other,
+            }
         {}
 
-        constexpr bool operator==(const PSOKey& rhs) const noexcept
+        bool operator==(const PSOKey& rhs) const noexcept
         {
             // clang-format off
-            return Hash             == rhs.Hash      &&
-                   Type             == rhs.Type      &&
-                   Flags            == rhs.Flags     &&
-                   CullMode         == rhs.CullMode  &&
-                   AlphaMode        == rhs.AlphaMode &&
-                   DebugView        == rhs.DebugView &&
-                   LoadingAnimation == rhs.LoadingAnimation &&
-                   UserValue        == rhs.UserValue;
+            return Hash                      == rhs.Hash      &&
+                   Type                      == rhs.Type      &&
+                   Flags                     == rhs.Flags     &&
+                   CullMode                  == rhs.CullMode  &&
+                   AlphaMode                 == rhs.AlphaMode &&
+                   DebugView                 == rhs.DebugView &&
+                   LoadingAnimation          == rhs.LoadingAnimation &&
+                   UserValue                 == rhs.UserValue &&
+                   HasStaticShaderTextureIds == rhs.HasStaticShaderTextureIds &&
+                   (!HasStaticShaderTextureIds || StaticShaderTextureIds == rhs.StaticShaderTextureIds);
             // clang-format on
         }
-        constexpr bool operator!=(const PSOKey& rhs) const noexcept
+        bool operator!=(const PSOKey& rhs) const noexcept
         {
             return !(*this == rhs);
         }
@@ -697,15 +714,22 @@ public:
         constexpr LoadingAnimationMode GetLoadingAnimation() const noexcept { return LoadingAnimation; }
         constexpr Uint64               GetUserValue() const noexcept { return UserValue; }
 
+        constexpr const StaticShaderTextureIdsArrayType* GetStaticShaderTextureIds() const noexcept
+        {
+            return HasStaticShaderTextureIds ? &StaticShaderTextureIds : nullptr;
+        }
+
     private:
-        RenderPassType       Type             = RenderPassType::Main;
-        PSO_FLAGS            Flags            = PSO_FLAG_NONE;
-        ALPHA_MODE           AlphaMode        = ALPHA_MODE_OPAQUE;
-        CULL_MODE            CullMode         = CULL_MODE_BACK;
-        DebugViewType        DebugView        = DebugViewType::None;
-        LoadingAnimationMode LoadingAnimation = LoadingAnimationMode::None;
-        Uint64               UserValue        = 0;
-        size_t               Hash             = 0;
+        PSO_FLAGS                       Flags                     = PSO_FLAG_NONE;
+        RenderPassType                  Type                      = RenderPassType::Main;
+        ALPHA_MODE                      AlphaMode                 = ALPHA_MODE_OPAQUE;
+        CULL_MODE                       CullMode                  = CULL_MODE_BACK;
+        DebugViewType                   DebugView                 = DebugViewType::None;
+        LoadingAnimationMode            LoadingAnimation          = LoadingAnimationMode::None;
+        bool                            HasStaticShaderTextureIds = false;
+        StaticShaderTextureIdsArrayType StaticShaderTextureIds{};
+        Uint64                          UserValue = 0;
+        size_t                          Hash      = 0;
     };
 
     using PsoHashMapType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;

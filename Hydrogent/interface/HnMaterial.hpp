@@ -126,19 +126,8 @@ public:
 
     const pxr::TfToken& GetTag() const { return m_Tag; }
 
-    /// Static shader texture indexing identifier, for example:
-    ///    0 -> {0, 0, 0, 1, 1, 2}
-    ///    1 -> {0, 1, 0, 1, 2, 2}
-    using ShaderTextureIndexingIdType = Uint32;
-    /// Returns the static shader texture indexing for the given identifier.
-    static const PBR_Renderer::StaticShaderTextureIdsArrayType& GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id);
-
-    /// Returns the static shader texture indexing identifier that can be passed to
-    /// GetStaticShaderTextureIds() to get the shader texture indices for this material.
-    ShaderTextureIndexingIdType GetStaticShaderTextureIndexingId() const
-    {
-        return m_ShaderTextureIndexingId;
-    }
+    /// Returns the static shader texture indices for this material, or null if they are not initialized.
+    const PBR_Renderer::StaticShaderTextureIdsArrayType* GetStaticShaderTextureIds() const noexcept;
 
     Uint32 GetPBRPrimitiveAttribsBufferRange() const { return m_PBRPrimitiveAttribsBufferRange; }
     Uint32 GetPBRMaterialAttribsSize() const { return m_PBRMaterialAttribsSize; }
@@ -214,9 +203,9 @@ private:
     // Texture registry storage version + material attribs buffer version.
     Uint32 m_ResourceCacheVersion = ~0u;
 
-    ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
-
     RefCntAutoPtr<HnMaterialSRBCache> m_SRBCache;
+
+    const PBR_Renderer::StaticShaderTextureIdsArrayType* m_pStaticShaderTextureIds = nullptr;
 };
 
 } // namespace USD

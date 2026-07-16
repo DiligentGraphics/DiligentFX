@@ -1312,9 +1312,12 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnDrawItem::GeometryData& Geo      = DrawItem.GetGeometryData();
         const CULL_MODE                 CullMode = ListItem.Mesh.GetCullMode();
 
-        // Use the material's texture indexing ID as the user value in the PSO key.
-        // The USD renderer will use this ID to return the indexing.
-        const auto ShaderTextureIndexingId = pMaterial->GetStaticShaderTextureIndexingId();
+        const PBR_Renderer::StaticShaderTextureIdsArrayType* pStaticShaderTextureIds =
+            State.RenderParam.GetConfig().TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ?
+            pMaterial->GetStaticShaderTextureIds() :
+            nullptr;
+        VERIFY(State.RenderParam.GetConfig().TextureBindingMode != HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS || pStaticShaderTextureIds != nullptr,
+               "Static shader texture indices are not initialized");
 
         PBR_Renderer::PsoCacheAccessor::GET_FLAGS GetPSOFlags = PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL;
         if (State.RenderParam.GetConfig().AsyncShaderCompilation)
@@ -1380,7 +1383,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 CullMode,
                 m_DebugView,
                 LoadingAnimationMode,
-                ShaderTextureIndexingId,
+                0,
+                pStaticShaderTextureIds,
             };
             ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
             // PSOKey may have cleared some flags - get updated flags
@@ -1397,7 +1401,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 CullMode,
                 PBR_Renderer::DebugViewType::None,
                 PBR_Renderer::LoadingAnimationMode::None,
-                ShaderTextureIndexingId,
+                0,
+                pStaticShaderTextureIds,
             };
             ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
             // PSOKey may have cleared some flags - get updated flags

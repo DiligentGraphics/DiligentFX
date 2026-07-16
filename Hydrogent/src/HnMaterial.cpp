@@ -29,6 +29,7 @@
 #include <vector>
 #include <set>
 #include <array>
+#include <unordered_set>
 
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
@@ -613,7 +614,6 @@ class HnMaterialSRBCache : public ObjectBase<IObject>
 {
 public:
     using StaticShaderTextureIdsArrayType = PBR_Renderer::StaticShaderTextureIdsArrayType;
-    using ShaderTextureIndexingIdType     = HnMaterial::ShaderTextureIndexingIdType;
 
     HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
         ObjectBase<IObject>{pRefCounters},
@@ -687,33 +687,13 @@ public:
         return m_Cache.Get(Key, CreateSRB);
     }
 
-    /// Adds shader texture indexing to the cache and returns its identifier, for example:
-    ///     {0, 0, 0, 1, 1, 2} -> 0
-    ///     {0, 1, 0, 1, 2, 2} -> 1
-    ShaderTextureIndexingIdType AddShaderTextureIndexing(const StaticShaderTextureIdsArrayType& TextureIds)
+    /// Adds shader texture indexing to the cache and returns a stable pointer to it.
+    const StaticShaderTextureIdsArrayType* AddShaderTextureIndexing(const StaticShaderTextureIdsArrayType& TextureIds)
     {
         std::lock_guard<std::mutex> Lock{m_ShaderTextureIndexingCacheMtx};
 
-        auto it = m_ShaderTextureIndexingCache.find(TextureIds);
-        if (it != m_ShaderTextureIndexingCache.end())
-            return it->second;
-
-        auto Id = static_cast<ShaderTextureIndexingIdType>(m_ShaderTextureIndexingCache.size());
-        it      = m_ShaderTextureIndexingCache.emplace(TextureIds, Id).first;
-
-        m_IdToIndexing.emplace(Id, it->first);
-
-        return Id;
-    }
-
-    /// Returns the shader texture indexing by its identifier, for example:
-    ///     0 -> {0, 0, 0, 1, 1, 2}
-    ///     1 -> {0, 1, 0, 1, 2, 2}
-    const StaticShaderTextureIdsArrayType& GetShaderTextureIndexing(Uint32 Id) const
-    {
-        auto it = m_IdToIndexing.find(Id);
-        VERIFY_EXPR(it != m_IdToIndexing.end());
-        return it->second;
+        const auto it = m_ShaderTextureIndexingCache.emplace(TextureIds).first;
+        return &*it;
     }
 
     void AllocateBufferOffset(Uint32& Offset, Uint32& Size, Uint32 RequiredSize)
@@ -826,13 +806,8 @@ private:
         }
     };
 
-    std::mutex m_ShaderTextureIndexingCacheMtx;
-    std::unordered_map<StaticShaderTextureIdsArrayType,
-                       ShaderTextureIndexingIdType,
-                       ShaderTextureIndexingTypeHasher>
-        m_ShaderTextureIndexingCache;
-
-    std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
+    std::mutex                                                                           m_ShaderTextureIndexingCacheMtx;
+    std::unordered_set<StaticShaderTextureIdsArrayType, ShaderTextureIndexingTypeHasher> m_ShaderTextureIndexingCache;
 
     Uint32 m_ConstantBufferOffsetAlignment = 0;
     Uint32 m_MaxAttribsDataSize            = 0;
@@ -869,9 +844,9 @@ void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
     }
 }
 
-const PBR_Renderer::StaticShaderTextureIdsArrayType& HnMaterial::GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id)
+const PBR_Renderer::StaticShaderTextureIdsArrayType* HnMaterial::GetStaticShaderTextureIds() const noexcept
 {
-    return ClassPtrCast<HnMaterialSRBCache>(SRBCache)->GetShaderTextureIndexing(Id);
+    return m_pStaticShaderTextureIds;
 }
 
 RefCntAutoPtr<IObject> HnMaterial::CreateSRBCache()
@@ -1202,7 +1177,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
                 SRBKey.UniqueIDs.push_back(Tex ? Tex->GetUniqueID() : 0);
             }
 
-            m_ShaderTextureIndexingId = SRBCache->AddShaderTextureIndexing(StaticShaderTexIds);
+            m_pStaticShaderTextureIds = SRBCache->AddShaderTextureIndexing(StaticShaderTexIds);
         }
     }
 

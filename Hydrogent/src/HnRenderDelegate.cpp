@@ -165,8 +165,7 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Ren
 }
 
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
-                                                       IBuffer*                            pPrimitiveAttribsCB,
-                                                       IObject*                            MaterialSRBCache)
+                                                       IBuffer*                            pPrimitiveAttribsCB)
 {
     USD_Renderer::CreateInfo USDRendererCI;
 
@@ -250,12 +249,6 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
         USDRendererCI.ShaderTexturesArrayMode   = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
         USDRendererCI.MaterialTexturesArraySize = TexturesArraySize;
-        VERIFY_EXPR(MaterialSRBCache != nullptr);
-        USDRendererCI.GetStaticShaderTextureIds = [MaterialSRBCache](const USD_Renderer::PSOKey& Key) {
-            // User value in the PSO key is the shader indexing ID that identifies the static texture
-            // indexing in the SRB cache.
-            return HnMaterial::GetStaticShaderTextureIds(MaterialSRBCache, Key.GetUserValue());
-        };
     }
     else
     {
@@ -457,7 +450,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_ResourceMgr{CreateResourceManager(CI)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
-    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
+    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB)},
     m_TextureRegistry{
         std::make_shared<HnTextureRegistry>(
             HnTextureRegistry::CreateInfo{
