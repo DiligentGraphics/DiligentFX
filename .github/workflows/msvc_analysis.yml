@@ -27,18 +27,18 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v21
+      uses: DiligentGraphics/github-action/checkout@v22
 
     - name: Set up build environment
       if: success()
-      uses: DiligentGraphics/github-action/setup-build-env@v21
+      uses: DiligentGraphics/github-action/setup-build-env@v22
       with:
         platform:        ${{ matrix.platform }}
         cmake-generator: ${{ matrix.cmake_generator }}
 
     - name: Configure CMake
       if: success()
-      uses: DiligentGraphics/github-action/configure-cmake@v21
+      uses: DiligentGraphics/github-action/configure-cmake@v22
       with:
         generator:  ${{ matrix.cmake_generator }}
         vs-arch:    ${{ matrix.toolset }}
@@ -47,7 +47,7 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@v21
+      uses: DiligentGraphics/github-action/build@v22
 
     - name: Run MSVC Code Analysis
       uses: DiligentGraphics/msvc-code-analysis-action@main
