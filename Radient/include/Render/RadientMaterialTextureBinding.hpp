@@ -54,6 +54,9 @@ struct RadientMaterialTextureBindingPlan
     }
 };
 
+using RadientMaterialTextureSRVArray =
+    std::array<ITextureView*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
+
 /// Assigns every active material texture semantic to a distinct SRB slot in
 /// stable PBR texture-attribute order. Null texture assets are preserved so the
 /// SRB builder can bind the semantic's fallback atlas.
@@ -62,6 +65,18 @@ RADIENT_STATUS BuildStandardMaterialTextureBindingPlan(
     const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
     PBR_Renderer::PSO_FLAGS                                       PSOFlags,
     Uint32                                                        MaxTextureSlots,
+    RadientMaterialTextureBindingPlan&                            Plan);
+
+/// Builds the preferred material texture binding plan. Materials that fit in
+/// the slot budget retain one slot per active semantic. Larger materials group
+/// semantics that resolve to the same SRV and fail only when the number of
+/// distinct SRVs exceeds the slot budget.
+RADIENT_STATUS BuildMaterialTextureBindingPlan(
+    const RadientMaterialRenderData&                              MaterialData,
+    const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
+    PBR_Renderer::PSO_FLAGS                                       PSOFlags,
+    Uint32                                                        MaxTextureSlots,
+    const RadientMaterialTextureSRVArray&                         TextureSRVs,
     RadientMaterialTextureBindingPlan&                            Plan);
 
 } // namespace Diligent
