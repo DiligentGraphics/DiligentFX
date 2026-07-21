@@ -396,7 +396,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
 
             // Pending materials are resolved lazily by GetDrawableMesh().
             if (MaterialLoadStatus == RADIENT_STATUS_OK)
-                pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
+                pMaterial = RadientMaterialAssetManager::GetRenderData(pMaterialAsset).pMaterial;
             else if (MaterialLoadStatus == RADIENT_STATUS_PENDING)
                 MaterialStatusValue = RADIENT_STATUS_PENDING;
         }
@@ -404,6 +404,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
         Materials.emplace_back(pMaterialAsset);
         DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
+            pMaterialAsset,
             GeometryIndex,
             true,
             PrimitiveCI.FirstIndex,
@@ -1409,7 +1410,7 @@ RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh)
         if (pMaterialAsset == nullptr)
             continue;
 
-        const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetMaterial(pMaterialAsset);
+        const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetRenderData(pMaterialAsset).pMaterial;
         if (pMaterial == nullptr)
             return RADIENT_STATUS_PENDING;
 

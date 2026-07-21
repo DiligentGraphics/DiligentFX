@@ -36,9 +36,12 @@
 namespace Diligent
 {
 
+struct IRadientMaterialAsset;
+
 struct RadientDrawableMeshPrimitive
 {
-    const GLTF::Material* pMaterial = nullptr;
+    const GLTF::Material*  pMaterial      = nullptr;
+    IRadientMaterialAsset* pMaterialAsset = nullptr;
 
     Uint32 GeometryIndex = 0;
 

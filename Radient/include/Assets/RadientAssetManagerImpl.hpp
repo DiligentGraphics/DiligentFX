@@ -105,9 +105,6 @@ public:
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
 
-    // Returns the GLTF material if the material status is OK, or nullptr otherwise.
-    static const GLTF::Material* GetMaterial(IRadientMaterialAsset* pMaterial);
-
     static const RadientImport::ImportedDocument* GetImportedScene(IRadientSceneAsset* pScene);
 
     // Reports scene source load status. OK does not imply GPU resources exist.

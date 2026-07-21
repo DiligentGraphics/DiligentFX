@@ -321,6 +321,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
         Slot.IsIndexed          = Primitive.IsIndexed;
         Slot.pMaterial          = Primitive.pMaterial;
+        Slot.pMaterialAsset     = Primitive.pMaterialAsset;
         Slot.pVertexPool        = Geometry.pVertexPool;
         Slot.VertexAttribFlags  = Geometry.VertexAttribFlags;
         Slot.FirstIndexLocation = Geometry.FirstIndexLocation;

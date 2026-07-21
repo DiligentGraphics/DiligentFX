@@ -72,6 +72,7 @@ RADIENT_STATUS ConvertGLTFDrawableMeshPrimitives(const std::vector<GLTF::Primiti
 
         DrawablePrimitives.push_back(RadientDrawableMeshPrimitive{
             pMaterial,
+            nullptr,
             0,
             IsIndexed,
             FirstElement,

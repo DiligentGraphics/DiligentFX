@@ -286,14 +286,21 @@ RADIENT_STATUS RadientMaterialAssetManager::GetGPUResourceStatus(IRadientAsset* 
     return pImpl->GetStorage().GetGPUResourceStatus();
 }
 
-const GLTF::Material* RadientMaterialAssetManager::GetMaterial(IRadientMaterialAsset* pMaterial)
+RadientMaterialRenderData RadientMaterialAssetManager::GetRenderData(IRadientMaterialAsset* pMaterial)
 {
     RefCntAutoPtr<MaterialAssetImpl> pImpl = MaterialAssetImpl::ResolveAsset(pMaterial);
     if (!pImpl)
-        return nullptr;
+        return {};
 
     MaterialStorage& MaterialData = pImpl->GetStorage();
-    return UpdateTextureAtlasAttribs(MaterialData) ? &MaterialData.Material : nullptr;
+    if (!UpdateTextureAtlasAttribs(MaterialData))
+        return {};
+
+    return {
+        &MaterialData.Material,
+        MaterialData.Textures.data(),
+        static_cast<Uint32>(MaterialData.Textures.size()),
+    };
 }
 
 } // namespace Diligent

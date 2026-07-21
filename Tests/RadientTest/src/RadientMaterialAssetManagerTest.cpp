@@ -83,10 +83,11 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_NE(pMaterial->GetReference().URI, nullptr);
     EXPECT_NE(pMaterial->GetReference().Version, 0u);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
-    ASSERT_NE(pGLTFMaterial, nullptr);
+    const RadientMaterialRenderData RenderData = RadientMaterialAssetManager::GetRenderData(pMaterial);
+    ASSERT_TRUE(RenderData);
+    EXPECT_EQ(RenderData.TextureCount, 0u);
 
-    VerifyTestMaterial(*pGLTFMaterial, MaterialCI);
+    VerifyTestMaterial(*RenderData.pMaterial, MaterialCI);
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)
@@ -117,7 +118,7 @@ TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependenci
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetNumActiveTextureAttribs(), 0u);
     EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.x, BaseColorFactor.x);
@@ -159,7 +160,7 @@ TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     VerifyTestMaterial(*pGLTFMaterial, MaterialCI);
 }

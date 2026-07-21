@@ -774,6 +774,13 @@ TEST(RadientMeshAssetManagerTest, MeshViewCacheDistinguishesMaterialsFromDiffere
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMeshA),
               RadientMeshAssetManager::GetMeshPayload(pMeshB));
 
+    const RadientDrawableMeshResolveResult DrawableA =
+        RadientMeshAssetManager::GetDrawableMesh(pMeshA, false);
+    ASSERT_EQ(DrawableA.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(DrawableA.pMesh, nullptr);
+    ASSERT_EQ(DrawableA.pMesh->Primitives.size(), 1u);
+    EXPECT_EQ(DrawableA.pMesh->Primitives[0].pMaterialAsset, pMaterialA.RawPtr());
+
     pThreadPool->StopThreads();
 }
 

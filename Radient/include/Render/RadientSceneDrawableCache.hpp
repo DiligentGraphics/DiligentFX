@@ -63,8 +63,12 @@ struct RadientDrawableSlot
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
 
-    const GLTF::Material* pMaterial   = nullptr;
-    IVertexPool*          pVertexPool = nullptr;
+    // RenderableRecord::pMesh keeps the mesh payload alive. The payload owns
+    // the material asset, which in turn keeps the resolved material alive.
+    const GLTF::Material*  pMaterial      = nullptr;
+    IRadientMaterialAsset* pMaterialAsset = nullptr;
+
+    IVertexPool* pVertexPool = nullptr;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 

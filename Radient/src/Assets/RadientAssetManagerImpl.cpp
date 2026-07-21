@@ -558,11 +558,6 @@ RadientDrawableMeshResolveResult RadientAssetManagerImpl::GetDrawableMesh(IRadie
     return RadientMeshAssetManager::GetDrawableMesh(pMesh, RequireGPUResourcesReady);
 }
 
-const GLTF::Material* RadientAssetManagerImpl::GetMaterial(IRadientMaterialAsset* pMaterial)
-{
-    return RadientMaterialAssetManager::GetMaterial(pMaterial);
-}
-
 const RadientImport::ImportedDocument* RadientAssetManagerImpl::GetImportedScene(IRadientSceneAsset* pScene)
 {
     RefCntAutoPtr<SceneAssetImpl> pImpl = SceneAssetImpl::ResolveAsset(pScene);

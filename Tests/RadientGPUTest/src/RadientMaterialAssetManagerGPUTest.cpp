@@ -180,7 +180,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     // The texture worker is blocked, so the material must not expose texture
     // attributes that depend on texture storage placement.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
 
     ReleaseWorker.Trigger();
 
@@ -188,7 +188,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
 
@@ -251,7 +251,7 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     // but it must still wait for referenced texture assets before exposing
     // atlas-dependent texture attributes.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
 
     ReleaseWorker.Trigger();
 
@@ -259,7 +259,7 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 0);
@@ -319,7 +319,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetMaterial(pMaterial);
+    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
 
@@ -357,7 +357,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
         EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-        EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+        EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
 
         // Drop the explicit texture handle before managers are destroyed. The
         // material payload must keep the pending texture dependency alive.
@@ -372,7 +372,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_EQ(RadientMaterialAssetManager::GetMaterial(pMaterial), nullptr);
+    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
 }
 
 } // namespace
