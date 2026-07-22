@@ -29,6 +29,7 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
+#include "Render/RadientMaterialSRBTable.hpp"
 
 #include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
@@ -103,6 +104,7 @@ private:
 
     RadientGeometryResourceCacheUseInfo  m_CacheUseInfo;
     RadientGeometryResourceCacheBindings m_CacheBindings;
+    RadientMaterialSRBTable              m_MaterialSRBs;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
