@@ -136,6 +136,45 @@ struct MaterialStorage
     std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
 };
 
+void SetDefaultMaterialTextures(MaterialStorage&                      MaterialData,
+                                const GLTF::Material&                 Material,
+                                const RadientMaterialDefaultTextures& DefaultTextures)
+{
+    // Radient's core PBR path may sample these maps for every material.
+    MaterialData.SetTexture(GLTF::DefaultBaseColorTextureAttribId, DefaultTextures.pWhite);
+
+    IRadientTextureAsset* pPhysicalDesc = Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS ?
+        DefaultTextures.pWhite :
+        DefaultTextures.pPhysicalDesc;
+    MaterialData.SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, pPhysicalDesc);
+    MaterialData.SetTexture(GLTF::DefaultNormalTextureAttribId, DefaultTextures.pNormal);
+    MaterialData.SetTexture(GLTF::DefaultOcclusionTextureAttribId, DefaultTextures.pWhite);
+    MaterialData.SetTexture(GLTF::DefaultEmissiveTextureAttribId, DefaultTextures.pBlack);
+
+    if (Material.HasClearcoat)
+    {
+        MaterialData.SetTexture(GLTF::DefaultClearcoatTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetTexture(GLTF::DefaultClearcoatNormalTextureAttribId, DefaultTextures.pNormal);
+    }
+    if (Material.Sheen)
+    {
+        MaterialData.SetTexture(GLTF::DefaultSheenColorTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetTexture(GLTF::DefaultSheenRoughnessTextureAttribId, DefaultTextures.pWhite);
+    }
+    if (Material.Anisotropy)
+        MaterialData.SetTexture(GLTF::DefaultAnisotropyTextureAttribId, DefaultTextures.pWhite);
+    if (Material.Iridescence)
+    {
+        MaterialData.SetTexture(GLTF::DefaultIridescenceTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetTexture(GLTF::DefaultIridescenceThicknessTextureAttribId, DefaultTextures.pWhite);
+    }
+    if (Material.Transmission)
+        MaterialData.SetTexture(GLTF::DefaultTransmissionTextureAttribId, DefaultTextures.pWhite);
+    if (Material.Volume)
+        MaterialData.SetTexture(GLTF::DefaultThicknessTextureAttribId, DefaultTextures.pWhite);
+}
+
 class MaterialPayloadImpl final : public RadientAssetPayloadImpl<MaterialStorage, MaterialPayloadImpl>
 {
 public:
@@ -191,9 +230,14 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 
 RadientMaterialAssetManager::~RadientMaterialAssetManager() = default;
 
-RadientMaterialAssetManagerSharedPtr RadientMaterialAssetManager::Create()
+RadientMaterialAssetManager::RadientMaterialAssetManager(const CreateInfo& CI) :
+    m_DefaultTextures{CI.DefaultTextures}
 {
-    return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager()};
+}
+
+RadientMaterialAssetManagerSharedPtr RadientMaterialAssetManager::Create(const CreateInfo& CI)
+{
+    return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager{CI}};
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
@@ -201,13 +245,9 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
 {
     if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppMaterial == nullptr, "Output material pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppMaterial = nullptr;
 
-    RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create();
-
-    MaterialStorage&      MaterialData = pPayload->GetStorage();
-    GLTF::MaterialBuilder Builder{MaterialData.Material};
+    GLTF::Material        Material;
+    GLTF::MaterialBuilder Builder{Material};
 
     GLTF::Material::ShaderAttribs& Attribs = Builder.GetShaderAttribs();
     Attribs.BaseColorFactor                = RadientMath::ToFloat4(MaterialCI.BaseColorFactor);
@@ -216,19 +256,20 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     Attribs.EmissiveFactor                 = RadientMath::ToFloat3(MaterialCI.EmissiveFactor);
     Attribs.AlphaCutoff                    = MaterialCI.AlphaCutoff;
 
-    MaterialData.Material.DoubleSided = MaterialCI.DoubleSided != False;
+    Material.DoubleSided = MaterialCI.DoubleSided != False;
 
-    int  TextureId = 0;
+    std::vector<IRadientTextureAsset*> Textures;
+    Textures.reserve(5);
+
     auto AddMaterialTexture =
         [&](Uint32 TextureAttribId, IRadientTextureAsset* pTexture) //
     {
         if (pTexture == nullptr)
             return;
 
-        MaterialData.SetTexture(TextureAttribId, pTexture);
-        Builder.SetTextureId(TextureAttribId, TextureId++);
-        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
-        TextureAttribs.SetUVSelector(0);
+        Builder.SetTextureId(TextureAttribId, static_cast<int>(Textures.size()));
+        Builder.GetTextureAttrib(TextureAttribId).SetUVSelector(0);
+        Textures.push_back(pTexture);
     };
 
     AddMaterialTexture(GLTF::DefaultBaseColorTextureAttribId, MaterialCI.pBaseColorTexture);
@@ -238,7 +279,10 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
 
     Builder.Finalize();
-    return CreateMaterialAsset(std::move(pPayload), ppMaterial);
+    return CreateGLTFMaterial(std::move(Material),
+                              Textures.data(),
+                              static_cast<Uint32>(Textures.size()),
+                              ppMaterial);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
@@ -257,6 +301,9 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
     RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create();
 
     MaterialStorage& MaterialData = pPayload->GetStorage();
+    SetDefaultMaterialTextures(MaterialData, Material, m_DefaultTextures);
+
+    // Actual GLTF textures override fallbacks and may use custom attributes.
     Material.ProcessActiveTextureAttibs(
         [&](Uint32 TextureAttribId, const GLTF::Material::TextureShaderAttribs&, int TextureId) //
         {

@@ -130,7 +130,11 @@ GLTF::Material CreateGLTFMaterialWithSharedTexture()
     Builder.SetTextureId(GLTF::DefaultNormalTextureAttribId, 0);
     Builder.GetTextureAttrib(GLTF::DefaultNormalTextureAttribId).SetUVSelector(1);
 
+    Builder.SetTextureId(GLTF::DefaultClearcoatTextureAttribId, 0);
+    Builder.GetTextureAttrib(GLTF::DefaultClearcoatTextureAttribId).SetUVSelector(2);
+
     Builder.Finalize();
+    Material.HasClearcoat = true;
     return Material;
 }
 
@@ -263,6 +267,7 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 0);
+    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultClearcoatTextureAttribId), 0);
 
     GLTF::Material::TextureShaderAttribs ExpectedAttribs;
     ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
@@ -276,6 +281,11 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
         pGLTFMaterial->GetTextureAttrib(GLTF::DefaultNormalTextureAttribId);
     EXPECT_EQ(NormalAttribs.GetUVSelector(), 1);
     ExpectTextureAttribsEqual(NormalAttribs, ExpectedAttribs);
+
+    const GLTF::Material::TextureShaderAttribs& ClearcoatAttribs =
+        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultClearcoatTextureAttribId);
+    EXPECT_EQ(ClearcoatAttribs.GetUVSelector(), 2);
+    ExpectTextureAttribsEqual(ClearcoatAttribs, ExpectedAttribs);
 
     pThreadPool->StopThreads();
 }

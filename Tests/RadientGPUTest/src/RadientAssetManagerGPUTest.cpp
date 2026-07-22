@@ -111,6 +111,38 @@ bool WaitForPendingCopyCommandEnqueueCallbacks(RadientAssetManagerImpl& AssetMan
     return AssetManager.GetTextureManagerStats().PendingCopyCommandEnqueueCallbacks != 0;
 }
 
+bool WaitForTextureManagerIdle(RadientAssetManagerImpl& AssetManager,
+                               IRenderDevice*           pDevice,
+                               IDeviceContext*          pContext)
+{
+    for (Uint32 i = 0; i < 256; ++i)
+    {
+        const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
+        if (Stats.PendingTextureLoads == 0 &&
+            Stats.PendingTextureSourceLoads == 0 &&
+            Stats.PendingCopyCommandEnqueueCallbacks == 0)
+        {
+            return true;
+        }
+
+        if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
+        {
+            AssetManager.UpdateGPUResources(pDevice, pContext);
+            pContext->Flush();
+            pContext->FinishFrame();
+        }
+        else
+        {
+            std::this_thread::sleep_for(1ms);
+        }
+    }
+
+    const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
+    return Stats.PendingTextureLoads == 0 &&
+        Stats.PendingTextureSourceLoads == 0 &&
+        Stats.PendingCopyCommandEnqueueCallbacks == 0;
+}
+
 RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
                                             Threading::Signal& ReleaseWorker)
 {
@@ -124,6 +156,66 @@ RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
             });
     pTask->WaitUntilRunning();
     return pTask;
+}
+
+TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.pThreadPool = pThreadPool;
+    AssetManagerCI.pDevice     = pDevice;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    RadientMaterialCreateInfo            MaterialCI{};
+    ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    // Default textures use the normal asynchronous texture path and become
+    // material dependencies before the first material is created.
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+
+    const RadientMaterialRenderData MaterialData = RadientMaterialAssetManager::GetRenderData(pMaterial);
+    ASSERT_TRUE(MaterialData);
+    ASSERT_EQ(MaterialData.TextureCount, GLTF::DefaultEmissiveTextureAttribId + 1);
+
+    for (Uint32 TextureAttribId = 0; TextureAttribId < MaterialData.TextureCount; ++TextureAttribId)
+        EXPECT_NE(MaterialData.GetTexture(TextureAttribId), nullptr) << TextureAttribId;
+
+    IRadientTextureAsset* pWhite        = MaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId);
+    IRadientTextureAsset* pBlack        = MaterialData.GetTexture(GLTF::DefaultEmissiveTextureAttribId);
+    IRadientTextureAsset* pNormal       = MaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId);
+    IRadientTextureAsset* pPhysicalDesc = MaterialData.GetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId);
+
+    EXPECT_NE(pWhite, nullptr);
+    EXPECT_NE(pBlack, nullptr);
+    EXPECT_NE(pNormal, nullptr);
+    EXPECT_NE(pPhysicalDesc, nullptr);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultOcclusionTextureAttribId), pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), nullptr);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatNormalTextureAttribId), nullptr);
+
+    EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pWhite), nullptr);
+    EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pBlack), nullptr);
+    EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pNormal), nullptr);
+    EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pPhysicalDesc), nullptr);
+
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
 }
 
 TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
@@ -222,6 +314,10 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
 
         RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
         ASSERT_NE(pAssetManager, nullptr);
+
+        // Default material textures are submitted during asset-manager initialization.
+        // Drain them so this test observes only the upload scheduled below.
+        ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
 
         EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadTexture(MakeTextureLoadInfo(TextureData), &pTexture)));
         ASSERT_NE(pTexture, nullptr);

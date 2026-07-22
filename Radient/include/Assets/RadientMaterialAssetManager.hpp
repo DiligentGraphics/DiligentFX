@@ -39,6 +39,14 @@ class RadientMaterialAssetManager;
 
 using RadientMaterialAssetManagerSharedPtr = std::shared_ptr<RadientMaterialAssetManager>;
 
+struct RadientMaterialDefaultTextures
+{
+    RefCntAutoPtr<IRadientTextureAsset> pWhite;
+    RefCntAutoPtr<IRadientTextureAsset> pBlack;
+    RefCntAutoPtr<IRadientTextureAsset> pNormal;
+    RefCntAutoPtr<IRadientTextureAsset> pPhysicalDesc;
+};
+
 /// Immutable renderer-facing view of a resolved material and its texture dependencies.
 /// The view remains valid while the material asset is retained.
 struct RadientMaterialRenderData
@@ -61,9 +69,14 @@ struct RadientMaterialRenderData
 class RadientMaterialAssetManager final : public std::enable_shared_from_this<RadientMaterialAssetManager>
 {
 public:
+    struct CreateInfo
+    {
+        RadientMaterialDefaultTextures DefaultTextures;
+    };
+
     ~RadientMaterialAssetManager();
 
-    static RadientMaterialAssetManagerSharedPtr Create();
+    static RadientMaterialAssetManagerSharedPtr Create(const CreateInfo& CI = {});
 
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);
@@ -89,7 +102,9 @@ public:
     static RadientMaterialRenderData GetRenderData(IRadientMaterialAsset* pMaterial);
 
 private:
-    RadientMaterialAssetManager() = default;
+    explicit RadientMaterialAssetManager(const CreateInfo& CI);
+
+    RadientMaterialDefaultTextures m_DefaultTextures;
 };
 
 } // namespace Diligent

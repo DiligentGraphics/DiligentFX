@@ -39,6 +39,7 @@
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
 
+#include <array>
 #include <atomic>
 #include <cstring>
 #include <exception>
@@ -235,6 +236,41 @@ RefCntAutoPtr<IGPUUploadManager> CreateRadientGPUUploadManager(IRenderDevice* pD
     return pUploadManager;
 }
 
+RadientMaterialDefaultTextures CreateDefaultMaterialTextures(IThreadPool&                ThreadPool,
+                                                             RadientTextureAssetManager& TextureManager)
+{
+    static constexpr Uint32 DefaultTextureSize = 16;
+
+    RadientMaterialDefaultTextures DefaultTextures;
+
+    auto LoadDefaultTexture = [&](const char* URI, Uint32 Pixel, IRadientTextureAsset** ppTexture) {
+        std::array<Uint32, DefaultTextureSize * DefaultTextureSize> Pixels;
+        Pixels.fill(Pixel);
+
+        RadientTextureData TextureData;
+        TextureData.Width  = DefaultTextureSize;
+        TextureData.Height = DefaultTextureSize;
+        TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+        TextureData.pData  = Pixels.data();
+        TextureData.Stride = DefaultTextureSize * sizeof(Pixel);
+
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.URI          = URI;
+        LoadInfo.pTextureData = &TextureData;
+
+        const RADIENT_STATUS Status = TextureManager.LoadTexture(ThreadPool, LoadInfo, ppTexture);
+        if (RADIENT_FAILED(Status))
+            LOG_ERROR_MESSAGE("Failed to create Radient default material texture '", URI, "'");
+    };
+
+    LoadDefaultTexture("radient://default-texture/white", 0xFFFFFFFFu, DefaultTextures.pWhite.GetAddressOfEmpty());
+    LoadDefaultTexture("radient://default-texture/black", 0x00000000u, DefaultTextures.pBlack.GetAddressOfEmpty());
+    LoadDefaultTexture("radient://default-texture/normal", 0x00FF7F7Fu, DefaultTextures.pNormal.GetAddressOfEmpty());
+    LoadDefaultTexture("radient://default-texture/physical-description", 0x0000FF00u, DefaultTextures.pPhysicalDesc.GetAddressOfEmpty());
+
+    return DefaultTextures;
+}
+
 std::string MakeSceneCacheKey(RADIENT_SCENE_FORMAT Format, const char* Location)
 {
     if (Location == nullptr || Location[0] == '\0')
@@ -307,14 +343,6 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     m_pAssetResolver{GetRadientAssetResolverOrDefault(CreateInfo.Assets.pAssetResolver)},
     m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice)},
     m_pUploadManager{CreateRadientGPUUploadManager(CreateInfo.pDevice)},
-    m_pMeshManager{
-        RadientMeshAssetManager::Create(
-            RadientMeshAssetManager::CreateInfo{
-                m_pDevice,
-                m_pResourceManager,
-                m_pUploadManager,
-            })},
-    m_pMaterialManager{RadientMaterialAssetManager::Create()},
     m_pTextureManager{
         RadientTextureAssetManager::Create(
             RadientTextureAssetManager::CreateInfo{
@@ -322,9 +350,23 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
                 m_pResourceManager,
                 m_pUploadManager,
                 m_pAssetResolver,
+            })},
+    m_pMaterialManager{},
+    m_pMeshManager{
+        RadientMeshAssetManager::Create(
+            RadientMeshAssetManager::CreateInfo{
+                m_pDevice,
+                m_pResourceManager,
+                m_pUploadManager,
             })}
 {
     m_Desc.Name = m_Name.c_str();
+
+    RadientMaterialAssetManager::CreateInfo MaterialManagerCI;
+    if (m_pDevice != nullptr && m_pThreadPool != nullptr && m_pTextureManager != nullptr)
+        MaterialManagerCI.DefaultTextures = CreateDefaultMaterialTextures(*m_pThreadPool, *m_pTextureManager);
+
+    m_pMaterialManager = RadientMaterialAssetManager::Create(MaterialManagerCI);
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
