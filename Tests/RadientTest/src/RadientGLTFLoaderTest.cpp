@@ -871,9 +871,69 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
     EXPECT_EQ(pResolver->GetStats().ResolveLocationCount, 1u);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
     EXPECT_NE(pResolver->GetStats().LastURI.find("external.png"), std::string::npos);
-    EXPECT_EQ(pResolver->GetStats().LastBaseURI, GLTFPath);
+    // Document returns an external image URI already resolved relative to the GLTF.
+    // Passing the GLTF URI as a base again would prepend its directory twice.
+    EXPECT_TRUE(pResolver->GetStats().LastBaseURI.empty());
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadTexturesDoesNotResolveExternalImageURITwice)
+{
+    static constexpr char GLTFPath[] = "Models/Box/Box.gltf";
+    const std::string     GLTFData   = R"GLTF({
+    "asset": {"version": "2.0"},
+    "images": [{"uri": "external.png"}],
+    "textures": [{"source": 0}]
+})GLTF";
+
+    GLTF::DocumentLoadInfo DocumentLoadInfo;
+    DocumentLoadInfo.FileName           = GLTFPath;
+    DocumentLoadInfo.DecodeImages       = false;
+    DocumentLoadInfo.FileExistsCallback = [](const char* FilePath) {
+        return FilePath != nullptr && std::strcmp(FilePath, GLTFPath) == 0;
+    };
+    DocumentLoadInfo.ReadWholeFileCallback = [GLTFData = std::move(GLTFData)](const char* FilePath, std::vector<unsigned char>& Data, std::string&) {
+        if (FilePath == nullptr || std::strcmp(FilePath, GLTFPath) != 0)
+            return false;
+
+        Data.assign(GLTFData.begin(), GLTFData.end());
+        return true;
+    };
+    auto pDocument = std::make_shared<GLTF::Document>(DocumentLoadInfo);
+
+    GLTF::TextureSourceInfo Source;
+    ASSERT_TRUE(pDocument->GetTextureSourceInfo(0, Source));
+    EXPECT_TRUE(Source.URI == "Models/Box/external.png" ||
+                Source.URI == "Models\\Box\\external.png");
+
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
+    pResolver->AddAsset(Source.URI,
+                        "memory://resolved/external.png",
+                        std::vector<Uint8>{TransparentPng.begin(), TransparentPng.end()});
+
+    RadientTextureAssetManager::CreateInfo TextureManagerCI;
+    TextureManagerCI.pAssetResolver                     = pResolver;
+    RadientTextureAssetManagerSharedPtr pTextureManager = RadientTextureAssetManager::Create(TextureManagerCI);
+    ASSERT_NE(pTextureManager, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientImport::TextureAssetList Textures =
+        RadientGLTFLoader::LoadTextures(*pThreadPool,
+                                        *pTextureManager,
+                                        GLTFPath,
+                                        pDocument);
+    ASSERT_EQ(Textures.size(), 1u);
+    ASSERT_NE(Textures[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    EXPECT_EQ(pResolver->GetStats().LastURI, Source.URI);
+    EXPECT_TRUE(pResolver->GetStats().LastBaseURI.empty());
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();
 }
 

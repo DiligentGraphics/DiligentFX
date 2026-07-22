@@ -589,8 +589,10 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
             MakeEmbeddedGLTFTextureURI(SourceURI, TextureIndex);
 
         RadientTextureLoadInfo LoadInfo;
-        LoadInfo.URI      = TextureURI.c_str();
-        LoadInfo.BaseURI  = !Source.URI.empty() ? SourceURI.c_str() : nullptr;
+        LoadInfo.URI = TextureURI.c_str();
+        // External image URIs returned by GetTextureSourceInfo() are already
+        // resolved relative to the GLTF document, so no base URI is needed.
+        LoadInfo.BaseURI  = nullptr;
         LoadInfo.pData    = Source.pData;
         LoadInfo.DataSize = Source.DataSize;
         LoadInfo.IsSRGB   = False;
