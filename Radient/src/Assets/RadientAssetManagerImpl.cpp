@@ -135,12 +135,9 @@ struct ImportedSceneStorage
     {
         RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
-        for (IRadientTextureAsset* pTexture : Scene.Textures)
-        {
-            if (pTexture != nullptr)
-                Status = CombineDependencyStatus(Status, RadientTextureAssetManager::GetLoadStatus(pTexture));
-        }
-
+        // Materials own their render texture dependencies and substitute
+        // defaults for failed sources. Raw document texture slots therefore do
+        // not independently determine whether the imported scene succeeded.
         for (IRadientMaterialAsset* pMaterial : Scene.Materials)
         {
             if (pMaterial != nullptr)
@@ -160,12 +157,9 @@ struct ImportedSceneStorage
     {
         RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
-        for (IRadientTextureAsset* pTexture : Scene.Textures)
-        {
-            if (pTexture != nullptr)
-                Status = CombineDependencyStatus(Status, RadientTextureAssetManager::GetGPUResourceStatus(pTexture));
-        }
-
+        // Materials own their render texture dependencies and substitute
+        // defaults for failed sources. Raw document texture slots therefore do
+        // not independently determine whether the imported scene succeeded.
         for (IRadientMaterialAsset* pMaterial : Scene.Materials)
         {
             if (pMaterial != nullptr)

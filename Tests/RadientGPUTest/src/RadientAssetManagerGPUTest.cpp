@@ -26,8 +26,10 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "Import/RadientImportedScene.hpp"
 
 #include "GPUTestingEnvironment.hpp"
+#include "TempDirectory.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 
@@ -35,6 +37,9 @@
 
 #include <array>
 #include <chrono>
+#include <fstream>
+#include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -158,6 +163,115 @@ RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
     return pTask;
 }
 
+std::string WriteGLTFWithMissingMaterialTextures(const TempDirectory& TempDir)
+{
+    const std::string Path = TempDir.Get() + "/missing_material_textures.gltf";
+
+    std::ofstream File{Path, std::ios::binary};
+    EXPECT_TRUE(File.is_open());
+    File << R"GLTF({
+        "asset": {"version": "2.0"},
+        "extensionsUsed": [
+            "KHR_materials_pbrSpecularGlossiness",
+            "KHR_materials_clearcoat",
+            "KHR_materials_sheen",
+            "KHR_materials_anisotropy",
+            "KHR_materials_iridescence",
+            "KHR_materials_transmission",
+            "KHR_materials_volume"
+        ],
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Root"}],
+        "images": [{"uri": "missing.png"}],
+        "textures": [{"source": 0}],
+        "materials": [
+            {
+                "pbrMetallicRoughness": {
+                    "baseColorTexture": {"index": 0},
+                    "metallicRoughnessTexture": {"index": 0}
+                },
+                "normalTexture": {"index": 0},
+                "occlusionTexture": {"index": 0},
+                "emissiveTexture": {"index": 0},
+                "extensions": {
+                    "KHR_materials_clearcoat": {
+                        "clearcoatFactor": 1.0,
+                        "clearcoatTexture": {"index": 0},
+                        "clearcoatRoughnessTexture": {"index": 0},
+                        "clearcoatNormalTexture": {"index": 0}
+                    },
+                    "KHR_materials_sheen": {
+                        "sheenColorTexture": {"index": 0},
+                        "sheenRoughnessTexture": {"index": 0}
+                    },
+                    "KHR_materials_anisotropy": {
+                        "anisotropyTexture": {"index": 0}
+                    },
+                    "KHR_materials_iridescence": {
+                        "iridescenceTexture": {"index": 0},
+                        "iridescenceThicknessTexture": {"index": 0}
+                    },
+                    "KHR_materials_transmission": {
+                        "transmissionTexture": {"index": 0}
+                    },
+                    "KHR_materials_volume": {
+                        "thicknessTexture": {"index": 0}
+                    }
+                }
+            },
+            {
+                "extensions": {
+                    "KHR_materials_pbrSpecularGlossiness": {
+                        "diffuseTexture": {"index": 0},
+                        "specularGlossinessTexture": {"index": 0}
+                    }
+                }
+            }
+        ]
+    })GLTF";
+
+    return Path;
+}
+
+void ExpectTextureURI(IRadientTextureAsset* pTexture, const char* ExpectedURI)
+{
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_NE(pTexture->GetReference().URI, nullptr);
+    EXPECT_STREQ(pTexture->GetReference().URI, ExpectedURI);
+}
+
+void ExpectMetallicRoughnessTextureDefaults(const RadientMaterialRenderData&      MaterialData,
+                                            const RadientMaterialDefaultTextures& DefaultTextures)
+{
+    ASSERT_TRUE(MaterialData);
+    ASSERT_EQ(MaterialData.TextureCount, GLTF::DefaultThicknessTextureAttribId + 1);
+
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId), DefaultTextures.pPhysicalDesc);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId), DefaultTextures.pNormal);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultOcclusionTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultEmissiveTextureAttribId), DefaultTextures.pBlack);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatNormalTextureAttribId), DefaultTextures.pNormal);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultSheenColorTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultSheenRoughnessTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultAnisotropyTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultIridescenceTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultIridescenceThicknessTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultTransmissionTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultThicknessTextureAttribId), DefaultTextures.pWhite);
+}
+
+void ExpectSpecularGlossinessTextureDefaults(const RadientMaterialRenderData&      MaterialData,
+                                             const RadientMaterialDefaultTextures& DefaultTextures)
+{
+    ASSERT_TRUE(MaterialData);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultDiffuseTextureAttribId), DefaultTextures.pWhite);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultSpecularGlossinessTextureAttibId), DefaultTextures.pWhite);
+}
+
 TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
@@ -205,6 +319,10 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     EXPECT_NE(pBlack, nullptr);
     EXPECT_NE(pNormal, nullptr);
     EXPECT_NE(pPhysicalDesc, nullptr);
+    ExpectTextureURI(pWhite, "radient://default-texture/white");
+    ExpectTextureURI(pBlack, "radient://default-texture/black");
+    ExpectTextureURI(pNormal, "radient://default-texture/normal");
+    ExpectTextureURI(pPhysicalDesc, "radient://default-texture/physical-description");
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultOcclusionTextureAttribId), pWhite);
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), nullptr);
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatNormalTextureAttribId), nullptr);
@@ -213,6 +331,178 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pBlack), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pNormal), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pPhysicalDesc), nullptr);
+
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientAssetManagerGPUTest, MapsDefaultsForAllSupportedMaterialTextures)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.pThreadPool = pThreadPool;
+    AssetManagerCI.pDevice     = pDevice;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
+    RadientMaterialCreateInfo            DefaultMaterialCI{};
+    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefaultMaterial, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+
+    const RadientMaterialRenderData DefaultMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pDefaultMaterial);
+    ASSERT_TRUE(DefaultMaterialData);
+
+    RadientMaterialDefaultTextures DefaultTextures;
+    DefaultTextures.pWhite =
+        DefaultMaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId);
+    DefaultTextures.pBlack =
+        DefaultMaterialData.GetTexture(GLTF::DefaultEmissiveTextureAttribId);
+    DefaultTextures.pNormal =
+        DefaultMaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId);
+    DefaultTextures.pPhysicalDesc =
+        DefaultMaterialData.GetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId);
+
+    ExpectTextureURI(DefaultTextures.pWhite, "radient://default-texture/white");
+    ExpectTextureURI(DefaultTextures.pBlack, "radient://default-texture/black");
+    ExpectTextureURI(DefaultTextures.pNormal, "radient://default-texture/normal");
+    ExpectTextureURI(DefaultTextures.pPhysicalDesc, "radient://default-texture/physical-description");
+
+    RadientMaterialAssetManager::CreateInfo MaterialManagerCI{};
+    MaterialManagerCI.DefaultTextures = DefaultTextures;
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager =
+        RadientMaterialAssetManager::Create(MaterialManagerCI);
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    GLTF::Material Material;
+    Material.HasClearcoat = true;
+    Material.Sheen        = std::make_unique<GLTF::Material::SheenShaderAttribs>();
+    Material.Anisotropy   = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
+    Material.Iridescence  = std::make_unique<GLTF::Material::IridescenceShaderAttribs>();
+    Material.Transmission = std::make_unique<GLTF::Material::TransmissionShaderAttribs>();
+    Material.Volume       = std::make_unique<GLTF::Material::VolumeShaderAttribs>();
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pMaterialManager->CreateGLTFMaterial(std::move(Material), nullptr, 0, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    const RadientMaterialRenderData MaterialData = RadientMaterialAssetManager::GetRenderData(pMaterial);
+    ExpectMetallicRoughnessTextureDefaults(MaterialData, DefaultTextures);
+
+    GLTF::Material SpecGlossMaterial;
+    SpecGlossMaterial.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pSpecGlossMaterial;
+    ASSERT_EQ(pMaterialManager->CreateGLTFMaterial(std::move(SpecGlossMaterial), nullptr, 0, &pSpecGlossMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pSpecGlossMaterial, nullptr);
+
+    const RadientMaterialRenderData SpecGlossMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pSpecGlossMaterial);
+    ExpectSpecularGlossinessTextureDefaults(SpecGlossMaterialData, DefaultTextures);
+
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSupportedMaterialTextures)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.pThreadPool = pThreadPool;
+    AssetManagerCI.pDevice     = pDevice;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
+    RadientMaterialCreateInfo            DefaultMaterialCI{};
+    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefaultMaterial, nullptr);
+
+    TempDirectory     TempDir{"RadientAssetManagerGPUTest"};
+    const std::string GLTFPath = WriteGLTFWithMissingMaterialTextures(TempDir);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    TestingEnvironment::ErrorScope ExpectedErrors{"Failed to open file"};
+
+    RefCntAutoPtr<IRadientSceneAsset> pScene;
+    EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadScene(LoadInfo, &pScene)));
+    ASSERT_NE(pScene, nullptr);
+
+    // The missing texture remains failed, but both materials resolve through
+    // their semantic defaults and allow the scene source load to succeed.
+    // Default texture uploads may temporarily occupy the only worker while
+    // waiting for render-thread copy callbacks, so service them before waiting
+    // synchronously for the scene source task.
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+    EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene), RADIENT_STATUS_OK);
+
+    const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pScene);
+    ASSERT_NE(pImportedScene, nullptr);
+    ASSERT_EQ(pImportedScene->Textures.size(), 1u);
+    ASSERT_EQ(pImportedScene->Materials.size(), 2u);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pImportedScene->Textures[0]), RADIENT_STATUS_NOT_FOUND);
+
+    const RadientMaterialRenderData MetallicRoughnessMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pImportedScene->Materials[0]);
+    const RadientMaterialRenderData SpecularGlossinessMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pImportedScene->Materials[1]);
+
+    const RadientMaterialRenderData DefaultMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pDefaultMaterial);
+    ASSERT_TRUE(DefaultMaterialData);
+
+    RadientMaterialDefaultTextures DefaultTextures;
+    DefaultTextures.pWhite =
+        DefaultMaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId);
+    DefaultTextures.pBlack =
+        DefaultMaterialData.GetTexture(GLTF::DefaultEmissiveTextureAttribId);
+    DefaultTextures.pNormal =
+        DefaultMaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId);
+    DefaultTextures.pPhysicalDesc =
+        DefaultMaterialData.GetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId);
+
+    ExpectTextureURI(DefaultTextures.pWhite, "radient://default-texture/white");
+    ExpectTextureURI(DefaultTextures.pBlack, "radient://default-texture/black");
+    ExpectTextureURI(DefaultTextures.pNormal, "radient://default-texture/normal");
+    ExpectTextureURI(DefaultTextures.pPhysicalDesc, "radient://default-texture/physical-description");
+
+    ExpectMetallicRoughnessTextureDefaults(MetallicRoughnessMaterialData, DefaultTextures);
+    ExpectSpecularGlossinessTextureDefaults(SpecularGlossinessMaterialData, DefaultTextures);
+
+    for (Uint32 TextureAttribId = 0; TextureAttribId < MetallicRoughnessMaterialData.TextureCount; ++TextureAttribId)
+    {
+        EXPECT_NE(MetallicRoughnessMaterialData.GetTexture(TextureAttribId),
+                  pImportedScene->Textures[0].RawPtr());
+    }
 
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();

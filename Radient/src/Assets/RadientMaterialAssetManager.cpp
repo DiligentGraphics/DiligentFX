@@ -34,8 +34,8 @@
 #include "GLTFBuilder.hpp"
 #include "Math/RadientMath.hpp"
 
+#include <algorithm>
 #include <atomic>
-#include <utility>
 #include <vector>
 
 namespace Diligent
@@ -48,7 +48,11 @@ static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4
 
 struct MaterialStorage
 {
-    void SetTexture(Uint32 TextureAttribId, IRadientTextureAsset* pTexture)
+    using TextureArray = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+
+    static void SetTexture(TextureArray&         Textures,
+                           Uint32                TextureAttribId,
+                           IRadientTextureAsset* pTexture)
     {
         if (pTexture == nullptr)
             return;
@@ -59,9 +63,19 @@ struct MaterialStorage
         Textures[TextureAttribId] = pTexture;
     }
 
+    void SetRequestedTexture(Uint32 TextureAttribId, IRadientTextureAsset* pTexture)
+    {
+        SetTexture(RequestedTextures, TextureAttribId, pTexture);
+    }
+
+    void SetFallbackTexture(Uint32 TextureAttribId, IRadientTextureAsset* pTexture)
+    {
+        SetTexture(FallbackTextures, TextureAttribId, pTexture);
+    }
+
     void InitLoadStatus() noexcept
     {
-        const RADIENT_STATUS InitStatus = !Textures.empty() ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
+        const RADIENT_STATUS InitStatus = GetTextureCount() != 0 ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK;
         LoadStatus.store(InitStatus, std::memory_order_release);
         GPUResourceStatus.store(InitStatus, std::memory_order_release);
     }
@@ -83,8 +97,9 @@ struct MaterialStorage
     {
         RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
-        for (IRadientTextureAsset* pTexture : Textures)
+        for (size_t TextureAttribId = 0; TextureAttribId < GetTextureCount(); ++TextureAttribId)
         {
+            IRadientTextureAsset* pTexture = GetRenderTexture(TextureAttribId);
             if (pTexture == nullptr)
                 continue;
 
@@ -116,8 +131,9 @@ struct MaterialStorage
     {
         RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
-        for (IRadientTextureAsset* pTexture : Textures)
+        for (size_t TextureAttribId = 0; TextureAttribId < GetTextureCount(); ++TextureAttribId)
         {
+            IRadientTextureAsset* pTexture = GetRenderTexture(TextureAttribId);
             if (pTexture == nullptr)
                 continue;
 
@@ -128,12 +144,43 @@ struct MaterialStorage
         return Status;
     }
 
+    size_t GetTextureCount() const noexcept
+    {
+        return std::max(RequestedTextures.size(), FallbackTextures.size());
+    }
+
+    IRadientTextureAsset* GetRequestedTexture(size_t TextureAttribId) const noexcept
+    {
+        return TextureAttribId < RequestedTextures.size() ? RequestedTextures[TextureAttribId].RawPtr() : nullptr;
+    }
+
+    IRadientTextureAsset* GetFallbackTexture(size_t TextureAttribId) const noexcept
+    {
+        return TextureAttribId < FallbackTextures.size() ? FallbackTextures[TextureAttribId].RawPtr() : nullptr;
+    }
+
+    IRadientTextureAsset* GetRenderTexture(size_t TextureAttribId) const noexcept
+    {
+        IRadientTextureAsset* pRequestedTexture = GetRequestedTexture(TextureAttribId);
+        if (pRequestedTexture != nullptr &&
+            RADIENT_SUCCEEDED(RadientTextureAssetManager::GetLoadStatus(pRequestedTexture)))
+            return pRequestedTexture;
+
+        IRadientTextureAsset* pFallbackTexture = GetFallbackTexture(TextureAttribId);
+        return pFallbackTexture != nullptr ? pFallbackTexture : pRequestedTexture;
+    }
+
     GLTF::Material                      Material;
     bool                                TextureAttribsReady = false;
     mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
 
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    TextureArray RequestedTextures;
+    TextureArray FallbackTextures;
+
+    // GetRenderData() requires a contiguous immutable smart-pointer array. It is
+    // captured once after every selected texture has reached GPU-ready status.
+    TextureArray RenderTextures;
 };
 
 void SetDefaultMaterialTextures(MaterialStorage&                      MaterialData,
@@ -141,38 +188,38 @@ void SetDefaultMaterialTextures(MaterialStorage&                      MaterialDa
                                 const RadientMaterialDefaultTextures& DefaultTextures)
 {
     // Radient's core PBR path may sample these maps for every material.
-    MaterialData.SetTexture(GLTF::DefaultBaseColorTextureAttribId, DefaultTextures.pWhite);
+    MaterialData.SetFallbackTexture(GLTF::DefaultBaseColorTextureAttribId, DefaultTextures.pWhite);
 
     IRadientTextureAsset* pPhysicalDesc = Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS ?
         DefaultTextures.pWhite :
         DefaultTextures.pPhysicalDesc;
-    MaterialData.SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, pPhysicalDesc);
-    MaterialData.SetTexture(GLTF::DefaultNormalTextureAttribId, DefaultTextures.pNormal);
-    MaterialData.SetTexture(GLTF::DefaultOcclusionTextureAttribId, DefaultTextures.pWhite);
-    MaterialData.SetTexture(GLTF::DefaultEmissiveTextureAttribId, DefaultTextures.pBlack);
+    MaterialData.SetFallbackTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, pPhysicalDesc);
+    MaterialData.SetFallbackTexture(GLTF::DefaultNormalTextureAttribId, DefaultTextures.pNormal);
+    MaterialData.SetFallbackTexture(GLTF::DefaultOcclusionTextureAttribId, DefaultTextures.pWhite);
+    MaterialData.SetFallbackTexture(GLTF::DefaultEmissiveTextureAttribId, DefaultTextures.pBlack);
 
     if (Material.HasClearcoat)
     {
-        MaterialData.SetTexture(GLTF::DefaultClearcoatTextureAttribId, DefaultTextures.pWhite);
-        MaterialData.SetTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId, DefaultTextures.pWhite);
-        MaterialData.SetTexture(GLTF::DefaultClearcoatNormalTextureAttribId, DefaultTextures.pNormal);
+        MaterialData.SetFallbackTexture(GLTF::DefaultClearcoatTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultClearcoatNormalTextureAttribId, DefaultTextures.pNormal);
     }
     if (Material.Sheen)
     {
-        MaterialData.SetTexture(GLTF::DefaultSheenColorTextureAttribId, DefaultTextures.pWhite);
-        MaterialData.SetTexture(GLTF::DefaultSheenRoughnessTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultSheenColorTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultSheenRoughnessTextureAttribId, DefaultTextures.pWhite);
     }
     if (Material.Anisotropy)
-        MaterialData.SetTexture(GLTF::DefaultAnisotropyTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultAnisotropyTextureAttribId, DefaultTextures.pWhite);
     if (Material.Iridescence)
     {
-        MaterialData.SetTexture(GLTF::DefaultIridescenceTextureAttribId, DefaultTextures.pWhite);
-        MaterialData.SetTexture(GLTF::DefaultIridescenceThicknessTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultIridescenceTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultIridescenceThicknessTextureAttribId, DefaultTextures.pWhite);
     }
     if (Material.Transmission)
-        MaterialData.SetTexture(GLTF::DefaultTransmissionTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultTransmissionTextureAttribId, DefaultTextures.pWhite);
     if (Material.Volume)
-        MaterialData.SetTexture(GLTF::DefaultThicknessTextureAttribId, DefaultTextures.pWhite);
+        MaterialData.SetFallbackTexture(GLTF::DefaultThicknessTextureAttribId, DefaultTextures.pWhite);
 }
 
 class MaterialPayloadImpl final : public RadientAssetPayloadImpl<MaterialStorage, MaterialPayloadImpl>
@@ -210,9 +257,11 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 
     GLTF::MaterialBuilder Builder{MaterialData.Material};
 
-    for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.Textures.size(); ++TextureAttribId)
+    MaterialData.RenderTextures.resize(MaterialData.GetTextureCount());
+    for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.RenderTextures.size(); ++TextureAttribId)
     {
-        IRadientTextureAsset* pTexture = MaterialData.Textures[TextureAttribId];
+        IRadientTextureAsset* pTexture               = MaterialData.GetRenderTexture(TextureAttribId);
+        MaterialData.RenderTextures[TextureAttribId] = pTexture;
         if (pTexture == nullptr)
             continue;
 
@@ -308,7 +357,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
         [&](Uint32 TextureAttribId, const GLTF::Material::TextureShaderAttribs&, int TextureId) //
         {
             if (TextureId >= 0 && static_cast<Uint32>(TextureId) < TextureCount)
-                MaterialData.SetTexture(TextureAttribId, ppTextures[TextureId]);
+                MaterialData.SetRequestedTexture(TextureAttribId, ppTextures[TextureId]);
             return true;
         });
     MaterialData.Material = std::move(Material);
@@ -345,8 +394,8 @@ RadientMaterialRenderData RadientMaterialAssetManager::GetRenderData(IRadientMat
 
     return {
         &MaterialData.Material,
-        MaterialData.Textures.data(),
-        static_cast<Uint32>(MaterialData.Textures.size()),
+        MaterialData.RenderTextures.data(),
+        static_cast<Uint32>(MaterialData.RenderTextures.size()),
     };
 }
 

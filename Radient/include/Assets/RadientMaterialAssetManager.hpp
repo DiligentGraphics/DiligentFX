@@ -86,16 +86,20 @@ public:
                                       Uint32                       TextureCount,
                                       IRadientMaterialAsset**      ppMaterial);
 
-    // Reports material source/dependency status. OK means all dependent texture
-    // sources have loaded. Once the status becomes terminal, it is cached and
-    // no longer rechecks texture dependencies.
+    // Reports material source/dependency status. A failed requested texture is
+    // replaced by its semantic default when one is available. OK means every
+    // render texture source has loaded. Once the status becomes terminal,
+    // it is cached and no longer rechecks texture dependencies.
     static RADIENT_STATUS GetLoadStatus(IRadientAsset* pMaterial);
 
-    // Reports material GPU resource status. OK means all dependent texture GPU
-    // resources are available. NO_GPU_DATA means all sources loaded without a GPU backend.
+    // Reports material GPU resource status. A requested texture that failed to
+    // load is replaced by its semantic default when one is available. OK means
+    // every selected texture GPU resource is available. NO_GPU_DATA means all
+    // sources loaded without a GPU backend.
     static RADIENT_STATUS GetGPUResourceStatus(IRadientAsset* pMaterial);
 
-    // Returns the resolved material and its immutable texture dependencies.
+    // Returns the resolved material and its immutable render textures,
+    // including semantic defaults selected for failed requested textures.
     // This method lazily updates texture atlas attributes in the stored material
     // and must be called from the render thread. It is not thread-safe and must
     // not race with another GetRenderData() call for the same material asset.
