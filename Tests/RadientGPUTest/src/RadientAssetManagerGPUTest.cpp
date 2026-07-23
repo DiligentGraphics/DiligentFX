@@ -234,6 +234,32 @@ std::string WriteGLTFWithMissingMaterialTextures(const TempDirectory& TempDir)
     return Path;
 }
 
+std::string WriteGLTFWithMissingDDSTexture(const TempDirectory& TempDir)
+{
+    const std::string Path = TempDir.Get() + "/missing_dds_texture.gltf";
+
+    std::ofstream File{Path, std::ios::binary};
+    EXPECT_TRUE(File.is_open());
+    File << R"GLTF({
+        "asset": {"version": "2.0"},
+        "extensionsUsed": ["MSFT_texture_dds"],
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Root"}],
+        "images": [{"uri": "missing.dds"}],
+        "textures": [{
+            "extensions": {"MSFT_texture_dds": {"source": 0}}
+        }],
+        "materials": [{
+            "pbrMetallicRoughness": {
+                "baseColorTexture": {"index": 0}
+            }
+        }]
+    })GLTF";
+
+    return Path;
+}
+
 void ExpectTextureURI(IRadientTextureAsset* pTexture, const char* ExpectedURI)
 {
     ASSERT_NE(pTexture, nullptr);
@@ -503,6 +529,73 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
         EXPECT_NE(MetallicRoughnessMaterialData.GetTexture(TextureAttribId),
                   pImportedScene->Textures[0].RawPtr());
     }
+
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientAssetManagerGPUTest, SceneWithMissingDDSTextureUsesDefault)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.pThreadPool = pThreadPool;
+    AssetManagerCI.pDevice     = pDevice;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
+    RadientMaterialCreateInfo            DefaultMaterialCI{};
+    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefaultMaterial, nullptr);
+
+    TempDirectory     TempDir{"RadientAssetManagerGPUTest"};
+    const std::string GLTFPath = WriteGLTFWithMissingDDSTexture(TempDir);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    TestingEnvironment::ErrorScope ExpectedErrors{"Failed to open file"};
+
+    RefCntAutoPtr<IRadientSceneAsset> pScene;
+    EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadScene(LoadInfo, &pScene)));
+    ASSERT_NE(pScene, nullptr);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+    EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene), RADIENT_STATUS_OK);
+
+    const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pScene);
+    ASSERT_NE(pImportedScene, nullptr);
+    ASSERT_EQ(pImportedScene->Textures.size(), 1u);
+    ASSERT_EQ(pImportedScene->Materials.size(), 1u);
+    ASSERT_NE(pImportedScene->Textures[0], nullptr);
+    ASSERT_NE(pImportedScene->Textures[0]->GetReference().URI, nullptr);
+    EXPECT_NE(std::string{pImportedScene->Textures[0]->GetReference().URI}.find("missing.dds"), std::string::npos);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pImportedScene->Textures[0]), RADIENT_STATUS_NOT_FOUND);
+
+    const RadientMaterialRenderData MaterialData =
+        RadientMaterialAssetManager::GetRenderData(pImportedScene->Materials[0]);
+    const RadientMaterialRenderData DefaultMaterialData =
+        RadientMaterialAssetManager::GetRenderData(pDefaultMaterial);
+    ASSERT_TRUE(MaterialData);
+    ASSERT_TRUE(DefaultMaterialData);
+
+    IRadientTextureAsset* pDefaultWhite =
+        DefaultMaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId);
+    ExpectTextureURI(pDefaultWhite, "radient://default-texture/white");
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId), pDefaultWhite);
 
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();
