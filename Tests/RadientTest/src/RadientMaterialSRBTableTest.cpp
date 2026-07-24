@@ -95,9 +95,8 @@ RadientMaterialTextureBindingPlan MakePlan(std::initializer_list<PBR_Renderer::T
     RadientMaterialTextureBindingPlan Plan;
     for (const PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId : TextureAttribIds)
     {
-        Plan.ShaderTextureIds[TextureAttribId]     = static_cast<Uint16>(Plan.SlotCount);
-        Plan.Slots[Plan.SlotCount].TextureAttribId = TextureAttribId;
-        ++Plan.SlotCount;
+        Plan.ShaderTextureIds[TextureAttribId] = static_cast<Uint16>(Plan.Slots.size());
+        Plan.Slots.push_back({TextureAttribId});
     }
     return Plan;
 }

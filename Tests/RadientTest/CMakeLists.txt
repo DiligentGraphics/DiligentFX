@@ -35,6 +35,7 @@ PRIVATE
     Radient
     EnTT
     absl::flat_hash_map
+    absl::inlined_vector
 )
 
 if (MSVC)

@@ -29,7 +29,17 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "PBR_Renderer.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#endif
+#include "absl/container/inlined_vector.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #include <array>
+#include <cstddef>
 
 namespace Diligent
 {
@@ -49,11 +59,7 @@ struct RadientMaterialTextureBindingPlan
 {
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
 
-    static constexpr Uint32 MaxSlotCount = PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT;
-    using SlotArrayType                  = std::array<RadientMaterialTextureSlot, MaxSlotCount>;
-
-    SlotArrayType Slots{};
-    Uint32        SlotCount = 0;
+    absl::InlinedVector<RadientMaterialTextureSlot, 8> Slots;
 
     RadientMaterialTextureBindingPlan() noexcept
     {

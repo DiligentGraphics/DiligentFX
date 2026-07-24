@@ -16,6 +16,8 @@
 
 #include "Render/RadientMaterialTextureBinding.hpp"
 
+#include <utility>
+
 namespace Diligent
 {
 
@@ -43,7 +45,6 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
     const bool UseCompactMapping = ActiveTextureCount > MaxTextureSlots;
 
     RadientMaterialTextureBindingPlan NewPlan;
-    RadientMaterialTextureSRVArray    SlotSRVs{};
     RADIENT_STATUS                    Status = RADIENT_STATUS_OK;
 
     PBR_Renderer::ProcessTexturAttribs(
@@ -52,42 +53,46 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
             if (Status != RADIENT_STATUS_OK)
                 return;
 
-            const int MaterialTextureAttribId = TextureAttribIndices[AttribId];
+            const int           MaterialTextureAttribId = TextureAttribIndices[AttribId];
+            ITextureView* const pTextureSRV             = TextureSRVs[AttribId];
             if (MaterialTextureAttribId < 0 ||
-                (UseCompactMapping && TextureSRVs[AttribId] == nullptr))
+                (UseCompactMapping && pTextureSRV == nullptr))
             {
                 Status = RADIENT_STATUS_INVALID_OPERATION;
                 return;
             }
 
-            Uint32 SlotIndex = NewPlan.SlotCount;
+            size_t SlotIndex = NewPlan.Slots.size();
             if (UseCompactMapping)
             {
                 SlotIndex = 0;
-                while (SlotIndex < NewPlan.SlotCount && SlotSRVs[SlotIndex] != TextureSRVs[AttribId])
+                while (SlotIndex < NewPlan.Slots.size() &&
+                       TextureSRVs[NewPlan.Slots[SlotIndex].TextureAttribId] != pTextureSRV)
                     ++SlotIndex;
             }
 
-            if (SlotIndex == NewPlan.SlotCount)
+            if (SlotIndex == NewPlan.Slots.size())
             {
-                if (NewPlan.SlotCount >= MaxTextureSlots)
+                if (NewPlan.Slots.size() >= MaxTextureSlots)
                 {
                     Status = RADIENT_STATUS_INVALID_OPERATION;
                     return;
                 }
 
-                SlotSRVs[SlotIndex]      = TextureSRVs[AttribId];
-                NewPlan.Slots[SlotIndex] = {
+                NewPlan.Slots.push_back({
                     AttribId,
                     MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId)),
-                };
-                ++NewPlan.SlotCount;
+                });
             }
 
             NewPlan.ShaderTextureIds[AttribId] = static_cast<Uint16>(SlotIndex);
         });
 
-    Plan = Status == RADIENT_STATUS_OK ? NewPlan : RadientMaterialTextureBindingPlan{};
+    if (Status == RADIENT_STATUS_OK)
+        Plan = std::move(NewPlan);
+    else
+        Plan = {};
+
     return Status;
 }
 

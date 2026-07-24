@@ -62,8 +62,8 @@ bool BuildRadientMaterialSRBKey(const RadientMaterialTextureBindingPlan& Plan,
 {
     RadientMaterialSRBKey NewKey;
 
-    bool IsValid = Plan.SlotCount <= NewKey.SlotSRVs.size();
-    for (Uint32 Slot = 0; IsValid && Slot < Plan.SlotCount; ++Slot)
+    bool IsValid = Plan.Slots.size() <= NewKey.SlotSRVs.size();
+    for (size_t Slot = 0; IsValid && Slot < Plan.Slots.size(); ++Slot)
     {
         const PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId = Plan.Slots[Slot].TextureAttribId;
 
@@ -74,7 +74,7 @@ bool BuildRadientMaterialSRBKey(const RadientMaterialTextureBindingPlan& Plan,
     }
 
     if (IsValid)
-        NewKey.SlotCount = Plan.SlotCount;
+        NewKey.SlotCount = static_cast<Uint32>(Plan.Slots.size());
 
     Key = NewKey;
     return IsValid;
@@ -99,8 +99,8 @@ RadientMaterialSRBIndex RadientMaterialSRBTable::GetOrCreate(
 
     Entry NewEntry;
     NewEntry.pSRB      = std::move(pSRB);
-    NewEntry.SlotCount = Plan.SlotCount;
-    for (Uint32 Slot = 0; Slot < Plan.SlotCount; ++Slot)
+    NewEntry.SlotCount = static_cast<Uint32>(Plan.Slots.size());
+    for (size_t Slot = 0; Slot < Plan.Slots.size(); ++Slot)
     {
         NewEntry.SlotTextures[Slot]         = Plan.Slots[Slot].pTexture;
         NewEntry.SlotTextureAttribIds[Slot] = Plan.Slots[Slot].TextureAttribId;
