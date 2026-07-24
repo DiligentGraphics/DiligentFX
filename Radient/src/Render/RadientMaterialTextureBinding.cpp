@@ -16,6 +16,7 @@
 
 #include "Render/RadientMaterialTextureBinding.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace Diligent
@@ -35,17 +36,27 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    Uint32 ActiveTextureCount = 0;
+    Uint32 ActiveTextureCount   = 0;
+    bool   CanUseDefaultMapping = true;
     PBR_Renderer::ProcessTexturAttribs(
         PSOFlags,
-        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID) {
+        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) {
             ++ActiveTextureCount;
+            if (AttribId >= MaxTextureSlots)
+                CanUseDefaultMapping = false;
         });
 
-    const bool UseCompactMapping = ActiveTextureCount > MaxTextureSlots;
+    const bool UseDefaultMapping = ActiveTextureCount != 0 && CanUseDefaultMapping;
 
     RadientMaterialTextureBindingPlan NewPlan;
     RADIENT_STATUS                    Status = RADIENT_STATUS_OK;
+
+    if (UseDefaultMapping)
+    {
+        NewPlan.Bindings.resize(std::min(MaxTextureSlots, Uint32{PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT}));
+        for (Uint32 Slot = 0; Slot < NewPlan.Bindings.size(); ++Slot)
+            NewPlan.ShaderTextureIds[Slot] = static_cast<Uint16>(Slot);
+    }
 
     PBR_Renderer::ProcessTexturAttribs(
         PSOFlags,
@@ -56,30 +67,37 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
             const int           MaterialTextureAttribId = TextureAttribIndices[AttribId];
             ITextureView* const pTextureSRV             = TextureSRVs[AttribId];
             if (MaterialTextureAttribId < 0 ||
-                (UseCompactMapping && pTextureSRV == nullptr))
+                (!UseDefaultMapping && pTextureSRV == nullptr))
             {
                 Status = RADIENT_STATUS_INVALID_OPERATION;
                 return;
             }
 
-            size_t SlotIndex = NewPlan.Slots.size();
-            if (UseCompactMapping)
+            size_t SlotIndex = AttribId;
+            if (!UseDefaultMapping)
             {
                 SlotIndex = 0;
-                while (SlotIndex < NewPlan.Slots.size() &&
-                       TextureSRVs[NewPlan.Slots[SlotIndex].TextureAttribId] != pTextureSRV)
+                while (SlotIndex < NewPlan.Bindings.size() &&
+                       TextureSRVs[NewPlan.Bindings[SlotIndex].TextureAttribId] != pTextureSRV)
                     ++SlotIndex;
             }
 
-            if (SlotIndex == NewPlan.Slots.size())
+            if (UseDefaultMapping)
             {
-                if (NewPlan.Slots.size() >= MaxTextureSlots)
+                NewPlan.Bindings[SlotIndex] = {
+                    AttribId,
+                    MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId)),
+                };
+            }
+            else if (SlotIndex == NewPlan.Bindings.size())
+            {
+                if (NewPlan.Bindings.size() >= MaxTextureSlots)
                 {
                     Status = RADIENT_STATUS_INVALID_OPERATION;
                     return;
                 }
 
-                NewPlan.Slots.push_back({
+                NewPlan.Bindings.push_back({
                     AttribId,
                     MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId)),
                 });

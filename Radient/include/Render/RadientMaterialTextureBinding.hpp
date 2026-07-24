@@ -44,22 +44,26 @@
 namespace Diligent
 {
 
-struct RadientMaterialTextureSlot
+struct RadientMaterialTextureBinding
 {
     // Texture attribute ID (e.g. BASE_COLOR, NORMAL, etc.).
     PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId = PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT;
 
-    // Pointer to the texture asset. Can be nullptr if the slot is empty.
+    // Pointer to the active texture asset. A null pointer selects the default
+    // texture for this semantic when the renderer materializes the SRB slots.
     IRadientTextureAsset* pTexture = nullptr;
 };
 
-/// Static shader texture indices and the corresponding SRB slot contents.
-/// ShaderTextureIds is part of the PSO identity; Slots will form the SRB identity.
+/// Static shader texture indices and the active texture bindings used to build
+/// the SRB slots. ShaderTextureIds is part of the PSO identity; the final,
+/// default-filled slot contents form the SRB identity.
 struct RadientMaterialTextureBindingPlan
 {
+    // Maps every shader texture semantic to its SRB slot.
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
 
-    absl::InlinedVector<RadientMaterialTextureSlot, 8> Slots;
+    // Complete SRB slot layout. Empty bindings are populated from renderer defaults.
+    absl::InlinedVector<RadientMaterialTextureBinding, 8> Bindings;
 
     RadientMaterialTextureBindingPlan() noexcept
     {
@@ -70,10 +74,10 @@ struct RadientMaterialTextureBindingPlan
 using RadientMaterialTextureSRVArray =
     std::array<ITextureView*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
 
-/// Builds the preferred material texture binding plan. Materials that fit in
-/// the slot budget retain one slot per active semantic. Larger materials group
-/// semantics that resolve to the same SRV and fail only when the number of
-/// distinct SRVs exceeds the slot budget.
+/// Builds the preferred material texture binding plan. When every active
+/// semantic fits its same-numbered slot, the plan uses a common identity
+/// mapping across the complete slot range. Otherwise, semantics that resolve
+/// to the same SRV are compacted into shared slots.
 RADIENT_STATUS BuildMaterialTextureBindingPlan(
     const RadientMaterialRenderData&                              MaterialData,
     const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,

@@ -90,20 +90,39 @@ RefCntAutoPtr<IShaderResourceBinding> MakeTestSRB()
     return RefCntAutoPtr<IShaderResourceBinding>{MakeNewRCObj<TestShaderResourceBinding>()()};
 }
 
+ITextureView* GetTestSRV(size_t Id)
+{
+    return reinterpret_cast<ITextureView*>(Id);
+}
+
 RadientMaterialTextureBindingPlan MakePlan(std::initializer_list<PBR_Renderer::TEXTURE_ATTRIB_ID> TextureAttribIds)
 {
     RadientMaterialTextureBindingPlan Plan;
     for (const PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId : TextureAttribIds)
     {
-        Plan.ShaderTextureIds[TextureAttribId] = static_cast<Uint16>(Plan.Slots.size());
-        Plan.Slots.push_back({TextureAttribId});
+        Plan.ShaderTextureIds[TextureAttribId] = static_cast<Uint16>(Plan.Bindings.size());
+        Plan.Bindings.push_back({TextureAttribId});
     }
     return Plan;
 }
 
-ITextureView* GetTestSRV(size_t Id)
+RadientMaterialTextureBindingPlan MakeDefaultPlan(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId,
+                                                  Uint32                          SlotCount)
 {
-    return reinterpret_cast<ITextureView*>(Id);
+    RadientMaterialTextureBindingPlan Plan;
+    Plan.Bindings.resize(SlotCount);
+    for (Uint32 Slot = 0; Slot < SlotCount; ++Slot)
+        Plan.ShaderTextureIds[Slot] = static_cast<Uint16>(Slot);
+    Plan.Bindings[TextureAttribId] = {TextureAttribId};
+    return Plan;
+}
+
+RadientMaterialTextureSRVArray MakeDefaultSRVs()
+{
+    RadientMaterialTextureSRVArray SRVs{};
+    for (size_t Slot = 0; Slot < SRVs.size(); ++Slot)
+        SRVs[Slot] = GetTestSRV(100 + Slot);
+    return SRVs;
 }
 
 } // namespace
@@ -126,8 +145,9 @@ TEST(RadientMaterialSRBTableTest, ReusesSRBForSameSlotIdentities)
         return MakeTestSRB();
     };
 
-    const RadientMaterialSRBIndex FirstIndex  = Table.GetOrCreate(Plan, TextureSRVs, CreateSRB);
-    const RadientMaterialSRBIndex SecondIndex = Table.GetOrCreate(Plan, TextureSRVs, CreateSRB);
+    const RadientMaterialTextureSRVArray DefaultSRVs = MakeDefaultSRVs();
+    const RadientMaterialSRBIndex        FirstIndex  = Table.GetOrCreate(Plan, TextureSRVs, DefaultSRVs, CreateSRB);
+    const RadientMaterialSRBIndex        SecondIndex = Table.GetOrCreate(Plan, TextureSRVs, DefaultSRVs, CreateSRB);
 
     ASSERT_NE(FirstIndex, InvalidRadientMaterialSRBIndex);
     EXPECT_EQ(SecondIndex, FirstIndex);
@@ -155,7 +175,38 @@ TEST(RadientMaterialSRBTableTest, IgnoresSemanticMappingAndShaderTextureIds)
         PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE,
         PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC,
     });
-    SecondPlan.ShaderTextureIds.fill(7);
+    Uint32                            CreateCount         = 0;
+    auto                              CreateSRB           = [&CreateCount](ITextureView* const*, Uint32) {
+        ++CreateCount;
+        return MakeTestSRB();
+    };
+
+    const RadientMaterialTextureSRVArray DefaultSRVs = MakeDefaultSRVs();
+    const RadientMaterialSRBIndex        FirstIndex  = Table.GetOrCreate(FirstPlan, FirstSRVs, DefaultSRVs, CreateSRB);
+    const RadientMaterialSRBIndex        SecondIndex = Table.GetOrCreate(SecondPlan, SecondSRVs, DefaultSRVs, CreateSRB);
+
+    ASSERT_NE(FirstIndex, InvalidRadientMaterialSRBIndex);
+    EXPECT_EQ(SecondIndex, FirstIndex);
+    EXPECT_EQ(CreateCount, 1u);
+    EXPECT_EQ(Table.GetSize(), 1u);
+}
+
+TEST(RadientMaterialSRBTableTest, ReusesDefaultFilledSRBAcrossActiveSemantics)
+{
+    RadientMaterialSRBTable Table;
+
+    const RadientMaterialTextureBindingPlan BaseColorPlan =
+        MakeDefaultPlan(PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, 8);
+    const RadientMaterialTextureBindingPlan NormalPlan =
+        MakeDefaultPlan(PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL, 8);
+
+    const RadientMaterialTextureSRVArray DefaultSRVs = MakeDefaultSRVs();
+    RadientMaterialTextureSRVArray       BaseColorSRVs{};
+    RadientMaterialTextureSRVArray       NormalSRVs{};
+    BaseColorSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] =
+        DefaultSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR];
+    NormalSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL] =
+        DefaultSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL];
 
     Uint32 CreateCount = 0;
     auto   CreateSRB   = [&CreateCount](ITextureView* const*, Uint32) {
@@ -163,11 +214,13 @@ TEST(RadientMaterialSRBTableTest, IgnoresSemanticMappingAndShaderTextureIds)
         return MakeTestSRB();
     };
 
-    const RadientMaterialSRBIndex FirstIndex  = Table.GetOrCreate(FirstPlan, FirstSRVs, CreateSRB);
-    const RadientMaterialSRBIndex SecondIndex = Table.GetOrCreate(SecondPlan, SecondSRVs, CreateSRB);
+    const RadientMaterialSRBIndex BaseColorIndex =
+        Table.GetOrCreate(BaseColorPlan, BaseColorSRVs, DefaultSRVs, CreateSRB);
+    const RadientMaterialSRBIndex NormalIndex =
+        Table.GetOrCreate(NormalPlan, NormalSRVs, DefaultSRVs, CreateSRB);
 
-    ASSERT_NE(FirstIndex, InvalidRadientMaterialSRBIndex);
-    EXPECT_EQ(SecondIndex, FirstIndex);
+    ASSERT_NE(BaseColorIndex, InvalidRadientMaterialSRBIndex);
+    EXPECT_EQ(NormalIndex, BaseColorIndex);
     EXPECT_EQ(CreateCount, 1u);
     EXPECT_EQ(Table.GetSize(), 1u);
 }
@@ -185,17 +238,22 @@ TEST(RadientMaterialSRBTableTest, DistinguishesSlotOrderAndCount)
         return MakeTestSRB();
     };
 
+    const RadientMaterialTextureSRVArray DefaultSRVs = MakeDefaultSRVs();
+
     const RadientMaterialSRBIndex FirstIndex = Table.GetOrCreate(
         MakePlan({PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL}),
         TextureSRVs,
+        DefaultSRVs,
         CreateSRB);
     const RadientMaterialSRBIndex ReorderedIndex = Table.GetOrCreate(
         MakePlan({PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL, PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR}),
         TextureSRVs,
+        DefaultSRVs,
         CreateSRB);
     const RadientMaterialSRBIndex ShorterIndex = Table.GetOrCreate(
         MakePlan({PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR}),
         TextureSRVs,
+        DefaultSRVs,
         CreateSRB);
 
     EXPECT_NE(FirstIndex, InvalidRadientMaterialSRBIndex);
@@ -218,6 +276,7 @@ TEST(RadientMaterialSRBTableTest, RejectsInvalidSlotData)
     EXPECT_EQ(Table.GetOrCreate(
                   Plan,
                   TextureSRVs,
+                  {},
                   [&CreateCalled](ITextureView* const*, Uint32) {
                       CreateCalled = true;
                       return MakeTestSRB();

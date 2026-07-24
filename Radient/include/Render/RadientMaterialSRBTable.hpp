@@ -59,9 +59,11 @@ struct RadientMaterialSRBKey
     };
 };
 
-/// Builds an SRB key from the slot order selected by the material binding plan.
+/// Builds an SRB key by filling all slots with their semantic defaults and then
+/// applying the active bindings selected by the material binding plan.
 bool BuildRadientMaterialSRBKey(const RadientMaterialTextureBindingPlan& Plan,
                                 const RadientMaterialTextureSRVArray&    TextureSRVs,
+                                const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
                                 RadientMaterialSRBKey&                   Key) noexcept;
 
 /// Renderer-owned table that gives material SRBs stable integer indices.
@@ -74,6 +76,7 @@ public:
 
     RadientMaterialSRBIndex GetOrCreate(const RadientMaterialTextureBindingPlan& Plan,
                                         const RadientMaterialTextureSRVArray&    TextureSRVs,
+                                        const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
                                         const CreateSRBCallbackType&             CreateSRB);
 
     IShaderResourceBinding* Get(RadientMaterialSRBIndex Index) const noexcept;
