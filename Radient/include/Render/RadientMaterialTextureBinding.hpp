@@ -36,17 +36,24 @@ namespace Diligent
 
 struct RadientMaterialTextureSlot
 {
+    // Texture attribute ID (e.g. BASE_COLOR, NORMAL, etc.).
     PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId = PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT;
-    IRadientTextureAsset*           pTexture        = nullptr;
+
+    // Pointer to the texture asset. Can be nullptr if the slot is empty.
+    IRadientTextureAsset* pTexture = nullptr;
 };
 
 /// Static shader texture indices and the corresponding SRB slot contents.
 /// ShaderTextureIds is part of the PSO identity; Slots will form the SRB identity.
 struct RadientMaterialTextureBindingPlan
 {
-    PBR_Renderer::StaticShaderTextureIdsArrayType                                 ShaderTextureIds;
-    std::array<RadientMaterialTextureSlot, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Slots{};
-    Uint32                                                                        SlotCount = 0;
+    PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
+
+    static constexpr Uint32 MaxSlotCount = PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT;
+    using SlotArrayType                  = std::array<RadientMaterialTextureSlot, MaxSlotCount>;
+
+    SlotArrayType Slots{};
+    Uint32        SlotCount = 0;
 
     RadientMaterialTextureBindingPlan() noexcept
     {
@@ -56,16 +63,6 @@ struct RadientMaterialTextureBindingPlan
 
 using RadientMaterialTextureSRVArray =
     std::array<ITextureView*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
-
-/// Assigns every active material texture semantic to a distinct SRB slot in
-/// stable PBR texture-attribute order. Null texture assets are preserved so the
-/// SRB builder can bind the semantic's fallback atlas.
-RADIENT_STATUS BuildStandardMaterialTextureBindingPlan(
-    const RadientMaterialRenderData&                              MaterialData,
-    const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-    PBR_Renderer::PSO_FLAGS                                       PSOFlags,
-    Uint32                                                        MaxTextureSlots,
-    RadientMaterialTextureBindingPlan&                            Plan);
 
 /// Builds the preferred material texture binding plan. Materials that fit in
 /// the slot budget retain one slot per active semantic. Larger materials group
