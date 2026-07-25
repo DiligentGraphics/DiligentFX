@@ -94,7 +94,9 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext, m_DrawableCache, m_FrameTargets);
+    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext,
+                                   m_pAssetManager->GetResourceManager(),
+                                   m_DrawableCache, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 

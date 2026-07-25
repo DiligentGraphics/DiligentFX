@@ -27,6 +27,7 @@
 #include "Render/Passes/RadientGeometryPass.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "Render/RadientSceneDrawableCache.hpp"
 
@@ -598,110 +599,6 @@ RefCntAutoPtr<ITextureView> GetPBRTextureSRV(ITexture*                          
     return pTexSRV;
 }
 
-void CreateResourceCacheSRB(PBR_Renderer&                        Renderer,
-                            IRenderDevice*                       pDevice,
-                            IDeviceContext*                      pContext,
-                            RadientGeometryResourceCacheUseInfo& CacheUseInfo,
-                            IBuffer*                             pFrameAttribs,
-                            ITextureView*                        pIrradianceCubeSRV,
-                            ITextureView*                        pPrefilteredEnvMapSRV,
-                            IShaderResourceBinding**             ppCacheSRB)
-{
-    DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
-
-    Renderer.CreateResourceBinding(ppCacheSRB);
-    IShaderResourceBinding* const pSRB = *ppCacheSRB;
-    if (pSRB == nullptr)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient PBR resource cache SRB");
-        return;
-    }
-
-    Renderer.InitCommonSRBVars(pSRB, pFrameAttribs);
-    Renderer.SetIBLResourceViews(pSRB, pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
-
-    const PBR_Renderer::CreateInfo& Settings   = Renderer.GetSettings();
-    auto                            SetTexture = [&](PBR_Renderer::TEXTURE_ATTRIB_ID ID) {
-        const TEXTURE_FORMAT Fmt = CacheUseInfo.AtlasFormats[ID];
-        if (ITexture* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pContext))
-        {
-            if (RefCntAutoPtr<ITextureView> pTexSRV = GetPBRTextureSRV(pTexture, ID, Settings.TexColorConversionMode))
-            {
-                Renderer.SetMaterialTexture(pSRB, pTexSRV, ID);
-            }
-            else
-            {
-                UNEXPECTED("Failed to get SRV for atlas '", pTexture->GetDesc().Name, "'");
-            }
-        }
-    };
-
-    SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR);
-    SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC);
-    SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL);
-    if (Settings.EnableAO)
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION);
-    if (Settings.EnableEmissive)
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE);
-    if (Settings.EnableClearCoat)
-    {
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL);
-    }
-    if (Settings.EnableSheen)
-    {
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS);
-    }
-    if (Settings.EnableAnisotropy)
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY);
-    if (Settings.EnableIridescence)
-    {
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS);
-    }
-    if (Settings.EnableTransmission)
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION);
-    if (Settings.EnableVolume)
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS);
-}
-
-void BeginResourceCache(PBR_Renderer&                         Renderer,
-                        IRenderDevice*                        pDevice,
-                        IDeviceContext*                       pContext,
-                        RadientGeometryResourceCacheUseInfo&  CacheUseInfo,
-                        RadientGeometryResourceCacheBindings& Bindings,
-                        IBuffer*                              pFrameAttribs,
-                        ITextureView*                         pIrradianceCubeSRV,
-                        ITextureView*                         pPrefilteredEnvMapSRV)
-{
-    VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
-
-    if (Renderer.GetJointsBuffer() != nullptr)
-    {
-        MapHelper<float4x4> pJoints{pContext, Renderer.GetJointsBuffer(), MAP_WRITE, MAP_FLAG_DISCARD};
-    }
-
-    const Uint32 TextureVersion = CacheUseInfo.pResourceMgr->GetTextureVersion();
-    if (!Bindings.pSRB || Bindings.Version != TextureVersion)
-    {
-        Bindings.pSRB.Release();
-        CreateResourceCacheSRB(Renderer, pDevice, pContext, CacheUseInfo, pFrameAttribs, pIrradianceCubeSRV, pPrefilteredEnvMapSRV, &Bindings.pSRB);
-        if (!Bindings.pSRB)
-        {
-            LOG_ERROR_MESSAGE("Failed to create an SRB for Radient resource cache");
-            return;
-        }
-        Bindings.Version = TextureVersion;
-    }
-
-    pContext->TransitionShaderResources(Bindings.pSRB);
-
-    if (IBuffer* pIndexBuffer = CacheUseInfo.pResourceMgr->GetIndexBuffer())
-        pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-}
-
 void BindVertexPool(IVertexPool&    VertexPool,
                     IDeviceContext* pContext)
 {
@@ -768,6 +665,68 @@ void WriteMaterialAttribs(PBR_Renderer&           Renderer,
     pContext->UnmapBuffer(Renderer.GetPBRMaterialAttribsCB(), MAP_WRITE);
 }
 
+bool CreateMaterialSRB(RadientGeometryRenderer&         GeometryRenderer,
+                       const RadientMaterialRenderData& MaterialData,
+                       PBR_Renderer::PSO_FLAGS          PSOFlags,
+                       IShaderResourceBinding**         ppSRB)
+{
+    VERIFY_EXPR(ppSRB != nullptr && *ppSRB == nullptr);
+
+    PBR_Renderer* const pRenderer = GeometryRenderer.GetRenderer();
+    if (pRenderer == nullptr || !MaterialData)
+        return false;
+
+    RefCntAutoPtr<IShaderResourceBinding> pSRB;
+    pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty());
+    if (pSRB == nullptr)
+        return false;
+
+    pRenderer->InitCommonSRBVars(pSRB, GeometryRenderer.GetFrameAttribsCB());
+    pRenderer->SetIBLResourceViews(pSRB,
+                                   GeometryRenderer.GetIrradianceCubeSRV(),
+                                   GeometryRenderer.GetPrefilteredEnvMapSRV());
+
+    const PBR_Renderer::CreateInfo& Settings = pRenderer->GetSettings();
+    bool                            IsValid  = true;
+    PBR_Renderer::ProcessTexturAttribs(
+        PSOFlags,
+        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) {
+            const int MaterialTextureAttribId = Settings.TextureAttribIndices[TextureAttribId];
+            if (MaterialTextureAttribId < 0)
+            {
+                UNEXPECTED("Shader texture attribute ", Uint32{TextureAttribId}, " is not initialized");
+                IsValid = false;
+                return;
+            }
+
+            IRadientTextureAsset* const pTextureAsset =
+                MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId));
+            ITextureView* const pSourceSRV = RadientAssetManagerImpl::GetTextureSRV(pTextureAsset);
+            if (pSourceSRV == nullptr)
+            {
+                UNEXPECTED("Material texture ", Uint32{TextureAttribId}, " is not ready");
+                IsValid = false;
+                return;
+            }
+
+            RefCntAutoPtr<ITextureView> pTextureSRV =
+                GetPBRTextureSRV(pSourceSRV->GetTexture(), TextureAttribId, Settings.TexColorConversionMode);
+            if (pTextureSRV == nullptr)
+            {
+                UNEXPECTED("Failed to create material texture SRV for attribute ", Uint32{TextureAttribId});
+                IsValid = false;
+                return;
+            }
+
+            pRenderer->SetMaterialTexture(pSRB, pTextureSRV, TextureAttribId);
+        });
+
+    if (IsValid)
+        *ppSRB = pSRB.Detach();
+
+    return IsValid;
+}
+
 } // namespace
 
 RadientGeometryPass::RadientGeometryPass(bool EnableAsyncPipelineCompilation) noexcept :
@@ -827,11 +786,13 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    m_CacheUseInfo.pResourceMgr = pResourceManager;
-    BeginResourceCache(*m_pRenderer, pDevice, pContext, m_CacheUseInfo, m_CacheBindings,
-                       m_pFrameAttribsCB, m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
-    if (!m_CacheBindings.pSRB)
-        return RADIENT_STATUS_OUT_OF_DATE;
+    if (m_pRenderer->GetJointsBuffer() != nullptr)
+    {
+        MapHelper<float4x4> pJoints{pContext, m_pRenderer->GetJointsBuffer(), MAP_WRITE, MAP_FLAG_DISCARD};
+    }
+
+    if (IBuffer* pIndexBuffer = pResourceManager->GetIndexBuffer())
+        pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     return RADIENT_STATUS_OK;
 }
@@ -844,6 +805,7 @@ void RadientGeometryRenderer::EndFrame()
 RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Renderer,
                                             IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
+                                            GLTF::ResourceManager*           pResourceManager,
                                             const RadientSceneDrawableCache& DrawableCache,
                                             const RadientFrameRenderTargets& Targets)
 {
@@ -879,7 +841,14 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
         RebuildDrawablePassData = true;
     }
 
-    SyncDrawablePassData(*pRenderer, DrawableCache, RebuildDrawablePassData);
+    const Uint32 TextureVersion = pResourceManager != nullptr ? pResourceManager->GetTextureVersion() : ~0u;
+    if (m_TextureVersion != TextureVersion)
+    {
+        m_TextureVersion        = TextureVersion;
+        RebuildDrawablePassData = true;
+    }
+
+    SyncDrawablePassData(Renderer, DrawableCache, RebuildDrawablePassData);
     return RADIENT_STATUS_OK;
 }
 
@@ -899,16 +868,12 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, nullptr, DrawableCache, Targets);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
     if (!m_PbrPSOCache)
         return RADIENT_STATUS_OK;
-
-    IShaderResourceBinding* const pResourceCacheSRB = Renderer.GetResourceCacheSRB();
-    if (pResourceCacheSRB == nullptr)
-        return RADIENT_STATUS_OUT_OF_DATE;
 
     ITextureView* pColorRTV = Targets.GetColorRTV();
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
@@ -951,10 +916,10 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
                 pContext->SetPipelineState(pCurrPSO);
         }
 
-        if (pCurrSRB != pResourceCacheSRB)
+        if (pCurrSRB != PassData.pMaterialSRB)
         {
-            pCurrSRB = pResourceCacheSRB;
-            pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+            pCurrSRB = PassData.pMaterialSRB;
+            pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
 
         WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.pWorldMatrix);
@@ -1015,6 +980,7 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
         const DrawablePassData& PassData = m_DrawablePassData[DrawItem.DrawableID];
         if (PassData.pDrawable != pDrawable ||
             PassData.Generation != pDrawable->Generation ||
+            PassData.pMaterialSRB == nullptr ||
             !IsPipelineReady(PassData.pPSO))
         {
             continue;
@@ -1049,7 +1015,7 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
               });
 }
 
-void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    Renderer,
+void RadientGeometryPass::SyncDrawablePassData(RadientGeometryRenderer&         Renderer,
                                                const RadientSceneDrawableCache& DrawableCache,
                                                bool                             RebuildAll)
 {
@@ -1094,7 +1060,7 @@ void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    
     }
 }
 
-void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Renderer,
+void RadientGeometryPass::UpdateDrawablePassData(RadientGeometryRenderer&   Renderer,
                                                  const RadientDrawableSlot& Drawable,
                                                  RadientDrawableID          DrawableID)
 {
@@ -1104,17 +1070,26 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
     if (DrawableID >= m_DrawablePassData.size())
         m_DrawablePassData.resize(static_cast<size_t>(DrawableID) + 1);
 
-    DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-    if (Drawable.pMaterial == nullptr)
+    DrawablePassData&   PassData  = m_DrawablePassData[DrawableID];
+    PBR_Renderer* const pRenderer = Renderer.GetRenderer();
+    if (pRenderer == nullptr || Drawable.pMaterialAsset == nullptr)
     {
         PassData = {};
         return;
     }
 
-    const GLTF::Material&            Material  = *Drawable.pMaterial;
+    const RadientMaterialRenderData MaterialData =
+        RadientMaterialAssetManager::GetRenderData(Drawable.pMaterialAsset);
+    if (!MaterialData)
+    {
+        PassData = {};
+        return;
+    }
+
+    const GLTF::Material&            Material  = *MaterialData.pMaterial;
     const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | GetMaterialPSOFlags(Renderer, Material);
+    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
@@ -1138,10 +1113,18 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
         GetFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
     }
 
-    PassData.pDrawable  = &Drawable;
-    PassData.Generation = Drawable.Generation;
-    PassData.PSOFlags   = PSOFlags;
-    PassData.pPSO       = m_PbrPSOCache.Get(PsoKey, GetFlags);
+    RefCntAutoPtr<IShaderResourceBinding> pSRB;
+    if (!CreateMaterialSRB(Renderer, MaterialData, PSOFlags, pSRB.GetAddressOfEmpty()))
+    {
+        PassData = {};
+        return;
+    }
+
+    PassData.pDrawable    = &Drawable;
+    PassData.Generation   = Drawable.Generation;
+    PassData.PSOFlags     = PSOFlags;
+    PassData.pPSO         = m_PbrPSOCache.Get(PsoKey, GetFlags);
+    PassData.pMaterialSRB = std::move(pSRB);
     VERIFY_EXPR(PassData.pPSO != nullptr);
 }
 
@@ -1240,8 +1223,6 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
     m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING;
     m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
-
-    m_CacheBindings = {};
 
     return RADIENT_STATUS_OK;
 }

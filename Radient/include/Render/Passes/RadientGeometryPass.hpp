@@ -29,15 +29,12 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
-#include "Render/RadientMaterialSRBTable.hpp"
 
 #include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
-#include <array>
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace Diligent
@@ -45,25 +42,6 @@ namespace Diligent
 
 class RadientSceneDrawableCache;
 struct RadientDrawableSlot;
-
-struct RadientGeometryResourceCacheUseInfo
-{
-    GLTF::ResourceManager* pResourceMgr = nullptr;
-
-    std::array<TEXTURE_FORMAT, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> AtlasFormats{};
-
-    RadientGeometryResourceCacheUseInfo() noexcept
-    {
-        AtlasFormats.fill(TEX_FORMAT_RGBA8_TYPELESS);
-    }
-};
-
-struct RadientGeometryResourceCacheBindings
-{
-    Uint32 Version = ~0u;
-
-    RefCntAutoPtr<IShaderResourceBinding> pSRB;
-};
 
 /// Shared renderer state used by geometry passes.
 class RadientGeometryRenderer
@@ -85,7 +63,6 @@ public:
     ITextureView*           GetDefaultIBLCubemapSRV() const { return m_pDefaultIBLCubemapSRV; }
     ITextureView*           GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
     ITextureView*           GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
-    IShaderResourceBinding* GetResourceCacheSRB() const { return m_CacheBindings.pSRB.RawPtr(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
 private:
@@ -101,10 +78,6 @@ private:
     RefCntAutoPtr<ITextureView>   m_pDefaultIBLCubemapSRV;
     RefCntAutoPtr<ITextureView>   m_pIrradianceCubeSRV;
     RefCntAutoPtr<ITextureView>   m_pPrefilteredEnvMapSRV;
-
-    RadientGeometryResourceCacheUseInfo  m_CacheUseInfo;
-    RadientGeometryResourceCacheBindings m_CacheBindings;
-    RadientMaterialSRBTable              m_MaterialSRBs;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
@@ -122,6 +95,7 @@ public:
     RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
+                           GLTF::ResourceManager*           pResourceManager,
                            const RadientSceneDrawableCache& DrawableCache,
                            const RadientFrameRenderTargets& Targets);
     RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
@@ -143,12 +117,15 @@ private:
         Uint32                     Generation = 0;
         PBR_Renderer::PSO_FLAGS    PSOFlags   = PBR_Renderer::PSO_FLAG_NONE;
         IPipelineState*            pPSO       = nullptr;
+
+        // Named-texture mode uses immutable material bindings for each drawable.
+        RefCntAutoPtr<IShaderResourceBinding> pMaterialSRB;
     };
 
-    void SyncDrawablePassData(PBR_Renderer&                    Renderer,
+    void SyncDrawablePassData(RadientGeometryRenderer&         Renderer,
                               const RadientSceneDrawableCache& DrawableCache,
                               bool                             RebuildAll);
-    void UpdateDrawablePassData(PBR_Renderer&              Renderer,
+    void UpdateDrawablePassData(RadientGeometryRenderer&   Renderer,
                                 const RadientDrawableSlot& Drawable,
                                 RadientDrawableID          DrawableID);
     void InvalidateDrawablePassData(RadientDrawableID DrawableID);
@@ -167,6 +144,8 @@ private:
 
     TEXTURE_FORMAT m_RTVFormat = TEX_FORMAT_UNKNOWN;
     TEXTURE_FORMAT m_DSVFormat = TEX_FORMAT_UNKNOWN;
+    // Atlas growth replaces texture views, which requires rebuilding material SRBs.
+    Uint32 m_TextureVersion = ~0u;
 
     bool m_EnableAsyncPipelineCompilation = true;
 };
