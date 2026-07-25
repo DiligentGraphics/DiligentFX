@@ -831,6 +831,10 @@ public:
 
     inline static constexpr PSO_FLAGS GetTextureAttribPSOFlag(TEXTURE_ATTRIB_ID AttribId);
 
+    /// Returns true if the texture attribute represents color data that must
+    /// be sampled through an sRGB texture view.
+    inline static constexpr bool IsSRGBTextureAttribute(TEXTURE_ATTRIB_ID AttribId);
+
     /// Processes enabled texture attributes with the given handler.
     template <typename HandlerType>
     inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
@@ -1046,6 +1050,14 @@ inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(P
     static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 16u, "Did you add new texture flag? You may need to handle it here.");
 
     return static_cast<PBR_Renderer::PSO_FLAGS>(Uint64{1} << AttribId);
+}
+
+inline constexpr bool PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
+{
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture attribute? It may need to be handled here.");
+    return (AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ||
+            AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE ||
+            AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR);
 }
 
 template <typename HandlerType>
