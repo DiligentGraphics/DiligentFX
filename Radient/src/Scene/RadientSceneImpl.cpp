@@ -120,11 +120,6 @@ RADIENT_STATUS RadientSceneImpl::GetCamera(RadientEntityID Entity, RadientCamera
     return m_pState->GetCamera(Entity, Camera);
 }
 
-const RadientEnvironmentDesc& RadientSceneImpl::GetEnvironment() const
-{
-    return m_pState->GetEnvironment();
-}
-
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     return m_pState->HasComponent(Entity, ComponentType, HasComponent);

@@ -49,7 +49,6 @@ public:
     RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
                            IDeviceContext*                  pContext,
                            const RadientViewDesc&           ViewDesc,
-                           const RadientEnvironmentDesc&    Environment,
                            const RadientFrameRenderTargets& Targets);
 
 private:

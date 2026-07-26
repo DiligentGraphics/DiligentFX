@@ -122,15 +122,6 @@ bool IsValidLightComponent(const RadientLightComponent& Light)
             IsFinite(Light.ShapingFocus));
 }
 
-bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
-{
-    return (Environment.pEnvironmentMap == nullptr ||
-            Environment.pEnvironmentMap->GetType() == RADIENT_ASSET_TYPE_TEXTURE) &&
-        IsFiniteNonNegative(Environment.Color) &&
-        IsFiniteNonNegative(Environment.Intensity) &&
-        IsFinite(Environment.Exposure);
-}
-
 } // namespace
 
 
@@ -329,11 +320,6 @@ RADIENT_STATUS RadientSceneState::GetCamera(RadientEntityID Entity, RadientCamer
 
     Camera = *pCamera;
     return RADIENT_STATUS_OK;
-}
-
-const RadientEnvironmentDesc& RadientSceneState::GetEnvironment() const
-{
-    return m_Environment;
 }
 
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
@@ -667,24 +653,6 @@ RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const Radient
     m_Registry.emplace_or_replace<RadientLightComponent>(E, Light);
     Touch(CHANGE_FLAG_LIGHTS);
     RecordRenderableLightChange(E, pExistingLight != nullptr ? RenderableLightChangeType::Updated : RenderableLightChangeType::Added);
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS RadientSceneState::SetEnvironment(const RadientEnvironmentDesc& Environment)
-{
-    if (!IsValidEnvironment(Environment))
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    RadientEnvironmentDesc NewEnvironment = Environment;
-    NewEnvironment.pEnvironmentMap        = Environment.pEnvironmentMap;
-
-    if (m_Environment == NewEnvironment)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    m_pEnvironmentMap              = Environment.pEnvironmentMap;
-    NewEnvironment.pEnvironmentMap = m_pEnvironmentMap;
-    m_Environment                  = NewEnvironment;
-    Touch(CHANGE_FLAG_ENVIRONMENT);
     return RADIENT_STATUS_OK;
 }
 
@@ -1584,9 +1552,6 @@ void RadientSceneState::Touch(CHANGE_FLAGS ChangeFlags)
 
     if ((ChangeFlags & CHANGE_FLAG_CAMERAS) != CHANGE_FLAG_NONE)
         ++m_SceneRevisions.Cameras;
-
-    if ((ChangeFlags & CHANGE_FLAG_ENVIRONMENT) != CHANGE_FLAG_NONE)
-        ++m_SceneRevisions.Environment;
 
     if ((ChangeFlags & CHANGE_FLAG_CUSTOM_COMPONENTS) != CHANGE_FLAG_NONE)
         ++m_SceneRevisions.CustomComponents;

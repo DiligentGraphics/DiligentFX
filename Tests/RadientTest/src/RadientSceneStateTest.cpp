@@ -90,7 +90,6 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
                           RadientRevision              Transforms,
                           RadientRevision              Visibility,
                           RadientRevision              Cameras          = 0,
-                          RadientRevision              Environment      = 0,
                           RadientRevision              CustomComponents = 0)
 {
     EXPECT_EQ(Revisions.Drawables, Drawables);
@@ -98,7 +97,6 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
     EXPECT_EQ(Revisions.Transforms, Transforms);
     EXPECT_EQ(Revisions.Visibility, Visibility);
     EXPECT_EQ(Revisions.Cameras, Cameras);
-    EXPECT_EQ(Revisions.Environment, Environment);
     EXPECT_EQ(Revisions.CustomComponents, CustomComponents);
 }
 
@@ -111,7 +109,6 @@ void ExpectSceneRevisionDelta(const RadientSceneRevisions& Before,
     EXPECT_EQ(After.Transforms, Before.Transforms + Delta.Transforms);
     EXPECT_EQ(After.Visibility, Before.Visibility + Delta.Visibility);
     EXPECT_EQ(After.Cameras, Before.Cameras + Delta.Cameras);
-    EXPECT_EQ(After.Environment, Before.Environment + Delta.Environment);
     EXPECT_EQ(After.CustomComponents, Before.CustomComponents + Delta.CustomComponents);
 }
 
@@ -389,99 +386,6 @@ TEST(RadientSceneStateTest, GetDescCopiesHeapName)
 
     // The stored name should still be readable because SceneState made a copy.
     EXPECT_STREQ(State.GetDesc().Name, "Heap Scene");
-}
-
-TEST(RadientSceneStateTest, SetEnvironmentKeepsTextureAsset)
-{
-    // Environment is scene-level render state, so it is tracked outside the
-    // entity/component hierarchy and retains the texture asset it references.
-    RadientSceneState State;
-
-    const RadientEnvironmentDesc& DefaultEnvironment = State.GetEnvironment();
-    EXPECT_EQ(DefaultEnvironment.pEnvironmentMap, nullptr);
-    EXPECT_EQ(DefaultEnvironment.Color.x, 1.f);
-    EXPECT_EQ(DefaultEnvironment.Color.y, 1.f);
-    EXPECT_EQ(DefaultEnvironment.Color.z, 1.f);
-    EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
-    EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
-
-    RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap = MakeTestTextureAsset("texture://environment", 7);
-
-    RadientEnvironmentDesc Environment{};
-    Environment.pEnvironmentMap = pEnvironmentMap;
-    Environment.Color           = {0.25f, 0.5f, 1.f};
-    Environment.Intensity       = 2.f;
-    Environment.Exposure        = -1.f;
-
-    EXPECT_EQ(State.SetEnvironment(Environment), RADIENT_STATUS_OK);
-    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
-
-    const IRadientTextureAsset* pExpectedEnvironmentMap = pEnvironmentMap;
-    pEnvironmentMap.Release();
-
-    const RadientEnvironmentDesc& StoredEnvironment = State.GetEnvironment();
-    ASSERT_NE(StoredEnvironment.pEnvironmentMap, nullptr);
-    EXPECT_EQ(StoredEnvironment.pEnvironmentMap, pExpectedEnvironmentMap);
-    EXPECT_STREQ(StoredEnvironment.pEnvironmentMap->GetReference().URI, "texture://environment");
-    EXPECT_EQ(StoredEnvironment.pEnvironmentMap->GetReference().Version, 7u);
-    EXPECT_EQ(StoredEnvironment.Color.x, 0.25f);
-    EXPECT_EQ(StoredEnvironment.Color.y, 0.5f);
-    EXPECT_EQ(StoredEnvironment.Color.z, 1.f);
-    EXPECT_EQ(StoredEnvironment.Intensity, 2.f);
-    EXPECT_EQ(StoredEnvironment.Exposure, -1.f);
-
-    EXPECT_EQ(State.SetEnvironment(StoredEnvironment), RADIENT_STATUS_NO_CHANGE);
-    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
-
-    RadientEnvironmentDesc UpdatedEnvironment = StoredEnvironment;
-    UpdatedEnvironment.Intensity              = 4.f;
-    EXPECT_EQ(State.SetEnvironment(UpdatedEnvironment), RADIENT_STATUS_OK);
-    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 2);
-}
-
-TEST(RadientSceneStateTest, RejectsInvalidEnvironmentProperties)
-{
-    // Null environment map is valid and means the renderer should use default IBL,
-    // but numeric environment parameters must be finite and non-negative where applicable.
-    RadientSceneState State;
-
-    RadientEnvironmentDesc Environment{};
-    Environment.pEnvironmentMap = nullptr;
-    Environment.Color           = {0.25f, 0.5f, 1.f};
-    Environment.Intensity       = 0.f;
-    Environment.Exposure        = -2.f;
-
-    EXPECT_EQ(State.SetEnvironment(Environment), RADIENT_STATUS_OK);
-    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
-
-    const RadientEnvironmentDesc StoredEnvironment = State.GetEnvironment();
-    const RadientSceneRevisions  StoredRevisions   = State.GetSceneRevisions();
-
-    const auto ExpectInvalidEnvironment = [&](RadientEnvironmentDesc InvalidEnvironment) {
-        EXPECT_EQ(State.SetEnvironment(InvalidEnvironment), RADIENT_STATUS_INVALID_ARGUMENT);
-        EXPECT_EQ(State.GetEnvironment(), StoredEnvironment);
-        EXPECT_EQ(State.GetSceneRevisions(), StoredRevisions);
-    };
-
-    RadientEnvironmentDesc InvalidEnvironment = StoredEnvironment;
-    InvalidEnvironment.Color.x                = -0.1f;
-    ExpectInvalidEnvironment(InvalidEnvironment);
-
-    InvalidEnvironment         = StoredEnvironment;
-    InvalidEnvironment.Color.y = std::numeric_limits<Float32>::infinity();
-    ExpectInvalidEnvironment(InvalidEnvironment);
-
-    InvalidEnvironment           = StoredEnvironment;
-    InvalidEnvironment.Intensity = -1.f;
-    ExpectInvalidEnvironment(InvalidEnvironment);
-
-    InvalidEnvironment           = StoredEnvironment;
-    InvalidEnvironment.Intensity = std::numeric_limits<Float32>::infinity();
-    ExpectInvalidEnvironment(InvalidEnvironment);
-
-    InvalidEnvironment          = StoredEnvironment;
-    InvalidEnvironment.Exposure = std::numeric_limits<Float32>::quiet_NaN();
-    ExpectInvalidEnvironment(InvalidEnvironment);
 }
 
 TEST(RadientSceneStateTest, IsEntityAlive)
@@ -3171,28 +3075,28 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     CustomComponent.DataSize      = sizeof(CustomValue);
     EXPECT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
     // Custom components are opaque scene data and have a separate revision.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 1);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 1);
 
     CustomValue = 43;
     EXPECT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
     // Updating existing custom component payload advances only custom revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 2);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 2);
 
     EXPECT_EQ(State.RemoveComponent(Entity, CustomComponentType), RADIENT_STATUS_OK);
     // Removing custom component data also advances only custom revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 3);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 3);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
     // Removing renderer data changes drawable membership.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2, 0, 3);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2, 3);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
     // Removing light data advances light revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2, 0, 3);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2, 3);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
     // Removing camera data advances camera revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3, 0, 3);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3, 3);
 }
 
 TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)

@@ -55,9 +55,12 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetRenderTarget(IRadientRenderTarget* pRenderTarget) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEnvironment(const RadientEnvironmentDesc& Environment) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;
 
 private:
+    void CopyEnvironment(const RadientEnvironmentDesc& Environment);
     void CopySkybox(const RadientSkyboxDesc& Skybox);
 
 private:
@@ -67,6 +70,7 @@ private:
 
     RefCntAutoPtr<IRadientScene>        m_pScene;
     RefCntAutoPtr<IRadientRenderTarget> m_pRenderTarget;
+    RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     RefCntAutoPtr<IRadientTextureAsset> m_pSkyboxTexture;
 };
 

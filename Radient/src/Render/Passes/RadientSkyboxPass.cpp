@@ -117,7 +117,6 @@ RADIENT_STATUS RadientSkyboxPass::Prepare(RadientGeometryRenderer&         Rende
 RADIENT_STATUS RadientSkyboxPass::Execute(RadientGeometryRenderer&         Renderer,
                                           IDeviceContext*                  pContext,
                                           const RadientViewDesc&           ViewDesc,
-                                          const RadientEnvironmentDesc&    Environment,
                                           const RadientFrameRenderTargets& Targets)
 {
     if (pContext == nullptr || ViewDesc.Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
@@ -129,9 +128,9 @@ RADIENT_STATUS RadientSkyboxPass::Execute(RadientGeometryRenderer&         Rende
     ITextureView* pEnvMap = nullptr;
     switch (ViewDesc.Skybox.Source)
     {
-        case RADIENT_SKYBOX_SOURCE_SCENE_ENVIRONMENT:
-            if (Environment.pEnvironmentMap != nullptr)
-                pEnvMap = RadientAssetManagerImpl::GetTextureSRV(Environment.pEnvironmentMap);
+        case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
+            if (ViewDesc.Environment.pEnvironmentMap != nullptr)
+                pEnvMap = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Environment.pEnvironmentMap);
             break;
 
         case RADIENT_SKYBOX_SOURCE_TEXTURE:

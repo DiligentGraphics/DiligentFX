@@ -28,12 +28,14 @@
 
 void RadientViewHeader_C_TestMacros(IRadientView* pView)
 {
-    const RadientViewDesc* pDesc  = IRadientView_GetDesc(pView);
-    RADIENT_STATUS         Status = RADIENT_STATUS_OK;
+    const RadientViewDesc* pDesc       = IRadientView_GetDesc(pView);
+    RadientEnvironmentDesc Environment = {0};
+    RADIENT_STATUS         Status      = RADIENT_STATUS_OK;
 
     Status = IRadientView_SetScene(pView, 0);
     Status = IRadientView_SetCamera(pView, InvalidRadientEntityID);
     Status = IRadientView_SetRenderTarget(pView, 0);
+    Status = IRadientView_SetEnvironment(pView, &Environment);
 
     (void)pDesc;
     (void)Status;

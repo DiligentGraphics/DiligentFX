@@ -35,7 +35,7 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 // {A8E0ADCC-C8C3-4D2E-8732-D7A4E555A8F4}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
-    { 0xa8e0adcc, 0xc8c3, 0x4d2e, { 0x87, 0x32, 0xd7, 0xa4, 0xe5, 0x55, 0xa8, 0xf4 } };
+    {0xa8e0adcc, 0xc8c3, 0x4d2e, {0x87, 0x32, 0xd7, 0xa4, 0xe5, 0x55, 0xa8, 0xf4}};
 
 #define DILIGENT_INTERFACE_NAME IRadientSceneWriter
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
@@ -106,10 +106,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                             RadientEntityID                 Entity,
                                             const RadientLightComponent REF Light) PURE;
 
-    /// Sets the scene environment used for image-based lighting.
-    VIRTUAL RADIENT_STATUS METHOD(SetEnvironment)(THIS_
-                                                  const RadientEnvironmentDesc REF Environment) PURE;
-
     /// Adds or updates a custom serialized component.
     VIRTUAL RADIENT_STATUS METHOD(SetCustomComponentData)(THIS_
                                                           RadientEntityID                       Entity,
@@ -140,7 +136,6 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_SetMeshRenderer(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, SetMeshRenderer,   This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMaterialBindings(This, ...)    CALL_IFACE_METHOD(RadientSceneWriter, SetMaterialBindings, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetLight(This, ...)               CALL_IFACE_METHOD(RadientSceneWriter, SetLight,          This, __VA_ARGS__)
-#    define IRadientSceneWriter_SetEnvironment(This, ...)         CALL_IFACE_METHOD(RadientSceneWriter, SetEnvironment,    This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetCustomComponentData(This, ...) CALL_IFACE_METHOD(RadientSceneWriter, SetCustomComponentData,  This, __VA_ARGS__)
 #    define IRadientSceneWriter_RemoveComponent(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, RemoveComponent,   This, __VA_ARGS__)
 #    define IRadientSceneWriter_CommitChanges(This)               CALL_IFACE_METHOD(RadientSceneWriter, CommitChanges,     This)

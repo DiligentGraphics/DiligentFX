@@ -37,6 +37,7 @@
 
 #include <array>
 #include <fstream>
+#include <limits>
 #include <string>
 
 using namespace Diligent;
@@ -883,6 +884,37 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetRenderTarget(nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().pRenderTarget, nullptr);
 
+    // Environment settings are view-local and retain the referenced texture asset.
+    const RadientEnvironmentDesc& DefaultEnvironment = pView->GetDesc().Environment;
+    const RadientFloat3           DefaultColor{1.f, 1.f, 1.f};
+    EXPECT_EQ(DefaultEnvironment.pEnvironmentMap, nullptr);
+    EXPECT_EQ(DefaultEnvironment.Color, DefaultColor);
+    EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
+    EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
+
+    RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap = MakeTestTextureAsset("texture://environment", 7);
+
+    RadientEnvironmentDesc Environment{};
+    Environment.pEnvironmentMap = pEnvironmentMap;
+    Environment.Color           = {0.25f, 0.5f, 1.f};
+    Environment.Intensity       = 2.f;
+    Environment.Exposure        = -1.f;
+
+    EXPECT_EQ(pView->SetEnvironment(Environment), RADIENT_STATUS_OK);
+
+    const IRadientTextureAsset* pExpectedEnvironmentMap = pEnvironmentMap;
+    pEnvironmentMap.Release();
+
+    const RadientEnvironmentDesc& StoredEnvironment = pView->GetDesc().Environment;
+    ASSERT_NE(StoredEnvironment.pEnvironmentMap, nullptr);
+    EXPECT_EQ(StoredEnvironment.pEnvironmentMap, pExpectedEnvironmentMap);
+    EXPECT_STREQ(StoredEnvironment.pEnvironmentMap->GetReference().URI, "texture://environment");
+    EXPECT_EQ(StoredEnvironment.pEnvironmentMap->GetReference().Version, 7u);
+    EXPECT_EQ(StoredEnvironment.Color, Environment.Color);
+    EXPECT_EQ(StoredEnvironment.Intensity, Environment.Intensity);
+    EXPECT_EQ(StoredEnvironment.Exposure, Environment.Exposure);
+    EXPECT_EQ(pView->SetEnvironment(StoredEnvironment), RADIENT_STATUS_NO_CHANGE);
+
     // Skybox settings are view-local and copy raw texture URI strings.
     std::string SkyboxURI = "texture://skybox";
 
@@ -912,6 +944,52 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredSkybox.MipLevel, 1.f);
 
     EXPECT_EQ(pView->SetSkybox(StoredSkybox), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RadientViewDesc InvalidViewDesc{};
+    InvalidViewDesc.Environment.Intensity = -1.f;
+
+    RefCntAutoPtr<IRadientView> pView;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
+    RadientViewDesc ViewDesc{};
+    ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientEnvironmentDesc StoredEnvironment        = pView->GetDesc().Environment;
+    const auto                   ExpectInvalidEnvironment = [&](RadientEnvironmentDesc Environment) {
+        EXPECT_EQ(pView->SetEnvironment(Environment), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().Environment, StoredEnvironment);
+    };
+
+    RadientEnvironmentDesc InvalidEnvironment = StoredEnvironment;
+    InvalidEnvironment.Color.x                = -0.1f;
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment         = StoredEnvironment;
+    InvalidEnvironment.Color.y = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment           = StoredEnvironment;
+    InvalidEnvironment.Intensity = -1.f;
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment           = StoredEnvironment;
+    InvalidEnvironment.Intensity = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment          = StoredEnvironment;
+    InvalidEnvironment.Exposure = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidEnvironment(InvalidEnvironment);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

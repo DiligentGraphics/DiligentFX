@@ -44,8 +44,8 @@ DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
     /// Do not render a skybox.
     RADIENT_SKYBOX_SOURCE_NONE = 0,
 
-    /// Render the scene environment map as the skybox.
-    RADIENT_SKYBOX_SOURCE_SCENE_ENVIRONMENT,
+    /// Render the view environment map as the skybox.
+    RADIENT_SKYBOX_SOURCE_ENVIRONMENT,
 
     /// Render the explicit texture asset as the skybox.
     RADIENT_SKYBOX_SOURCE_TEXTURE
@@ -94,6 +94,38 @@ struct RadientSkyboxDesc
 };
 typedef struct RadientSkyboxDesc RadientSkyboxDesc;
 
+/// View environment used for image-based lighting.
+struct RadientEnvironmentDesc
+{
+    /// Environment map texture asset. When null or not loaded, renderer default IBL is used.
+    IRadientTextureAsset* pEnvironmentMap DEFAULT_INITIALIZER(nullptr);
+
+    /// Environment color multiplier.
+    RadientFloat3 Color DEFAULT_INITIALIZER({1.f, 1.f, 1.f});
+
+    /// Environment intensity multiplier.
+    Float32 Intensity DEFAULT_INITIALIZER(1.f);
+
+    /// Exposure multiplier as a power of 2.
+    Float32 Exposure DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientEnvironmentDesc& Rhs) const
+    {
+        return pEnvironmentMap == Rhs.pEnvironmentMap &&
+            Color == Rhs.Color &&
+            Intensity == Rhs.Intensity &&
+            Exposure == Rhs.Exposure;
+    }
+
+    bool operator!=(const RadientEnvironmentDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientEnvironmentDesc RadientEnvironmentDesc;
+
 /// View description.
 ///
 /// A view describes one persistent way to render a scene: which scene is
@@ -111,6 +143,9 @@ struct RadientViewDesc
 
     /// Render target.
     IRadientRenderTarget* pRenderTarget DEFAULT_INITIALIZER(nullptr);
+
+    /// Environment used for image-based lighting.
+    RadientEnvironmentDesc Environment DEFAULT_INITIALIZER({});
 
     /// Skybox rendered by the view.
     RadientSkyboxDesc Skybox DEFAULT_INITIALIZER({});
@@ -148,6 +183,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     VIRTUAL RADIENT_STATUS METHOD(SetRenderTarget)(THIS_
                                                    IRadientRenderTarget* pRenderTarget) PURE;
 
+    /// Sets the environment used for image-based lighting.
+    VIRTUAL RADIENT_STATUS METHOD(SetEnvironment)(THIS_
+                                                  const RadientEnvironmentDesc REF Environment) PURE;
+
     /// Sets the skybox rendered by the view.
     VIRTUAL RADIENT_STATUS METHOD(SetSkybox)(THIS_
                                              const RadientSkyboxDesc REF Skybox) PURE;
@@ -162,6 +201,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetScene(This, ...)          CALL_IFACE_METHOD(RadientView, SetScene,        This, __VA_ARGS__)
 #    define IRadientView_SetCamera(This, ...)         CALL_IFACE_METHOD(RadientView, SetCamera,       This, __VA_ARGS__)
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
+#    define IRadientView_SetEnvironment(This, ...)    CALL_IFACE_METHOD(RadientView, SetEnvironment,  This, __VA_ARGS__)
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
 
 #endif

@@ -131,7 +131,10 @@ RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRad
     *ppView = nullptr;
 
     RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc);
-    *ppView                           = pView.Detach();
+    if (pView == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    *ppView = pView.Detach();
     return RADIENT_STATUS_OK;
 }
 

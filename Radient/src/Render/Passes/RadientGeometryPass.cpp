@@ -713,10 +713,8 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
     if (m_pRenderer == nullptr || m_pFrameSRB == nullptr || m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_OK;
 
-    const RadientEnvironmentDesc Environment       = ViewDesc.pScene != nullptr ?
-              ViewDesc.pScene->GetEnvironment() :
-              RadientEnvironmentDesc{};
-    const RADIENT_STATUS         EnvironmentStatus = UpdateEnvironment(pContext, Environment);
+    const RadientEnvironmentDesc& Environment       = ViewDesc.Environment;
+    const RADIENT_STATUS          EnvironmentStatus = UpdateEnvironment(pContext, Environment);
     if (RADIENT_FAILED(EnvironmentStatus))
         return EnvironmentStatus;
 

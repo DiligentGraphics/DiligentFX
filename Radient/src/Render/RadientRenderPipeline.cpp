@@ -171,12 +171,9 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
         if (HasSkybox)
         {
-            const RadientEnvironmentDesc& Environment = ViewDesc.pScene->GetEnvironment();
-
             Status = m_SkyboxPass.Execute(m_GeometryRenderer,
                                           pContext,
                                           ViewDesc,
-                                          Environment,
                                           m_FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;

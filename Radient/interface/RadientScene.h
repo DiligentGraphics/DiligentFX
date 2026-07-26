@@ -110,9 +110,6 @@ struct RadientSceneRevisions
     /// Camera component data changed.
     RadientRevision Cameras DEFAULT_INITIALIZER(0);
 
-    /// Scene environment data changed.
-    RadientRevision Environment DEFAULT_INITIALIZER(0);
-
     /// Custom component data changed.
     RadientRevision CustomComponents DEFAULT_INITIALIZER(0);
 
@@ -124,7 +121,6 @@ struct RadientSceneRevisions
             Transforms == Rhs.Transforms &&
             Visibility == Rhs.Visibility &&
             Cameras == Rhs.Cameras &&
-            Environment == Rhs.Environment &&
             CustomComponents == Rhs.CustomComponents;
     }
 
@@ -135,39 +131,6 @@ struct RadientSceneRevisions
 #endif
 };
 typedef struct RadientSceneRevisions RadientSceneRevisions;
-
-
-/// Scene environment used for image-based lighting.
-struct RadientEnvironmentDesc
-{
-    /// Environment map texture asset. When null or not loaded, renderer default IBL is used.
-    IRadientTextureAsset* pEnvironmentMap DEFAULT_INITIALIZER(nullptr);
-
-    /// Environment color multiplier.
-    RadientFloat3 Color DEFAULT_INITIALIZER({1.f, 1.f, 1.f});
-
-    /// Environment intensity multiplier.
-    Float32 Intensity DEFAULT_INITIALIZER(1.f);
-
-    /// Exposure multiplier as a power of 2.
-    Float32 Exposure DEFAULT_INITIALIZER(0.f);
-
-#if DILIGENT_CPP_INTERFACE
-    bool operator==(const RadientEnvironmentDesc& Rhs) const
-    {
-        return pEnvironmentMap == Rhs.pEnvironmentMap &&
-            Color == Rhs.Color &&
-            Intensity == Rhs.Intensity &&
-            Exposure == Rhs.Exposure;
-    }
-
-    bool operator!=(const RadientEnvironmentDesc& Rhs) const
-    {
-        return !(*this == Rhs);
-    }
-#endif
-};
-typedef struct RadientEnvironmentDesc RadientEnvironmentDesc;
 
 
 /// Entity creation attributes.
@@ -537,9 +500,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                              RadientEntityID            Entity,
                                              RadientCameraComponent REF Camera) CONST PURE;
 
-    /// Gets the scene environment used for image-based lighting.
-    VIRTUAL const RadientEnvironmentDesc REF METHOD(GetEnvironment)(THIS) CONST PURE;
-
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
                                                 RadientEntityID        Entity,
@@ -568,7 +528,6 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
-#    define IRadientScene_GetEnvironment(This)                   CALL_IFACE_METHOD(RadientScene, GetEnvironment,              This)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetSceneRevisions(This)                CALL_IFACE_METHOD(RadientScene, GetSceneRevisions,           This)
 

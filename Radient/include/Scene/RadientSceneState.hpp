@@ -141,8 +141,6 @@ public:
     RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
     RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
-    const RadientEnvironmentDesc& GetEnvironment() const;
-
     const RadientSceneRevisions&    GetSceneRevisions() const;
     const RenderableChangeLogState& GetRenderableChangeLogState() const;
 
@@ -178,7 +176,6 @@ public:
     RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
     RADIENT_STATUS SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings);
     RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
-    RADIENT_STATUS SetEnvironment(const RadientEnvironmentDesc& Environment);
     RADIENT_STATUS SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component);
     RADIENT_STATUS RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType);
     RADIENT_STATUS CommitChanges();
@@ -218,11 +215,8 @@ private:
         // Camera component data changed.
         CHANGE_FLAG_CAMERAS = 1u << 4u,
 
-        // Scene environment data changed.
-        CHANGE_FLAG_ENVIRONMENT = 1u << 5u,
-
         // Custom component data changed.
-        CHANGE_FLAG_CUSTOM_COMPONENTS = 1u << 6u
+        CHANGE_FLAG_CUSTOM_COMPONENTS = 1u << 5u
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(CHANGE_FLAGS);
 
@@ -413,17 +407,15 @@ private:
 
     using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
     using EntityMapType                = absl::flat_hash_map<RadientEntityID, entt::entity>;
-    entt::registry                      m_Registry;
-    CoreStorages                        m_CoreStorages;
-    EntityMapType                       m_EntityMap;
-    CustomComponentStoresMapType        m_CustomComponentStores;
-    RadientEntityID                     m_NextEntityID = 1;
-    RadientSceneRevisions               m_SceneRevisions;
-    RenderableChangeLogState            m_RenderableChangeLogState;
-    RadientEnvironmentDesc              m_Environment;
-    RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
-    std::vector<RenderableMeshChange>   m_RemovedRenderableMeshChanges;
-    std::vector<RenderableLightChange>  m_RemovedRenderableLightChanges;
+    entt::registry                     m_Registry;
+    CoreStorages                       m_CoreStorages;
+    EntityMapType                      m_EntityMap;
+    CustomComponentStoresMapType       m_CustomComponentStores;
+    RadientEntityID                    m_NextEntityID = 1;
+    RadientSceneRevisions              m_SceneRevisions;
+    RenderableChangeLogState           m_RenderableChangeLogState;
+    std::vector<RenderableMeshChange>  m_RemovedRenderableMeshChanges;
+    std::vector<RenderableLightChange> m_RemovedRenderableLightChanges;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;

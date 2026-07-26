@@ -25,11 +25,26 @@
  */
 
 #include "Core/RadientViewImpl.hpp"
+#include "Math/RadientMath.hpp"
 
 #include <utility>
 
 namespace Diligent
 {
+
+namespace
+{
+
+bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    return (Environment.pEnvironmentMap == nullptr ||
+            Environment.pEnvironmentMap->GetType() == RADIENT_ASSET_TYPE_TEXTURE) &&
+        RadientMath::IsFiniteNonNegative(Environment.Color) &&
+        RadientMath::IsFiniteNonNegative(Environment.Intensity) &&
+        RadientMath::IsFinite(Environment.Exposure);
+}
+
+} // namespace
 
 RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
     TBase{pRefCounters},
@@ -39,6 +54,7 @@ RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const Radient
     m_pRenderTarget{Desc.pRenderTarget}
 {
     m_Desc.Name = m_Name.c_str();
+    CopyEnvironment(Desc.Environment);
     CopySkybox(Desc.Skybox);
 }
 
@@ -48,6 +64,9 @@ RadientViewImpl::~RadientViewImpl()
 
 RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
 {
+    if (!IsValidEnvironment(Desc.Environment))
+        return {};
+
     return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
 }
 
@@ -85,6 +104,18 @@ RADIENT_STATUS RadientViewImpl::SetRenderTarget(IRadientRenderTarget* pRenderTar
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientViewImpl::SetEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    if (!IsValidEnvironment(Environment))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.Environment == Environment)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    CopyEnvironment(Environment);
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
 {
     RadientSkyboxDesc NewSkybox = Skybox;
@@ -97,6 +128,13 @@ RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
     NewSkybox.pTexture = m_pSkyboxTexture;
     m_Desc.Skybox      = NewSkybox;
     return RADIENT_STATUS_OK;
+}
+
+void RadientViewImpl::CopyEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    m_pEnvironmentMap                  = Environment.pEnvironmentMap;
+    m_Desc.Environment                 = Environment;
+    m_Desc.Environment.pEnvironmentMap = m_pEnvironmentMap;
 }
 
 void RadientViewImpl::CopySkybox(const RadientSkyboxDesc& Skybox)
