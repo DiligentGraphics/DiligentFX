@@ -383,7 +383,6 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
         }
 
         IRadientMaterialAsset* pMaterialAsset = View.GetMaterial(PrimitiveIndex);
-        const GLTF::Material*  pMaterial      = nullptr;
 
         if (pMaterialAsset != nullptr)
         {
@@ -394,16 +393,15 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
                 return;
             }
 
-            // Pending materials are resolved lazily by GetDrawableMesh().
-            if (MaterialLoadStatus == RADIENT_STATUS_OK)
-                pMaterial = RadientMaterialAssetManager::GetRenderData(pMaterialAsset).pMaterial;
-            else if (MaterialLoadStatus == RADIENT_STATUS_PENDING)
+            if (MaterialLoadStatus == RADIENT_STATUS_PENDING)
                 MaterialStatusValue = RADIENT_STATUS_PENDING;
         }
 
         Materials.emplace_back(pMaterialAsset);
         DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
-            pMaterial,
+            // MeshStorage is constructed on a worker thread. Material render
+            // data must be resolved later by GetDrawableMesh() on the render thread.
+            nullptr,
             pMaterialAsset,
             GeometryIndex,
             true,
