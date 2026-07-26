@@ -141,7 +141,7 @@ GLTF::ResourceManager::CreateInfo MakeResourceManagerCI(Uint32 TextureAtlasSize)
     CreateInfo.DefaultAtlasDesc.Desc.Width     = TextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.Height    = TextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.ArraySize = 1;
-    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
+    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_TYPELESS;
     CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
     CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
     CreateInfo.DefaultAtlasDesc.MaxSliceCount  = TestTextureAtlasMaxSlice;

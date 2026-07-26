@@ -40,6 +40,7 @@
 #include "ThreadPool.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <memory>
 #include <string>
@@ -100,14 +101,42 @@ public:
         return m_GPUResourceStatus.load(std::memory_order_acquire);
     }
 
-    void ResetGPUResourceState()
+    void ResetGPUResourceState(TEXTURE_FORMAT Format)
     {
         ClearTextureAttribs();
         m_PendingSubresourceUploads.store(0, std::memory_order_release);
         m_AllCopyCommandsEnqueued.store(false, std::memory_order_release);
         SetGPUResourceStatus(RADIENT_STATUS_PENDING);
-        m_pTexture.Release();
+        m_Standalone = {};
         m_pAtlasSuballocation.Release();
+
+        const TEXTURE_FORMAT TypelessFormat = FormatToTypeless(Format);
+        const TEXTURE_FORMAT LinearFormat   = TypelessFormatToUnorm(TypelessFormat);
+        const TEXTURE_FORMAT SRGBFormat     = TypelessFormatToSRGB(TypelessFormat);
+
+        // FormatToTypeless() also maps formats such as RGBA8_UINT, SNORM, and SINT
+        // to RGBA8_TYPELESS. Only use typeless storage when the source is the
+        // typeless, UNORM, or sRGB member of the family; otherwise preserve its
+        // original interpretation for both linear and sRGB view requests.
+        const bool IsTypelessLinearOrSRGB =
+            Format == TypelessFormat || Format == LinearFormat || Format == SRGBFormat;
+
+        if (IsSRGBFormat(SRGBFormat) && IsTypelessLinearOrSRGB)
+        {
+            m_StorageFormat                                                    = TypelessFormat;
+            m_ViewFormats[static_cast<size_t>(RadientTextureViewType::Linear)] = LinearFormat;
+            m_ViewFormats[static_cast<size_t>(RadientTextureViewType::SRGB)]   = SRGBFormat;
+        }
+        else
+        {
+            m_StorageFormat = Format;
+            m_ViewFormats.fill(Format);
+        }
+    }
+
+    TEXTURE_FORMAT GetStorageFormat() const noexcept
+    {
+        return m_StorageFormat;
     }
 
     ITexture* CreateTexture(IRenderDevice* pDevice, const TextureDesc& Desc) noexcept
@@ -118,21 +147,24 @@ public:
         if (pDevice != nullptr)
             pDevice->CreateTexture(Desc, nullptr, pTexture.GetAddressOfEmpty());
 
-        m_pTexture = std::move(pTexture);
-        if (m_pTexture != nullptr)
+        m_Standalone.pTexture = std::move(pTexture);
+        if (m_Standalone.pTexture != nullptr)
+        {
+            CreateStandaloneTextureSRVs();
             SetTextureAttribs(float4{1, 1, 0, 0}, 0);
+        }
         else
             ClearTextureAttribs();
 
         // BeginSubresourceUploads() and RecordCopyCommandEnqueueResult() own
         // readiness publication. Creating the resource does not imply that its
         // required copy commands have been enqueued.
-        return m_pTexture;
+        return m_Standalone.pTexture;
     }
 
     ITexture* GetTexture() const noexcept
     {
-        return m_pTexture;
+        return m_Standalone.pTexture;
     }
 
     void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation)
@@ -150,12 +182,7 @@ public:
         m_pAtlasSuballocation = std::move(pAtlasSuballocation);
     }
 
-    ITextureAtlasSuballocation* GetAtlasSuballocation() const noexcept
-    {
-        return m_pAtlasSuballocation;
-    }
-
-    ITextureView* GetTextureSRV() const
+    ITextureView* GetTextureSRV(RadientTextureViewType ViewType) const noexcept
     {
         if (GetGPUResourceStatus() != RADIENT_STATUS_OK ||
             !m_AllCopyCommandsEnqueued.load(std::memory_order_acquire))
@@ -163,20 +190,24 @@ public:
             return nullptr;
         }
 
-        // Once the GPU resource status is OK and all copy commands have been
-        // enqueued, no worker/upload callback will continue modifying the texture storage.
-        ITexture* pTexture = m_pTexture;
-        if (pTexture == nullptr)
+        if (ViewType >= RadientTextureViewType::Count)
         {
-            ITextureAtlasSuballocation* pAtlasSuballocation = GetAtlasSuballocation();
-            if (pAtlasSuballocation != nullptr)
-            {
-                if (IDynamicTextureAtlas* pAtlas = pAtlasSuballocation->GetAtlas())
-                    pTexture = pAtlas->GetTexture();
-            }
+            UNEXPECTED("Unexpected view type");
+            return nullptr;
         }
 
-        return pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+        if (m_Standalone.pTexture != nullptr)
+            return m_Standalone.pSRV[static_cast<size_t>(ViewType)];
+
+        if (m_pAtlasSuballocation == nullptr)
+            return nullptr;
+
+        IDynamicTextureAtlas* const pAtlas = m_pAtlasSuballocation->GetAtlas();
+
+        const TEXTURE_FORMAT ViewFormat = m_ViewFormats[static_cast<size_t>(ViewType)];
+        return ViewFormat != TEX_FORMAT_UNKNOWN ?
+            pAtlas->GetTextureSRV(ViewFormat) :
+            nullptr;
     }
 
     bool GetTextureAtlasAttribs(GLTF::Material::TextureShaderAttribs& Attribs) const noexcept
@@ -227,6 +258,35 @@ public:
     }
 
 private:
+    void CreateStandaloneTextureSRVs() noexcept
+    {
+        VERIFY_EXPR(m_Standalone.pTexture != nullptr);
+        VERIFY_EXPR(m_Standalone.pTexture->GetDesc().Format == m_StorageFormat);
+
+        for (size_t ViewIndex = 0; ViewIndex < m_ViewFormats.size(); ++ViewIndex)
+        {
+            const TEXTURE_FORMAT ViewFormat = m_ViewFormats[ViewIndex];
+            if (ViewFormat == TEX_FORMAT_UNKNOWN)
+                continue;
+
+            RefCntAutoPtr<ITextureView>& pTextureView = m_Standalone.pSRV[ViewIndex];
+            VERIFY_EXPR(pTextureView == nullptr);
+
+            ITextureView* pDefaultView = m_Standalone.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            if (pDefaultView != nullptr && pDefaultView->GetDesc().Format == ViewFormat)
+            {
+                pTextureView = pDefaultView;
+            }
+            else
+            {
+                TextureViewDesc ViewDesc;
+                ViewDesc.ViewType = TEXTURE_VIEW_SHADER_RESOURCE;
+                ViewDesc.Format   = ViewFormat;
+                m_Standalone.pTexture->CreateView(ViewDesc, pTextureView.GetAddressOfEmpty());
+            }
+        }
+    }
+
     void SetTextureAttribs(const float4& AtlasUVScaleAndBias, Uint32 TextureSlice) noexcept
     {
         m_TextureSlice.store(static_cast<float>(TextureSlice), std::memory_order_relaxed);
@@ -248,8 +308,17 @@ private:
     }
 
 private:
-    RefCntAutoPtr<ITexture>                   m_pTexture;
+    struct StandaloneTexture
+    {
+        RefCntAutoPtr<ITexture>                                                                     pTexture;
+        std::array<RefCntAutoPtr<ITextureView>, static_cast<size_t>(RadientTextureViewType::Count)> pSRV;
+    };
+    StandaloneTexture m_Standalone;
+
     RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
+
+    TEXTURE_FORMAT                                                                 m_StorageFormat = TEX_FORMAT_UNKNOWN;
+    std::array<TEXTURE_FORMAT, static_cast<size_t>(RadientTextureViewType::Count)> m_ViewFormats{};
 
     std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> m_GPUResourceStatus{RADIENT_STATUS_OK};
@@ -657,10 +726,11 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
     return ASYNC_TASK_STATUS_COMPLETE;
 }
 
-ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
+ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset*  pTextureAsset,
+                                                        RadientTextureViewType ViewType)
 {
     if (RefCntAutoPtr<TextureAssetImpl> pImpl = TextureAssetImpl::ResolveAsset(pTextureAsset))
-        return pImpl->GetStorage().GetTextureSRV();
+        return pImpl->GetStorage().GetTextureSRV(ViewType);
 
     return nullptr;
 }
@@ -721,9 +791,12 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         return RADIENT_STATUS_INVALID_OPERATION;
 
     TextureStorage& Texture = pTextureAsset->GetStorage();
-    Texture.ResetGPUResourceState();
+    Texture.ResetGPUResourceState(TexDesc.Format);
 
-    const TextureDesc AtlasDescForFit = ResourceManager.GetAtlasDesc(TexDesc.Format);
+    TextureDesc StorageDesc = TexDesc;
+    StorageDesc.Format      = Texture.GetStorageFormat();
+
+    const TextureDesc AtlasDescForFit = ResourceManager.GetAtlasDesc(StorageDesc.Format);
     const bool        UseTextureAtlas =
         TexDesc.Type == RESOURCE_DIM_TEX_2D &&
         TexDesc.GetArraySize() == 1 &&
@@ -731,16 +804,21 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         TexDesc.Width <= AtlasDescForFit.Width &&
         TexDesc.Height <= AtlasDescForFit.Height;
 
+    // PBR material textures are always consumed as Texture2DArray. Preserve
+    // this interface for standalone 2D textures by creating one-slice arrays.
+    if (!UseTextureAtlas && StorageDesc.Type == RESOURCE_DIM_TEX_2D)
+        StorageDesc.Type = RESOURCE_DIM_TEX_2D_ARRAY;
+
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
 
     uint2          AtlasOrigin{};
     Uint32         UploadMipLevels = TexDesc.MipLevels;
     Uint32         UploadSlices    = TexDesc.GetArraySize();
-    TEXTURE_FORMAT UploadFormat    = TexDesc.Format;
+    TEXTURE_FORMAT UploadFormat    = StorageDesc.Format;
 
     if (UseTextureAtlas)
     {
-        pAtlasSuballocation = ResourceManager.AllocateTextureSpace(TexDesc.Format,
+        pAtlasSuballocation = ResourceManager.AllocateTextureSpace(StorageDesc.Format,
                                                                    TexDesc.Width,
                                                                    TexDesc.Height,
                                                                    TextureCacheKey.c_str());
@@ -781,7 +859,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     {
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation != DEVICE_FEATURE_STATE_DISABLED)
         {
-            if (Texture.CreateTexture(m_pDevice, TexDesc) == nullptr)
+            if (Texture.CreateTexture(m_pDevice, StorageDesc) == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
         }
     }
@@ -802,7 +880,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                 m_pDevice,
                 pTextureAsset,
                 pAtlasSuballocation,
-                pAtlasSuballocation ? TextureDesc{} : TexDesc,
+                pAtlasSuballocation ? TextureDesc{} : StorageDesc,
                 pAtlasSuballocation || TexDesc.Name == nullptr ? std::string{} : TexDesc.Name,
                 m_Stats.PendingTextureLoads,
                 m_Stats.PendingCopyCommandEnqueueCallbacks,

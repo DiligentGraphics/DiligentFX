@@ -547,58 +547,6 @@ void* WritePBRMaterialShaderAttribs(void*                           pDstShaderAt
     return pDstTextures + NumTextureAttribs;
 }
 
-RefCntAutoPtr<ITextureView> GetPBRTextureSRV(ITexture*                                           pTexture,
-                                             PBR_Renderer::TEXTURE_ATTRIB_ID                     ID,
-                                             PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE ConversionMode)
-{
-    if (pTexture == nullptr)
-    {
-        UNEXPECTED("Texture is null");
-        return {};
-    }
-
-    const TextureDesc& TexDesc = pTexture->GetDesc();
-    TEXTURE_FORMAT     ViewFmt = TexDesc.Format;
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture attribute? It may need to be handled here.");
-    if ((ConversionMode == PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE) &&
-        (ID == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ||
-         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE ||
-         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR))
-    {
-        const TextureFormatAttribs& FmtInfo = GetTextureFormatAttribs(ViewFmt);
-        if (FmtInfo.ComponentType != COMPONENT_TYPE_UNORM_SRGB)
-        {
-            if (FmtInfo.IsTypeless)
-            {
-                ViewFmt = TypelessFormatToSRGB(ViewFmt);
-            }
-            else
-            {
-                LOG_WARNING_MESSAGE("Unable to create sRGB view for texture '", pTexture->GetDesc().Name,
-                                    "' as its format (", FmtInfo.Name,
-                                    ") is not typeless. Expect images to be too bright.");
-            }
-        }
-    }
-
-    RefCntAutoPtr<ITextureView> pTexSRV;
-
-    if (TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY && TexDesc.Format == ViewFmt)
-    {
-        pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    }
-    else
-    {
-        TextureViewDesc SRVDesc;
-        SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
-        SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
-        SRVDesc.Format     = ViewFmt;
-        pTexture->CreateView(SRVDesc, &pTexSRV);
-    }
-
-    return pTexSRV;
-}
-
 void BindVertexPool(IVertexPool&    VertexPool,
                     IDeviceContext* pContext)
 {
@@ -701,7 +649,11 @@ bool CreateMaterialSRB(RadientGeometryRenderer&         GeometryRenderer,
 
             IRadientTextureAsset* const pTextureAsset =
                 MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId));
-            ITextureView* const pSourceSRV = RadientAssetManagerImpl::GetTextureSRV(pTextureAsset);
+            const RadientTextureViewType ViewType = PBR_Renderer::IsSRGBTextureAttribute(TextureAttribId) ?
+                RadientTextureViewType::SRGB :
+                RadientTextureViewType::Linear;
+
+            ITextureView* const pSourceSRV = RadientAssetManagerImpl::GetTextureSRV(pTextureAsset, ViewType);
             if (pSourceSRV == nullptr)
             {
                 UNEXPECTED("Material texture ", Uint32{TextureAttribId}, " is not ready");
@@ -709,16 +661,14 @@ bool CreateMaterialSRB(RadientGeometryRenderer&         GeometryRenderer,
                 return;
             }
 
-            RefCntAutoPtr<ITextureView> pTextureSRV =
-                GetPBRTextureSRV(pSourceSRV->GetTexture(), TextureAttribId, Settings.TexColorConversionMode);
-            if (pTextureSRV == nullptr)
+            if (pSourceSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
             {
-                UNEXPECTED("Failed to create material texture SRV for attribute ", Uint32{TextureAttribId});
+                UNEXPECTED("Material texture ", Uint32{TextureAttribId}, " is not a 2D array");
                 IsValid = false;
                 return;
             }
 
-            pRenderer->SetMaterialTexture(pSRB, pTextureSRV, TextureAttribId);
+            pRenderer->SetMaterialTexture(pSRB, pSourceSRV, TextureAttribId);
         });
 
     if (IsValid)
@@ -1176,6 +1126,12 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    if (pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
+    {
+        LOG_ERROR_MESSAGE("Radient geometry rendering requires texture subresource views");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     PBR_Renderer::CreateInfo RendererCI;
     RendererCI.EnableIBL               = true;
     RendererCI.EnableAO                = true;
@@ -1187,9 +1143,7 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     RendererCI.ShaderTexturesArrayMode = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     InputLayoutDescX InputLayout       = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
     RendererCI.InputLayout             = InputLayout;
-    RendererCI.TexColorConversionMode  = pDevice->GetDeviceInfo().Features.TextureSubresourceViews ?
-         PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE :
-         PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
+    RendererCI.TexColorConversionMode  = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
 
     m_pRenderer             = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);

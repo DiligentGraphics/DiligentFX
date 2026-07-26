@@ -56,6 +56,13 @@ class RadientTextureAssetManager;
 
 using RadientTextureAssetManagerSharedPtr = std::shared_ptr<RadientTextureAssetManager>;
 
+enum class RadientTextureViewType : Uint8
+{
+    Linear,
+    SRGB,
+    Count
+};
+
 struct RadientTextureAssetManagerStats
 {
     // Total number of texture loads that are still active in any stage. A load
@@ -96,11 +103,14 @@ public:
 
     static RADIENT_STATUS RejectTextureLoad(const RadientTextureLoadInfo& LoadInfo);
 
-    // Returns the texture SRV if the texture GPU resource status is OK (i.e.,
-    // all required copy commands were enqueued), or nullptr otherwise.
+    // Returns the requested typed texture SRV if the texture GPU resource
+    // status is OK (i.e., all required copy commands were enqueued), or
+    // nullptr otherwise. Linear is the default interpretation for callers
+    // such as environment-map rendering.
     // This method must not race with render-thread operations that may access
     // the texture.
-    static ITextureView* GetTextureSRV(IRadientTextureAsset* pTextureAsset);
+    static ITextureView* GetTextureSRV(IRadientTextureAsset*  pTextureAsset,
+                                       RadientTextureViewType ViewType = RadientTextureViewType::Linear);
 
     // Reports texture source loading status. OK means the source image was
     // decoded/loaded, but does not imply that GPU resources exist.
@@ -145,7 +155,8 @@ private:
     RefCntWeakPtr<GLTF::ResourceManager>  m_WeakResourceManager;
     RefCntWeakPtr<IGPUUploadManager>      m_WeakUploadManager;
     RadientAssetCache<TexturePayloadImpl> m_TextureCache;
-    AtomicStats                           m_Stats;
+
+    AtomicStats m_Stats;
 };
 
 } // namespace Diligent

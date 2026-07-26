@@ -114,11 +114,12 @@ public:
     // NO_GPU_DATA means the scene loaded successfully without a GPU backend.
     static RADIENT_STATUS GetSceneGPUResourceStatus(IRadientSceneAsset* pScene);
 
-    // Returns the texture SRV if the texture status is OK (i.e., all
-    // required copy commands were enqueued), or nullptr otherwise.
+    // Returns the requested typed texture SRV if the texture status is OK
+    // (i.e., all required copy commands were enqueued), or nullptr otherwise.
     // This method must not race with render-thread operations that may access
     // the texture.
-    static ITextureView* GetTextureSRV(IRadientTextureAsset* pTexture);
+    static ITextureView* GetTextureSRV(IRadientTextureAsset*  pTexture,
+                                       RadientTextureViewType ViewType = RadientTextureViewType::Linear);
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);

@@ -141,6 +141,7 @@ void VerifyUploadedStandaloneTextureData(IDeviceContext&           Context,
     EXPECT_FLOAT_EQ(TextureAttribs.TextureSlice, 0.f);
 
     const TextureDesc& UploadedDesc = pUploadedTexture->GetDesc();
+    ASSERT_EQ(UploadedDesc.Type, RESOURCE_DIM_TEX_2D_ARRAY);
     ASSERT_EQ(UploadedDesc.Width, ExpectedData.Width);
     ASSERT_EQ(UploadedDesc.Height, ExpectedData.Height);
     ASSERT_EQ(UploadedDesc.GetArraySize(), 1u);
@@ -227,6 +228,189 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    if (pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
+        GTEST_SKIP() << "Typed linear and sRGB texture views are not supported by this device.";
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    const std::vector<Uint8> LinearPixels = MakeTexturePixels(0);
+    const std::vector<Uint8> SRGBPixels   = MakeTexturePixels(1);
+    RadientTextureData       LinearData   = MakeTextureData(LinearPixels);
+    RadientTextureData       SRGBData     = MakeTextureData(SRGBPixels);
+    SRGBData.Format                       = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB;
+
+    RefCntAutoPtr<IRadientTextureAsset> pLinearTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(LinearData), &pLinearTexture)));
+    ASSERT_NE(pLinearTexture, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pSRGBTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(SRGBData), &pSRGBTexture)));
+    ASSERT_NE(pSRGBTexture, nullptr);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pLinearTexture);
+    ProcessUploads(*pUploadManager, *pContext, *pSRGBTexture);
+
+    ITextureView* const pLinearSRV = RadientTextureAssetManager::GetTextureSRV(pLinearTexture, RadientTextureViewType::Linear);
+    ITextureView* const pSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pLinearTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pLinearSRV, nullptr);
+    ASSERT_NE(pSRGBSRV, nullptr);
+    EXPECT_EQ(pLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(pSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
+    EXPECT_EQ(pLinearSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(pSRGBSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(pLinearSRV->GetTexture(), pSRGBSRV->GetTexture());
+
+    ITextureView* const pOtherLinearSRV = RadientTextureAssetManager::GetTextureSRV(pSRGBTexture, RadientTextureViewType::Linear);
+    ITextureView* const pOtherSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pSRGBTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pOtherLinearSRV, nullptr);
+    ASSERT_NE(pOtherSRGBSRV, nullptr);
+    EXPECT_EQ(pOtherLinearSRV, pLinearSRV);
+    EXPECT_EQ(pOtherSRGBSRV, pSRGBSRV);
+    EXPECT_EQ(pOtherLinearSRV->GetTexture(), pLinearSRV->GetTexture());
+    EXPECT_EQ(pOtherSRGBSRV->GetTexture(), pLinearSRV->GetTexture());
+    EXPECT_EQ(pLinearSRV->GetTexture()->GetDesc().Format, TEX_FORMAT_RGBA8_TYPELESS);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerGPUTest, SRGBViewRequestUsesNativeFormatWhenSRGBIsUnavailable)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    static constexpr Uint32 Width          = 4;
+    static constexpr Uint32 Height         = 4;
+    static constexpr Uint32 ComponentCount = 4;
+
+    const std::vector<float> TexturePixels(Width * Height * ComponentCount, 1.f);
+    const RadientTextureData TextureData{
+        Width,
+        Height,
+        RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT,
+        TexturePixels.data(),
+        Width * ComponentCount * static_cast<Uint32>(sizeof(float))};
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pTexture);
+
+    ITextureView* const pLinearSRV = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::Linear);
+    ITextureView* const pSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pLinearSRV, nullptr);
+    ASSERT_NE(pSRGBSRV, nullptr);
+    EXPECT_EQ(pLinearSRV, pSRGBSRV);
+    EXPECT_EQ(pLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA32_FLOAT);
+
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    if (pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
+        GTEST_SKIP() << "Typed linear and sRGB texture views are not supported by this device.";
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    const TestTextureParams              Params;
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice, Params.Width);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    const std::vector<Uint8> FirstPixels = MakeTexturePixels(0, Params);
+    const RadientTextureData FirstData   = MakeTextureData(FirstPixels, Params);
+
+    RefCntAutoPtr<IRadientTextureAsset> pFirstTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(FirstData), &pFirstTexture)));
+    ASSERT_NE(pFirstTexture, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pFirstTexture);
+
+    // Keep the original views alive so pointer comparison remains reliable
+    // after the atlas replaces its backing texture.
+    RefCntAutoPtr<ITextureView> pOldLinearSRV{RadientTextureAssetManager::GetTextureSRV(pFirstTexture, RadientTextureViewType::Linear)};
+    RefCntAutoPtr<ITextureView> pOldSRGBSRV{RadientTextureAssetManager::GetTextureSRV(pFirstTexture, RadientTextureViewType::SRGB)};
+    ASSERT_NE(pOldLinearSRV, nullptr);
+    ASSERT_NE(pOldSRGBSRV, nullptr);
+    ITexture* const pOldAtlasTexture = pOldLinearSRV->GetTexture();
+
+    // A full-atlas allocation consumes the first slice. This second texture
+    // requires another slice and forces the dynamic array to grow.
+    const std::vector<Uint8> SecondPixels = MakeTexturePixels(1, Params);
+    const RadientTextureData SecondData   = MakeTextureData(SecondPixels, Params);
+
+    RefCntAutoPtr<IRadientTextureAsset> pSecondTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(SecondData), &pSecondTexture)));
+    ASSERT_NE(pSecondTexture, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pSecondTexture);
+
+    ITextureView* const pNewLinearSRV = RadientTextureAssetManager::GetTextureSRV(pFirstTexture, RadientTextureViewType::Linear);
+    ITextureView* const pNewSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pFirstTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pNewLinearSRV, nullptr);
+    ASSERT_NE(pNewSRGBSRV, nullptr);
+    EXPECT_NE(pNewLinearSRV->GetTexture(), pOldAtlasTexture);
+    EXPECT_EQ(pNewLinearSRV->GetTexture(), pNewSRGBSRV->GetTexture());
+    EXPECT_EQ(pNewLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(pNewSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTexture)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
@@ -260,7 +444,16 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
 
     ProcessUploads(*pUploadManager, *pContext, *pTexture);
-    EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+    ITextureView* const pLinearSRV = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::Linear);
+    ITextureView* const pSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pLinearSRV, nullptr);
+    ASSERT_NE(pSRGBSRV, nullptr);
+    EXPECT_EQ(pLinearSRV->GetTexture(), pSRGBSRV->GetTexture());
+    EXPECT_EQ(pLinearSRV->GetTexture()->GetDesc().Format, TEX_FORMAT_RGBA8_TYPELESS);
+    EXPECT_EQ(pLinearSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(pSRGBSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(pLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(pSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
     VerifyUploadedStandaloneTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();

@@ -202,7 +202,7 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     CreateInfo.DefaultAtlasDesc.Desc.Width     = RadientDefaultTextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.Height    = RadientDefaultTextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.ArraySize = RadientDefaultTextureAtlasSlices;
-    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
+    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_TYPELESS;
     CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
     CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
     CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
@@ -629,9 +629,10 @@ RADIENT_STATUS RadientAssetManagerImpl::GetSceneGPUResourceStatus(IRadientSceneA
     return pImpl->GetStorage().GetGPUResourceStatus();
 }
 
-ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
+ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset*  pTextureAsset,
+                                                     RadientTextureViewType ViewType)
 {
-    return RadientTextureAssetManager::GetTextureSRV(pTextureAsset);
+    return RadientTextureAssetManager::GetTextureSRV(pTextureAsset, ViewType);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevice,
