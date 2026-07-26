@@ -41,8 +41,7 @@ jobs:
       matrix:
         name:       ["GCC", "Clang"]
         build_type: ["Debug", "Release"]
-        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
-        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON"]
+        cmake_args: ["-DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON"]
         include:
           - name:            "GCC"
             cmake_generator: "Unix Makefiles"
@@ -57,7 +56,7 @@ jobs:
           - name:            "Clang-ASAN"
             build_type:      "RelWithDebInfo"
             cmake_generator: "Ninja"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_TESTS=ON"
+            cmake_args:      "-DDILIGENT_BUILD_FX_TESTS=ON"
             sanitizer:       "address"
             cc:              "clang-18"
             cxx:             "clang++-18"
@@ -65,7 +64,7 @@ jobs:
           - name:            "Clang-TSAN"
             build_type:      "RelWithDebInfo"
             cmake_generator: "Ninja"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_TESTS=ON"
+            cmake_args:      "-DDILIGENT_BUILD_FX_TESTS=ON"
             sanitizer:       "thread"
             cc:              "clang-18"
             cxx:             "clang++-18"

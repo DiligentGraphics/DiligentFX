@@ -35,6 +35,8 @@
 namespace Diligent
 {
 
+class PBR_Renderer;
+
 class RadientViewImpl final : public ObjectBase<IRadientView>
 {
 public:
@@ -59,7 +61,25 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;
 
+    // Lazily creates the view-owned IBL cubemaps and SRB, and refreshes the
+    // cubemap contents when the environment changes.
+    RADIENT_STATUS Prepare(PBR_Renderer&   Renderer,
+                           IDeviceContext* pContext,
+                           IBuffer*        pFrameAttribsCB);
+
+    IShaderResourceBinding* GetFrameSRB() const { return m_pFrameSRB; }
+    ITextureView*           GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
+    ITextureView*           GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
+
 private:
+    RADIENT_STATUS CreateIBLResources(PBR_Renderer&   Renderer,
+                                      IDeviceContext* pContext,
+                                      IBuffer*        pFrameAttribsCB);
+
+    void PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
+                               IDeviceContext* pContext,
+                               ITextureView*   pEnvironmentMapSRV);
+
     void CopyEnvironment(const RadientEnvironmentDesc& Environment);
     void CopySkybox(const RadientSkyboxDesc& Skybox);
 
@@ -72,6 +92,14 @@ private:
     RefCntAutoPtr<IRadientRenderTarget> m_pRenderTarget;
     RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     RefCntAutoPtr<IRadientTextureAsset> m_pSkyboxTexture;
+
+    RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
+    // IBL variables are mutable, so every view keeps an immutable SRB that
+    // remains valid while commands using that view are in flight.
+    RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
+
+    RefCntWeakPtr<IRadientTextureAsset> m_WeakPreparedEnvironmentMap;
 };
 
 } // namespace Diligent

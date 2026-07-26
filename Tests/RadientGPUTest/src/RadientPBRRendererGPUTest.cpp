@@ -25,8 +25,11 @@
  */
 
 #include "Render/RadientPBRRenderer.hpp"
+#include "Core/RadientViewImpl.hpp"
 
+#include "Cast.hpp"
 #include "GPUTestingEnvironment.hpp"
+#include "GraphicsUtilities.h"
 
 #include "gtest/gtest.h"
 
@@ -85,6 +88,70 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_TRUE(HasResource(MaterialDesc, "cbPrimitiveAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "cbMaterialAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "g_BaseColorMap"));
+}
+
+TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    PBR_Renderer::CreateInfo RendererCI{};
+    RendererCI.EnableIBL = true;
+
+    RadientPBRRenderer Renderer{pDevice, nullptr, pContext, RendererCI};
+
+    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
+    CreateUniformBuffer(pDevice,
+                        Renderer.GetPRBFrameAttribsSize(),
+                        "Radient view IBL test frame attribs buffer",
+                        pFrameAttribsCB.GetAddressOfEmpty());
+    ASSERT_NE(pFrameAttribsCB, nullptr);
+
+    RefCntAutoPtr<IRadientView> pFirstView  = RadientViewImpl::Create({});
+    RefCntAutoPtr<IRadientView> pSecondView = RadientViewImpl::Create({});
+    ASSERT_NE(pFirstView, nullptr);
+    ASSERT_NE(pSecondView, nullptr);
+
+    RadientViewImpl* pFirstViewImpl  = ClassPtrCast<RadientViewImpl>(pFirstView.RawPtr());
+    RadientViewImpl* pSecondViewImpl = ClassPtrCast<RadientViewImpl>(pSecondView.RawPtr());
+    ASSERT_NE(pFirstViewImpl, nullptr);
+    ASSERT_NE(pSecondViewImpl, nullptr);
+
+    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
+
+    ITextureView* const pFirstIrradiance  = pFirstViewImpl->GetIrradianceCubeSRV();
+    ITextureView* const pFirstPrefiltered = pFirstViewImpl->GetPrefilteredEnvMapSRV();
+    ASSERT_NE(pFirstIrradiance, nullptr);
+    ASSERT_NE(pFirstPrefiltered, nullptr);
+
+    EXPECT_NE(pFirstIrradiance, pSecondViewImpl->GetIrradianceCubeSRV());
+    EXPECT_NE(pFirstPrefiltered, pSecondViewImpl->GetPrefilteredEnvMapSRV());
+
+    IShaderResourceBinding* const pFirstFrameSRB  = pFirstViewImpl->GetFrameSRB();
+    IShaderResourceBinding* const pSecondFrameSRB = pSecondViewImpl->GetFrameSRB();
+    ASSERT_NE(pFirstFrameSRB, nullptr);
+    ASSERT_NE(pSecondFrameSRB, nullptr);
+    EXPECT_NE(pFirstFrameSRB, pSecondFrameSRB);
+
+    IShaderResourceVariable* const pFirstIrradianceVar =
+        pFirstFrameSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap");
+    IShaderResourceVariable* const pFirstPrefilteredVar =
+        pFirstFrameSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap");
+    ASSERT_NE(pFirstIrradianceVar, nullptr);
+    ASSERT_NE(pFirstPrefilteredVar, nullptr);
+    EXPECT_EQ(pFirstIrradianceVar->Get(), pFirstIrradiance);
+    EXPECT_EQ(pFirstPrefilteredVar->Get(), pFirstPrefiltered);
+
+    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstViewImpl->GetFrameSRB(), pFirstFrameSRB);
+    EXPECT_EQ(pFirstViewImpl->GetIrradianceCubeSRV(), pFirstIrradiance);
+    EXPECT_EQ(pFirstViewImpl->GetPrefilteredEnvMapSRV(), pFirstPrefiltered);
 }
 
 } // namespace

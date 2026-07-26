@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Render/RadientFrameRenderTargets.hpp"
+#include "RadientView.h"
 
 #include <memory>
 
@@ -46,9 +47,9 @@ public:
     RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
-                           IDeviceContext*                  pContext,
-                           const RadientViewDesc&           ViewDesc,
+    RADIENT_STATUS Execute(IDeviceContext*                  pContext,
+                           const RadientSkyboxDesc&         Skybox,
+                           ITextureView*                    pSkyboxSRV,
                            const RadientFrameRenderTargets& Targets);
 
 private:

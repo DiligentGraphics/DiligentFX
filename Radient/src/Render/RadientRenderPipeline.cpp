@@ -27,6 +27,7 @@
 #include "Render/RadientRenderPipeline.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Core/RadientViewImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 
 #include "Cast.hpp"
@@ -54,12 +55,11 @@ RadientRenderPipeline::~RadientRenderPipeline()
 
 RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs)
 {
-    if (Attribs.pView == nullptr)
-    {
+    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(Attribs.pView);
+    if (pViewImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
 
-    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    const RadientViewDesc& ViewDesc = pViewImpl->GetDesc();
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -94,6 +94,22 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
+    const bool HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
+    const bool HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
+    if (HasDrawables || HasSkybox)
+    {
+        PBR_Renderer* const pPBRRenderer    = m_GeometryRenderer.GetRenderer();
+        IBuffer* const      pFrameAttribsCB = m_GeometryRenderer.GetFrameAttribsCB();
+        if (pPBRRenderer == nullptr || pFrameAttribsCB == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        Status = pViewImpl->Prepare(*pPBRRenderer,
+                                    pContext,
+                                    pFrameAttribsCB);
+        if (RADIENT_FAILED(Status))
+            return Status;
+    }
+
     Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext,
                                    m_pAssetManager->GetResourceManager(),
                                    m_DrawableCache, m_FrameTargets);
@@ -113,12 +129,11 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
 
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
 {
-    if (Attribs.pView == nullptr)
-    {
+    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(Attribs.pView);
+    if (pViewImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
 
-    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    const RadientViewDesc& ViewDesc = pViewImpl->GetDesc();
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -139,11 +154,18 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
     if (HasDrawables || HasSkybox)
     {
+        const RadientGeometryFrameAttribs GeometryFrameAttribs{
+            ViewDesc.Environment,
+            ViewDesc.pScene,
+            ViewDesc.Camera,
+            pViewImpl->GetPrefilteredEnvMapSRV(),
+        };
+
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
                                                m_DrawableCache.GetLightList(),
                                                m_pAssetManager->GetResourceManager(),
-                                               ViewDesc,
+                                               GeometryFrameAttribs,
                                                m_FrameTargets);
         if (RADIENT_FAILED(Status))
             return Status;
@@ -153,6 +175,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
+                                           pViewImpl->GetFrameSRB(),
                                            m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE),
                                            m_DrawableCache,
                                            m_FrameTargets);
@@ -162,6 +185,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
+                                           pViewImpl->GetFrameSRB(),
                                            m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK),
                                            m_DrawableCache,
                                            m_FrameTargets);
@@ -171,12 +195,32 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
         if (HasSkybox)
         {
-            Status = m_SkyboxPass.Execute(m_GeometryRenderer,
-                                          pContext,
-                                          ViewDesc,
-                                          m_FrameTargets);
-            if (RADIENT_FAILED(Status))
-                return Status;
+            IRadientTextureAsset* pSkyboxTexture = nullptr;
+            switch (ViewDesc.Skybox.Source)
+            {
+                case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
+                    pSkyboxTexture = ViewDesc.Environment.pEnvironmentMap;
+                    break;
+
+                case RADIENT_SKYBOX_SOURCE_TEXTURE:
+                    pSkyboxTexture = ViewDesc.Skybox.pTexture;
+                    break;
+
+                default:
+                    UNEXPECTED("Unexpected Radient skybox source");
+                    break;
+            }
+
+            ITextureView* pSkyboxSRV = pSkyboxTexture != nullptr ? RadientAssetManagerImpl::GetTextureSRV(pSkyboxTexture) : nullptr;
+            if (pSkyboxSRV != nullptr)
+            {
+                Status = m_SkyboxPass.Execute(pContext,
+                                              ViewDesc.Skybox,
+                                              pSkyboxSRV,
+                                              m_FrameTargets);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+            }
         }
 
         if (HasDrawables)
@@ -184,6 +228,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
+                                           pViewImpl->GetFrameSRB(),
                                            m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND),
                                            m_DrawableCache,
                                            m_FrameTargets);

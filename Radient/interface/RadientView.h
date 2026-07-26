@@ -97,7 +97,8 @@ typedef struct RadientSkyboxDesc RadientSkyboxDesc;
 /// View environment used for image-based lighting.
 struct RadientEnvironmentDesc
 {
-    /// Environment map texture asset. When null or not loaded, renderer default IBL is used.
+    /// Environment map texture asset. New views use cleared IBL maps until the asset is ready.
+    /// When the environment changes, the current IBL remains active until the replacement is ready.
     IRadientTextureAsset* pEnvironmentMap DEFAULT_INITIALIZER(nullptr);
 
     /// Environment color multiplier.

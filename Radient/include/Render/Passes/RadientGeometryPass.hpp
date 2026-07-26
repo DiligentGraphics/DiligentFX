@@ -29,6 +29,7 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
+#include "RadientView.h"
 
 #include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
@@ -43,47 +44,43 @@ namespace Diligent
 class RadientSceneDrawableCache;
 struct RadientDrawableSlot;
 
+/// View-independent inputs used to populate PBR frame attributes.
+struct RadientGeometryFrameAttribs
+{
+    const RadientEnvironmentDesc& Environment;
+    IRadientScene*                pScene                = nullptr;
+    RadientEntityID               Camera                = InvalidRadientEntityID;
+    ITextureView*                 pPrefilteredEnvMapSRV = nullptr;
+};
+
 /// Shared renderer state used by geometry passes.
 class RadientGeometryRenderer
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
 
-    RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
-                              IDeviceContext*                  pContext,
-                              const RadientLightLists&         LightList,
-                              GLTF::ResourceManager*           pResourceManager,
-                              const RadientViewDesc&           ViewDesc,
-                              const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS BeginFrame(IRenderDevice*                     pDevice,
+                              IDeviceContext*                    pContext,
+                              const RadientLightLists&           LightList,
+                              GLTF::ResourceManager*             pResourceManager,
+                              const RadientGeometryFrameAttribs& FrameAttribs,
+                              const RadientFrameRenderTargets&   Targets);
 
     void EndFrame();
 
     PBR_Renderer*           GetRenderer() const { return m_pRenderer.get(); }
-    IShaderResourceBinding* GetFrameSRB() const { return m_pFrameSRB; }
     IBuffer*                GetFrameAttribsCB() const { return m_pFrameAttribsCB; }
-    ITextureView*           GetDefaultIBLCubemapSRV() const { return m_pDefaultIBLCubemapSRV; }
-    ITextureView*           GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
-    ITextureView*           GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
                                   IDeviceContext* pContext);
 
-    RADIENT_STATUS UpdateEnvironment(IDeviceContext*               pContext,
-                                     const RadientEnvironmentDesc& Environment);
-
 private:
-    std::unique_ptr<PBR_Renderer>         m_pRenderer;
-    RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
-    RefCntAutoPtr<IBuffer>                m_pFrameAttribsCB;
-    RefCntAutoPtr<ITextureView>           m_pDefaultIBLCubemapSRV;
-    RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
+    std::unique_ptr<PBR_Renderer> m_pRenderer;
+    RefCntAutoPtr<IBuffer>        m_pFrameAttribsCB;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
-
-    RefCntAutoPtr<IRadientTextureAsset> m_pCurrentEnvironmentMap;
 
     Uint32 m_FrameIndex = 0;
 };
@@ -103,6 +100,7 @@ public:
     RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
+                           IShaderResourceBinding*          pFrameSRB,
                            const RadientDrawList&           DrawList,
                            const RadientSceneDrawableCache& DrawableCache,
                            const RadientFrameRenderTargets& Targets);

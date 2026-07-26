@@ -83,90 +83,29 @@ bool IsPipelineReady(IPipelineState* pPSO)
     return pPSO != nullptr && pPSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
 }
 
-RefCntAutoPtr<ITextureView> CreateDefaultIBLCubemap(IRenderDevice* pDevice)
-{
-    TextureDesc TexDesc;
-    TexDesc.Name      = "Radient default IBL cubemap";
-    TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
-    TexDesc.Usage     = USAGE_IMMUTABLE;
-    TexDesc.BindFlags = BIND_SHADER_RESOURCE;
-    TexDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
-    TexDesc.Width     = 16;
-    TexDesc.Height    = 16;
-    TexDesc.MipLevels = 1;
-    TexDesc.ArraySize = 6;
-
-    std::vector<Uint32>            Data(TexDesc.Width * TexDesc.Height, 0xFFFFFFFFu);
-    std::vector<TextureSubResData> SubResData(6);
-    for (TextureSubResData& Subres : SubResData)
-    {
-        Subres.pData  = Data.data();
-        Subres.Stride = TexDesc.Width * sizeof(Uint32);
-    }
-
-    TextureData InitData{SubResData.data(), static_cast<Uint32>(SubResData.size())};
-
-    RefCntAutoPtr<ITexture> pEnvMap;
-    pDevice->CreateTexture(TexDesc, &InitData, &pEnvMap);
-    if (pEnvMap == nullptr)
-        return {};
-
-    return RefCntAutoPtr<ITextureView>{pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)};
-}
-
-bool CreatePBRIBLCubemaps(PBR_Renderer&                Renderer,
-                          IDeviceContext*              pContext,
-                          RefCntAutoPtr<ITextureView>& pIrradianceCubeSRV,
-                          RefCntAutoPtr<ITextureView>& pPrefilteredEnvMapSRV)
-{
-    if (pContext == nullptr)
-        return false;
-
-    RefCntAutoPtr<ITexture> pIrradianceCube    = Renderer.CreateIrradianceCube(pContext, "Radient irradiance cube map");
-    RefCntAutoPtr<ITexture> pPrefilteredEnvMap = Renderer.CreatePrefilteredEnvMap(pContext, "Radient prefiltered environment map");
-    if (pIrradianceCube == nullptr || pPrefilteredEnvMap == nullptr)
-        return false;
-
-    pIrradianceCubeSRV    = pIrradianceCube->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    return pIrradianceCubeSRV != nullptr && pPrefilteredEnvMapSRV != nullptr;
-}
-
-void PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
-                           IDeviceContext* pContext,
-                           ITextureView*   pEnvironmentMapSRV,
-                           ITextureView*   pIrradianceCubeSRV,
-                           ITextureView*   pPrefilteredEnvMapSRV)
-{
-    PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
-    Attribs.pEnvironmentMapSRV = pEnvironmentMapSRV;
-    Attribs.pIrradianceCube    = pIrradianceCubeSRV != nullptr ? pIrradianceCubeSRV->GetTexture() : nullptr;
-    Attribs.pPrefilteredEnvMap = pPrefilteredEnvMapSRV != nullptr ? pPrefilteredEnvMapSRV->GetTexture() : nullptr;
-    Renderer.PrecomputeCubemaps(pContext, Attribs);
-}
-
 float3 GetLightingScale(const RadientFloat3& Color, Float32 Intensity, Float32 Exposure)
 {
     const float Scale = Intensity * std::exp2(Exposure);
     return float3{Color.x * Scale, Color.y * Scale, Color.z * Scale};
 }
 
-RadientCameraComponent GetCameraComponent(const RadientViewDesc& ViewDesc)
+RadientCameraComponent GetCameraComponent(IRadientScene* pScene, RadientEntityID CameraEntity)
 {
     RadientCameraComponent Camera{};
-    if (ViewDesc.pScene != nullptr && ViewDesc.Camera != InvalidRadientEntityID)
-        (void)ViewDesc.pScene->GetCamera(ViewDesc.Camera, Camera);
+    if (pScene != nullptr && CameraEntity != InvalidRadientEntityID)
+        (void)pScene->GetCamera(CameraEntity, Camera);
 
     return Camera;
 }
 
 void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
-                              const RadientViewDesc&           ViewDesc,
+                              IRadientScene*                   pScene,
+                              RadientEntityID                  CameraEntity,
                               const RadientFrameRenderTargets& Targets,
                               Uint32                           FrameIndex,
                               HLSL::CameraAttribs&             CameraAttribs)
 {
-    const RadientCameraComponent Camera     = GetCameraComponent(ViewDesc);
+    const RadientCameraComponent Camera     = GetCameraComponent(pScene, CameraEntity);
     const RadientExtent2D&       TargetSize = Targets.GetSize();
 
     const float Width            = static_cast<float>(TargetSize.Width);
@@ -175,10 +114,10 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     const bool  NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
 
     float4x4 CameraWorld = float4x4::Identity();
-    if (ViewDesc.pScene != nullptr && ViewDesc.Camera != InvalidRadientEntityID)
+    if (pScene != nullptr && CameraEntity != InvalidRadientEntityID)
     {
         RadientMatrix4x4 CameraWorldMatrix{};
-        if (RADIENT_SUCCEEDED(ViewDesc.pScene->GetCachedWorldMatrix(ViewDesc.Camera, CameraWorldMatrix)))
+        if (RADIENT_SUCCEEDED(pScene->GetCachedWorldMatrix(CameraEntity, CameraWorldMatrix)))
             CameraWorld = RadientMath::ToFloat4x4(CameraWorldMatrix);
     }
     const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
@@ -694,12 +633,12 @@ RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                   pDevice,
-                                                   IDeviceContext*                  pContext,
-                                                   const RadientLightLists&         LightList,
-                                                   GLTF::ResourceManager*           pResourceManager,
-                                                   const RadientViewDesc&           ViewDesc,
-                                                   const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                     pDevice,
+                                                   IDeviceContext*                    pContext,
+                                                   const RadientLightLists&           LightList,
+                                                   GLTF::ResourceManager*             pResourceManager,
+                                                   const RadientGeometryFrameAttribs& FrameAttribs,
+                                                   const RadientFrameRenderTargets&   Targets)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -710,23 +649,22 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
-    if (m_pRenderer == nullptr || m_pFrameSRB == nullptr || m_pFrameAttribsCB == nullptr)
+    if (m_pRenderer == nullptr || m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_OK;
 
-    const RadientEnvironmentDesc& Environment       = ViewDesc.Environment;
-    const RADIENT_STATUS          EnvironmentStatus = UpdateEnvironment(pContext, Environment);
-    if (RADIENT_FAILED(EnvironmentStatus))
-        return EnvironmentStatus;
-
     {
-        MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext, m_pFrameAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        HLSL::PBRFrameAttribs*           pFrameAttribs = FrameAttribs;
+        MapHelper<HLSL::PBRFrameAttribs> MappedFrameAttribs{pContext, m_pFrameAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        HLSL::PBRFrameAttribs*           pFrameAttribs = MappedFrameAttribs;
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        WriteCameraShaderAttribs(pDevice, ViewDesc, Targets, m_FrameIndex, pFrameAttribs->Camera);
-        WriteCameraShaderAttribs(pDevice, ViewDesc, Targets, m_FrameIndex, pFrameAttribs->PrevCamera);
-        WriteSceneLights(*m_pRenderer, LightList, Environment, m_pPrefilteredEnvMapSRV, *pFrameAttribs);
+        WriteCameraShaderAttribs(pDevice, FrameAttribs.pScene, FrameAttribs.Camera, Targets, m_FrameIndex, pFrameAttribs->Camera);
+        WriteCameraShaderAttribs(pDevice, FrameAttribs.pScene, FrameAttribs.Camera, Targets, m_FrameIndex, pFrameAttribs->PrevCamera);
+        WriteSceneLights(*m_pRenderer,
+                         LightList,
+                         FrameAttribs.Environment,
+                         FrameAttribs.pPrefilteredEnvMapSRV,
+                         *pFrameAttribs);
     }
 
     if (pResourceManager == nullptr)
@@ -801,6 +739,7 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
 RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
                                             IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
+                                            IShaderResourceBinding*          pFrameSRB,
                                             const RadientDrawList&           DrawList,
                                             const RadientSceneDrawableCache& DrawableCache,
                                             const RadientFrameRenderTargets& Targets)
@@ -827,12 +766,11 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     BuildSortedDrawableIDs(DrawList, DrawableCache);
 
-    IShaderResourceBinding* const pFrameSRB         = Renderer.GetFrameSRB();
-    IShaderResourceBinding*       pCurrMaterialSRB  = nullptr;
-    IPipelineState*               pCurrPSO          = nullptr;
-    IVertexPool*                  pCurrVertexPool   = nullptr;
-    const GLTF::Material*         pCurrMaterial     = nullptr;
-    bool                          FrameSRBCommitted = false;
+    IShaderResourceBinding* pCurrMaterialSRB  = nullptr;
+    IPipelineState*         pCurrPSO          = nullptr;
+    IVertexPool*            pCurrVertexPool   = nullptr;
+    const GLTF::Material*   pCurrMaterial     = nullptr;
+    bool                    FrameSRBCommitted = false;
 
     for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
     {
@@ -1092,42 +1030,6 @@ void RadientGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableI
         m_DrawablePassData[DrawableID] = {};
 }
 
-RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*               pContext,
-                                                          const RadientEnvironmentDesc& Environment)
-{
-    if (m_pRenderer == nullptr ||
-        m_pDefaultIBLCubemapSRV == nullptr ||
-        m_pIrradianceCubeSRV == nullptr ||
-        m_pPrefilteredEnvMapSRV == nullptr)
-    {
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    ITextureView* pEnvironmentMap = nullptr;
-    if (Environment.pEnvironmentMap != nullptr)
-        pEnvironmentMap = RadientAssetManagerImpl::GetTextureSRV(Environment.pEnvironmentMap);
-
-    if (pEnvironmentMap == nullptr)
-    {
-        if (m_pCurrentEnvironmentMap != nullptr)
-        {
-            PrecomputeIBLCubemaps(*m_pRenderer, pContext, m_pDefaultIBLCubemapSRV,
-                                  m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
-            m_pCurrentEnvironmentMap.Release();
-        }
-        return RADIENT_STATUS_OK;
-    }
-
-    if (m_pCurrentEnvironmentMap == Environment.pEnvironmentMap)
-        return RADIENT_STATUS_OK;
-
-    PrecomputeIBLCubemaps(*m_pRenderer, pContext, pEnvironmentMap,
-                          m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
-    m_pCurrentEnvironmentMap = Environment.pEnvironmentMap;
-
-    return RADIENT_STATUS_OK;
-}
-
 RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
                                                        IDeviceContext* pContext)
 {
@@ -1154,21 +1056,7 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     RendererCI.TexColorConversionMode  = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
 
-    m_pRenderer             = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
-    m_pDefaultIBLCubemapSRV = CreateDefaultIBLCubemap(pDevice);
-    if (m_pDefaultIBLCubemapSRV == nullptr)
-    {
-        UNEXPECTED("Failed to create Radient default IBL cubemap");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-    if (!CreatePBRIBLCubemaps(*m_pRenderer, pContext, m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV))
-    {
-        UNEXPECTED("Failed to create Radient IBL cubemaps");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    PrecomputeIBLCubemaps(*m_pRenderer, pContext, m_pDefaultIBLCubemapSRV,
-                          m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
+    m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
 
     m_pFrameAttribsCB.Release();
     CreateUniformBuffer(pDevice,
@@ -1177,21 +1065,6 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
                         &m_pFrameAttribsCB);
     if (m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
-
-    m_pFrameSRB.Release();
-    m_pRenderer->CreateResourceBinding(m_pFrameSRB.GetAddressOfEmpty(), 0);
-    if (m_pFrameSRB == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    constexpr bool BindPrimitiveAttribsBuffer = false;
-    constexpr bool BindMaterialAttribsBuffer  = false;
-    m_pRenderer->InitCommonSRBVars(m_pFrameSRB,
-                                   m_pFrameAttribsCB,
-                                   BindPrimitiveAttribsBuffer,
-                                   BindMaterialAttribsBuffer);
-    m_pRenderer->SetIBLResourceViews(m_pFrameSRB,
-                                     m_pIrradianceCubeSRV,
-                                     m_pPrefilteredEnvMapSRV);
 
     m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_DEFAULT |

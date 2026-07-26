@@ -26,7 +26,6 @@
 
 #include "Render/Passes/RadientSkyboxPass.hpp"
 
-#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Render/Passes/RadientGeometryPass.hpp"
 
 #include "EnvMapRenderer.hpp"
@@ -114,38 +113,18 @@ RADIENT_STATUS RadientSkyboxPass::Prepare(RadientGeometryRenderer&         Rende
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSkyboxPass::Execute(RadientGeometryRenderer&         Renderer,
-                                          IDeviceContext*                  pContext,
-                                          const RadientViewDesc&           ViewDesc,
+RADIENT_STATUS RadientSkyboxPass::Execute(IDeviceContext*                  pContext,
+                                          const RadientSkyboxDesc&         Skybox,
+                                          ITextureView*                    pSkyboxSRV,
                                           const RadientFrameRenderTargets& Targets)
 {
-    if (pContext == nullptr || ViewDesc.Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
+    if (pContext == nullptr || Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
         return RADIENT_STATUS_OK;
 
     if (m_pRenderer == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    ITextureView* pEnvMap = nullptr;
-    switch (ViewDesc.Skybox.Source)
-    {
-        case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
-            if (ViewDesc.Environment.pEnvironmentMap != nullptr)
-                pEnvMap = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Environment.pEnvironmentMap);
-            break;
-
-        case RADIENT_SKYBOX_SOURCE_TEXTURE:
-            if (ViewDesc.Skybox.pTexture != nullptr)
-                pEnvMap = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Skybox.pTexture);
-            break;
-
-        default:
-            UNEXPECTED("Unexpected Radient skybox source");
-            break;
-    }
-
-    if (pEnvMap == nullptr)
-        pEnvMap = Renderer.GetDefaultIBLCubemapSRV();
-    if (pEnvMap == nullptr)
+    if (pSkyboxSRV == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
     ITextureView* pColorRTV = Targets.GetColorRTV();
@@ -164,10 +143,10 @@ RADIENT_STATUS RadientSkyboxPass::Execute(RadientGeometryRenderer&         Rende
     ToneMapping.fLuminanceSaturation = 1.f;
 
     EnvMapRenderer::RenderAttribs Attribs;
-    Attribs.pEnvMap  = pEnvMap;
-    Attribs.MipLevel = ViewDesc.Skybox.MipLevel;
+    Attribs.pEnvMap  = pSkyboxSRV;
+    Attribs.MipLevel = Skybox.MipLevel;
     Attribs.Alpha    = 0.f;
-    Attribs.Scale    = GetLightingScale(ViewDesc.Skybox.Color, ViewDesc.Skybox.Intensity, ViewDesc.Skybox.Exposure);
+    Attribs.Scale    = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
 
     if (RequiresOutputSRGBConversion(m_RTVFormat))
         Attribs.Options |= EnvMapRenderer::OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB;
