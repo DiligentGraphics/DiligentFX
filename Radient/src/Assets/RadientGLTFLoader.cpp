@@ -72,6 +72,45 @@ void ReleaseGLTFTextureSourceData(const void*, Uint64, void* pUserData)
     delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
 }
 
+struct TextureColorSpaceUsage
+{
+    bool Linear = false;
+    bool SRGB   = false;
+};
+
+bool IsSRGBMaterialTextureAttribute(const GLTF::Material& Material, Uint32 TextureAttribId)
+{
+    return (TextureAttribId == GLTF::DefaultBaseColorTextureAttribId ||
+            TextureAttribId == GLTF::DefaultEmissiveTextureAttribId ||
+            TextureAttribId == GLTF::DefaultSheenColorTextureAttribId ||
+            (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS &&
+             TextureAttribId == GLTF::DefaultSpecularGlossinessTextureAttibId));
+}
+
+std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Document& Document)
+{
+    std::vector<TextureColorSpaceUsage> TextureUsages(Document.GetTextureCount());
+
+    for (Uint32 MaterialIndex = 0; MaterialIndex < Document.GetMaterialCount(); ++MaterialIndex)
+    {
+        const GLTF::Material Material = GLTF::LoadMaterial(Document, MaterialIndex);
+        Material.ProcessActiveTextureAttibs(
+            [&](Uint32 TextureAttribId, const GLTF::Material::TextureShaderAttribs&, int TextureIndex) {
+                if (TextureIndex >= 0 && static_cast<size_t>(TextureIndex) < TextureUsages.size())
+                {
+                    TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
+                    if (IsSRGBMaterialTextureAttribute(Material, TextureAttribId))
+                        Usage.SRGB = true;
+                    else
+                        Usage.Linear = true;
+                }
+                return true;
+            });
+    }
+
+    return TextureUsages;
+}
+
 struct PrimitiveVertexKey
 {
     std::vector<int> AttributeAccessors;
@@ -571,8 +610,9 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
     if (pDocument == nullptr)
         return {};
 
-    const Uint32                    TextureCount = pDocument->GetTextureCount();
-    RadientImport::TextureAssetList Textures(TextureCount);
+    const Uint32                              TextureCount  = pDocument->GetTextureCount();
+    const std::vector<TextureColorSpaceUsage> TextureUsages = GetTextureColorSpaceUsages(*pDocument);
+    RadientImport::TextureAssetList           Textures(TextureCount);
 
     for (Uint32 TextureIndex = 0; TextureIndex < TextureCount; ++TextureIndex)
     {
@@ -595,7 +635,14 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
         LoadInfo.BaseURI  = nullptr;
         LoadInfo.pData    = Source.pData;
         LoadInfo.DataSize = Source.DataSize;
-        LoadInfo.IsSRGB   = False;
+
+        const TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
+        if (Usage.SRGB && Usage.Linear)
+        {
+            LOG_WARNING_MESSAGE("GLTF texture ", TextureIndex, " in '", SourceURI,
+                                "' is used by both sRGB and linear material attributes; loading it as linear");
+        }
+        LoadInfo.IsSRGB = Usage.SRGB && !Usage.Linear;
 
         std::unique_ptr<std::shared_ptr<const GLTF::Document>> pDocumentOwner;
         if (Source.pData != nullptr)

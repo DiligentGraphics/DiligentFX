@@ -665,6 +665,33 @@ std::string WriteGLTFMaterialWithTextureDependencyFile(const TempDirectory& Temp
 })GLTF");
 }
 
+std::string WriteGLTFTextureColorSpaceUsageFile(const TempDirectory& TempDir)
+{
+    const std::string ImagePath = TempDir.Get() + "/color_space.png";
+    std::ofstream     ImageFile{ImagePath, std::ios::binary};
+    EXPECT_TRUE(ImageFile.is_open());
+    ImageFile.write(reinterpret_cast<const char*>(TransparentPng.data()), TransparentPng.size());
+
+    return WriteGLTFFile(TempDir, "texture_color_space_usage.gltf",
+                         R"GLTF({
+    "asset": {"version": "2.0"},
+    "images": [{"uri": "color_space.png"}],
+    "textures": [
+        {"source": 0},
+        {"source": 0},
+        {"source": 0}
+    ],
+    "materials": [
+        {"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}},
+        {"normalTexture": {"index": 1}},
+        {
+            "pbrMetallicRoughness": {"baseColorTexture": {"index": 2}},
+            "normalTexture": {"index": 2}
+        }
+    ]
+})GLTF");
+}
+
 std::string WriteGLTFWithMissingAndValidTextureSourcesFile(const TempDirectory& TempDir)
 {
     const std::string ImagePath = TempDir.Get() + "/external.png";
@@ -830,6 +857,39 @@ TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromExternalImageURI)
     ProcessQueuedTasks(*pThreadPool);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadTexturesUsesMaterialTextureColorSpace)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pTextureManager = RadientTextureAssetManager::Create({});
+    ASSERT_NE(pTextureManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath = WriteGLTFTextureColorSpaceUsageFile(TempDir);
+
+    RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
+    ASSERT_EQ(Textures.size(), 3u);
+    ASSERT_NE(Textures[0], nullptr);
+    ASSERT_NE(Textures[1], nullptr);
+    ASSERT_NE(Textures[2], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    const TexturePayloadImpl* pSRGBPayload   = RadientTextureAssetManager::GetTexturePayload(Textures[0]);
+    const TexturePayloadImpl* pLinearPayload = RadientTextureAssetManager::GetTexturePayload(Textures[1]);
+    const TexturePayloadImpl* pMixedPayload  = RadientTextureAssetManager::GetTexturePayload(Textures[2]);
+    ASSERT_NE(pSRGBPayload, nullptr);
+    ASSERT_NE(pLinearPayload, nullptr);
+    ASSERT_NE(pMixedPayload, nullptr);
+
+    // sRGB affects mip generation and therefore forms a distinct texture payload.
+    EXPECT_NE(pSRGBPayload, pLinearPayload);
+    // A texture used by both color spaces is deliberately loaded as linear.
+    EXPECT_EQ(pMixedPayload, pLinearPayload);
     pThreadPool->StopThreads();
 }
 
