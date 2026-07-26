@@ -33,6 +33,7 @@ set(SOURCE
     src/Render/RadientLightList.cpp
     src/Render/RadientMaterialSRBTable.cpp
     src/Render/RadientMaterialTextureBinding.cpp
+    src/Render/RadientPBRRenderer.cpp
     src/Render/RadientRenderPipeline.cpp
     src/Render/RadientRendererImpl.cpp
     src/Render/RadientSceneDrawableCache.cpp
@@ -78,6 +79,7 @@ set(INCLUDE
     include/Render/RadientLightList.hpp
     include/Render/RadientMaterialSRBTable.hpp
     include/Render/RadientMaterialTextureBinding.hpp
+    include/Render/RadientPBRRenderer.hpp
     include/Render/RadientRenderPipeline.hpp
     include/Render/RadientRendererImpl.hpp
     include/Render/RadientSceneDrawableCache.hpp

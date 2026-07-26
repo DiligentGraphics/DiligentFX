@@ -29,6 +29,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Math/RadientMath.hpp"
+#include "Render/RadientPBRRenderer.hpp"
 #include "Render/RadientSceneDrawableCache.hpp"
 
 #include "GraphicsAccessories.hpp"
@@ -625,14 +626,11 @@ bool CreateMaterialSRB(RadientGeometryRenderer&         GeometryRenderer,
         return false;
 
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
-    pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty());
+    pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty(), 1);
     if (pSRB == nullptr)
         return false;
 
-    pRenderer->InitCommonSRBVars(pSRB, GeometryRenderer.GetFrameAttribsCB());
-    pRenderer->SetIBLResourceViews(pSRB,
-                                   GeometryRenderer.GetIrradianceCubeSRV(),
-                                   GeometryRenderer.GetPrefilteredEnvMapSRV());
+    pRenderer->InitCommonSRBVars(pSRB, nullptr);
 
     const PBR_Renderer::CreateInfo& Settings = pRenderer->GetSettings();
     bool                            IsValid  = true;
@@ -712,7 +710,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
-    if (m_pRenderer == nullptr || m_pFrameAttribsCB == nullptr)
+    if (m_pRenderer == nullptr || m_pFrameSRB == nullptr || m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_OK;
 
     const RadientEnvironmentDesc Environment       = ViewDesc.pScene != nullptr ?
@@ -831,10 +829,12 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     BuildSortedDrawableIDs(DrawList, DrawableCache);
 
-    IShaderResourceBinding* pCurrSRB        = nullptr;
-    IPipelineState*         pCurrPSO        = nullptr;
-    IVertexPool*            pCurrVertexPool = nullptr;
-    const GLTF::Material*   pCurrMaterial   = nullptr;
+    IShaderResourceBinding* const pFrameSRB         = Renderer.GetFrameSRB();
+    IShaderResourceBinding*       pCurrMaterialSRB  = nullptr;
+    IPipelineState*               pCurrPSO          = nullptr;
+    IVertexPool*                  pCurrVertexPool   = nullptr;
+    const GLTF::Material*         pCurrMaterial     = nullptr;
+    bool                          FrameSRBCommitted = false;
 
     for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
     {
@@ -866,10 +866,20 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
                 pContext->SetPipelineState(pCurrPSO);
         }
 
-        if (pCurrSRB != PassData.pMaterialSRB)
+        if (!FrameSRBCommitted)
         {
-            pCurrSRB = PassData.pMaterialSRB;
-            pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            VERIFY(pFrameSRB != nullptr, "Radient frame SRB is not initialized");
+            if (pFrameSRB == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+
+            pContext->CommitShaderResources(pFrameSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            FrameSRBCommitted = true;
+        }
+
+        if (pCurrMaterialSRB != PassData.pMaterialSRB)
+        {
+            pCurrMaterialSRB = PassData.pMaterialSRB;
+            pContext->CommitShaderResources(pCurrMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
 
         WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.pWorldMatrix);
@@ -1146,7 +1156,7 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     RendererCI.TexColorConversionMode  = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
 
-    m_pRenderer             = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
+    m_pRenderer             = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
     m_pDefaultIBLCubemapSRV = CreateDefaultIBLCubemap(pDevice);
     if (m_pDefaultIBLCubemapSRV == nullptr)
     {
@@ -1169,6 +1179,21 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
                         &m_pFrameAttribsCB);
     if (m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
+
+    m_pFrameSRB.Release();
+    m_pRenderer->CreateResourceBinding(m_pFrameSRB.GetAddressOfEmpty(), 0);
+    if (m_pFrameSRB == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    constexpr bool BindPrimitiveAttribsBuffer = false;
+    constexpr bool BindMaterialAttribsBuffer  = false;
+    m_pRenderer->InitCommonSRBVars(m_pFrameSRB,
+                                   m_pFrameAttribsCB,
+                                   BindPrimitiveAttribsBuffer,
+                                   BindMaterialAttribsBuffer);
+    m_pRenderer->SetIBLResourceViews(m_pFrameSRB,
+                                     m_pIrradianceCubeSRV,
+                                     m_pPrefilteredEnvMapSRV);
 
     m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_DEFAULT |
