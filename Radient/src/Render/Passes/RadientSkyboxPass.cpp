@@ -98,9 +98,13 @@ RADIENT_STATUS RadientSkyboxPass::Prepare(RadientGeometryRenderer&         Rende
         return RADIENT_STATUS_OK;
     }
 
+    RadientPBRRenderer* const pPBRRenderer = Renderer.GetRenderer();
+    if (pPBRRenderer == nullptr || pPBRRenderer->GetFrameAttribsCB() == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     EnvMapRenderer::CreateInfo RendererCI;
     RendererCI.pDevice            = pDevice;
-    RendererCI.pCameraAttribsCB   = Renderer.GetFrameAttribsCB();
+    RendererCI.pCameraAttribsCB   = pPBRRenderer->GetFrameAttribsCB();
     RendererCI.PackMatrixRowMajor = true;
     RendererCI.NumRenderTargets   = 1;
     RendererCI.RTVFormats[0]      = RTVFormat;

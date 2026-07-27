@@ -29,7 +29,6 @@
 
 #include "Cast.hpp"
 #include "GPUTestingEnvironment.hpp"
-#include "GraphicsUtilities.h"
 
 #include "gtest/gtest.h"
 
@@ -105,12 +104,7 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
 
     RadientPBRRenderer Renderer{pDevice, nullptr, pContext, RendererCI};
 
-    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
-    CreateUniformBuffer(pDevice,
-                        Renderer.GetPRBFrameAttribsSize(),
-                        "Radient view IBL test frame attribs buffer",
-                        pFrameAttribsCB.GetAddressOfEmpty());
-    ASSERT_NE(pFrameAttribsCB, nullptr);
+    ASSERT_NE(Renderer.GetFrameAttribsCB(), nullptr);
 
     RefCntAutoPtr<IRadientView> pFirstView  = RadientViewImpl::Create({});
     RefCntAutoPtr<IRadientView> pSecondView = RadientViewImpl::Create({});
@@ -126,9 +120,9 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     ASSERT_EQ(pSecondViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IShaderResourceBinding> pFirstFrameSRB =
-        Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources(), pFrameAttribsCB);
+        Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources());
     RefCntAutoPtr<IShaderResourceBinding> pSecondFrameSRB =
-        Renderer.GetOrCreateFrameSRB(pSecondViewImpl->GetIBLResources(), pFrameAttribsCB);
+        Renderer.GetOrCreateFrameSRB(pSecondViewImpl->GetIBLResources());
 
     ITextureView* const pFirstIrradiance  = pFirstViewImpl->GetIrradianceCubeSRV();
     ITextureView* const pFirstPrefiltered = pFirstViewImpl->GetPrefilteredEnvMapSRV();
@@ -152,7 +146,7 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     EXPECT_EQ(pFirstPrefilteredVar->Get(), pFirstPrefiltered);
 
     ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
-    EXPECT_EQ(Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources(), pFrameAttribsCB).RawPtr(),
+    EXPECT_EQ(Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources()).RawPtr(),
               pFirstFrameSRB.RawPtr());
     EXPECT_EQ(pFirstViewImpl->GetIrradianceCubeSRV(), pFirstIrradiance);
     EXPECT_EQ(pFirstViewImpl->GetPrefilteredEnvMapSRV(), pFirstPrefiltered);

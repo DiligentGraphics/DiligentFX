@@ -69,7 +69,6 @@ public:
     void EndFrame();
 
     RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
-    IBuffer*                GetFrameAttribsCB() const { return m_pFrameAttribsCB; }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
 private:
@@ -78,7 +77,6 @@ private:
 
 private:
     std::unique_ptr<RadientPBRRenderer> m_pRenderer;
-    RefCntAutoPtr<IBuffer>              m_pFrameAttribsCB;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

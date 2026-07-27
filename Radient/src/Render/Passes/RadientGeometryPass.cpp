@@ -33,7 +33,6 @@
 #include "Render/RadientSceneDrawableCache.hpp"
 
 #include "GraphicsAccessories.hpp"
-#include "GraphicsUtilities.h"
 #include "GLTFLoader.hpp"
 #include "MapHelper.hpp"
 
@@ -649,11 +648,11 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
-    if (m_pRenderer == nullptr || m_pFrameAttribsCB == nullptr)
+    if (m_pRenderer == nullptr || m_pRenderer->GetFrameAttribsCB() == nullptr)
         return RADIENT_STATUS_OK;
 
     {
-        MapHelper<HLSL::PBRFrameAttribs> MappedFrameAttribs{pContext, m_pFrameAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        MapHelper<HLSL::PBRFrameAttribs> MappedFrameAttribs{pContext, m_pRenderer->GetFrameAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
         HLSL::PBRFrameAttribs*           pFrameAttribs = MappedFrameAttribs;
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
@@ -1057,14 +1056,11 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     SetGLTFTextureAttribIndices(RendererCI);
 
     m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
-
-    m_pFrameAttribsCB.Release();
-    CreateUniformBuffer(pDevice,
-                        m_pRenderer->GetPRBFrameAttribsSize(),
-                        "Radient PBR frame attribs buffer",
-                        &m_pFrameAttribsCB);
-    if (m_pFrameAttribsCB == nullptr)
+    if (m_pRenderer->GetFrameAttribsCB() == nullptr)
+    {
+        m_pRenderer.reset();
         return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_DEFAULT |

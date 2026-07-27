@@ -26,6 +26,8 @@
 
 #include "Render/RadientPBRRenderer.hpp"
 
+#include "GraphicsUtilities.h"
+
 #include <unordered_set>
 
 namespace Diligent
@@ -38,12 +40,16 @@ RadientPBRRenderer::RadientPBRRenderer(IRenderDevice*     pDevice,
     PBR_Renderer{pDevice, pStateCache, pContext, CI, false}
 {
     CreateSignature();
+
+    CreateUniformBuffer(pDevice,
+                        GetPRBFrameAttribsSize(),
+                        "Radient PBR frame attribs buffer",
+                        &m_pFrameAttribsCB);
 }
 
-RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources,
-                                                                              IBuffer*             pFrameAttribsCB)
+RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources)
 {
-    if (pResources == nullptr || pFrameAttribsCB == nullptr)
+    if (pResources == nullptr || m_pFrameAttribsCB == nullptr)
         return {};
 
     if (RefCntAutoPtr<IShaderResourceBinding> pCachedSRB = m_FrameSRBCache.Get(pResources))
@@ -57,7 +63,7 @@ RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(Ra
     constexpr bool BindPrimitiveAttribsBuffer = false;
     constexpr bool BindMaterialAttribsBuffer  = false;
     InitCommonSRBVars(pFrameSRB,
-                      pFrameAttribsCB,
+                      m_pFrameAttribsCB,
                       BindPrimitiveAttribsBuffer,
                       BindMaterialAttribsBuffer);
     SetIBLResourceViews(pFrameSRB,

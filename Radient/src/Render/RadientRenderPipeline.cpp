@@ -154,12 +154,11 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
         RefCntAutoPtr<IShaderResourceBinding> pFrameSRB;
         if (HasDrawables)
         {
-            RadientPBRRenderer* const pPBRRenderer    = m_GeometryRenderer.GetRenderer();
-            IBuffer* const            pFrameAttribsCB = m_GeometryRenderer.GetFrameAttribsCB();
-            if (pPBRRenderer == nullptr || pFrameAttribsCB == nullptr)
+            RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
+            if (pPBRRenderer == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
 
-            pFrameSRB = pPBRRenderer->GetOrCreateFrameSRB(pViewImpl->GetIBLResources(), pFrameAttribsCB);
+            pFrameSRB = pPBRRenderer->GetOrCreateFrameSRB(pViewImpl->GetIBLResources());
             if (pFrameSRB == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
         }

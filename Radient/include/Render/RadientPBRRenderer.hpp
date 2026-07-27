@@ -44,14 +44,16 @@ public:
                        const CreateInfo&  CI);
 
     /// Returns the cached immutable frame SRB for the IBL resources, creating it if necessary.
-    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources,
-                                                              IBuffer*             pFrameAttribsCB);
+    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources);
+
+    IBuffer* GetFrameAttribsCB() const noexcept { return m_pFrameAttribsCB; }
 
 protected:
     virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc) override final;
 
 private:
-    RadientFrameSRBCache m_FrameSRBCache;
+    RefCntAutoPtr<IBuffer> m_pFrameAttribsCB;
+    RadientFrameSRBCache   m_FrameSRBCache;
 };
 
 } // namespace Diligent
