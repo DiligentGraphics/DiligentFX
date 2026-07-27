@@ -27,7 +27,9 @@
 #include "Core/RadientViewImpl.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Math/RadientMath.hpp"
-#include "Render/RadientPBRRenderer.hpp"
+#include "Render/RadientFrameSRBCache.hpp"
+
+#include "PBR_Renderer.hpp"
 
 #include <utility>
 
@@ -133,18 +135,15 @@ RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
 }
 
 RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
-                                        IDeviceContext* pContext,
-                                        IBuffer*        pFrameAttribsCB)
+                                        IDeviceContext* pContext)
 {
-    if (pContext == nullptr || pFrameAttribsCB == nullptr)
+    if (pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     bool ResourcesCreated = false;
-    if (m_pIrradianceCubeSRV == nullptr ||
-        m_pPrefilteredEnvMapSRV == nullptr ||
-        m_pFrameSRB == nullptr)
+    if (m_pIBLResources == nullptr)
     {
-        const RADIENT_STATUS Status = CreateIBLResources(Renderer, pContext, pFrameAttribsCB);
+        const RADIENT_STATUS Status = CreateIBLResources(Renderer, pContext);
         if (RADIENT_FAILED(Status))
             return Status;
 
@@ -171,45 +170,25 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
 }
 
 RADIENT_STATUS RadientViewImpl::CreateIBLResources(PBR_Renderer&   Renderer,
-                                                   IDeviceContext* pContext,
-                                                   IBuffer*        pFrameAttribsCB)
+                                                   IDeviceContext* pContext)
 {
-    RefCntAutoPtr<ITexture> pIrradianceCube = Renderer.CreateIrradianceCube(pContext, "Radient irradiance cube map");
+    RefCntAutoPtr<ITexture>     pIrradianceCube = Renderer.CreateIrradianceCube(pContext, "Radient irradiance cube map");
+    RefCntAutoPtr<ITextureView> pIrradianceCubeSRV;
     if (pIrradianceCube != nullptr)
-        m_pIrradianceCubeSRV = pIrradianceCube->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        pIrradianceCubeSRV = pIrradianceCube->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-    RefCntAutoPtr<ITexture> pPrefilteredEnvMap = Renderer.CreatePrefilteredEnvMap(pContext, "Radient prefiltered environment map");
+    RefCntAutoPtr<ITexture>     pPrefilteredEnvMap = Renderer.CreatePrefilteredEnvMap(pContext, "Radient prefiltered environment map");
+    RefCntAutoPtr<ITextureView> pPrefilteredEnvMapSRV;
     if (pPrefilteredEnvMap != nullptr)
-        m_pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-    if (m_pIrradianceCubeSRV != nullptr && m_pPrefilteredEnvMapSRV != nullptr)
+    if (pIrradianceCubeSRV == nullptr || pPrefilteredEnvMapSRV == nullptr)
     {
-        Renderer.CreateResourceBinding(m_pFrameSRB.GetAddressOfEmpty(), 0);
-        if (m_pFrameSRB != nullptr)
-        {
-            constexpr bool BindPrimitiveAttribsBuffer = false;
-            constexpr bool BindMaterialAttribsBuffer  = false;
-            Renderer.InitCommonSRBVars(m_pFrameSRB,
-                                       pFrameAttribsCB,
-                                       BindPrimitiveAttribsBuffer,
-                                       BindMaterialAttribsBuffer);
-            Renderer.SetIBLResourceViews(m_pFrameSRB,
-                                         m_pIrradianceCubeSRV,
-                                         m_pPrefilteredEnvMapSRV);
-        }
-    }
-
-    if (m_pIrradianceCubeSRV == nullptr ||
-        m_pPrefilteredEnvMapSRV == nullptr ||
-        m_pFrameSRB == nullptr)
-    {
-        m_pIrradianceCubeSRV.Release();
-        m_pPrefilteredEnvMapSRV.Release();
-        m_pFrameSRB.Release();
         UNEXPECTED("Failed to create Radient view IBL resources");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    m_pIBLResources = std::make_unique<RadientIBLResources>(pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
     return RADIENT_STATUS_OK;
 }
 
@@ -219,9 +198,19 @@ void RadientViewImpl::PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
 {
     PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
     Attribs.pEnvironmentMapSRV = pEnvironmentMapSRV;
-    Attribs.pIrradianceCube    = m_pIrradianceCubeSRV != nullptr ? m_pIrradianceCubeSRV->GetTexture() : nullptr;
-    Attribs.pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV != nullptr ? m_pPrefilteredEnvMapSRV->GetTexture() : nullptr;
+    Attribs.pIrradianceCube    = GetIrradianceCubeSRV() != nullptr ? GetIrradianceCubeSRV()->GetTexture() : nullptr;
+    Attribs.pPrefilteredEnvMap = GetPrefilteredEnvMapSRV() != nullptr ? GetPrefilteredEnvMapSRV()->GetTexture() : nullptr;
     Renderer.PrecomputeCubemaps(pContext, Attribs);
+}
+
+ITextureView* RadientViewImpl::GetIrradianceCubeSRV() const noexcept
+{
+    return m_pIBLResources != nullptr ? m_pIBLResources->GetIrradianceCubeSRV() : nullptr;
+}
+
+ITextureView* RadientViewImpl::GetPrefilteredEnvMapSRV() const noexcept
+{
+    return m_pIBLResources != nullptr ? m_pIBLResources->GetPrefilteredEnvMapSRV() : nullptr;
 }
 
 void RadientViewImpl::CopyEnvironment(const RadientEnvironmentDesc& Environment)

@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include "Render/RadientFrameSRBCache.hpp"
+
 #include "PBR_Renderer.hpp"
 
 namespace Diligent
@@ -41,8 +43,15 @@ public:
                        IDeviceContext*    pContext,
                        const CreateInfo&  CI);
 
+    /// Returns the cached immutable frame SRB for the IBL resources, creating it if necessary.
+    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources,
+                                                              IBuffer*             pFrameAttribsCB);
+
 protected:
     virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc) override final;
+
+private:
+    RadientFrameSRBCache m_FrameSRBCache;
 };
 
 } // namespace Diligent

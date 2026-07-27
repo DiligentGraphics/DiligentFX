@@ -29,10 +29,10 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
+#include "Render/RadientPBRRenderer.hpp"
 #include "RadientView.h"
 
 #include "GLTFLoader.hpp"
-#include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <memory>
@@ -68,7 +68,7 @@ public:
 
     void EndFrame();
 
-    PBR_Renderer*           GetRenderer() const { return m_pRenderer.get(); }
+    RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
     IBuffer*                GetFrameAttribsCB() const { return m_pFrameAttribsCB; }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
@@ -77,8 +77,8 @@ private:
                                   IDeviceContext* pContext);
 
 private:
-    std::unique_ptr<PBR_Renderer> m_pRenderer;
-    RefCntAutoPtr<IBuffer>        m_pFrameAttribsCB;
+    std::unique_ptr<RadientPBRRenderer> m_pRenderer;
+    RefCntAutoPtr<IBuffer>              m_pFrameAttribsCB;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

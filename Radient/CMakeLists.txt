@@ -29,6 +29,7 @@ set(SOURCE
     src/Render/Passes/RadientPostProcessPipeline.cpp
     src/Render/Passes/RadientSkyboxPass.cpp
     src/Render/RadientDrawList.cpp
+    src/Render/RadientFrameSRBCache.cpp
     src/Render/RadientFrameRenderTargets.cpp
     src/Render/RadientLightList.cpp
     src/Render/RadientMaterialSRBTable.cpp
@@ -75,6 +76,7 @@ set(INCLUDE
     include/Render/Passes/RadientSkyboxPass.hpp
     include/Render/RadientDrawableMesh.hpp
     include/Render/RadientDrawList.hpp
+    include/Render/RadientFrameSRBCache.hpp
     include/Render/RadientFrameRenderTargets.hpp
     include/Render/RadientLightList.hpp
     include/Render/RadientMaterialSRBTable.hpp

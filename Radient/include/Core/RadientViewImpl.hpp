@@ -30,12 +30,14 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <memory>
 #include <string>
 
 namespace Diligent
 {
 
 class PBR_Renderer;
+class RadientIBLResources;
 
 class RadientViewImpl final : public ObjectBase<IRadientView>
 {
@@ -61,20 +63,18 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;
 
-    // Lazily creates the view-owned IBL cubemaps and SRB, and refreshes the
-    // cubemap contents when the environment changes.
+    // Lazily creates the view-owned IBL cubemaps and refreshes their contents
+    // when the environment changes.
     RADIENT_STATUS Prepare(PBR_Renderer&   Renderer,
-                           IDeviceContext* pContext,
-                           IBuffer*        pFrameAttribsCB);
+                           IDeviceContext* pContext);
 
-    IShaderResourceBinding* GetFrameSRB() const { return m_pFrameSRB; }
-    ITextureView*           GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
-    ITextureView*           GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
+    RadientIBLResources* GetIBLResources() const noexcept { return m_pIBLResources.get(); }
+    ITextureView*        GetIrradianceCubeSRV() const noexcept;
+    ITextureView*        GetPrefilteredEnvMapSRV() const noexcept;
 
 private:
     RADIENT_STATUS CreateIBLResources(PBR_Renderer&   Renderer,
-                                      IDeviceContext* pContext,
-                                      IBuffer*        pFrameAttribsCB);
+                                      IDeviceContext* pContext);
 
     void PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
                                IDeviceContext* pContext,
@@ -93,11 +93,7 @@ private:
     RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     RefCntAutoPtr<IRadientTextureAsset> m_pSkyboxTexture;
 
-    RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
-    // IBL variables are mutable, so every view keeps an immutable SRB that
-    // remains valid while commands using that view are in flight.
-    RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
+    std::unique_ptr<RadientIBLResources> m_pIBLResources;
 
     RefCntWeakPtr<IRadientTextureAsset> m_WeakPreparedEnvironmentMap;
 };

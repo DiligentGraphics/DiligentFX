@@ -40,6 +40,34 @@ RadientPBRRenderer::RadientPBRRenderer(IRenderDevice*     pDevice,
     CreateSignature();
 }
 
+RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources,
+                                                                              IBuffer*             pFrameAttribsCB)
+{
+    if (pResources == nullptr || pFrameAttribsCB == nullptr)
+        return {};
+
+    if (RefCntAutoPtr<IShaderResourceBinding> pCachedSRB = m_FrameSRBCache.Get(pResources))
+        return pCachedSRB;
+
+    RefCntAutoPtr<IShaderResourceBinding> pFrameSRB;
+    CreateResourceBinding(pFrameSRB.GetAddressOfEmpty(), 0);
+    if (pFrameSRB == nullptr)
+        return {};
+
+    constexpr bool BindPrimitiveAttribsBuffer = false;
+    constexpr bool BindMaterialAttribsBuffer  = false;
+    InitCommonSRBVars(pFrameSRB,
+                      pFrameAttribsCB,
+                      BindPrimitiveAttribsBuffer,
+                      BindMaterialAttribsBuffer);
+    SetIBLResourceViews(pFrameSRB,
+                        pResources->GetIrradianceCubeSRV(),
+                        pResources->GetPrefilteredEnvMapSRV());
+
+    m_FrameSRBCache.Add(pResources, pFrameSRB);
+    return pFrameSRB;
+}
+
 void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc)
 {
     PipelineResourceSignatureDescX FrameSignatureDesc;

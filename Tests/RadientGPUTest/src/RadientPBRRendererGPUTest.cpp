@@ -122,8 +122,13 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     ASSERT_NE(pFirstViewImpl, nullptr);
     ASSERT_NE(pSecondViewImpl, nullptr);
 
-    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
-    ASSERT_EQ(pSecondViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IShaderResourceBinding> pFirstFrameSRB =
+        Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources(), pFrameAttribsCB);
+    RefCntAutoPtr<IShaderResourceBinding> pSecondFrameSRB =
+        Renderer.GetOrCreateFrameSRB(pSecondViewImpl->GetIBLResources(), pFrameAttribsCB);
 
     ITextureView* const pFirstIrradiance  = pFirstViewImpl->GetIrradianceCubeSRV();
     ITextureView* const pFirstPrefiltered = pFirstViewImpl->GetPrefilteredEnvMapSRV();
@@ -133,8 +138,6 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     EXPECT_NE(pFirstIrradiance, pSecondViewImpl->GetIrradianceCubeSRV());
     EXPECT_NE(pFirstPrefiltered, pSecondViewImpl->GetPrefilteredEnvMapSRV());
 
-    IShaderResourceBinding* const pFirstFrameSRB  = pFirstViewImpl->GetFrameSRB();
-    IShaderResourceBinding* const pSecondFrameSRB = pSecondViewImpl->GetFrameSRB();
     ASSERT_NE(pFirstFrameSRB, nullptr);
     ASSERT_NE(pSecondFrameSRB, nullptr);
     EXPECT_NE(pFirstFrameSRB, pSecondFrameSRB);
@@ -148,8 +151,9 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     EXPECT_EQ(pFirstIrradianceVar->Get(), pFirstIrradiance);
     EXPECT_EQ(pFirstPrefilteredVar->Get(), pFirstPrefiltered);
 
-    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext, pFrameAttribsCB), RADIENT_STATUS_OK);
-    EXPECT_EQ(pFirstViewImpl->GetFrameSRB(), pFirstFrameSRB);
+    ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
+    EXPECT_EQ(Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources(), pFrameAttribsCB).RawPtr(),
+              pFirstFrameSRB.RawPtr());
     EXPECT_EQ(pFirstViewImpl->GetIrradianceCubeSRV(), pFirstIrradiance);
     EXPECT_EQ(pFirstViewImpl->GetPrefilteredEnvMapSRV(), pFirstPrefiltered);
 }
