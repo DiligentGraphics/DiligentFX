@@ -39,6 +39,8 @@ namespace Diligent
 namespace
 {
 
+constexpr float IBLClearColor[] = {0.5f, 0.5f, 0.5f, 0.5f};
+
 bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
 {
     return (Environment.pEnvironmentMap == nullptr ||
@@ -172,12 +174,22 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
 RADIENT_STATUS RadientViewImpl::CreateIBLResources(PBR_Renderer&   Renderer,
                                                    IDeviceContext* pContext)
 {
-    RefCntAutoPtr<ITexture>     pIrradianceCube = Renderer.CreateIrradianceCube(pContext, "Radient irradiance cube map");
+    RefCntAutoPtr<ITexture> pIrradianceCube =
+        Renderer.CreateIrradianceCube(pContext,
+                                      "Radient irradiance cube map",
+                                      PBR_Renderer::IrradianceCubeFmt,
+                                      PBR_Renderer::IrradianceCubeDim,
+                                      IBLClearColor);
     RefCntAutoPtr<ITextureView> pIrradianceCubeSRV;
     if (pIrradianceCube != nullptr)
         pIrradianceCubeSRV = pIrradianceCube->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-    RefCntAutoPtr<ITexture>     pPrefilteredEnvMap = Renderer.CreatePrefilteredEnvMap(pContext, "Radient prefiltered environment map");
+    RefCntAutoPtr<ITexture> pPrefilteredEnvMap =
+        Renderer.CreatePrefilteredEnvMap(pContext,
+                                         "Radient prefiltered environment map",
+                                         PBR_Renderer::PrefilteredEnvMapFmt,
+                                         PBR_Renderer::PrefilteredEnvMapDim,
+                                         IBLClearColor);
     RefCntAutoPtr<ITextureView> pPrefilteredEnvMapSRV;
     if (pPrefilteredEnvMap != nullptr)
         pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);

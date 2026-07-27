@@ -290,7 +290,7 @@ void ProcessCubemapFaces(IDeviceContext* pCtx, ITexture* pCubemap, FaceHandlerTy
     }
 }
 
-static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap)
+static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap, const float* pClearColor)
 {
     if (pCtx == nullptr || pCubemap == nullptr)
     {
@@ -298,8 +298,8 @@ static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap)
         return;
     }
 
-    ProcessCubemapFaces(pCtx, pCubemap, [pCtx](ITextureView* pRTV, Uint32 mip, Uint32 face) {
-        pCtx->ClearRenderTarget(pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    ProcessCubemapFaces(pCtx, pCubemap, [pCtx, pClearColor](ITextureView* pRTV, Uint32 mip, Uint32 face) {
+        pCtx->ClearRenderTarget(pRTV, pClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     });
 }
 
@@ -703,12 +703,13 @@ TextureDesc PBR_Renderer::GetPrefilteredEnvMapDesc(const char*    Name,
 RefCntAutoPtr<ITexture> PBR_Renderer::CreateIrradianceCube(IDeviceContext* pCtx,
                                                            const char*     Name,
                                                            TEXTURE_FORMAT  Format,
-                                                           Uint32          Dimension) const
+                                                           Uint32          Dimension,
+                                                           const float*    pClearColor) const
 {
     RefCntAutoPtr<ITexture> pIrradianceCube = m_Device.CreateTexture(GetIrradianceCubeDesc(Name, Format, Dimension), nullptr);
     VERIFY_EXPR(pIrradianceCube);
     if (pIrradianceCube != nullptr && pCtx != nullptr)
-        ClearCubemap(pCtx, pIrradianceCube);
+        ClearCubemap(pCtx, pIrradianceCube, pClearColor);
 
     return pIrradianceCube;
 }
@@ -716,12 +717,13 @@ RefCntAutoPtr<ITexture> PBR_Renderer::CreateIrradianceCube(IDeviceContext* pCtx,
 RefCntAutoPtr<ITexture> PBR_Renderer::CreatePrefilteredEnvMap(IDeviceContext* pCtx,
                                                               const char*     Name,
                                                               TEXTURE_FORMAT  Format,
-                                                              Uint32          Dimension) const
+                                                              Uint32          Dimension,
+                                                              const float*    pClearColor) const
 {
     RefCntAutoPtr<ITexture> pPrefilteredEnvMap = m_Device.CreateTexture(GetPrefilteredEnvMapDesc(Name, Format, Dimension), nullptr);
     VERIFY_EXPR(pPrefilteredEnvMap);
     if (pPrefilteredEnvMap != nullptr && pCtx != nullptr)
-        ClearCubemap(pCtx, pPrefilteredEnvMap);
+        ClearCubemap(pCtx, pPrefilteredEnvMap, pClearColor);
 
     return pPrefilteredEnvMap;
 }

@@ -489,17 +489,21 @@ public:
                                                 TEXTURE_FORMAT Format    = PrefilteredEnvMapFmt,
                                                 Uint32         Dimension = PrefilteredEnvMapDim);
 
-    /// Creates and clears an irradiance cube map.
+    /// Creates and clears an irradiance cube map. pClearColor points to four
+    /// floating-point components; null clears the map to zero.
     RefCntAutoPtr<ITexture> CreateIrradianceCube(IDeviceContext* pCtx,
-                                                 const char*     Name      = "Irradiance cube map",
-                                                 TEXTURE_FORMAT  Format    = IrradianceCubeFmt,
-                                                 Uint32          Dimension = IrradianceCubeDim) const;
+                                                 const char*     Name        = "Irradiance cube map",
+                                                 TEXTURE_FORMAT  Format      = IrradianceCubeFmt,
+                                                 Uint32          Dimension   = IrradianceCubeDim,
+                                                 const float*    pClearColor = nullptr) const;
 
-    /// Creates and clears a prefiltered environment map.
+    /// Creates and clears a prefiltered environment map. pClearColor points to
+    /// four floating-point components; null clears the map to zero.
     RefCntAutoPtr<ITexture> CreatePrefilteredEnvMap(IDeviceContext* pCtx,
-                                                    const char*     Name      = "Prefiltered environment map",
-                                                    TEXTURE_FORMAT  Format    = PrefilteredEnvMapFmt,
-                                                    Uint32          Dimension = PrefilteredEnvMapDim) const;
+                                                    const char*     Name        = "Prefiltered environment map",
+                                                    TEXTURE_FORMAT  Format      = PrefilteredEnvMapFmt,
+                                                    Uint32          Dimension   = PrefilteredEnvMapDim,
+                                                    const float*    pClearColor = nullptr) const;
 
     struct PrecomputeCubemapsAttribs
     {
