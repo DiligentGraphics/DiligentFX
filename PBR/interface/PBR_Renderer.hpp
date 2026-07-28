@@ -806,6 +806,12 @@ public:
 
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 
+    /// Binds a range of the material texture array.
+    bool SetMaterialTextures(IShaderResourceBinding* pSRB,
+                             ITextureView* const*    ppTextureSRVs,
+                             Uint32                  FirstTexture,
+                             Uint32                  TextureCount) const;
+
     void SetIBLResourceViews(IShaderResourceBinding* pSRB,
                              ITextureView*           pIrradianceCubeSRV,
                              ITextureView*           pPrefilteredEnvMapSRV) const;

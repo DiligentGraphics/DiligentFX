@@ -1115,6 +1115,57 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
     }
 }
 
+bool PBR_Renderer::SetMaterialTextures(IShaderResourceBinding* pSRB,
+                                       ITextureView* const*    ppTextureSRVs,
+                                       Uint32                  FirstTexture,
+                                       Uint32                  TextureCount) const
+{
+    if (pSRB == nullptr)
+    {
+        UNEXPECTED("SRB must not be null");
+        return false;
+    }
+    if (ppTextureSRVs == nullptr)
+    {
+        UNEXPECTED("Material texture SRV array must not be null");
+        return false;
+    }
+    if (TextureCount == 0)
+    {
+        UNEXPECTED("Material texture count must not be zero");
+        return false;
+    }
+    if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
+    {
+        UNEXPECTED("Material texture array mode must be enabled");
+        return false;
+    }
+    if (FirstTexture >= m_Settings.MaterialTexturesArraySize)
+    {
+        UNEXPECTED("First material texture index ", FirstTexture,
+                   " is outside the material texture array of size ", m_Settings.MaterialTexturesArraySize);
+        return false;
+    }
+    if (TextureCount > m_Settings.MaterialTexturesArraySize - FirstTexture)
+    {
+        UNEXPECTED("Material texture range [", FirstTexture, ", ", Uint64{FirstTexture} + TextureCount,
+                   ") exceeds the material texture array size ", m_Settings.MaterialTexturesArraySize);
+        return false;
+    }
+
+    IShaderResourceVariable* const pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures");
+    if (pMatTexturesVar == nullptr)
+        return false;
+
+    for (Uint32 TextureIndex = 0; TextureIndex < TextureCount; ++TextureIndex)
+    {
+        IDeviceObject* pObj[] = {ppTextureSRVs[TextureIndex]};
+        pMatTexturesVar->SetArray(pObj, TextureIndex, 1);
+    }
+
+    return true;
+}
+
 void PBR_Renderer::CreateSignature()
 {
     VERIFY(m_ResourceSignatures.empty(), "Resource signature has already been created");
