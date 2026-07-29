@@ -41,6 +41,19 @@
 namespace Diligent
 {
 
+RadientTextureViewType GetMaterialTextureViewType(const GLTF::Material& Material,
+                                                  Uint32                TextureAttribId) noexcept
+{
+    const bool IsSRGB =
+        TextureAttribId == GLTF::DefaultBaseColorTextureAttribId ||
+        TextureAttribId == GLTF::DefaultEmissiveTextureAttribId ||
+        TextureAttribId == GLTF::DefaultSheenColorTextureAttribId ||
+        (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS &&
+         TextureAttribId == GLTF::DefaultSpecularGlossinessTextureAttibId);
+
+    return IsSRGB ? RadientTextureViewType::SRGB : RadientTextureViewType::Linear;
+}
+
 namespace
 {
 
@@ -48,7 +61,8 @@ static constexpr INTERFACE_ID IID_MaterialAssetImpl = {0x1a11a468, 0xbf30, 0x4c4
 
 struct MaterialStorage
 {
-    using TextureArray = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+    using TextureArray       = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
+    using RenderTextureArray = std::vector<RadientMaterialTextureRenderData>;
 
     static void SetTexture(TextureArray&         Textures,
                            Uint32                TextureAttribId,
@@ -171,16 +185,18 @@ struct MaterialStorage
     }
 
     GLTF::Material                      Material;
-    bool                                TextureAttribsReady = false;
+    bool                                TextureAttribsReady           = false;
+    bool                                TextureBindingIdentitiesReady = false;
     mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
 
     TextureArray RequestedTextures;
     TextureArray FallbackTextures;
 
-    // GetRenderData() requires a contiguous immutable smart-pointer array. It is
-    // captured once after every selected texture has reached GPU-ready status.
-    TextureArray RenderTextures;
+    // GetRenderData() exposes this immutable array after the requested/fallback
+    // texture selection has been resolved. Binding identities are filled once
+    // the selected textures have GPU storage.
+    RenderTextureArray RenderTextures;
 };
 
 void SetDefaultMaterialTextures(MaterialStorage&                      MaterialData,
@@ -260,8 +276,10 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
     MaterialData.RenderTextures.resize(MaterialData.GetTextureCount());
     for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.RenderTextures.size(); ++TextureAttribId)
     {
-        IRadientTextureAsset* pTexture               = MaterialData.GetRenderTexture(TextureAttribId);
-        MaterialData.RenderTextures[TextureAttribId] = pTexture;
+        IRadientTextureAsset*             pTexture    = MaterialData.GetRenderTexture(TextureAttribId);
+        RadientMaterialTextureRenderData& TextureData = MaterialData.RenderTextures[TextureAttribId];
+        TextureData.pTexture                          = pTexture;
+        TextureData.ViewType                          = GetMaterialTextureViewType(MaterialData.Material, static_cast<Uint32>(TextureAttribId));
         if (pTexture == nullptr)
             continue;
 
@@ -273,6 +291,28 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
     Builder.Finalize();
     MaterialData.TextureAttribsReady = true;
     return true;
+}
+
+void UpdateTextureBindingIdentities(MaterialStorage& MaterialData)
+{
+    if (MaterialData.TextureBindingIdentitiesReady ||
+        MaterialData.GetGPUResourceStatus() != RADIENT_STATUS_OK)
+    {
+        return;
+    }
+
+    for (RadientMaterialTextureRenderData& TextureData : MaterialData.RenderTextures)
+    {
+        if (TextureData.pTexture == nullptr)
+            continue;
+
+        TextureData.BindingIdentity =
+            RadientTextureAssetManager::GetTextureBindingIdentity(TextureData.pTexture, TextureData.ViewType);
+        if (!TextureData.BindingIdentity)
+            return;
+    }
+
+    MaterialData.TextureBindingIdentitiesReady = true;
 }
 
 } // namespace
@@ -391,6 +431,8 @@ RadientMaterialRenderData RadientMaterialAssetManager::GetRenderData(IRadientMat
     MaterialStorage& MaterialData = pImpl->GetStorage();
     if (!UpdateTextureAtlasAttribs(MaterialData))
         return {};
+
+    UpdateTextureBindingIdentities(MaterialData);
 
     return {
         &MaterialData.Material,

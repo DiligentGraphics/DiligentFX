@@ -78,15 +78,6 @@ struct TextureColorSpaceUsage
     bool SRGB   = false;
 };
 
-bool IsSRGBMaterialTextureAttribute(const GLTF::Material& Material, Uint32 TextureAttribId)
-{
-    return (TextureAttribId == GLTF::DefaultBaseColorTextureAttribId ||
-            TextureAttribId == GLTF::DefaultEmissiveTextureAttribId ||
-            TextureAttribId == GLTF::DefaultSheenColorTextureAttribId ||
-            (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS &&
-             TextureAttribId == GLTF::DefaultSpecularGlossinessTextureAttibId));
-}
-
 std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Document& Document)
 {
     std::vector<TextureColorSpaceUsage> TextureUsages(Document.GetTextureCount());
@@ -99,7 +90,7 @@ std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Docum
                 if (TextureIndex >= 0 && static_cast<size_t>(TextureIndex) < TextureUsages.size())
                 {
                     TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
-                    if (IsSRGBMaterialTextureAttribute(Material, TextureAttribId))
+                    if (GetMaterialTextureViewType(Material, TextureAttribId) == RadientTextureViewType::SRGB)
                         Usage.SRGB = true;
                     else
                         Usage.Linear = true;

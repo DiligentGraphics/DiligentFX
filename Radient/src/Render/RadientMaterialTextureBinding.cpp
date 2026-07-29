@@ -64,9 +64,9 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
             if (Status != RADIENT_STATUS_OK)
                 return;
 
-            const int           MaterialTextureAttribId = TextureAttribIndices[AttribId];
-            ITextureView* const pTextureSRV             = TextureSRVs[AttribId];
-            if (MaterialTextureAttribId < 0 ||
+            const int           TextureId   = TextureAttribIndices[AttribId];
+            ITextureView* const pTextureSRV = TextureSRVs[AttribId];
+            if (TextureId < 0 ||
                 (!UseDefaultMapping && pTextureSRV == nullptr))
             {
                 Status = RADIENT_STATUS_INVALID_OPERATION;
@@ -86,7 +86,7 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
             {
                 NewPlan.Bindings[SlotIndex] = {
                     AttribId,
-                    MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId)),
+                    MaterialData.GetTexture(static_cast<Uint32>(TextureId)),
                 };
             }
             else if (SlotIndex == NewPlan.Bindings.size())
@@ -99,7 +99,7 @@ RADIENT_STATUS BuildMaterialTextureBindingPlan(
 
                 NewPlan.Bindings.push_back({
                     AttribId,
-                    MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId)),
+                    MaterialData.GetTexture(static_cast<Uint32>(TextureId)),
                 });
             }
 

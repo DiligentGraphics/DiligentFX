@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "RadientTextureAssetManager.hpp"
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -47,17 +48,39 @@ struct RadientMaterialDefaultTextures
     RefCntAutoPtr<IRadientTextureAsset> pPhysicalDesc;
 };
 
+struct RadientMaterialTextureRenderData
+{
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    RadientTextureViewType              ViewType        = RadientTextureViewType::Linear;
+    RadientTextureBindingIdentity       BindingIdentity = {};
+
+    explicit operator bool() const noexcept
+    {
+        return pTexture != nullptr && static_cast<bool>(BindingIdentity);
+    }
+};
+
+RadientTextureViewType GetMaterialTextureViewType(const GLTF::Material& Material,
+                                                  Uint32                TextureAttribId) noexcept;
+
 /// Immutable renderer-facing view of a resolved material and its texture dependencies.
 /// The view remains valid while the material asset is retained.
 struct RadientMaterialRenderData
 {
-    const GLTF::Material*                      pMaterial    = nullptr;
-    const RefCntAutoPtr<IRadientTextureAsset>* pTextures    = nullptr;
-    Uint32                                     TextureCount = 0;
+    const GLTF::Material*                   pMaterial    = nullptr;
+    const RadientMaterialTextureRenderData* pTextures    = nullptr;
+    Uint32                                  TextureCount = 0;
 
-    IRadientTextureAsset* GetTexture(Uint32 TextureAttribId) const noexcept
+    IRadientTextureAsset* GetTexture(Uint32 TextureId) const noexcept
     {
-        return pTextures != nullptr && TextureAttribId < TextureCount ? pTextures[TextureAttribId].RawPtr() : nullptr;
+        return pTextures != nullptr && TextureId < TextureCount ? pTextures[TextureId].pTexture.RawPtr() : nullptr;
+    }
+
+    const RadientMaterialTextureRenderData* GetTextureData(Uint32 TextureId) const noexcept
+    {
+        return pTextures != nullptr && TextureId < TextureCount ?
+            &pTextures[TextureId] :
+            nullptr;
     }
 
     explicit operator bool() const noexcept

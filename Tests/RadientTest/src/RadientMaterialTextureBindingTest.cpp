@@ -49,9 +49,49 @@ std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> MakeTextureAttribIndices(
     return Indices;
 }
 
+class TestMaterialTextures
+{
+public:
+    TestMaterialTextures() = default;
+
+    explicit TestMaterialTextures(size_t TextureCount) :
+        m_Textures(TextureCount)
+    {}
+
+    TestMaterialTextures(std::initializer_list<RefCntAutoPtr<IRadientTextureAsset>> Textures)
+    {
+        m_Textures.reserve(Textures.size());
+        for (const RefCntAutoPtr<IRadientTextureAsset>& pTexture : Textures)
+            m_Textures.push_back(RadientMaterialTextureRenderData{pTexture});
+    }
+
+    RefCntAutoPtr<IRadientTextureAsset>& operator[](size_t TextureId)
+    {
+        return m_Textures[TextureId].pTexture;
+    }
+
+    const RefCntAutoPtr<IRadientTextureAsset>& operator[](size_t TextureId) const
+    {
+        return m_Textures[TextureId].pTexture;
+    }
+
+    const RadientMaterialTextureRenderData* data() const noexcept
+    {
+        return m_Textures.data();
+    }
+
+    size_t size() const noexcept
+    {
+        return m_Textures.size();
+    }
+
+private:
+    std::vector<RadientMaterialTextureRenderData> m_Textures;
+};
+
 RadientMaterialRenderData MakeRenderData(
-    const GLTF::Material&                                   Material,
-    const std::vector<RefCntAutoPtr<IRadientTextureAsset>>& Textures)
+    const GLTF::Material&       Material,
+    const TestMaterialTextures& Textures)
 {
     return {
         &Material,
@@ -61,8 +101,8 @@ RadientMaterialRenderData MakeRenderData(
 
 TEST(RadientMaterialTextureBindingTest, MappingUsesStableSemanticOrder)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures{
+    GLTF::Material       Material;
+    TestMaterialTextures Textures{
         MakeTestTextureAsset("texture://base"),
         MakeTestTextureAsset("texture://physical-description"),
         MakeTestTextureAsset("texture://normal")};
@@ -92,9 +132,9 @@ TEST(RadientMaterialTextureBindingTest, MappingUsesStableSemanticOrder)
 
 TEST(RadientMaterialTextureBindingTest, MappingKeepsDistinctSemanticSlotsWhenMaterialFits)
 {
-    GLTF::Material                                   Material;
-    RefCntAutoPtr<IRadientTextureAsset>              pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures(GLTF::DefaultEmissiveTextureAttribId + 1);
+    GLTF::Material                      Material;
+    RefCntAutoPtr<IRadientTextureAsset> pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
+    TestMaterialTextures                Textures{GLTF::DefaultEmissiveTextureAttribId + 1};
     Textures[GLTF::DefaultBaseColorTextureAttribId] = pSharedTexture;
     Textures[GLTF::DefaultEmissiveTextureAttribId]  = pSharedTexture;
 
@@ -118,8 +158,8 @@ TEST(RadientMaterialTextureBindingTest, MappingKeepsDistinctSemanticSlotsWhenMat
 
 TEST(RadientMaterialTextureBindingTest, MappingPreservesFallbackSlotsWhenMaterialFits)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    GLTF::Material       Material;
+    TestMaterialTextures Textures;
 
     RadientMaterialTextureBindingPlan Plan;
     ASSERT_EQ(BuildMaterialTextureBindingPlan(
@@ -139,8 +179,8 @@ TEST(RadientMaterialTextureBindingTest, MappingPreservesFallbackSlotsWhenMateria
 
 TEST(RadientMaterialTextureBindingTest, MappingRejectsInsufficientDistinctSRVSlots)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    GLTF::Material       Material;
+    TestMaterialTextures Textures;
 
     RadientMaterialTextureBindingPlan Plan;
     Plan.Bindings.resize(7);
@@ -165,10 +205,10 @@ TEST(RadientMaterialTextureBindingTest, MappingRejectsInsufficientDistinctSRVSlo
 
 TEST(RadientMaterialTextureBindingTest, MappingRejectsMissingAttributeMapping)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
-    auto                                             TextureAttribIndices = MakeTextureAttribIndices();
-    TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]          = -1;
+    GLTF::Material       Material;
+    TestMaterialTextures Textures;
+    auto                 TextureAttribIndices                    = MakeTextureAttribIndices();
+    TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL] = -1;
 
     RadientMaterialTextureBindingPlan Plan;
     EXPECT_EQ(BuildMaterialTextureBindingPlan(
@@ -184,8 +224,8 @@ TEST(RadientMaterialTextureBindingTest, MappingRejectsMissingAttributeMapping)
 
 TEST(RadientMaterialTextureBindingTest, CompactMappingGroupsMatchingSRVs)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures{
+    GLTF::Material       Material;
+    TestMaterialTextures Textures{
         MakeTestTextureAsset("texture://base"),
         MakeTestTextureAsset("texture://physical-description"),
         MakeTestTextureAsset("texture://normal"),
@@ -231,9 +271,9 @@ TEST(RadientMaterialTextureBindingTest, CompactMappingGroupsMatchingSRVs)
 
 TEST(RadientMaterialTextureBindingTest, PreferredMappingKeepsDistinctSlotsWhenMaterialFits)
 {
-    GLTF::Material                                   Material;
-    RefCntAutoPtr<IRadientTextureAsset>              pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures(GLTF::DefaultEmissiveTextureAttribId + 1);
+    GLTF::Material                      Material;
+    RefCntAutoPtr<IRadientTextureAsset> pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
+    TestMaterialTextures                Textures{GLTF::DefaultEmissiveTextureAttribId + 1};
     Textures[GLTF::DefaultBaseColorTextureAttribId] = pSharedTexture;
     Textures[GLTF::DefaultEmissiveTextureAttribId]  = pSharedTexture;
 
@@ -263,8 +303,8 @@ TEST(RadientMaterialTextureBindingTest, PreferredMappingKeepsDistinctSlotsWhenMa
 
 TEST(RadientMaterialTextureBindingTest, CompactMappingRejectsTooManyDistinctSRVs)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    GLTF::Material       Material;
+    TestMaterialTextures Textures;
 
     RadientMaterialTextureSRVArray TextureSRVs{};
     TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = reinterpret_cast<ITextureView*>(size_t{1});
@@ -291,8 +331,8 @@ TEST(RadientMaterialTextureBindingTest, CompactMappingRejectsTooManyDistinctSRVs
 
 TEST(RadientMaterialTextureBindingTest, CompactMappingRejectsMissingSRV)
 {
-    GLTF::Material                                   Material;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    GLTF::Material       Material;
+    TestMaterialTextures Textures;
 
     RadientMaterialTextureSRVArray TextureSRVs{};
     TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = reinterpret_cast<ITextureView*>(size_t{1});
