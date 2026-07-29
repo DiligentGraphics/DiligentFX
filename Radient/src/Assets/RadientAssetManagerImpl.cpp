@@ -358,7 +358,9 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
 
     RadientMaterialAssetManager::CreateInfo MaterialManagerCI;
     if (m_pDevice != nullptr && m_pThreadPool != nullptr && m_pTextureManager != nullptr)
-        MaterialManagerCI.DefaultTextures = CreateDefaultMaterialTextures(*m_pThreadPool, *m_pTextureManager);
+        m_DefaultMaterialTextures = CreateDefaultMaterialTextures(*m_pThreadPool, *m_pTextureManager);
+
+    MaterialManagerCI.DefaultTextures = m_DefaultMaterialTextures;
 
     m_pMaterialManager = RadientMaterialAssetManager::Create(MaterialManagerCI);
 }

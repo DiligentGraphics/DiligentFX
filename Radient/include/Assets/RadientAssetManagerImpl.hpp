@@ -127,6 +127,11 @@ public:
     GLTF::ResourceManager*          GetResourceManager() const;
     RadientTextureAssetManagerStats GetTextureManagerStats() const;
 
+    const RadientMaterialDefaultTextures& GetDefaultMaterialTextures() const noexcept
+    {
+        return m_DefaultMaterialTextures;
+    }
+
 private:
     // Dispatches to the asset-type-specific load status. OK means source data
     // has been processed.
@@ -150,6 +155,7 @@ private:
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
     RadientTextureAssetManagerSharedPtr  m_pTextureManager;
+    RadientMaterialDefaultTextures       m_DefaultMaterialTextures;
     RadientMaterialAssetManagerSharedPtr m_pMaterialManager;
     RadientMeshAssetManagerSharedPtr     m_pMeshManager;
 
