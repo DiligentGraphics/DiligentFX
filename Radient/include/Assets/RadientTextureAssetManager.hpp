@@ -63,6 +63,39 @@ enum class RadientTextureViewType : Uint8
     Count
 };
 
+/// Stable identity of the logical resource and typed view used by a texture binding.
+struct RadientTextureBindingIdentity
+{
+    /// Unique device-object identifier for a standalone texture. Zero denotes
+    /// an atlas binding: within one resource manager, ViewFormat uniquely
+    /// identifies the corresponding typed atlas SRV.
+    Int32 StandaloneResourceId = 0;
+
+    /// Typed SRV format. This distinguishes, for example, linear and sRGB
+    /// bindings that refer to the same underlying resource.
+    TEXTURE_FORMAT ViewFormat = TEX_FORMAT_UNKNOWN;
+
+    explicit operator bool() const noexcept
+    {
+        return ViewFormat != TEX_FORMAT_UNKNOWN;
+    }
+
+    bool operator==(const RadientTextureBindingIdentity& Rhs) const noexcept
+    {
+        return StandaloneResourceId == Rhs.StandaloneResourceId && ViewFormat == Rhs.ViewFormat;
+    }
+
+    bool operator!=(const RadientTextureBindingIdentity& Rhs) const noexcept
+    {
+        return !(*this == Rhs);
+    }
+
+    struct Hasher
+    {
+        size_t operator()(const RadientTextureBindingIdentity& Identity) const noexcept;
+    };
+};
+
 struct RadientTextureAssetManagerStats
 {
     // Total number of texture loads that are still active in any stage. A load
@@ -111,6 +144,13 @@ public:
     // the texture.
     static ITextureView* GetTextureSRV(IRadientTextureAsset*  pTextureAsset,
                                        RadientTextureViewType ViewType = RadientTextureViewType::Linear);
+
+    // Returns the stable resource identity and resolved typed view format used
+    // by the requested texture view. This method is thread-safe and may be
+    // called from worker threads after the GPU resource status becomes OK.
+    static RadientTextureBindingIdentity GetTextureBindingIdentity(
+        IRadientTextureAsset*  pTextureAsset,
+        RadientTextureViewType ViewType = RadientTextureViewType::Linear);
 
     // Reports texture source loading status. OK means the source image was
     // decoded/loaded, but does not imply that GPU resources exist.

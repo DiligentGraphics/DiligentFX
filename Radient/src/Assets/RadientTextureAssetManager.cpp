@@ -36,6 +36,7 @@
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 #include "GraphicsAccessories.hpp"
+#include "HashUtils.hpp"
 #include "TextureLoader.h"
 #include "ThreadPool.hpp"
 
@@ -48,6 +49,13 @@
 
 namespace Diligent
 {
+
+size_t RadientTextureBindingIdentity::Hasher::operator()(const RadientTextureBindingIdentity& Identity) const noexcept
+{
+    size_t Hash = ComputeHash(Identity.StandaloneResourceId);
+    HashCombine(Hash, static_cast<Uint32>(Identity.ViewFormat));
+    return Hash;
+}
 
 namespace
 {
@@ -208,6 +216,28 @@ public:
         return ViewFormat != TEX_FORMAT_UNKNOWN ?
             pAtlas->GetTextureSRV(ViewFormat) :
             nullptr;
+    }
+
+    RadientTextureBindingIdentity GetTextureBindingIdentity(RadientTextureViewType ViewType) const noexcept
+    {
+        if (GetGPUResourceStatus() != RADIENT_STATUS_OK ||
+            !m_AllCopyCommandsEnqueued.load(std::memory_order_acquire) ||
+            ViewType >= RadientTextureViewType::Count)
+        {
+            return {};
+        }
+
+        const TEXTURE_FORMAT ViewFormat = m_ViewFormats[static_cast<size_t>(ViewType)];
+        if (ViewFormat == TEX_FORMAT_UNKNOWN)
+            return {};
+
+        if (m_Standalone.pTexture != nullptr)
+            return {m_Standalone.pTexture->GetUniqueID(), ViewFormat};
+
+        if (m_pAtlasSuballocation == nullptr)
+            return {};
+
+        return {0, ViewFormat};
     }
 
     bool GetTextureAtlasAttribs(GLTF::Material::TextureShaderAttribs& Attribs) const noexcept
@@ -733,6 +763,20 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset*  p
         return pImpl->GetStorage().GetTextureSRV(ViewType);
 
     return nullptr;
+}
+
+RadientTextureBindingIdentity RadientTextureAssetManager::GetTextureBindingIdentity(
+    IRadientTextureAsset*  pTextureAsset,
+    RadientTextureViewType ViewType)
+{
+    RefCntAutoPtr<TextureAssetImpl> pImpl = TextureAssetImpl::ResolveAsset(pTextureAsset);
+    if (!pImpl)
+        return {};
+
+    RefCntAutoPtr<TexturePayloadImpl> pPayload = pImpl->GetPayload();
+    return pPayload ?
+        pPayload->GetStorage().GetTextureBindingIdentity(ViewType) :
+        RadientTextureBindingIdentity{};
 }
 
 RADIENT_STATUS RadientTextureAssetManager::GetLoadStatus(IRadientAsset* pTextureAsset)

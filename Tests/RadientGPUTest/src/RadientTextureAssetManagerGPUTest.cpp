@@ -291,6 +291,21 @@ TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)
     EXPECT_EQ(pOtherSRGBSRV->GetTexture(), pLinearSRV->GetTexture());
     EXPECT_EQ(pLinearSRV->GetTexture()->GetDesc().Format, TEX_FORMAT_RGBA8_TYPELESS);
 
+    const RadientTextureBindingIdentity LinearBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pLinearTexture, RadientTextureViewType::Linear);
+    const RadientTextureBindingIdentity SRGBBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pLinearTexture, RadientTextureViewType::SRGB);
+    ASSERT_TRUE(LinearBinding);
+    ASSERT_TRUE(SRGBBinding);
+    EXPECT_EQ(LinearBinding.StandaloneResourceId, 0);
+    EXPECT_EQ(SRGBBinding.StandaloneResourceId, 0);
+    EXPECT_EQ(LinearBinding.ViewFormat, TEX_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(SRGBBinding.ViewFormat, TEX_FORMAT_RGBA8_UNORM_SRGB);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureBindingIdentity(pSRGBTexture, RadientTextureViewType::Linear),
+              LinearBinding);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureBindingIdentity(pSRGBTexture, RadientTextureViewType::SRGB),
+              SRGBBinding);
+
     pThreadPool->StopThreads();
 }
 
@@ -386,7 +401,13 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
     RefCntAutoPtr<ITextureView> pOldSRGBSRV{RadientTextureAssetManager::GetTextureSRV(pFirstTexture, RadientTextureViewType::SRGB)};
     ASSERT_NE(pOldLinearSRV, nullptr);
     ASSERT_NE(pOldSRGBSRV, nullptr);
-    ITexture* const pOldAtlasTexture = pOldLinearSRV->GetTexture();
+    ITexture* const                     pOldAtlasTexture = pOldLinearSRV->GetTexture();
+    const RadientTextureBindingIdentity OldLinearBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pFirstTexture, RadientTextureViewType::Linear);
+    const RadientTextureBindingIdentity OldSRGBBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pFirstTexture, RadientTextureViewType::SRGB);
+    ASSERT_TRUE(OldLinearBinding);
+    ASSERT_TRUE(OldSRGBBinding);
 
     // A full-atlas allocation consumes the first slice. This second texture
     // requires another slice and forces the dynamic array to grow.
@@ -407,6 +428,10 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
     EXPECT_EQ(pNewLinearSRV->GetTexture(), pNewSRGBSRV->GetTexture());
     EXPECT_EQ(pNewLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
     EXPECT_EQ(pNewSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureBindingIdentity(pFirstTexture, RadientTextureViewType::Linear),
+              OldLinearBinding);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureBindingIdentity(pFirstTexture, RadientTextureViewType::SRGB),
+              OldSRGBBinding);
 
     pThreadPool->StopThreads();
 }
@@ -454,6 +479,16 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
     EXPECT_EQ(pSRGBSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
     EXPECT_EQ(pLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
     EXPECT_EQ(pSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
+    const RadientTextureBindingIdentity LinearBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, RadientTextureViewType::Linear);
+    const RadientTextureBindingIdentity SRGBBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, RadientTextureViewType::SRGB);
+    ASSERT_TRUE(LinearBinding);
+    ASSERT_TRUE(SRGBBinding);
+    EXPECT_EQ(LinearBinding.StandaloneResourceId, pLinearSRV->GetTexture()->GetUniqueID());
+    EXPECT_EQ(SRGBBinding.StandaloneResourceId, LinearBinding.StandaloneResourceId);
+    EXPECT_EQ(LinearBinding.ViewFormat, TEX_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(SRGBBinding.ViewFormat, TEX_FORMAT_RGBA8_UNORM_SRGB);
     VerifyUploadedStandaloneTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();

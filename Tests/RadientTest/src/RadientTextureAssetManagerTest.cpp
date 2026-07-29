@@ -44,6 +44,23 @@ using namespace Diligent::Testing;
 namespace
 {
 
+TEST(RadientTextureBindingIdentityTest, HashMatchesEquality)
+{
+    const RadientTextureBindingIdentity First{1, TEX_FORMAT_RGBA8_UNORM};
+    const RadientTextureBindingIdentity Equal{1, TEX_FORMAT_RGBA8_UNORM};
+    const RadientTextureBindingIdentity DifferentResource{2, TEX_FORMAT_RGBA8_UNORM};
+    const RadientTextureBindingIdentity DifferentFormat{1, TEX_FORMAT_RGBA8_UNORM_SRGB};
+    const RadientTextureBindingIdentity Atlas{0, TEX_FORMAT_RGBA8_UNORM};
+
+    const RadientTextureBindingIdentity::Hasher Hasher;
+    EXPECT_EQ(First, Equal);
+    EXPECT_EQ(Hasher(First), Hasher(Equal));
+    EXPECT_NE(First, DifferentResource);
+    EXPECT_NE(First, DifferentFormat);
+    EXPECT_TRUE(Atlas);
+    EXPECT_NE(First, Atlas);
+}
+
 constexpr size_t DefaultWorkerCount = 1;
 
 static constexpr std::array<Uint8, 16> TexturePixels{
