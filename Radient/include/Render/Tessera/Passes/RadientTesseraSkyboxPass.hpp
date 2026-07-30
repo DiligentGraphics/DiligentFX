@@ -35,16 +35,16 @@ namespace Diligent
 {
 
 class EnvMapRenderer;
-class RadientGeometryRenderer;
+class RadientTesseraGeometryRenderer;
 
 /// Skybox render pass.
-class RadientSkyboxPass
+class RadientTesseraSkyboxPass
 {
 public:
-    RadientSkyboxPass();
-    ~RadientSkyboxPass();
+    RadientTesseraSkyboxPass();
+    ~RadientTesseraSkyboxPass();
 
-    RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
+    RADIENT_STATUS Prepare(RadientTesseraGeometryRenderer&  Renderer,
                            IRenderDevice*                   pDevice,
                            const RadientFrameRenderTargets& Targets);
     RADIENT_STATUS Execute(IDeviceContext*                  pContext,

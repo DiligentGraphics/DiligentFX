@@ -24,9 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "Render/Passes/RadientSkyboxPass.hpp"
+#include "Render/Tessera/Passes/RadientTesseraSkyboxPass.hpp"
 
-#include "Render/Passes/RadientGeometryPass.hpp"
+#include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
 #include "EnvMapRenderer.hpp"
 
@@ -71,13 +71,13 @@ float3 GetLightingScale(const RadientFloat3& Color, Float32 Intensity, Float32 E
 
 } // namespace
 
-RadientSkyboxPass::RadientSkyboxPass() = default;
+RadientTesseraSkyboxPass::RadientTesseraSkyboxPass() = default;
 
-RadientSkyboxPass::~RadientSkyboxPass() = default;
+RadientTesseraSkyboxPass::~RadientTesseraSkyboxPass() = default;
 
-RADIENT_STATUS RadientSkyboxPass::Prepare(RadientGeometryRenderer&         Renderer,
-                                          IRenderDevice*                   pDevice,
-                                          const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientTesseraSkyboxPass::Prepare(RadientTesseraGeometryRenderer&  Renderer,
+                                                 IRenderDevice*                   pDevice,
+                                                 const RadientFrameRenderTargets& Targets)
 {
     if (pDevice == nullptr)
         return RADIENT_STATUS_OK;
@@ -117,10 +117,10 @@ RADIENT_STATUS RadientSkyboxPass::Prepare(RadientGeometryRenderer&         Rende
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSkyboxPass::Execute(IDeviceContext*                  pContext,
-                                          const RadientSkyboxDesc&         Skybox,
-                                          ITextureView*                    pSkyboxSRV,
-                                          const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                  pContext,
+                                                 const RadientSkyboxDesc&         Skybox,
+                                                 ITextureView*                    pSkyboxSRV,
+                                                 const RadientFrameRenderTargets& Targets)
 {
     if (pContext == nullptr || Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
         return RADIENT_STATUS_OK;

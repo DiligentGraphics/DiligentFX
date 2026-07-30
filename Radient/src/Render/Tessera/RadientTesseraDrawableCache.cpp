@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Render/RadientSceneDrawableCache.hpp"
+#include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
@@ -71,12 +71,12 @@ IRadientDrawableMeshProvider& GetDefaultDrawableMeshProvider()
 
 } // namespace
 
-RadientSceneDrawableCache::RadientSceneDrawableCache(IRadientDrawableMeshProvider* pMeshProvider) :
+RadientTesseraDrawableCache::RadientTesseraDrawableCache(IRadientDrawableMeshProvider* pMeshProvider) :
     m_MeshProvider{pMeshProvider != nullptr ? *pMeshProvider : GetDefaultDrawableMeshProvider()}
 {
 }
 
-RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
+RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(const IRadientScene& Scene)
 {
     m_DrawableChanges.clear();
     m_LightChanges.clear();
@@ -159,7 +159,7 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
     return RADIENT_STATUS_OK;
 }
 
-void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh)
+void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh)
 {
     auto record_it = m_Renderables.find(Mesh.Entity);
 
@@ -203,7 +203,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
     }
 }
 
-void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Entity)
+void RadientTesseraDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Entity)
 {
     RenderableMap::iterator It = m_Renderables.find(Entity);
     if (It == m_Renderables.end())
@@ -213,7 +213,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Ent
     m_Renderables.erase(It);
 }
 
-void RadientSceneDrawableCache::ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light)
+void RadientTesseraDrawableCache::ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light)
 {
     LightMap::iterator It = m_Lights.find(Light.Entity);
 
@@ -241,7 +241,7 @@ void RadientSceneDrawableCache::ProcessRenderableLightAddedOrUpdated(const Radie
     }
 }
 
-void RadientSceneDrawableCache::ProcessRenderableLightRemoved(RadientEntityID Entity)
+void RadientTesseraDrawableCache::ProcessRenderableLightRemoved(RadientEntityID Entity)
 {
     LightMap::iterator It = m_Lights.find(Entity);
     if (It == m_Lights.end())
@@ -251,7 +251,7 @@ void RadientSceneDrawableCache::ProcessRenderableLightRemoved(RadientEntityID En
     m_Lights.erase(It);
 }
 
-void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
+void RadientTesseraDrawableCache::ResolvePendingRenderableMeshes()
 {
     m_PendingRenderableEntitiesScratch.clear();
     m_PendingRenderableEntitiesScratch.swap(m_PendingRenderableEntities);
@@ -275,7 +275,7 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
     m_PendingRenderableEntitiesScratch.clear();
 }
 
-bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
+bool RadientTesseraDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
     const RadientDrawableMeshResolveResult ResolveResult = m_MeshProvider.GetDrawableMesh(Record.pMesh);
     if (ResolveResult.Status == RADIENT_STATUS_PENDING)
@@ -338,7 +338,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
     return true;
 }
 
-RadientDrawableID RadientSceneDrawableCache::AllocateDrawableID()
+RadientDrawableID RadientTesseraDrawableCache::AllocateDrawableID()
 {
     RadientDrawableID DrawableID = InvalidRadientDrawableID;
     if (!m_FreeDrawableIDs.empty())
@@ -360,7 +360,7 @@ RadientDrawableID RadientSceneDrawableCache::AllocateDrawableID()
     return DrawableID;
 }
 
-void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
+void RadientTesseraDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
 {
     if (DrawableID >= m_DrawableSlots.size())
     {
@@ -391,14 +391,14 @@ void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
     m_FreeDrawableIDs.push_back(DrawableID);
 }
 
-void RadientSceneDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)
+void RadientTesseraDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)
 {
     for (const RadientDrawableID DrawableID : Record.DrawableIDs)
         FreeDrawableID(DrawableID);
     Record.DrawableIDs.clear();
 }
 
-void RadientSceneDrawableCache::AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record)
+void RadientTesseraDrawableCache::AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record)
 {
     if (Record.PendingResolution)
         return;
@@ -407,7 +407,7 @@ void RadientSceneDrawableCache::AddPendingResolution(RadientEntityID Entity, Ren
     m_PendingRenderableEntities.push_back(Entity);
 }
 
-void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
+void RadientTesseraDrawableCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
 {
     if (DrawableID == InvalidRadientDrawableID)
         return;
@@ -415,7 +415,7 @@ void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableI
     m_DrawableChanges.push_back({DrawableID, Type});
 }
 
-void RadientSceneDrawableCache::RemoveLightFromList(RadientEntityID Entity, const LightListLocation& Location)
+void RadientTesseraDrawableCache::RemoveLightFromList(RadientEntityID Entity, const LightListLocation& Location)
 {
     const RADIENT_LIGHT_TYPE RemovedType = Location.Type;
     const RadientEntityID    MovedEntity = m_LightLists.RemoveAt(RemovedType, Location.Index);
@@ -430,7 +430,7 @@ void RadientSceneDrawableCache::RemoveLightFromList(RadientEntityID Entity, cons
     RecordLightChange(Entity, RemovedType, RadientLightChangeType::Removed);
 }
 
-void RadientSceneDrawableCache::RecordLightChange(RadientEntityID Entity, RADIENT_LIGHT_TYPE Type, RadientLightChangeType Change)
+void RadientTesseraDrawableCache::RecordLightChange(RadientEntityID Entity, RADIENT_LIGHT_TYPE Type, RadientLightChangeType Change)
 {
     if (Entity == InvalidRadientEntityID)
     {

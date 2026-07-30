@@ -117,7 +117,7 @@ struct RadientLightChange
     RadientLightChangeType Change = RadientLightChangeType::Updated;
 };
 
-/// Source of renderer-ready mesh data for RadientSceneDrawableCache.
+/// Source of renderer-ready mesh data for RadientTesseraDrawableCache.
 ///
 /// Production code resolves assets through the asset manager. Tests can provide a lightweight
 /// fake provider without constructing the real asset-loading stack.
@@ -129,7 +129,7 @@ public:
     virtual RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh) = 0;
 };
 
-// RadientSceneDrawableCache is the bridge between scene-state components and renderer-facing
+// RadientTesseraDrawableCache is the bridge between scene-state components and renderer-facing
 // draw/light lists. It owns stable drawable slots and keeps the lightweight lists in sync
 // incrementally from RadientSceneState changes.
 //
@@ -164,10 +164,10 @@ public:
 // becomes ready.
 
 /// Converts Radient scene state into renderer-facing render data.
-class RadientSceneDrawableCache
+class RadientTesseraDrawableCache
 {
 public:
-    explicit RadientSceneDrawableCache(IRadientDrawableMeshProvider* pMeshProvider = nullptr);
+    explicit RadientTesseraDrawableCache(IRadientDrawableMeshProvider* pMeshProvider = nullptr);
 
     RADIENT_STATUS SyncScene(const IRadientScene& Scene);
 

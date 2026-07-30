@@ -29,7 +29,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Core/RadientViewImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
-#include "Tessera/RadientTesseraRenderTechnique.hpp"
+#include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
 
 #include "Cast.hpp"
 #include "Errors.hpp"

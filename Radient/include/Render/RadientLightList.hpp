@@ -61,7 +61,7 @@ struct RadientLightItem
 /// Compact list of scene lights of one or more compatible render paths.
 ///
 /// The list does not own light data. Removal uses swap-erase; RemoveAt returns the moved
-/// entity ID so RadientSceneDrawableCache can repair the moved LightRecord::ListIndex.
+/// entity ID so the owner can repair its bookkeeping.
 class RadientLightList
 {
 public:

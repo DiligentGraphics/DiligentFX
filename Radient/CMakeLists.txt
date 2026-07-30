@@ -25,9 +25,6 @@ set(SOURCE
     src/Import/RadientGLTFConverter.cpp
     src/Import/RadientSceneImporterImpl.cpp
     src/Math/RadientMath.cpp
-    src/Render/Passes/RadientGeometryPass.cpp
-    src/Render/Passes/RadientPostProcessPipeline.cpp
-    src/Render/Passes/RadientSkyboxPass.cpp
     src/Render/RadientDrawList.cpp
     src/Render/RadientFrameSRBCache.cpp
     src/Render/RadientFrameRenderTargets.cpp
@@ -37,7 +34,11 @@ set(SOURCE
     src/Render/RadientPBRRenderer.cpp
     src/Render/RadientRenderPipeline.cpp
     src/Render/RadientRendererImpl.cpp
-    src/Render/RadientSceneDrawableCache.cpp
+    src/Render/Tessera/Passes/RadientTesseraGeometryPass.cpp
+    src/Render/Tessera/Passes/RadientTesseraPostProcessPipeline.cpp
+    src/Render/Tessera/Passes/RadientTesseraSkyboxPass.cpp
+    src/Render/Tessera/RadientTesseraDrawableCache.cpp
+    src/Render/Tessera/RadientTesseraGeometryRenderer.cpp
     src/Render/Tessera/RadientTesseraRenderTechnique.cpp
     src/Scene/Components/RadientMaterialBindingsStorage.cpp
     src/Scene/Components/RadientMeshComponentStorage.cpp
@@ -72,9 +73,6 @@ set(INCLUDE
     include/Import/RadientImportedScene.hpp
     include/Import/RadientSceneImporterImpl.hpp
     include/Math/RadientMath.hpp
-    include/Render/Passes/RadientGeometryPass.hpp
-    include/Render/Passes/RadientPostProcessPipeline.hpp
-    include/Render/Passes/RadientSkyboxPass.hpp
     include/Render/RadientDrawableMesh.hpp
     include/Render/RadientDrawList.hpp
     include/Render/RadientFrameSRBCache.hpp
@@ -86,13 +84,17 @@ set(INCLUDE
     include/Render/RadientRenderPipeline.hpp
     include/Render/RadientRenderTechnique.hpp
     include/Render/RadientRendererImpl.hpp
-    include/Render/RadientSceneDrawableCache.hpp
     include/Scene/Components/RadientMaterialBindingsStorage.hpp
     include/Scene/Components/RadientMeshComponentStorage.hpp
     include/Scene/RadientSceneImpl.hpp
     include/Scene/RadientSceneState.hpp
     include/Scene/RadientSceneWriterImpl.hpp
-    src/Render/Tessera/RadientTesseraRenderTechnique.hpp
+    include/Render/Tessera/Passes/RadientTesseraGeometryPass.hpp
+    include/Render/Tessera/Passes/RadientTesseraPostProcessPipeline.hpp
+    include/Render/Tessera/Passes/RadientTesseraSkyboxPass.hpp
+    include/Render/Tessera/RadientTesseraDrawableCache.hpp
+    include/Render/Tessera/RadientTesseraGeometryRenderer.hpp
+    include/Render/Tessera/RadientTesseraRenderTechnique.hpp
 )
 
 set(INTERFACE

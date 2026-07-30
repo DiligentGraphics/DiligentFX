@@ -24,14 +24,14 @@
  *  of the possibility of such damages.
  */
 
-#include "Render/Passes/RadientPostProcessPipeline.hpp"
+#include "Render/Tessera/Passes/RadientTesseraPostProcessPipeline.hpp"
 
 namespace Diligent
 {
 
-RADIENT_STATUS RadientPostProcessPipeline::Prepare(IRenderDevice* pDevice,
-                                                   IDeviceContext* pContext,
-                                                   const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*                   pDevice,
+                                                          IDeviceContext*                  pContext,
+                                                          const RadientFrameRenderTargets& Targets)
 {
     (void)pDevice;
     (void)pContext;
@@ -40,7 +40,7 @@ RADIENT_STATUS RadientPostProcessPipeline::Prepare(IRenderDevice* pDevice,
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientPostProcessPipeline::Execute(IDeviceContext* pContext, const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IDeviceContext* pContext, const RadientFrameRenderTargets& Targets)
 {
     (void)pContext;
     (void)Targets;

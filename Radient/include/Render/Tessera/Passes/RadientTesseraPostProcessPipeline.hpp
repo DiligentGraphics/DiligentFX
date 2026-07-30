@@ -32,7 +32,7 @@ namespace Diligent
 {
 
 /// Post-processing stage chain: tone mapping first, then TAA/SSAO/SSR/Bloom/DoF as they are added.
-class RadientPostProcessPipeline
+class RadientTesseraPostProcessPipeline
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);

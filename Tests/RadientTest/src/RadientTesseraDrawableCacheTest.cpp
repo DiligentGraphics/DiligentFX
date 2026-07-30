@@ -28,7 +28,7 @@
 #include "gtest/gtest.h"
 
 #include "Assets/RadientDrawableMeshConverter.hpp"
-#include "Render/RadientSceneDrawableCache.hpp"
+#include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
 #include "Math/RadientMath.hpp"
@@ -215,10 +215,10 @@ void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
         EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
 }
 
-void ExpectDrawableChangeCounts(const RadientSceneDrawableCache& Cache,
-                                size_t                           ExpectedAdded,
-                                size_t                           ExpectedRemoved,
-                                size_t                           ExpectedUpdated)
+void ExpectDrawableChangeCounts(const RadientTesseraDrawableCache& Cache,
+                                size_t                             ExpectedAdded,
+                                size_t                             ExpectedRemoved,
+                                size_t                             ExpectedUpdated)
 {
     size_t Added   = 0;
     size_t Removed = 0;
@@ -247,10 +247,10 @@ void ExpectDrawableChangeCounts(const RadientSceneDrawableCache& Cache,
     EXPECT_EQ(Updated, ExpectedUpdated);
 }
 
-void ExpectLightChangeCounts(const RadientSceneDrawableCache& Cache,
-                             size_t                           ExpectedAdded,
-                             size_t                           ExpectedRemoved,
-                             size_t                           ExpectedUpdated)
+void ExpectLightChangeCounts(const RadientTesseraDrawableCache& Cache,
+                             size_t                             ExpectedAdded,
+                             size_t                             ExpectedRemoved,
+                             size_t                             ExpectedUpdated)
 {
     size_t Added   = 0;
     size_t Removed = 0;
@@ -308,12 +308,12 @@ const RadientLightItem* FindLightItem(const RadientLightList& LightList,
     return It != Items.end() ? &*It : nullptr;
 }
 
-RadientEntityID AddReadyRenderableEntity(TestDrawableMeshProvider&  MeshProvider,
-                                         RadientSceneDrawableCache& DrawableCache,
-                                         RadientSceneImpl&          Scene,
-                                         IRadientSceneWriter&       Writer,
-                                         IRadientMeshAsset*         pMesh,
-                                         RadientEntityID            Parent = InvalidRadientEntityID)
+RadientEntityID AddReadyRenderableEntity(TestDrawableMeshProvider&    MeshProvider,
+                                         RadientTesseraDrawableCache& DrawableCache,
+                                         RadientSceneImpl&            Scene,
+                                         IRadientSceneWriter&         Writer,
+                                         IRadientMeshAsset*           pMesh,
+                                         RadientEntityID              Parent = InvalidRadientEntityID)
 {
     const RadientEntityID Entity = AddRenderableEntity(Writer, pMesh, Parent);
     EXPECT_NE(Entity, InvalidRadientEntityID);
@@ -353,7 +353,7 @@ bool DrawableSlotMatchesPrimitive(const RadientDrawableSlot& Slot,
         Slot.ElementCount == (IsIndexed ? Primitive.IndexCount : Primitive.VertexCount);
 }
 
-void ExpectDrawListMatchesPrimitives(const RadientSceneDrawableCache&    Cache,
+void ExpectDrawListMatchesPrimitives(const RadientTesseraDrawableCache&  Cache,
                                      const GLTF::Model&                  Model,
                                      const std::vector<RadientEntityID>& Entities,
                                      GLTF::Material::ALPHA_MODE          AlphaMode,
@@ -411,7 +411,7 @@ void ExpectDrawListMatchesPrimitives(const RadientSceneDrawableCache&    Cache,
     EXPECT_TRUE(ExpectedDrawables.empty());
 }
 
-void ExpectDrawListsForEntities(const RadientSceneDrawableCache&    Cache,
+void ExpectDrawListsForEntities(const RadientTesseraDrawableCache&  Cache,
                                 const GLTF::Model&                  Model,
                                 const std::vector<RadientEntityID>& Entities,
                                 PBR_Renderer::PSO_FLAGS             VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE,
@@ -423,7 +423,7 @@ void ExpectDrawListsForEntities(const RadientSceneDrawableCache&    Cache,
     ExpectDrawListMatchesPrimitives(Cache, Model, Entities, GLTF::Material::ALPHA_MODE_BLEND, VertexAttribFlags, FirstIndexLocation, BaseVertex);
 }
 
-const RadientDrawableSlot* GetFirstDrawableSlot(const RadientSceneDrawableCache& Cache)
+const RadientDrawableSlot* GetFirstDrawableSlot(const RadientTesseraDrawableCache& Cache)
 {
     const RadientDrawList::ItemListType& Items = Cache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();
     EXPECT_FALSE(Items.empty());
@@ -433,9 +433,9 @@ const RadientDrawableSlot* GetFirstDrawableSlot(const RadientSceneDrawableCache&
     return Cache.GetDrawableSlot(Items.front().DrawableID);
 }
 
-const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientSceneDrawableCache& Cache,
-                                                          GLTF::Material::ALPHA_MODE       AlphaMode,
-                                                          Uint32                           FirstElement)
+const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientTesseraDrawableCache& Cache,
+                                                          GLTF::Material::ALPHA_MODE         AlphaMode,
+                                                          Uint32                             FirstElement)
 {
     const RadientDrawList::ItemListType& Items = Cache.GetDrawList(AlphaMode).GetItems();
     for (const RadientDrawItem& Item : Items)
@@ -450,10 +450,10 @@ const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientSceneDraw
 
 } // namespace
 
-TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
+TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -536,10 +536,10 @@ TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
     pScene->ClearPendingRenderChanges();
 }
 
-TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSync)
+TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSync)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -569,9 +569,9 @@ TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSyn
     EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
 }
 
-TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableLightChangesBeforeSync)
+TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableLightChangesBeforeSync)
 {
-    RadientSceneDrawableCache       DrawableCache;
+    RadientTesseraDrawableCache     DrawableCache;
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -600,10 +600,10 @@ TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableLightChangesBeforeSy
     EXPECT_TRUE(DrawableCache.GetLightChanges().empty());
 }
 
-TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
+TEST(RadientTesseraDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -641,10 +641,10 @@ TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
     }
 }
 
-TEST(RadientSceneDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeometry)
+TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeometry)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -715,10 +715,10 @@ TEST(RadientSceneDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeometr
     EXPECT_EQ(pGeometry1Slot->ElementCount, 3u);
 }
 
-TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
+TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanFail)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -784,10 +784,10 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
     }
 }
 
-TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
+TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -833,10 +833,10 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
 }
 
-TEST(RadientSceneDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
+TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -931,10 +931,10 @@ TEST(RadientSceneDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
     pScene->ClearPendingRenderChanges();
 }
 
-TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenReady)
+TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenReady)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -983,10 +983,10 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenR
     }
 }
 
-TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindingsBeforeReady)
+TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindingsBeforeReady)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1030,10 +1030,10 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindings
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
 }
 
-TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshOnly)
+TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshOnly)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1091,10 +1091,10 @@ TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshOnl
     ExpectDrawListsForEntities(DrawableCache, AlternateModel, {Entity}, NewVertexAttribFlags, NewFirstIndexLocation, NewBaseVertex);
 }
 
-TEST(RadientSceneDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
+TEST(RadientTesseraDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1143,10 +1143,10 @@ TEST(RadientSceneDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
     ExpectDrawListsForEntities(DrawableCache, AlternateModel, {Entity}, NewVertexAttribFlags, NewFirstIndexLocation, NewBaseVertex);
 }
 
-TEST(RadientSceneDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
+TEST(RadientTesseraDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1174,10 +1174,10 @@ TEST(RadientSceneDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
 }
 
-TEST(RadientSceneDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots)
+TEST(RadientTesseraDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1213,10 +1213,10 @@ TEST(RadientSceneDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots)
     }
 }
 
-TEST(RadientSceneDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListIndices)
+TEST(RadientTesseraDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListIndices)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1251,10 +1251,10 @@ TEST(RadientSceneDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListIndic
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity0, Entity2});
 }
 
-TEST(RadientSceneDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawableSlots)
+TEST(RadientTesseraDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawableSlots)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1289,10 +1289,10 @@ TEST(RadientSceneDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawabl
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
 }
 
-TEST(RadientSceneDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables)
+TEST(RadientTesseraDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1361,10 +1361,10 @@ TEST(RadientSceneDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables)
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
 }
 
-TEST(RadientSceneDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)
+TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1416,10 +1416,10 @@ TEST(RadientSceneDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDraw
     ExpectMatrixNear(*pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(12.f, 0.f, 0.f)));
 }
 
-TEST(RadientSceneDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawableUpdate)
+TEST(RadientTesseraDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawableUpdate)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1484,9 +1484,9 @@ TEST(RadientSceneDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawa
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
 }
 
-TEST(RadientSceneDrawableCacheTest, LightListsUpdateIncrementallyByType)
+TEST(RadientTesseraDrawableCacheTest, LightListsUpdateIncrementallyByType)
 {
-    RadientSceneDrawableCache       DrawableCache;
+    RadientTesseraDrawableCache     DrawableCache;
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1561,9 +1561,9 @@ TEST(RadientSceneDrawableCacheTest, LightListsUpdateIncrementallyByType)
     EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), PointEntity), nullptr);
 }
 
-TEST(RadientSceneDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWithoutLightUpdate)
+TEST(RadientTesseraDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWithoutLightUpdate)
 {
-    RadientSceneDrawableCache       DrawableCache;
+    RadientTesseraDrawableCache     DrawableCache;
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1632,9 +1632,9 @@ TEST(RadientSceneDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWithou
     ExpectMatrixNear(*pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(0.f, 0.f, 0.f)));
 }
 
-TEST(RadientSceneDrawableCacheTest, LightVisibilityIsSkippedByGeometryPass)
+TEST(RadientTesseraDrawableCacheTest, LightVisibilityIsSkippedByGeometryPass)
 {
-    RadientSceneDrawableCache       DrawableCache;
+    RadientTesseraDrawableCache     DrawableCache;
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);

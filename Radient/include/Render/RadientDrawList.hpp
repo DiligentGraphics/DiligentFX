@@ -45,7 +45,7 @@ static constexpr RadientDrawableID InvalidRadientDrawableID = ~RadientDrawableID
 ///
 /// Draw items deliberately store only a stable drawable ID. Heavy primitive data, material
 /// state, scene transform/visibility references, and renderer-derived pass data live in
-/// RadientSceneDrawableCache/RadientDrawableSlot or in the render pass cache.
+/// renderer-owned drawable storage or pass-specific caches.
 struct RadientDrawItem
 {
     explicit RadientDrawItem(RadientDrawableID _DrawableID) :
@@ -59,8 +59,7 @@ struct RadientDrawItem
 /// Compact list of drawable IDs selected for a render pass subset.
 ///
 /// A draw list does not own drawable data and does not preserve semantic order. Removal uses
-/// swap-erase; RemoveAt returns the moved drawable ID so RadientSceneDrawableCache can repair
-/// the moved slot's DrawListIndex.
+/// swap-erase; RemoveAt returns the moved drawable ID so the owner can repair its bookkeeping.
 class RadientDrawList
 {
 public:

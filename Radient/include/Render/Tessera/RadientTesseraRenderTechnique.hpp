@@ -26,11 +26,12 @@
 
 #pragma once
 
-#include "Render/Passes/RadientGeometryPass.hpp"
-#include "Render/Passes/RadientPostProcessPipeline.hpp"
-#include "Render/Passes/RadientSkyboxPass.hpp"
+#include "Render/Tessera/Passes/RadientTesseraGeometryPass.hpp"
+#include "Render/Tessera/Passes/RadientTesseraPostProcessPipeline.hpp"
+#include "Render/Tessera/Passes/RadientTesseraSkyboxPass.hpp"
 #include "Render/RadientRenderTechnique.hpp"
-#include "Render/RadientSceneDrawableCache.hpp"
+#include "Render/Tessera/RadientTesseraDrawableCache.hpp"
+#include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
 #include "RefCntAutoPtr.hpp"
 
@@ -55,12 +56,12 @@ public:
 private:
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
-    RadientSceneDrawableCache  m_DrawableCache;
-    RadientFrameRenderTargets  m_FrameTargets;
-    RadientGeometryRenderer    m_GeometryRenderer;
-    RadientGeometryPass        m_ForwardPass;
-    RadientSkyboxPass          m_SkyboxPass;
-    RadientPostProcessPipeline m_PostProcessPipeline;
+    RadientTesseraDrawableCache       m_DrawableCache;
+    RadientFrameRenderTargets         m_FrameTargets;
+    RadientTesseraGeometryRenderer    m_GeometryRenderer;
+    RadientTesseraGeometryPass        m_ForwardPass;
+    RadientTesseraSkyboxPass          m_SkyboxPass;
+    RadientTesseraPostProcessPipeline m_PostProcessPipeline;
 
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
     bool                                  m_FrameActive = false;

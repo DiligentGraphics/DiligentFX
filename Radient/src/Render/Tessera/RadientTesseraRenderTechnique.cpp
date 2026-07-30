@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "RadientTesseraRenderTechnique.hpp"
+#include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Core/RadientViewImpl.hpp"
@@ -122,7 +122,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
             return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    const RadientGeometryFrameAttribs GeometryFrameAttribs{
+    const RadientTesseraGeometryFrameAttribs GeometryFrameAttribs{
         ViewDesc.Environment,
         ViewDesc.pScene,
         ViewDesc.Camera,
