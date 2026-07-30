@@ -37,21 +37,17 @@
 namespace Diligent
 {
 
-using RadientMaterialSRBIndex = Uint32;
-
-static constexpr RadientMaterialSRBIndex InvalidRadientMaterialSRBIndex = ~RadientMaterialSRBIndex{0};
-
 class RadientMaterialSRBState;
 class RadientMaterialSRBTable;
 
-/// Shared reference to a stable material SRB table entry.
+/// Owning reference to a stable material SRB table entry. The entry and its
+/// texture resources are released when the last lease is destroyed.
 /// GetSRB() must only be called from the render thread after table preparation.
 class RadientMaterialSRBLease
 {
 public:
     RadientMaterialSRBLease() noexcept = default;
 
-    RadientMaterialSRBIndex GetIndex() const noexcept;
     IShaderResourceBinding* GetSRB() const noexcept;
 
     explicit operator bool() const noexcept
@@ -114,6 +110,8 @@ public:
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);
 
+    /// Returns the number of retained table records. Expired weak entries may
+    /// remain included until the next Prepare() call removes them.
     size_t GetSize() const noexcept;
 
 private:

@@ -48,18 +48,12 @@ namespace Diligent
 class RadientMaterialSRBState
 {
 public:
-    RadientMaterialSRBIndex                                  Index = InvalidRadientMaterialSRBIndex;
     absl::InlinedVector<RadientMaterialTextureRenderData, 8> Slots;
 
     // Accessed exclusively from the render thread.
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
     Uint32                                PreparedTextureVersion = ~0u;
 };
-
-RadientMaterialSRBIndex RadientMaterialSRBLease::GetIndex() const noexcept
-{
-    return m_pState != nullptr ? m_pState->Index : InvalidRadientMaterialSRBIndex;
-}
 
 IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 {
@@ -103,13 +97,15 @@ struct RadientMaterialSRBTable::Impl
 {
     mutable std::mutex Mutex;
 
-    std::vector<std::shared_ptr<RadientMaterialSRBState>> Entries;
-    // Render-thread snapshot reused by Prepare() to avoid allocating every frame.
-    std::vector<std::shared_ptr<RadientMaterialSRBState>> PrepareEntries;
+    // Leases own SRB states. The table keeps weak records so unused standalone
+    // textures and their SRBs are released with the last material reference.
     absl::flat_hash_map<RadientMaterialSRBIdentity,
-                        std::shared_ptr<RadientMaterialSRBState>,
+                        std::weak_ptr<RadientMaterialSRBState>,
                         RadientMaterialSRBIdentity::Hasher>
         Lookup;
+
+    // Render-thread snapshot reused by Prepare() to avoid allocating every frame.
+    std::vector<std::shared_ptr<RadientMaterialSRBState>> PrepareEntries;
 };
 
 RadientMaterialSRBTable::RadientMaterialSRBTable() :
@@ -128,13 +124,16 @@ RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(const RadientMaterialTe
 
     const auto LookupIt = m_Impl->Lookup.find(Identity);
     if (LookupIt != m_Impl->Lookup.end())
-        return RadientMaterialSRBLease{LookupIt->second};
+    {
+        if (std::shared_ptr<RadientMaterialSRBState> pState = LookupIt->second.lock())
+            return RadientMaterialSRBLease{std::move(pState)};
+
+        m_Impl->Lookup.erase(LookupIt);
+    }
 
     auto pState   = std::make_shared<RadientMaterialSRBState>();
-    pState->Index = static_cast<RadientMaterialSRBIndex>(m_Impl->Entries.size());
     pState->Slots = Plan.Slots;
 
-    m_Impl->Entries.push_back(pState);
     m_Impl->Lookup.emplace(std::move(Identity), pState);
     return RadientMaterialSRBLease{std::move(pState)};
 }
@@ -149,7 +148,21 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
 
     {
         std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
-        m_Impl->PrepareEntries = m_Impl->Entries;
+        m_Impl->PrepareEntries.clear();
+        m_Impl->PrepareEntries.reserve(m_Impl->Lookup.size());
+
+        for (auto LookupIt = m_Impl->Lookup.begin(); LookupIt != m_Impl->Lookup.end();)
+        {
+            if (std::shared_ptr<RadientMaterialSRBState> pState = LookupIt->second.lock())
+            {
+                m_Impl->PrepareEntries.push_back(std::move(pState));
+                ++LookupIt;
+            }
+            else
+            {
+                m_Impl->Lookup.erase(LookupIt++);
+            }
+        }
     }
 
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
@@ -193,7 +206,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
 size_t RadientMaterialSRBTable::GetSize() const noexcept
 {
     std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
-    return m_Impl->Entries.size();
+    return m_Impl->Lookup.size();
 }
 
 } // namespace Diligent

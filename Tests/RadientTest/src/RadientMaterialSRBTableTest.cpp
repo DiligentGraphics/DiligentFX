@@ -135,7 +135,7 @@ TEST(RadientMaterialSRBTableTest, ReusesEntryForSameLogicalSlots)
     const RadientMaterialSRBLease           Second = Table.Acquire(Plan);
 
     ASSERT_TRUE(First);
-    EXPECT_EQ(Second.GetIndex(), First.GetIndex());
+    EXPECT_TRUE(Second);
     EXPECT_EQ(Table.GetSize(), 1u);
     EXPECT_EQ(First.GetSRB(), nullptr);
 }
@@ -153,7 +153,7 @@ TEST(RadientMaterialSRBTableTest, IgnoresShaderTextureMapping)
     const RadientMaterialSRBLease Second = Table.Acquire(SecondPlan);
 
     ASSERT_TRUE(First);
-    EXPECT_EQ(Second.GetIndex(), First.GetIndex());
+    EXPECT_TRUE(Second);
     EXPECT_EQ(Table.GetSize(), 1u);
 }
 
@@ -170,9 +170,9 @@ TEST(RadientMaterialSRBTableTest, DistinguishesSlotOrderCountAndFormat)
     const RadientMaterialSRBLease TypedView = Table.Acquire(DifferentFormat);
 
     ASSERT_TRUE(First);
-    EXPECT_NE(Reordered.GetIndex(), First.GetIndex());
-    EXPECT_NE(Shorter.GetIndex(), First.GetIndex());
-    EXPECT_NE(TypedView.GetIndex(), First.GetIndex());
+    EXPECT_TRUE(Reordered);
+    EXPECT_TRUE(Shorter);
+    EXPECT_TRUE(TypedView);
     EXPECT_EQ(Table.GetSize(), 4u);
 }
 
@@ -203,7 +203,6 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
     EXPECT_EQ(Table.Prepare(2, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     EXPECT_NE(Lease.GetSRB(), nullptr);
     EXPECT_NE(Lease.GetSRB(), pFirstSRB);
-    EXPECT_EQ(Lease.GetIndex(), 0u);
     EXPECT_EQ(CreateCount, 2u);
 }
 
@@ -227,7 +226,59 @@ TEST(RadientMaterialSRBTableTest, ConcurrentAcquireReservesOneEntry)
 
     ASSERT_TRUE(Leases[0]);
     for (const RadientMaterialSRBLease& Lease : Leases)
-        EXPECT_EQ(Lease.GetIndex(), Leases[0].GetIndex());
+        EXPECT_TRUE(Lease);
+    EXPECT_EQ(Table.GetSize(), 1u);
+}
+
+TEST(RadientMaterialSRBTableTest, ReleasesTexturesWithLastLease)
+{
+    RadientMaterialSRBTable             Table;
+    RadientMaterialSRBLease             First;
+    RadientMaterialSRBLease             Second;
+    RefCntWeakPtr<IRadientTextureAsset> pWeakTexture;
+    RadientMaterialTextureBindingPlan   Plan = MakePlan({1});
+    pWeakTexture                             = Plan.Slots[0].pTexture;
+
+    First  = Table.Acquire(Plan);
+    Second = Table.Acquire(Plan);
+    Plan   = {};
+
+    ASSERT_TRUE(First);
+    ASSERT_TRUE(Second);
+    EXPECT_NE(pWeakTexture.Lock(), nullptr);
+
+    First = {};
+    EXPECT_NE(pWeakTexture.Lock(), nullptr);
+
+    Second = {};
+    EXPECT_EQ(pWeakTexture.Lock(), nullptr);
+    EXPECT_EQ(Table.GetSize(), 1u);
+}
+
+TEST(RadientMaterialSRBTableTest, RemovesReleasedEntryDuringPrepare)
+{
+    RadientMaterialSRBTable Table;
+
+    {
+        const RadientMaterialSRBLease Lease = Table.Acquire(MakePlan({1}));
+        ASSERT_TRUE(Lease);
+    }
+    EXPECT_EQ(Table.GetSize(), 1u);
+
+    Uint32 CreateCount = 0;
+    ASSERT_EQ(Table.Prepare(
+                  1,
+                  ResolveTestSRV,
+                  [&CreateCount](ITextureView* const*, Uint32) {
+                      ++CreateCount;
+                      return MakeTestSRB();
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(CreateCount, 0u);
+    EXPECT_EQ(Table.GetSize(), 0u);
+
+    const RadientMaterialSRBLease Lease = Table.Acquire(MakePlan({2}));
+    ASSERT_TRUE(Lease);
     EXPECT_EQ(Table.GetSize(), 1u);
 }
 
