@@ -26,36 +26,44 @@
 
 #pragma once
 
+#include "Render/Passes/RadientGeometryPass.hpp"
+#include "Render/Passes/RadientPostProcessPipeline.hpp"
+#include "Render/Passes/RadientSkyboxPass.hpp"
 #include "Render/RadientRenderTechnique.hpp"
+#include "Render/RadientSceneDrawableCache.hpp"
 
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
 #include "RefCntAutoPtr.hpp"
-
-#include <memory>
 
 namespace Diligent
 {
 
 class RadientAssetManagerImpl;
 
-/// Backend-facing render pipeline for one Radient renderer instance.
-class RadientRenderPipeline
+/// Rasterization-based Radient render technique.
+class RadientTesseraRenderTechnique final : public IRadientRenderTechnique
 {
 public:
-    RadientRenderPipeline(IRadientBackend*           pBackend,
-                          RadientAssetManagerImpl*   pAssetManager,
-                          const RadientRendererDesc& Desc);
-    ~RadientRenderPipeline();
+    RadientTesseraRenderTechnique(RadientAssetManagerImpl*   pAssetManager,
+                                  const RadientRendererDesc& Desc);
 
-    RADIENT_STATUS Update(const RadientRenderAttribs& Attribs);
-    RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
+    virtual RADIENT_STATUS SyncScene(const IRadientScene& Scene) override final;
+    virtual RADIENT_STATUS PrepareFrame(const RadientRenderContext& Context) override final;
+    virtual RADIENT_STATUS BeginFrame(const RadientRenderContext& Context) override final;
+    virtual RADIENT_STATUS Render(const RadientRenderContext& Context) override final;
+    virtual void           EndFrame(const RadientRenderContext& Context) override final;
 
 private:
-    RefCntAutoPtr<IRadientBackend>         m_pBackend;
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
-    std::unique_ptr<IRadientRenderTechnique> m_pTechnique;
+    RadientSceneDrawableCache  m_DrawableCache;
+    RadientFrameRenderTargets  m_FrameTargets;
+    RadientGeometryRenderer    m_GeometryRenderer;
+    RadientGeometryPass        m_ForwardPass;
+    RadientSkyboxPass          m_SkyboxPass;
+    RadientPostProcessPipeline m_PostProcessPipeline;
+
+    RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
+    bool                                  m_FrameActive = false;
 };
 
 } // namespace Diligent

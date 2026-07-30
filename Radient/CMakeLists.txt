@@ -38,6 +38,7 @@ set(SOURCE
     src/Render/RadientRenderPipeline.cpp
     src/Render/RadientRendererImpl.cpp
     src/Render/RadientSceneDrawableCache.cpp
+    src/Render/Tessera/RadientTesseraRenderTechnique.cpp
     src/Scene/Components/RadientMaterialBindingsStorage.cpp
     src/Scene/Components/RadientMeshComponentStorage.cpp
     src/Scene/RadientSceneImpl.cpp
@@ -91,6 +92,7 @@ set(INCLUDE
     include/Scene/RadientSceneImpl.hpp
     include/Scene/RadientSceneState.hpp
     include/Scene/RadientSceneWriterImpl.hpp
+    src/Render/Tessera/RadientTesseraRenderTechnique.hpp
 )
 
 set(INTERFACE
