@@ -83,6 +83,7 @@ set(INCLUDE
     include/Render/RadientMaterialTextureBinding.hpp
     include/Render/RadientPBRRenderer.hpp
     include/Render/RadientRenderPipeline.hpp
+    include/Render/RadientRenderTechnique.hpp
     include/Render/RadientRendererImpl.hpp
     include/Render/RadientSceneDrawableCache.hpp
     include/Scene/Components/RadientMaterialBindingsStorage.hpp
