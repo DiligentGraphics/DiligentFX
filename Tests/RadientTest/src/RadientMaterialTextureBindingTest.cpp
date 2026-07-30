@@ -27,10 +27,8 @@
 #include "Render/RadientMaterialTextureBinding.hpp"
 
 #include "RadientTestAssetHelpers.hpp"
+#include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
-
-#include <array>
-#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -38,74 +36,68 @@ using namespace Diligent::Testing;
 namespace
 {
 
-std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> MakeTextureAttribIndices()
+using TestMaterialTextureArray =
+    std::array<RadientMaterialTextureRenderData, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
+
+RadientMaterialTextureRenderData MakeBinding(size_t                 ResourceId,
+                                             TEXTURE_FORMAT         ViewFormat = TEX_FORMAT_RGBA8_UNORM,
+                                             RadientTextureViewType ViewType   = RadientTextureViewType::Linear)
 {
-    std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices;
-    Indices.fill(-1);
-    Indices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = GLTF::DefaultBaseColorTextureAttribId;
-    Indices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = GLTF::DefaultNormalTextureAttribId;
-    Indices[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = GLTF::DefaultMetallicRoughnessTextureAttribId;
-    Indices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = GLTF::DefaultEmissiveTextureAttribId;
-    return Indices;
+    RadientMaterialTextureRenderData TextureData;
+    TextureData.pTexture        = MakeTestTextureAsset();
+    TextureData.ViewType        = ViewType;
+    TextureData.BindingIdentity = {
+        static_cast<Int32>(ResourceId),
+        ViewFormat,
+    };
+    return TextureData;
 }
 
-class TestMaterialTextures
+RadientMaterialDefaultTextureBindings MakeDefaultBindings()
 {
-public:
-    TestMaterialTextures() = default;
+    RadientMaterialDefaultTextureBindings Bindings;
+    Bindings.WhiteLinear  = MakeBinding(100);
+    Bindings.WhiteSRGB    = MakeBinding(101, TEX_FORMAT_RGBA8_UNORM_SRGB, RadientTextureViewType::SRGB);
+    Bindings.BlackSRGB    = MakeBinding(102, TEX_FORMAT_RGBA8_UNORM_SRGB, RadientTextureViewType::SRGB);
+    Bindings.Normal       = MakeBinding(103);
+    Bindings.PhysicalDesc = MakeBinding(104);
+    return Bindings;
+}
 
-    explicit TestMaterialTextures(size_t TextureCount) :
-        m_Textures(TextureCount)
-    {}
-
-    TestMaterialTextures(std::initializer_list<RefCntAutoPtr<IRadientTextureAsset>> Textures)
-    {
-        m_Textures.reserve(Textures.size());
-        for (const RefCntAutoPtr<IRadientTextureAsset>& pTexture : Textures)
-            m_Textures.push_back(RadientMaterialTextureRenderData{pTexture});
-    }
-
-    RefCntAutoPtr<IRadientTextureAsset>& operator[](size_t TextureId)
-    {
-        return m_Textures[TextureId].pTexture;
-    }
-
-    const RefCntAutoPtr<IRadientTextureAsset>& operator[](size_t TextureId) const
-    {
-        return m_Textures[TextureId].pTexture;
-    }
-
-    const RadientMaterialTextureRenderData* data() const noexcept
-    {
-        return m_Textures.data();
-    }
-
-    size_t size() const noexcept
-    {
-        return m_Textures.size();
-    }
-
-private:
-    std::vector<RadientMaterialTextureRenderData> m_Textures;
-};
-
-RadientMaterialRenderData MakeRenderData(
-    const GLTF::Material&       Material,
-    const TestMaterialTextures& Textures)
+RADIENT_STATUS BuildTestMaterialTextureBindingPlan(
+    PBR_Renderer::PSO_FLAGS                      PSOFlags,
+    Uint32                                       MaxTextureSlots,
+    const TestMaterialTextureArray&              Textures,
+    const RadientMaterialDefaultTextureBindings& DefaultTextures,
+    RadientMaterialTextureBindingPlan&           Plan)
 {
-    return {
+    static const GLTF::Material                                         Material;
+    static const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices = [] {
+        std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices;
+        for (size_t Attrib = 0; Attrib < Indices.size(); ++Attrib)
+            Indices[Attrib] = static_cast<int>(Attrib);
+        return Indices;
+    }();
+
+    const RadientMaterialRenderData MaterialData{
         &Material,
         Textures.data(),
-        static_cast<Uint32>(Textures.size())};
+        static_cast<Uint32>(Textures.size()),
+    };
+    return BuildMaterialTextureBindingPlan(MaterialData,
+                                           TextureAttribIndices,
+                                           PSOFlags,
+                                           MaxTextureSlots,
+                                           DefaultTextures,
+                                           Plan);
 }
 
-TEST(RadientMaterialTextureBindingTest, MappingUsesStableSemanticOrder)
+TEST(RadientMaterialTextureBindingTest, DefaultMappingUsesSemanticSlots)
 {
-    GLTF::Material       Material;
-    TestMaterialTextures Textures{
-        MakeTestTextureAsset("texture://base"),
-        MakeTestTextureAsset("texture://physical-description"),
-        MakeTestTextureAsset("texture://normal")};
+    TestMaterialTextureArray Textures;
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = MakeBinding(1);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = MakeBinding(2);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = MakeBinding(3);
 
     const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
         PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP |
@@ -113,133 +105,78 @@ TEST(RadientMaterialTextureBindingTest, MappingUsesStableSemanticOrder)
         PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP);
 
     RadientMaterialTextureBindingPlan Plan;
-    ASSERT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures), MakeTextureAttribIndices(), Flags, 3, {}, Plan),
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(Flags, 3, Textures, MakeDefaultBindings(), Plan),
               RADIENT_STATUS_OK);
 
-    ASSERT_EQ(Plan.Bindings.size(), 3u);
+    ASSERT_EQ(Plan.Slots.size(), 3u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL], 1u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);
-
-    EXPECT_EQ(Plan.Bindings[0].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR);
-    EXPECT_EQ(Plan.Bindings[0].pTexture, Textures[GLTF::DefaultBaseColorTextureAttribId]);
-    EXPECT_EQ(Plan.Bindings[1].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL);
-    EXPECT_EQ(Plan.Bindings[1].pTexture, Textures[GLTF::DefaultNormalTextureAttribId]);
-    EXPECT_EQ(Plan.Bindings[2].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC);
-    EXPECT_EQ(Plan.Bindings[2].pTexture, Textures[GLTF::DefaultMetallicRoughnessTextureAttribId]);
+    EXPECT_EQ(Plan.Slots[0].BindingIdentity, Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR].BindingIdentity);
+    EXPECT_EQ(Plan.Slots[1].BindingIdentity, Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL].BindingIdentity);
+    EXPECT_EQ(Plan.Slots[2].BindingIdentity, Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC].BindingIdentity);
 }
 
-TEST(RadientMaterialTextureBindingTest, MappingKeepsDistinctSemanticSlotsWhenMaterialFits)
+TEST(RadientMaterialTextureBindingTest, DefaultMappingProducesCanonicalCompleteRecipes)
 {
-    GLTF::Material                      Material;
-    RefCntAutoPtr<IRadientTextureAsset> pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
-    TestMaterialTextures                Textures{GLTF::DefaultEmissiveTextureAttribId + 1};
-    Textures[GLTF::DefaultBaseColorTextureAttribId] = pSharedTexture;
-    Textures[GLTF::DefaultEmissiveTextureAttribId]  = pSharedTexture;
+    const RadientMaterialDefaultTextureBindings Defaults = MakeDefaultBindings();
+
+    TestMaterialTextureArray BaseColorTextures;
+    BaseColorTextures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] =
+        *Defaults.Get(PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR);
+
+    TestMaterialTextureArray NormalTextures;
+    NormalTextures[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL] =
+        *Defaults.Get(PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL);
+
+    RadientMaterialTextureBindingPlan BaseColorPlan;
+    RadientMaterialTextureBindingPlan NormalPlan;
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(PBR_Renderer::PSO_FLAG_USE_COLOR_MAP,
+                                                  8, BaseColorTextures, Defaults, BaseColorPlan),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP,
+                                                  8, NormalTextures, Defaults, NormalPlan),
+              RADIENT_STATUS_OK);
+
+    ASSERT_EQ(BaseColorPlan.Slots.size(), 8u);
+    ASSERT_EQ(NormalPlan.Slots.size(), BaseColorPlan.Slots.size());
+    for (size_t Slot = 0; Slot < BaseColorPlan.Slots.size(); ++Slot)
+    {
+        EXPECT_EQ(BaseColorPlan.Slots[Slot].BindingIdentity, NormalPlan.Slots[Slot].BindingIdentity);
+        EXPECT_EQ(BaseColorPlan.ShaderTextureIds[Slot], Slot);
+        EXPECT_EQ(NormalPlan.ShaderTextureIds[Slot], Slot);
+    }
+}
+
+TEST(RadientMaterialTextureBindingTest, DefaultMappingKeepsDistinctSemanticSlots)
+{
+    TestMaterialTextureArray               Textures;
+    const RadientMaterialTextureRenderData SharedTexture = MakeBinding(1);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = SharedTexture;
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = SharedTexture;
 
     const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP);
 
     RadientMaterialTextureBindingPlan Plan;
-    ASSERT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures), MakeTextureAttribIndices(), Flags, 8, {}, Plan),
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(Flags, 8, Textures, MakeDefaultBindings(), Plan),
               RADIENT_STATUS_OK);
 
-    ASSERT_EQ(Plan.Bindings.size(), 8u);
-    EXPECT_EQ(Plan.Bindings[0].pTexture, pSharedTexture);
-    EXPECT_EQ(Plan.Bindings[6].pTexture, pSharedTexture);
+    ASSERT_EQ(Plan.Slots.size(), 8u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE], 6u);
-    for (Uint32 Slot = 0; Slot < Plan.Bindings.size(); ++Slot)
-        EXPECT_EQ(Plan.ShaderTextureIds[Slot], Slot);
+    EXPECT_EQ(Plan.Slots[0].BindingIdentity, SharedTexture.BindingIdentity);
+    EXPECT_EQ(Plan.Slots[6].BindingIdentity, SharedTexture.BindingIdentity);
 }
 
-TEST(RadientMaterialTextureBindingTest, MappingPreservesFallbackSlotsWhenMaterialFits)
+TEST(RadientMaterialTextureBindingTest, CompactMappingGroupsMatchingLogicalViews)
 {
-    GLTF::Material       Material;
-    TestMaterialTextures Textures;
-
-    RadientMaterialTextureBindingPlan Plan;
-    ASSERT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  MakeTextureAttribIndices(),
-                  PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP,
-                  8,
-                  {},
-                  Plan),
-              RADIENT_STATUS_OK);
-
-    ASSERT_EQ(Plan.Bindings.size(), 8u);
-    EXPECT_EQ(Plan.Bindings[1].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL);
-    EXPECT_EQ(Plan.Bindings[1].pTexture, nullptr);
-    EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL], 1u);
-}
-
-TEST(RadientMaterialTextureBindingTest, MappingRejectsInsufficientDistinctSRVSlots)
-{
-    GLTF::Material       Material;
-    TestMaterialTextures Textures;
-
-    RadientMaterialTextureBindingPlan Plan;
-    Plan.Bindings.resize(7);
-    Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = 4;
-
-    const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP);
-
-    RadientMaterialTextureSRVArray TextureSRVs{};
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = reinterpret_cast<ITextureView*>(size_t{1});
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = reinterpret_cast<ITextureView*>(size_t{2});
-
-    EXPECT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures), MakeTextureAttribIndices(), Flags, 1, TextureSRVs, Plan),
-              RADIENT_STATUS_INVALID_OPERATION);
-
-    EXPECT_TRUE(Plan.Bindings.empty());
-    for (Uint16 TextureId : Plan.ShaderTextureIds)
-        EXPECT_EQ(TextureId, PBR_Renderer::InvalidMaterialTextureId);
-}
-
-TEST(RadientMaterialTextureBindingTest, MappingRejectsMissingAttributeMapping)
-{
-    GLTF::Material       Material;
-    TestMaterialTextures Textures;
-    auto                 TextureAttribIndices                    = MakeTextureAttribIndices();
-    TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL] = -1;
-
-    RadientMaterialTextureBindingPlan Plan;
-    EXPECT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  TextureAttribIndices,
-                  PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP,
-                  1,
-                  {},
-                  Plan),
-              RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_TRUE(Plan.Bindings.empty());
-}
-
-TEST(RadientMaterialTextureBindingTest, CompactMappingGroupsMatchingSRVs)
-{
-    GLTF::Material       Material;
-    TestMaterialTextures Textures{
-        MakeTestTextureAsset("texture://base"),
-        MakeTestTextureAsset("texture://physical-description"),
-        MakeTestTextureAsset("texture://normal"),
-        {},
-        MakeTestTextureAsset("texture://emissive")};
-
-    ITextureView* const pColorAtlas = reinterpret_cast<ITextureView*>(size_t{1});
-    ITextureView* const pDataAtlas  = reinterpret_cast<ITextureView*>(size_t{2});
-
-    RadientMaterialTextureSRVArray TextureSRVs{};
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = pColorAtlas;
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = pColorAtlas;
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = pDataAtlas;
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = pDataAtlas;
+    TestMaterialTextureArray Textures;
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = MakeBinding(1);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = MakeBinding(1);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = MakeBinding(2);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = MakeBinding(2);
 
     const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
@@ -248,111 +185,61 @@ TEST(RadientMaterialTextureBindingTest, CompactMappingGroupsMatchingSRVs)
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP);
 
     RadientMaterialTextureBindingPlan Plan;
-    ASSERT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  MakeTextureAttribIndices(),
-                  Flags,
-                  2,
-                  TextureSRVs,
-                  Plan),
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(Flags, 2, Textures, MakeDefaultBindings(), Plan),
               RADIENT_STATUS_OK);
 
-    ASSERT_EQ(Plan.Bindings.size(), 2u);
+    ASSERT_EQ(Plan.Slots.size(), 2u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE], 0u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL], 1u);
     EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 1u);
-
-    EXPECT_EQ(Plan.Bindings[0].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR);
-    EXPECT_EQ(Plan.Bindings[0].pTexture, Textures[GLTF::DefaultBaseColorTextureAttribId]);
-    EXPECT_EQ(Plan.Bindings[1].TextureAttribId, PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL);
-    EXPECT_EQ(Plan.Bindings[1].pTexture, Textures[GLTF::DefaultNormalTextureAttribId]);
 }
 
-TEST(RadientMaterialTextureBindingTest, PreferredMappingKeepsDistinctSlotsWhenMaterialFits)
+TEST(RadientMaterialTextureBindingTest, CompactMappingDistinguishesTypedViews)
 {
-    GLTF::Material                      Material;
-    RefCntAutoPtr<IRadientTextureAsset> pSharedTexture = MakeTestTextureAsset("texture://shared-atlas");
-    TestMaterialTextures                Textures{GLTF::DefaultEmissiveTextureAttribId + 1};
-    Textures[GLTF::DefaultBaseColorTextureAttribId] = pSharedTexture;
-    Textures[GLTF::DefaultEmissiveTextureAttribId]  = pSharedTexture;
-
-    ITextureView* const            pSharedSRV = reinterpret_cast<ITextureView*>(size_t{1});
-    RadientMaterialTextureSRVArray TextureSRVs{};
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = pSharedSRV;
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = pSharedSRV;
+    TestMaterialTextureArray Textures;
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] =
+        MakeBinding(1, TEX_FORMAT_RGBA8_UNORM_SRGB, RadientTextureViewType::SRGB);
+    Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL] =
+        MakeBinding(1, TEX_FORMAT_RGBA8_UNORM, RadientTextureViewType::Linear);
 
     const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP);
+        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP);
 
     RadientMaterialTextureBindingPlan Plan;
-    ASSERT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  MakeTextureAttribIndices(),
-                  Flags,
-                  8,
-                  TextureSRVs,
-                  Plan),
+    TestingEnvironment::ErrorScope    ExpectedErrors{"Material requires more than 1 distinct texture bindings"};
+    EXPECT_EQ(BuildTestMaterialTextureBindingPlan(Flags, 1, Textures, MakeDefaultBindings(), Plan),
+              RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_TRUE(Plan.Slots.empty());
+}
+
+TEST(RadientMaterialTextureBindingTest, RejectsMissingActiveTexture)
+{
+    RadientMaterialTextureBindingPlan Plan;
+    TestingEnvironment::ErrorScope    ExpectedErrors{"Material texture 1 used by PBR texture attribute 1 is not initialized"};
+    EXPECT_EQ(BuildTestMaterialTextureBindingPlan(PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP,
+                                                  8, {}, MakeDefaultBindings(), Plan),
+              RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_TRUE(Plan.Slots.empty());
+}
+
+TEST(RadientMaterialTextureBindingTest, MaterialWithoutActiveTexturesUsesDefaults)
+{
+    const RadientMaterialDefaultTextureBindings Defaults = MakeDefaultBindings();
+    RadientMaterialTextureBindingPlan           Plan;
+    ASSERT_EQ(BuildTestMaterialTextureBindingPlan(PBR_Renderer::PSO_FLAG_NONE,
+                                                  8, {}, Defaults, Plan),
               RADIENT_STATUS_OK);
-
-    ASSERT_EQ(Plan.Bindings.size(), 8u);
-    EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
-    EXPECT_EQ(Plan.ShaderTextureIds[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE], 6u);
-}
-
-TEST(RadientMaterialTextureBindingTest, CompactMappingRejectsTooManyDistinctSRVs)
-{
-    GLTF::Material       Material;
-    TestMaterialTextures Textures;
-
-    RadientMaterialTextureSRVArray TextureSRVs{};
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = reinterpret_cast<ITextureView*>(size_t{1});
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = reinterpret_cast<ITextureView*>(size_t{2});
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = reinterpret_cast<ITextureView*>(size_t{3});
-
-    const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-        PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP);
-
-    RadientMaterialTextureBindingPlan Plan;
-    Plan.Bindings.resize(7);
-    EXPECT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  MakeTextureAttribIndices(),
-                  Flags,
-                  2,
-                  TextureSRVs,
-                  Plan),
-              RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_TRUE(Plan.Bindings.empty());
-}
-
-TEST(RadientMaterialTextureBindingTest, CompactMappingRejectsMissingSRV)
-{
-    GLTF::Material       Material;
-    TestMaterialTextures Textures;
-
-    RadientMaterialTextureSRVArray TextureSRVs{};
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = reinterpret_cast<ITextureView*>(size_t{1});
-    TextureSRVs[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = reinterpret_cast<ITextureView*>(size_t{2});
-
-    const auto Flags = static_cast<PBR_Renderer::PSO_FLAGS>(
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-        PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP);
-
-    RadientMaterialTextureBindingPlan Plan;
-    EXPECT_EQ(BuildMaterialTextureBindingPlan(
-                  MakeRenderData(Material, Textures),
-                  MakeTextureAttribIndices(),
-                  Flags,
-                  2,
-                  TextureSRVs,
-                  Plan),
-              RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_TRUE(Plan.Bindings.empty());
+    EXPECT_EQ(Plan.Slots.size(), 8u);
+    for (Uint32 Slot = 0; Slot < Plan.Slots.size(); ++Slot)
+    {
+        const auto                              TextureAttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(Slot);
+        const RadientMaterialTextureRenderData* pDefaultTexture = Defaults.Get(TextureAttribId);
+        ASSERT_NE(pDefaultTexture, nullptr);
+        EXPECT_EQ(Plan.Slots[Slot].BindingIdentity, pDefaultTexture->BindingIdentity);
+        EXPECT_EQ(Plan.ShaderTextureIds[Slot], Slot);
+    }
 }
 
 } // namespace

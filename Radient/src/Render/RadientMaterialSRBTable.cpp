@@ -28,119 +28,172 @@
 
 #include "HashUtils.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
+#include <mutex>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
 
-bool RadientMaterialSRBKey::operator==(const RadientMaterialSRBKey& Rhs) const noexcept
+class RadientMaterialSRBState
 {
-    if (SlotCount != Rhs.SlotCount)
-        return false;
+public:
+    RadientMaterialSRBIndex                                  Index = InvalidRadientMaterialSRBIndex;
+    absl::InlinedVector<RadientMaterialTextureRenderData, 8> Slots;
 
-    for (Uint32 Slot = 0; Slot < SlotCount; ++Slot)
-    {
-        if (SlotSRVs[Slot] != Rhs.SlotSRVs[Slot])
-            return false;
-    }
+    // Accessed exclusively from the render thread.
+    RefCntAutoPtr<IShaderResourceBinding> pSRB;
+    Uint32                                PreparedTextureVersion = ~0u;
+};
 
-    return true;
+RadientMaterialSRBIndex RadientMaterialSRBLease::GetIndex() const noexcept
+{
+    return m_pState != nullptr ? m_pState->Index : InvalidRadientMaterialSRBIndex;
 }
 
-size_t RadientMaterialSRBKey::Hasher::operator()(const RadientMaterialSRBKey& Key) const noexcept
+IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 {
-    size_t Hash = ComputeHash(Key.SlotCount);
-    for (Uint32 Slot = 0; Slot < Key.SlotCount; ++Slot)
-        HashCombine(Hash, Key.SlotSRVs[Slot]);
+    return m_pState != nullptr ? m_pState->pSRB.RawPtr() : nullptr;
+}
 
+bool RadientMaterialSRBIdentity::operator==(const RadientMaterialSRBIdentity& Rhs) const noexcept
+{
+    return Slots == Rhs.Slots;
+}
+
+size_t RadientMaterialSRBIdentity::Hasher::operator()(const RadientMaterialSRBIdentity& Identity) const noexcept
+{
+    size_t                                      Hash = ComputeHash(Identity.Slots.size());
+    const RadientTextureBindingIdentity::Hasher IdentityHasher;
+    for (const RadientTextureBindingIdentity& Slot : Identity.Slots)
+        HashCombine(Hash, IdentityHasher(Slot));
     return Hash;
 }
 
-bool BuildRadientMaterialSRBKey(const RadientMaterialTextureBindingPlan& Plan,
-                                const RadientMaterialTextureSRVArray&    TextureSRVs,
-                                const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
-                                RadientMaterialSRBKey&                   Key) noexcept
+bool BuildRadientMaterialSRBIdentity(const RadientMaterialTextureBindingPlan& Plan,
+                                     RadientMaterialSRBIdentity&              Identity) noexcept
 {
-    RadientMaterialSRBKey NewKey;
-
-    bool IsValid = Plan.Bindings.size() <= NewKey.SlotSRVs.size();
-    for (size_t Slot = 0; IsValid && Slot < Plan.Bindings.size(); ++Slot)
+    RadientMaterialSRBIdentity NewIdentity;
+    NewIdentity.Slots.reserve(Plan.Slots.size());
+    for (const RadientMaterialTextureRenderData& Slot : Plan.Slots)
     {
-        IsValid = DefaultTextureSRVs[Slot] != nullptr;
-        if (IsValid)
-            NewKey.SlotSRVs[Slot] = DefaultTextureSRVs[Slot];
+        if (!Slot)
+        {
+            Identity = {};
+            return false;
+        }
+        NewIdentity.Slots.push_back(Slot.BindingIdentity);
     }
 
-    for (size_t Slot = 0; IsValid && Slot < Plan.Bindings.size(); ++Slot)
+    Identity = std::move(NewIdentity);
+    return !Identity.Slots.empty();
+}
+
+struct RadientMaterialSRBTable::Impl
+{
+    mutable std::mutex Mutex;
+
+    std::vector<std::shared_ptr<RadientMaterialSRBState>> Entries;
+    // Render-thread snapshot reused by Prepare() to avoid allocating every frame.
+    std::vector<std::shared_ptr<RadientMaterialSRBState>> PrepareEntries;
+    absl::flat_hash_map<RadientMaterialSRBIdentity,
+                        std::shared_ptr<RadientMaterialSRBState>,
+                        RadientMaterialSRBIdentity::Hasher>
+        Lookup;
+};
+
+RadientMaterialSRBTable::RadientMaterialSRBTable() :
+    m_Impl{std::make_unique<Impl>()}
+{}
+
+RadientMaterialSRBTable::~RadientMaterialSRBTable() = default;
+
+RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(const RadientMaterialTextureBindingPlan& Plan)
+{
+    RadientMaterialSRBIdentity Identity;
+    if (!BuildRadientMaterialSRBIdentity(Plan, Identity))
+        return {};
+
+    std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+
+    const auto LookupIt = m_Impl->Lookup.find(Identity);
+    if (LookupIt != m_Impl->Lookup.end())
+        return RadientMaterialSRBLease{LookupIt->second};
+
+    auto pState   = std::make_shared<RadientMaterialSRBState>();
+    pState->Index = static_cast<RadientMaterialSRBIndex>(m_Impl->Entries.size());
+    pState->Slots = Plan.Slots;
+
+    m_Impl->Entries.push_back(pState);
+    m_Impl->Lookup.emplace(std::move(Identity), pState);
+    return RadientMaterialSRBLease{std::move(pState)};
+}
+
+RADIENT_STATUS RadientMaterialSRBTable::Prepare(
+    Uint32                               TextureVersion,
+    const ResolveTextureSRVCallbackType& ResolveTextureSRV,
+    const CreateSRBCallbackType&         CreateSRB)
+{
+    if (!ResolveTextureSRV || !CreateSRB)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     {
-        const RadientMaterialTextureBinding&  Binding         = Plan.Bindings[Slot];
-        const PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId = Binding.TextureAttribId;
-        if (TextureAttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT)
+        std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+        m_Impl->PrepareEntries = m_Impl->Entries;
+    }
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (const std::shared_ptr<RadientMaterialSRBState>& pState : m_Impl->PrepareEntries)
+    {
+        if (pState->pSRB != nullptr && pState->PreparedTextureVersion == TextureVersion)
             continue;
 
-        IsValid = TextureAttribId < PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT &&
-            Plan.ShaderTextureIds[TextureAttribId] == Slot;
-
-        if (IsValid && TextureSRVs[TextureAttribId] != nullptr)
-            NewKey.SlotSRVs[Slot] = TextureSRVs[TextureAttribId];
-    }
-
-    if (IsValid)
-        NewKey.SlotCount = static_cast<Uint32>(Plan.Bindings.size());
-
-    Key = NewKey;
-    return IsValid;
-}
-
-RadientMaterialSRBIndex RadientMaterialSRBTable::GetOrCreate(
-    const RadientMaterialTextureBindingPlan& Plan,
-    const RadientMaterialTextureSRVArray&    TextureSRVs,
-    const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
-    const CreateSRBCallbackType&             CreateSRB)
-{
-    RadientMaterialSRBKey Key;
-    if (!BuildRadientMaterialSRBKey(Plan, TextureSRVs, DefaultTextureSRVs, Key) || !CreateSRB)
-        return InvalidRadientMaterialSRBIndex;
-
-    const auto LookupIt = m_Lookup.find(Key);
-    if (LookupIt != m_Lookup.end())
-        return LookupIt->second;
-
-    RefCntAutoPtr<IShaderResourceBinding> pSRB = CreateSRB(Key.SlotSRVs.data(), Key.SlotCount);
-    if (!pSRB)
-        return InvalidRadientMaterialSRBIndex;
-
-    Entry NewEntry;
-    NewEntry.pSRB      = std::move(pSRB);
-    NewEntry.SlotCount = static_cast<Uint32>(Plan.Bindings.size());
-    for (Uint32 Slot = 0; Slot < NewEntry.SlotCount; ++Slot)
-        NewEntry.SlotTextureAttribIds[Slot] = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(Slot);
-
-    for (size_t Slot = 0; Slot < Plan.Bindings.size(); ++Slot)
-    {
-        const RadientMaterialTextureBinding& Binding = Plan.Bindings[Slot];
-        if (Binding.TextureAttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT)
+        absl::InlinedVector<ITextureView*, 8> TextureSRVs;
+        TextureSRVs.reserve(pState->Slots.size());
+        for (const RadientMaterialTextureRenderData& Slot : pState->Slots)
+        {
+            ITextureView* const pTextureSRV = ResolveTextureSRV(Slot);
+            if (pTextureSRV == nullptr)
+            {
+                Status = RADIENT_STATUS_INVALID_OPERATION;
+                break;
+            }
+            TextureSRVs.push_back(pTextureSRV);
+        }
+        if (TextureSRVs.size() != pState->Slots.size())
             continue;
 
-        NewEntry.SlotTextures[Slot]         = Binding.pTexture;
-        NewEntry.SlotTextureAttribIds[Slot] = Binding.TextureAttribId;
+        RefCntAutoPtr<IShaderResourceBinding> pSRB =
+            CreateSRB(TextureSRVs.data(), static_cast<Uint32>(TextureSRVs.size()));
+        if (pSRB == nullptr)
+        {
+            Status = RADIENT_STATUS_INVALID_OPERATION;
+            continue;
+        }
+
+        pState->pSRB                   = std::move(pSRB);
+        pState->PreparedTextureVersion = TextureVersion;
     }
 
-    const RadientMaterialSRBIndex Index = static_cast<RadientMaterialSRBIndex>(m_Entries.size());
-    m_Entries.emplace_back(std::move(NewEntry));
-    m_Lookup.emplace(std::move(Key), Index);
-    return Index;
+    m_Impl->PrepareEntries.clear();
+
+    return Status;
 }
 
-IShaderResourceBinding* RadientMaterialSRBTable::Get(RadientMaterialSRBIndex Index) const noexcept
+size_t RadientMaterialSRBTable::GetSize() const noexcept
 {
-    return Index < m_Entries.size() ? m_Entries[Index].pSRB.RawPtr() : nullptr;
-}
-
-void RadientMaterialSRBTable::Clear()
-{
-    m_Lookup.clear();
-    m_Entries.clear();
+    std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+    return m_Impl->Entries.size();
 }
 
 } // namespace Diligent

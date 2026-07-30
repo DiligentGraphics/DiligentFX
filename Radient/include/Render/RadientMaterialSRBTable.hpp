@@ -31,10 +31,8 @@
 #include "RefCntAutoPtr.hpp"
 #include "ShaderResourceBinding.h"
 
-#include <array>
 #include <functional>
-#include <unordered_map>
-#include <vector>
+#include <memory>
 
 namespace Diligent
 {
@@ -43,67 +41,84 @@ using RadientMaterialSRBIndex = Uint32;
 
 static constexpr RadientMaterialSRBIndex InvalidRadientMaterialSRBIndex = ~RadientMaterialSRBIndex{0};
 
-/// Identifies an SRB exclusively by its ordered material texture slots.
-/// Shader texture indexing intentionally does not participate in this key.
-struct RadientMaterialSRBKey
+class RadientMaterialSRBState;
+class RadientMaterialSRBTable;
+
+/// Shared reference to a stable material SRB table entry.
+/// GetSRB() must only be called from the render thread after table preparation.
+class RadientMaterialSRBLease
 {
-    Uint32 SlotCount = 0;
+public:
+    RadientMaterialSRBLease() noexcept = default;
 
-    std::array<ITextureView*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> SlotSRVs{};
+    RadientMaterialSRBIndex GetIndex() const noexcept;
+    IShaderResourceBinding* GetSRB() const noexcept;
 
-    bool operator==(const RadientMaterialSRBKey& Rhs) const noexcept;
+    explicit operator bool() const noexcept
+    {
+        return m_pState != nullptr;
+    }
+
+private:
+    explicit RadientMaterialSRBLease(std::shared_ptr<RadientMaterialSRBState> pState) noexcept :
+        m_pState{std::move(pState)}
+    {}
+
+    std::shared_ptr<RadientMaterialSRBState> m_pState;
+
+    friend class RadientMaterialSRBTable;
+};
+
+/// Identifies an SRB exclusively by its complete ordered logical texture slots.
+/// Shader texture indexing intentionally does not participate in this key.
+struct RadientMaterialSRBIdentity
+{
+    absl::InlinedVector<RadientTextureBindingIdentity, 8> Slots;
+
+    bool operator==(const RadientMaterialSRBIdentity& Rhs) const noexcept;
 
     struct Hasher
     {
-        size_t operator()(const RadientMaterialSRBKey& Key) const noexcept;
+        size_t operator()(const RadientMaterialSRBIdentity& Identity) const noexcept;
     };
 };
 
-/// Builds an SRB key by filling all slots with their semantic defaults and then
-/// applying the active bindings selected by the material binding plan.
-bool BuildRadientMaterialSRBKey(const RadientMaterialTextureBindingPlan& Plan,
-                                const RadientMaterialTextureSRVArray&    TextureSRVs,
-                                const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
-                                RadientMaterialSRBKey&                   Key) noexcept;
+bool BuildRadientMaterialSRBIdentity(const RadientMaterialTextureBindingPlan& Plan,
+                                     RadientMaterialSRBIdentity&              Identity) noexcept;
 
-/// Renderer-owned table that gives material SRBs stable integer indices.
-/// The table is render-thread-only and retains representative texture assets so
-/// entries can be rebuilt after an atlas resize without changing their indices.
+/// Renderer-owned table that reserves stable material SRB entries by logical
+/// texture recipe. Reservation is thread-safe; Prepare() and SRB access are
+/// render-thread-only.
 class RadientMaterialSRBTable final
 {
 public:
-    using CreateSRBCallbackType = std::function<RefCntAutoPtr<IShaderResourceBinding>(ITextureView* const*, Uint32)>;
+    using ResolveTextureSRVCallbackType =
+        std::function<ITextureView*(const RadientMaterialTextureRenderData&)>;
+    using CreateSRBCallbackType =
+        std::function<RefCntAutoPtr<IShaderResourceBinding>(ITextureView* const*, Uint32)>;
 
-    RadientMaterialSRBIndex GetOrCreate(const RadientMaterialTextureBindingPlan& Plan,
-                                        const RadientMaterialTextureSRVArray&    TextureSRVs,
-                                        const RadientMaterialTextureSRVArray&    DefaultTextureSRVs,
-                                        const CreateSRBCallbackType&             CreateSRB);
 
-    IShaderResourceBinding* Get(RadientMaterialSRBIndex Index) const noexcept;
+    RadientMaterialSRBTable();
+    ~RadientMaterialSRBTable();
 
-    size_t GetSize() const noexcept
-    {
-        return m_Entries.size();
-    }
+    RadientMaterialSRBTable(const RadientMaterialSRBTable&)            = delete;
+    RadientMaterialSRBTable& operator=(const RadientMaterialSRBTable&) = delete;
+    RadientMaterialSRBTable(RadientMaterialSRBTable&&)                 = delete;
+    RadientMaterialSRBTable& operator=(RadientMaterialSRBTable&&)      = delete;
 
-    void Clear();
+    /// Reuses or reserves an entry without creating GPU objects.
+    RadientMaterialSRBLease Acquire(const RadientMaterialTextureBindingPlan& Plan);
+
+    /// Creates new SRBs and recreates existing SRBs when TextureVersion changes.
+    RADIENT_STATUS Prepare(Uint32                               TextureVersion,
+                           const ResolveTextureSRVCallbackType& ResolveTextureSRV,
+                           const CreateSRBCallbackType&         CreateSRB);
+
+    size_t GetSize() const noexcept;
 
 private:
-    struct Entry
-    {
-        RefCntAutoPtr<IShaderResourceBinding> pSRB;
-        Uint32                                SlotCount = 0;
-
-        std::array<RefCntAutoPtr<IRadientTextureAsset>, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> SlotTextures;
-        std::array<PBR_Renderer::TEXTURE_ATTRIB_ID, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>     SlotTextureAttribIds{};
-    };
-
-    std::vector<Entry> m_Entries;
-
-    std::unordered_map<RadientMaterialSRBKey,
-                       RadientMaterialSRBIndex,
-                       RadientMaterialSRBKey::Hasher>
-        m_Lookup;
+    struct Impl;
+    std::unique_ptr<Impl> m_Impl;
 };
 
 } // namespace Diligent

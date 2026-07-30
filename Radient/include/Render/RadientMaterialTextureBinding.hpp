@@ -44,26 +44,34 @@
 namespace Diligent
 {
 
-struct RadientMaterialTextureBinding
+/// Resolved default material texture bindings used to initialize SRB slots.
+/// White has separate linear and sRGB entries so default-filled slots use the
+/// same typed views as real textures with the corresponding semantics.
+struct RadientMaterialDefaultTextureBindings
 {
-    // Texture attribute ID (e.g. BASE_COLOR, NORMAL, etc.).
-    PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId = PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT;
+    RadientMaterialTextureRenderData WhiteLinear;
+    RadientMaterialTextureRenderData WhiteSRGB;
+    RadientMaterialTextureRenderData BlackSRGB;
+    RadientMaterialTextureRenderData Normal;
+    RadientMaterialTextureRenderData PhysicalDesc;
 
-    // Pointer to the active texture asset. A null pointer selects the default
-    // texture for this semantic when the renderer materializes the SRB slots.
-    IRadientTextureAsset* pTexture = nullptr;
+    const RadientMaterialTextureRenderData* Get(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) const noexcept;
+
+    explicit operator bool() const noexcept
+    {
+        return WhiteLinear && WhiteSRGB && BlackSRGB && Normal && PhysicalDesc;
+    }
 };
 
-/// Static shader texture indices and the active texture bindings used to build
-/// the SRB slots. ShaderTextureIds is part of the PSO identity; the final,
-/// default-filled slot contents form the SRB identity.
+/// Static shader texture indices and the complete logical SRB recipe.
+/// ShaderTextureIds is part of the PSO identity, while Slots form the SRB identity.
 struct RadientMaterialTextureBindingPlan
 {
     // Maps every shader texture semantic to its SRB slot.
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
 
-    // Complete SRB slot layout. Empty bindings are populated from renderer defaults.
-    absl::InlinedVector<RadientMaterialTextureBinding, 8> Bindings;
+    // Complete SRB slot layout, including canonical bindings for unused slots.
+    absl::InlinedVector<RadientMaterialTextureRenderData, 8> Slots;
 
     RadientMaterialTextureBindingPlan() noexcept
     {
@@ -71,19 +79,16 @@ struct RadientMaterialTextureBindingPlan
     }
 };
 
-using RadientMaterialTextureSRVArray =
-    std::array<ITextureView*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
-
 /// Builds the preferred material texture binding plan. When every active
 /// semantic fits its same-numbered slot, the plan uses a common identity
 /// mapping across the complete slot range. Otherwise, semantics that resolve
-/// to the same SRV are compacted into shared slots.
+/// to the same logical texture view are compacted into shared slots.
 RADIENT_STATUS BuildMaterialTextureBindingPlan(
     const RadientMaterialRenderData&                              MaterialData,
     const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
     PBR_Renderer::PSO_FLAGS                                       PSOFlags,
     Uint32                                                        MaxTextureSlots,
-    const RadientMaterialTextureSRVArray&                         TextureSRVs,
+    const RadientMaterialDefaultTextureBindings&                  DefaultTextures,
     RadientMaterialTextureBindingPlan&                            Plan);
 
 } // namespace Diligent
