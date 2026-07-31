@@ -39,7 +39,9 @@
 #    pragma warning(pop)
 #endif
 
+#include <mutex>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -120,12 +122,18 @@ IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 
 struct RadientMaterialSRBTable::Impl
 {
+    mutable std::mutex Mutex;
+
     // Leases own SRB states. The table keeps weak records so unused standalone
     // textures and their SRBs are released with the last material reference.
     absl::flat_hash_map<RadientMaterialSRBIdentity,
                         std::weak_ptr<RadientMaterialSRBState>,
                         RadientMaterialSRBIdentity::Hasher>
         Lookup;
+
+    // Prepare() snapshots strong references under Mutex, then creates GPU
+    // objects without blocking worker-thread acquisition.
+    std::vector<std::shared_ptr<RadientMaterialSRBState>> PrepareEntries;
 };
 
 RadientMaterialSRBTable::RadientMaterialSRBTable() :
@@ -273,6 +281,8 @@ RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(
         Identity.Slots.push_back(ppSlots[Slot]->BindingIdentity);
     }
 
+    std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+
     const auto LookupIt = m_Impl->Lookup.find(Identity);
     if (LookupIt != m_Impl->Lookup.end())
     {
@@ -299,17 +309,27 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     if (!ResolveTextureSRV || !CreateSRB)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RADIENT_STATUS Status = RADIENT_STATUS_OK;
-    for (auto LookupIt = m_Impl->Lookup.begin(); LookupIt != m_Impl->Lookup.end();)
+    m_Impl->PrepareEntries.clear();
     {
-        std::shared_ptr<RadientMaterialSRBState> pState = LookupIt->second.lock();
-        if (pState == nullptr)
+        std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+        m_Impl->PrepareEntries.reserve(m_Impl->Lookup.size());
+        for (auto LookupIt = m_Impl->Lookup.begin(); LookupIt != m_Impl->Lookup.end();)
         {
-            m_Impl->Lookup.erase(LookupIt++);
-            continue;
-        }
-        ++LookupIt;
+            std::shared_ptr<RadientMaterialSRBState> pState = LookupIt->second.lock();
+            if (pState == nullptr)
+            {
+                m_Impl->Lookup.erase(LookupIt++);
+                continue;
+            }
 
+            m_Impl->PrepareEntries.push_back(std::move(pState));
+            ++LookupIt;
+        }
+    }
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (const std::shared_ptr<RadientMaterialSRBState>& pState : m_Impl->PrepareEntries)
+    {
         if (pState->pSRB != nullptr && pState->PreparedTextureVersion == TextureVersion)
             continue;
 
@@ -339,12 +359,14 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         pState->pSRB                   = std::move(pSRB);
         pState->PreparedTextureVersion = TextureVersion;
     }
+    m_Impl->PrepareEntries.clear();
 
     return Status;
 }
 
 size_t RadientMaterialSRBTable::GetSize() const noexcept
 {
+    std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
     return m_Impl->Lookup.size();
 }
 

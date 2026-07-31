@@ -85,10 +85,11 @@ private:
     friend class RadientMaterialSRBTable;
 };
 
-/// Render-thread cache of material SRBs indexed by their ordered logical
-/// texture slots. Entries are owned by RadientMaterialSRBLease instances and
-/// unused cache records are removed by Prepare(). All methods must be called
-/// from the render thread.
+/// Cache of material SRBs indexed by their ordered logical texture slots.
+/// Acquire() is thread-safe and only reserves logical entries; Prepare() and
+/// SRB access are render-thread-only. Entries are owned by
+/// RadientMaterialSRBLease instances, and unused records are removed by
+/// Prepare().
 class RadientMaterialSRBTable final
 {
 public:
@@ -106,9 +107,9 @@ public:
     RadientMaterialSRBTable(RadientMaterialSRBTable&&)                 = delete;
     RadientMaterialSRBTable& operator=(RadientMaterialSRBTable&&)      = delete;
 
-    /// Builds the material texture mapping and reuses or reserves the matching
-    /// SRB entry without creating GPU objects. Slot texture references are only
-    /// retained when a new entry is inserted.
+    /// Thread-safely builds the material texture mapping and reuses or reserves
+    /// the matching SRB entry without creating GPU objects. Slot texture
+    /// references are only retained when a new entry is inserted.
     RADIENT_STATUS Acquire(
         const RadientMaterialRenderData&                              MaterialData,
         const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
@@ -118,8 +119,8 @@ public:
         RadientMaterialSRBLease&                                      Lease,
         PBR_Renderer::StaticShaderTextureIdsArrayType&                ShaderTextureIds);
 
-    /// Reuses or reserves an entry for a complete ordered slot recipe without
-    /// retaining the supplied texture references on a cache hit.
+    /// Thread-safely reuses or reserves an entry for a complete ordered slot
+    /// recipe without retaining the supplied texture references on a cache hit.
     RadientMaterialSRBLease Acquire(
         const RadientMaterialTextureRenderData* const* ppSlots,
         Uint32                                         SlotCount);

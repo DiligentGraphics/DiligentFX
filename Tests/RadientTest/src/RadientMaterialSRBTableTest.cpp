@@ -29,9 +29,12 @@
 #include "ObjectBase.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
+#include "ThreadSignal.hpp"
 #include "gtest/gtest.h"
 
+#include <atomic>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 namespace Diligent
@@ -201,6 +204,57 @@ TEST(RadientMaterialSRBTableTest, ReusesEntryForSameLogicalSlots)
     EXPECT_TRUE(Second);
     EXPECT_EQ(Table.GetSize(), 1u);
     EXPECT_EQ(First.GetSRB(), nullptr);
+}
+
+TEST(RadientMaterialSRBTableTest, ConcurrentAcquireReusesEntry)
+{
+    RadientMaterialSRBTable     Table;
+    const TestMaterialSRBRecipe Recipe{{1, 2}};
+
+    constexpr size_t                     RequestCount = 16;
+    std::vector<RadientMaterialSRBLease> Leases(RequestCount);
+    std::vector<std::thread>             Threads;
+    std::atomic<size_t>                  ReadyCount{0};
+    Threading::Signal                    StartSignal;
+    Threads.reserve(RequestCount);
+
+    for (size_t Request = 0; Request < RequestCount; ++Request)
+    {
+        Threads.emplace_back(
+            [&, Request] {
+                ReadyCount.fetch_add(1, std::memory_order_release);
+                StartSignal.Wait(true, static_cast<int>(RequestCount));
+
+                Leases[Request] = Recipe.Acquire(Table);
+            });
+    }
+
+    while (ReadyCount.load(std::memory_order_acquire) != RequestCount)
+        std::this_thread::yield();
+    StartSignal.Trigger(true);
+
+    for (std::thread& Thread : Threads)
+        Thread.join();
+
+    for (const RadientMaterialSRBLease& Lease : Leases)
+        ASSERT_TRUE(Lease);
+    EXPECT_EQ(Table.GetSize(), 1u);
+
+    Uint32 CreateCount = 0;
+    ASSERT_EQ(Table.Prepare(
+                  1,
+                  ResolveTestSRV,
+                  [&CreateCount](ITextureView* const*, Uint32) {
+                      ++CreateCount;
+                      return MakeTestSRB();
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(CreateCount, 1u);
+
+    IShaderResourceBinding* const pSRB = Leases[0].GetSRB();
+    ASSERT_NE(pSRB, nullptr);
+    for (const RadientMaterialSRBLease& Lease : Leases)
+        EXPECT_EQ(Lease.GetSRB(), pSRB);
 }
 
 TEST(RadientMaterialSRBTableTest, DistinguishesSlotOrderCountAndFormat)
