@@ -26,16 +26,36 @@
 
 #pragma once
 
-#include "Render/RadientMaterialTextureBinding.hpp"
-
+#include "Assets/RadientMaterialAssetManager.hpp"
+#include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "ShaderResourceBinding.h"
 
+#include <array>
 #include <functional>
 #include <memory>
 
 namespace Diligent
 {
+
+/// Resolved default material texture bindings used to initialize SRB slots.
+/// White has separate linear and sRGB entries so default-filled slots use the
+/// same typed views as real textures with the corresponding semantics.
+struct RadientMaterialDefaultTextureBindings
+{
+    RadientMaterialTextureRenderData WhiteLinear;
+    RadientMaterialTextureRenderData WhiteSRGB;
+    RadientMaterialTextureRenderData BlackSRGB;
+    RadientMaterialTextureRenderData Normal;
+    RadientMaterialTextureRenderData PhysicalDesc;
+
+    const RadientMaterialTextureRenderData* Get(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) const noexcept;
+
+    explicit operator bool() const noexcept
+    {
+        return WhiteLinear && WhiteSRGB && BlackSRGB && Normal && PhysicalDesc;
+    }
+};
 
 class RadientMaterialSRBState;
 class RadientMaterialSRBTable;
@@ -65,26 +85,10 @@ private:
     friend class RadientMaterialSRBTable;
 };
 
-/// Identifies an SRB exclusively by its complete ordered logical texture slots.
-/// Shader texture indexing intentionally does not participate in this key.
-struct RadientMaterialSRBIdentity
-{
-    absl::InlinedVector<RadientTextureBindingIdentity, 8> Slots;
-
-    bool operator==(const RadientMaterialSRBIdentity& Rhs) const noexcept;
-
-    struct Hasher
-    {
-        size_t operator()(const RadientMaterialSRBIdentity& Identity) const noexcept;
-    };
-};
-
-bool BuildRadientMaterialSRBIdentity(const RadientMaterialTextureBindingPlan& Plan,
-                                     RadientMaterialSRBIdentity&              Identity) noexcept;
-
-/// Renderer-owned table that reserves stable material SRB entries by logical
-/// texture recipe. Reservation is thread-safe; Prepare() and SRB access are
-/// render-thread-only.
+/// Render-thread cache of material SRBs indexed by their ordered logical
+/// texture slots. Entries are owned by RadientMaterialSRBLease instances and
+/// unused cache records are removed by Prepare(). All methods must be called
+/// from the render thread.
 class RadientMaterialSRBTable final
 {
 public:
@@ -102,8 +106,23 @@ public:
     RadientMaterialSRBTable(RadientMaterialSRBTable&&)                 = delete;
     RadientMaterialSRBTable& operator=(RadientMaterialSRBTable&&)      = delete;
 
-    /// Reuses or reserves an entry without creating GPU objects.
-    RadientMaterialSRBLease Acquire(const RadientMaterialTextureBindingPlan& Plan);
+    /// Builds the material texture mapping and reuses or reserves the matching
+    /// SRB entry without creating GPU objects. Slot texture references are only
+    /// retained when a new entry is inserted.
+    RADIENT_STATUS Acquire(
+        const RadientMaterialRenderData&                              MaterialData,
+        const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
+        PBR_Renderer::PSO_FLAGS                                       PSOFlags,
+        Uint32                                                        MaxTextureSlots,
+        const RadientMaterialDefaultTextureBindings&                  DefaultTextures,
+        RadientMaterialSRBLease&                                      Lease,
+        PBR_Renderer::StaticShaderTextureIdsArrayType&                ShaderTextureIds);
+
+    /// Reuses or reserves an entry for a complete ordered slot recipe without
+    /// retaining the supplied texture references on a cache hit.
+    RadientMaterialSRBLease Acquire(
+        const RadientMaterialTextureRenderData* const* ppSlots,
+        Uint32                                         SlotCount);
 
     /// Creates new SRBs and recreates existing SRBs when TextureVersion changes.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
