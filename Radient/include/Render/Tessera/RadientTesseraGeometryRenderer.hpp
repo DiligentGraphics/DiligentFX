@@ -28,7 +28,9 @@
 
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
+#include "Render/RadientMaterialSRBTable.hpp"
 #include "Render/RadientPBRRenderer.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientView.h"
 
 #include "GLTFLoader.hpp"
@@ -51,6 +53,9 @@ struct RadientTesseraGeometryFrameAttribs
 class RadientTesseraGeometryRenderer
 {
 public:
+    RadientTesseraGeometryRenderer(Uint32                                MaterialTextureSlotCount,
+                                   const RadientMaterialDefaultTextures& DefaultTextures) noexcept;
+
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
 
     RADIENT_STATUS BeginFrame(IRenderDevice*                            pDevice,
@@ -65,11 +70,25 @@ public:
     RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
+    RADIENT_STATUS AcquireMaterialSRB(
+        const RadientMaterialRenderData&               MaterialData,
+        PBR_Renderer::PSO_FLAGS                        PSOFlags,
+        RadientMaterialSRBLease&                       Lease,
+        PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds);
+
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext);
 
+    void PrepareDefaultMaterialTextureBindings();
+
 private:
     std::unique_ptr<RadientPBRRenderer> m_pRenderer;
+
+    RadientMaterialSRBTable               m_MaterialSRBTable;
+    RadientMaterialDefaultTextures        m_DefaultMaterialTextures;
+    RadientMaterialDefaultTextureBindings m_DefaultMaterialTextureBindings;
+    Uint32                                m_MaterialTextureSlotCount            = 8;
+    bool                                  m_DefaultMaterialTextureBindingsReady = false;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

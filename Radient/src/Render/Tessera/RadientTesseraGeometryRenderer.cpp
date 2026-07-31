@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 
 #include "MapHelper.hpp"
@@ -264,7 +265,76 @@ void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
     static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Please update the GLTF texture attribute mapping");
 }
 
+bool InitializeMaterialTextureBinding(IRadientTextureAsset*             pTexture,
+                                      RadientTextureViewType            ViewType,
+                                      RadientMaterialTextureRenderData& TextureData)
+{
+    if (pTexture == nullptr)
+        return false;
+
+    const RadientTextureBindingIdentity BindingIdentity =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, ViewType);
+    if (!BindingIdentity)
+        return false;
+
+    TextureData.pTexture        = pTexture;
+    TextureData.ViewType        = ViewType;
+    TextureData.BindingIdentity = BindingIdentity;
+    return true;
+}
+
 } // namespace
+
+RadientTesseraGeometryRenderer::RadientTesseraGeometryRenderer(
+    Uint32                                MaterialTextureSlotCount,
+    const RadientMaterialDefaultTextures& DefaultTextures) noexcept :
+    m_DefaultMaterialTextures{DefaultTextures},
+    m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8}
+{}
+
+RADIENT_STATUS RadientTesseraGeometryRenderer::AcquireMaterialSRB(
+    const RadientMaterialRenderData&               MaterialData,
+    PBR_Renderer::PSO_FLAGS                        PSOFlags,
+    RadientMaterialSRBLease&                       Lease,
+    PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds)
+{
+    Lease = {};
+    ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
+
+    if (m_pRenderer == nullptr || !m_DefaultMaterialTextureBindingsReady)
+        return RADIENT_STATUS_PENDING;
+
+    const PBR_Renderer::CreateInfo& Settings = m_pRenderer->GetSettings();
+    return m_MaterialSRBTable.Acquire(MaterialData,
+                                      Settings.TextureAttribIndices,
+                                      PSOFlags,
+                                      Settings.MaterialTexturesArraySize,
+                                      m_DefaultMaterialTextureBindings,
+                                      Lease,
+                                      ShaderTextureIds);
+}
+
+void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
+{
+    // Default texture assets load asynchronously. Keep each resolved binding so
+    // subsequent frames only retry the entries that are not ready yet.
+    auto Initialize = [](IRadientTextureAsset*             pTexture,
+                         RadientTextureViewType            ViewType,
+                         RadientMaterialTextureRenderData& TextureData) {
+        return TextureData || InitializeMaterialTextureBinding(pTexture, ViewType, TextureData);
+    };
+
+    if (!Initialize(m_DefaultMaterialTextures.pWhite, RadientTextureViewType::Linear, m_DefaultMaterialTextureBindings.WhiteLinear) ||
+        !Initialize(m_DefaultMaterialTextures.pWhite, RadientTextureViewType::SRGB, m_DefaultMaterialTextureBindings.WhiteSRGB) ||
+        !Initialize(m_DefaultMaterialTextures.pBlack, RadientTextureViewType::SRGB, m_DefaultMaterialTextureBindings.BlackSRGB) ||
+        !Initialize(m_DefaultMaterialTextures.pNormal, RadientTextureViewType::Linear, m_DefaultMaterialTextureBindings.Normal) ||
+        !Initialize(m_DefaultMaterialTextures.pPhysicalDesc, RadientTextureViewType::Linear, m_DefaultMaterialTextureBindings.PhysicalDesc))
+    {
+        return;
+    }
+
+    m_DefaultMaterialTextureBindingsReady = true;
+}
 
 RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
@@ -272,7 +342,14 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice* pDevice, I
         return RADIENT_STATUS_OK;
 
     if (m_pRenderer == nullptr)
-        return CreateRenderer(pDevice, pContext);
+    {
+        const RADIENT_STATUS Status = CreateRenderer(pDevice, pContext);
+        if (RADIENT_FAILED(Status))
+            return Status;
+    }
+
+    if (!m_DefaultMaterialTextureBindingsReady)
+        PrepareDefaultMaterialTextureBindings();
 
     return RADIENT_STATUS_OK;
 }
@@ -314,6 +391,33 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
+    const RADIENT_STATUS MaterialSRBStatus = m_MaterialSRBTable.Prepare(
+        pResourceManager->GetTextureVersion(),
+        [](const RadientMaterialTextureRenderData& Binding) {
+            ITextureView* const pTextureSRV =
+                RadientTextureAssetManager::GetTextureSRV(Binding.pTexture, Binding.ViewType);
+            if (pTextureSRV != nullptr && pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
+            {
+                UNEXPECTED("Material texture SRV is not a 2D array");
+                return static_cast<ITextureView*>(nullptr);
+            }
+            return pTextureSRV;
+        },
+        [this](ITextureView* const* ppTextureSRVs, Uint32 TextureCount) {
+            RefCntAutoPtr<IShaderResourceBinding> pSRB;
+            m_pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty(), 1);
+            if (pSRB == nullptr)
+                return pSRB;
+
+            m_pRenderer->InitCommonSRBVars(pSRB, nullptr);
+            if (!m_pRenderer->SetMaterialTextures(pSRB, ppTextureSRVs, 0, TextureCount))
+                pSRB.Release();
+
+            return pSRB;
+        });
+    if (RADIENT_FAILED(MaterialSRBStatus))
+        return MaterialSRBStatus;
+
     if (m_pRenderer->GetJointsBuffer() != nullptr)
     {
         MapHelper<float4x4> pJoints{pContext, m_pRenderer->GetJointsBuffer(), MAP_WRITE, MAP_FLAG_DISCARD};
@@ -335,6 +439,14 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    if (m_MaterialTextureSlotCount == 0 ||
+        m_MaterialTextureSlotCount > PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT)
+    {
+        LOG_ERROR_MESSAGE("Radient material texture slot count must be between 1 and ",
+                          Uint32{PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT});
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
     if (pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
     {
         LOG_ERROR_MESSAGE("Radient geometry rendering requires texture subresource views");
@@ -342,17 +454,18 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     }
 
     PBR_Renderer::CreateInfo RendererCI;
-    RendererCI.EnableIBL               = true;
-    RendererCI.EnableAO                = true;
-    RendererCI.EnableEmissive          = true;
-    RendererCI.EnableShadows           = false;
-    RendererCI.MaxLightCount           = RadientMaxLightCount;
-    RendererCI.MaxJointCount           = 0;
-    RendererCI.PackMatrixRowMajor      = true;
-    RendererCI.ShaderTexturesArrayMode = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
-    InputLayoutDescX InputLayout       = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
-    RendererCI.InputLayout             = InputLayout;
-    RendererCI.TexColorConversionMode  = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
+    RendererCI.EnableIBL                 = true;
+    RendererCI.EnableAO                  = true;
+    RendererCI.EnableEmissive            = true;
+    RendererCI.EnableShadows             = false;
+    RendererCI.MaxLightCount             = RadientMaxLightCount;
+    RendererCI.MaxJointCount             = 0;
+    RendererCI.PackMatrixRowMajor        = true;
+    RendererCI.ShaderTexturesArrayMode   = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
+    RendererCI.MaterialTexturesArraySize = m_MaterialTextureSlotCount;
+    InputLayoutDescX InputLayout         = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
+    RendererCI.InputLayout               = InputLayout;
+    RendererCI.TexColorConversionMode    = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
 
     m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);

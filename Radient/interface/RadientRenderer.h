@@ -51,6 +51,10 @@ struct RadientRendererDesc
     /// When enabled, geometry drawables are skipped until their pipeline state
     /// is ready instead of blocking the render call.
     Bool EnableAsyncPipelineCompilation DEFAULT_INITIALIZER(True);
+
+    /// Number of texture slots in each material SRB. Zero selects the default
+    /// value of 8. The value must not exceed the number of PBR texture attributes.
+    Uint32 MaterialTextureSlotCount DEFAULT_INITIALIZER(8);
 };
 typedef struct RadientRendererDesc RadientRendererDesc;
 

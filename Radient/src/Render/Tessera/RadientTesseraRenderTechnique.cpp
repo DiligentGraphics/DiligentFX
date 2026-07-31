@@ -35,14 +35,25 @@
 namespace Diligent
 {
 
+namespace
+{
+
+const RadientMaterialDefaultTextures& GetDefaultMaterialTextures(RadientAssetManagerImpl* pAssetManager)
+{
+    if (pAssetManager == nullptr)
+        LOG_ERROR_AND_THROW("Radient Tessera render technique asset manager must not be null");
+
+    return pAssetManager->GetDefaultMaterialTextures();
+}
+
+} // namespace
+
 RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(RadientAssetManagerImpl*   pAssetManager,
                                                              const RadientRendererDesc& Desc) :
     m_pAssetManager{pAssetManager},
+    m_GeometryRenderer{Desc.MaterialTextureSlotCount, GetDefaultMaterialTextures(pAssetManager)},
     m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
-{
-    if (m_pAssetManager == nullptr)
-        LOG_ERROR_AND_THROW("Radient Tessera render technique asset manager must not be null");
-}
+{}
 
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
 {
@@ -83,7 +94,6 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     Status = m_ForwardPass.Prepare(m_GeometryRenderer,
                                    Context.pDevice,
                                    Context.pContext,
-                                   m_pAssetManager->GetResourceManager(),
                                    m_DrawableCache,
                                    m_FrameTargets);
     if (RADIENT_FAILED(Status))

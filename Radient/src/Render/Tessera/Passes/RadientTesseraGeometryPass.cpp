@@ -26,7 +26,6 @@
 
 #include "Render/Tessera/Passes/RadientTesseraGeometryPass.hpp"
 
-#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "Render/RadientPBRRenderer.hpp"
@@ -332,67 +331,6 @@ void WriteMaterialAttribs(PBR_Renderer&           Renderer,
     pContext->UnmapBuffer(Renderer.GetPBRMaterialAttribsCB(), MAP_WRITE);
 }
 
-bool CreateMaterialSRB(RadientTesseraGeometryRenderer&  GeometryRenderer,
-                       const RadientMaterialRenderData& MaterialData,
-                       PBR_Renderer::PSO_FLAGS          PSOFlags,
-                       IShaderResourceBinding**         ppSRB)
-{
-    VERIFY_EXPR(ppSRB != nullptr && *ppSRB == nullptr);
-
-    PBR_Renderer* const pRenderer = GeometryRenderer.GetRenderer();
-    if (pRenderer == nullptr || !MaterialData)
-        return false;
-
-    RefCntAutoPtr<IShaderResourceBinding> pSRB;
-    pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty(), 1);
-    if (pSRB == nullptr)
-        return false;
-
-    pRenderer->InitCommonSRBVars(pSRB, nullptr);
-
-    const PBR_Renderer::CreateInfo& Settings = pRenderer->GetSettings();
-    bool                            IsValid  = true;
-    PBR_Renderer::ProcessTexturAttribs(
-        PSOFlags,
-        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) {
-            const int MaterialTextureAttribId = Settings.TextureAttribIndices[TextureAttribId];
-            if (MaterialTextureAttribId < 0)
-            {
-                UNEXPECTED("Shader texture attribute ", Uint32{TextureAttribId}, " is not initialized");
-                IsValid = false;
-                return;
-            }
-
-            IRadientTextureAsset* const pTextureAsset =
-                MaterialData.GetTexture(static_cast<Uint32>(MaterialTextureAttribId));
-            const RadientTextureViewType ViewType = PBR_Renderer::IsSRGBTextureAttribute(TextureAttribId) ?
-                RadientTextureViewType::SRGB :
-                RadientTextureViewType::Linear;
-
-            ITextureView* const pSourceSRV = RadientAssetManagerImpl::GetTextureSRV(pTextureAsset, ViewType);
-            if (pSourceSRV == nullptr)
-            {
-                UNEXPECTED("Material texture ", Uint32{TextureAttribId}, " is not ready");
-                IsValid = false;
-                return;
-            }
-
-            if (pSourceSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
-            {
-                UNEXPECTED("Material texture ", Uint32{TextureAttribId}, " is not a 2D array");
-                IsValid = false;
-                return;
-            }
-
-            pRenderer->SetMaterialTexture(pSRB, pSourceSRV, TextureAttribId);
-        });
-
-    if (IsValid)
-        *ppSRB = pSRB.Detach();
-
-    return IsValid;
-}
-
 } // namespace
 
 RadientTesseraGeometryPass::RadientTesseraGeometryPass(bool EnableAsyncPipelineCompilation) noexcept :
@@ -403,7 +341,6 @@ RadientTesseraGeometryPass::RadientTesseraGeometryPass(bool EnableAsyncPipelineC
 RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRenderer&    Renderer,
                                                    IRenderDevice*                     pDevice,
                                                    IDeviceContext*                    pContext,
-                                                   GLTF::ResourceManager*             pResourceManager,
                                                    const RadientTesseraDrawableCache& DrawableCache,
                                                    const RadientFrameRenderTargets&   Targets)
 {
@@ -439,13 +376,6 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
         RebuildDrawablePassData = true;
     }
 
-    const Uint32 TextureVersion = pResourceManager != nullptr ? pResourceManager->GetTextureVersion() : ~0u;
-    if (m_TextureVersion != TextureVersion)
-    {
-        m_TextureVersion        = TextureVersion;
-        RebuildDrawablePassData = true;
-    }
-
     SyncDrawablePassData(Renderer, DrawableCache, RebuildDrawablePassData);
     return RADIENT_STATUS_OK;
 }
@@ -467,7 +397,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, nullptr, DrawableCache, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -526,9 +456,10 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             FrameSRBCommitted = true;
         }
 
-        if (pCurrMaterialSRB != PassData.pMaterialSRB)
+        IShaderResourceBinding* const pMaterialSRB = PassData.MaterialSRB.GetSRB();
+        if (pCurrMaterialSRB != pMaterialSRB)
         {
-            pCurrMaterialSRB = PassData.pMaterialSRB;
+            pCurrMaterialSRB = pMaterialSRB;
             pContext->CommitShaderResources(pCurrMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
 
@@ -590,7 +521,8 @@ void RadientTesseraGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&  
         const DrawablePassData& PassData = m_DrawablePassData[DrawItem.DrawableID];
         if (PassData.pDrawable != pDrawable ||
             PassData.Generation != pDrawable->Generation ||
-            PassData.pMaterialSRB == nullptr ||
+            !PassData.MaterialSRB ||
+            PassData.MaterialSRB.GetSRB() == nullptr ||
             !IsPipelineReady(PassData.pPSO))
         {
             continue;
@@ -617,6 +549,11 @@ void RadientTesseraGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&  
 
                   if (LhsPassData.pPSO != RhsPassData.pPSO)
                       return std::less<IPipelineState*>{}(LhsPassData.pPSO, RhsPassData.pPSO);
+
+                  IShaderResourceBinding* const pLhsMaterialSRB = LhsPassData.MaterialSRB.GetSRB();
+                  IShaderResourceBinding* const pRhsMaterialSRB = RhsPassData.MaterialSRB.GetSRB();
+                  if (pLhsMaterialSRB != pRhsMaterialSRB)
+                      return std::less<IShaderResourceBinding*>{}(pLhsMaterialSRB, pRhsMaterialSRB);
 
                   if (LhsPassData.pDrawable->pVertexPool != RhsPassData.pDrawable->pVertexPool)
                       return std::less<IVertexPool*>{}(LhsPassData.pDrawable->pVertexPool, RhsPassData.pDrawable->pVertexPool);
@@ -708,12 +645,26 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         PBR_Renderer::PSO_FLAG_USE_LIGHTS;
     PSOFlags &= m_RenderFlags;
 
+    RadientMaterialSRBLease                       MaterialSRB;
+    PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
+    if (Renderer.AcquireMaterialSRB(MaterialData,
+                                    PSOFlags,
+                                    MaterialSRB,
+                                    ShaderTextureIds) != RADIENT_STATUS_OK)
+    {
+        PassData = {};
+        return;
+    }
+
     const PBR_Renderer::PSOKey PsoKey{
         PBR_Renderer::RenderPassType::Main,
         PSOFlags,
         ToPBRAlphaMode(AlphaMode),
         Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
         PBR_Renderer::DebugViewType::None,
+        PBR_Renderer::LoadingAnimationMode::None,
+        0,
+        &ShaderTextureIds,
     };
 
     PBR_Renderer::PsoCacheAccessor::GET_FLAGS GetFlags =
@@ -723,18 +674,11 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         GetFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
     }
 
-    RefCntAutoPtr<IShaderResourceBinding> pSRB;
-    if (!CreateMaterialSRB(Renderer, MaterialData, PSOFlags, pSRB.GetAddressOfEmpty()))
-    {
-        PassData = {};
-        return;
-    }
-
-    PassData.pDrawable    = &Drawable;
-    PassData.Generation   = Drawable.Generation;
-    PassData.PSOFlags     = PSOFlags;
-    PassData.pPSO         = m_PbrPSOCache.Get(PsoKey, GetFlags);
-    PassData.pMaterialSRB = std::move(pSRB);
+    PassData.pDrawable   = &Drawable;
+    PassData.Generation  = Drawable.Generation;
+    PassData.PSOFlags    = PSOFlags;
+    PassData.pPSO        = m_PbrPSOCache.Get(PsoKey, GetFlags);
+    PassData.MaterialSRB = std::move(MaterialSRB);
     VERIFY_EXPR(PassData.pPSO != nullptr);
 }
 
