@@ -34,6 +34,7 @@
 #include "gtest/gtest.h"
 
 #include <atomic>
+#include <cstdint>
 #include <thread>
 #include <vector>
 
@@ -95,6 +96,25 @@ std::unique_ptr<RadientTesseraMaterialCache> MakeMaterialCache(
     CI.EnabledMaterialPSOFlags  = EnabledMaterialPSOFlags;
     CI.DefaultTextures          = MakeDefaultTextureBindings();
     return std::make_unique<RadientTesseraMaterialCache>(CI);
+}
+
+RadientMaterialTextureSRVResolveResult ResolveTestTextureSRV(
+    const RadientMaterialTextureRenderData& Binding)
+{
+    return {
+        RADIENT_STATUS_OK,
+        reinterpret_cast<ITextureView*>(static_cast<uintptr_t>(Binding.BindingIdentity.StandaloneResourceId)),
+    };
+}
+
+RADIENT_STATUS PrepareMaterialCache(RadientTesseraMaterialCache& Cache)
+{
+    return Cache.Prepare(
+        1,
+        ResolveTestTextureSRV,
+        [](ITextureView* const*, Uint32) {
+            return Testing::MakeTestShaderResourceBinding();
+        });
 }
 
 constexpr PBR_Renderer::PSO_FLAGS ExpectedCoreMaterialPSOFlags =
@@ -223,6 +243,39 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);
 }
 
+TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialOnWorkerThread)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    Threading::Signal         ReleaseWorker;
+    RefCntAutoPtr<IAsyncTask> pBlocker =
+        EnqueueAsyncWork(
+            pThreadPool,
+            [&ReleaseWorker](Uint32) {
+                ReleaseWorker.Wait();
+                return ASYNC_TASK_STATUS_COMPLETE;
+            });
+    ASSERT_NE(pBlocker, nullptr);
+    pBlocker->WaitUntilRunning();
+
+    std::unique_ptr<RadientTesseraMaterialCache> pCache    = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult          Result    = pCache->Resolve(*pThreadPool, pMaterial);
+
+    EXPECT_TRUE(Result.Data);
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_PENDING);
+    if (Result.Data)
+        EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_PENDING);
+
+    ReleaseWorker.Trigger();
+    pThreadPool->WaitForAllTasks();
+
+    ASSERT_TRUE(Result.Data);
+    EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientTesseraMaterialCacheTest, DerivesPSOFlagsFromMaterial)
 {
     RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
@@ -313,6 +366,28 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsUseDistinctCachedData)
     ASSERT_EQ(Result0.Data->GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Result1.Data->GetStatus(), RADIENT_STATUS_OK);
     EXPECT_NE(Result0.Data.Get(), Result1.Data.Get());
+}
+
+TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial0  = MakeMaterialAsset();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial1  = MakeMaterialAsset();
+
+    RadientTesseraMaterialResolveResult Result0 = pCache->Resolve(*pThreadPool, pMaterial0);
+    RadientTesseraMaterialResolveResult Result1 = pCache->Resolve(*pThreadPool, pMaterial1);
+
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result0.Data->GetStatus(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Result1.Data->GetStatus(), RADIENT_STATUS_OK);
+    EXPECT_NE(Result0.Data.Get(), Result1.Data.Get());
+
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    IShaderResourceBinding* const pSRB = Result0.Data->GetMaterialSRB().GetSRB();
+    ASSERT_NE(pSRB, nullptr);
+    EXPECT_EQ(Result1.Data->GetMaterialSRB().GetSRB(), pSRB);
 }
 
 TEST(RadientTesseraMaterialCacheTest, ProcessingFailureIsTerminal)

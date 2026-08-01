@@ -29,6 +29,7 @@
 #include "RadientAssets.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "ShaderResourceBinding.h"
 
 #include <array>
 #include <map>
@@ -93,6 +94,61 @@ using TestMeshAsset     = TestRadientAsset<IRadientMeshAsset, IID_RadientMeshAss
 using TestMaterialAsset = TestRadientAsset<IRadientMaterialAsset, IID_RadientMaterialAsset, RADIENT_ASSET_TYPE_MATERIAL>;
 using TestTextureAsset  = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
 using TestSceneAsset    = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+
+class TestShaderResourceBinding final : public ObjectBase<IShaderResourceBinding>
+{
+public:
+    using TBase = ObjectBase<IShaderResourceBinding>;
+
+    explicit TestShaderResourceBinding(IReferenceCounters* pRefCounters) :
+        TBase{pRefCounters}
+    {}
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_ShaderResourceBinding, TBase)
+
+    virtual IPipelineResourceSignature* DILIGENT_CALL_TYPE GetPipelineResourceSignature() const override final
+    {
+        return nullptr;
+    }
+
+    virtual void DILIGENT_CALL_TYPE BindResources(SHADER_TYPE,
+                                                  IResourceMapping*,
+                                                  BIND_SHADER_RESOURCES_FLAGS) override final
+    {}
+
+    virtual SHADER_RESOURCE_VARIABLE_TYPE_FLAGS DILIGENT_CALL_TYPE CheckResources(
+        SHADER_TYPE,
+        IResourceMapping*,
+        BIND_SHADER_RESOURCES_FLAGS) const override final
+    {
+        return SHADER_RESOURCE_VARIABLE_TYPE_FLAG_NONE;
+    }
+
+    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByName(SHADER_TYPE, const Char*) override final
+    {
+        return nullptr;
+    }
+
+    virtual Uint32 DILIGENT_CALL_TYPE GetVariableCount(SHADER_TYPE) const override final
+    {
+        return 0;
+    }
+
+    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByIndex(SHADER_TYPE, Uint32) override final
+    {
+        return nullptr;
+    }
+
+    virtual Bool DILIGENT_CALL_TYPE StaticResourcesInitialized() const override final
+    {
+        return True;
+    }
+};
+
+inline RefCntAutoPtr<IShaderResourceBinding> MakeTestShaderResourceBinding()
+{
+    return RefCntAutoPtr<IShaderResourceBinding>{MakeNewRCObj<TestShaderResourceBinding>()()};
+}
 
 struct TestRadientAssetResolverStats
 {
