@@ -577,6 +577,34 @@ public:
         PSO_FLAG_ENABLE_TRANSMISSION = PSO_FLAG_BIT(27),
         PSO_FLAG_ENABLE_VOLUME       = PSO_FLAG_BIT(28),
 
+        PSO_FLAG_ALL_CLEAR_COAT =
+            PSO_FLAG_ENABLE_CLEAR_COAT |
+            PSO_FLAG_USE_CLEAR_COAT_MAP |
+            PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP |
+            PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP,
+
+        PSO_FLAG_ALL_SHEEN =
+            PSO_FLAG_ENABLE_SHEEN |
+            PSO_FLAG_USE_SHEEN_COLOR_MAP |
+            PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP,
+
+        PSO_FLAG_ALL_ANISOTROPY =
+            PSO_FLAG_ENABLE_ANISOTROPY |
+            PSO_FLAG_USE_ANISOTROPY_MAP,
+
+        PSO_FLAG_ALL_IRIDESCENCE =
+            PSO_FLAG_ENABLE_IRIDESCENCE |
+            PSO_FLAG_USE_IRIDESCENCE_MAP |
+            PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP,
+
+        PSO_FLAG_ALL_TRANSMISSION =
+            PSO_FLAG_ENABLE_TRANSMISSION |
+            PSO_FLAG_USE_TRANSMISSION_MAP,
+
+        PSO_FLAG_ALL_VOLUME =
+            PSO_FLAG_ENABLE_VOLUME |
+            PSO_FLAG_USE_THICKNESS_MAP,
+
         PSO_FLAG_USE_IBL                   = PSO_FLAG_BIT(29),
         PSO_FLAG_USE_LIGHTS                = PSO_FLAG_BIT(30),
         PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(31),
@@ -618,6 +646,10 @@ public:
 
         PSO_FLAG_ALL_USER_DEFINED = ~(PSO_FLAG_FIRST_USER_DEFINED - 1ull)
     };
+
+    /// Returns the PSO flags permitted by the renderer settings.
+    /// User-defined flags are always preserved.
+    static PSO_FLAGS GetEnabledPSOFlags(const CreateInfo& Settings);
 
     static std::string GetPSOFlagsString(PSO_FLAGS Flags);
     static const char* GetAlphaModeString(ALPHA_MODE AlphaMode);

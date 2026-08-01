@@ -33,6 +33,7 @@
 
 #include "GraphicsAccessories.hpp"
 #include "GLTFLoader.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -82,71 +83,6 @@ PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
     static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_MASK) == PBR_Renderer::ALPHA_MODE_MASK, "GLTF mask alpha mode must match PBR alpha mode");
     static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_BLEND) == PBR_Renderer::ALPHA_MODE_BLEND, "GLTF blend alpha mode must match PBR alpha mode");
     return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
-}
-
-PBR_Renderer::PSO_FLAGS GetMaterialPSOFlags(const PBR_Renderer&   Renderer,
-                                            const GLTF::Material& Material)
-{
-    const PBR_Renderer::CreateInfo& Settings = Renderer.GetSettings();
-
-    PBR_Renderer::PSO_FLAGS Flags =
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-        PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP;
-
-    if (Settings.EnableAO)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_AO_MAP;
-
-    if (Settings.EnableEmissive)
-        Flags |= PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
-
-    if (Settings.EnableClearCoat && Material.HasClearcoat)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_MAP |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP;
-    }
-
-    if (Settings.EnableSheen && Material.Sheen)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_SHEEN |
-            PBR_Renderer::PSO_FLAG_USE_SHEEN_COLOR_MAP |
-            PBR_Renderer::PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP;
-    }
-
-    if (Settings.EnableAnisotropy && Material.Anisotropy)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY |
-            PBR_Renderer::PSO_FLAG_USE_ANISOTROPY_MAP;
-    }
-
-    if (Settings.EnableIridescence && Material.Iridescence)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE |
-            PBR_Renderer::PSO_FLAG_USE_IRIDESCENCE_MAP |
-            PBR_Renderer::PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP;
-    }
-
-    if (Settings.EnableTransmission && Material.Transmission)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION |
-            PBR_Renderer::PSO_FLAG_USE_TRANSMISSION_MAP;
-    }
-
-    if (Settings.EnableVolume && Material.Volume)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_VOLUME |
-            PBR_Renderer::PSO_FLAG_USE_THICKNESS_MAP;
-    }
-
-    return Flags;
 }
 
 template <typename ShaderStructType, typename HostStructType>
@@ -636,7 +572,9 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     const GLTF::Material&            Material  = *MaterialData.pMaterial;
     const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
+    PBR_Renderer::PSO_FLAGS PSOFlags =
+        Drawable.VertexAttribFlags |
+        GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
@@ -644,6 +582,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         PBR_Renderer::PSO_FLAG_USE_IBL |
         PBR_Renderer::PSO_FLAG_USE_LIGHTS;
     PSOFlags &= m_RenderFlags;
+    PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 
     RadientMaterialSRBLease                       MaterialSRB;
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;

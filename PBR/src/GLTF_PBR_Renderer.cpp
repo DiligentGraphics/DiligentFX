@@ -426,69 +426,27 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
-GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::Material& Mat) const
+GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::Material& Material)
 {
-    // Color, normal and physical descriptor maps are always enabled
-    PSO_FLAGS PSOFlags =
-        PSO_FLAG_USE_COLOR_MAP |
-        PSO_FLAG_USE_NORMAL_MAP |
-        PSO_FLAG_USE_PHYS_DESC_MAP;
+    PSO_FLAGS PSOFlags = PSO_FLAG_DEFAULT_TEXTURES;
 
-    if (m_Settings.EnableAO)
-    {
-        PSOFlags |= PSO_FLAG_USE_AO_MAP;
-    }
+    if (Material.HasClearcoat)
+        PSOFlags |= PSO_FLAG_ALL_CLEAR_COAT;
 
-    if (m_Settings.EnableEmissive)
-    {
-        PSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
-    }
+    if (Material.Sheen)
+        PSOFlags |= PSO_FLAG_ALL_SHEEN;
 
-    if (m_Settings.EnableClearCoat && Mat.HasClearcoat)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_CLEAR_COAT |
-            PSO_FLAG_USE_CLEAR_COAT_MAP |
-            PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP |
-            PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP;
-    }
+    if (Material.Anisotropy)
+        PSOFlags |= PSO_FLAG_ALL_ANISOTROPY;
 
-    if (m_Settings.EnableSheen && Mat.Sheen)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_SHEEN |
-            PSO_FLAG_USE_SHEEN_COLOR_MAP |
-            PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP;
-    }
+    if (Material.Iridescence)
+        PSOFlags |= PSO_FLAG_ALL_IRIDESCENCE;
 
-    if (m_Settings.EnableAnisotropy && Mat.Anisotropy)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_ANISOTROPY |
-            PSO_FLAG_USE_ANISOTROPY_MAP;
-    }
+    if (Material.Transmission)
+        PSOFlags |= PSO_FLAG_ALL_TRANSMISSION;
 
-    if (m_Settings.EnableIridescence && Mat.Iridescence)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_IRIDESCENCE |
-            PSO_FLAG_USE_IRIDESCENCE_MAP |
-            PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP;
-    }
-
-    if (m_Settings.EnableTransmission && Mat.Transmission)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_TRANSMISSION |
-            PSO_FLAG_USE_TRANSMISSION_MAP;
-    }
-
-    if (m_Settings.EnableVolume && Mat.Volume)
-    {
-        PSOFlags |=
-            PSO_FLAG_ENABLE_VOLUME |
-            PSO_FLAG_USE_THICKNESS_MAP;
-    }
+    if (Material.Volume)
+        PSOFlags |= PSO_FLAG_ALL_VOLUME;
 
     return PSOFlags;
 }
@@ -630,6 +588,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             }
 
             PSOFlags &= RenderParams.Flags;
+            PSOFlags &= GetEnabledPSOFlags(m_Settings);
 
             if (RenderParams.Wireframe)
                 PSOFlags |= PSO_FLAG_UNSHADED;

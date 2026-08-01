@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
+#include "GLTF_PBR_Renderer.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "ThreadPool.hpp"
@@ -103,6 +104,101 @@ constexpr PBR_Renderer::PSO_FLAGS ExpectedClearcoatMaterialPSOFlags =
     PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT;
 
 } // namespace
+
+TEST(PBRRendererPSOFlagsTest, EnabledFlagsFollowRendererSettings)
+{
+    PBR_Renderer::CreateInfo Settings;
+    Settings.EnableIBL          = false;
+    Settings.EnableAO           = false;
+    Settings.EnableEmissive     = false;
+    Settings.EnableClearCoat    = false;
+    Settings.EnableSheen        = false;
+    Settings.EnableAnisotropy   = false;
+    Settings.EnableIridescence  = false;
+    Settings.EnableTransmission = false;
+    Settings.EnableVolume       = false;
+    Settings.EnableShadows      = false;
+    Settings.MaxJointCount      = 0;
+
+    const PBR_Renderer::PSO_FLAGS DisabledFlags =
+        PBR_Renderer::PSO_FLAG_USE_IBL |
+        PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+        PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
+        PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT |
+        PBR_Renderer::PSO_FLAG_ALL_SHEEN |
+        PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY |
+        PBR_Renderer::PSO_FLAG_ALL_IRIDESCENCE |
+        PBR_Renderer::PSO_FLAG_ALL_TRANSMISSION |
+        PBR_Renderer::PSO_FLAG_ALL_VOLUME |
+        PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS |
+        PBR_Renderer::PSO_FLAG_USE_JOINTS;
+
+    const PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::GetEnabledPSOFlags(Settings);
+    EXPECT_EQ(Flags & DisabledFlags, PBR_Renderer::PSO_FLAG_NONE);
+    EXPECT_NE(Flags & PBR_Renderer::PSO_FLAG_USE_COLOR_MAP, PBR_Renderer::PSO_FLAG_NONE);
+    EXPECT_NE(Flags & PBR_Renderer::PSO_FLAG_FIRST_USER_DEFINED, PBR_Renderer::PSO_FLAG_NONE);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, DefaultMaterial)
+{
+    GLTF::Material Material;
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, ClearCoat)
+{
+    GLTF::Material Material;
+    Material.HasClearcoat = true;
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Sheen)
+{
+    GLTF::Material Material;
+    Material.Sheen = std::make_unique<GLTF::Material::SheenShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_SHEEN);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Anisotropy)
+{
+    GLTF::Material Material;
+    Material.Anisotropy = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Iridescence)
+{
+    GLTF::Material Material;
+    Material.Iridescence = std::make_unique<GLTF::Material::IridescenceShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_IRIDESCENCE);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Transmission)
+{
+    GLTF::Material Material;
+    Material.Transmission = std::make_unique<GLTF::Material::TransmissionShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_TRANSMISSION);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Volume)
+{
+    GLTF::Material Material;
+    Material.Volume = std::make_unique<GLTF::Material::VolumeShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_VOLUME);
+}
 
 TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
 {

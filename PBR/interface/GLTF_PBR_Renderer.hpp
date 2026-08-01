@@ -261,7 +261,9 @@ public:
     static void WritePBRLightShaderAttribs(const PBRLightShaderAttribsData& AttribsData,
                                            HLSL::PBRLightAttribs*           pShaderAttribs);
 
-    PSO_FLAGS GetMaterialPSOFlags(const GLTF::Material& Mat) const;
+    /// Returns the PSO features required by the GLTF material. Renderer
+    /// configuration can be applied with PBR_Renderer::GetEnabledPSOFlags().
+    static PSO_FLAGS GetMaterialPSOFlags(const GLTF::Material& Material);
 
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);

@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
+#include "GLTF_PBR_Renderer.hpp"
 #include "ThreadPool.hpp"
 
 #include <exception>
@@ -68,60 +69,6 @@ void RadientTesseraMaterialData::PublishFailure(RADIENT_STATUS Status) noexcept
     VERIFY_EXPR(RADIENT_FAILED(Status));
     m_Status.store(Status, std::memory_order_release);
 }
-
-namespace
-{
-
-PBR_Renderer::PSO_FLAGS GetMaterialPSOFlags(const GLTF::Material&   Material,
-                                            PBR_Renderer::PSO_FLAGS EnabledFlags)
-{
-    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES;
-
-    if (Material.HasClearcoat)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_MAP |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP |
-            PBR_Renderer::PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP;
-    }
-    if (Material.Sheen)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_SHEEN |
-            PBR_Renderer::PSO_FLAG_USE_SHEEN_COLOR_MAP |
-            PBR_Renderer::PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP;
-    }
-    if (Material.Anisotropy)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY |
-            PBR_Renderer::PSO_FLAG_USE_ANISOTROPY_MAP;
-    }
-    if (Material.Iridescence)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE |
-            PBR_Renderer::PSO_FLAG_USE_IRIDESCENCE_MAP |
-            PBR_Renderer::PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP;
-    }
-    if (Material.Transmission)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION |
-            PBR_Renderer::PSO_FLAG_USE_TRANSMISSION_MAP;
-    }
-    if (Material.Volume)
-    {
-        Flags |=
-            PBR_Renderer::PSO_FLAG_ENABLE_VOLUME |
-            PBR_Renderer::PSO_FLAG_USE_THICKNESS_MAP;
-    }
-
-    return static_cast<PBR_Renderer::PSO_FLAGS>(Flags & EnabledFlags);
-}
-
-} // namespace
 
 struct RadientTesseraMaterialCache::ProcessingContext
 {
@@ -220,8 +167,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     RadientTesseraMaterialData&               Data)
 {
     const PBR_Renderer::PSO_FLAGS MaterialPSOFlags =
-        GetMaterialPSOFlags(*Data.m_MaterialData.pMaterial,
-                            pContext->EnabledMaterialPSOFlags);
+        GLTF_PBR_Renderer::GetMaterialPSOFlags(*Data.m_MaterialData.pMaterial) &
+        pContext->EnabledMaterialPSOFlags;
 
     RadientMaterialSRBLease                       MaterialSRB;
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;

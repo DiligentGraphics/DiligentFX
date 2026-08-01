@@ -2223,57 +2223,42 @@ PBR_Renderer::PsoCacheAccessor PBR_Renderer::GetPsoCacheAccessor(const GraphicsP
     return {*this, it->second, it->first};
 }
 
+PBR_Renderer::PSO_FLAGS PBR_Renderer::GetEnabledPSOFlags(const CreateInfo& Settings)
+{
+    PSO_FLAGS Flags = PSO_FLAG_ALL | PSO_FLAG_ALL_USER_DEFINED;
+
+    if (!Settings.EnableIBL)
+        Flags &= ~PSO_FLAG_USE_IBL;
+    if (!Settings.EnableAO)
+        Flags &= ~PSO_FLAG_USE_AO_MAP;
+    if (!Settings.EnableEmissive)
+        Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
+    if (!Settings.EnableClearCoat)
+        Flags &= ~PSO_FLAG_ALL_CLEAR_COAT;
+    if (!Settings.EnableSheen)
+        Flags &= ~PSO_FLAG_ALL_SHEEN;
+    if (!Settings.EnableAnisotropy)
+        Flags &= ~PSO_FLAG_ALL_ANISOTROPY;
+    if (!Settings.EnableIridescence)
+        Flags &= ~PSO_FLAG_ALL_IRIDESCENCE;
+    if (!Settings.EnableTransmission)
+        Flags &= ~PSO_FLAG_ALL_TRANSMISSION;
+    if (!Settings.EnableVolume)
+        Flags &= ~PSO_FLAG_ALL_VOLUME;
+    if (!Settings.EnableShadows)
+        Flags &= ~PSO_FLAG_ENABLE_SHADOWS;
+    if (Settings.MaxJointCount == 0)
+        Flags &= ~PSO_FLAG_USE_JOINTS;
+
+    return Flags;
+}
+
 IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
                                      const GraphicsPipelineDesc& GraphicsDesc,
                                      const PSOKey&               Key,
                                      PsoCacheAccessor::GET_FLAGS GetFlags)
 {
-    PSO_FLAGS Flags = Key.GetFlags();
-    if (!m_Settings.EnableIBL)
-    {
-        Flags &= ~PSO_FLAG_USE_IBL;
-    }
-    if (!m_Settings.EnableAO)
-    {
-        Flags &= ~PSO_FLAG_USE_AO_MAP;
-    }
-    if (!m_Settings.EnableEmissive)
-    {
-        Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
-    }
-    if (!m_Settings.EnableClearCoat)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_CLEAR_COAT;
-    }
-    if (!m_Settings.EnableSheen)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_SHEEN;
-    }
-    if (!m_Settings.EnableAnisotropy)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_ANISOTROPY;
-    }
-    if (!m_Settings.EnableIridescence)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_IRIDESCENCE;
-    }
-    if (!m_Settings.EnableTransmission)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_TRANSMISSION;
-    }
-    if (!m_Settings.EnableVolume)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_VOLUME;
-    }
-    if (!m_Settings.EnableShadows)
-    {
-        Flags &= ~PSO_FLAG_ENABLE_SHADOWS;
-    }
-
-    if (m_Settings.MaxJointCount == 0)
-    {
-        Flags &= ~PSO_FLAG_USE_JOINTS;
-    }
+    PSO_FLAGS Flags = Key.GetFlags() & GetEnabledPSOFlags(m_Settings);
     if (m_Settings.UseSeparateMetallicRoughnessTextures)
     {
         DEV_CHECK_ERR((Flags & PSO_FLAG_USE_PHYS_DESC_MAP) == 0, "Physical descriptor map is not enabled");
@@ -2286,26 +2271,18 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     {
         Flags &= ~PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
     }
+    if ((Flags & PSO_FLAG_ENABLE_CLEAR_COAT) == 0)
+        Flags &= ~PSO_FLAG_ALL_CLEAR_COAT;
     if ((Flags & PSO_FLAG_ENABLE_SHEEN) == 0)
-    {
-        Flags &= ~(PSO_FLAG_USE_SHEEN_COLOR_MAP | PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP);
-    }
+        Flags &= ~PSO_FLAG_ALL_SHEEN;
     if ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) == 0)
-    {
-        Flags &= ~PSO_FLAG_USE_ANISOTROPY_MAP;
-    }
+        Flags &= ~PSO_FLAG_ALL_ANISOTROPY;
     if ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) == 0)
-    {
-        Flags &= ~(PSO_FLAG_USE_IRIDESCENCE_MAP | PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP);
-    }
+        Flags &= ~PSO_FLAG_ALL_IRIDESCENCE;
     if ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) == 0)
-    {
-        Flags &= ~PSO_FLAG_USE_TRANSMISSION_MAP;
-    }
+        Flags &= ~PSO_FLAG_ALL_TRANSMISSION;
     if ((Flags & PSO_FLAG_ENABLE_VOLUME) == 0)
-    {
-        Flags &= ~PSO_FLAG_USE_THICKNESS_MAP;
-    }
+        Flags &= ~PSO_FLAG_ALL_VOLUME;
 
     const PSOKey UpdatedKey{Flags, Key};
 
