@@ -52,6 +52,11 @@ public:
         return m_Status.load(std::memory_order_acquire);
     }
 
+    /// Reports aggregate Tessera GPU readiness. The source material tracks its
+    /// selected texture dependencies; Tessera additionally waits for the SRB
+    /// prepared for the logical lease. This method is render-thread-only.
+    RADIENT_STATUS GetGPUResourceStatus() const noexcept;
+
     const RadientMaterialRenderData& GetMaterialRenderData() const noexcept
     {
         return m_MaterialData;
@@ -111,8 +116,7 @@ struct RadientTesseraMaterialResolveResult
 class RadientTesseraMaterialCache final
 {
 public:
-    using ResolveTextureSRVCallbackType =
-        std::function<ITextureView*(const RadientMaterialTextureRenderData&)>;
+    using ResolveTextureSRVCallbackType = RadientMaterialSRBTable::ResolveTextureSRVCallbackType;
     using CreateSRBCallbackType =
         std::function<RefCntAutoPtr<IShaderResourceBinding>(ITextureView* const*, Uint32)>;
 

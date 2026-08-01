@@ -60,6 +60,12 @@ struct RadientMaterialDefaultTextureBindings
 class RadientMaterialSRBState;
 class RadientMaterialSRBTable;
 
+struct RadientMaterialTextureSRVResolveResult
+{
+    RADIENT_STATUS Status      = RADIENT_STATUS_INVALID_ARGUMENT;
+    ITextureView*  pTextureSRV = nullptr;
+};
+
 /// Owning reference to a stable material SRB table entry. The entry and its
 /// texture resources are released when the last lease is destroyed.
 /// GetSRB() must only be called from the render thread after table preparation.
@@ -94,7 +100,7 @@ class RadientMaterialSRBTable final
 {
 public:
     using ResolveTextureSRVCallbackType =
-        std::function<ITextureView*(const RadientMaterialTextureRenderData&)>;
+        std::function<RadientMaterialTextureSRVResolveResult(const RadientMaterialTextureRenderData&)>;
     using CreateSRBCallbackType =
         std::function<RefCntAutoPtr<IShaderResourceBinding>(ITextureView* const*, Uint32)>;
 
@@ -126,6 +132,7 @@ public:
         Uint32                                         SlotCount);
 
     /// Creates new SRBs and recreates existing SRBs when TextureVersion changes.
+    /// Pending texture resolutions are skipped and retried by the next call.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);

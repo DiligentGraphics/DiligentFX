@@ -378,4 +378,43 @@ TEST(RadientTesseraMaterialCacheTest, MaterialDataMayOutliveCacheAndMaterialOwne
     EXPECT_EQ(pWeakMaterial.Lock(), nullptr);
 }
 
+TEST(RadientTesseraMaterialCacheTest, MaterialDataRetainsOnlySRBRecipeTextures)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+
+    RadientTesseraMaterialCache::CreateInfo CI;
+    CI.TextureAttribIndices     = MakeTextureAttribIndices();
+    CI.MaterialTextureSlotCount = 1;
+    CI.EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
+    CI.DefaultTextures          = MakeDefaultTextureBindings();
+
+    RefCntWeakPtr<IRadientTextureAsset> pWeakWhiteLinear{CI.DefaultTextures.WhiteLinear.pTexture.RawPtr()};
+    RefCntWeakPtr<IRadientTextureAsset> pWeakWhiteSRGB{CI.DefaultTextures.WhiteSRGB.pTexture.RawPtr()};
+    RefCntWeakPtr<IRadientTextureAsset> pWeakBlackSRGB{CI.DefaultTextures.BlackSRGB.pTexture.RawPtr()};
+    RefCntWeakPtr<IRadientTextureAsset> pWeakNormal{CI.DefaultTextures.Normal.pTexture.RawPtr()};
+    RefCntWeakPtr<IRadientTextureAsset> pWeakPhysicalDesc{CI.DefaultTextures.PhysicalDesc.pTexture.RawPtr()};
+
+    std::unique_ptr<RadientTesseraMaterialCache> pCache =
+        std::make_unique<RadientTesseraMaterialCache>(CI);
+    CI.DefaultTextures = {};
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult  Result    = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(Result.Data);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+
+    // Slot zero uses the sRGB white default. The material data must not retain
+    // the other renderer defaults after its cache has been released.
+    pCache.reset();
+    EXPECT_EQ(pWeakWhiteLinear.Lock(), nullptr);
+    EXPECT_NE(pWeakWhiteSRGB.Lock(), nullptr);
+    EXPECT_EQ(pWeakBlackSRGB.Lock(), nullptr);
+    EXPECT_EQ(pWeakNormal.Lock(), nullptr);
+    EXPECT_EQ(pWeakPhysicalDesc.Lock(), nullptr);
+
+    Result.Data = {};
+    EXPECT_EQ(pWeakWhiteSRGB.Lock(), nullptr);
+}
+
 } // namespace Diligent

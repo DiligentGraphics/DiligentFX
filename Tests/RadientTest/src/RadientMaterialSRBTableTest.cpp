@@ -32,6 +32,7 @@
 #include "ThreadSignal.hpp"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <thread>
@@ -186,9 +187,12 @@ public:
     std::vector<const RadientMaterialTextureRenderData*> SlotSources;
 };
 
-ITextureView* ResolveTestSRV(const RadientMaterialTextureRenderData& Binding)
+RadientMaterialTextureSRVResolveResult ResolveTestSRV(const RadientMaterialTextureRenderData& Binding)
 {
-    return reinterpret_cast<ITextureView*>(static_cast<uintptr_t>(Binding.BindingIdentity.StandaloneResourceId));
+    return {
+        RADIENT_STATUS_OK,
+        reinterpret_cast<ITextureView*>(static_cast<uintptr_t>(Binding.BindingIdentity.StandaloneResourceId)),
+    };
 }
 
 } // namespace
@@ -304,6 +308,104 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
     EXPECT_NE(Lease.GetSRB(), nullptr);
     EXPECT_NE(Lease.GetSRB(), pFirstSRB);
     EXPECT_EQ(CreateCount, 2u);
+}
+
+TEST(RadientMaterialSRBTableTest, RetriesPendingTextureResolution)
+{
+    RadientMaterialSRBTable       Table;
+    const TestMaterialSRBRecipe   Recipe{1};
+    const RadientMaterialSRBLease Lease = Recipe.Acquire(Table);
+    ASSERT_TRUE(Lease);
+
+    RADIENT_STATUS TextureStatus = RADIENT_STATUS_PENDING;
+    Uint32         CreateCount   = 0;
+
+    auto ResolveTextureSRV =
+        [&TextureStatus](const RadientMaterialTextureRenderData& Binding) {
+            return TextureStatus == RADIENT_STATUS_OK ?
+                ResolveTestSRV(Binding) :
+                RadientMaterialTextureSRVResolveResult{TextureStatus, nullptr};
+        };
+
+    auto CreateSRB =
+        [&CreateCount](ITextureView* const*, Uint32) {
+            ++CreateCount;
+            return MakeTestSRB();
+        };
+
+    EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Lease.GetSRB(), nullptr);
+    EXPECT_EQ(CreateCount, 0u);
+
+    TextureStatus = RADIENT_STATUS_OK;
+    EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
+    EXPECT_NE(Lease.GetSRB(), nullptr);
+    EXPECT_EQ(CreateCount, 1u);
+}
+
+TEST(RadientMaterialSRBTableTest, UnresolvedEntryDoesNotBlockReadyEntry)
+{
+    static constexpr size_t EntryCount = 32;
+
+    const RADIENT_STATUS UnresolvedStatuses[] = {
+        RADIENT_STATUS_PENDING,
+        RADIENT_STATUS_NOT_FOUND,
+    };
+
+    for (const RADIENT_STATUS UnresolvedStatus : UnresolvedStatuses)
+    {
+        SCOPED_TRACE(static_cast<Int32>(UnresolvedStatus));
+
+        RadientMaterialSRBTable              Table;
+        std::vector<RadientMaterialSRBLease> Leases;
+        Leases.reserve(EntryCount);
+        for (size_t EntryIndex = 0; EntryIndex < EntryCount; ++EntryIndex)
+        {
+            const TestMaterialSRBRecipe Recipe{EntryIndex + 1};
+            Leases.push_back(Recipe.Acquire(Table));
+            ASSERT_TRUE(Leases.back());
+        }
+
+        std::vector<bool> EntryResolved(EntryCount, false);
+        size_t            ResolveCallCount    = 0;
+        size_t            FirstUnresolvedCall = EntryCount;
+        size_t            FirstResolvedCall   = EntryCount;
+        Uint32            CreateCount         = 0;
+
+        auto ResolveTextureSRV =
+            [&](const RadientMaterialTextureRenderData& Binding) {
+                const size_t EntryIndex =
+                    static_cast<size_t>(Binding.BindingIdentity.StandaloneResourceId - 1);
+                const bool IsResolved     = (ResolveCallCount % 2) != 0;
+                EntryResolved[EntryIndex] = IsResolved;
+
+                if (IsResolved)
+                    FirstResolvedCall = std::min(FirstResolvedCall, ResolveCallCount);
+                else
+                    FirstUnresolvedCall = std::min(FirstUnresolvedCall, ResolveCallCount);
+                ++ResolveCallCount;
+
+                return IsResolved ?
+                    ResolveTestSRV(Binding) :
+                    RadientMaterialTextureSRVResolveResult{UnresolvedStatus, nullptr};
+            };
+        auto CreateSRB =
+            [&CreateCount](ITextureView* const*, Uint32) {
+                ++CreateCount;
+                return MakeTestSRB();
+            };
+
+        EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), UnresolvedStatus);
+        EXPECT_EQ(ResolveCallCount, EntryCount);
+        EXPECT_LT(FirstUnresolvedCall, FirstResolvedCall);
+        EXPECT_EQ(CreateCount, EntryCount / 2);
+
+        for (size_t EntryIndex = 0; EntryIndex < EntryCount; ++EntryIndex)
+        {
+            EXPECT_EQ(Leases[EntryIndex].GetSRB() != nullptr,
+                      EntryResolved[EntryIndex]);
+        }
+    }
 }
 
 TEST(RadientMaterialSRBTableTest, ReleasesTexturesWithLastLease)

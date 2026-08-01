@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
+#include "Assets/RadientAssetStatus.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "ThreadPool.hpp"
 
@@ -41,6 +42,23 @@ RadientTesseraMaterialData::RadientTesseraMaterialData(IRadientMaterialAsset*   
     m_MaterialData{MaterialData}
 {
     m_ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
+}
+
+RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
+{
+    RADIENT_STATUS Status = GetStatus();
+    // The material aggregate covers the texture assets exposed through
+    // m_MaterialData; renderer defaults that are not in this recipe are irrelevant.
+    Status = CombineDependencyStatus(
+        Status,
+        RadientMaterialAssetManager::GetGPUResourceStatus(m_pMaterial));
+
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    return m_MaterialSRB.GetSRB() != nullptr ?
+        RADIENT_STATUS_OK :
+        RADIENT_STATUS_PENDING;
 }
 
 bool RadientTesseraMaterialData::TryScheduleProcessing() noexcept

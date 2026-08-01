@@ -26,6 +26,7 @@
 
 #include "Render/RadientMaterialSRBTable.hpp"
 
+#include "Assets/RadientAssetStatus.hpp"
 #include "HashUtils.hpp"
 
 #ifdef _MSC_VER
@@ -335,24 +336,31 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
 
         absl::InlinedVector<ITextureView*, 8> TextureSRVs;
         TextureSRVs.reserve(pState->Slots.size());
+        RADIENT_STATUS EntryStatus = RADIENT_STATUS_OK;
         for (const RadientMaterialTextureRenderData& Slot : pState->Slots)
         {
-            ITextureView* const pTextureSRV = ResolveTextureSRV(Slot);
-            if (pTextureSRV == nullptr)
+            const RadientMaterialTextureSRVResolveResult ResolveResult = ResolveTextureSRV(Slot);
+            RADIENT_STATUS                               TextureStatus = ResolveResult.Status;
+            if (TextureStatus == RADIENT_STATUS_OK && ResolveResult.pTextureSRV == nullptr)
             {
-                Status = RADIENT_STATUS_INVALID_OPERATION;
-                break;
+                UNEXPECTED("Texture SRV resolver returned OK without an SRV");
+                TextureStatus = RADIENT_STATUS_INVALID_OPERATION;
             }
-            TextureSRVs.push_back(pTextureSRV);
+
+            EntryStatus = CombineDependencyStatus(EntryStatus, TextureStatus);
+            if (TextureStatus == RADIENT_STATUS_OK)
+                TextureSRVs.push_back(ResolveResult.pTextureSRV);
         }
-        if (TextureSRVs.size() != pState->Slots.size())
+
+        Status = CombineDependencyStatus(Status, EntryStatus);
+        if (EntryStatus != RADIENT_STATUS_OK)
             continue;
 
         RefCntAutoPtr<IShaderResourceBinding> pSRB =
             CreateSRB(TextureSRVs.data(), static_cast<Uint32>(TextureSRVs.size()));
         if (pSRB == nullptr)
         {
-            Status = RADIENT_STATUS_INVALID_OPERATION;
+            Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
             continue;
         }
 

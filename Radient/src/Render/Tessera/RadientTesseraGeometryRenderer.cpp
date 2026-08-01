@@ -399,9 +399,9 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
             if (pTextureSRV != nullptr && pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
             {
                 UNEXPECTED("Material texture SRV is not a 2D array");
-                return static_cast<ITextureView*>(nullptr);
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, static_cast<ITextureView*>(nullptr)};
             }
-            return pTextureSRV;
+            return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_OK, pTextureSRV};
         },
         [this](ITextureView* const* ppTextureSRVs, Uint32 TextureCount) {
             RefCntAutoPtr<IShaderResourceBinding> pSRB;
