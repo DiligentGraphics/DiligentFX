@@ -38,6 +38,7 @@ namespace Diligent
 
 class RadientRenderPipeline;
 class RadientAssetManagerImpl;
+struct IThreadPool;
 
 class RadientRenderTargetImpl final : public ObjectBase<IRadientRenderTarget>
 {
@@ -81,6 +82,7 @@ public:
     struct CreateInfo
     {
         RadientRendererDesc      Desc;
+        IThreadPool*             pThreadPool   = nullptr;
         IRadientBackend*         pBackend      = nullptr;
         RadientAssetManagerImpl* pAssetManager = nullptr;
     };

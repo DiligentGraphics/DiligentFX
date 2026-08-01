@@ -38,12 +38,14 @@ namespace Diligent
 {
 
 class RadientAssetManagerImpl;
+struct IThreadPool;
 
 /// Backend-facing render pipeline for one Radient renderer instance.
 class RadientRenderPipeline
 {
 public:
-    RadientRenderPipeline(IRadientBackend*           pBackend,
+    RadientRenderPipeline(IThreadPool*               pThreadPool,
+                          IRadientBackend*           pBackend,
                           RadientAssetManagerImpl*   pAssetManager,
                           const RadientRendererDesc& Desc);
     ~RadientRenderPipeline();

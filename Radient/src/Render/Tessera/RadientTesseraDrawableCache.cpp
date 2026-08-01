@@ -76,7 +76,9 @@ RadientTesseraDrawableCache::RadientTesseraDrawableCache(IRadientDrawableMeshPro
 {
 }
 
-RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(const IRadientScene& Scene)
+RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
+    const IRadientScene&                        Scene,
+    const RadientTesseraMaterialResolveContext* pMaterialResolveContext)
 {
     m_DrawableChanges.clear();
     m_LightChanges.clear();
@@ -123,11 +125,11 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(const IRadientScene& Scene
     if (UpdateRenderables)
     {
         State.EnumerateRenderableMeshChanges(
-            [this](const RadientSceneState::RenderableMeshChange& Change,
-                   const RadientSceneState::RenderableMesh*       pMesh) {
+            [this, pMaterialResolveContext](const RadientSceneState::RenderableMeshChange& Change,
+                                            const RadientSceneState::RenderableMesh*       pMesh) {
                 if (pMesh != nullptr)
                 {
-                    ProcessRenderableMeshAddedOrUpdated(*pMesh);
+                    ProcessRenderableMeshAddedOrUpdated(*pMesh, pMaterialResolveContext);
                 }
                 else
                 {
@@ -136,7 +138,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(const IRadientScene& Scene
             });
     }
 
-    ResolvePendingRenderableMeshes();
+    ResolvePendingRenderableMeshes(pMaterialResolveContext);
 
     if (UpdateLights)
     {
@@ -159,7 +161,9 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(const IRadientScene& Scene
     return RADIENT_STATUS_OK;
 }
 
-void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh)
+void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
+    const RadientSceneState::RenderableMesh&    Mesh,
+    const RadientTesseraMaterialResolveContext* pMaterialResolveContext)
 {
     auto record_it = m_Renderables.find(Mesh.Entity);
 
@@ -174,6 +178,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radi
     if (IsNewRecord || MeshChanged)
     {
         RemoveRenderableDrawables(Record);
+        m_PendingMaterialData.erase(Mesh.Entity);
 
         Record.pMesh             = Mesh.Mesh.pMesh;
         Record.PendingResolution = false;
@@ -185,7 +190,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radi
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Mesh.Entity, Record);
+        TryExpandRenderable(Mesh.Entity, Record, pMaterialResolveContext);
     }
     else
     {
@@ -210,6 +215,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID E
         return;
 
     RemoveRenderableDrawables(It->second);
+    m_PendingMaterialData.erase(Entity);
     m_Renderables.erase(It);
 }
 
@@ -251,7 +257,8 @@ void RadientTesseraDrawableCache::ProcessRenderableLightRemoved(RadientEntityID 
     m_Lights.erase(It);
 }
 
-void RadientTesseraDrawableCache::ResolvePendingRenderableMeshes()
+void RadientTesseraDrawableCache::ResolvePendingRenderableMeshes(
+    const RadientTesseraMaterialResolveContext* pMaterialResolveContext)
 {
     m_PendingRenderableEntitiesScratch.clear();
     m_PendingRenderableEntitiesScratch.swap(m_PendingRenderableEntities);
@@ -270,12 +277,15 @@ void RadientTesseraDrawableCache::ResolvePendingRenderableMeshes()
             continue;
 
         Record.PendingResolution = false;
-        TryExpandRenderable(Entity, Record);
+        TryExpandRenderable(Entity, Record, pMaterialResolveContext);
     }
     m_PendingRenderableEntitiesScratch.clear();
 }
 
-bool RadientTesseraDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
+bool RadientTesseraDrawableCache::TryExpandRenderable(
+    RadientEntityID                             Entity,
+    RenderableRecord&                           Record,
+    const RadientTesseraMaterialResolveContext* pMaterialResolveContext)
 {
     const RadientDrawableMeshResolveResult ResolveResult = m_MeshProvider.GetDrawableMesh(Record.pMesh);
     if (ResolveResult.Status == RADIENT_STATUS_PENDING)
@@ -285,24 +295,78 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(RadientEntityID Entity, Re
     }
 
     if (ResolveResult.Status != RADIENT_STATUS_OK)
+    {
+        m_PendingMaterialData.erase(Entity);
         return false;
+    }
 
     VERIFY(ResolveResult.pMesh != nullptr, "Drawable mesh provider returned ready status with null mesh data");
     if (ResolveResult.pMesh == nullptr)
+    {
+        m_PendingMaterialData.erase(Entity);
         return false;
+    }
 
     const RadientDrawableMesh& Mesh = *ResolveResult.pMesh;
 
+    std::vector<RadientTesseraMaterialDataMap::ValueHandle> MaterialData;
+    if (pMaterialResolveContext != nullptr)
+    {
+        if (pMaterialResolveContext->pMaterialCache == nullptr)
+        {
+            AddPendingResolution(Entity, Record);
+            return false;
+        }
+
+        bool HasPendingMaterial = false;
+        MaterialData.resize(Mesh.Primitives.size());
+        for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
+        {
+            const RadientDrawableMeshPrimitive& Primitive = Mesh.Primitives[PrimitiveIndex];
+            if (Primitive.ElementCount == 0 || Primitive.pMaterialAsset == nullptr)
+                continue;
+
+            RadientTesseraMaterialResolveResult MaterialResult =
+                pMaterialResolveContext->pMaterialCache->Resolve(
+                    pMaterialResolveContext->ThreadPool,
+                    Primitive.pMaterialAsset);
+            if (!MaterialResult.Data)
+                continue;
+
+            const RADIENT_STATUS MaterialStatus = MaterialResult.Data->GetGPUResourceStatus();
+            if (MaterialStatus == RADIENT_STATUS_PENDING)
+                HasPendingMaterial = true;
+            else if (MaterialStatus != RADIENT_STATUS_OK)
+                continue;
+
+            MaterialData[PrimitiveIndex] = std::move(MaterialResult.Data);
+        }
+
+        if (HasPendingMaterial)
+        {
+            // The material cache stores weak values. Retain the resolved handles
+            // until the renderable is retried and they can move into drawable slots.
+            m_PendingMaterialData[Entity] = std::move(MaterialData);
+            AddPendingResolution(Entity, Record);
+            return false;
+        }
+    }
+
     Record.PendingResolution = false;
+    m_PendingMaterialData.erase(Entity);
     RemoveRenderableDrawables(Record);
 
     Record.DrawableIDs.reserve(Mesh.Primitives.size());
-    for (const RadientDrawableMeshPrimitive& Primitive : Mesh.Primitives)
+    for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
     {
+        const RadientDrawableMeshPrimitive& Primitive = Mesh.Primitives[PrimitiveIndex];
         if (Primitive.ElementCount == 0)
             continue;
 
         if (Primitive.pMaterial == nullptr)
+            continue;
+
+        if (pMaterialResolveContext != nullptr && !MaterialData[PrimitiveIndex])
             continue;
 
         if (Primitive.GeometryIndex >= Mesh.Geometries.size())
@@ -315,13 +379,14 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(RadientEntityID Entity, Re
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
 
-        Slot.Entity             = Entity;
-        Slot.pRenderer          = Record.pRenderer;
-        Slot.pWorldMatrix       = Record.pWorldMatrix;
-        Slot.pEffectiveVisible  = Record.pEffectiveVisible;
-        Slot.IsIndexed          = Primitive.IsIndexed;
-        Slot.pMaterial          = Primitive.pMaterial;
-        Slot.pMaterialAsset     = Primitive.pMaterialAsset;
+        Slot.Entity            = Entity;
+        Slot.pRenderer         = Record.pRenderer;
+        Slot.pWorldMatrix      = Record.pWorldMatrix;
+        Slot.pEffectiveVisible = Record.pEffectiveVisible;
+        Slot.IsIndexed         = Primitive.IsIndexed;
+        Slot.pMaterial         = Primitive.pMaterial;
+        if (pMaterialResolveContext != nullptr)
+            Slot.MaterialData = std::move(MaterialData[PrimitiveIndex]);
         Slot.pVertexPool        = Geometry.pVertexPool;
         Slot.VertexAttribFlags  = Geometry.VertexAttribFlags;
         Slot.FirstIndexLocation = Geometry.FirstIndexLocation;

@@ -46,10 +46,20 @@ const RadientMaterialDefaultTextures& GetDefaultMaterialTextures(RadientAssetMan
     return pAssetManager->GetDefaultMaterialTextures();
 }
 
+IThreadPool* ValidateThreadPool(IThreadPool* pThreadPool)
+{
+    if (pThreadPool == nullptr)
+        LOG_ERROR_AND_THROW("Radient Tessera render technique thread pool must not be null");
+
+    return pThreadPool;
+}
+
 } // namespace
 
-RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(RadientAssetManagerImpl*   pAssetManager,
+RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*               pThreadPool,
+                                                             RadientAssetManagerImpl*   pAssetManager,
                                                              const RadientRendererDesc& Desc) :
+    m_pThreadPool{ValidateThreadPool(pThreadPool)},
     m_pAssetManager{pAssetManager},
     m_GeometryRenderer{Desc.MaterialTextureSlotCount, GetDefaultMaterialTextures(pAssetManager)},
     m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
@@ -57,7 +67,11 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(RadientAssetManager
 
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
 {
-    return m_DrawableCache.SyncScene(Scene);
+    const RadientTesseraMaterialResolveContext MaterialResolveContext{
+        *m_pThreadPool,
+        m_GeometryRenderer.GetMaterialCache(),
+    };
+    return m_DrawableCache.SyncScene(Scene, &MaterialResolveContext);
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderContext& Context)
@@ -74,7 +88,9 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (RADIENT_FAILED(Status) || Context.pDevice == nullptr || Context.pContext == nullptr)
         return Status;
 
-    Status = m_GeometryRenderer.Prepare(Context.pDevice, Context.pContext);
+    Status = m_GeometryRenderer.Prepare(Context.pDevice,
+                                        Context.pContext,
+                                        m_pAssetManager->GetResourceManager());
     if (RADIENT_FAILED(Status))
         return Status;
 

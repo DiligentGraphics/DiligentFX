@@ -182,6 +182,7 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
 
     RadientRendererImpl::CreateInfo RendererCI{};
     RendererCI.Desc          = Desc;
+    RendererCI.pThreadPool   = m_pThreadPool;
     RendererCI.pBackend      = m_pBackend;
     RendererCI.pAssetManager = m_pAssetManager;
 

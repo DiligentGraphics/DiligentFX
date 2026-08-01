@@ -27,6 +27,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Import/RadientImportedScene.hpp"
+#include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
 #include "GPUTestingEnvironment.hpp"
 #include "TempDirectory.hpp"
@@ -357,6 +358,55 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pBlack), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pNormal), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pPhysicalDesc), nullptr);
+
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.pThreadPool = pThreadPool;
+    AssetManagerCI.pDevice     = pDevice;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
+
+    {
+        RadientTesseraGeometryRenderer Renderer{8, pAssetManager->GetDefaultMaterialTextures()};
+        ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+        ASSERT_NE(Renderer.GetMaterialCache(), nullptr);
+
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        RadientMaterialCreateInfo            MaterialCI{};
+        ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+        ASSERT_NE(pMaterial, nullptr);
+
+        const RadientTesseraMaterialResolveResult Result =
+            Renderer.GetMaterialCache()->Resolve(*pThreadPool, pMaterial);
+        ASSERT_TRUE(Result.Data);
+        EXPECT_TRUE(IsPendingOrOK(Result.Status));
+
+        pThreadPool->WaitForAllTasks();
+        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+
+        ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+        EXPECT_NE(Result.Data->GetMaterialSRB().GetSRB(), nullptr);
+    }
 
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();

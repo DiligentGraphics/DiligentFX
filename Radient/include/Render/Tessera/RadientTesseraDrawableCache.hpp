@@ -29,11 +29,22 @@
 #include "Render/RadientDrawableMesh.hpp"
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientLightList.hpp"
+#include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 #include "RadientScene.h"
 #include "Scene/RadientSceneState.hpp"
 
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
+
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
 
 #include <deque>
 #include <string>
@@ -42,6 +53,16 @@
 
 namespace Diligent
 {
+
+struct IThreadPool;
+
+/// Per-sync services used to resolve Tessera-specific material data. A null
+/// material cache means renderer material resources are not initialized yet.
+struct RadientTesseraMaterialResolveContext
+{
+    IThreadPool&                 ThreadPool;
+    RadientTesseraMaterialCache* pMaterialCache = nullptr;
+};
 
 /// Renderer-facing primitive slot addressed by a stable drawable ID.
 ///
@@ -63,10 +84,10 @@ struct RadientDrawableSlot
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
 
-    // RenderableRecord::pMesh keeps the mesh payload alive. The payload owns
-    // the material asset, which in turn keeps the resolved material alive.
-    const GLTF::Material*  pMaterial      = nullptr;
-    IRadientMaterialAsset* pMaterialAsset = nullptr;
+    // RenderableRecord::pMesh keeps the mesh payload alive. MaterialData keeps
+    // the renderer-specific material state and its material asset alive.
+    const GLTF::Material*                      pMaterial = nullptr;
+    RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
     IVertexPool* pVertexPool = nullptr;
 
@@ -169,7 +190,9 @@ class RadientTesseraDrawableCache
 public:
     explicit RadientTesseraDrawableCache(IRadientDrawableMeshProvider* pMeshProvider = nullptr);
 
-    RADIENT_STATUS SyncScene(const IRadientScene& Scene);
+    RADIENT_STATUS SyncScene(
+        const IRadientScene&                        Scene,
+        const RadientTesseraMaterialResolveContext* pMaterialResolveContext = nullptr);
 
     const RadientDrawLists& GetDrawLists() const
     {
@@ -243,14 +266,20 @@ private:
         size_t             Index = 0;
     };
 
-    void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh);
+    void ProcessRenderableMeshAddedOrUpdated(
+        const RadientSceneState::RenderableMesh&    Mesh,
+        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
-    void ResolvePendingRenderableMeshes();
+    void ResolvePendingRenderableMeshes(
+        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
 
-    bool TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record);
+    bool TryExpandRenderable(
+        RadientEntityID                             Entity,
+        RenderableRecord&                           Record,
+        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
 
     RadientDrawableID AllocateDrawableID();
 
@@ -269,6 +298,12 @@ private:
     using LightMap      = std::unordered_map<RadientEntityID, LightListLocation>;
     RenderableMap m_Renderables;
     LightMap      m_Lights;
+
+    // Renderer-specific material data is retained only while an entity waits
+    // for all of its primitive materials to become GPU-ready.
+    using PendingMaterialDataMap =
+        absl::flat_hash_map<RadientEntityID, std::vector<RadientTesseraMaterialDataMap::ValueHandle>>;
+    PendingMaterialDataMap m_PendingMaterialData;
 
     // Geometry passes cache pointers to drawable slots; deque keeps existing slot
     // addresses stable when new drawable IDs append more slots.

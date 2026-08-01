@@ -292,28 +292,6 @@ RadientTesseraGeometryRenderer::RadientTesseraGeometryRenderer(
     m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8}
 {}
 
-RADIENT_STATUS RadientTesseraGeometryRenderer::AcquireMaterialSRB(
-    const RadientMaterialRenderData&               MaterialData,
-    PBR_Renderer::PSO_FLAGS                        PSOFlags,
-    RadientMaterialSRBLease&                       Lease,
-    PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds)
-{
-    Lease = {};
-    ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
-
-    if (m_pRenderer == nullptr || !m_DefaultMaterialTextureBindingsReady)
-        return RADIENT_STATUS_PENDING;
-
-    const PBR_Renderer::CreateInfo& Settings = m_pRenderer->GetSettings();
-    return m_MaterialSRBTable.Acquire(MaterialData,
-                                      Settings.TextureAttribIndices,
-                                      PSOFlags,
-                                      Settings.MaterialTexturesArraySize,
-                                      m_DefaultMaterialTextureBindings,
-                                      Lease,
-                                      ShaderTextureIds);
-}
-
 void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
 {
     // Default texture assets load asynchronously. Keep each resolved binding so
@@ -336,7 +314,61 @@ void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
     m_DefaultMaterialTextureBindingsReady = true;
 }
 
-RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice* pDevice, IDeviceContext* pContext)
+void RadientTesseraGeometryRenderer::CreateMaterialCache()
+{
+    VERIFY_EXPR(m_pRenderer != nullptr);
+    VERIFY_EXPR(m_DefaultMaterialTextureBindingsReady);
+
+    const PBR_Renderer::CreateInfo& Settings = m_pRenderer->GetSettings();
+
+    RadientTesseraMaterialCache::CreateInfo CacheCI;
+    CacheCI.TextureAttribIndices     = Settings.TextureAttribIndices;
+    CacheCI.MaterialTextureSlotCount = Settings.MaterialTexturesArraySize;
+    CacheCI.EnabledMaterialPSOFlags  = PBR_Renderer::GetEnabledPSOFlags(Settings);
+    CacheCI.DefaultTextures          = m_DefaultMaterialTextureBindings;
+    m_pMaterialCache                 = std::make_unique<RadientTesseraMaterialCache>(CacheCI);
+}
+
+RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(Uint32 TextureVersion)
+{
+    VERIFY_EXPR(m_pRenderer != nullptr);
+    VERIFY_EXPR(m_pMaterialCache != nullptr);
+
+    return m_pMaterialCache->Prepare(
+        TextureVersion,
+        [](const RadientMaterialTextureRenderData& Binding) {
+            const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetGPUResourceStatus(Binding.pTexture);
+            if (TextureStatus != RADIENT_STATUS_OK)
+                return RadientMaterialTextureSRVResolveResult{TextureStatus, nullptr};
+
+            ITextureView* const pTextureSRV = RadientTextureAssetManager::GetTextureSRV(Binding.pTexture, Binding.ViewType);
+            if (pTextureSRV == nullptr)
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, nullptr};
+
+            if (pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
+            {
+                UNEXPECTED("Material texture SRV is not a 2D array");
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, nullptr};
+            }
+            return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_OK, pTextureSRV};
+        },
+        [this](ITextureView* const* ppTextureSRVs, Uint32 TextureCount) {
+            RefCntAutoPtr<IShaderResourceBinding> pSRB;
+            m_pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty(), 1);
+            if (pSRB == nullptr)
+                return pSRB;
+
+            m_pRenderer->InitCommonSRBVars(pSRB, nullptr);
+            if (!m_pRenderer->SetMaterialTextures(pSRB, ppTextureSRVs, 0, TextureCount))
+                pSRB.Release();
+
+            return pSRB;
+        });
+}
+
+RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pDevice,
+                                                       IDeviceContext*        pContext,
+                                                       GLTF::ResourceManager* pResourceManager)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -350,6 +382,12 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice* pDevice, I
 
     if (!m_DefaultMaterialTextureBindingsReady)
         PrepareDefaultMaterialTextureBindings();
+
+    if (m_DefaultMaterialTextureBindingsReady && m_pMaterialCache == nullptr)
+        CreateMaterialCache();
+
+    if (m_pMaterialCache != nullptr && pResourceManager != nullptr)
+        return PrepareMaterialSRBs(pResourceManager->GetTextureVersion());
 
     return RADIENT_STATUS_OK;
 }
@@ -366,7 +404,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
 
     if (m_pRenderer == nullptr)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(pDevice, pContext);
+        const RADIENT_STATUS PrepareStatus = Prepare(pDevice, pContext, pResourceManager);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -390,33 +428,6 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
 
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
-
-    const RADIENT_STATUS MaterialSRBStatus = m_MaterialSRBTable.Prepare(
-        pResourceManager->GetTextureVersion(),
-        [](const RadientMaterialTextureRenderData& Binding) {
-            ITextureView* const pTextureSRV =
-                RadientTextureAssetManager::GetTextureSRV(Binding.pTexture, Binding.ViewType);
-            if (pTextureSRV != nullptr && pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
-            {
-                UNEXPECTED("Material texture SRV is not a 2D array");
-                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, static_cast<ITextureView*>(nullptr)};
-            }
-            return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_OK, pTextureSRV};
-        },
-        [this](ITextureView* const* ppTextureSRVs, Uint32 TextureCount) {
-            RefCntAutoPtr<IShaderResourceBinding> pSRB;
-            m_pRenderer->CreateResourceBinding(pSRB.GetAddressOfEmpty(), 1);
-            if (pSRB == nullptr)
-                return pSRB;
-
-            m_pRenderer->InitCommonSRBVars(pSRB, nullptr);
-            if (!m_pRenderer->SetMaterialTextures(pSRB, ppTextureSRVs, 0, TextureCount))
-                pSRB.Release();
-
-            return pSRB;
-        });
-    if (RADIENT_FAILED(MaterialSRBStatus))
-        return MaterialSRBStatus;
 
     if (m_pRenderer->GetJointsBuffer() != nullptr)
     {

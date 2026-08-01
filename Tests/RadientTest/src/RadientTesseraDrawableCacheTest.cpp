@@ -33,6 +33,7 @@
 #include "Scene/RadientSceneWriterImpl.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientTestAssetHelpers.hpp"
+#include "ThreadPool.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -782,6 +783,38 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanFail)
         ASSERT_NE(pSlot->pRenderer, nullptr);
         EXPECT_EQ(pSlot->pRenderer->VisibilityMask, Renderer.VisibilityMask);
     }
+}
+
+TEST(RadientTesseraDrawableCacheTest, ReadyMeshWaitsForMaterialCache)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene      = RadientSceneImpl::Create();
+    RefCntAutoPtr<IThreadPool>      pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pScene, nullptr);
+    ASSERT_NE(pThreadPool, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-pending-material-cache-test", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+    ASSERT_NE(AddRenderableEntity(*pWriter, pMesh), InvalidRadientEntityID);
+
+    // The renderer has not created its material cache yet, so the otherwise
+    // ready mesh remains pending and is retried by the next synchronization.
+    const RadientTesseraMaterialResolveContext MaterialContext{*pThreadPool, nullptr};
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene, &MaterialContext), RADIENT_STATUS_OK);
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+    EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+    pScene->ClearPendingRenderChanges();
+
+    MeshProvider.NumCalls = 0;
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene, &MaterialContext), RADIENT_STATUS_OK);
+    EXPECT_EQ(MeshProvider.NumCalls, 1u);
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+    EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
 }
 
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanBeRemoved)

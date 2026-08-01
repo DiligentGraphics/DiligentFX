@@ -37,7 +37,8 @@
 namespace Diligent
 {
 
-RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*           pBackend,
+RadientRenderPipeline::RadientRenderPipeline(IThreadPool*               pThreadPool,
+                                             IRadientBackend*           pBackend,
                                              RadientAssetManagerImpl*   pAssetManager,
                                              const RadientRendererDesc& Desc) :
     m_pBackend{pBackend},
@@ -48,7 +49,7 @@ RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*           pBackend
     if (m_pAssetManager == nullptr)
         LOG_ERROR_AND_THROW("Radient render pipeline asset manager must not be null");
 
-    m_pTechnique = std::make_unique<RadientTesseraRenderTechnique>(pAssetManager, Desc);
+    m_pTechnique = std::make_unique<RadientTesseraRenderTechnique>(pThreadPool, pAssetManager, Desc);
 }
 
 RadientRenderPipeline::~RadientRenderPipeline()

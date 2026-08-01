@@ -28,8 +28,8 @@
 
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
-#include "Render/RadientMaterialSRBTable.hpp"
 #include "Render/RadientPBRRenderer.hpp"
+#include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientView.h"
 
@@ -56,7 +56,9 @@ public:
     RadientTesseraGeometryRenderer(Uint32                                MaterialTextureSlotCount,
                                    const RadientMaterialDefaultTextures& DefaultTextures) noexcept;
 
-    RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
+    RADIENT_STATUS Prepare(IRenderDevice*         pDevice,
+                           IDeviceContext*        pContext,
+                           GLTF::ResourceManager* pResourceManager = nullptr);
 
     RADIENT_STATUS BeginFrame(IRenderDevice*                            pDevice,
                               IDeviceContext*                           pContext,
@@ -70,21 +72,23 @@ public:
     RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
-    RADIENT_STATUS AcquireMaterialSRB(
-        const RadientMaterialRenderData&               MaterialData,
-        PBR_Renderer::PSO_FLAGS                        PSOFlags,
-        RadientMaterialSRBLease&                       Lease,
-        PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds);
+    RadientTesseraMaterialCache* GetMaterialCache() const noexcept
+    {
+        return m_pMaterialCache.get();
+    }
 
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext);
 
     void PrepareDefaultMaterialTextureBindings();
+    void CreateMaterialCache();
+
+    RADIENT_STATUS PrepareMaterialSRBs(Uint32 TextureVersion);
 
 private:
-    std::unique_ptr<RadientPBRRenderer> m_pRenderer;
+    std::unique_ptr<RadientPBRRenderer>          m_pRenderer;
+    std::unique_ptr<RadientTesseraMaterialCache> m_pMaterialCache;
 
-    RadientMaterialSRBTable               m_MaterialSRBTable;
     RadientMaterialDefaultTextures        m_DefaultMaterialTextures;
     RadientMaterialDefaultTextureBindings m_DefaultMaterialTextureBindings;
     Uint32                                m_MaterialTextureSlotCount            = 8;

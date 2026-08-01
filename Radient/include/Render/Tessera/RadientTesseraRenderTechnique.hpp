@@ -34,6 +34,7 @@
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
 #include "RefCntAutoPtr.hpp"
+#include "ThreadPool.h"
 
 namespace Diligent
 {
@@ -44,7 +45,8 @@ class RadientAssetManagerImpl;
 class RadientTesseraRenderTechnique final : public IRadientRenderTechnique
 {
 public:
-    RadientTesseraRenderTechnique(RadientAssetManagerImpl*   pAssetManager,
+    RadientTesseraRenderTechnique(IThreadPool*               pThreadPool,
+                                  RadientAssetManagerImpl*   pAssetManager,
                                   const RadientRendererDesc& Desc);
 
     virtual RADIENT_STATUS SyncScene(const IRadientScene& Scene) override final;
@@ -54,6 +56,7 @@ public:
     virtual void           EndFrame(const RadientRenderContext& Context) override final;
 
 private:
+    RefCntAutoPtr<IThreadPool>             m_pThreadPool;
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
     RadientTesseraDrawableCache       m_DrawableCache;

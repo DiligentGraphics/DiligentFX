@@ -33,7 +33,6 @@
 
 #include "GraphicsAccessories.hpp"
 #include "GLTFLoader.hpp"
-#include "GLTF_PBR_Renderer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -555,14 +554,14 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
 
     DrawablePassData&   PassData  = m_DrawablePassData[DrawableID];
     PBR_Renderer* const pRenderer = Renderer.GetRenderer();
-    if (pRenderer == nullptr || Drawable.pMaterialAsset == nullptr)
+    if (pRenderer == nullptr || !Drawable.MaterialData)
     {
         PassData = {};
         return;
     }
 
-    const RadientMaterialRenderData MaterialData =
-        RadientMaterialAssetManager::GetRenderData(Drawable.pMaterialAsset);
+    const RadientTesseraMaterialData& TesseraMaterialData = *Drawable.MaterialData;
+    const RadientMaterialRenderData&  MaterialData        = TesseraMaterialData.GetMaterialRenderData();
     if (!MaterialData)
     {
         PassData = {};
@@ -572,9 +571,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     const GLTF::Material&            Material  = *MaterialData.pMaterial;
     const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags =
-        Drawable.VertexAttribFlags |
-        GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
+    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
@@ -584,16 +581,14 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PSOFlags &= m_RenderFlags;
     PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 
-    RadientMaterialSRBLease                       MaterialSRB;
-    PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
-    if (Renderer.AcquireMaterialSRB(MaterialData,
-                                    PSOFlags,
-                                    MaterialSRB,
-                                    ShaderTextureIds) != RADIENT_STATUS_OK)
+    const RadientMaterialSRBLease& MaterialSRB = TesseraMaterialData.GetMaterialSRB();
+    if (!MaterialSRB || MaterialSRB.GetSRB() == nullptr)
     {
         PassData = {};
         return;
     }
+    const PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds =
+        TesseraMaterialData.GetShaderTextureIds();
 
     const PBR_Renderer::PSOKey PsoKey{
         PBR_Renderer::RenderPassType::Main,
@@ -617,7 +612,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PassData.Generation  = Drawable.Generation;
     PassData.PSOFlags    = PSOFlags;
     PassData.pPSO        = m_PbrPSOCache.Get(PsoKey, GetFlags);
-    PassData.MaterialSRB = std::move(MaterialSRB);
+    PassData.MaterialSRB = MaterialSRB;
     VERIFY_EXPR(PassData.pPSO != nullptr);
 }
 
