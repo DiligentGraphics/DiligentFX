@@ -39,7 +39,8 @@ namespace Diligent
 namespace
 {
 
-constexpr float IBLClearColor[] = {0.5f, 0.5f, 0.5f, 0.5f};
+constexpr float  IBLClearColor[]         = {0.5f, 0.5f, 0.5f, 0.5f};
+constexpr Uint32 MaxSSRDepthHierarchyMip = 6;
 
 bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
 {
@@ -78,6 +79,38 @@ bool IsValidTemporalAntiAliasing(const RadientTemporalAntiAliasingDesc& Temporal
         TemporalAntiAliasing.TemporalStabilityFactor <= 1.f;
 }
 
+bool IsValidSSAO(const RadientSSAODesc& SSAO)
+{
+    return SSAO.Algorithm < RADIENT_SSAO_ALGORITHM_COUNT &&
+        RadientMath::IsFiniteNonNegative(SSAO.EffectRadius) &&
+        RadientMath::IsFiniteNonNegative(SSAO.EffectFalloffRange) &&
+        SSAO.EffectFalloffRange <= 1.f &&
+        RadientMath::IsFinitePositive(SSAO.RadiusMultiplier) &&
+        RadientMath::IsFiniteNonNegative(SSAO.DepthMIPSamplingOffset) &&
+        RadientMath::IsFiniteNonNegative(SSAO.TemporalStabilityFactor) &&
+        SSAO.TemporalStabilityFactor <= 1.f &&
+        RadientMath::IsFiniteNonNegative(SSAO.SpatialReconstructionRadius) &&
+        RadientMath::IsFiniteNonNegative(SSAO.BitmaskThickness);
+}
+
+bool IsValidSSR(const RadientSSRDesc& SSR)
+{
+    return RadientMath::IsFiniteNonNegative(SSR.DepthBufferThickness) &&
+        SSR.DepthBufferThickness <= 1.f &&
+        RadientMath::IsFiniteNonNegative(SSR.RoughnessThreshold) &&
+        SSR.RoughnessThreshold <= 1.f &&
+        SSR.MostDetailedMip <= MaxSSRDepthHierarchyMip &&
+        SSR.MaxTraversalIntersections > 0 &&
+        RadientMath::IsFiniteNonNegative(SSR.GGXImportanceSampleBias) &&
+        SSR.GGXImportanceSampleBias <= 1.f &&
+        RadientMath::IsFiniteNonNegative(SSR.SpatialReconstructionRadius) &&
+        RadientMath::IsFiniteNonNegative(SSR.TemporalRadianceStabilityFactor) &&
+        SSR.TemporalRadianceStabilityFactor <= 1.f &&
+        RadientMath::IsFiniteNonNegative(SSR.TemporalVarianceStabilityFactor) &&
+        SSR.TemporalVarianceStabilityFactor <= 1.f &&
+        RadientMath::IsFiniteNonNegative(SSR.BilateralCleanupSpatialSigmaFactor);
+}
+
 } // namespace
 
 RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
@@ -101,7 +134,9 @@ RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
     if (!IsValidEnvironment(Desc.Environment) ||
         !IsValidToneMapping(Desc.ToneMapping) ||
         !IsValidBloom(Desc.Bloom) ||
-        !IsValidTemporalAntiAliasing(Desc.TemporalAntiAliasing))
+        !IsValidTemporalAntiAliasing(Desc.TemporalAntiAliasing) ||
+        !IsValidSSAO(Desc.SSAO) ||
+        !IsValidSSR(Desc.SSR))
         return {};
 
     return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
@@ -200,6 +235,30 @@ RADIENT_STATUS RadientViewImpl::SetTemporalAntiAliasing(const RadientTemporalAnt
         return RADIENT_STATUS_NO_CHANGE;
 
     m_Desc.TemporalAntiAliasing = TemporalAntiAliasing;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetSSAO(const RadientSSAODesc& SSAO)
+{
+    if (!IsValidSSAO(SSAO))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.SSAO == SSAO)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.SSAO = SSAO;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetSSR(const RadientSSRDesc& SSR)
+{
+    if (!IsValidSSR(SSR))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.SSR == SSR)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.SSR = SSR;
     return RADIENT_STATUS_OK;
 }
 

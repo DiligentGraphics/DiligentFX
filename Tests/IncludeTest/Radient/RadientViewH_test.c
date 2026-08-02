@@ -33,6 +33,8 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     RadientToneMappingDesc          ToneMapping          = {0};
     RadientBloomDesc                Bloom                = {0};
     RadientTemporalAntiAliasingDesc TemporalAntiAliasing = {0};
+    RadientSSAODesc                 SSAO                 = {0};
+    RadientSSRDesc                  SSR                  = {0};
     RADIENT_STATUS                  Status               = RADIENT_STATUS_OK;
 
     Status = IRadientView_SetScene(pView, 0);
@@ -42,6 +44,8 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     Status = IRadientView_SetToneMapping(pView, &ToneMapping);
     Status = IRadientView_SetBloom(pView, &Bloom);
     Status = IRadientView_SetTemporalAntiAliasing(pView, &TemporalAntiAliasing);
+    Status = IRadientView_SetSSAO(pView, &SSAO);
+    Status = IRadientView_SetSSR(pView, &SSR);
 
     (void)pDesc;
     (void)Status;

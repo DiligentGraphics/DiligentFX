@@ -996,6 +996,60 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetTemporalAntiAliasing(TemporalAntiAliasing), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, TemporalAntiAliasing);
     EXPECT_EQ(pView->SetTemporalAntiAliasing(TemporalAntiAliasing), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientSSAODesc& DefaultSSAO = pView->GetDesc().SSAO;
+    EXPECT_EQ(DefaultSSAO.Enabled, False);
+    EXPECT_EQ(DefaultSSAO.Algorithm, RADIENT_SSAO_ALGORITHM_GTAO);
+    EXPECT_EQ(DefaultSSAO.EffectRadius, 1.f);
+    EXPECT_EQ(DefaultSSAO.EffectFalloffRange, 0.615f);
+    EXPECT_EQ(DefaultSSAO.RadiusMultiplier, 1.457f);
+    EXPECT_EQ(DefaultSSAO.DepthMIPSamplingOffset, 3.3f);
+    EXPECT_EQ(DefaultSSAO.TemporalStabilityFactor, 0.9f);
+    EXPECT_EQ(DefaultSSAO.SpatialReconstructionRadius, 4.f);
+    EXPECT_EQ(DefaultSSAO.BitmaskThickness, 0.5f);
+
+    RadientSSAODesc SSAO{};
+    SSAO.Enabled                     = True;
+    SSAO.Algorithm                   = RADIENT_SSAO_ALGORITHM_VBAO;
+    SSAO.EffectRadius                = 2.f;
+    SSAO.EffectFalloffRange          = 0.5f;
+    SSAO.RadiusMultiplier            = 1.2f;
+    SSAO.DepthMIPSamplingOffset      = 2.5f;
+    SSAO.TemporalStabilityFactor     = 0.8f;
+    SSAO.SpatialReconstructionRadius = 5.f;
+    SSAO.BitmaskThickness            = 0.75f;
+
+    EXPECT_EQ(pView->SetSSAO(SSAO), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().SSAO, SSAO);
+    EXPECT_EQ(pView->SetSSAO(SSAO), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientSSRDesc& DefaultSSR = pView->GetDesc().SSR;
+    EXPECT_EQ(DefaultSSR.Enabled, False);
+    EXPECT_EQ(DefaultSSR.DepthBufferThickness, 0.025f);
+    EXPECT_EQ(DefaultSSR.RoughnessThreshold, 0.2f);
+    EXPECT_EQ(DefaultSSR.MostDetailedMip, 0u);
+    EXPECT_EQ(DefaultSSR.MaxTraversalIntersections, 128u);
+    EXPECT_EQ(DefaultSSR.GGXImportanceSampleBias, 0.3f);
+    EXPECT_EQ(DefaultSSR.SpatialReconstructionRadius, 4.f);
+    EXPECT_EQ(DefaultSSR.TemporalRadianceStabilityFactor, 1.f);
+    EXPECT_EQ(DefaultSSR.TemporalVarianceStabilityFactor, 0.9f);
+    EXPECT_EQ(DefaultSSR.BilateralCleanupSpatialSigmaFactor, 0.9f);
+
+    RadientSSRDesc SSR{};
+    SSR.Enabled                            = True;
+    SSR.DepthBufferThickness               = 0.05f;
+    SSR.RoughnessThreshold                 = 0.4f;
+    SSR.MostDetailedMip                    = 1;
+    SSR.MaxTraversalIntersections          = 64;
+    SSR.GGXImportanceSampleBias            = 0.2f;
+    SSR.SpatialReconstructionRadius        = 5.f;
+    SSR.TemporalRadianceStabilityFactor    = 0.8f;
+    SSR.TemporalVarianceStabilityFactor    = 0.7f;
+    SSR.BilateralCleanupSpatialSigmaFactor = 1.2f;
+
+    EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().SSR, SSR);
+    EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
@@ -1064,6 +1118,16 @@ TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
     EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pView, nullptr);
 
+    InvalidViewDesc                = {};
+    InvalidViewDesc.SSAO.Algorithm = RADIENT_SSAO_ALGORITHM_COUNT;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
+    InvalidViewDesc                     = {};
+    InvalidViewDesc.SSR.MostDetailedMip = 7;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
     RadientViewDesc ViewDesc{};
     ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
     ASSERT_NE(pView, nullptr);
@@ -1102,6 +1166,34 @@ TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
 
     EXPECT_EQ(pView->SetTemporalAntiAliasing(InvalidTemporalAntiAliasing), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, StoredTemporalAntiAliasing);
+
+    const RadientSSAODesc StoredSSAO        = pView->GetDesc().SSAO;
+    const auto            ExpectInvalidSSAO = [&](RadientSSAODesc SSAO) {
+        EXPECT_EQ(pView->SetSSAO(SSAO), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().SSAO, StoredSSAO);
+    };
+
+    RadientSSAODesc InvalidSSAO = StoredSSAO;
+    InvalidSSAO.EffectRadius    = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidSSAO(InvalidSSAO);
+
+    InvalidSSAO                         = StoredSSAO;
+    InvalidSSAO.TemporalStabilityFactor = 1.1f;
+    ExpectInvalidSSAO(InvalidSSAO);
+
+    const RadientSSRDesc StoredSSR        = pView->GetDesc().SSR;
+    const auto           ExpectInvalidSSR = [&](RadientSSRDesc SSR) {
+        EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().SSR, StoredSSR);
+    };
+
+    RadientSSRDesc InvalidSSR     = StoredSSR;
+    InvalidSSR.RoughnessThreshold = -0.1f;
+    ExpectInvalidSSR(InvalidSSR);
+
+    InvalidSSR                           = StoredSSR;
+    InvalidSSR.MaxTraversalIntersections = 0;
+    ExpectInvalidSSR(InvalidSSR);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

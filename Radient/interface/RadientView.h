@@ -56,6 +56,21 @@ DILIGENT_TYPED_ENUM(RADIENT_TONE_MAPPING_MODE, Uint8)
     RADIENT_TONE_MAPPING_MODE_COUNT
 };
 
+/// Screen-space ambient occlusion algorithm.
+DILIGENT_TYPED_ENUM(RADIENT_SSAO_ALGORITHM, Uint8)
+{
+    /// Ground-truth ambient occlusion using cosine-weighted horizon integration.
+    RADIENT_SSAO_ALGORITHM_GTAO = 0,
+
+    /// Horizon-based ambient occlusion using uniformly weighted horizon integration.
+    RADIENT_SSAO_ALGORITHM_HBAO,
+
+    /// Visibility-bitmask ambient occlusion for partial occlusion by thin geometry.
+    RADIENT_SSAO_ALGORITHM_VBAO,
+
+    RADIENT_SSAO_ALGORITHM_COUNT
+};
+
 /// Skybox source.
 DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
 {
@@ -200,6 +215,116 @@ struct RadientTemporalAntiAliasingDesc
 };
 typedef struct RadientTemporalAntiAliasingDesc RadientTemporalAntiAliasingDesc;
 
+/// Per-view screen-space ambient occlusion settings.
+/// Currently consumed by the Tessera render technique.
+struct RadientSSAODesc
+{
+    /// Enables screen-space ambient occlusion.
+    Bool Enabled DEFAULT_INITIALIZER(False);
+
+    /// Ambient occlusion algorithm.
+    RADIENT_SSAO_ALGORITHM Algorithm DEFAULT_INITIALIZER(RADIENT_SSAO_ALGORITHM_GTAO);
+
+    /// World-space radius of ambient occlusion.
+    Float32 EffectRadius DEFAULT_INITIALIZER(1.f);
+
+    /// Fraction of EffectRadius over which sample contribution falls off, in the [0, 1] range.
+    Float32 EffectFalloffRange DEFAULT_INITIALIZER(0.615f);
+
+    /// Radius correction used to compensate for screen-space sampling bias.
+    Float32 RadiusMultiplier DEFAULT_INITIALIZER(1.457f);
+
+    /// Depth-mip sampling offset controlling the bandwidth and quality tradeoff.
+    Float32 DepthMIPSamplingOffset DEFAULT_INITIALIZER(3.3f);
+
+    /// Historical-frame contribution, in the [0, 1] range.
+    Float32 TemporalStabilityFactor DEFAULT_INITIALIZER(0.9f);
+
+    /// Spatial reconstruction kernel radius.
+    Float32 SpatialReconstructionRadius DEFAULT_INITIALIZER(4.f);
+
+    /// View-space occluder thickness used by the visibility-bitmask algorithm.
+    Float32 BitmaskThickness DEFAULT_INITIALIZER(0.5f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientSSAODesc& Rhs) const
+    {
+        return Enabled == Rhs.Enabled &&
+            Algorithm == Rhs.Algorithm &&
+            EffectRadius == Rhs.EffectRadius &&
+            EffectFalloffRange == Rhs.EffectFalloffRange &&
+            RadiusMultiplier == Rhs.RadiusMultiplier &&
+            DepthMIPSamplingOffset == Rhs.DepthMIPSamplingOffset &&
+            TemporalStabilityFactor == Rhs.TemporalStabilityFactor &&
+            SpatialReconstructionRadius == Rhs.SpatialReconstructionRadius &&
+            BitmaskThickness == Rhs.BitmaskThickness;
+    }
+
+    constexpr bool operator!=(const RadientSSAODesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientSSAODesc RadientSSAODesc;
+
+/// Per-view screen-space reflection settings.
+/// Currently consumed by the Tessera render technique.
+struct RadientSSRDesc
+{
+    /// Enables screen-space reflections.
+    Bool Enabled DEFAULT_INITIALIZER(False);
+
+    /// Depth comparison tolerance used when accepting ray intersections, in the [0, 1] range.
+    Float32 DepthBufferThickness DEFAULT_INITIALIZER(0.025f);
+
+    /// Surfaces rougher than this value do not produce screen-space reflection rays, in the [0, 1] range.
+    Float32 RoughnessThreshold DEFAULT_INITIALIZER(0.2f);
+
+    /// Most detailed depth-hierarchy mip used for non-mirror surfaces, in the [0, 6] range.
+    Uint32 MostDetailedMip DEFAULT_INITIALIZER(0);
+
+    /// Maximum number of depth-hierarchy intersections evaluated for one ray.
+    Uint32 MaxTraversalIntersections DEFAULT_INITIALIZER(128);
+
+    /// GGX importance-sampling bias, in the [0, 1] range.
+    Float32 GGXImportanceSampleBias DEFAULT_INITIALIZER(0.3f);
+
+    /// Spatial reconstruction kernel radius.
+    Float32 SpatialReconstructionRadius DEFAULT_INITIALIZER(4.f);
+
+    /// Historical radiance contribution, in the [0, 1] range.
+    Float32 TemporalRadianceStabilityFactor DEFAULT_INITIALIZER(1.f);
+
+    /// Historical variance contribution, in the [0, 1] range.
+    Float32 TemporalVarianceStabilityFactor DEFAULT_INITIALIZER(0.9f);
+
+    /// Spatial sigma of the bilateral cleanup filter.
+    Float32 BilateralCleanupSpatialSigmaFactor DEFAULT_INITIALIZER(0.9f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientSSRDesc& Rhs) const
+    {
+        return Enabled == Rhs.Enabled &&
+            DepthBufferThickness == Rhs.DepthBufferThickness &&
+            RoughnessThreshold == Rhs.RoughnessThreshold &&
+            MostDetailedMip == Rhs.MostDetailedMip &&
+            MaxTraversalIntersections == Rhs.MaxTraversalIntersections &&
+            GGXImportanceSampleBias == Rhs.GGXImportanceSampleBias &&
+            SpatialReconstructionRadius == Rhs.SpatialReconstructionRadius &&
+            TemporalRadianceStabilityFactor == Rhs.TemporalRadianceStabilityFactor &&
+            TemporalVarianceStabilityFactor == Rhs.TemporalVarianceStabilityFactor &&
+            BilateralCleanupSpatialSigmaFactor == Rhs.BilateralCleanupSpatialSigmaFactor;
+    }
+
+    constexpr bool operator!=(const RadientSSRDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientSSRDesc RadientSSRDesc;
+
 /// Skybox description.
 struct RadientSkyboxDesc
 {
@@ -305,6 +430,12 @@ struct RadientViewDesc
 
     /// Temporal anti-aliasing settings.
     RadientTemporalAntiAliasingDesc TemporalAntiAliasing DEFAULT_INITIALIZER({});
+
+    /// Screen-space ambient occlusion settings.
+    RadientSSAODesc SSAO DEFAULT_INITIALIZER({});
+
+    /// Screen-space reflection settings.
+    RadientSSRDesc SSR DEFAULT_INITIALIZER({});
 };
 typedef struct RadientViewDesc RadientViewDesc;
 
@@ -358,6 +489,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     /// Sets temporal anti-aliasing settings.
     VIRTUAL RADIENT_STATUS METHOD(SetTemporalAntiAliasing)(THIS_
                                                            const RadientTemporalAntiAliasingDesc REF TemporalAntiAliasing) PURE;
+
+    /// Sets screen-space ambient occlusion settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetSSAO)(THIS_
+                                           const RadientSSAODesc REF SSAO) PURE;
+
+    /// Sets screen-space reflection settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetSSR)(THIS_
+                                          const RadientSSRDesc REF SSR) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -374,6 +513,8 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetToneMapping(This, ...)    CALL_IFACE_METHOD(RadientView, SetToneMapping,  This, __VA_ARGS__)
 #    define IRadientView_SetBloom(This, ...)          CALL_IFACE_METHOD(RadientView, SetBloom,        This, __VA_ARGS__)
 #    define IRadientView_SetTemporalAntiAliasing(This, ...) CALL_IFACE_METHOD(RadientView, SetTemporalAntiAliasing, This, __VA_ARGS__)
+#    define IRadientView_SetSSAO(This, ...)           CALL_IFACE_METHOD(RadientView, SetSSAO,         This, __VA_ARGS__)
+#    define IRadientView_SetSSR(This, ...)            CALL_IFACE_METHOD(RadientView, SetSSR,          This, __VA_ARGS__)
 
 #endif
 
