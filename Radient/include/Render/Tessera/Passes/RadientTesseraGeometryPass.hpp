@@ -40,7 +40,7 @@
 #    pragma warning(disable : 4127) // conditional expression is constant
 #    pragma warning(disable : 4702) // unreachable code
 #endif
-#include "absl/container/btree_set.h"
+#include "absl/container/btree_map.h"
 #ifdef _MSC_VER
 #    pragma warning(pop)
 #endif
@@ -74,45 +74,67 @@ public:
                            const RadientFrameRenderTargets&   Targets);
 
 private:
+    static constexpr Uint32 InvalidBatchItemIndex = ~Uint32{0};
+
     RADIENT_STATUS CreatePsoCaches(PBR_Renderer&           Renderer,
                                    PBR_Renderer::PSO_FLAGS BaseRenderFlags,
                                    TEXTURE_FORMAT          RTVFormat,
                                    TEXTURE_FORMAT          DSVFormat);
 
-    struct DrawableSortKey
+    struct DrawableBatchKey
     {
-        UniqueIdentifier  PSOId        = 0;
-        UniqueIdentifier  MaterialId   = 0;
-        UniqueIdentifier  VertexPoolId = 0;
-        RadientDrawableID DrawableID   = InvalidRadientDrawableID;
-        bool              IsIndexed    = false;
+        UniqueIdentifier PSOId        = 0;
+        UniqueIdentifier MaterialId   = 0;
+        UniqueIdentifier VertexPoolId = 0;
+        bool             IsIndexed    = false;
     };
 
-    struct DrawableSortKeyLess
+    struct DrawableBatchKeyLess
     {
-        bool operator()(const DrawableSortKey& Lhs, const DrawableSortKey& Rhs) const noexcept;
+        bool operator()(const DrawableBatchKey& Lhs, const DrawableBatchKey& Rhs) const noexcept;
     };
 
-    struct DrawablePassData
+    struct DrawableBatchItem
     {
-        const RadientDrawableSlot* pDrawable = nullptr;
+        // Only fields consumed by Execute() are retained here, keeping the hot
+        // per-batch traversal compact and independent of the full drawable slot.
+        const RadientMatrix4x4* pWorldMatrix      = nullptr;
+        const Bool*             pEffectiveVisible = nullptr;
 
+        RadientDrawableID DrawableID    = InvalidRadientDrawableID;
+        Uint32            ElementCount  = 0;
+        Uint32            FirstLocation = 0;
+        Uint32            BaseVertex    = 0;
+    };
+
+    struct DrawableBatch
+    {
         IPipelineState*         pPSO                 = nullptr;
         PBR_Renderer::PSO_FLAGS PSOFlags             = PBR_Renderer::PSO_FLAG_NONE;
         Uint32                  PrimitiveAttribsSize = 0;
 
-        Uint32                     Generation = 0;
-        GLTF::Material::ALPHA_MODE AlphaMode  = GLTF::Material::ALPHA_MODE_NUM_MODES;
-        DrawableSortKey            SortKey;
+        UniqueIdentifier      MaterialId  = 0;
+        IVertexPool*          pVertexPool = nullptr;
+        const GLTF::Material* pMaterial   = nullptr;
+        bool                  IsIndexed   = false;
 
-        RadientMaterialSRBLease MaterialSRB;
+        RadientMaterialSRBLease        MaterialSRB;
+        std::vector<DrawableBatchItem> Drawables;
+    };
+
+    struct DrawablePassData
+    {
+        GLTF::Material::ALPHA_MODE AlphaMode = GLTF::Material::ALPHA_MODE_NUM_MODES;
+        DrawableBatchKey           BatchKey;
+        Uint32                     BatchItemIndex = InvalidBatchItemIndex;
     };
 
     struct PendingDraw
     {
-        RadientDrawableID DrawableID             = InvalidRadientDrawableID;
-        Uint32            PrimitiveAttribsOffset = 0;
-        Uint32            DrawCount              = 1;
+        const DrawableBatch* pBatch                 = nullptr;
+        Uint32               FirstDrawItem          = 0;
+        Uint32               PrimitiveAttribsOffset = 0;
+        Uint32               DrawCount              = 1;
     };
 
     struct DrawState
@@ -140,19 +162,19 @@ private:
     void InvalidateDrawablePassData(RadientDrawableID DrawableID);
 
 private:
-    using OrderedDrawableSet = absl::btree_set<DrawableSortKey, DrawableSortKeyLess>;
+    using OrderedDrawableBatchMap = absl::btree_map<DrawableBatchKey, DrawableBatch, DrawableBatchKeyLess>;
 
     PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
     PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
 
     std::vector<DrawablePassData> m_DrawablePassData;
 
-    // Incremental drawable changes maintain this order, avoiding a full sort
-    // of every visible drawable on every frame.
-    std::array<OrderedDrawableSet, GLTF::Material::ALPHA_MODE_NUM_MODES> m_OrderedDrawables;
-    std::vector<PendingDraw>                                             m_PendingDraws;
-    std::vector<MultiDrawItem>                                           m_MultiDrawItems;
-    std::vector<MultiDrawIndexedItem>                                    m_MultiDrawIndexedItems;
+    // Incremental drawable changes only move affected records between batches.
+    // Execute traverses each compact drawable vector without sorting every frame.
+    std::array<OrderedDrawableBatchMap, GLTF::Material::ALPHA_MODE_NUM_MODES> m_DrawableBatches;
+    std::vector<PendingDraw>                                                  m_PendingDraws;
+    std::vector<MultiDrawItem>                                                m_MultiDrawItems;
+    std::vector<MultiDrawIndexedItem>                                         m_MultiDrawIndexedItems;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

@@ -273,8 +273,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    const OrderedDrawableSet& OrderedDrawables = m_OrderedDrawables[AlphaMode];
-    if (OrderedDrawables.empty())
+    const OrderedDrawableBatchMap& DrawableBatches = m_DrawableBatches[AlphaMode];
+    if (DrawableBatches.empty())
         return RADIENT_STATUS_OK;
 
     VERIFY(pFrameSRB != nullptr, "Radient frame SRB is not initialized");
@@ -305,17 +305,13 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     const Uint32 ConstantBufferOffsetAlignment = pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
 
     m_PendingDraws.clear();
+    m_MultiDrawItems.clear();
+    m_MultiDrawIndexedItems.clear();
 
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
-    Uint32 MultiDrawCount       = 0;
 
     DrawState State;
-
-    UniqueIdentifier CurrentPSOId      = 0;
-    UniqueIdentifier CurrentMaterialId = 0;
-    bool             IsCurrentPSOReady = false;
-    bool             IsCurrentSRBReady = false;
 
     auto RenderPendingDraws = [&]() -> RADIENT_STATUS {
         if (pMappedPrimitiveData != nullptr)
@@ -326,121 +322,125 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
         const RADIENT_STATUS Status = this->RenderPendingDraws(*pRenderer, pContext, pFrameSRB, State);
         m_PendingDraws.clear();
+        m_MultiDrawItems.clear();
+        m_MultiDrawIndexedItems.clear();
         AttribsBufferOffset = 0;
-        MultiDrawCount      = 0;
         return Status;
     };
 
-    for (const DrawableSortKey& SortKey : OrderedDrawables)
+    for (const auto& BatchEntry : DrawableBatches)
     {
-        const RadientDrawableID DrawableID = SortKey.DrawableID;
-        VERIFY(DrawableID < m_DrawablePassData.size(), "Ordered drawable references invalid pass data");
-        const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-        VERIFY(PassData.pDrawable != nullptr &&
-                   PassData.Generation == PassData.pDrawable->Generation &&
-                   PassData.SortKey.DrawableID == DrawableID,
-               "Ordered drawable references stale pass data");
-
-        const RadientDrawableSlot& Drawable = *PassData.pDrawable;
-        if (Drawable.pMaterial == nullptr ||
-            Drawable.pVertexPool == nullptr ||
-            Drawable.pWorldMatrix == nullptr ||
-            Drawable.pEffectiveVisible == nullptr ||
-            !*Drawable.pEffectiveVisible ||
-            Drawable.ElementCount == 0)
-        {
-            continue;
-        }
-
-        if (CurrentPSOId != SortKey.PSOId)
-        {
-            CurrentPSOId      = SortKey.PSOId;
-            IsCurrentPSOReady = IsPipelineReady(PassData.pPSO);
-        }
-        if (!IsCurrentPSOReady)
+        const DrawableBatch& Batch = BatchEntry.second;
+        VERIFY(Batch.pPSO != nullptr && Batch.pMaterial != nullptr && Batch.pVertexPool != nullptr,
+               "Drawable batch contains invalid shared render state");
+        if (Batch.pPSO == nullptr || Batch.pMaterial == nullptr || Batch.pVertexPool == nullptr)
             continue;
 
-        if (CurrentMaterialId != SortKey.MaterialId)
-        {
-            CurrentMaterialId = SortKey.MaterialId;
-            IsCurrentSRBReady = PassData.MaterialSRB.GetSRB() != nullptr;
-        }
-        if (!IsCurrentSRBReady)
+        // Pipeline and SRB readiness are shared by the whole batch, so each
+        // potentially expensive query is made once instead of once per drawable.
+        if (!IsPipelineReady(Batch.pPSO))
+            continue;
+        if (Batch.MaterialSRB.GetSRB() == nullptr)
             continue;
 
-        if (MultiDrawCount == PrimitiveArraySize)
-            MultiDrawCount = 0;
-
-        if (MultiDrawCount > 0)
+        Uint32 MultiDrawCount = 0;
+        for (const DrawableBatchItem& Drawable : Batch.Drawables)
         {
-            PendingDraw&           FirstBatchDraw = m_PendingDraws[m_PendingDraws.size() - MultiDrawCount];
-            const DrawableSortKey& FirstBatchKey  = m_DrawablePassData[FirstBatchDraw.DrawableID].SortKey;
-            if (FirstBatchKey.PSOId == SortKey.PSOId &&
-                FirstBatchKey.MaterialId == SortKey.MaterialId &&
-                FirstBatchKey.VertexPoolId == SortKey.VertexPoolId &&
-                FirstBatchKey.IsIndexed == SortKey.IsIndexed)
+            if (Drawable.pWorldMatrix == nullptr ||
+                Drawable.pEffectiveVisible == nullptr ||
+                !*Drawable.pEffectiveVisible ||
+                Drawable.ElementCount == 0)
             {
-                ++FirstBatchDraw.DrawCount;
+                continue;
+            }
+
+            if (MultiDrawCount == PrimitiveArraySize)
+                MultiDrawCount = 0;
+
+            if (MultiDrawCount == 0)
+            {
+                AttribsBufferOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
+                if (Uint64{AttribsBufferOffset} + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
+                {
+                    const RADIENT_STATUS Status = RenderPendingDraws();
+                    if (RADIENT_FAILED(Status))
+                        return Status;
+                }
+            }
+
+            const Uint32 PrimitiveAttribsOffset = AttribsBufferOffset;
+
+            if (pMappedPrimitiveData == nullptr)
+            {
+                pContext->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedPrimitiveData);
+                if (pMappedPrimitiveData == nullptr)
+                {
+                    UNEXPECTED("Unable to map PBR primitive attributes buffer");
+                    return RADIENT_STATUS_INVALID_OPERATION;
+                }
+            }
+
+            void* const     pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
+            const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*Drawable.pWorldMatrix);
+            const float4    CustomData{};
+
+            GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData;
+            AttribsData.PSOFlags       = Batch.PSOFlags;
+            AttribsData.NodeMatrix     = &NodeTransform;
+            AttribsData.PrevNodeMatrix = &NodeTransform;
+            AttribsData.CustomData     = &CustomData;
+            AttribsData.CustomDataSize = sizeof(CustomData);
+
+            void* const pPrimitiveAttribsEnd =
+                GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
+                    pPrimitiveAttribs,
+                    AttribsData,
+                    !pRenderer->GetSettings().PackMatrixRowMajor,
+                    pRenderer->GetSettings().UseSkinPreTransform);
+            const Uint32 PrimitiveAttribsSize =
+                static_cast<Uint32>(static_cast<Uint8*>(pPrimitiveAttribsEnd) - static_cast<Uint8*>(pPrimitiveAttribs));
+            if (PrimitiveAttribsSize != Batch.PrimitiveAttribsSize || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
+            {
+                pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+                pMappedPrimitiveData = nullptr;
+                UNEXPECTED("PBR primitive attributes size is inconsistent with the bound buffer range");
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
+
+            Uint32 FirstDrawItem = 0;
+            if (Batch.IsIndexed)
+            {
+                FirstDrawItem = static_cast<Uint32>(m_MultiDrawIndexedItems.size());
+                m_MultiDrawIndexedItems.push_back({
+                    Drawable.ElementCount,
+                    Drawable.FirstLocation,
+                    Drawable.BaseVertex,
+                });
             }
             else
             {
-                MultiDrawCount = 0;
+                FirstDrawItem = static_cast<Uint32>(m_MultiDrawItems.size());
+                m_MultiDrawItems.push_back({
+                    Drawable.ElementCount,
+                    Drawable.FirstLocation,
+                });
             }
-        }
 
-        if (MultiDrawCount == 0)
-        {
-            AttribsBufferOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
-            if (Uint64{AttribsBufferOffset} + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
+            if (MultiDrawCount == 0)
             {
-                const RADIENT_STATUS Status = RenderPendingDraws();
-                if (RADIENT_FAILED(Status))
-                    return Status;
+                m_PendingDraws.push_back({&Batch, FirstDrawItem, PrimitiveAttribsOffset, 1});
             }
-        }
-
-        const Uint32 PrimitiveAttribsOffset = AttribsBufferOffset;
-
-        if (pMappedPrimitiveData == nullptr)
-        {
-            pContext->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedPrimitiveData);
-            if (pMappedPrimitiveData == nullptr)
+            else
             {
-                UNEXPECTED("Unable to map PBR primitive attributes buffer");
-                return RADIENT_STATUS_INVALID_OPERATION;
+                PendingDraw& Pending = m_PendingDraws.back();
+                VERIFY(Pending.pBatch == &Batch && Pending.FirstDrawItem + Pending.DrawCount == FirstDrawItem,
+                       "Pending multi-draw batch is not contiguous");
+                ++Pending.DrawCount;
             }
+
+            AttribsBufferOffset = PrimitiveAttribsOffset + Batch.PrimitiveAttribsSize;
+            ++MultiDrawCount;
         }
-
-        void* const     pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
-        const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*PassData.pDrawable->pWorldMatrix);
-        const float4    CustomData{};
-
-        GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData;
-        AttribsData.PSOFlags       = PassData.PSOFlags;
-        AttribsData.NodeMatrix     = &NodeTransform;
-        AttribsData.PrevNodeMatrix = &NodeTransform;
-        AttribsData.CustomData     = &CustomData;
-        AttribsData.CustomDataSize = sizeof(CustomData);
-
-        void* const pPrimitiveAttribsEnd =
-            GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
-                pPrimitiveAttribs,
-                AttribsData,
-                !pRenderer->GetSettings().PackMatrixRowMajor,
-                pRenderer->GetSettings().UseSkinPreTransform);
-        const Uint32 PrimitiveAttribsSize =
-            static_cast<Uint32>(static_cast<Uint8*>(pPrimitiveAttribsEnd) - static_cast<Uint8*>(pPrimitiveAttribs));
-        if (PrimitiveAttribsSize != PassData.PrimitiveAttribsSize || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
-        {
-            pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
-            pMappedPrimitiveData = nullptr;
-            UNEXPECTED("PBR primitive attributes size is inconsistent with the bound buffer range");
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        m_PendingDraws.push_back({DrawableID, PrimitiveAttribsOffset, 1});
-        AttribsBufferOffset = PrimitiveAttribsOffset + PassData.PrimitiveAttribsSize;
-        ++MultiDrawCount;
     }
 
     return RenderPendingDraws();
@@ -455,32 +455,27 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
            "Native multi-draw support has not been initialized");
     const bool NativeMultiDrawSupported = m_NativeMultiDrawSupported == DEVICE_FEATURE_STATE_ENABLED;
 
-    size_t PendingDrawIndex = 0;
-    while (PendingDrawIndex < m_PendingDraws.size())
+    for (const PendingDraw& Pending : m_PendingDraws)
     {
-        const PendingDraw& Pending = m_PendingDraws[PendingDrawIndex];
-        VERIFY(Pending.DrawableID < m_DrawablePassData.size(), "Pending drawable ID references invalid pass data");
-        const DrawablePassData& PassData = m_DrawablePassData[Pending.DrawableID];
-        VERIFY(PassData.pDrawable != nullptr &&
-                   PassData.Generation == PassData.pDrawable->Generation &&
-                   PassData.pPSO != nullptr,
-               "Pending drawable ID references stale pass data");
+        VERIFY(Pending.pBatch != nullptr, "Pending draw references a null batch");
+        if (Pending.pBatch == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
 
-        const RadientDrawableSlot& Drawable = *PassData.pDrawable;
-        const GLTF::Material&      Material = *Drawable.pMaterial;
+        const DrawableBatch&  Batch    = *Pending.pBatch;
+        const GLTF::Material& Material = *Batch.pMaterial;
 
-        if (State.pVertexPool != Drawable.pVertexPool)
+        if (State.pVertexPool != Batch.pVertexPool)
         {
-            State.pVertexPool = Drawable.pVertexPool;
-            VERIFY(State.pVertexPool != nullptr, "Pending drawable references null vertex pool");
+            State.pVertexPool = Batch.pVertexPool;
+            VERIFY(State.pVertexPool != nullptr, "Pending batch references null vertex pool");
             if (State.pVertexPool != nullptr)
                 BindVertexPool(*State.pVertexPool, pContext);
         }
 
-        const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
-        if (State.pPSO != PassData.pPSO)
+        const PBR_Renderer::PSO_FLAGS PSOFlags = Batch.PSOFlags;
+        if (State.pPSO != Batch.pPSO)
         {
-            State.pPSO      = PassData.pPSO;
+            State.pPSO      = Batch.pPSO;
             State.pMaterial = nullptr;
 
             if (State.pPSO != nullptr)
@@ -493,13 +488,13 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             State.FrameSRBCommitted = true;
         }
 
-        const UniqueIdentifier MaterialId         = PassData.SortKey.MaterialId;
+        const UniqueIdentifier MaterialId         = Batch.MaterialId;
         const bool             MaterialSRBChanged = State.MaterialId != MaterialId;
         if (MaterialSRBChanged)
         {
             State.MaterialId           = MaterialId;
-            State.pMaterialSRB         = PassData.MaterialSRB.GetSRB();
-            State.pPrimitiveAttribsVar = PassData.MaterialSRB.GetPrimitiveAttribsVariable();
+            State.pMaterialSRB         = Batch.MaterialSRB.GetSRB();
+            State.pPrimitiveAttribsVar = Batch.MaterialSRB.GetPrimitiveAttribsVariable();
         }
 
         if (State.pPrimitiveAttribsVar == nullptr)
@@ -520,40 +515,17 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             State.pMaterial = &Material;
         }
 
-        VERIFY(Pending.DrawCount > 0 && PendingDrawIndex + Pending.DrawCount <= m_PendingDraws.size(),
-               "Pending multi-draw batch is invalid");
-
-#ifdef DILIGENT_DEBUG
-        for (Uint32 DrawIndex = 1; DrawIndex < Pending.DrawCount; ++DrawIndex)
+        VERIFY(Pending.DrawCount > 0, "Pending multi-draw batch is empty");
+        if (Batch.IsIndexed)
         {
-            const PendingDraw& BatchDraw = m_PendingDraws[PendingDrawIndex + DrawIndex];
-            VERIFY(BatchDraw.DrawableID < m_DrawablePassData.size(), "Pending batch references invalid pass data");
-            const DrawablePassData& BatchPassData = m_DrawablePassData[BatchDraw.DrawableID];
-            VERIFY(BatchPassData.SortKey.PSOId == PassData.SortKey.PSOId &&
-                       BatchPassData.SortKey.MaterialId == PassData.SortKey.MaterialId &&
-                       BatchPassData.SortKey.VertexPoolId == PassData.SortKey.VertexPoolId &&
-                       BatchPassData.SortKey.IsIndexed == PassData.SortKey.IsIndexed,
-                   "Multi-draw batch contains incompatible draw state");
-        }
-#endif
+            VERIFY(Uint64{Pending.FirstDrawItem} + Pending.DrawCount <= m_MultiDrawIndexedItems.size(),
+                   "Pending indexed multi-draw batch is invalid");
+            const MultiDrawIndexedItem* const pDrawItems = m_MultiDrawIndexedItems.data() + Pending.FirstDrawItem;
 
-        if (Pending.DrawCount > 1 && Drawable.IsIndexed)
-        {
-            if (NativeMultiDrawSupported)
+            if (Pending.DrawCount > 1 && NativeMultiDrawSupported)
             {
-                m_MultiDrawIndexedItems.resize(Pending.DrawCount);
-                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
-                {
-                    const RadientDrawableSlot& BatchDrawable =
-                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
-                    m_MultiDrawIndexedItems[DrawIndex] = {
-                        BatchDrawable.ElementCount,
-                        BatchDrawable.FirstIndexLocation + BatchDrawable.FirstElement,
-                        BatchDrawable.BaseVertex,
-                    };
-                }
                 pContext->MultiDrawIndexed({Pending.DrawCount,
-                                            m_MultiDrawIndexedItems.data(),
+                                            pDrawItems,
                                             VT_UINT32,
                                             DRAW_FLAG_VERIFY_ALL});
             }
@@ -561,73 +533,50 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             {
                 for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
                 {
-                    const RadientDrawableSlot& BatchDrawable =
-                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
-                    DrawIndexedAttribs DrawAttrs{BatchDrawable.ElementCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    const MultiDrawIndexedItem& DrawItem = pDrawItems[DrawIndex];
+                    DrawIndexedAttribs          DrawAttrs{DrawItem.NumIndices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
                     if (DrawIndex > 0)
                         DrawAttrs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
-                    DrawAttrs.FirstIndexLocation    = BatchDrawable.FirstIndexLocation + BatchDrawable.FirstElement;
-                    DrawAttrs.BaseVertex            = BatchDrawable.BaseVertex;
+                    DrawAttrs.FirstIndexLocation    = DrawItem.FirstIndexLocation;
+                    DrawAttrs.BaseVertex            = DrawItem.BaseVertex;
                     DrawAttrs.FirstInstanceLocation = DrawIndex;
                     pContext->DrawIndexed(DrawAttrs);
                 }
             }
         }
-        else if (Pending.DrawCount > 1)
+        else
         {
-            if (NativeMultiDrawSupported)
+            VERIFY(Uint64{Pending.FirstDrawItem} + Pending.DrawCount <= m_MultiDrawItems.size(),
+                   "Pending multi-draw batch is invalid");
+            const MultiDrawItem* const pDrawItems = m_MultiDrawItems.data() + Pending.FirstDrawItem;
+
+            if (Pending.DrawCount > 1 && NativeMultiDrawSupported)
             {
-                m_MultiDrawItems.resize(Pending.DrawCount);
-                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
-                {
-                    const RadientDrawableSlot& BatchDrawable =
-                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
-                    m_MultiDrawItems[DrawIndex] = {
-                        BatchDrawable.ElementCount,
-                        BatchDrawable.BaseVertex + BatchDrawable.FirstElement,
-                    };
-                }
                 pContext->MultiDraw({Pending.DrawCount,
-                                     m_MultiDrawItems.data(),
+                                     pDrawItems,
                                      DRAW_FLAG_VERIFY_ALL});
             }
             else
             {
                 for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
                 {
-                    const RadientDrawableSlot& BatchDrawable =
-                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
-                    DrawAttribs DrawAttrs{BatchDrawable.ElementCount, DRAW_FLAG_VERIFY_ALL};
+                    const MultiDrawItem& DrawItem = pDrawItems[DrawIndex];
+                    DrawAttribs          DrawAttrs{DrawItem.NumVertices, DRAW_FLAG_VERIFY_ALL};
                     if (DrawIndex > 0)
                         DrawAttrs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
-                    DrawAttrs.StartVertexLocation   = BatchDrawable.BaseVertex + BatchDrawable.FirstElement;
+                    DrawAttrs.StartVertexLocation   = DrawItem.StartVertexLocation;
                     DrawAttrs.FirstInstanceLocation = DrawIndex;
                     pContext->Draw(DrawAttrs);
                 }
             }
         }
-        else if (Drawable.IsIndexed)
-        {
-            DrawIndexedAttribs DrawAttrs{Drawable.ElementCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.FirstIndexLocation = Drawable.FirstIndexLocation + Drawable.FirstElement;
-            DrawAttrs.BaseVertex         = Drawable.BaseVertex;
-            pContext->DrawIndexed(DrawAttrs);
-        }
-        else
-        {
-            DrawAttribs DrawAttrs{Drawable.ElementCount, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.StartVertexLocation = Drawable.BaseVertex + Drawable.FirstElement;
-            pContext->Draw(DrawAttrs);
-        }
-
-        PendingDrawIndex += Pending.DrawCount;
     }
 
     return RADIENT_STATUS_OK;
 }
 
-bool RadientTesseraGeometryPass::DrawableSortKeyLess::operator()(const DrawableSortKey& Lhs,
-                                                                 const DrawableSortKey& Rhs) const noexcept
+bool RadientTesseraGeometryPass::DrawableBatchKeyLess::operator()(const DrawableBatchKey& Lhs,
+                                                                  const DrawableBatchKey& Rhs) const noexcept
 {
     if (Lhs.PSOId != Rhs.PSOId)
         return Lhs.PSOId < Rhs.PSOId;
@@ -638,10 +587,7 @@ bool RadientTesseraGeometryPass::DrawableSortKeyLess::operator()(const DrawableS
     if (Lhs.VertexPoolId != Rhs.VertexPoolId)
         return Lhs.VertexPoolId < Rhs.VertexPoolId;
 
-    if (Lhs.IsIndexed != Rhs.IsIndexed)
-        return Lhs.IsIndexed < Rhs.IsIndexed;
-
-    return Lhs.DrawableID < Rhs.DrawableID;
+    return Lhs.IsIndexed < Rhs.IsIndexed;
 }
 
 void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRenderer&    Renderer,
@@ -653,8 +599,8 @@ void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRend
 
     if (RebuildAll)
     {
-        for (OrderedDrawableSet& Drawables : m_OrderedDrawables)
-            Drawables.clear();
+        for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)
+            Batches.clear();
         m_DrawablePassData.clear();
 
         const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
@@ -771,23 +717,54 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         return;
     }
 
-    PassData.pDrawable            = &Drawable;
-    PassData.Generation           = Drawable.Generation;
-    PassData.PSOFlags             = PSOFlags;
-    PassData.PrimitiveAttribsSize = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
-    PassData.AlphaMode            = AlphaMode;
-    PassData.pPSO                 = pPSO;
-    PassData.MaterialSRB          = MaterialSRB;
-    PassData.SortKey              = {
+    const DrawableBatchKey BatchKey = {
         pPSO->GetUniqueID(),
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),
-        DrawableID,
         Drawable.IsIndexed,
     };
 
-    const auto InsertResult = m_OrderedDrawables[AlphaMode].insert(PassData.SortKey);
-    VERIFY(InsertResult.second, "Drawable is already present in the ordered pass data");
+    OrderedDrawableBatchMap& Batches      = m_DrawableBatches[AlphaMode];
+    auto                     InsertResult = Batches.emplace(BatchKey, DrawableBatch{});
+    DrawableBatch&           Batch        = InsertResult.first->second;
+    if (InsertResult.second)
+    {
+        Batch.pPSO                 = pPSO;
+        Batch.PSOFlags             = PSOFlags;
+        Batch.PrimitiveAttribsSize = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
+        Batch.MaterialId           = BatchKey.MaterialId;
+        Batch.pVertexPool          = Drawable.pVertexPool;
+        Batch.pMaterial            = &Material;
+        Batch.IsIndexed            = Drawable.IsIndexed;
+        Batch.MaterialSRB          = MaterialSRB;
+    }
+    else
+    {
+        VERIFY(Batch.pPSO == pPSO &&
+                   Batch.PSOFlags == PSOFlags &&
+                   Batch.pVertexPool == Drawable.pVertexPool &&
+                   Batch.pMaterial == &Material &&
+                   Batch.IsIndexed == Drawable.IsIndexed,
+               "Drawable batch key refers to inconsistent shared render state");
+    }
+
+    VERIFY(Batch.Drawables.size() < (std::numeric_limits<Uint32>::max)(),
+           "Drawable batch contains too many items");
+
+    PassData.AlphaMode      = AlphaMode;
+    PassData.BatchKey       = BatchKey;
+    PassData.BatchItemIndex = static_cast<Uint32>(Batch.Drawables.size());
+
+    Batch.Drawables.push_back({
+        Drawable.pWorldMatrix,
+        Drawable.pEffectiveVisible,
+        DrawableID,
+        Drawable.ElementCount,
+        Drawable.IsIndexed ?
+            Drawable.FirstIndexLocation + Drawable.FirstElement :
+            Drawable.BaseVertex + Drawable.FirstElement,
+        Drawable.IsIndexed ? Drawable.BaseVertex : 0,
+    });
 }
 
 void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableID)
@@ -795,17 +772,38 @@ void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID Dr
     if (DrawableID < m_DrawablePassData.size())
     {
         DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-        if (PassData.SortKey.DrawableID != InvalidRadientDrawableID)
+        if (PassData.BatchItemIndex != InvalidBatchItemIndex)
         {
-            VERIFY(PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES,
-                   "Ordered drawable has an invalid alpha mode");
+            VERIFY(PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES, "Drawable has an invalid alpha mode");
             if (PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES)
             {
-                OrderedDrawableSet& Drawables = m_OrderedDrawables[PassData.AlphaMode];
-                const auto          It        = Drawables.find(PassData.SortKey);
-                VERIFY(It != Drawables.end(), "Ordered drawable entry is missing");
-                if (It != Drawables.end())
-                    Drawables.erase(It);
+                OrderedDrawableBatchMap& Batches = m_DrawableBatches[PassData.AlphaMode];
+                const auto               It      = Batches.find(PassData.BatchKey);
+                VERIFY(It != Batches.end(), "Drawable batch is missing");
+                if (It != Batches.end())
+                {
+                    std::vector<DrawableBatchItem>& Drawables = It->second.Drawables;
+                    VERIFY(PassData.BatchItemIndex < Drawables.size() &&
+                               Drawables[PassData.BatchItemIndex].DrawableID == DrawableID,
+                           "Drawable batch index is invalid");
+                    if (PassData.BatchItemIndex < Drawables.size())
+                    {
+                        const size_t LastItemIndex = Drawables.size() - 1;
+                        if (PassData.BatchItemIndex != LastItemIndex)
+                        {
+                            Drawables[PassData.BatchItemIndex] = std::move(Drawables.back());
+
+                            const RadientDrawableID MovedDrawableID = Drawables[PassData.BatchItemIndex].DrawableID;
+                            VERIFY(MovedDrawableID < m_DrawablePassData.size(), "Moved drawable has an invalid ID");
+                            if (MovedDrawableID < m_DrawablePassData.size())
+                                m_DrawablePassData[MovedDrawableID].BatchItemIndex = PassData.BatchItemIndex;
+                        }
+                        Drawables.pop_back();
+                    }
+
+                    if (Drawables.empty())
+                        Batches.erase(It);
+                }
             }
         }
         PassData = {};
@@ -839,8 +837,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
 
     m_RTVFormat = RTVFormat;
     m_DSVFormat = DSVFormat;
-    for (OrderedDrawableSet& Drawables : m_OrderedDrawables)
-        Drawables.clear();
+    for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)
+        Batches.clear();
     m_DrawablePassData.clear();
 
     return RADIENT_STATUS_OK;
