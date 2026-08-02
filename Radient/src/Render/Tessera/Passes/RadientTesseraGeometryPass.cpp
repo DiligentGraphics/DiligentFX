@@ -26,7 +26,6 @@
 
 #include "Render/Tessera/Passes/RadientTesseraGeometryPass.hpp"
 
-#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
@@ -37,19 +36,11 @@
 
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <limits>
 #include <vector>
 
 namespace Diligent
 {
-
-namespace HLSL
-{
-#include "Shaders/Common/public/BasicStructures.fxh"
-#include "Shaders/PBR/public/PBR_Structures.fxh"
-#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
-} // namespace HLSL
 
 namespace
 {
@@ -86,70 +77,6 @@ PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
     return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
 }
 
-template <typename ShaderStructType, typename HostStructType>
-Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* DebugName)
-{
-    static_assert(sizeof(ShaderStructType) == sizeof(HostStructType), "Size of HLSL and C++ structures must be the same");
-    if (pSrc != nullptr)
-    {
-        std::memcpy(pDstPtr, pSrc, sizeof(ShaderStructType));
-    }
-    else
-    {
-        UNEXPECTED("Shader attribute ", DebugName, " is not initialized in the material");
-        std::memset(pDstPtr, 0, sizeof(ShaderStructType));
-    }
-    static_assert(sizeof(ShaderStructType) % 16 == 0, "Size structure must be a multiple of 16");
-    return pDstPtr + sizeof(ShaderStructType);
-}
-
-void* WritePBRMaterialShaderAttribs(void*                           pDstShaderAttribs,
-                                    const PBR_Renderer::CreateInfo& Settings,
-                                    PBR_Renderer::PSO_FLAGS         PSOFlags,
-                                    const GLTF::Material&           Material)
-{
-    static_assert(static_cast<PBR_Renderer::PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH, "GLTF metallic-roughness workflow must match PBR workflow");
-    static_assert(static_cast<PBR_Renderer::PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_Renderer::PBR_WORKFLOW_SPEC_GLOSS, "GLTF specular-glossiness workflow must match PBR workflow");
-    static_assert(static_cast<PBR_Renderer::PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_UNLIT) == PBR_Renderer::PBR_WORKFLOW_UNLIT, "GLTF unlit workflow must match PBR workflow");
-
-    Uint8* pDstPtr = reinterpret_cast<Uint8*>(pDstShaderAttribs);
-
-    pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialBasicAttribs>(pDstPtr, &Material.Attribs, "Basic Attribs");
-
-    if (PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_SHEEN)
-        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialSheenAttribs>(pDstPtr, Material.Sheen.get(), "Sheen Attribs");
-
-    if (PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY)
-        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialAnisotropyAttribs>(pDstPtr, Material.Anisotropy.get(), "Anisotropy Attribs");
-
-    if (PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE)
-        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialIridescenceAttribs>(pDstPtr, Material.Iridescence.get(), "Iridescence Attribs");
-
-    if (PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION)
-        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialTransmissionAttribs>(pDstPtr, Material.Transmission.get(), "Transmission Attribs");
-
-    if (PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_VOLUME)
-        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialVolumeAttribs>(pDstPtr, Material.Volume.get(), "Volume Attribs");
-
-    HLSL::PBRMaterialTextureAttribs* pDstTextures      = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstPtr);
-    Uint32                           NumTextureAttribs = 0;
-    PBR_Renderer::ProcessTexturAttribs(PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) {
-        const int SrcAttribIndex = Settings.TextureAttribIndices[AttribId];
-        if (SrcAttribIndex < 0)
-        {
-            UNEXPECTED("Shader texture attribute ", Uint32{AttribId}, " is not initialized");
-            return;
-        }
-
-        static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
-                      "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
-        std::memcpy(pDstTextures + CurrIndex, &Material.GetTextureAttrib(SrcAttribIndex), sizeof(HLSL::PBRMaterialTextureAttribs));
-        ++NumTextureAttribs;
-    });
-
-    return pDstTextures + NumTextureAttribs;
-}
-
 void BindVertexPool(IVertexPool&    VertexPool,
                     IDeviceContext* pContext)
 {
@@ -161,30 +88,6 @@ void BindVertexPool(IVertexPool&    VertexPool,
         pVBs[BufferIndex] = VertexPool.GetBuffer(BufferIndex);
 
     pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
-}
-
-void WriteMaterialAttribs(PBR_Renderer&           Renderer,
-                          IDeviceContext*         pContext,
-                          PBR_Renderer::PSO_FLAGS PSOFlags,
-                          const GLTF::Material&   Material)
-{
-    void* pAttribsData = nullptr;
-    pContext->MapBuffer(Renderer.GetPBRMaterialAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD, pAttribsData);
-    if (pAttribsData == nullptr)
-    {
-        UNEXPECTED("Unable to map PBR material attribs buffer");
-        return;
-    }
-
-    void* pEndPtr = WritePBRMaterialShaderAttribs(pAttribsData,
-                                                  Renderer.GetSettings(),
-                                                  PSOFlags,
-                                                  Material);
-
-    VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + Renderer.GetPBRMaterialAttribsCB()->GetDesc().Size,
-           "Not enough space in the buffer to store material attributes");
-
-    pContext->UnmapBuffer(Renderer.GetPBRMaterialAttribsCB(), MAP_WRITE);
 }
 
 } // namespace
@@ -320,7 +223,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             pMappedPrimitiveData = nullptr;
         }
 
-        const RADIENT_STATUS Status = this->RenderPendingDraws(*pRenderer, pContext, pFrameSRB, State);
+        const RADIENT_STATUS Status = this->RenderPendingDraws(pContext, pFrameSRB, State);
         m_PendingDraws.clear();
         m_MultiDrawItems.clear();
         m_MultiDrawIndexedItems.clear();
@@ -331,9 +234,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     for (const auto& BatchEntry : DrawableBatches)
     {
         const DrawableBatch& Batch = BatchEntry.second;
-        VERIFY(Batch.pPSO != nullptr && Batch.pMaterial != nullptr && Batch.pVertexPool != nullptr,
+        VERIFY(Batch.pPSO != nullptr && Batch.pVertexPool != nullptr,
                "Drawable batch contains invalid shared render state");
-        if (Batch.pPSO == nullptr || Batch.pMaterial == nullptr || Batch.pVertexPool == nullptr)
+        if (Batch.pPSO == nullptr || Batch.pVertexPool == nullptr)
             continue;
 
         // Pipeline and SRB readiness are shared by the whole batch, so each
@@ -446,8 +349,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     return RenderPendingDraws();
 }
 
-RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&           Renderer,
-                                                              IDeviceContext*         pContext,
+RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*         pContext,
                                                               IShaderResourceBinding* pFrameSRB,
                                                               DrawState&              State)
 {
@@ -461,8 +363,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
         if (Pending.pBatch == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const DrawableBatch&  Batch    = *Pending.pBatch;
-        const GLTF::Material& Material = *Batch.pMaterial;
+        const DrawableBatch& Batch = *Pending.pBatch;
 
         if (State.pVertexPool != Batch.pVertexPool)
         {
@@ -472,11 +373,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
                 BindVertexPool(*State.pVertexPool, pContext);
         }
 
-        const PBR_Renderer::PSO_FLAGS PSOFlags = Batch.PSOFlags;
         if (State.pPSO != Batch.pPSO)
         {
-            State.pPSO      = Batch.pPSO;
-            State.pMaterial = nullptr;
+            State.pPSO = Batch.pPSO;
 
             if (State.pPSO != nullptr)
                 pContext->SetPipelineState(State.pPSO);
@@ -488,32 +387,38 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             State.FrameSRBCommitted = true;
         }
 
-        const UniqueIdentifier MaterialId         = Batch.MaterialId;
-        const bool             MaterialSRBChanged = State.MaterialId != MaterialId;
-        if (MaterialSRBChanged)
+        bool MaterialSRBChanged = false;
+        if (State.MaterialId != Batch.MaterialId)
         {
-            State.MaterialId           = MaterialId;
-            State.pMaterialSRB         = Batch.MaterialSRB.GetSRB();
-            State.pPrimitiveAttribsVar = Batch.MaterialSRB.GetPrimitiveAttribsVariable();
+            State.MaterialId = Batch.MaterialId;
+
+            IShaderResourceBinding* const pMaterialSRB = Batch.MaterialSRB.GetSRB();
+            MaterialSRBChanged                         = State.pMaterialSRB != pMaterialSRB;
+            if (MaterialSRBChanged)
+            {
+                State.pMaterialSRB          = pMaterialSRB;
+                State.pPrimitiveAttribsVar  = Batch.MaterialSRB.GetPrimitiveAttribsVariable();
+                State.pMaterialAttribsVar   = Batch.MaterialSRB.GetMaterialAttribsVariable();
+                State.MaterialAttribsOffset = ~Uint32{0};
+            }
         }
 
-        if (State.pPrimitiveAttribsVar == nullptr)
+        if (State.pPrimitiveAttribsVar == nullptr || State.pMaterialAttribsVar == nullptr)
         {
-            UNEXPECTED("Material SRB does not contain the PBR primitive attributes buffer variable");
+            UNEXPECTED("Material SRB does not contain the PBR attribute buffer variables");
             return RADIENT_STATUS_INVALID_OPERATION;
         }
 
         // One dynamic offset selects the contiguous primitive array consumed by
         // the entire multi-draw batch.
         State.pPrimitiveAttribsVar->SetBufferOffset(Pending.PrimitiveAttribsOffset);
+        if (State.MaterialAttribsOffset != Batch.MaterialAttribsOffset)
+        {
+            State.pMaterialAttribsVar->SetBufferOffset(Batch.MaterialAttribsOffset);
+            State.MaterialAttribsOffset = Batch.MaterialAttribsOffset;
+        }
         if (MaterialSRBChanged)
             pContext->CommitShaderResources(State.pMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-        if (State.pMaterial != &Material)
-        {
-            WriteMaterialAttribs(Renderer, pContext, PSOFlags, Material);
-            State.pMaterial = &Material;
-        }
 
         VERIFY(Pending.DrawCount > 0, "Pending multi-draw batch is empty");
         if (Batch.IsIndexed)
@@ -683,8 +588,10 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PSOFlags &= m_RenderFlags;
     PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 
-    const RadientMaterialSRBLease& MaterialSRB = TesseraMaterialData.GetMaterialSRB();
-    if (!MaterialSRB)
+    const RadientMaterialSRBLease&                MaterialSRB = TesseraMaterialData.GetMaterialSRB();
+    const RadientTesseraMaterialBufferAllocation& MaterialBufferAllocation =
+        TesseraMaterialData.GetMaterialBufferAllocation();
+    if (!MaterialSRB || !MaterialBufferAllocation)
     {
         PassData = {};
         return;
@@ -729,21 +636,22 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     DrawableBatch&           Batch        = InsertResult.first->second;
     if (InsertResult.second)
     {
-        Batch.pPSO                 = pPSO;
-        Batch.PSOFlags             = PSOFlags;
-        Batch.PrimitiveAttribsSize = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
-        Batch.MaterialId           = BatchKey.MaterialId;
-        Batch.pVertexPool          = Drawable.pVertexPool;
-        Batch.pMaterial            = &Material;
-        Batch.IsIndexed            = Drawable.IsIndexed;
-        Batch.MaterialSRB          = MaterialSRB;
+        Batch.pPSO                  = pPSO;
+        Batch.PSOFlags              = PSOFlags;
+        Batch.PrimitiveAttribsSize  = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
+        Batch.MaterialId            = BatchKey.MaterialId;
+        Batch.pVertexPool           = Drawable.pVertexPool;
+        Batch.MaterialAttribsOffset = MaterialBufferAllocation.GetOffset();
+        Batch.IsIndexed             = Drawable.IsIndexed;
+        Batch.MaterialSRB           = MaterialSRB;
     }
     else
     {
         VERIFY(Batch.pPSO == pPSO &&
                    Batch.PSOFlags == PSOFlags &&
+                   Batch.MaterialId == BatchKey.MaterialId &&
                    Batch.pVertexPool == Drawable.pVertexPool &&
-                   Batch.pMaterial == &Material &&
+                   Batch.MaterialAttribsOffset == MaterialBufferAllocation.GetOffset() &&
                    Batch.IsIndexed == Drawable.IsIndexed,
                "Drawable batch key refers to inconsistent shared render state");
     }

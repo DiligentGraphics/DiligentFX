@@ -196,6 +196,7 @@ TEST(RadientMaterialSRBTableTest, ConcurrentAcquireReusesEntry)
     Uint32 CreateCount = 0;
     ASSERT_EQ(Table.Prepare(
                   1,
+                  0,
                   ResolveTestSRV,
                   [&CreateCount](ITextureView* const*, Uint32) {
                       ++CreateCount;
@@ -244,24 +245,63 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
         return MakeTestSRB();
     };
 
-    ASSERT_EQ(Table.Prepare(1, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
+    ASSERT_EQ(Table.Prepare(1, 0, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     RefCntAutoPtr<IShaderResourceBinding> pFirstSRB{Lease.GetSRB()};
     ASSERT_NE(pFirstSRB, nullptr);
     IShaderResourceVariable* const pFirstPrimitiveAttribsVar = Lease.GetPrimitiveAttribsVariable();
     ASSERT_NE(pFirstPrimitiveAttribsVar, nullptr);
     EXPECT_EQ(pFirstPrimitiveAttribsVar,
               pFirstSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"));
+    EXPECT_EQ(Lease.GetMaterialAttribsVariable(),
+              pFirstSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs"));
     EXPECT_EQ(CreateCount, 1u);
 
-    EXPECT_EQ(Table.Prepare(1, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
+    EXPECT_EQ(Table.Prepare(1, 0, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     EXPECT_EQ(Lease.GetSRB(), pFirstSRB);
     EXPECT_EQ(CreateCount, 1u);
 
-    EXPECT_EQ(Table.Prepare(2, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
+    EXPECT_EQ(Table.Prepare(2, 0, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     EXPECT_NE(Lease.GetSRB(), nullptr);
     EXPECT_NE(Lease.GetSRB(), pFirstSRB);
     EXPECT_NE(Lease.GetPrimitiveAttribsVariable(), pFirstPrimitiveAttribsVar);
     EXPECT_EQ(CreateCount, 2u);
+
+    RefCntAutoPtr<IShaderResourceBinding> pSecondSRB{Lease.GetSRB()};
+    EXPECT_EQ(Table.Prepare(2, 1, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
+    EXPECT_NE(Lease.GetSRB(), pSecondSRB);
+    EXPECT_EQ(CreateCount, 3u);
+}
+
+TEST(RadientMaterialSRBTableTest, MaterialBufferRefreshKeepsPreviousSRBUntilReplacementIsReady)
+{
+    RadientMaterialSRBTable       Table;
+    const RadientMaterialSRBLease Lease = TestMaterialSRBRecipe{1}.Acquire(Table);
+    ASSERT_TRUE(Lease);
+
+    ASSERT_EQ(Table.Prepare(1, 0, ResolveTestSRV,
+                            [](ITextureView* const*, Uint32) { return MakeTestSRB(); }),
+              RADIENT_STATUS_OK);
+    IShaderResourceBinding* const  pPreviousSRB                 = Lease.GetSRB();
+    IShaderResourceVariable* const pPreviousPrimitiveAttribsVar = Lease.GetPrimitiveAttribsVariable();
+    IShaderResourceVariable* const pPreviousMaterialAttribsVar  = Lease.GetMaterialAttribsVariable();
+    ASSERT_NE(pPreviousSRB, nullptr);
+
+    EXPECT_EQ(Table.Prepare(
+                  1,
+                  1,
+                  [](const RadientMaterialTextureRenderData&) {
+                      return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_PENDING, nullptr};
+                  },
+                  [](ITextureView* const*, Uint32) { return MakeTestSRB(); }),
+              RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Lease.GetSRB(), pPreviousSRB);
+    EXPECT_EQ(Lease.GetPrimitiveAttribsVariable(), pPreviousPrimitiveAttribsVar);
+    EXPECT_EQ(Lease.GetMaterialAttribsVariable(), pPreviousMaterialAttribsVar);
+
+    EXPECT_EQ(Table.Prepare(1, 1, ResolveTestSRV,
+                            [](ITextureView* const*, Uint32) { return MakeTestSRB(); }),
+              RADIENT_STATUS_OK);
+    EXPECT_NE(Lease.GetSRB(), pPreviousSRB);
 }
 
 TEST(RadientMaterialSRBTableTest, RetriesPendingTextureResolution)
@@ -287,12 +327,12 @@ TEST(RadientMaterialSRBTableTest, RetriesPendingTextureResolution)
             return MakeTestSRB();
         };
 
-    EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Table.Prepare(1, 0, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_PENDING);
     EXPECT_EQ(Lease.GetSRB(), nullptr);
     EXPECT_EQ(CreateCount, 0u);
 
     TextureStatus = RADIENT_STATUS_OK;
-    EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
+    EXPECT_EQ(Table.Prepare(1, 0, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
     EXPECT_NE(Lease.GetSRB(), nullptr);
     EXPECT_EQ(CreateCount, 1u);
 }
@@ -349,7 +389,7 @@ TEST(RadientMaterialSRBTableTest, UnresolvedEntryDoesNotBlockReadyEntry)
                 return MakeTestSRB();
             };
 
-        EXPECT_EQ(Table.Prepare(1, ResolveTextureSRV, CreateSRB), UnresolvedStatus);
+        EXPECT_EQ(Table.Prepare(1, 0, ResolveTextureSRV, CreateSRB), UnresolvedStatus);
         EXPECT_EQ(ResolveCallCount, EntryCount);
         EXPECT_LT(FirstUnresolvedCall, FirstResolvedCall);
         EXPECT_EQ(CreateCount, EntryCount / 2);
@@ -400,6 +440,7 @@ TEST(RadientMaterialSRBTableTest, RemovesReleasedEntryDuringPrepare)
     Uint32 CreateCount = 0;
     ASSERT_EQ(Table.Prepare(
                   1,
+                  0,
                   ResolveTestSRV,
                   [&CreateCount](ITextureView* const*, Uint32) {
                       ++CreateCount;

@@ -318,25 +318,34 @@ void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
     m_DefaultMaterialTextureBindingsReady = true;
 }
 
-void RadientTesseraGeometryRenderer::CreateMaterialCache()
+void RadientTesseraGeometryRenderer::CreateMaterialCache(IRenderDevice* pDevice)
 {
+    VERIFY_EXPR(pDevice != nullptr);
     VERIFY_EXPR(m_pRenderer != nullptr);
     VERIFY_EXPR(m_DefaultMaterialTextureBindingsReady);
 
     const PBR_Renderer::CreateInfo& Settings = m_pRenderer->GetSettings();
 
     RadientTesseraMaterialCache::CreateInfo CacheCI;
-    CacheCI.TextureAttribIndices     = Settings.TextureAttribIndices;
-    CacheCI.MaterialTextureSlotCount = Settings.MaterialTexturesArraySize;
-    CacheCI.EnabledMaterialPSOFlags  = PBR_Renderer::GetEnabledPSOFlags(Settings);
-    CacheCI.DefaultTextures          = m_DefaultMaterialTextureBindings;
-    m_pMaterialCache                 = std::make_unique<RadientTesseraMaterialCache>(CacheCI);
+    CacheCI.TextureAttribIndices          = Settings.TextureAttribIndices;
+    CacheCI.MaterialTextureSlotCount      = Settings.MaterialTexturesArraySize;
+    CacheCI.EnabledMaterialPSOFlags       = PBR_Renderer::GetEnabledPSOFlags(Settings);
+    CacheCI.DefaultTextures               = m_DefaultMaterialTextureBindings;
+    CacheCI.ConstantBufferOffsetAlignment = pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
+    CacheCI.MaxMaterialAttribsSize        = m_pRenderer->GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+    m_pMaterialCache                      = std::make_unique<RadientTesseraMaterialCache>(CacheCI);
 }
 
-RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(Uint32 TextureVersion)
+RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice*  pDevice,
+                                                                   IDeviceContext* pContext,
+                                                                   Uint32          TextureVersion)
 {
     VERIFY_EXPR(m_pRenderer != nullptr);
     VERIFY_EXPR(m_pMaterialCache != nullptr);
+
+    const RADIENT_STATUS MaterialBufferStatus = m_pMaterialCache->PrepareMaterialBuffer(pDevice, pContext);
+    if (MaterialBufferStatus != RADIENT_STATUS_OK)
+        return MaterialBufferStatus;
 
     return m_pMaterialCache->Prepare(
         TextureVersion,
@@ -362,7 +371,10 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(Uint32 Textur
             if (pSRB == nullptr)
                 return pSRB;
 
-            m_pRenderer->InitMaterialSRBVars(pSRB);
+            m_pRenderer->InitMaterialSRBVars(
+                pSRB,
+                m_pMaterialCache->GetMaterialBuffer(),
+                m_pMaterialCache->GetMaxMaterialAttribsSize());
             if (!m_pRenderer->SetMaterialTextures(pSRB, ppTextureSRVs, 0, TextureCount))
                 pSRB.Release();
 
@@ -388,10 +400,10 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pD
         PrepareDefaultMaterialTextureBindings();
 
     if (m_DefaultMaterialTextureBindingsReady && m_pMaterialCache == nullptr)
-        CreateMaterialCache();
+        CreateMaterialCache(pDevice);
 
     if (m_pMaterialCache != nullptr && pResourceManager != nullptr)
-        return PrepareMaterialSRBs(pResourceManager->GetTextureVersion());
+        return PrepareMaterialSRBs(pDevice, pContext, pResourceManager->GetTextureVersion());
 
     return RADIENT_STATUS_OK;
 }

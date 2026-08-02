@@ -76,6 +76,7 @@ public:
 
     IShaderResourceBinding*  GetSRB() const noexcept;
     IShaderResourceVariable* GetPrimitiveAttribsVariable() const noexcept;
+    IShaderResourceVariable* GetMaterialAttribsVariable() const noexcept;
 
     explicit operator bool() const noexcept
     {
@@ -132,9 +133,11 @@ public:
         const RadientMaterialTextureRenderData* const* ppSlots,
         Uint32                                         SlotCount);
 
-    /// Creates new SRBs and recreates existing SRBs when TextureVersion changes.
-    /// Pending texture resolutions are skipped and retried by the next call.
+    /// Creates new SRBs and recreates existing SRBs when the texture resources
+    /// or shared material buffer change. Pending texture resolutions are
+    /// skipped and retried by the next call.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
+                           Uint32                               MaterialBufferVersion,
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);
 

@@ -113,10 +113,10 @@ private:
         PBR_Renderer::PSO_FLAGS PSOFlags             = PBR_Renderer::PSO_FLAG_NONE;
         Uint32                  PrimitiveAttribsSize = 0;
 
-        UniqueIdentifier      MaterialId  = 0;
-        IVertexPool*          pVertexPool = nullptr;
-        const GLTF::Material* pMaterial   = nullptr;
-        bool                  IsIndexed   = false;
+        UniqueIdentifier MaterialId            = 0;
+        IVertexPool*     pVertexPool           = nullptr;
+        Uint32           MaterialAttribsOffset = ~Uint32{0};
+        bool             IsIndexed             = false;
 
         RadientMaterialSRBLease        MaterialSRB;
         std::vector<DrawableBatchItem> Drawables;
@@ -139,17 +139,17 @@ private:
 
     struct DrawState
     {
-        UniqueIdentifier         MaterialId           = 0;
-        IShaderResourceBinding*  pMaterialSRB         = nullptr;
-        IShaderResourceVariable* pPrimitiveAttribsVar = nullptr;
-        IPipelineState*          pPSO                 = nullptr;
-        IVertexPool*             pVertexPool          = nullptr;
-        const GLTF::Material*    pMaterial            = nullptr;
-        bool                     FrameSRBCommitted    = false;
+        UniqueIdentifier         MaterialId            = 0;
+        IShaderResourceBinding*  pMaterialSRB          = nullptr;
+        IShaderResourceVariable* pPrimitiveAttribsVar  = nullptr;
+        IShaderResourceVariable* pMaterialAttribsVar   = nullptr;
+        IPipelineState*          pPSO                  = nullptr;
+        IVertexPool*             pVertexPool           = nullptr;
+        Uint32                   MaterialAttribsOffset = ~Uint32{0};
+        bool                     FrameSRBCommitted     = false;
     };
 
-    RADIENT_STATUS RenderPendingDraws(PBR_Renderer&           Renderer,
-                                      IDeviceContext*         pContext,
+    RADIENT_STATUS RenderPendingDraws(IDeviceContext*         pContext,
                                       IShaderResourceBinding* pFrameSRB,
                                       DrawState&              State);
 

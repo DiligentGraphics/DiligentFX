@@ -48,16 +48,18 @@ RadientPBRRenderer::RadientPBRRenderer(IRenderDevice*     pDevice,
                         &m_pFrameAttribsCB);
 }
 
-void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB) const
+void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB,
+                                             IBuffer*                pMaterialAttribsBuffer,
+                                             Uint32                  MaterialAttribsRange) const
 {
-    if (pSRB == nullptr)
+    if (pSRB == nullptr || pMaterialAttribsBuffer == nullptr || MaterialAttribsRange == 0)
     {
-        UNEXPECTED("Material SRB must not be null");
+        UNEXPECTED("Material SRB and shared material attributes buffer must be initialized");
         return;
     }
 
     constexpr bool BindPrimitiveAttribsBuffer = false;
-    constexpr bool BindMaterialAttribsBuffer  = true;
+    constexpr bool BindMaterialAttribsBuffer  = false;
     InitCommonSRBVars(pSRB,
                       nullptr,
                       BindPrimitiveAttribsBuffer,
@@ -77,6 +79,15 @@ void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB) const
                                           0,
                                           GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL) * PrimitiveArraySize);
     }
+
+    IShaderResourceVariable* const pMaterialAttribs = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
+    if (pMaterialAttribs == nullptr)
+    {
+        UNEXPECTED("PBR material attributes buffer variable is not initialized");
+        return;
+    }
+    if (pMaterialAttribs->Get() == nullptr)
+        pMaterialAttribs->SetBufferRange(pMaterialAttribsBuffer, 0, MaterialAttribsRange);
 }
 
 RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources)

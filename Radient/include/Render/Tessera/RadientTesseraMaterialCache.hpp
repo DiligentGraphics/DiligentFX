@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Render/RadientMaterialSRBTable.hpp"
+#include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
 #include "UniqueIdentifier.hpp"
 #include "WeakValueHashMap.hpp"
 
@@ -73,6 +74,11 @@ public:
         return m_MaterialSRB;
     }
 
+    const RadientTesseraMaterialBufferAllocation& GetMaterialBufferAllocation() const noexcept
+    {
+        return m_MaterialBufferAllocation;
+    }
+
     const PBR_Renderer::StaticShaderTextureIdsArrayType& GetShaderTextureIds() const noexcept
     {
         return m_ShaderTextureIds;
@@ -88,13 +94,15 @@ private:
 
     void PublishSuccess(PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
                         RadientMaterialSRBLease                       MaterialSRB,
+                        RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
                         PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept;
 
     void PublishFailure(RADIENT_STATUS Status) noexcept;
 
-    RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
-    RadientMaterialRenderData            m_MaterialData;
-    RadientMaterialSRBLease              m_MaterialSRB;
+    RefCntAutoPtr<IRadientMaterialAsset>   m_pMaterial;
+    RadientMaterialRenderData              m_MaterialData;
+    RadientMaterialSRBLease                m_MaterialSRB;
+    RadientTesseraMaterialBufferAllocation m_MaterialBufferAllocation;
 
     const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};
@@ -135,6 +143,8 @@ public:
         /// Resolve() further restricts extension groups using the GLTF material.
         PBR_Renderer::PSO_FLAGS               EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES;
         RadientMaterialDefaultTextureBindings DefaultTextures;
+        Uint32                                ConstantBufferOffsetAlignment = 0;
+        Uint32                                MaxMaterialAttribsSize        = 0;
     };
 
     explicit RadientTesseraMaterialCache(const CreateInfo& CI);
@@ -151,11 +161,20 @@ public:
     RadientTesseraMaterialResolveResult Resolve(IThreadPool&           ThreadPool,
                                                 IRadientMaterialAsset* pMaterial);
 
+    /// Creates or grows the shared material buffer and uploads worker-produced
+    /// material records. This method must be called from the render thread.
+    RADIENT_STATUS PrepareMaterialBuffer(IRenderDevice*  pDevice,
+                                         IDeviceContext* pContext);
+
     /// Creates pending material SRBs and refreshes existing SRBs after texture
     /// resources change. This method must be called from the render thread.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);
+
+    IBuffer* GetMaterialBuffer() const noexcept;
+    Uint32   GetMaterialBufferVersion() const noexcept;
+    Uint32   GetMaxMaterialAttribsSize() const noexcept;
 
 private:
     struct ProcessingContext;

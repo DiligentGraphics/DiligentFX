@@ -82,9 +82,11 @@ private:
     RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext);
 
     void PrepareDefaultMaterialTextureBindings();
-    void CreateMaterialCache();
+    void CreateMaterialCache(IRenderDevice* pDevice);
 
-    RADIENT_STATUS PrepareMaterialSRBs(Uint32 TextureVersion);
+    RADIENT_STATUS PrepareMaterialSRBs(IRenderDevice*  pDevice,
+                                       IDeviceContext* pContext,
+                                       Uint32          TextureVersion);
 
 private:
     std::unique_ptr<RadientPBRRenderer>          m_pRenderer;

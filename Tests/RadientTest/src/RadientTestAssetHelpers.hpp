@@ -173,7 +173,8 @@ public:
 
     explicit TestShaderResourceBinding(IReferenceCounters* pRefCounters) :
         TBase{pRefCounters},
-        m_pPrimitiveAttribsVar{MakeNewRCObj<TestShaderResourceVariable>()("cbPrimitiveAttribs")}
+        m_pPrimitiveAttribsVar{MakeNewRCObj<TestShaderResourceVariable>()("cbPrimitiveAttribs")},
+        m_pMaterialAttribsVar{MakeNewRCObj<TestShaderResourceVariable>()("cbMaterialAttribs")}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_ShaderResourceBinding, TBase)
@@ -198,19 +199,30 @@ public:
 
     virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByName(SHADER_TYPE ShaderType, const Char* Name) override final
     {
-        return ShaderType == SHADER_TYPE_PIXEL && Name != nullptr && std::strcmp(Name, "cbPrimitiveAttribs") == 0 ?
-            m_pPrimitiveAttribsVar.RawPtr() :
-            nullptr;
+        if (ShaderType != SHADER_TYPE_PIXEL || Name == nullptr)
+            return nullptr;
+
+        if (std::strcmp(Name, "cbPrimitiveAttribs") == 0)
+            return m_pPrimitiveAttribsVar;
+        if (std::strcmp(Name, "cbMaterialAttribs") == 0)
+            return m_pMaterialAttribsVar;
+        return nullptr;
     }
 
     virtual Uint32 DILIGENT_CALL_TYPE GetVariableCount(SHADER_TYPE ShaderType) const override final
     {
-        return ShaderType == SHADER_TYPE_PIXEL ? 1 : 0;
+        return ShaderType == SHADER_TYPE_PIXEL ? 2 : 0;
     }
 
     virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByIndex(SHADER_TYPE ShaderType, Uint32 Index) override final
     {
-        return ShaderType == SHADER_TYPE_PIXEL && Index == 0 ? m_pPrimitiveAttribsVar.RawPtr() : nullptr;
+        if (ShaderType != SHADER_TYPE_PIXEL)
+            return nullptr;
+        if (Index == 0)
+            return m_pPrimitiveAttribsVar;
+        if (Index == 1)
+            return m_pMaterialAttribsVar;
+        return nullptr;
     }
 
     virtual Bool DILIGENT_CALL_TYPE StaticResourcesInitialized() const override final
@@ -220,6 +232,7 @@ public:
 
 private:
     RefCntAutoPtr<IShaderResourceVariable> m_pPrimitiveAttribsVar;
+    RefCntAutoPtr<IShaderResourceVariable> m_pMaterialAttribsVar;
 };
 
 inline RefCntAutoPtr<IShaderResourceBinding> MakeTestShaderResourceBinding()

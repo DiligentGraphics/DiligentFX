@@ -113,8 +113,10 @@ public:
     // Accessed exclusively from the render thread.
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
     IShaderResourceVariable*              pPrimitiveAttribsVar = nullptr;
+    IShaderResourceVariable*              pMaterialAttribsVar  = nullptr;
 
-    Uint32 PreparedTextureVersion = ~0u;
+    Uint32 PreparedTextureVersion        = ~0u;
+    Uint32 PreparedMaterialBufferVersion = ~0u;
 };
 
 IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
@@ -125,6 +127,11 @@ IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 IShaderResourceVariable* RadientMaterialSRBLease::GetPrimitiveAttribsVariable() const noexcept
 {
     return m_pState != nullptr ? m_pState->pPrimitiveAttribsVar : nullptr;
+}
+
+IShaderResourceVariable* RadientMaterialSRBLease::GetMaterialAttribsVariable() const noexcept
+{
+    return m_pState != nullptr ? m_pState->pMaterialAttribsVar : nullptr;
 }
 
 struct RadientMaterialSRBTable::Impl
@@ -310,6 +317,7 @@ RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(
 
 RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     Uint32                               TextureVersion,
+    Uint32                               MaterialBufferVersion,
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
     const CreateSRBCallbackType&         CreateSRB)
 {
@@ -337,7 +345,9 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     for (const std::shared_ptr<RadientMaterialSRBState>& pState : m_Impl->PrepareEntries)
     {
-        if (pState->pSRB != nullptr && pState->PreparedTextureVersion == TextureVersion)
+        if (pState->pSRB != nullptr &&
+            pState->PreparedTextureVersion == TextureVersion &&
+            pState->PreparedMaterialBufferVersion == MaterialBufferVersion)
             continue;
 
         absl::InlinedVector<ITextureView*, 8> TextureSRVs;
@@ -378,9 +388,19 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             continue;
         }
 
-        pState->pSRB                   = std::move(pSRB);
-        pState->pPrimitiveAttribsVar   = pPrimitiveAttribsVar;
-        pState->PreparedTextureVersion = TextureVersion;
+        IShaderResourceVariable* const pMaterialAttribsVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
+        if (pMaterialAttribsVar == nullptr)
+        {
+            UNEXPECTED("Material SRB does not contain the PBR material attributes buffer variable");
+            Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
+            continue;
+        }
+
+        pState->pSRB                          = std::move(pSRB);
+        pState->pPrimitiveAttribsVar          = pPrimitiveAttribsVar;
+        pState->pMaterialAttribsVar           = pMaterialAttribsVar;
+        pState->PreparedTextureVersion        = TextureVersion;
+        pState->PreparedMaterialBufferVersion = MaterialBufferVersion;
     }
     m_Impl->PrepareEntries.clear();
 

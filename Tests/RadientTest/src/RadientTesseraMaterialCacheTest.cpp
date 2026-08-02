@@ -91,10 +91,12 @@ std::unique_ptr<RadientTesseraMaterialCache> MakeMaterialCache(
     PBR_Renderer::PSO_FLAGS                                       EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE)
 {
     RadientTesseraMaterialCache::CreateInfo CI;
-    CI.TextureAttribIndices     = TextureAttribIndices;
-    CI.MaterialTextureSlotCount = 8;
-    CI.EnabledMaterialPSOFlags  = EnabledMaterialPSOFlags;
-    CI.DefaultTextures          = MakeDefaultTextureBindings();
+    CI.TextureAttribIndices          = TextureAttribIndices;
+    CI.MaterialTextureSlotCount      = 8;
+    CI.EnabledMaterialPSOFlags       = EnabledMaterialPSOFlags;
+    CI.DefaultTextures               = MakeDefaultTextureBindings();
+    CI.ConstantBufferOffsetAlignment = 256;
+    CI.MaxMaterialAttribsSize        = 4096;
     return std::make_unique<RadientTesseraMaterialCache>(CI);
 }
 
@@ -369,6 +371,8 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsUseDistinctCachedData)
     EXPECT_NE(Result0.Data->GetUniqueID(), 0);
     EXPECT_NE(Result1.Data->GetUniqueID(), 0);
     EXPECT_NE(Result0.Data->GetUniqueID(), Result1.Data->GetUniqueID());
+    EXPECT_NE(Result0.Data->GetMaterialBufferAllocation().GetOffset(),
+              Result1.Data->GetMaterialBufferAllocation().GetOffset());
 }
 
 TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)
@@ -391,6 +395,8 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)
     IShaderResourceBinding* const pSRB = Result0.Data->GetMaterialSRB().GetSRB();
     ASSERT_NE(pSRB, nullptr);
     EXPECT_EQ(Result1.Data->GetMaterialSRB().GetSRB(), pSRB);
+    EXPECT_NE(Result0.Data->GetMaterialBufferAllocation().GetOffset(),
+              Result1.Data->GetMaterialBufferAllocation().GetOffset());
 }
 
 TEST(RadientTesseraMaterialCacheTest, ProcessingFailureIsTerminal)
@@ -461,10 +467,12 @@ TEST(RadientTesseraMaterialCacheTest, MaterialDataRetainsOnlySRBRecipeTextures)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
 
     RadientTesseraMaterialCache::CreateInfo CI;
-    CI.TextureAttribIndices     = MakeTextureAttribIndices();
-    CI.MaterialTextureSlotCount = 1;
-    CI.EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
-    CI.DefaultTextures          = MakeDefaultTextureBindings();
+    CI.TextureAttribIndices          = MakeTextureAttribIndices();
+    CI.MaterialTextureSlotCount      = 1;
+    CI.EnabledMaterialPSOFlags       = PBR_Renderer::PSO_FLAG_NONE;
+    CI.DefaultTextures               = MakeDefaultTextureBindings();
+    CI.ConstantBufferOffsetAlignment = 256;
+    CI.MaxMaterialAttribsSize        = 4096;
 
     RefCntWeakPtr<IRadientTextureAsset> pWeakWhiteLinear{CI.DefaultTextures.WhiteLinear.pTexture.RawPtr()};
     RefCntWeakPtr<IRadientTextureAsset> pWeakWhiteSRGB{CI.DefaultTextures.WhiteSRGB.pTexture.RawPtr()};

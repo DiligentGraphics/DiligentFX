@@ -500,9 +500,11 @@ std::unique_ptr<RadientTesseraMaterialCache> MakeDrawableMaterialCache()
     RadientTesseraMaterialCache::CreateInfo CI;
     for (size_t TextureId = 0; TextureId < CI.TextureAttribIndices.size(); ++TextureId)
         CI.TextureAttribIndices[TextureId] = static_cast<int>(TextureId);
-    CI.MaterialTextureSlotCount = 8;
-    CI.EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
-    CI.DefaultTextures          = MakeMaterialDefaultTextureBindings();
+    CI.MaterialTextureSlotCount      = 8;
+    CI.EnabledMaterialPSOFlags       = PBR_Renderer::PSO_FLAG_NONE;
+    CI.DefaultTextures               = MakeMaterialDefaultTextureBindings();
+    CI.ConstantBufferOffsetAlignment = 256;
+    CI.MaxMaterialAttribsSize        = 4096;
     return std::make_unique<RadientTesseraMaterialCache>(CI);
 }
 

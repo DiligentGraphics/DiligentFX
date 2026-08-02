@@ -32,6 +32,7 @@
 
 #include <exception>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -80,12 +81,15 @@ bool RadientTesseraMaterialData::TryScheduleProcessing() noexcept
 void RadientTesseraMaterialData::PublishSuccess(
     PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
     RadientMaterialSRBLease                       MaterialSRB,
+    RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept
 {
     VERIFY_EXPR(MaterialSRB);
-    m_MaterialPSOFlags = MaterialPSOFlags;
-    m_MaterialSRB      = std::move(MaterialSRB);
-    m_ShaderTextureIds = std::move(ShaderTextureIds);
+    VERIFY_EXPR(MaterialBufferAllocation);
+    m_MaterialPSOFlags         = MaterialPSOFlags;
+    m_MaterialSRB              = std::move(MaterialSRB);
+    m_MaterialBufferAllocation = std::move(MaterialBufferAllocation);
+    m_ShaderTextureIds         = std::move(ShaderTextureIds);
 
     m_Status.store(RADIENT_STATUS_OK, std::memory_order_release);
 }
@@ -103,10 +107,17 @@ struct RadientTesseraMaterialCache::ProcessingContext
     Uint32                                                 MaterialTextureSlotCount = 0;
     PBR_Renderer::PSO_FLAGS                                EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
     RadientMaterialDefaultTextureBindings                  DefaultTextures;
+    RadientTesseraMaterialBuffer                           MaterialBuffer;
+
+    ProcessingContext(Uint32 ConstantBufferOffsetAlignment,
+                      Uint32 MaxMaterialAttribsSize) :
+        MaterialBuffer{{ConstantBufferOffsetAlignment, MaxMaterialAttribsSize}}
+    {}
 };
 
 RadientTesseraMaterialCache::RadientTesseraMaterialCache(const CreateInfo& CI) :
-    m_pProcessingContext{std::make_shared<ProcessingContext>()}
+    m_pProcessingContext{std::make_shared<ProcessingContext>(CI.ConstantBufferOffsetAlignment,
+                                                             CI.MaxMaterialAttribsSize)}
 {
     if (CI.MaterialTextureSlotCount == 0 ||
         CI.MaterialTextureSlotCount > PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT)
@@ -177,6 +188,12 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
     return {std::move(Data), Status};
 }
 
+RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice* pDevice,
+                                                                   IDeviceContext* pContext)
+{
+    return m_pProcessingContext->MaterialBuffer.Prepare(pDevice, pContext);
+}
+
 RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     Uint32                               TextureVersion,
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
@@ -184,8 +201,24 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
 {
     return m_pProcessingContext->pMaterialSRBTable->Prepare(
         TextureVersion,
+        m_pProcessingContext->MaterialBuffer.GetVersion(),
         ResolveTextureSRV,
         CreateSRB);
+}
+
+IBuffer* RadientTesseraMaterialCache::GetMaterialBuffer() const noexcept
+{
+    return m_pProcessingContext->MaterialBuffer.GetBuffer();
+}
+
+Uint32 RadientTesseraMaterialCache::GetMaterialBufferVersion() const noexcept
+{
+    return m_pProcessingContext->MaterialBuffer.GetVersion();
+}
+
+Uint32 RadientTesseraMaterialCache::GetMaxMaterialAttribsSize() const noexcept
+{
+    return m_pProcessingContext->MaterialBuffer.GetMaxMaterialAttribsSize();
 }
 
 void RadientTesseraMaterialCache::ProcessMaterial(
@@ -209,10 +242,40 @@ void RadientTesseraMaterialCache::ProcessMaterial(
             MaterialSRB,
             ShaderTextureIds);
 
-    if (Status == RADIENT_STATUS_OK)
-        Data.PublishSuccess(MaterialPSOFlags, std::move(MaterialSRB), std::move(ShaderTextureIds));
-    else
+    if (Status != RADIENT_STATUS_OK)
+    {
         Data.PublishFailure(Status);
+        return;
+    }
+
+    std::vector<Uint8> MaterialAttribs(pContext->MaterialBuffer.GetMaxMaterialAttribsSize());
+    void* const        pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(
+        MaterialAttribs.data(),
+        {
+            MaterialPSOFlags,
+            pContext->TextureAttribIndices,
+            *Data.m_MaterialData.pMaterial,
+        });
+    const size_t MaterialAttribsSize =
+        static_cast<Uint8*>(pEnd) - MaterialAttribs.data();
+    if (MaterialAttribsSize == 0 || MaterialAttribsSize > MaterialAttribs.size())
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
+
+    RadientTesseraMaterialBufferAllocation MaterialBufferAllocation =
+        pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), static_cast<Uint32>(MaterialAttribsSize));
+    if (!MaterialBufferAllocation)
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
+
+    Data.PublishSuccess(MaterialPSOFlags,
+                        std::move(MaterialSRB),
+                        std::move(MaterialBufferAllocation),
+                        std::move(ShaderTextureIds));
 }
 
 } // namespace Diligent
