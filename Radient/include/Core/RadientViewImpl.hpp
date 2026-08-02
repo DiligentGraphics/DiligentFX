@@ -73,6 +73,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSSR(const RadientSSRDesc& SSR) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDepthOfField(const RadientDepthOfFieldDesc& DepthOfField) override final;
+
     // Lazily creates the view-owned IBL cubemaps and refreshes their contents
     // when the environment changes.
     RADIENT_STATUS Prepare(PBR_Renderer&   Renderer,

@@ -111,6 +111,17 @@ bool IsValidSSR(const RadientSSRDesc& SSR)
         RadientMath::IsFiniteNonNegative(SSR.BilateralCleanupSpatialSigmaFactor);
 }
 
+bool IsValidDepthOfField(const RadientDepthOfFieldDesc& DepthOfField)
+{
+    return RadientMath::IsFinitePositive(DepthOfField.MaxCircleOfConfusion) &&
+        RadientMath::IsFiniteNonNegative(DepthOfField.TemporalStabilityFactor) &&
+        DepthOfField.TemporalStabilityFactor <= 1.f &&
+        DepthOfField.BokehKernelRingCount >= 2 &&
+        DepthOfField.BokehKernelRingCount <= 5 &&
+        DepthOfField.BokehKernelRingDensity >= 2 &&
+        DepthOfField.BokehKernelRingDensity <= 7;
+}
+
 } // namespace
 
 RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
@@ -136,7 +147,8 @@ RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
         !IsValidBloom(Desc.Bloom) ||
         !IsValidTemporalAntiAliasing(Desc.TemporalAntiAliasing) ||
         !IsValidSSAO(Desc.SSAO) ||
-        !IsValidSSR(Desc.SSR))
+        !IsValidSSR(Desc.SSR) ||
+        !IsValidDepthOfField(Desc.DepthOfField))
         return {};
 
     return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
@@ -259,6 +271,18 @@ RADIENT_STATUS RadientViewImpl::SetSSR(const RadientSSRDesc& SSR)
         return RADIENT_STATUS_NO_CHANGE;
 
     m_Desc.SSR = SSR;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetDepthOfField(const RadientDepthOfFieldDesc& DepthOfField)
+{
+    if (!IsValidDepthOfField(DepthOfField))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.DepthOfField == DepthOfField)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.DepthOfField = DepthOfField;
     return RADIENT_STATUS_OK;
 }
 

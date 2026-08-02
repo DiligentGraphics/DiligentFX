@@ -1050,6 +1050,28 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().SSR, SSR);
     EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientDepthOfFieldDesc& DefaultDepthOfField = pView->GetDesc().DepthOfField;
+    EXPECT_EQ(DefaultDepthOfField.Enabled, False);
+    EXPECT_EQ(DefaultDepthOfField.MaxCircleOfConfusion, 0.01f);
+    EXPECT_EQ(DefaultDepthOfField.TemporalStabilityFactor, 0.9375f);
+    EXPECT_EQ(DefaultDepthOfField.BokehKernelRingCount, 5u);
+    EXPECT_EQ(DefaultDepthOfField.BokehKernelRingDensity, 7u);
+    EXPECT_EQ(DefaultDepthOfField.TemporalSmoothing, True);
+    EXPECT_EQ(DefaultDepthOfField.KarisInverse, True);
+
+    RadientDepthOfFieldDesc DepthOfField{};
+    DepthOfField.Enabled                 = True;
+    DepthOfField.MaxCircleOfConfusion    = 0.015f;
+    DepthOfField.TemporalStabilityFactor = 0.8f;
+    DepthOfField.BokehKernelRingCount    = 4;
+    DepthOfField.BokehKernelRingDensity  = 6;
+    DepthOfField.TemporalSmoothing       = False;
+    DepthOfField.KarisInverse            = False;
+
+    EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().DepthOfField, DepthOfField);
+    EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
@@ -1128,6 +1150,11 @@ TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
     EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pView, nullptr);
 
+    InvalidViewDesc                                   = {};
+    InvalidViewDesc.DepthOfField.BokehKernelRingCount = 1;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
     RadientViewDesc ViewDesc{};
     ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
     ASSERT_NE(pView, nullptr);
@@ -1194,6 +1221,24 @@ TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
     InvalidSSR                           = StoredSSR;
     InvalidSSR.MaxTraversalIntersections = 0;
     ExpectInvalidSSR(InvalidSSR);
+
+    const RadientDepthOfFieldDesc StoredDepthOfField        = pView->GetDesc().DepthOfField;
+    const auto                    ExpectInvalidDepthOfField = [&](RadientDepthOfFieldDesc DepthOfField) {
+        EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().DepthOfField, StoredDepthOfField);
+    };
+
+    RadientDepthOfFieldDesc InvalidDepthOfField = StoredDepthOfField;
+    InvalidDepthOfField.MaxCircleOfConfusion    = 0.f;
+    ExpectInvalidDepthOfField(InvalidDepthOfField);
+
+    InvalidDepthOfField                         = StoredDepthOfField;
+    InvalidDepthOfField.TemporalStabilityFactor = 1.1f;
+    ExpectInvalidDepthOfField(InvalidDepthOfField);
+
+    InvalidDepthOfField                        = StoredDepthOfField;
+    InvalidDepthOfField.BokehKernelRingDensity = 8;
+    ExpectInvalidDepthOfField(InvalidDepthOfField);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

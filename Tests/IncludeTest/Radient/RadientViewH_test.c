@@ -35,6 +35,7 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     RadientTemporalAntiAliasingDesc TemporalAntiAliasing = {0};
     RadientSSAODesc                 SSAO                 = {0};
     RadientSSRDesc                  SSR                  = {0};
+    RadientDepthOfFieldDesc         DepthOfField         = {0};
     RADIENT_STATUS                  Status               = RADIENT_STATUS_OK;
 
     Status = IRadientView_SetScene(pView, 0);
@@ -46,6 +47,7 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     Status = IRadientView_SetTemporalAntiAliasing(pView, &TemporalAntiAliasing);
     Status = IRadientView_SetSSAO(pView, &SSAO);
     Status = IRadientView_SetSSR(pView, &SSR);
+    Status = IRadientView_SetDepthOfField(pView, &DepthOfField);
 
     (void)pDesc;
     (void)Status;

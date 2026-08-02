@@ -325,6 +325,51 @@ struct RadientSSRDesc
 };
 typedef struct RadientSSRDesc RadientSSRDesc;
 
+/// Per-view depth-of-field settings.
+/// Currently consumed by the Tessera render technique.
+struct RadientDepthOfFieldDesc
+{
+    /// Enables depth of field.
+    Bool Enabled DEFAULT_INITIALIZER(False);
+
+    /// Maximum circle-of-confusion radius in texture coordinates.
+    Float32 MaxCircleOfConfusion DEFAULT_INITIALIZER(0.01f);
+
+    /// Historical circle-of-confusion contribution, in the [0, 1] range.
+    Float32 TemporalStabilityFactor DEFAULT_INITIALIZER(0.9375f);
+
+    /// Number of rings in the bokeh kernel, in the [2, 5] range.
+    Uint32 BokehKernelRingCount DEFAULT_INITIALIZER(5);
+
+    /// Number of samples contributed by each bokeh-kernel ring, in the [2, 7] range.
+    Uint32 BokehKernelRingDensity DEFAULT_INITIALIZER(7);
+
+    /// Enables temporal smoothing of the circle of confusion.
+    Bool TemporalSmoothing DEFAULT_INITIALIZER(True);
+
+    /// Enables inverse Karis weighting to emphasize bokeh circles.
+    Bool KarisInverse DEFAULT_INITIALIZER(True);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientDepthOfFieldDesc& Rhs) const
+    {
+        return Enabled == Rhs.Enabled &&
+            MaxCircleOfConfusion == Rhs.MaxCircleOfConfusion &&
+            TemporalStabilityFactor == Rhs.TemporalStabilityFactor &&
+            BokehKernelRingCount == Rhs.BokehKernelRingCount &&
+            BokehKernelRingDensity == Rhs.BokehKernelRingDensity &&
+            TemporalSmoothing == Rhs.TemporalSmoothing &&
+            KarisInverse == Rhs.KarisInverse;
+    }
+
+    constexpr bool operator!=(const RadientDepthOfFieldDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientDepthOfFieldDesc RadientDepthOfFieldDesc;
+
 /// Skybox description.
 struct RadientSkyboxDesc
 {
@@ -436,6 +481,9 @@ struct RadientViewDesc
 
     /// Screen-space reflection settings.
     RadientSSRDesc SSR DEFAULT_INITIALIZER({});
+
+    /// Depth-of-field settings.
+    RadientDepthOfFieldDesc DepthOfField DEFAULT_INITIALIZER({});
 };
 typedef struct RadientViewDesc RadientViewDesc;
 
@@ -497,6 +545,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     /// Sets screen-space reflection settings.
     VIRTUAL RADIENT_STATUS METHOD(SetSSR)(THIS_
                                           const RadientSSRDesc REF SSR) PURE;
+
+    /// Sets depth-of-field settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetDepthOfField)(THIS_
+                                                   const RadientDepthOfFieldDesc REF DepthOfField) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -515,6 +567,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetTemporalAntiAliasing(This, ...) CALL_IFACE_METHOD(RadientView, SetTemporalAntiAliasing, This, __VA_ARGS__)
 #    define IRadientView_SetSSAO(This, ...)           CALL_IFACE_METHOD(RadientView, SetSSAO,         This, __VA_ARGS__)
 #    define IRadientView_SetSSR(This, ...)            CALL_IFACE_METHOD(RadientView, SetSSR,          This, __VA_ARGS__)
+#    define IRadientView_SetDepthOfField(This, ...)   CALL_IFACE_METHOD(RadientView, SetDepthOfField, This, __VA_ARGS__)
 
 #endif
 
