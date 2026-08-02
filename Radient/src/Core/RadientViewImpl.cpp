@@ -50,6 +50,28 @@ bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
         RadientMath::IsFinite(Environment.Exposure);
 }
 
+bool IsValidToneMapping(const RadientToneMappingDesc& ToneMapping)
+{
+    return ToneMapping.Mode < RADIENT_TONE_MAPPING_MODE_COUNT &&
+        RadientMath::IsFinitePositive(ToneMapping.MiddleGray) &&
+        RadientMath::IsFinitePositive(ToneMapping.WhitePoint) &&
+        RadientMath::IsFiniteNonNegative(ToneMapping.LuminanceSaturation) &&
+        RadientMath::IsFiniteNonNegative(ToneMapping.AgX.Saturation) &&
+        RadientMath::IsFiniteNonNegative(ToneMapping.AgX.Slope) &&
+        RadientMath::IsFiniteNonNegative(ToneMapping.AgX.Power) &&
+        RadientMath::IsFinite(ToneMapping.AgX.Offset);
+}
+
+bool IsValidBloom(const RadientBloomDesc& Bloom)
+{
+    return RadientMath::IsFiniteNonNegative(Bloom.Intensity) &&
+        RadientMath::IsFiniteNonNegative(Bloom.Threshold) &&
+        RadientMath::IsFiniteNonNegative(Bloom.SoftThreshold) &&
+        Bloom.SoftThreshold <= 1.f &&
+        RadientMath::IsFiniteNonNegative(Bloom.Radius) &&
+        Bloom.Radius <= 1.f;
+}
+
 } // namespace
 
 RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
@@ -70,7 +92,9 @@ RadientViewImpl::~RadientViewImpl()
 
 RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
 {
-    if (!IsValidEnvironment(Desc.Environment))
+    if (!IsValidEnvironment(Desc.Environment) ||
+        !IsValidToneMapping(Desc.ToneMapping) ||
+        !IsValidBloom(Desc.Bloom))
         return {};
 
     return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
@@ -133,6 +157,30 @@ RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
     m_pSkyboxTexture   = Skybox.pTexture;
     NewSkybox.pTexture = m_pSkyboxTexture;
     m_Desc.Skybox      = NewSkybox;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetToneMapping(const RadientToneMappingDesc& ToneMapping)
+{
+    if (!IsValidToneMapping(ToneMapping))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.ToneMapping == ToneMapping)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.ToneMapping = ToneMapping;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetBloom(const RadientBloomDesc& Bloom)
+{
+    if (!IsValidBloom(Bloom))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.Bloom == Bloom)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.Bloom = Bloom;
     return RADIENT_STATUS_OK;
 }
 

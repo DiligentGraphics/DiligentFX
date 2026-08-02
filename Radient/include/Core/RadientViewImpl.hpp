@@ -63,6 +63,10 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetToneMapping(const RadientToneMappingDesc& ToneMapping) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetBloom(const RadientBloomDesc& Bloom) override final;
+
     // Lazily creates the view-owned IBL cubemaps and refreshes their contents
     // when the environment changes.
     RADIENT_STATUS Prepare(PBR_Renderer&   Renderer,

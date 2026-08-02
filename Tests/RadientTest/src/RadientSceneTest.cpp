@@ -944,6 +944,46 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredSkybox.MipLevel, 1.f);
 
     EXPECT_EQ(pView->SetSkybox(StoredSkybox), RADIENT_STATUS_NO_CHANGE);
+
+    // Presentation settings are stored by the view independently of the
+    // render technique that will consume them.
+    const RadientToneMappingDesc& DefaultToneMapping = pView->GetDesc().ToneMapping;
+    EXPECT_EQ(DefaultToneMapping.Mode, RADIENT_TONE_MAPPING_MODE_UNCHARTED2);
+    EXPECT_EQ(DefaultToneMapping.AutoExposure, True);
+    EXPECT_EQ(DefaultToneMapping.MiddleGray, 0.18f);
+    EXPECT_EQ(DefaultToneMapping.LightAdaptation, True);
+    EXPECT_EQ(DefaultToneMapping.WhitePoint, 3.f);
+    EXPECT_EQ(DefaultToneMapping.LuminanceSaturation, 1.f);
+
+    RadientToneMappingDesc ToneMapping{};
+    ToneMapping.Mode            = RADIENT_TONE_MAPPING_MODE_AGX_CUSTOM;
+    ToneMapping.AutoExposure    = False;
+    ToneMapping.MiddleGray      = 0.2f;
+    ToneMapping.LightAdaptation = False;
+    ToneMapping.WhitePoint      = 4.f;
+    ToneMapping.AgX.Saturation  = 1.2f;
+
+    EXPECT_EQ(pView->SetToneMapping(ToneMapping), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().ToneMapping, ToneMapping);
+    EXPECT_EQ(pView->SetToneMapping(ToneMapping), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientBloomDesc& DefaultBloom = pView->GetDesc().Bloom;
+    EXPECT_EQ(DefaultBloom.Enabled, False);
+    EXPECT_EQ(DefaultBloom.Intensity, 0.15f);
+    EXPECT_EQ(DefaultBloom.Threshold, 1.f);
+    EXPECT_EQ(DefaultBloom.SoftThreshold, 0.125f);
+    EXPECT_EQ(DefaultBloom.Radius, 0.75f);
+
+    RadientBloomDesc Bloom{};
+    Bloom.Enabled       = True;
+    Bloom.Intensity     = 0.25f;
+    Bloom.Threshold     = 2.f;
+    Bloom.SoftThreshold = 0.25f;
+    Bloom.Radius        = 0.8f;
+
+    EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().Bloom, Bloom);
+    EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
@@ -990,6 +1030,54 @@ TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
     InvalidEnvironment          = StoredEnvironment;
     InvalidEnvironment.Exposure = std::numeric_limits<Float32>::quiet_NaN();
     ExpectInvalidEnvironment(InvalidEnvironment);
+}
+
+TEST(RadientRendererTest, RejectsInvalidViewToneMappingAndBloomSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RadientViewDesc InvalidViewDesc{};
+    InvalidViewDesc.Bloom.Radius = 2.f;
+
+    RefCntAutoPtr<IRadientView> pView;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
+    RadientViewDesc ViewDesc{};
+    ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientToneMappingDesc StoredToneMapping        = pView->GetDesc().ToneMapping;
+    const auto                   ExpectInvalidToneMapping = [&](RadientToneMappingDesc ToneMapping) {
+        EXPECT_EQ(pView->SetToneMapping(ToneMapping), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().ToneMapping, StoredToneMapping);
+    };
+
+    RadientToneMappingDesc InvalidToneMapping = StoredToneMapping;
+    InvalidToneMapping.Mode                   = RADIENT_TONE_MAPPING_MODE_COUNT;
+    ExpectInvalidToneMapping(InvalidToneMapping);
+
+    InvalidToneMapping            = StoredToneMapping;
+    InvalidToneMapping.MiddleGray = 0.f;
+    ExpectInvalidToneMapping(InvalidToneMapping);
+
+    const RadientBloomDesc StoredBloom        = pView->GetDesc().Bloom;
+    const auto             ExpectInvalidBloom = [&](RadientBloomDesc Bloom) {
+        EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().Bloom, StoredBloom);
+    };
+
+    RadientBloomDesc InvalidBloom = StoredBloom;
+    InvalidBloom.Intensity        = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidBloom(InvalidBloom);
+
+    InvalidBloom               = StoredBloom;
+    InvalidBloom.SoftThreshold = 1.1f;
+    ExpectInvalidBloom(InvalidBloom);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

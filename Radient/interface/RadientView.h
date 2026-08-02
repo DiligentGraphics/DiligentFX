@@ -38,6 +38,24 @@ typedef struct IRadientView         IRadientView;
 
 // clang-format off
 
+/// Tone mapping mode.
+DILIGENT_TYPED_ENUM(RADIENT_TONE_MAPPING_MODE, Uint8)
+{
+    RADIENT_TONE_MAPPING_MODE_NONE = 0,
+    RADIENT_TONE_MAPPING_MODE_EXP,
+    RADIENT_TONE_MAPPING_MODE_REINHARD,
+    RADIENT_TONE_MAPPING_MODE_REINHARD_MOD,
+    RADIENT_TONE_MAPPING_MODE_UNCHARTED2,
+    RADIENT_TONE_MAPPING_MODE_FILMIC_ALU,
+    RADIENT_TONE_MAPPING_MODE_LOGARITHMIC,
+    RADIENT_TONE_MAPPING_MODE_ADAPTIVE_LOG,
+    RADIENT_TONE_MAPPING_MODE_AGX,
+    RADIENT_TONE_MAPPING_MODE_AGX_CUSTOM,
+    RADIENT_TONE_MAPPING_MODE_PBR_NEUTRAL,
+    RADIENT_TONE_MAPPING_MODE_COMMERCE,
+    RADIENT_TONE_MAPPING_MODE_COUNT
+};
+
 /// Skybox source.
 DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
 {
@@ -53,6 +71,110 @@ DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
 
 // clang-format on
 
+/// Custom AgX tone mapping parameters.
+struct RadientToneMappingAgXDesc
+{
+    Float32 Saturation DEFAULT_INITIALIZER(1.f);
+    Float32 Slope      DEFAULT_INITIALIZER(1.f);
+    Float32 Power      DEFAULT_INITIALIZER(1.f);
+    Float32 Offset     DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientToneMappingAgXDesc& Rhs) const
+    {
+        return (Saturation == Rhs.Saturation &&
+                Slope == Rhs.Slope &&
+                Power == Rhs.Power &&
+                Offset == Rhs.Offset);
+    }
+
+    constexpr bool operator!=(const RadientToneMappingAgXDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientToneMappingAgXDesc RadientToneMappingAgXDesc;
+
+/// Tone mapping settings shared by all render techniques.
+struct RadientToneMappingDesc
+{
+    /// Tone mapping operator. RADIENT_TONE_MAPPING_MODE_NONE disables tone mapping.
+    RADIENT_TONE_MAPPING_MODE Mode DEFAULT_INITIALIZER(RADIENT_TONE_MAPPING_MODE_UNCHARTED2);
+
+    /// Enables automatic exposure calculation.
+    Bool AutoExposure DEFAULT_INITIALIZER(True);
+
+    /// Middle gray value used by tone mapping operators.
+    Float32 MiddleGray DEFAULT_INITIALIZER(0.18f);
+
+    /// Enables temporal adaptation to luminance changes.
+    Bool LightAdaptation DEFAULT_INITIALIZER(True);
+
+    /// White point used by tone mapping operators.
+    Float32 WhitePoint DEFAULT_INITIALIZER(3.f);
+
+    /// Luminance saturation applied by compatible tone mapping operators.
+    Float32 LuminanceSaturation DEFAULT_INITIALIZER(1.f);
+
+    /// Parameters used by RADIENT_TONE_MAPPING_MODE_AGX_CUSTOM.
+    RadientToneMappingAgXDesc AgX DEFAULT_INITIALIZER({});
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientToneMappingDesc& Rhs) const
+    {
+        return (Mode == Rhs.Mode &&
+                AutoExposure == Rhs.AutoExposure &&
+                MiddleGray == Rhs.MiddleGray &&
+                LightAdaptation == Rhs.LightAdaptation &&
+                WhitePoint == Rhs.WhitePoint &&
+                LuminanceSaturation == Rhs.LuminanceSaturation &&
+                AgX == Rhs.AgX);
+    }
+
+    constexpr bool operator!=(const RadientToneMappingDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientToneMappingDesc RadientToneMappingDesc;
+
+/// Bloom post-processing settings shared by all render techniques.
+struct RadientBloomDesc
+{
+    /// Enables the Bloom effect.
+    Bool Enabled DEFAULT_INITIALIZER(False);
+
+    /// Bloom contribution to the final image.
+    Float32 Intensity DEFAULT_INITIALIZER(0.15f);
+
+    /// Minimum brightness that contributes to Bloom.
+    Float32 Threshold DEFAULT_INITIALIZER(1.f);
+
+    /// Softness of the brightness threshold, in the [0, 1] range.
+    Float32 SoftThreshold DEFAULT_INITIALIZER(0.125f);
+
+    /// Bloom radius, in the [0, 1] range.
+    Float32 Radius DEFAULT_INITIALIZER(0.75f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientBloomDesc& Rhs) const
+    {
+        return (Enabled == Rhs.Enabled &&
+                Intensity == Rhs.Intensity &&
+                Threshold == Rhs.Threshold &&
+                SoftThreshold == Rhs.SoftThreshold &&
+                Radius == Rhs.Radius);
+    }
+
+    constexpr bool operator!=(const RadientBloomDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientBloomDesc RadientBloomDesc;
 
 /// Skybox description.
 struct RadientSkyboxDesc
@@ -150,6 +272,12 @@ struct RadientViewDesc
 
     /// Skybox rendered by the view.
     RadientSkyboxDesc Skybox DEFAULT_INITIALIZER({});
+
+    /// Tone mapping settings.
+    RadientToneMappingDesc ToneMapping DEFAULT_INITIALIZER({});
+
+    /// Bloom settings.
+    RadientBloomDesc Bloom DEFAULT_INITIALIZER({});
 };
 typedef struct RadientViewDesc RadientViewDesc;
 
@@ -191,6 +319,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     /// Sets the skybox rendered by the view.
     VIRTUAL RADIENT_STATUS METHOD(SetSkybox)(THIS_
                                              const RadientSkyboxDesc REF Skybox) PURE;
+
+    /// Sets tone mapping settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetToneMapping)(THIS_
+                                                  const RadientToneMappingDesc REF ToneMapping) PURE;
+
+    /// Sets Bloom settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetBloom)(THIS_
+                                            const RadientBloomDesc REF Bloom) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -204,6 +340,8 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
 #    define IRadientView_SetEnvironment(This, ...)    CALL_IFACE_METHOD(RadientView, SetEnvironment,  This, __VA_ARGS__)
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
+#    define IRadientView_SetToneMapping(This, ...)    CALL_IFACE_METHOD(RadientView, SetToneMapping,  This, __VA_ARGS__)
+#    define IRadientView_SetBloom(This, ...)          CALL_IFACE_METHOD(RadientView, SetBloom,        This, __VA_ARGS__)
 
 #endif
 
