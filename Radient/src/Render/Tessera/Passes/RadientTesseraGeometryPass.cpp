@@ -594,10 +594,12 @@ void RadientTesseraGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&  
                   if (LhsPassData.pPSO != RhsPassData.pPSO)
                       return std::less<IPipelineState*>{}(LhsPassData.pPSO, RhsPassData.pPSO);
 
-                  IShaderResourceBinding* const pLhsMaterialSRB = LhsPassData.MaterialSRB.GetSRB();
-                  IShaderResourceBinding* const pRhsMaterialSRB = RhsPassData.MaterialSRB.GetSRB();
+                  // Calling GetSRB() for every comparison is expensive, so use the
+                  // material SRB lease addresses as the ordering key.
+                  const RadientMaterialSRBLease* const pLhsMaterialSRB = std::addressof(LhsPassData.MaterialSRB);
+                  const RadientMaterialSRBLease* const pRhsMaterialSRB = std::addressof(RhsPassData.MaterialSRB);
                   if (pLhsMaterialSRB != pRhsMaterialSRB)
-                      return std::less<IShaderResourceBinding*>{}(pLhsMaterialSRB, pRhsMaterialSRB);
+                      return std::less<const RadientMaterialSRBLease*>{}(pLhsMaterialSRB, pRhsMaterialSRB);
 
                   if (LhsPassData.pDrawable->pVertexPool != RhsPassData.pDrawable->pVertexPool)
                       return std::less<IVertexPool*>{}(LhsPassData.pDrawable->pVertexPool, RhsPassData.pDrawable->pVertexPool);
