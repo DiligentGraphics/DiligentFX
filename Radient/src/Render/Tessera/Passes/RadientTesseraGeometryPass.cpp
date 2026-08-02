@@ -32,6 +32,7 @@
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 
 #include "GraphicsAccessories.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 #include "GLTFLoader.hpp"
 
 #include <algorithm>
@@ -102,58 +103,6 @@ Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* Debu
     return pDstPtr + sizeof(ShaderStructType);
 }
 
-struct PBRPrimitiveShaderAttribsData
-{
-    PBR_Renderer::PSO_FLAGS PSOFlags       = PBR_Renderer::PSO_FLAG_NONE;
-    const float4x4*         NodeMatrix     = nullptr;
-    const float4x4*         PrevNodeMatrix = nullptr;
-    Uint32                  JointCount     = 0;
-    Uint32                  FirstJoint     = 0;
-};
-
-void* WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
-                                     const PBRPrimitiveShaderAttribsData& AttribsData,
-                                     bool                                 TransposeMatrices)
-{
-    Uint8* pDstPtr    = reinterpret_cast<Uint8*>(pDstShaderAttribs);
-    auto   WriteValue = [&pDstPtr](auto Val) {
-        *reinterpret_cast<decltype(Val)*>(pDstPtr) = Val;
-        pDstPtr += sizeof(Val);
-    };
-
-    if (AttribsData.NodeMatrix != nullptr)
-        WriteShaderMatrix(pDstPtr, *AttribsData.NodeMatrix, TransposeMatrices);
-    else
-        UNEXPECTED("Node matrix must not be null");
-    pDstPtr += sizeof(float4x4);
-
-    if (AttribsData.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS)
-    {
-        if (AttribsData.PrevNodeMatrix != nullptr)
-            WriteShaderMatrix(pDstPtr, *AttribsData.PrevNodeMatrix, TransposeMatrices);
-        else
-            UNEXPECTED("Prev node matrix must not be null when motion vectors are enabled");
-        pDstPtr += sizeof(float4x4);
-    }
-
-    WriteValue(static_cast<int>(AttribsData.JointCount));
-    WriteValue(static_cast<int>(AttribsData.FirstJoint));
-
-    WriteValue(0.f);
-    WriteValue(0.f);
-    WriteValue(0.f);
-
-    WriteValue(1.f);
-    WriteValue(1.f);
-    WriteValue(1.f);
-
-    const float4 FallbackColor{1.f, 1.f, 1.f, 1.f};
-    std::memcpy(pDstPtr, &FallbackColor, sizeof(FallbackColor));
-    pDstPtr += sizeof(FallbackColor);
-
-    return pDstPtr;
-}
-
 void* WritePBRMaterialShaderAttribs(void*                           pDstShaderAttribs,
                                     const PBR_Renderer::CreateInfo& Settings,
                                     PBR_Renderer::PSO_FLAGS         PSOFlags,
@@ -212,41 +161,6 @@ void BindVertexPool(IVertexPool&    VertexPool,
         pVBs[BufferIndex] = VertexPool.GetBuffer(BufferIndex);
 
     pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
-}
-
-Uint32 WritePrimitiveAttribs(PBR_Renderer&           Renderer,
-                             void*                   pAttribsData,
-                             PBR_Renderer::PSO_FLAGS PSOFlags,
-                             const RadientMatrix4x4& WorldMatrix)
-{
-    if (pAttribsData == nullptr)
-    {
-        UNEXPECTED("Primitive attributes destination must not be null");
-        return 0;
-    }
-
-    const float4x4                NodeTransform = RadientMath::ToFloat4x4(WorldMatrix);
-    PBRPrimitiveShaderAttribsData AttribsData;
-    AttribsData.PSOFlags       = PSOFlags;
-    AttribsData.NodeMatrix     = &NodeTransform;
-    AttribsData.PrevNodeMatrix = &NodeTransform;
-
-    void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData,
-                                                   AttribsData,
-                                                   !Renderer.GetSettings().PackMatrixRowMajor);
-
-    const Uint32 WrittenSize = static_cast<Uint32>(reinterpret_cast<Uint8*>(pEndPtr) - static_cast<Uint8*>(pAttribsData));
-    const Uint32 AttribsSize = Renderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-    if (WrittenSize > AttribsSize)
-    {
-        UNEXPECTED("Written primitive attributes exceed the expected shader data size");
-        return 0;
-    }
-
-    // Radient does not currently use the custom primitive data that follows
-    // the standard PBR attributes, but it is part of the shader record.
-    std::memset(static_cast<Uint8*>(pAttribsData) + WrittenSize, 0, AttribsSize - WrittenSize);
-    return AttribsSize;
 }
 
 void WriteMaterialAttribs(PBR_Renderer&           Renderer,
@@ -497,21 +411,35 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             }
         }
 
+        void* const     pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
+        const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*PassData.pDrawable->pWorldMatrix);
+        const float4    CustomData{};
+
+        GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData;
+        AttribsData.PSOFlags       = PassData.PSOFlags;
+        AttribsData.NodeMatrix     = &NodeTransform;
+        AttribsData.PrevNodeMatrix = &NodeTransform;
+        AttribsData.CustomData     = &CustomData;
+        AttribsData.CustomDataSize = sizeof(CustomData);
+
+        void* const pPrimitiveAttribsEnd =
+            GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
+                pPrimitiveAttribs,
+                AttribsData,
+                !pRenderer->GetSettings().PackMatrixRowMajor,
+                pRenderer->GetSettings().UseSkinPreTransform);
         const Uint32 PrimitiveAttribsSize =
-            WritePrimitiveAttribs(*pRenderer,
-                                  static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset,
-                                  PassData.PSOFlags,
-                                  *PassData.pDrawable->pWorldMatrix);
-        if (PrimitiveAttribsSize == 0 || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
+            static_cast<Uint32>(static_cast<Uint8*>(pPrimitiveAttribsEnd) - static_cast<Uint8*>(pPrimitiveAttribs));
+        if (PrimitiveAttribsSize != PassData.PrimitiveAttribsSize || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
         {
             pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
             pMappedPrimitiveData = nullptr;
-            UNEXPECTED("PBR primitive attributes exceed the bound buffer range");
+            UNEXPECTED("PBR primitive attributes size is inconsistent with the bound buffer range");
             return RADIENT_STATUS_INVALID_OPERATION;
         }
 
         m_PendingDraws.push_back({DrawableID, PrimitiveAttribsOffset, 1});
-        AttribsBufferOffset = PrimitiveAttribsOffset + PrimitiveAttribsSize;
+        AttribsBufferOffset = PrimitiveAttribsOffset + PassData.PrimitiveAttribsSize;
         ++MultiDrawCount;
     }
 
@@ -843,13 +771,14 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         return;
     }
 
-    PassData.pDrawable   = &Drawable;
-    PassData.Generation  = Drawable.Generation;
-    PassData.PSOFlags    = PSOFlags;
-    PassData.AlphaMode   = AlphaMode;
-    PassData.pPSO        = pPSO;
-    PassData.MaterialSRB = MaterialSRB;
-    PassData.SortKey     = {
+    PassData.pDrawable            = &Drawable;
+    PassData.Generation           = Drawable.Generation;
+    PassData.PSOFlags             = PSOFlags;
+    PassData.PrimitiveAttribsSize = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
+    PassData.AlphaMode            = AlphaMode;
+    PassData.pPSO                 = pPSO;
+    PassData.MaterialSRB          = MaterialSRB;
+    PassData.SortKey              = {
         pPSO->GetUniqueID(),
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),

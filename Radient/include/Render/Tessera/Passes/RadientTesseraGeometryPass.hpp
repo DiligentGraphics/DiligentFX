@@ -97,8 +97,9 @@ private:
     {
         const RadientDrawableSlot* pDrawable = nullptr;
 
-        IPipelineState*         pPSO     = nullptr;
-        PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+        IPipelineState*         pPSO                 = nullptr;
+        PBR_Renderer::PSO_FLAGS PSOFlags             = PBR_Renderer::PSO_FLAG_NONE;
+        Uint32                  PrimitiveAttribsSize = 0;
 
         Uint32                     Generation = 0;
         GLTF::Material::ALPHA_MODE AlphaMode  = GLTF::Material::ALPHA_MODE_NUM_MODES;
