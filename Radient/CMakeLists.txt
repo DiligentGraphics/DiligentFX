@@ -31,6 +31,7 @@ set(SOURCE
     src/Render/RadientLightList.cpp
     src/Render/RadientMaterialSRBTable.cpp
     src/Render/RadientPBRRenderer.cpp
+    src/Render/RadientPostFXParameters.cpp
     src/Render/RadientRenderPipeline.cpp
     src/Render/RadientRendererImpl.cpp
     src/Render/Tessera/Passes/RadientTesseraGeometryPass.cpp
@@ -81,6 +82,7 @@ set(INCLUDE
     include/Render/RadientLightList.hpp
     include/Render/RadientMaterialSRBTable.hpp
     include/Render/RadientPBRRenderer.hpp
+    include/Render/RadientPostFXParameters.hpp
     include/Render/RadientRenderPipeline.hpp
     include/Render/RadientRenderTechnique.hpp
     include/Render/RadientRendererImpl.hpp
