@@ -67,6 +67,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetBloom(const RadientBloomDesc& Bloom) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTemporalAntiAliasing(const RadientTemporalAntiAliasingDesc& TemporalAntiAliasing) override final;
+
     // Lazily creates the view-owned IBL cubemaps and refreshes their contents
     // when the environment changes.
     RADIENT_STATUS Prepare(PBR_Renderer&   Renderer,

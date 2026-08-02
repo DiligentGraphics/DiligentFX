@@ -176,6 +176,30 @@ struct RadientBloomDesc
 };
 typedef struct RadientBloomDesc RadientBloomDesc;
 
+/// Temporal anti-aliasing settings shared by all render techniques.
+struct RadientTemporalAntiAliasingDesc
+{
+    /// Enables temporal anti-aliasing.
+    Bool Enabled DEFAULT_INITIALIZER(False);
+
+    /// Historical-frame contribution, in the [0, 1] range.
+    Float32 TemporalStabilityFactor DEFAULT_INITIALIZER(0.9375f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientTemporalAntiAliasingDesc& Rhs) const
+    {
+        return Enabled == Rhs.Enabled &&
+            TemporalStabilityFactor == Rhs.TemporalStabilityFactor;
+    }
+
+    constexpr bool operator!=(const RadientTemporalAntiAliasingDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientTemporalAntiAliasingDesc RadientTemporalAntiAliasingDesc;
+
 /// Skybox description.
 struct RadientSkyboxDesc
 {
@@ -278,6 +302,9 @@ struct RadientViewDesc
 
     /// Bloom settings.
     RadientBloomDesc Bloom DEFAULT_INITIALIZER({});
+
+    /// Temporal anti-aliasing settings.
+    RadientTemporalAntiAliasingDesc TemporalAntiAliasing DEFAULT_INITIALIZER({});
 };
 typedef struct RadientViewDesc RadientViewDesc;
 
@@ -327,6 +354,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     /// Sets Bloom settings.
     VIRTUAL RADIENT_STATUS METHOD(SetBloom)(THIS_
                                             const RadientBloomDesc REF Bloom) PURE;
+
+    /// Sets temporal anti-aliasing settings.
+    VIRTUAL RADIENT_STATUS METHOD(SetTemporalAntiAliasing)(THIS_
+                                                           const RadientTemporalAntiAliasingDesc REF TemporalAntiAliasing) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -342,6 +373,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
 #    define IRadientView_SetToneMapping(This, ...)    CALL_IFACE_METHOD(RadientView, SetToneMapping,  This, __VA_ARGS__)
 #    define IRadientView_SetBloom(This, ...)          CALL_IFACE_METHOD(RadientView, SetBloom,        This, __VA_ARGS__)
+#    define IRadientView_SetTemporalAntiAliasing(This, ...) CALL_IFACE_METHOD(RadientView, SetTemporalAntiAliasing, This, __VA_ARGS__)
 
 #endif
 

@@ -984,6 +984,18 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().Bloom, Bloom);
     EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientTemporalAntiAliasingDesc& DefaultTemporalAntiAliasing = pView->GetDesc().TemporalAntiAliasing;
+    EXPECT_EQ(DefaultTemporalAntiAliasing.Enabled, False);
+    EXPECT_EQ(DefaultTemporalAntiAliasing.TemporalStabilityFactor, 0.9375f);
+
+    RadientTemporalAntiAliasingDesc TemporalAntiAliasing{};
+    TemporalAntiAliasing.Enabled                 = True;
+    TemporalAntiAliasing.TemporalStabilityFactor = 0.9f;
+
+    EXPECT_EQ(pView->SetTemporalAntiAliasing(TemporalAntiAliasing), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, TemporalAntiAliasing);
+    EXPECT_EQ(pView->SetTemporalAntiAliasing(TemporalAntiAliasing), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
@@ -1032,7 +1044,7 @@ TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
     ExpectInvalidEnvironment(InvalidEnvironment);
 }
 
-TEST(RadientRendererTest, RejectsInvalidViewToneMappingAndBloomSettings)
+TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
 {
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -1044,6 +1056,11 @@ TEST(RadientRendererTest, RejectsInvalidViewToneMappingAndBloomSettings)
     InvalidViewDesc.Bloom.Radius = 2.f;
 
     RefCntAutoPtr<IRadientView> pView;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
+    InvalidViewDesc                                              = {};
+    InvalidViewDesc.TemporalAntiAliasing.TemporalStabilityFactor = -0.1f;
     EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pView, nullptr);
 
@@ -1078,6 +1095,13 @@ TEST(RadientRendererTest, RejectsInvalidViewToneMappingAndBloomSettings)
     InvalidBloom               = StoredBloom;
     InvalidBloom.SoftThreshold = 1.1f;
     ExpectInvalidBloom(InvalidBloom);
+
+    const RadientTemporalAntiAliasingDesc StoredTemporalAntiAliasing  = pView->GetDesc().TemporalAntiAliasing;
+    RadientTemporalAntiAliasingDesc       InvalidTemporalAntiAliasing = StoredTemporalAntiAliasing;
+    InvalidTemporalAntiAliasing.TemporalStabilityFactor               = 1.1f;
+
+    EXPECT_EQ(pView->SetTemporalAntiAliasing(InvalidTemporalAntiAliasing), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, StoredTemporalAntiAliasing);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

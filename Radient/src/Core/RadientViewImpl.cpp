@@ -72,6 +72,12 @@ bool IsValidBloom(const RadientBloomDesc& Bloom)
         Bloom.Radius <= 1.f;
 }
 
+bool IsValidTemporalAntiAliasing(const RadientTemporalAntiAliasingDesc& TemporalAntiAliasing)
+{
+    return RadientMath::IsFiniteNonNegative(TemporalAntiAliasing.TemporalStabilityFactor) &&
+        TemporalAntiAliasing.TemporalStabilityFactor <= 1.f;
+}
+
 } // namespace
 
 RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
@@ -94,7 +100,8 @@ RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
 {
     if (!IsValidEnvironment(Desc.Environment) ||
         !IsValidToneMapping(Desc.ToneMapping) ||
-        !IsValidBloom(Desc.Bloom))
+        !IsValidBloom(Desc.Bloom) ||
+        !IsValidTemporalAntiAliasing(Desc.TemporalAntiAliasing))
         return {};
 
     return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
@@ -181,6 +188,18 @@ RADIENT_STATUS RadientViewImpl::SetBloom(const RadientBloomDesc& Bloom)
         return RADIENT_STATUS_NO_CHANGE;
 
     m_Desc.Bloom = Bloom;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetTemporalAntiAliasing(const RadientTemporalAntiAliasingDesc& TemporalAntiAliasing)
+{
+    if (!IsValidTemporalAntiAliasing(TemporalAntiAliasing))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.TemporalAntiAliasing == TemporalAntiAliasing)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.TemporalAntiAliasing = TemporalAntiAliasing;
     return RADIENT_STATUS_OK;
 }
 
