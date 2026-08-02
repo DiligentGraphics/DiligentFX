@@ -1120,7 +1120,7 @@ TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
     ExpectInvalidEnvironment(InvalidEnvironment);
 }
 
-TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
+TEST(RadientRendererTest, RejectsInvalidToneMappingSettings)
 {
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
@@ -1128,117 +1128,367 @@ TEST(RadientRendererTest, RejectsInvalidViewPresentationSettings)
     RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
     ASSERT_NE(pRenderer, nullptr);
 
-    RadientViewDesc InvalidViewDesc{};
-    InvalidViewDesc.Bloom.Radius = 2.f;
-
     RefCntAutoPtr<IRadientView> pView;
-    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView, nullptr);
-
-    InvalidViewDesc                                              = {};
-    InvalidViewDesc.TemporalAntiAliasing.TemporalStabilityFactor = -0.1f;
-    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView, nullptr);
-
-    InvalidViewDesc                = {};
-    InvalidViewDesc.SSAO.Algorithm = RADIENT_SSAO_ALGORITHM_COUNT;
-    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView, nullptr);
-
-    InvalidViewDesc                     = {};
-    InvalidViewDesc.SSR.MostDetailedMip = 7;
-    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView, nullptr);
-
-    InvalidViewDesc                                   = {};
-    InvalidViewDesc.DepthOfField.BokehKernelRingCount = 1;
-    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView, nullptr);
-
-    RadientViewDesc ViewDesc{};
-    ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
     ASSERT_NE(pView, nullptr);
 
-    const RadientToneMappingDesc StoredToneMapping        = pView->GetDesc().ToneMapping;
-    const auto                   ExpectInvalidToneMapping = [&](RadientToneMappingDesc ToneMapping) {
+    const RadientToneMappingDesc StoredToneMapping = pView->GetDesc().ToneMapping;
+    const auto                   ExpectInvalid     = [&](const RadientToneMappingDesc& ToneMapping) {
         EXPECT_EQ(pView->SetToneMapping(ToneMapping), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pView->GetDesc().ToneMapping, StoredToneMapping);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.ToneMapping = ToneMapping;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
     };
 
-    RadientToneMappingDesc InvalidToneMapping = StoredToneMapping;
-    InvalidToneMapping.Mode                   = RADIENT_TONE_MAPPING_MODE_COUNT;
-    ExpectInvalidToneMapping(InvalidToneMapping);
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
 
-    InvalidToneMapping            = StoredToneMapping;
-    InvalidToneMapping.MiddleGray = 0.f;
-    ExpectInvalidToneMapping(InvalidToneMapping);
+    RadientToneMappingDesc Invalid = StoredToneMapping;
+    Invalid.Mode                   = RADIENT_TONE_MAPPING_MODE_COUNT;
+    ExpectInvalid(Invalid);
 
-    const RadientBloomDesc StoredBloom        = pView->GetDesc().Bloom;
-    const auto             ExpectInvalidBloom = [&](RadientBloomDesc Bloom) {
+    const Float32 InvalidPositiveValues[] = {0.f, -0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidPositiveValues)
+    {
+        Invalid            = StoredToneMapping;
+        Invalid.MiddleGray = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid            = StoredToneMapping;
+        Invalid.WhitePoint = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Float32 InvalidNonNegativeValues[] = {-0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidNonNegativeValues)
+    {
+        Invalid                     = StoredToneMapping;
+        Invalid.LuminanceSaturation = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                = StoredToneMapping;
+        Invalid.AgX.Saturation = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid           = StoredToneMapping;
+        Invalid.AgX.Slope = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid           = StoredToneMapping;
+        Invalid.AgX.Power = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Float32 InvalidFiniteValues[] = {NaN, Infinity, -Infinity};
+    for (Float32 Value : InvalidFiniteValues)
+    {
+        Invalid            = StoredToneMapping;
+        Invalid.AgX.Offset = Value;
+        ExpectInvalid(Invalid);
+    }
+}
+
+TEST(RadientRendererTest, RejectsInvalidBloomSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientBloomDesc StoredBloom   = pView->GetDesc().Bloom;
+    const auto             ExpectInvalid = [&](const RadientBloomDesc& Bloom) {
         EXPECT_EQ(pView->SetBloom(Bloom), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pView->GetDesc().Bloom, StoredBloom);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.Bloom = Bloom;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
     };
 
-    RadientBloomDesc InvalidBloom = StoredBloom;
-    InvalidBloom.Intensity        = std::numeric_limits<Float32>::quiet_NaN();
-    ExpectInvalidBloom(InvalidBloom);
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
 
-    InvalidBloom               = StoredBloom;
-    InvalidBloom.SoftThreshold = 1.1f;
-    ExpectInvalidBloom(InvalidBloom);
+    RadientBloomDesc Invalid                    = StoredBloom;
+    const Float32    InvalidNonNegativeValues[] = {-0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidNonNegativeValues)
+    {
+        Invalid           = StoredBloom;
+        Invalid.Intensity = Value;
+        ExpectInvalid(Invalid);
 
-    const RadientTemporalAntiAliasingDesc StoredTemporalAntiAliasing  = pView->GetDesc().TemporalAntiAliasing;
-    RadientTemporalAntiAliasingDesc       InvalidTemporalAntiAliasing = StoredTemporalAntiAliasing;
-    InvalidTemporalAntiAliasing.TemporalStabilityFactor               = 1.1f;
+        Invalid           = StoredBloom;
+        Invalid.Threshold = Value;
+        ExpectInvalid(Invalid);
+    }
 
-    EXPECT_EQ(pView->SetTemporalAntiAliasing(InvalidTemporalAntiAliasing), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, StoredTemporalAntiAliasing);
+    const Float32 InvalidUnitValues[] = {-0.1f, 1.1f, NaN, Infinity};
+    for (Float32 Value : InvalidUnitValues)
+    {
+        Invalid               = StoredBloom;
+        Invalid.SoftThreshold = Value;
+        ExpectInvalid(Invalid);
 
-    const RadientSSAODesc StoredSSAO        = pView->GetDesc().SSAO;
-    const auto            ExpectInvalidSSAO = [&](RadientSSAODesc SSAO) {
+        Invalid        = StoredBloom;
+        Invalid.Radius = Value;
+        ExpectInvalid(Invalid);
+    }
+}
+
+TEST(RadientRendererTest, RejectsInvalidTemporalAntiAliasingSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientTemporalAntiAliasingDesc StoredTemporalAntiAliasing = pView->GetDesc().TemporalAntiAliasing;
+    const auto                            ExpectInvalid              = [&](const RadientTemporalAntiAliasingDesc& TemporalAntiAliasing) {
+        EXPECT_EQ(pView->SetTemporalAntiAliasing(TemporalAntiAliasing), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().TemporalAntiAliasing, StoredTemporalAntiAliasing);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.TemporalAntiAliasing = TemporalAntiAliasing;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
+    };
+
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
+
+    const Float32 InvalidUnitValues[] = {-0.1f, 1.1f, NaN, Infinity};
+    for (Float32 Value : InvalidUnitValues)
+    {
+        RadientTemporalAntiAliasingDesc Invalid = StoredTemporalAntiAliasing;
+        Invalid.TemporalStabilityFactor         = Value;
+        ExpectInvalid(Invalid);
+    }
+}
+
+TEST(RadientRendererTest, RejectsInvalidSSAOSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientSSAODesc StoredSSAO    = pView->GetDesc().SSAO;
+    const auto            ExpectInvalid = [&](const RadientSSAODesc& SSAO) {
         EXPECT_EQ(pView->SetSSAO(SSAO), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pView->GetDesc().SSAO, StoredSSAO);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.SSAO = SSAO;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
     };
 
-    RadientSSAODesc InvalidSSAO = StoredSSAO;
-    InvalidSSAO.EffectRadius    = std::numeric_limits<Float32>::quiet_NaN();
-    ExpectInvalidSSAO(InvalidSSAO);
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
 
-    InvalidSSAO                         = StoredSSAO;
-    InvalidSSAO.TemporalStabilityFactor = 1.1f;
-    ExpectInvalidSSAO(InvalidSSAO);
+    RadientSSAODesc Invalid = StoredSSAO;
+    Invalid.Algorithm       = RADIENT_SSAO_ALGORITHM_COUNT;
+    ExpectInvalid(Invalid);
 
-    const RadientSSRDesc StoredSSR        = pView->GetDesc().SSR;
-    const auto           ExpectInvalidSSR = [&](RadientSSRDesc SSR) {
+    const Float32 InvalidNonNegativeValues[] = {-0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidNonNegativeValues)
+    {
+        Invalid              = StoredSSAO;
+        Invalid.EffectRadius = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                        = StoredSSAO;
+        Invalid.DepthMIPSamplingOffset = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                             = StoredSSAO;
+        Invalid.SpatialReconstructionRadius = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                  = StoredSSAO;
+        Invalid.BitmaskThickness = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Float32 InvalidUnitValues[] = {-0.1f, 1.1f, NaN, Infinity};
+    for (Float32 Value : InvalidUnitValues)
+    {
+        Invalid                    = StoredSSAO;
+        Invalid.EffectFalloffRange = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                         = StoredSSAO;
+        Invalid.TemporalStabilityFactor = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Float32 InvalidPositiveValues[] = {0.f, -0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidPositiveValues)
+    {
+        Invalid                  = StoredSSAO;
+        Invalid.RadiusMultiplier = Value;
+        ExpectInvalid(Invalid);
+    }
+}
+
+TEST(RadientRendererTest, RejectsInvalidSSRSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientSSRDesc StoredSSR     = pView->GetDesc().SSR;
+    const auto           ExpectInvalid = [&](const RadientSSRDesc& SSR) {
         EXPECT_EQ(pView->SetSSR(SSR), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pView->GetDesc().SSR, StoredSSR);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.SSR = SSR;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
     };
 
-    RadientSSRDesc InvalidSSR     = StoredSSR;
-    InvalidSSR.RoughnessThreshold = -0.1f;
-    ExpectInvalidSSR(InvalidSSR);
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
 
-    InvalidSSR                           = StoredSSR;
-    InvalidSSR.MaxTraversalIntersections = 0;
-    ExpectInvalidSSR(InvalidSSR);
+    RadientSSRDesc Invalid  = StoredSSR;
+    Invalid.MostDetailedMip = 7;
+    ExpectInvalid(Invalid);
 
-    const RadientDepthOfFieldDesc StoredDepthOfField        = pView->GetDesc().DepthOfField;
-    const auto                    ExpectInvalidDepthOfField = [&](RadientDepthOfFieldDesc DepthOfField) {
+    Invalid                           = StoredSSR;
+    Invalid.MaxTraversalIntersections = 0;
+    ExpectInvalid(Invalid);
+
+    const Float32 InvalidUnitValues[] = {-0.1f, 1.1f, NaN, Infinity};
+    for (Float32 Value : InvalidUnitValues)
+    {
+        Invalid                      = StoredSSR;
+        Invalid.DepthBufferThickness = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                    = StoredSSR;
+        Invalid.RoughnessThreshold = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                         = StoredSSR;
+        Invalid.GGXImportanceSampleBias = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                                 = StoredSSR;
+        Invalid.TemporalRadianceStabilityFactor = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                                 = StoredSSR;
+        Invalid.TemporalVarianceStabilityFactor = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Float32 InvalidNonNegativeValues[] = {-0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidNonNegativeValues)
+    {
+        Invalid                             = StoredSSR;
+        Invalid.SpatialReconstructionRadius = Value;
+        ExpectInvalid(Invalid);
+
+        Invalid                                    = StoredSSR;
+        Invalid.BilateralCleanupSpatialSigmaFactor = Value;
+        ExpectInvalid(Invalid);
+    }
+}
+
+TEST(RadientRendererTest, RejectsInvalidDepthOfFieldSettings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientDepthOfFieldDesc StoredDepthOfField = pView->GetDesc().DepthOfField;
+    const auto                    ExpectInvalid      = [&](const RadientDepthOfFieldDesc& DepthOfField) {
         EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pView->GetDesc().DepthOfField, StoredDepthOfField);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.DepthOfField = DepthOfField;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
     };
 
-    RadientDepthOfFieldDesc InvalidDepthOfField = StoredDepthOfField;
-    InvalidDepthOfField.MaxCircleOfConfusion    = 0.f;
-    ExpectInvalidDepthOfField(InvalidDepthOfField);
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
 
-    InvalidDepthOfField                         = StoredDepthOfField;
-    InvalidDepthOfField.TemporalStabilityFactor = 1.1f;
-    ExpectInvalidDepthOfField(InvalidDepthOfField);
+    const Float32 InvalidPositiveValues[] = {0.f, -0.1f, NaN, Infinity};
+    for (Float32 Value : InvalidPositiveValues)
+    {
+        RadientDepthOfFieldDesc Invalid = StoredDepthOfField;
+        Invalid.MaxCircleOfConfusion    = Value;
+        ExpectInvalid(Invalid);
+    }
 
-    InvalidDepthOfField                        = StoredDepthOfField;
-    InvalidDepthOfField.BokehKernelRingDensity = 8;
-    ExpectInvalidDepthOfField(InvalidDepthOfField);
+    const Float32 InvalidUnitValues[] = {-0.1f, 1.1f, NaN, Infinity};
+    for (Float32 Value : InvalidUnitValues)
+    {
+        RadientDepthOfFieldDesc Invalid = StoredDepthOfField;
+        Invalid.TemporalStabilityFactor = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Uint32 InvalidRingCounts[] = {0, 1, 6};
+    for (Uint32 Value : InvalidRingCounts)
+    {
+        RadientDepthOfFieldDesc Invalid = StoredDepthOfField;
+        Invalid.BokehKernelRingCount    = Value;
+        ExpectInvalid(Invalid);
+    }
+
+    const Uint32 InvalidRingDensities[] = {0, 1, 8};
+    for (Uint32 Value : InvalidRingDensities)
+    {
+        RadientDepthOfFieldDesc Invalid = StoredDepthOfField;
+        Invalid.BokehKernelRingDensity  = Value;
+        ExpectInvalid(Invalid);
+    }
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)
