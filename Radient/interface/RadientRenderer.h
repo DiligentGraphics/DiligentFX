@@ -55,6 +55,13 @@ struct RadientRendererDesc
     /// Number of texture slots in each material SRB. Zero selects the default
     /// value of 8. The value must not exceed the number of PBR texture attributes.
     Uint32 MaterialTextureSlotCount DEFAULT_INITIALIZER(8);
+
+    /// Maximum number of compatible primitives submitted in one multi-draw batch.
+    /// Zero selects the default value of 16; one disables batching.
+    ///
+    /// Multi-draw is automatically disabled when the backend cannot provide a
+    /// primitive ID through native multi-draw or base-instance emulation.
+    Uint32 MultiDrawBatchSize DEFAULT_INITIALIZER(16);
 };
 typedef struct RadientRendererDesc RadientRendererDesc;
 

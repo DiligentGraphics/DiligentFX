@@ -301,6 +301,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
     if (pRenderer == nullptr)
         return RADIENT_STATUS_OK;
 
+    if (m_NativeMultiDrawSupported == DEVICE_FEATURE_STATE_OPTIONAL)
+        m_NativeMultiDrawSupported = pDevice->GetDeviceInfo().Features.NativeMultiDraw;
+
     bool          RebuildDrawablePassData = false;
     ITextureView* pColorRTV               = Targets.GetColorRTV();
     if (pColorRTV == nullptr)
@@ -375,8 +378,10 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    const Uint32 PrimitiveAttribsRange = pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
-    if (PrimitiveAttribsRange == 0 || PrimitiveAttribsBufferDesc.Size < PrimitiveAttribsRange)
+    const Uint32 PrimitiveArraySize      = std::max(pRenderer->GetSettings().PrimitiveArraySize, 1u);
+    const Uint32 PrimitiveAttribsMaxSize = pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+    const Uint64 PrimitiveAttribsRange   = Uint64{PrimitiveAttribsMaxSize} * PrimitiveArraySize;
+    if (PrimitiveAttribsMaxSize == 0 || PrimitiveAttribsBufferDesc.Size < PrimitiveAttribsRange)
     {
         UNEXPECTED("Radient primitive attributes buffer is too small");
         return RADIENT_STATUS_INVALID_OPERATION;
@@ -389,6 +394,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
+    Uint32 MultiDrawCount       = 0;
 
     DrawState State;
 
@@ -407,6 +413,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         const RADIENT_STATUS Status = this->RenderPendingDraws(*pRenderer, pContext, pFrameSRB, State);
         m_PendingDraws.clear();
         AttribsBufferOffset = 0;
+        MultiDrawCount      = 0;
         return Status;
     };
 
@@ -447,15 +454,38 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         if (!IsCurrentSRBReady)
             continue;
 
-        Uint32 PrimitiveAttribsOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
-        if (PrimitiveAttribsOffset + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
-        {
-            const RADIENT_STATUS Status = RenderPendingDraws();
-            if (RADIENT_FAILED(Status))
-                return Status;
+        if (MultiDrawCount == PrimitiveArraySize)
+            MultiDrawCount = 0;
 
-            PrimitiveAttribsOffset = 0;
+        if (MultiDrawCount > 0)
+        {
+            PendingDraw&           FirstBatchDraw = m_PendingDraws[m_PendingDraws.size() - MultiDrawCount];
+            const DrawableSortKey& FirstBatchKey  = m_DrawablePassData[FirstBatchDraw.DrawableID].SortKey;
+            if (FirstBatchKey.PSOId == SortKey.PSOId &&
+                FirstBatchKey.MaterialId == SortKey.MaterialId &&
+                FirstBatchKey.VertexPoolId == SortKey.VertexPoolId &&
+                FirstBatchKey.IsIndexed == SortKey.IsIndexed)
+            {
+                ++FirstBatchDraw.DrawCount;
+            }
+            else
+            {
+                MultiDrawCount = 0;
+            }
         }
+
+        if (MultiDrawCount == 0)
+        {
+            AttribsBufferOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
+            if (Uint64{AttribsBufferOffset} + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
+            {
+                const RADIENT_STATUS Status = RenderPendingDraws();
+                if (RADIENT_FAILED(Status))
+                    return Status;
+            }
+        }
+
+        const Uint32 PrimitiveAttribsOffset = AttribsBufferOffset;
 
         if (pMappedPrimitiveData == nullptr)
         {
@@ -472,7 +502,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                                   static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset,
                                   PassData.PSOFlags,
                                   *PassData.pDrawable->pWorldMatrix);
-        if (PrimitiveAttribsSize == 0 || PrimitiveAttribsSize > PrimitiveAttribsRange)
+        if (PrimitiveAttribsSize == 0 || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
         {
             pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
             pMappedPrimitiveData = nullptr;
@@ -480,8 +510,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             return RADIENT_STATUS_INVALID_OPERATION;
         }
 
-        m_PendingDraws.push_back({DrawableID, PrimitiveAttribsOffset});
+        m_PendingDraws.push_back({DrawableID, PrimitiveAttribsOffset, 1});
         AttribsBufferOffset = PrimitiveAttribsOffset + PrimitiveAttribsSize;
+        ++MultiDrawCount;
     }
 
     return RenderPendingDraws();
@@ -492,8 +523,14 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
                                                               IShaderResourceBinding* pFrameSRB,
                                                               DrawState&              State)
 {
-    for (const PendingDraw& Pending : m_PendingDraws)
+    VERIFY(m_NativeMultiDrawSupported != DEVICE_FEATURE_STATE_OPTIONAL,
+           "Native multi-draw support has not been initialized");
+    const bool NativeMultiDrawSupported = m_NativeMultiDrawSupported == DEVICE_FEATURE_STATE_ENABLED;
+
+    size_t PendingDrawIndex = 0;
+    while (PendingDrawIndex < m_PendingDraws.size())
     {
+        const PendingDraw& Pending = m_PendingDraws[PendingDrawIndex];
         VERIFY(Pending.DrawableID < m_DrawablePassData.size(), "Pending drawable ID references invalid pass data");
         const DrawablePassData& PassData = m_DrawablePassData[Pending.DrawableID];
         VERIFY(PassData.pDrawable != nullptr &&
@@ -543,8 +580,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             return RADIENT_STATUS_INVALID_OPERATION;
         }
 
-        // Dynamic offsets select the primitive record written for this draw
-        // without rebinding the underlying buffer.
+        // One dynamic offset selects the contiguous primitive array consumed by
+        // the entire multi-draw batch.
         State.pPrimitiveAttribsVar->SetBufferOffset(Pending.PrimitiveAttribsOffset);
         if (MaterialSRBChanged)
             pContext->CommitShaderResources(State.pMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -555,7 +592,93 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             State.pMaterial = &Material;
         }
 
-        if (Drawable.IsIndexed)
+        VERIFY(Pending.DrawCount > 0 && PendingDrawIndex + Pending.DrawCount <= m_PendingDraws.size(),
+               "Pending multi-draw batch is invalid");
+
+#ifdef DILIGENT_DEBUG
+        for (Uint32 DrawIndex = 1; DrawIndex < Pending.DrawCount; ++DrawIndex)
+        {
+            const PendingDraw& BatchDraw = m_PendingDraws[PendingDrawIndex + DrawIndex];
+            VERIFY(BatchDraw.DrawableID < m_DrawablePassData.size(), "Pending batch references invalid pass data");
+            const DrawablePassData& BatchPassData = m_DrawablePassData[BatchDraw.DrawableID];
+            VERIFY(BatchPassData.SortKey.PSOId == PassData.SortKey.PSOId &&
+                       BatchPassData.SortKey.MaterialId == PassData.SortKey.MaterialId &&
+                       BatchPassData.SortKey.VertexPoolId == PassData.SortKey.VertexPoolId &&
+                       BatchPassData.SortKey.IsIndexed == PassData.SortKey.IsIndexed,
+                   "Multi-draw batch contains incompatible draw state");
+        }
+#endif
+
+        if (Pending.DrawCount > 1 && Drawable.IsIndexed)
+        {
+            if (NativeMultiDrawSupported)
+            {
+                m_MultiDrawIndexedItems.resize(Pending.DrawCount);
+                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
+                {
+                    const RadientDrawableSlot& BatchDrawable =
+                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
+                    m_MultiDrawIndexedItems[DrawIndex] = {
+                        BatchDrawable.ElementCount,
+                        BatchDrawable.FirstIndexLocation + BatchDrawable.FirstElement,
+                        BatchDrawable.BaseVertex,
+                    };
+                }
+                pContext->MultiDrawIndexed({Pending.DrawCount,
+                                            m_MultiDrawIndexedItems.data(),
+                                            VT_UINT32,
+                                            DRAW_FLAG_VERIFY_ALL});
+            }
+            else
+            {
+                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
+                {
+                    const RadientDrawableSlot& BatchDrawable =
+                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
+                    DrawIndexedAttribs DrawAttrs{BatchDrawable.ElementCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    if (DrawIndex > 0)
+                        DrawAttrs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
+                    DrawAttrs.FirstIndexLocation    = BatchDrawable.FirstIndexLocation + BatchDrawable.FirstElement;
+                    DrawAttrs.BaseVertex            = BatchDrawable.BaseVertex;
+                    DrawAttrs.FirstInstanceLocation = DrawIndex;
+                    pContext->DrawIndexed(DrawAttrs);
+                }
+            }
+        }
+        else if (Pending.DrawCount > 1)
+        {
+            if (NativeMultiDrawSupported)
+            {
+                m_MultiDrawItems.resize(Pending.DrawCount);
+                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
+                {
+                    const RadientDrawableSlot& BatchDrawable =
+                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
+                    m_MultiDrawItems[DrawIndex] = {
+                        BatchDrawable.ElementCount,
+                        BatchDrawable.BaseVertex + BatchDrawable.FirstElement,
+                    };
+                }
+                pContext->MultiDraw({Pending.DrawCount,
+                                     m_MultiDrawItems.data(),
+                                     DRAW_FLAG_VERIFY_ALL});
+            }
+            else
+            {
+                for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
+                {
+                    const RadientDrawableSlot& BatchDrawable =
+                        *m_DrawablePassData[m_PendingDraws[PendingDrawIndex + DrawIndex].DrawableID].pDrawable;
+                    DrawAttribs DrawAttrs{BatchDrawable.ElementCount, DRAW_FLAG_VERIFY_ALL};
+                    if (DrawIndex > 0)
+                        DrawAttrs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
+                    DrawAttrs.StartVertexLocation   = BatchDrawable.BaseVertex + BatchDrawable.FirstElement;
+                    DrawAttrs.FirstInstanceLocation = DrawIndex;
+                    pContext->Draw(DrawAttrs);
+                }
+            }
+        }
+        else if (Drawable.IsIndexed)
         {
             DrawIndexedAttribs DrawAttrs{Drawable.ElementCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
             DrawAttrs.FirstIndexLocation = Drawable.FirstIndexLocation + Drawable.FirstElement;
@@ -568,6 +691,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             DrawAttrs.StartVertexLocation = Drawable.BaseVertex + Drawable.FirstElement;
             pContext->Draw(DrawAttrs);
         }
+
+        PendingDrawIndex += Pending.DrawCount;
     }
 
     return RADIENT_STATUS_OK;
@@ -584,6 +709,9 @@ bool RadientTesseraGeometryPass::DrawableSortKeyLess::operator()(const DrawableS
 
     if (Lhs.VertexPoolId != Rhs.VertexPoolId)
         return Lhs.VertexPoolId < Rhs.VertexPoolId;
+
+    if (Lhs.IsIndexed != Rhs.IsIndexed)
+        return Lhs.IsIndexed < Rhs.IsIndexed;
 
     return Lhs.DrawableID < Rhs.DrawableID;
 }
@@ -726,6 +854,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),
         DrawableID,
+        Drawable.IsIndexed,
     };
 
     const auto InsertResult = m_OrderedDrawables[AlphaMode].insert(PassData.SortKey);

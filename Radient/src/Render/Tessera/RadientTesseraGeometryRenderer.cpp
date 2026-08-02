@@ -289,9 +289,11 @@ bool InitializeMaterialTextureBinding(IRadientTextureAsset*             pTexture
 
 RadientTesseraGeometryRenderer::RadientTesseraGeometryRenderer(
     Uint32                                MaterialTextureSlotCount,
-    const RadientMaterialDefaultTextures& DefaultTextures) noexcept :
+    const RadientMaterialDefaultTextures& DefaultTextures,
+    Uint32                                MultiDrawBatchSize) noexcept :
     m_DefaultMaterialTextures{DefaultTextures},
-    m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8}
+    m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8},
+    m_MultiDrawBatchSize{MultiDrawBatchSize != 0 ? MultiDrawBatchSize : 16}
 {}
 
 void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
@@ -476,9 +478,21 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.PackMatrixRowMajor        = true;
     RendererCI.ShaderTexturesArrayMode   = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
     RendererCI.MaterialTexturesArraySize = m_MaterialTextureSlotCount;
-    InputLayoutDescX InputLayout         = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
-    RendererCI.InputLayout               = InputLayout;
-    RendererCI.TexColorConversionMode    = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
+
+    const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
+    if (m_MultiDrawBatchSize > 1 &&
+        (DeviceInfo.IsVulkanDevice() ||
+         DeviceInfo.IsWebGPUDevice() ||
+         (DeviceInfo.IsGLDevice() && DeviceInfo.Features.NativeMultiDraw)))
+    {
+        // Without native multi-draw, the PBR shader uses base instance as the
+        // primitive ID. Direct3D does not offset SV_InstanceID by base instance.
+        RendererCI.PrimitiveArraySize = m_MultiDrawBatchSize;
+    }
+
+    InputLayoutDescX InputLayout      = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
+    RendererCI.InputLayout            = InputLayout;
+    RendererCI.TexColorConversionMode = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
 
     RefCntAutoPtr<IBuffer> pPrimitiveAttribsCB;
@@ -491,7 +505,18 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
         return RADIENT_STATUS_INVALID_OPERATION;
     RendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
 
-    m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
+    m_pRenderer                     = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
+    const Uint32 PrimitiveArraySize = std::max(RendererCI.PrimitiveArraySize, 1u);
+    const Uint64 PrimitiveAttribsRange =
+        Uint64{m_pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL)} * PrimitiveArraySize;
+    if (PrimitiveAttribsRange > pPrimitiveAttribsCB->GetDesc().Size)
+    {
+        LOG_ERROR_MESSAGE("Radient multi-draw batch size ", PrimitiveArraySize,
+                          " exceeds the primitive attributes buffer capacity");
+        m_pRenderer.reset();
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
     if (m_pRenderer->GetFrameAttribsCB() == nullptr)
     {
         m_pRenderer.reset();

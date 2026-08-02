@@ -38,6 +38,8 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
     IRadientRenderer*      pRenderer     = 0;
     RADIENT_STATUS         Status        = RADIENT_STATUS_OK;
 
+    RendererDesc.MultiDrawBatchSize = 16;
+
     Status = IRadientEngine_GetBackend(pEngine, &pBackend);
     Status = IRadientEngine_GetAssetManager(pEngine, &pAssetManager);
     Status = IRadientEngine_CreateScene(pEngine, &SceneDesc, &pScene);

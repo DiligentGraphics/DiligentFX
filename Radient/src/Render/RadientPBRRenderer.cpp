@@ -28,6 +28,7 @@
 
 #include "GraphicsUtilities.h"
 
+#include <algorithm>
 #include <unordered_set>
 
 namespace Diligent
@@ -71,9 +72,10 @@ void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB) const
 
     if (pPrimitiveAttribs->Get() == nullptr)
     {
+        const Uint32 PrimitiveArraySize = std::max(GetSettings().PrimitiveArraySize, 1u);
         pPrimitiveAttribs->SetBufferRange(GetPBRPrimitiveAttribsCB(),
                                           0,
-                                          GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL));
+                                          GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL) * PrimitiveArraySize);
     }
 }
 

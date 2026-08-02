@@ -85,6 +85,7 @@ private:
         UniqueIdentifier  MaterialId   = 0;
         UniqueIdentifier  VertexPoolId = 0;
         RadientDrawableID DrawableID   = InvalidRadientDrawableID;
+        bool              IsIndexed    = false;
     };
 
     struct DrawableSortKeyLess
@@ -110,6 +111,7 @@ private:
     {
         RadientDrawableID DrawableID             = InvalidRadientDrawableID;
         Uint32            PrimitiveAttribsOffset = 0;
+        Uint32            DrawCount              = 1;
     };
 
     struct DrawState
@@ -148,12 +150,15 @@ private:
     // of every visible drawable on every frame.
     std::array<OrderedDrawableSet, GLTF::Material::ALPHA_MODE_NUM_MODES> m_OrderedDrawables;
     std::vector<PendingDraw>                                             m_PendingDraws;
+    std::vector<MultiDrawItem>                                           m_MultiDrawItems;
+    std::vector<MultiDrawIndexedItem>                                    m_MultiDrawIndexedItems;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    TEXTURE_FORMAT m_RTVFormat                      = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
-    bool           m_EnableAsyncPipelineCompilation = true;
+    TEXTURE_FORMAT       m_RTVFormat                      = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT       m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
+    bool                 m_EnableAsyncPipelineCompilation = true;
+    DEVICE_FEATURE_STATE m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
 };
 
 } // namespace Diligent

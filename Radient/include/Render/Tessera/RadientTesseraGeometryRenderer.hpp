@@ -54,7 +54,8 @@ class RadientTesseraGeometryRenderer
 {
 public:
     RadientTesseraGeometryRenderer(Uint32                                MaterialTextureSlotCount,
-                                   const RadientMaterialDefaultTextures& DefaultTextures) noexcept;
+                                   const RadientMaterialDefaultTextures& DefaultTextures,
+                                   Uint32                                MultiDrawBatchSize = 16) noexcept;
 
     RADIENT_STATUS Prepare(IRenderDevice*         pDevice,
                            IDeviceContext*        pContext,
@@ -92,6 +93,7 @@ private:
     RadientMaterialDefaultTextures        m_DefaultMaterialTextures;
     RadientMaterialDefaultTextureBindings m_DefaultMaterialTextureBindings;
     Uint32                                m_MaterialTextureSlotCount            = 8;
+    Uint32                                m_MultiDrawBatchSize                  = 16;
     bool                                  m_DefaultMaterialTextureBindingsReady = false;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;

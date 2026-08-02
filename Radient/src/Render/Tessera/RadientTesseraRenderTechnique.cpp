@@ -61,7 +61,9 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*       
                                                              const RadientRendererDesc& Desc) :
     m_pThreadPool{ValidateThreadPool(pThreadPool)},
     m_pAssetManager{pAssetManager},
-    m_GeometryRenderer{Desc.MaterialTextureSlotCount, GetDefaultMaterialTextures(pAssetManager)},
+    m_GeometryRenderer{Desc.MaterialTextureSlotCount,
+                       GetDefaultMaterialTextures(pAssetManager),
+                       Desc.MultiDrawBatchSize},
     m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
 {}
 
