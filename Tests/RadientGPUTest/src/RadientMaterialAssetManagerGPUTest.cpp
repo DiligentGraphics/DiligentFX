@@ -263,11 +263,15 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
+    const RadientMaterialRenderData MaterialData  = RadientMaterialAssetManager::GetRenderData(pMaterial);
+    const GLTF::Material*           pGLTFMaterial = MaterialData.pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 0);
     EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultClearcoatTextureAttribId), 0);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId), pTexture);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId), pTexture);
+    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), pTexture);
 
     GLTF::Material::TextureShaderAttribs ExpectedAttribs;
     ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));

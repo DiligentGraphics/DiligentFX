@@ -484,6 +484,10 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.EnableIBL                 = true;
     RendererCI.EnableAO                  = true;
     RendererCI.EnableEmissive            = true;
+    RendererCI.EnableClearCoat           = true;
+    RendererCI.EnableSheen               = false;
+    RendererCI.EnableAnisotropy          = true;
+    RendererCI.EnableIridescence         = true;
     RendererCI.EnableShadows             = false;
     RendererCI.MaxLightCount             = RadientMaxLightCount;
     RendererCI.MaxJointCount             = 0;
@@ -535,13 +539,13 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    // Tessera enables material and geometry features per drawable. Only flags
+    // controlled by the pass itself are excluded from this capability mask.
     m_BaseRenderFlags =
-        PBR_Renderer::PSO_FLAG_DEFAULT |
-        PBR_Renderer::PSO_FLAG_ALL_TEXTURES |
-        PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
-        PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
-    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING;
-    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+        PBR_Renderer::PSO_FLAG_ALL &
+        ~(PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING |
+          PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS |
+          PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB);
 
     return RADIENT_STATUS_OK;
 }
