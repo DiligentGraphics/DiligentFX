@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace Diligent
@@ -213,17 +214,15 @@ void BindVertexPool(IVertexPool&    VertexPool,
     pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 }
 
-void WritePrimitiveAttribs(PBR_Renderer&           Renderer,
-                           IDeviceContext*         pContext,
-                           PBR_Renderer::PSO_FLAGS PSOFlags,
-                           const RadientMatrix4x4& WorldMatrix)
+Uint32 WritePrimitiveAttribs(PBR_Renderer&           Renderer,
+                             void*                   pAttribsData,
+                             PBR_Renderer::PSO_FLAGS PSOFlags,
+                             const RadientMatrix4x4& WorldMatrix)
 {
-    void* pAttribsData = nullptr;
-    pContext->MapBuffer(Renderer.GetPBRPrimitiveAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD, pAttribsData);
     if (pAttribsData == nullptr)
     {
-        UNEXPECTED("Unable to map PBR primitive attribs buffer");
-        return;
+        UNEXPECTED("Primitive attributes destination must not be null");
+        return 0;
     }
 
     const float4x4                NodeTransform = RadientMath::ToFloat4x4(WorldMatrix);
@@ -236,10 +235,18 @@ void WritePrimitiveAttribs(PBR_Renderer&           Renderer,
                                                    AttribsData,
                                                    !Renderer.GetSettings().PackMatrixRowMajor);
 
-    VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + Renderer.GetPBRPrimitiveAttribsCB()->GetDesc().Size,
-           "Not enough space in the buffer to store primitive attributes");
+    const Uint32 WrittenSize = static_cast<Uint32>(reinterpret_cast<Uint8*>(pEndPtr) - static_cast<Uint8*>(pAttribsData));
+    const Uint32 AttribsSize = Renderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+    if (WrittenSize > AttribsSize)
+    {
+        UNEXPECTED("Written primitive attributes exceed the expected shader data size");
+        return 0;
+    }
 
-    pContext->UnmapBuffer(Renderer.GetPBRPrimitiveAttribsCB(), MAP_WRITE);
+    // Radient does not currently use the custom primitive data that follows
+    // the standard PBR attributes, but it is part of the shader record.
+    std::memset(static_cast<Uint8*>(pAttribsData) + WrittenSize, 0, AttribsSize - WrittenSize);
+    return AttribsSize;
 }
 
 void WriteMaterialAttribs(PBR_Renderer&           Renderer,
@@ -344,12 +351,53 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     BuildSortedDrawableIDs(DrawList, DrawableCache);
+    if (m_SortedDrawableIDs.empty())
+        return RADIENT_STATUS_OK;
 
-    IShaderResourceBinding* pCurrMaterialSRB  = nullptr;
-    IPipelineState*         pCurrPSO          = nullptr;
-    IVertexPool*            pCurrVertexPool   = nullptr;
-    const GLTF::Material*   pCurrMaterial     = nullptr;
-    bool                    FrameSRBCommitted = false;
+    VERIFY(pFrameSRB != nullptr, "Radient frame SRB is not initialized");
+    if (pFrameSRB == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    IBuffer* const pPrimitiveAttribsCB = pRenderer->GetPBRPrimitiveAttribsCB();
+    if (pPrimitiveAttribsCB == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    const BufferDesc& PrimitiveAttribsBufferDesc = pPrimitiveAttribsCB->GetDesc();
+    if (PrimitiveAttribsBufferDesc.Usage != USAGE_DYNAMIC)
+    {
+        UNEXPECTED("Radient primitive attributes buffer must use USAGE_DYNAMIC");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    const Uint32 PrimitiveAttribsRange = pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+    if (PrimitiveAttribsRange == 0 || PrimitiveAttribsBufferDesc.Size < PrimitiveAttribsRange)
+    {
+        UNEXPECTED("Radient primitive attributes buffer is too small");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    const Uint32 PrimitiveAttribsBufferSize    = static_cast<Uint32>(PrimitiveAttribsBufferDesc.Size);
+    const Uint32 ConstantBufferOffsetAlignment = pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
+
+    m_PendingDraws.clear();
+
+    void*  pMappedPrimitiveData = nullptr;
+    Uint32 AttribsBufferOffset  = 0;
+
+    DrawState State;
+
+    auto RenderPendingDraws = [&]() -> RADIENT_STATUS {
+        if (pMappedPrimitiveData != nullptr)
+        {
+            pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            pMappedPrimitiveData = nullptr;
+        }
+
+        const RADIENT_STATUS Status = this->RenderPendingDraws(*pRenderer, pContext, pFrameSRB, State);
+        m_PendingDraws.clear();
+        AttribsBufferOffset = 0;
+        return Status;
+    };
 
     for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
     {
@@ -360,50 +408,111 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                    IsPipelineReady(PassData.pPSO),
                "Sorted drawable ID references stale pass data");
 
+        Uint32 PrimitiveAttribsOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
+        if (PrimitiveAttribsOffset + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
+        {
+            const RADIENT_STATUS Status = RenderPendingDraws();
+            if (RADIENT_FAILED(Status))
+                return Status;
+
+            PrimitiveAttribsOffset = 0;
+        }
+
+        if (pMappedPrimitiveData == nullptr)
+        {
+            pContext->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedPrimitiveData);
+            if (pMappedPrimitiveData == nullptr)
+            {
+                UNEXPECTED("Unable to map PBR primitive attributes buffer");
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
+        }
+
+        const Uint32 PrimitiveAttribsSize =
+            WritePrimitiveAttribs(*pRenderer,
+                                  static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset,
+                                  PassData.PSOFlags,
+                                  *PassData.pDrawable->pWorldMatrix);
+        if (PrimitiveAttribsSize == 0 || PrimitiveAttribsSize > PrimitiveAttribsRange)
+        {
+            pContext->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            pMappedPrimitiveData = nullptr;
+            UNEXPECTED("PBR primitive attributes exceed the bound buffer range");
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        m_PendingDraws.push_back({DrawableID, PrimitiveAttribsOffset});
+        AttribsBufferOffset = PrimitiveAttribsOffset + PrimitiveAttribsSize;
+    }
+
+    return RenderPendingDraws();
+}
+
+RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&           Renderer,
+                                                              IDeviceContext*         pContext,
+                                                              IShaderResourceBinding* pFrameSRB,
+                                                              DrawState&              State)
+{
+    for (const PendingDraw& Pending : m_PendingDraws)
+    {
+        VERIFY(Pending.DrawableID < m_DrawablePassData.size(), "Pending drawable ID references invalid pass data");
+        const DrawablePassData& PassData = m_DrawablePassData[Pending.DrawableID];
+        VERIFY(PassData.pDrawable != nullptr &&
+                   PassData.Generation == PassData.pDrawable->Generation &&
+                   IsPipelineReady(PassData.pPSO),
+               "Pending drawable ID references stale pass data");
+
         const RadientDrawableSlot& Drawable = *PassData.pDrawable;
         const GLTF::Material&      Material = *Drawable.pMaterial;
 
-        if (pCurrVertexPool != Drawable.pVertexPool)
+        if (State.pVertexPool != Drawable.pVertexPool)
         {
-            pCurrVertexPool = Drawable.pVertexPool;
-            VERIFY(pCurrVertexPool != nullptr, "Sorted drawable references null vertex pool");
-            if (pCurrVertexPool != nullptr)
-                BindVertexPool(*pCurrVertexPool, pContext);
+            State.pVertexPool = Drawable.pVertexPool;
+            VERIFY(State.pVertexPool != nullptr, "Pending drawable references null vertex pool");
+            if (State.pVertexPool != nullptr)
+                BindVertexPool(*State.pVertexPool, pContext);
         }
 
         const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
-        if (pCurrPSO != PassData.pPSO)
+        if (State.pPSO != PassData.pPSO)
         {
-            pCurrPSO      = PassData.pPSO;
-            pCurrMaterial = nullptr;
+            State.pPSO      = PassData.pPSO;
+            State.pMaterial = nullptr;
 
-            if (pCurrPSO != nullptr)
-                pContext->SetPipelineState(pCurrPSO);
+            if (State.pPSO != nullptr)
+                pContext->SetPipelineState(State.pPSO);
         }
 
-        if (!FrameSRBCommitted)
+        if (!State.FrameSRBCommitted)
         {
-            VERIFY(pFrameSRB != nullptr, "Radient frame SRB is not initialized");
-            if (pFrameSRB == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
-
             pContext->CommitShaderResources(pFrameSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            FrameSRBCommitted = true;
+            State.FrameSRBCommitted = true;
         }
 
-        IShaderResourceBinding* const pMaterialSRB = PassData.MaterialSRB.GetSRB();
-        if (pCurrMaterialSRB != pMaterialSRB)
+        IShaderResourceBinding* const pMaterialSRB       = PassData.MaterialSRB.GetSRB();
+        const bool                    MaterialSRBChanged = State.pMaterialSRB != pMaterialSRB;
+        if (MaterialSRBChanged)
         {
-            pCurrMaterialSRB = pMaterialSRB;
-            pContext->CommitShaderResources(pCurrMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            State.pMaterialSRB         = pMaterialSRB;
+            State.pPrimitiveAttribsVar = PassData.MaterialSRB.GetPrimitiveAttribsVariable();
         }
 
-        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.pWorldMatrix);
-
-        if (pCurrMaterial != &Material)
+        if (State.pPrimitiveAttribsVar == nullptr)
         {
-            WriteMaterialAttribs(*pRenderer, pContext, PSOFlags, Material);
-            pCurrMaterial = &Material;
+            UNEXPECTED("Material SRB does not contain the PBR primitive attributes buffer variable");
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        // Dynamic offsets select the primitive record written for this draw
+        // without rebinding the underlying buffer.
+        State.pPrimitiveAttribsVar->SetBufferOffset(Pending.PrimitiveAttribsOffset);
+        if (MaterialSRBChanged)
+            pContext->CommitShaderResources(State.pMaterialSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        if (State.pMaterial != &Material)
+        {
+            WriteMaterialAttribs(Renderer, pContext, PSOFlags, Material);
+            State.pMaterial = &Material;
         }
 
         if (Drawable.IsIndexed)

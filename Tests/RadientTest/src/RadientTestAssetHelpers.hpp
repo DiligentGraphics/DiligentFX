@@ -32,6 +32,7 @@
 #include "ShaderResourceBinding.h"
 
 #include <array>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <string>
@@ -95,13 +96,84 @@ using TestMaterialAsset = TestRadientAsset<IRadientMaterialAsset, IID_RadientMat
 using TestTextureAsset  = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
 using TestSceneAsset    = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
 
+class TestShaderResourceVariable final : public ObjectBase<IShaderResourceVariable>
+{
+public:
+    using TBase = ObjectBase<IShaderResourceVariable>;
+
+    TestShaderResourceVariable(IReferenceCounters* pRefCounters, const Char* Name) :
+        TBase{pRefCounters},
+        m_Name{Name != nullptr ? Name : ""}
+    {}
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_ShaderResourceVariable, TBase)
+
+    virtual void DILIGENT_CALL_TYPE Set(IDeviceObject* pObject,
+                                        SET_SHADER_RESOURCE_FLAGS) override final
+    {
+        m_pObject = pObject;
+    }
+
+    virtual void DILIGENT_CALL_TYPE SetArray(IDeviceObject* const* ppObjects,
+                                             Uint32                FirstElement,
+                                             Uint32                NumElements,
+                                             SET_SHADER_RESOURCE_FLAGS) override final
+    {
+        if (FirstElement == 0 && NumElements != 0)
+            m_pObject = ppObjects[0];
+    }
+
+    virtual void DILIGENT_CALL_TYPE SetBufferRange(IDeviceObject* pObject,
+                                                   Uint64,
+                                                   Uint64,
+                                                   Uint32,
+                                                   SET_SHADER_RESOURCE_FLAGS) override final
+    {
+        m_pObject = pObject;
+    }
+
+    virtual void DILIGENT_CALL_TYPE SetBufferOffset(Uint32 Offset, Uint32) override final
+    {
+        m_BufferOffset = Offset;
+    }
+
+    virtual void DILIGENT_CALL_TYPE SetInlineConstants(const void*, Uint32, Uint32) override final
+    {}
+
+    virtual SHADER_RESOURCE_VARIABLE_TYPE DILIGENT_CALL_TYPE GetType() const override final
+    {
+        return SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+    }
+
+    virtual void DILIGENT_CALL_TYPE GetResourceDesc(ShaderResourceDesc& ResourceDesc) const override final
+    {
+        ResourceDesc = {m_Name.c_str(), SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, 1};
+    }
+
+    virtual Uint32 DILIGENT_CALL_TYPE GetIndex() const override final
+    {
+        return 0;
+    }
+
+    virtual IDeviceObject* DILIGENT_CALL_TYPE Get(Uint32) const override final
+    {
+        return m_pObject;
+    }
+
+private:
+    std::string                  m_Name;
+    RefCntAutoPtr<IDeviceObject> m_pObject;
+    Uint32                       m_BufferOffset = 0;
+};
+
 class TestShaderResourceBinding final : public ObjectBase<IShaderResourceBinding>
 {
 public:
     using TBase = ObjectBase<IShaderResourceBinding>;
 
     explicit TestShaderResourceBinding(IReferenceCounters* pRefCounters) :
-        TBase{pRefCounters}
+        TBase{pRefCounters},
+        m_pPrimitiveAttribsVar{MakeNewRCObj<TestShaderResourceVariable>()("cbPrimitiveAttribs")}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_ShaderResourceBinding, TBase)
@@ -124,25 +196,30 @@ public:
         return SHADER_RESOURCE_VARIABLE_TYPE_FLAG_NONE;
     }
 
-    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByName(SHADER_TYPE, const Char*) override final
+    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByName(SHADER_TYPE ShaderType, const Char* Name) override final
     {
-        return nullptr;
+        return ShaderType == SHADER_TYPE_PIXEL && Name != nullptr && std::strcmp(Name, "cbPrimitiveAttribs") == 0 ?
+            m_pPrimitiveAttribsVar.RawPtr() :
+            nullptr;
     }
 
-    virtual Uint32 DILIGENT_CALL_TYPE GetVariableCount(SHADER_TYPE) const override final
+    virtual Uint32 DILIGENT_CALL_TYPE GetVariableCount(SHADER_TYPE ShaderType) const override final
     {
-        return 0;
+        return ShaderType == SHADER_TYPE_PIXEL ? 1 : 0;
     }
 
-    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByIndex(SHADER_TYPE, Uint32) override final
+    virtual IShaderResourceVariable* DILIGENT_CALL_TYPE GetVariableByIndex(SHADER_TYPE ShaderType, Uint32 Index) override final
     {
-        return nullptr;
+        return ShaderType == SHADER_TYPE_PIXEL && Index == 0 ? m_pPrimitiveAttribsVar.RawPtr() : nullptr;
     }
 
     virtual Bool DILIGENT_CALL_TYPE StaticResourcesInitialized() const override final
     {
         return True;
     }
+
+private:
+    RefCntAutoPtr<IShaderResourceVariable> m_pPrimitiveAttribsVar;
 };
 
 inline RefCntAutoPtr<IShaderResourceBinding> MakeTestShaderResourceBinding()

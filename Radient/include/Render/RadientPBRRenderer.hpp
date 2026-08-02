@@ -46,6 +46,10 @@ public:
     /// Returns the cached immutable frame SRB for the IBL resources, creating it if necessary.
     RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources);
 
+    /// Initializes the common material resources and binds one primitive
+    /// attribute record so the pass can select records through dynamic offsets.
+    void InitMaterialSRBVars(IShaderResourceBinding* pSRB) const;
+
     IBuffer* GetFrameAttribsCB() const noexcept { return m_pFrameAttribsCB; }
 
 protected:

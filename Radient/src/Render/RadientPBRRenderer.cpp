@@ -47,6 +47,36 @@ RadientPBRRenderer::RadientPBRRenderer(IRenderDevice*     pDevice,
                         &m_pFrameAttribsCB);
 }
 
+void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB) const
+{
+    if (pSRB == nullptr)
+    {
+        UNEXPECTED("Material SRB must not be null");
+        return;
+    }
+
+    constexpr bool BindPrimitiveAttribsBuffer = false;
+    constexpr bool BindMaterialAttribsBuffer  = true;
+    InitCommonSRBVars(pSRB,
+                      nullptr,
+                      BindPrimitiveAttribsBuffer,
+                      BindMaterialAttribsBuffer);
+
+    IShaderResourceVariable* const pPrimitiveAttribs = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+    if (pPrimitiveAttribs == nullptr || GetPBRPrimitiveAttribsCB() == nullptr)
+    {
+        UNEXPECTED("PBR primitive attributes buffer variable is not initialized");
+        return;
+    }
+
+    if (pPrimitiveAttribs->Get() == nullptr)
+    {
+        pPrimitiveAttribs->SetBufferRange(GetPBRPrimitiveAttribsCB(),
+                                          0,
+                                          GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL));
+    }
+}
+
 RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources)
 {
     if (pResources == nullptr || m_pFrameAttribsCB == nullptr)

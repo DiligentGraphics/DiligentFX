@@ -112,6 +112,7 @@ public:
 
     // Accessed exclusively from the render thread.
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
+    IShaderResourceVariable*              pPrimitiveAttribsVar = nullptr;
 
     Uint32 PreparedTextureVersion = ~0u;
 };
@@ -119,6 +120,11 @@ public:
 IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 {
     return m_pState != nullptr ? m_pState->pSRB.RawPtr() : nullptr;
+}
+
+IShaderResourceVariable* RadientMaterialSRBLease::GetPrimitiveAttribsVariable() const noexcept
+{
+    return m_pState != nullptr ? m_pState->pPrimitiveAttribsVar : nullptr;
 }
 
 struct RadientMaterialSRBTable::Impl
@@ -364,7 +370,16 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             continue;
         }
 
+        IShaderResourceVariable* const pPrimitiveAttribsVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+        if (pPrimitiveAttribsVar == nullptr)
+        {
+            UNEXPECTED("Material SRB does not contain the PBR primitive attributes buffer variable");
+            Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
+            continue;
+        }
+
         pState->pSRB                   = std::move(pSRB);
+        pState->pPrimitiveAttribsVar   = pPrimitiveAttribsVar;
         pState->PreparedTextureVersion = TextureVersion;
     }
     m_Impl->PrepareEntries.clear();

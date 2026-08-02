@@ -29,6 +29,7 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 
+#include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 
 #include <algorithm>
@@ -47,8 +48,9 @@ namespace HLSL
 namespace
 {
 
-constexpr float  RadientDefaultSceneScale = 1.f;
-constexpr Uint32 RadientMaxLightCount     = 16;
+constexpr float  RadientDefaultSceneScale          = 1.f;
+constexpr Uint32 RadientMaxLightCount              = 16;
+constexpr Uint64 RadientPrimitiveAttribsBufferSize = Uint64{64} << 10u;
 
 float3 GetLightingScale(const RadientFloat3& Color, Float32 Intensity, Float32 Exposure)
 {
@@ -358,7 +360,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(Uint32 Textur
             if (pSRB == nullptr)
                 return pSRB;
 
-            m_pRenderer->InitCommonSRBVars(pSRB, nullptr);
+            m_pRenderer->InitMaterialSRBVars(pSRB);
             if (!m_pRenderer->SetMaterialTextures(pSRB, ppTextureSRVs, 0, TextureCount))
                 pSRB.Release();
 
@@ -478,6 +480,16 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.InputLayout               = InputLayout;
     RendererCI.TexColorConversionMode    = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);
+
+    RefCntAutoPtr<IBuffer> pPrimitiveAttribsCB;
+    CreateUniformBuffer(pDevice,
+                        RadientPrimitiveAttribsBufferSize,
+                        "Radient PBR primitive attribs buffer",
+                        pPrimitiveAttribsCB.GetAddressOfEmpty(),
+                        USAGE_DYNAMIC);
+    if (pPrimitiveAttribsCB == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+    RendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
 
     m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
     if (m_pRenderer->GetFrameAttribsCB() == nullptr)

@@ -68,13 +68,14 @@ struct RadientMaterialTextureSRVResolveResult
 
 /// Owning reference to a stable material SRB table entry. The entry and its
 /// texture resources are released when the last lease is destroyed.
-/// GetSRB() must only be called from the render thread after table preparation.
+/// SRB accessors must only be called from the render thread after table preparation.
 class RadientMaterialSRBLease
 {
 public:
     RadientMaterialSRBLease() noexcept = default;
 
-    IShaderResourceBinding* GetSRB() const noexcept;
+    IShaderResourceBinding*  GetSRB() const noexcept;
+    IShaderResourceVariable* GetPrimitiveAttribsVariable() const noexcept;
 
     explicit operator bool() const noexcept
     {

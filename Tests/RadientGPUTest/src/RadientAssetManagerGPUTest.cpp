@@ -389,6 +389,13 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
         ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
         ASSERT_NE(Renderer.GetMaterialCache(), nullptr);
 
+        PBR_Renderer* const pPBRRenderer = Renderer.GetRenderer();
+        ASSERT_NE(pPBRRenderer, nullptr);
+        IBuffer* const pPrimitiveAttribsCB = pPBRRenderer->GetPBRPrimitiveAttribsCB();
+        ASSERT_NE(pPrimitiveAttribsCB, nullptr);
+        EXPECT_GT(pPrimitiveAttribsCB->GetDesc().Size,
+                  pPBRRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL));
+
         RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
         RadientMaterialCreateInfo            MaterialCI{};
         ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
@@ -405,7 +412,14 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
 
         ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
         EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
-        EXPECT_NE(Result.Data->GetMaterialSRB().GetSRB(), nullptr);
+        IShaderResourceBinding* const pMaterialSRB = Result.Data->GetMaterialSRB().GetSRB();
+        ASSERT_NE(pMaterialSRB, nullptr);
+
+        IShaderResourceVariable* const pPrimitiveAttribsVar = Result.Data->GetMaterialSRB().GetPrimitiveAttribsVariable();
+        ASSERT_NE(pPrimitiveAttribsVar, nullptr);
+        EXPECT_EQ(pPrimitiveAttribsVar->Get(), pPrimitiveAttribsCB);
+        pPrimitiveAttribsVar->SetBufferOffset(
+            pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment);
     }
 
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);

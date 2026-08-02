@@ -247,6 +247,10 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
     ASSERT_EQ(Table.Prepare(1, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     RefCntAutoPtr<IShaderResourceBinding> pFirstSRB{Lease.GetSRB()};
     ASSERT_NE(pFirstSRB, nullptr);
+    IShaderResourceVariable* const pFirstPrimitiveAttribsVar = Lease.GetPrimitiveAttribsVariable();
+    ASSERT_NE(pFirstPrimitiveAttribsVar, nullptr);
+    EXPECT_EQ(pFirstPrimitiveAttribsVar,
+              pFirstSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"));
     EXPECT_EQ(CreateCount, 1u);
 
     EXPECT_EQ(Table.Prepare(1, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
@@ -256,6 +260,7 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
     EXPECT_EQ(Table.Prepare(2, ResolveTestSRV, CreateSRB), RADIENT_STATUS_OK);
     EXPECT_NE(Lease.GetSRB(), nullptr);
     EXPECT_NE(Lease.GetSRB(), pFirstSRB);
+    EXPECT_NE(Lease.GetPrimitiveAttribsVariable(), pFirstPrimitiveAttribsVar);
     EXPECT_EQ(CreateCount, 2u);
 }
 

@@ -77,6 +77,27 @@ private:
         RadientMaterialSRBLease MaterialSRB;
     };
 
+    struct PendingDraw
+    {
+        RadientDrawableID DrawableID             = InvalidRadientDrawableID;
+        Uint32            PrimitiveAttribsOffset = 0;
+    };
+
+    struct DrawState
+    {
+        IShaderResourceBinding*  pMaterialSRB         = nullptr;
+        IShaderResourceVariable* pPrimitiveAttribsVar = nullptr;
+        IPipelineState*          pPSO                 = nullptr;
+        IVertexPool*             pVertexPool          = nullptr;
+        const GLTF::Material*    pMaterial            = nullptr;
+        bool                     FrameSRBCommitted    = false;
+    };
+
+    RADIENT_STATUS RenderPendingDraws(PBR_Renderer&           Renderer,
+                                      IDeviceContext*         pContext,
+                                      IShaderResourceBinding* pFrameSRB,
+                                      DrawState&              State);
+
     void SyncDrawablePassData(RadientTesseraGeometryRenderer&    Renderer,
                               const RadientTesseraDrawableCache& DrawableCache,
                               bool                               RebuildAll);
@@ -94,6 +115,7 @@ private:
 
     std::vector<DrawablePassData>  m_DrawablePassData;
     std::vector<RadientDrawableID> m_SortedDrawableIDs;
+    std::vector<PendingDraw>       m_PendingDraws;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
