@@ -36,10 +36,18 @@
 namespace Diligent
 {
 
+namespace
+{
+
+std::atomic<UniqueIdentifier> s_NextUniqueID{0};
+
+} // namespace
+
 RadientTesseraMaterialData::RadientTesseraMaterialData(IRadientMaterialAsset*           pMaterial,
                                                        const RadientMaterialRenderData& MaterialData) :
     m_pMaterial{pMaterial},
-    m_MaterialData{MaterialData}
+    m_MaterialData{MaterialData},
+    m_UniqueID{s_NextUniqueID.fetch_add(1, std::memory_order_relaxed) + 1}
 {
     m_ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
 }

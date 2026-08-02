@@ -366,6 +366,9 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsUseDistinctCachedData)
     ASSERT_EQ(Result0.Data->GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Result1.Data->GetStatus(), RADIENT_STATUS_OK);
     EXPECT_NE(Result0.Data.Get(), Result1.Data.Get());
+    EXPECT_NE(Result0.Data->GetUniqueID(), 0);
+    EXPECT_NE(Result1.Data->GetUniqueID(), 0);
+    EXPECT_NE(Result0.Data->GetUniqueID(), Result1.Data->GetUniqueID());
 }
 
 TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)

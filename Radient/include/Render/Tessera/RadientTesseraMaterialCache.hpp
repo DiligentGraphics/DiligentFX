@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Render/RadientMaterialSRBTable.hpp"
+#include "UniqueIdentifier.hpp"
 #include "WeakValueHashMap.hpp"
 
 #include <atomic>
@@ -50,6 +51,11 @@ public:
     RADIENT_STATUS GetStatus() const noexcept
     {
         return m_Status.load(std::memory_order_acquire);
+    }
+
+    UniqueIdentifier GetUniqueID() const noexcept
+    {
+        return m_UniqueID;
     }
 
     /// Reports aggregate Tessera GPU readiness. The source material tracks its
@@ -90,6 +96,7 @@ private:
     RadientMaterialRenderData            m_MaterialData;
     RadientMaterialSRBLease              m_MaterialSRB;
 
+    const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};
     PBR_Renderer::PSO_FLAGS                       m_MaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
