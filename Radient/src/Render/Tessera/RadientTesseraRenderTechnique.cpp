@@ -189,7 +189,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 Context.pDevice,
                 Context.pContext,
                 m_pFrameSRB,
-                m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE),
+                GLTF::Material::ALPHA_MODE_OPAQUE,
                 m_DrawableCache,
                 m_FrameTargets);
             if (RADIENT_FAILED(Status))
@@ -200,7 +200,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 Context.pDevice,
                 Context.pContext,
                 m_pFrameSRB,
-                m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK),
+                GLTF::Material::ALPHA_MODE_MASK,
                 m_DrawableCache,
                 m_FrameTargets);
             if (RADIENT_FAILED(Status))
@@ -246,7 +246,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 Context.pDevice,
                 Context.pContext,
                 m_pFrameSRB,
-                m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND),
+                GLTF::Material::ALPHA_MODE_BLEND,
                 m_DrawableCache,
                 m_FrameTargets);
             if (RADIENT_FAILED(Status))

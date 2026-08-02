@@ -326,12 +326,18 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                                                    IRenderDevice*                     pDevice,
                                                    IDeviceContext*                    pContext,
                                                    IShaderResourceBinding*            pFrameSRB,
-                                                   const RadientDrawList&             DrawList,
+                                                   GLTF::Material::ALPHA_MODE         AlphaMode,
                                                    const RadientTesseraDrawableCache& DrawableCache,
                                                    const RadientFrameRenderTargets&   Targets)
 {
-    if (pDevice == nullptr || pContext == nullptr || DrawList.IsEmpty())
+    if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
+
+    if (AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+    {
+        UNEXPECTED("Invalid material alpha mode");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     PBR_Renderer* const pRenderer = Renderer.GetRenderer();
     if (pRenderer == nullptr)
@@ -350,8 +356,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    BuildSortedDrawableIDs(DrawList, DrawableCache);
-    if (m_SortedDrawableIDs.empty())
+    const OrderedDrawableSet& OrderedDrawables = m_OrderedDrawables[AlphaMode];
+    if (OrderedDrawables.empty())
         return RADIENT_STATUS_OK;
 
     VERIFY(pFrameSRB != nullptr, "Radient frame SRB is not initialized");
@@ -386,6 +392,11 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
     DrawState State;
 
+    UniqueIdentifier CurrentPSOId      = 0;
+    UniqueIdentifier CurrentMaterialId = 0;
+    bool             IsCurrentPSOReady = false;
+    bool             IsCurrentSRBReady = false;
+
     auto RenderPendingDraws = [&]() -> RADIENT_STATUS {
         if (pMappedPrimitiveData != nullptr)
         {
@@ -399,14 +410,42 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         return Status;
     };
 
-    for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
+    for (const DrawableSortKey& SortKey : OrderedDrawables)
     {
-        VERIFY(DrawableID < m_DrawablePassData.size(), "Sorted drawable ID references invalid pass data");
+        const RadientDrawableID DrawableID = SortKey.DrawableID;
+        VERIFY(DrawableID < m_DrawablePassData.size(), "Ordered drawable references invalid pass data");
         const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
         VERIFY(PassData.pDrawable != nullptr &&
                    PassData.Generation == PassData.pDrawable->Generation &&
-                   IsPipelineReady(PassData.pPSO),
-               "Sorted drawable ID references stale pass data");
+                   PassData.SortKey.DrawableID == DrawableID,
+               "Ordered drawable references stale pass data");
+
+        const RadientDrawableSlot& Drawable = *PassData.pDrawable;
+        if (Drawable.pMaterial == nullptr ||
+            Drawable.pVertexPool == nullptr ||
+            Drawable.pWorldMatrix == nullptr ||
+            Drawable.pEffectiveVisible == nullptr ||
+            !*Drawable.pEffectiveVisible ||
+            Drawable.ElementCount == 0)
+        {
+            continue;
+        }
+
+        if (CurrentPSOId != SortKey.PSOId)
+        {
+            CurrentPSOId      = SortKey.PSOId;
+            IsCurrentPSOReady = IsPipelineReady(PassData.pPSO);
+        }
+        if (!IsCurrentPSOReady)
+            continue;
+
+        if (CurrentMaterialId != SortKey.MaterialId)
+        {
+            CurrentMaterialId = SortKey.MaterialId;
+            IsCurrentSRBReady = PassData.MaterialSRB.GetSRB() != nullptr;
+        }
+        if (!IsCurrentSRBReady)
+            continue;
 
         Uint32 PrimitiveAttribsOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
         if (PrimitiveAttribsOffset + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
@@ -459,7 +498,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
         const DrawablePassData& PassData = m_DrawablePassData[Pending.DrawableID];
         VERIFY(PassData.pDrawable != nullptr &&
                    PassData.Generation == PassData.pDrawable->Generation &&
-                   IsPipelineReady(PassData.pPSO),
+                   PassData.pPSO != nullptr,
                "Pending drawable ID references stale pass data");
 
         const RadientDrawableSlot& Drawable = *PassData.pDrawable;
@@ -489,11 +528,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
             State.FrameSRBCommitted = true;
         }
 
-        IShaderResourceBinding* const pMaterialSRB       = PassData.MaterialSRB.GetSRB();
-        const bool                    MaterialSRBChanged = State.pMaterialSRB != pMaterialSRB;
+        const UniqueIdentifier MaterialId         = PassData.SortKey.MaterialId;
+        const bool             MaterialSRBChanged = State.MaterialId != MaterialId;
         if (MaterialSRBChanged)
         {
-            State.pMaterialSRB         = pMaterialSRB;
+            State.MaterialId           = MaterialId;
+            State.pMaterialSRB         = PassData.MaterialSRB.GetSRB();
             State.pPrimitiveAttribsVar = PassData.MaterialSRB.GetPrimitiveAttribsVariable();
         }
 
@@ -533,79 +573,19 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(PBR_Renderer&     
     return RADIENT_STATUS_OK;
 }
 
-void RadientTesseraGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
-                                                        const RadientTesseraDrawableCache& DrawableCache)
+bool RadientTesseraGeometryPass::DrawableSortKeyLess::operator()(const DrawableSortKey& Lhs,
+                                                                 const DrawableSortKey& Rhs) const noexcept
 {
-    m_SortedDrawableIDs.clear();
-    m_SortedDrawableIDs.reserve(DrawList.GetItemCount());
+    if (Lhs.PSOId != Rhs.PSOId)
+        return Lhs.PSOId < Rhs.PSOId;
 
-    for (const RadientDrawItem& DrawItem : DrawList.GetItems())
-    {
-        const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(DrawItem.DrawableID);
-        if (pDrawable == nullptr ||
-            pDrawable->pMaterial == nullptr ||
-            pDrawable->pVertexPool == nullptr)
-        {
-            continue;
-        }
+    if (Lhs.MaterialId != Rhs.MaterialId)
+        return Lhs.MaterialId < Rhs.MaterialId;
 
-        if (pDrawable->pWorldMatrix == nullptr ||
-            pDrawable->pEffectiveVisible == nullptr ||
-            !*pDrawable->pEffectiveVisible)
-        {
-            continue;
-        }
+    if (Lhs.VertexPoolId != Rhs.VertexPoolId)
+        return Lhs.VertexPoolId < Rhs.VertexPoolId;
 
-        if (pDrawable->ElementCount == 0)
-            continue;
-
-        if (DrawItem.DrawableID >= m_DrawablePassData.size())
-            continue;
-
-        const DrawablePassData& PassData = m_DrawablePassData[DrawItem.DrawableID];
-        if (PassData.pDrawable != pDrawable ||
-            PassData.Generation != pDrawable->Generation ||
-            !PassData.MaterialSRB ||
-            PassData.MaterialSRB.GetSRB() == nullptr ||
-            !IsPipelineReady(PassData.pPSO))
-        {
-            continue;
-        }
-
-        m_SortedDrawableIDs.push_back(DrawItem.DrawableID);
-    }
-
-    std::sort(m_SortedDrawableIDs.begin(), m_SortedDrawableIDs.end(),
-              [this](RadientDrawableID LhsDrawableID, RadientDrawableID RhsDrawableID) {
-                  VERIFY(LhsDrawableID < m_DrawablePassData.size() &&
-                             RhsDrawableID < m_DrawablePassData.size(),
-                         "Sorted drawable ID references missing pass data");
-
-                  const DrawablePassData& LhsPassData = m_DrawablePassData[LhsDrawableID];
-                  const DrawablePassData& RhsPassData = m_DrawablePassData[RhsDrawableID];
-                  VERIFY((LhsPassData.pDrawable != nullptr &&
-                          RhsPassData.pDrawable != nullptr &&
-                          LhsPassData.Generation == LhsPassData.pDrawable->Generation &&
-                          RhsPassData.Generation == RhsPassData.pDrawable->Generation &&
-                          IsPipelineReady(LhsPassData.pPSO) &&
-                          IsPipelineReady(RhsPassData.pPSO)),
-                         "Sorted drawable ID references stale pass data");
-
-                  if (LhsPassData.pPSO != RhsPassData.pPSO)
-                      return std::less<IPipelineState*>{}(LhsPassData.pPSO, RhsPassData.pPSO);
-
-                  // Calling GetSRB() for every comparison is expensive, so use the
-                  // material SRB lease addresses as the ordering key.
-                  const RadientMaterialSRBLease* const pLhsMaterialSRB = std::addressof(LhsPassData.MaterialSRB);
-                  const RadientMaterialSRBLease* const pRhsMaterialSRB = std::addressof(RhsPassData.MaterialSRB);
-                  if (pLhsMaterialSRB != pRhsMaterialSRB)
-                      return std::less<const RadientMaterialSRBLease*>{}(pLhsMaterialSRB, pRhsMaterialSRB);
-
-                  if (LhsPassData.pDrawable->pVertexPool != RhsPassData.pDrawable->pVertexPool)
-                      return std::less<IVertexPool*>{}(LhsPassData.pDrawable->pVertexPool, RhsPassData.pDrawable->pVertexPool);
-
-                  return LhsDrawableID < RhsDrawableID;
-              });
+    return Lhs.DrawableID < Rhs.DrawableID;
 }
 
 void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRenderer&    Renderer,
@@ -617,6 +597,8 @@ void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRend
 
     if (RebuildAll)
     {
+        for (OrderedDrawableSet& Drawables : m_OrderedDrawables)
+            Drawables.clear();
         m_DrawablePassData.clear();
 
         const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
@@ -663,6 +645,8 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     if (DrawableID >= m_DrawablePassData.size())
         m_DrawablePassData.resize(static_cast<size_t>(DrawableID) + 1);
 
+    InvalidateDrawablePassData(DrawableID);
+
     DrawablePassData&   PassData  = m_DrawablePassData[DrawableID];
     PBR_Renderer* const pRenderer = Renderer.GetRenderer();
     if (pRenderer == nullptr || !Drawable.MaterialData)
@@ -681,6 +665,11 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
 
     const GLTF::Material&            Material  = *MaterialData.pMaterial;
     const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
+    if (AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+    {
+        UNEXPECTED("Material has an invalid alpha mode");
+        return;
+    }
 
     PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
     PSOFlags |=
@@ -693,7 +682,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 
     const RadientMaterialSRBLease& MaterialSRB = TesseraMaterialData.GetMaterialSRB();
-    if (!MaterialSRB || MaterialSRB.GetSRB() == nullptr)
+    if (!MaterialSRB)
     {
         PassData = {};
         return;
@@ -719,18 +708,50 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         GetFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
     }
 
+    IPipelineState* const pPSO = m_PbrPSOCache.Get(PsoKey, GetFlags);
+    if (pPSO == nullptr || Drawable.pVertexPool == nullptr)
+    {
+        UNEXPECTED("Unable to create drawable pass ordering data");
+        return;
+    }
+
     PassData.pDrawable   = &Drawable;
     PassData.Generation  = Drawable.Generation;
     PassData.PSOFlags    = PSOFlags;
-    PassData.pPSO        = m_PbrPSOCache.Get(PsoKey, GetFlags);
+    PassData.AlphaMode   = AlphaMode;
+    PassData.pPSO        = pPSO;
     PassData.MaterialSRB = MaterialSRB;
-    VERIFY_EXPR(PassData.pPSO != nullptr);
+    PassData.SortKey     = {
+        pPSO->GetUniqueID(),
+        TesseraMaterialData.GetUniqueID(),
+        Drawable.pVertexPool->GetUniqueID(),
+        DrawableID,
+    };
+
+    const auto InsertResult = m_OrderedDrawables[AlphaMode].insert(PassData.SortKey);
+    VERIFY(InsertResult.second, "Drawable is already present in the ordered pass data");
 }
 
 void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableID)
 {
     if (DrawableID < m_DrawablePassData.size())
-        m_DrawablePassData[DrawableID] = {};
+    {
+        DrawablePassData& PassData = m_DrawablePassData[DrawableID];
+        if (PassData.SortKey.DrawableID != InvalidRadientDrawableID)
+        {
+            VERIFY(PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES,
+                   "Ordered drawable has an invalid alpha mode");
+            if (PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES)
+            {
+                OrderedDrawableSet& Drawables = m_OrderedDrawables[PassData.AlphaMode];
+                const auto          It        = Drawables.find(PassData.SortKey);
+                VERIFY(It != Drawables.end(), "Ordered drawable entry is missing");
+                if (It != Drawables.end())
+                    Drawables.erase(It);
+            }
+        }
+        PassData = {};
+    }
 }
 
 RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&           Renderer,
@@ -760,6 +781,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
 
     m_RTVFormat = RTVFormat;
     m_DSVFormat = DSVFormat;
+    for (OrderedDrawableSet& Drawables : m_OrderedDrawables)
+        Drawables.clear();
     m_DrawablePassData.clear();
 
     return RADIENT_STATUS_OK;

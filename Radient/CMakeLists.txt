@@ -136,6 +136,7 @@ PRIVATE
     Diligent-Common
     DiligentFX
     EnTT
+    absl::btree
     absl::flat_hash_map
     absl::inlined_vector
 )

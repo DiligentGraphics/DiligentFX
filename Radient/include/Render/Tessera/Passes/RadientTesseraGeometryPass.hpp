@@ -33,7 +33,19 @@
 
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "UniqueIdentifier.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/btree_set.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
+#include <array>
 #include <vector>
 
 namespace Diligent
@@ -57,7 +69,7 @@ public:
                            IRenderDevice*                     pDevice,
                            IDeviceContext*                    pContext,
                            IShaderResourceBinding*            pFrameSRB,
-                           const RadientDrawList&             DrawList,
+                           GLTF::Material::ALPHA_MODE         AlphaMode,
                            const RadientTesseraDrawableCache& DrawableCache,
                            const RadientFrameRenderTargets&   Targets);
 
@@ -67,12 +79,29 @@ private:
                                    TEXTURE_FORMAT          RTVFormat,
                                    TEXTURE_FORMAT          DSVFormat);
 
+    struct DrawableSortKey
+    {
+        UniqueIdentifier  PSOId        = 0;
+        UniqueIdentifier  MaterialId   = 0;
+        UniqueIdentifier  VertexPoolId = 0;
+        RadientDrawableID DrawableID   = InvalidRadientDrawableID;
+    };
+
+    struct DrawableSortKeyLess
+    {
+        bool operator()(const DrawableSortKey& Lhs, const DrawableSortKey& Rhs) const noexcept;
+    };
+
     struct DrawablePassData
     {
-        const RadientDrawableSlot* pDrawable  = nullptr;
+        const RadientDrawableSlot* pDrawable = nullptr;
+
+        IPipelineState*         pPSO     = nullptr;
+        PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
         Uint32                     Generation = 0;
-        PBR_Renderer::PSO_FLAGS    PSOFlags   = PBR_Renderer::PSO_FLAG_NONE;
-        IPipelineState*            pPSO       = nullptr;
+        GLTF::Material::ALPHA_MODE AlphaMode  = GLTF::Material::ALPHA_MODE_NUM_MODES;
+        DrawableSortKey            SortKey;
 
         RadientMaterialSRBLease MaterialSRB;
     };
@@ -85,6 +114,7 @@ private:
 
     struct DrawState
     {
+        UniqueIdentifier         MaterialId           = 0;
         IShaderResourceBinding*  pMaterialSRB         = nullptr;
         IShaderResourceVariable* pPrimitiveAttribsVar = nullptr;
         IPipelineState*          pPSO                 = nullptr;
@@ -106,16 +136,18 @@ private:
                                 RadientDrawableID               DrawableID);
     void InvalidateDrawablePassData(RadientDrawableID DrawableID);
 
-    void BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
-                                const RadientTesseraDrawableCache& DrawableCache);
-
 private:
+    using OrderedDrawableSet = absl::btree_set<DrawableSortKey, DrawableSortKeyLess>;
+
     PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
     PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
 
-    std::vector<DrawablePassData>  m_DrawablePassData;
-    std::vector<RadientDrawableID> m_SortedDrawableIDs;
-    std::vector<PendingDraw>       m_PendingDraws;
+    std::vector<DrawablePassData> m_DrawablePassData;
+
+    // Incremental drawable changes maintain this order, avoiding a full sort
+    // of every visible drawable on every frame.
+    std::array<OrderedDrawableSet, GLTF::Material::ALPHA_MODE_NUM_MODES> m_OrderedDrawables;
+    std::vector<PendingDraw>                                             m_PendingDraws;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

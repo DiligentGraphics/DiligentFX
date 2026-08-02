@@ -38,8 +38,7 @@
 
 #ifdef _MSC_VER
 #    pragma warning(push)
-#    pragma warning(disable : 4127) // conditional expression is constant
-#    pragma warning(disable : 4702) // unreachable code
+#    pragma warning(disable : 4244) // 'argument': conversion from 'int' to 'unsigned char', possible loss of data
 #endif
 #include "absl/container/flat_hash_map.h"
 #ifdef _MSC_VER
