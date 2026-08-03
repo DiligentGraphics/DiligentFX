@@ -57,13 +57,33 @@ TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGr
     const RadientTesseraMaterialBufferAllocation First =
         Buffer.Allocate(FirstData.data(), static_cast<Uint32>(FirstData.size()));
     ASSERT_TRUE(First);
+    EXPECT_FALSE(First.IsUploadedThrough(Buffer.GetUploadedGeneration()));
     const Uint32 FirstOffset = First.GetOffset();
 
     ASSERT_EQ(Buffer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+    EXPECT_TRUE(First.IsUploadedThrough(Buffer.GetUploadedGeneration()));
     IBuffer* const pInitialBuffer = Buffer.GetBuffer();
     ASSERT_NE(pInitialBuffer, nullptr);
     const Uint32 InitialVersion    = Buffer.GetVersion();
+    const Uint64 InitialGeneration = Buffer.GetUploadedGeneration();
     const Uint64 InitialBufferSize = pInitialBuffer->GetDesc().Size;
+    EXPECT_TRUE(First.IsUploadedThrough(InitialGeneration));
+
+    std::array<Uint8, 32> LateData;
+    LateData.fill(0x7B);
+    const RadientTesseraMaterialBufferAllocation Late =
+        Buffer.Allocate(LateData.data(), static_cast<Uint32>(LateData.size()));
+    ASSERT_TRUE(Late);
+    ASSERT_LE(Uint64{Late.GetOffset()} + MaxMaterialAttribsSize, InitialBufferSize);
+    EXPECT_FALSE(Late.IsUploadedThrough(Buffer.GetUploadedGeneration()));
+    EXPECT_FALSE(Late.IsUploadedThrough(InitialGeneration));
+
+    ASSERT_EQ(Buffer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+    EXPECT_TRUE(Late.IsUploadedThrough(Buffer.GetUploadedGeneration()));
+    EXPECT_EQ(Buffer.GetVersion(), InitialVersion);
+    const Uint64 UpdatedGeneration = Buffer.GetUploadedGeneration();
+    EXPECT_GT(UpdatedGeneration, InitialGeneration);
+    EXPECT_TRUE(Late.IsUploadedThrough(UpdatedGeneration));
 
     std::vector<Uint8>                                  LastData(MaxMaterialAttribsSize, 0xA5);
     const size_t                                        AllocationCount = static_cast<size_t>(InitialBufferSize / MaxMaterialAttribsSize) + 2;
@@ -72,11 +92,16 @@ TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGr
     for (size_t Index = 0; Index < AllocationCount; ++Index)
         Allocations.push_back(Buffer.Allocate(LastData.data(), static_cast<Uint32>(LastData.size())));
     ASSERT_TRUE(Allocations.back());
+    EXPECT_FALSE(Allocations.back().IsUploadedThrough(Buffer.GetUploadedGeneration()));
 
     ASSERT_EQ(Buffer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+    EXPECT_TRUE(Allocations.back().IsUploadedThrough(Buffer.GetUploadedGeneration()));
     IBuffer* const pGrownBuffer = Buffer.GetBuffer();
     ASSERT_NE(pGrownBuffer, nullptr);
     EXPECT_GT(Buffer.GetVersion(), InitialVersion);
+    EXPECT_FALSE(Allocations.back().IsUploadedThrough(UpdatedGeneration));
+    EXPECT_TRUE(Allocations.back().IsUploadedThrough(Buffer.GetUploadedGeneration()));
+    EXPECT_TRUE(First.IsUploadedThrough(InitialGeneration));
     EXPECT_GE(pGrownBuffer->GetDesc().Size, InitialBufferSize * 2);
     EXPECT_EQ(First.GetOffset(), FirstOffset);
 

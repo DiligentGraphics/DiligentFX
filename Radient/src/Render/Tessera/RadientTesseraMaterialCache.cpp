@@ -65,7 +65,14 @@ RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    return m_MaterialSRB.GetSRB() != nullptr ?
+    IShaderResourceBinding* const pSRB = m_MaterialSRB.GetSRB();
+    if (pSRB == nullptr)
+        return RADIENT_STATUS_PENDING;
+
+    // An SRB may intentionally retain the previous global material buffer
+    // while a replacement is pending. Its generation records exactly how many
+    // material allocations that bound buffer contains.
+    return m_MaterialBufferAllocation.IsUploadedThrough(m_MaterialSRB.GetMaterialBufferGeneration()) ?
         RADIENT_STATUS_OK :
         RADIENT_STATUS_PENDING;
 }
@@ -196,12 +203,15 @@ RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice*
 
 RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     Uint32                               TextureVersion,
+    Uint32                               MaterialBufferVersion,
+    Uint64                               MaterialBufferGeneration,
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
     const CreateSRBCallbackType&         CreateSRB)
 {
     return m_pProcessingContext->pMaterialSRBTable->Prepare(
         TextureVersion,
-        m_pProcessingContext->MaterialBuffer.GetVersion(),
+        MaterialBufferVersion,
+        MaterialBufferGeneration,
         ResolveTextureSRV,
         CreateSRB);
 }
@@ -214,6 +224,11 @@ IBuffer* RadientTesseraMaterialCache::GetMaterialBuffer() const noexcept
 Uint32 RadientTesseraMaterialCache::GetMaterialBufferVersion() const noexcept
 {
     return m_pProcessingContext->MaterialBuffer.GetVersion();
+}
+
+Uint64 RadientTesseraMaterialCache::GetMaterialBufferGeneration() const noexcept
+{
+    return m_pProcessingContext->MaterialBuffer.GetUploadedGeneration();
 }
 
 Uint32 RadientTesseraMaterialCache::GetMaxMaterialAttribsSize() const noexcept

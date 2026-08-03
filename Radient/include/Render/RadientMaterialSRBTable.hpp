@@ -78,6 +78,11 @@ public:
     IShaderResourceVariable* GetPrimitiveAttribsVariable() const noexcept;
     IShaderResourceVariable* GetMaterialAttribsVariable() const noexcept;
 
+    /// Returns the material buffer version and uploaded generation bound by
+    /// this SRB. These values remain unchanged while replacement is pending.
+    Uint32 GetMaterialBufferVersion() const noexcept;
+    Uint64 GetMaterialBufferGeneration() const noexcept;
+
     explicit operator bool() const noexcept
     {
         return m_pState != nullptr;
@@ -138,6 +143,7 @@ public:
     /// skipped and retried by the next call.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
                            Uint32                               MaterialBufferVersion,
+                           Uint64                               MaterialBufferGeneration,
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);
 

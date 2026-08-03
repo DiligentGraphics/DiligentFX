@@ -111,8 +111,11 @@ RadientMaterialTextureSRVResolveResult ResolveTestTextureSRV(
 
 RADIENT_STATUS PrepareMaterialCache(RadientTesseraMaterialCache& Cache)
 {
+    // The synthetic SRB makes every CPU material record immediately visible.
     return Cache.Prepare(
         1,
+        0,
+        ~Uint64{0},
         ResolveTestTextureSRV,
         [](ITextureView* const*, Uint32) {
             return Testing::MakeTestShaderResourceBinding();

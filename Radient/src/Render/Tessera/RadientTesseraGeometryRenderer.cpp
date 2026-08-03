@@ -348,8 +348,16 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
     if (MaterialBufferStatus != RADIENT_STATUS_OK)
         return MaterialBufferStatus;
 
+    // The renderer may be initialized before any material records exist. A
+    // worker that allocates the first record after PrepareMaterialBuffer()
+    // will leave its generation pending for the next frame.
+    if (m_pMaterialCache->GetMaterialBuffer() == nullptr)
+        return RADIENT_STATUS_OK;
+
     return m_pMaterialCache->Prepare(
         TextureVersion,
+        m_pMaterialCache->GetMaterialBufferVersion(),
+        m_pMaterialCache->GetMaterialBufferGeneration(),
         [](const RadientMaterialTextureRenderData& Binding) {
             const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetGPUResourceStatus(Binding.pTexture);
             if (TextureStatus != RADIENT_STATUS_OK)

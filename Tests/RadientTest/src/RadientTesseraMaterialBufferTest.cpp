@@ -55,6 +55,8 @@ TEST(RadientTesseraMaterialBufferTest, AllocatesAlignedPersistentRegions)
 
     ASSERT_TRUE(First);
     ASSERT_TRUE(Second);
+    EXPECT_FALSE(First.IsUploadedThrough(Buffer.GetUploadedGeneration()));
+    EXPECT_FALSE(Second.IsUploadedThrough(Buffer.GetUploadedGeneration()));
     EXPECT_EQ(First.GetOffset() % 256, 0u);
     EXPECT_EQ(Second.GetOffset() % 256, 0u);
     EXPECT_NE(First.GetOffset(), Second.GetOffset());

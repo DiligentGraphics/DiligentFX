@@ -115,8 +115,9 @@ public:
     IShaderResourceVariable*              pPrimitiveAttribsVar = nullptr;
     IShaderResourceVariable*              pMaterialAttribsVar  = nullptr;
 
-    Uint32 PreparedTextureVersion        = ~0u;
-    Uint32 PreparedMaterialBufferVersion = ~0u;
+    Uint32 PreparedTextureVersion           = ~0u;
+    Uint32 PreparedMaterialBufferVersion    = ~0u;
+    Uint64 PreparedMaterialBufferGeneration = 0;
 };
 
 IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
@@ -132,6 +133,16 @@ IShaderResourceVariable* RadientMaterialSRBLease::GetPrimitiveAttribsVariable() 
 IShaderResourceVariable* RadientMaterialSRBLease::GetMaterialAttribsVariable() const noexcept
 {
     return m_pState != nullptr ? m_pState->pMaterialAttribsVar : nullptr;
+}
+
+Uint32 RadientMaterialSRBLease::GetMaterialBufferVersion() const noexcept
+{
+    return m_pState != nullptr ? m_pState->PreparedMaterialBufferVersion : ~0u;
+}
+
+Uint64 RadientMaterialSRBLease::GetMaterialBufferGeneration() const noexcept
+{
+    return m_pState != nullptr ? m_pState->PreparedMaterialBufferGeneration : 0;
 }
 
 struct RadientMaterialSRBTable::Impl
@@ -318,6 +329,7 @@ RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(
 RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     Uint32                               TextureVersion,
     Uint32                               MaterialBufferVersion,
+    Uint64                               MaterialBufferGeneration,
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
     const CreateSRBCallbackType&         CreateSRB)
 {
@@ -348,7 +360,12 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         if (pState->pSRB != nullptr &&
             pState->PreparedTextureVersion == TextureVersion &&
             pState->PreparedMaterialBufferVersion == MaterialBufferVersion)
+        {
+            // Uploading more records does not replace either resource bound by
+            // the SRB. Advance its material coverage without recreating it.
+            pState->PreparedMaterialBufferGeneration = MaterialBufferGeneration;
             continue;
+        }
 
         absl::InlinedVector<ITextureView*, 8> TextureSRVs;
         TextureSRVs.reserve(pState->Slots.size());
@@ -396,11 +413,12 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             continue;
         }
 
-        pState->pSRB                          = std::move(pSRB);
-        pState->pPrimitiveAttribsVar          = pPrimitiveAttribsVar;
-        pState->pMaterialAttribsVar           = pMaterialAttribsVar;
-        pState->PreparedTextureVersion        = TextureVersion;
-        pState->PreparedMaterialBufferVersion = MaterialBufferVersion;
+        pState->pSRB                             = std::move(pSRB);
+        pState->pPrimitiveAttribsVar             = pPrimitiveAttribsVar;
+        pState->pMaterialAttribsVar              = pMaterialAttribsVar;
+        pState->PreparedTextureVersion           = TextureVersion;
+        pState->PreparedMaterialBufferVersion    = MaterialBufferVersion;
+        pState->PreparedMaterialBufferGeneration = MaterialBufferGeneration;
     }
     m_Impl->PrepareEntries.clear();
 

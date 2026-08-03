@@ -57,6 +57,10 @@ public:
     Uint32 GetOffset() const noexcept;
     Uint32 GetSize() const noexcept;
 
+    /// Returns true if this allocation is included in the specified uploaded
+    /// generation of a material buffer.
+    bool IsUploadedThrough(Uint64 UploadedGeneration) const noexcept;
+
 private:
     explicit RadientTesseraMaterialBufferAllocation(
         std::shared_ptr<RadientTesseraMaterialBufferAllocationState> pState) noexcept :
@@ -98,6 +102,7 @@ public:
 
     IBuffer* GetBuffer() const noexcept;
     Uint32   GetVersion() const noexcept;
+    Uint64   GetUploadedGeneration() const noexcept;
     Uint32   GetMaxMaterialAttribsSize() const noexcept;
 
 private:

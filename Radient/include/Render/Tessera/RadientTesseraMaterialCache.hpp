@@ -167,13 +167,18 @@ public:
                                          IDeviceContext* pContext);
 
     /// Creates pending material SRBs and refreshes existing SRBs after texture
-    /// resources change. This method must be called from the render thread.
+    /// resources change. The material buffer version and generation must
+    /// describe the buffer snapshot bound by CreateSRB. This method must only
+    /// be called from the render thread.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
+                           Uint32                               MaterialBufferVersion,
+                           Uint64                               MaterialBufferGeneration,
                            const ResolveTextureSRVCallbackType& ResolveTextureSRV,
                            const CreateSRBCallbackType&         CreateSRB);
 
     IBuffer* GetMaterialBuffer() const noexcept;
     Uint32   GetMaterialBufferVersion() const noexcept;
+    Uint64   GetMaterialBufferGeneration() const noexcept;
     Uint32   GetMaxMaterialAttribsSize() const noexcept;
 
 private:

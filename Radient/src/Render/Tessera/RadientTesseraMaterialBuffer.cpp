@@ -33,6 +33,7 @@
 #include "VariableSizeAllocationsManager.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <limits>
 #include <mutex>
@@ -90,6 +91,8 @@ struct RadientTesseraMaterialBufferImpl
     size_t                         RequiredBufferSize = 0;
     size_t                         DirtyRangeStart    = (std::numeric_limits<size_t>::max)();
     size_t                         DirtyRangeEnd      = 0;
+    Uint64                         CurrentGeneration  = 0;
+    std::atomic<Uint64>            UploadedGeneration{0};
 };
 
 struct RadientTesseraMaterialBufferAllocationState
@@ -98,11 +101,13 @@ struct RadientTesseraMaterialBufferAllocationState
         std::shared_ptr<RadientTesseraMaterialBufferImpl> Owner,
         VariableSizeAllocationsManager::Allocation        Region,
         Uint32                                            AlignedOffset,
-        Uint32                                            DataSize) :
+        Uint32                                            DataSize,
+        Uint64                                            DataGeneration) :
         pOwner{std::move(Owner)},
         Allocation{std::move(Region)},
         Offset{AlignedOffset},
-        Size{DataSize}
+        Size{DataSize},
+        Generation{DataGeneration}
     {}
 
     ~RadientTesseraMaterialBufferAllocationState()
@@ -115,6 +120,7 @@ struct RadientTesseraMaterialBufferAllocationState
     VariableSizeAllocationsManager::Allocation        Allocation;
     const Uint32                                      Offset;
     const Uint32                                      Size;
+    const Uint64                                      Generation;
 };
 
 Uint32 RadientTesseraMaterialBufferAllocation::GetOffset() const noexcept
@@ -125,6 +131,11 @@ Uint32 RadientTesseraMaterialBufferAllocation::GetOffset() const noexcept
 Uint32 RadientTesseraMaterialBufferAllocation::GetSize() const noexcept
 {
     return m_pState != nullptr ? m_pState->Size : 0;
+}
+
+bool RadientTesseraMaterialBufferAllocation::IsUploadedThrough(Uint64 UploadedGeneration) const noexcept
+{
+    return m_pState != nullptr && UploadedGeneration >= m_pState->Generation;
 }
 
 RadientTesseraMaterialBuffer::RadientTesseraMaterialBuffer(const CreateInfo& CI)
@@ -182,11 +193,14 @@ RadientTesseraMaterialBufferAllocation RadientTesseraMaterialBuffer::Allocate(
     m_pImpl->DirtyRangeStart = std::min(m_pImpl->DirtyRangeStart, Offset);
     m_pImpl->DirtyRangeEnd   = std::max(m_pImpl->DirtyRangeEnd, Offset + Size);
 
+    const Uint64 Generation = ++m_pImpl->CurrentGeneration;
+
     auto pState = std::make_shared<RadientTesseraMaterialBufferAllocationState>(
         m_pImpl,
         std::move(Allocation),
         static_cast<Uint32>(Offset),
-        Size);
+        Size,
+        Generation);
     return RadientTesseraMaterialBufferAllocation{std::move(pState)};
 }
 
@@ -240,6 +254,12 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
         m_pImpl->DirtyRangeEnd   = 0;
     }
 
+    // Allocate() and Prepare() use the same mutex, so this publishes every
+    // CPU record observed by this upload. A later allocation receives a newer
+    // generation and remains pending until the next Prepare().
+    if (pBuffer != nullptr)
+        m_pImpl->UploadedGeneration.store(m_pImpl->CurrentGeneration, std::memory_order_release);
+
     return RADIENT_STATUS_OK;
 }
 
@@ -251,6 +271,11 @@ IBuffer* RadientTesseraMaterialBuffer::GetBuffer() const noexcept
 Uint32 RadientTesseraMaterialBuffer::GetVersion() const noexcept
 {
     return m_pImpl->Buffer.GetVersion();
+}
+
+Uint64 RadientTesseraMaterialBuffer::GetUploadedGeneration() const noexcept
+{
+    return m_pImpl->UploadedGeneration.load(std::memory_order_acquire);
 }
 
 Uint32 RadientTesseraMaterialBuffer::GetMaxMaterialAttribsSize() const noexcept

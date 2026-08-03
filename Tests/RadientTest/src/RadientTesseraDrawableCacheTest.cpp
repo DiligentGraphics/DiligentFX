@@ -518,8 +518,11 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeRenderableMaterialAsset()
 
 RADIENT_STATUS PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache)
 {
+    // The synthetic SRB makes every CPU material record immediately visible.
     return Cache.Prepare(
         1,
+        0,
+        ~Uint64{0},
         [](const RadientMaterialTextureRenderData& Binding) {
             return RadientMaterialTextureSRVResolveResult{
                 RADIENT_STATUS_OK,

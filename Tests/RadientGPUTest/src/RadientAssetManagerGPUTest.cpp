@@ -420,6 +420,23 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
         EXPECT_EQ(pPrimitiveAttribsVar->Get(), pPrimitiveAttribsCB);
         pPrimitiveAttribsVar->SetBufferOffset(
             pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment);
+
+        // Reusing an already-created SRB must not make a newly allocated
+        // material record ready before the render thread uploads its bytes.
+        RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
+        ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pSecondMaterial), RADIENT_STATUS_OK);
+        ASSERT_NE(pSecondMaterial, nullptr);
+
+        const RadientTesseraMaterialResolveResult SecondResult =
+            Renderer.GetMaterialCache()->Resolve(*pThreadPool, pSecondMaterial);
+        ASSERT_TRUE(SecondResult.Data);
+        pThreadPool->WaitForAllTasks();
+        ASSERT_EQ(SecondResult.Data->GetStatus(), RADIENT_STATUS_OK);
+        EXPECT_EQ(SecondResult.Data->GetMaterialSRB().GetSRB(), pMaterialSRB);
+        EXPECT_EQ(SecondResult.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+
+        ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+        EXPECT_EQ(SecondResult.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
     }
 
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
