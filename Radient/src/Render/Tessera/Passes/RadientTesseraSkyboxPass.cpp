@@ -82,7 +82,7 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Prepare(RadientTesseraGeometryRenderer&
     if (pDevice == nullptr)
         return RADIENT_STATUS_OK;
 
-    ITextureView* pColorRTV = Targets.GetColorRTV();
+    ITextureView* pColorRTV = Targets.GetSceneColorRTV();
     if (pColorRTV == nullptr)
         return RADIENT_STATUS_OK;
 
@@ -131,7 +131,7 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
     if (pSkyboxSRV == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    ITextureView* pColorRTV = Targets.GetColorRTV();
+    ITextureView* pColorRTV = Targets.GetSceneColorRTV();
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     if (pColorRTV == nullptr)
         return RADIENT_STATUS_OK;

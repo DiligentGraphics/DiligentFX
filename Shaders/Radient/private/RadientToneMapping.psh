@@ -1,0 +1,36 @@
+#include "FullScreenTriangleVSOutput.fxh"
+#include "SRGBUtilities.fxh"
+#include "ToneMapping.fxh"
+#include "BasicStructures.fxh"
+#include "PBR_Structures.fxh"
+#include "RenderPBR_Structures.fxh"
+#include "RadientPostProcessStructures.fxh"
+
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+cbuffer cbRadientPostProcessAttribs
+{
+    RadientPostProcessAttribs g_Attribs;
+}
+
+cbuffer cbFrameAttribs
+{
+    PBRFrameAttribs g_Frame;
+}
+#endif
+
+Texture2D g_ColorBuffer;
+
+void main(in  FullScreenTriangleVSOutput VSOut,
+          out float4                     Color : SV_Target0)
+{
+    Color = g_ColorBuffer.Load(int3(VSOut.f4PixelPos.xy, 0));
+
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+    const float AverageLogLum = g_Attribs.AverageLogLum * exp2(-g_Frame.Camera.fExposure);
+    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, AverageLogLum);
+#endif
+
+#if CONVERT_OUTPUT_TO_SRGB
+    Color.rgb = LinearToSRGB(Color.rgb);
+#endif
+}

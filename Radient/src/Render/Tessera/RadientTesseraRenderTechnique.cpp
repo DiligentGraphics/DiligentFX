@@ -86,7 +86,9 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RADIENT_STATUS Status = m_FrameTargets.Prepare(Context.pDevice, *ViewDesc.pRenderTarget);
+    ViewRenderState& ViewState = GetOrCreateViewRenderState(pView);
+
+    RADIENT_STATUS Status = ViewState.FrameTargets.Prepare(Context.pDevice, *ViewDesc.pRenderTarget);
     if (RADIENT_FAILED(Status) || Context.pDevice == nullptr || Context.pContext == nullptr)
         return Status;
 
@@ -96,14 +98,14 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (RADIENT_FAILED(Status))
         return Status;
 
+    RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
+    if (pPBRRenderer == nullptr || pPBRRenderer->GetFrameAttribsCB() == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
     const bool HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
     const bool HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
     if (HasDrawables || HasSkybox)
     {
-        RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
-        if (pPBRRenderer == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
-
         Status = pView->Prepare(*pPBRRenderer, Context.pContext);
         if (RADIENT_FAILED(Status))
             return Status;
@@ -113,15 +115,19 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                    Context.pDevice,
                                    Context.pContext,
                                    m_DrawableCache,
-                                   m_FrameTargets);
+                                   ViewState.FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_SkyboxPass.Prepare(m_GeometryRenderer, Context.pDevice, m_FrameTargets);
+    Status = m_SkyboxPass.Prepare(m_GeometryRenderer, Context.pDevice, ViewState.FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    return m_PostProcessPipeline.Prepare(Context.pDevice, Context.pContext, m_FrameTargets);
+    return ViewState.PostProcessPipeline.Prepare(Context.pDevice,
+                                                 Context.pContext,
+                                                 ViewState.FrameTargets,
+                                                 ViewDesc.ToneMapping,
+                                                 pPBRRenderer->GetFrameAttribsCB());
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderContext& Context)
@@ -133,11 +139,14 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
     if (pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    ViewRenderState* const pViewState = FindViewRenderState(pView, false);
+    if (pViewState == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    pViewState->FrameTargets.ClearSceneColor(Context.pContext);
+
     const RadientViewDesc& ViewDesc     = pView->GetDesc();
     const bool             HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
-    const bool             HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
-    if (!HasDrawables && !HasSkybox)
-        return RADIENT_STATUS_OK;
 
     if (HasDrawables)
     {
@@ -163,7 +172,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         m_DrawableCache.GetLightList(),
         m_pAssetManager->GetResourceManager(),
         GeometryFrameAttribs,
-        m_FrameTargets);
+        pViewState->FrameTargets);
 
     m_FrameActive = !RADIENT_FAILED(Status);
     if (RADIENT_FAILED(Status))
@@ -177,6 +186,10 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
     RadientViewImpl* pView = ClassPtrCast<RadientViewImpl>(Context.Attribs.pView);
     if (pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    ViewRenderState* const pViewState = FindViewRenderState(pView, false);
+    if (pViewState == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
 
     const RadientViewDesc& ViewDesc     = pView->GetDesc();
     const bool             HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
@@ -193,7 +206,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_OPAQUE,
                 m_DrawableCache,
-                m_FrameTargets);
+                pViewState->FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;
 
@@ -204,7 +217,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_MASK,
                 m_DrawableCache,
-                m_FrameTargets);
+                pViewState->FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
@@ -235,7 +248,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 const RADIENT_STATUS Status = m_SkyboxPass.Execute(Context.pContext,
                                                                    ViewDesc.Skybox,
                                                                    pSkyboxSRV,
-                                                                   m_FrameTargets);
+                                                                   pViewState->FrameTargets);
                 if (RADIENT_FAILED(Status))
                     return Status;
             }
@@ -250,13 +263,13 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_BLEND,
                 m_DrawableCache,
-                m_FrameTargets);
+                pViewState->FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
     }
 
-    return m_PostProcessPipeline.Execute(Context.pContext, m_FrameTargets);
+    return pViewState->PostProcessPipeline.Execute(Context.pContext, pViewState->FrameTargets);
 }
 
 void RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext&)
@@ -266,6 +279,45 @@ void RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext&)
 
     m_FrameActive = false;
     m_pFrameSRB.Release();
+}
+
+RadientTesseraRenderTechnique::ViewRenderState* RadientTesseraRenderTechnique::FindViewRenderState(IRadientView* pView,
+                                                                                                   bool          PruneExpired)
+{
+    ViewRenderState* pResult = nullptr;
+    for (auto It = m_ViewRenderStates.begin(); It != m_ViewRenderStates.end();)
+    {
+        RefCntAutoPtr<IRadientView> pCachedView = (*It)->WeakView.Lock();
+        if (pCachedView == nullptr && PruneExpired)
+        {
+            It = m_ViewRenderStates.erase(It);
+        }
+        else
+        {
+            if (pCachedView == pView)
+            {
+                if (!PruneExpired)
+                    return It->get();
+
+                pResult = It->get();
+            }
+
+            ++It;
+        }
+    }
+
+    return pResult;
+}
+
+RadientTesseraRenderTechnique::ViewRenderState& RadientTesseraRenderTechnique::GetOrCreateViewRenderState(IRadientView* pView)
+{
+    // PrepareFrame calls this once per frame, making it a natural point to
+    // release resources that belonged to views destroyed since the last frame.
+    if (ViewRenderState* pState = FindViewRenderState(pView, true))
+        return *pState;
+
+    m_ViewRenderStates.push_back(std::make_unique<ViewRenderState>(pView));
+    return *m_ViewRenderStates.back();
 }
 
 } // namespace Diligent

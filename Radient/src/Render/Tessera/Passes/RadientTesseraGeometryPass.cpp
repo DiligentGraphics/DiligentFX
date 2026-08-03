@@ -122,7 +122,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
         m_NativeMultiDrawSupported = pDevice->GetDeviceInfo().Features.NativeMultiDraw;
 
     bool          RebuildDrawablePassData = false;
-    ITextureView* pColorRTV               = Targets.GetColorRTV();
+    ITextureView* pColorRTV               = Targets.GetSceneColorRTV();
     if (pColorRTV == nullptr)
         return RADIENT_STATUS_OK;
 
@@ -172,7 +172,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     if (!m_PbrPSOCache)
         return RADIENT_STATUS_OK;
 
-    ITextureView* pColorRTV = Targets.GetColorRTV();
+    ITextureView* pColorRTV = Targets.GetSceneColorRTV();
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

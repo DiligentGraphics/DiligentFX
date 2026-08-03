@@ -102,6 +102,7 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     CameraAttribs.fSceneFarDepth  = CameraAttribs.fFarPlaneDepth;
     CameraAttribs.fHandness       = CameraView.Determinant() > 0.f ? 1.f : -1.f;
     CameraAttribs.uiFrameIndex    = FrameIndex;
+    CameraAttribs.fExposure       = 0.f;
     CameraAttribs.fFocusDistance  = Camera.FocusDistance;
     CameraAttribs.fFStop          = Camera.FStop;
     CameraAttribs.fFocalLength    = CameraProj.FocalLength;

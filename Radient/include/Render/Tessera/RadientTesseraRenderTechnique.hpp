@@ -36,6 +36,9 @@
 #include "RefCntAutoPtr.hpp"
 #include "ThreadPool.h"
 
+#include <memory>
+#include <vector>
+
 namespace Diligent
 {
 
@@ -56,15 +59,32 @@ public:
     virtual void           EndFrame(const RadientRenderContext& Context) override final;
 
 private:
+    struct ViewRenderState
+    {
+        explicit ViewRenderState(IRadientView* pView) :
+            WeakView{pView}
+        {}
+
+        RefCntWeakPtr<IRadientView>       WeakView;
+        RadientFrameRenderTargets         FrameTargets;
+        RadientTesseraPostProcessPipeline PostProcessPipeline;
+    };
+
+    ViewRenderState* FindViewRenderState(IRadientView* pView, bool PruneExpired);
+    ViewRenderState& GetOrCreateViewRenderState(IRadientView* pView);
+
+private:
     RefCntAutoPtr<IThreadPool>             m_pThreadPool;
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
-    RadientTesseraDrawableCache       m_DrawableCache;
-    RadientFrameRenderTargets         m_FrameTargets;
-    RadientTesseraGeometryRenderer    m_GeometryRenderer;
-    RadientTesseraGeometryPass        m_ForwardPass;
-    RadientTesseraSkyboxPass          m_SkyboxPass;
-    RadientTesseraPostProcessPipeline m_PostProcessPipeline;
+    RadientTesseraDrawableCache    m_DrawableCache;
+    RadientTesseraGeometryRenderer m_GeometryRenderer;
+    RadientTesseraGeometryPass     m_ForwardPass;
+    RadientTesseraSkyboxPass       m_SkyboxPass;
+
+    // Per-view render targets and PostFX state are retained weakly with the
+    // view so independent views never share renderer-specific frame history.
+    std::vector<std::unique_ptr<ViewRenderState>> m_ViewRenderStates;
 
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
     bool                                  m_FrameActive = false;

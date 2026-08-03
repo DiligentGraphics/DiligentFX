@@ -27,28 +27,37 @@
 #pragma once
 
 #include "RadientRenderer.h"
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
-/// Frame target bundle used by the Radient render pipeline.
+/// Owns the linear HDR scene color target and references the external output
+/// and depth targets supplied by the view.
 class RadientFrameRenderTargets
 {
 public:
+    static constexpr TEXTURE_FORMAT SceneColorFormat = TEX_FORMAT_RGBA16_FLOAT;
+
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target);
+    void           ClearSceneColor(IDeviceContext* pContext) const;
 
     const RadientExtent2D& GetSize() const;
     Uint32                 GetVersion() const;
 
-    ITextureView* GetColorRTV() const;
+    ITextureView* GetSceneColorRTV() const;
+    ITextureView* GetSceneColorSRV() const;
+    ITextureView* GetOutputColorRTV() const;
     ITextureView* GetDepthDSV() const;
 
 private:
     RadientExtent2D m_Size;
     Uint32          m_Version = 0;
 
-    ITextureView* m_pColorRTV = nullptr;
-    ITextureView* m_pDepthDSV = nullptr;
+    RefCntAutoPtr<ITexture> m_pSceneColor;
+
+    ITextureView* m_pOutputColorRTV = nullptr;
+    ITextureView* m_pDepthDSV       = nullptr;
 };
 
 } // namespace Diligent

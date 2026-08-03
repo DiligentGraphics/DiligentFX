@@ -26,27 +26,70 @@
 
 #include "Render/RadientFrameRenderTargets.hpp"
 
+#include <utility>
+
 namespace Diligent
 {
 
 RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target)
 {
-    (void)pDevice;
-
     const RadientRenderTargetDesc& Desc = Target.GetDesc();
     if (Desc.Size.Width == 0 || Desc.Size.Height == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    m_pColorRTV = Target.GetColorRTV();
-    m_pDepthDSV = Target.GetDepthDSV();
+    m_pOutputColorRTV = Target.GetColorRTV();
+    m_pDepthDSV       = Target.GetDepthDSV();
 
-    if (m_Size != Desc.Size)
+    if (pDevice != nullptr && m_pOutputColorRTV == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const bool RecreateSceneColor =
+        m_pSceneColor == nullptr ||
+        m_pSceneColor->GetDesc().Width != Desc.Size.Width ||
+        m_pSceneColor->GetDesc().Height != Desc.Size.Height;
+
+    if (pDevice != nullptr && RecreateSceneColor)
     {
-        m_Size = Desc.Size;
+        TextureDesc SceneColorDesc;
+        SceneColorDesc.Name      = "Radient HDR scene color";
+        SceneColorDesc.Type      = RESOURCE_DIM_TEX_2D;
+        SceneColorDesc.Width     = Desc.Size.Width;
+        SceneColorDesc.Height    = Desc.Size.Height;
+        SceneColorDesc.Format    = SceneColorFormat;
+        SceneColorDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
+
+        RefCntAutoPtr<ITexture> pSceneColor;
+        pDevice->CreateTexture(SceneColorDesc, nullptr, pSceneColor.GetAddressOfEmpty());
+        if (pSceneColor == nullptr ||
+            pSceneColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) == nullptr ||
+            pSceneColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) == nullptr)
+        {
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        m_pSceneColor = std::move(pSceneColor);
+        ++m_Version;
+    }
+    else if (pDevice == nullptr && m_Size != Desc.Size)
+    {
         ++m_Version;
     }
 
+    m_Size = Desc.Size;
+
     return RADIENT_STATUS_OK;
+}
+
+void RadientFrameRenderTargets::ClearSceneColor(IDeviceContext* pContext) const
+{
+    ITextureView* pSceneColorRTV = GetSceneColorRTV();
+    if (pContext == nullptr || pSceneColorRTV == nullptr)
+        return;
+
+    pContext->SetRenderTargets(1, &pSceneColorRTV, m_pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    constexpr float ClearColor[] = {0.f, 0.f, 0.f, 1.f};
+    pContext->ClearRenderTarget(pSceneColorRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
 }
 
 const RadientExtent2D& RadientFrameRenderTargets::GetSize() const
@@ -59,9 +102,19 @@ Uint32 RadientFrameRenderTargets::GetVersion() const
     return m_Version;
 }
 
-ITextureView* RadientFrameRenderTargets::GetColorRTV() const
+ITextureView* RadientFrameRenderTargets::GetSceneColorRTV() const
 {
-    return m_pColorRTV;
+    return m_pSceneColor != nullptr ? m_pSceneColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) : nullptr;
+}
+
+ITextureView* RadientFrameRenderTargets::GetSceneColorSRV() const
+{
+    return m_pSceneColor != nullptr ? m_pSceneColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+}
+
+ITextureView* RadientFrameRenderTargets::GetOutputColorRTV() const
+{
+    return m_pOutputColorRTV;
 }
 
 ITextureView* RadientFrameRenderTargets::GetDepthDSV() const

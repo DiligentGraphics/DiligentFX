@@ -27,16 +27,42 @@
 #pragma once
 
 #include "Render/RadientFrameRenderTargets.hpp"
+#include "RadientView.h"
+
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
-/// Post-processing stage chain: tone mapping first, then TAA/SSAO/SSR/Bloom/DoF as they are added.
+/// Tessera post-processing stage chain. Tone mapping and output conversion are
+/// performed by the final pass after all image-space effects.
 class RadientTesseraPostProcessPipeline
 {
 public:
-    RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Prepare(IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientFrameRenderTargets& Targets,
+                           const RadientToneMappingDesc&    ToneMapping,
+                           IBuffer*                         pFrameAttribsCB);
     RADIENT_STATUS Execute(IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
+
+private:
+    RADIENT_STATUS CreatePipelineState(IRenderDevice* pDevice,
+                                       TEXTURE_FORMAT OutputFormat,
+                                       Int32          ToneMappingMode,
+                                       bool           ConvertOutputToSRGB,
+                                       IBuffer*       pFrameAttribsCB);
+
+private:
+    RefCntAutoPtr<IBuffer>                m_pToneMappingAttribsCB;
+    RefCntAutoPtr<IBuffer>                m_pFrameAttribsCB;
+    RefCntAutoPtr<IPipelineState>         m_pPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
+
+    TEXTURE_FORMAT m_OutputFormat        = TEX_FORMAT_UNKNOWN;
+    Int32          m_ToneMappingMode     = -1;
+    bool           m_ConvertOutputToSRGB = false;
+    Uint32         m_TargetVersion       = ~Uint32{0};
 };
 
 } // namespace Diligent
