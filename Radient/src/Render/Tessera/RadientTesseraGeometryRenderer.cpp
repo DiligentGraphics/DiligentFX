@@ -356,8 +356,6 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
 
     return m_pMaterialCache->Prepare(
         TextureVersion,
-        m_pMaterialCache->GetMaterialBufferVersion(),
-        m_pMaterialCache->GetMaterialBufferGeneration(),
         [](const RadientMaterialTextureRenderData& Binding) {
             const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetGPUResourceStatus(Binding.pTexture);
             if (TextureStatus != RADIENT_STATUS_OK)

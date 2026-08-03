@@ -195,11 +195,26 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
     return {std::move(Data), Status};
 }
 
-RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice* pDevice,
-                                                                   IDeviceContext* pContext)
+RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice*  pDevice,
+                                                                  IDeviceContext* pContext)
 {
     return m_pProcessingContext->MaterialBuffer.Prepare(pDevice, pContext);
 }
+
+RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
+    Uint32                               TextureVersion,
+    const ResolveTextureSRVCallbackType& ResolveTextureSRV,
+    const CreateSRBCallbackType&         CreateSRB)
+{
+    const RadientTesseraMaterialBuffer& MaterialBuffer = m_pProcessingContext->MaterialBuffer;
+    return Prepare(
+        TextureVersion,
+        MaterialBuffer.GetVersion(),
+        MaterialBuffer.GetUploadedGeneration(),
+        ResolveTextureSRV,
+        CreateSRB);
+}
+
 
 RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     Uint32                               TextureVersion,
@@ -219,16 +234,6 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
 IBuffer* RadientTesseraMaterialCache::GetMaterialBuffer() const noexcept
 {
     return m_pProcessingContext->MaterialBuffer.GetBuffer();
-}
-
-Uint32 RadientTesseraMaterialCache::GetMaterialBufferVersion() const noexcept
-{
-    return m_pProcessingContext->MaterialBuffer.GetVersion();
-}
-
-Uint64 RadientTesseraMaterialCache::GetMaterialBufferGeneration() const noexcept
-{
-    return m_pProcessingContext->MaterialBuffer.GetUploadedGeneration();
 }
 
 Uint32 RadientTesseraMaterialCache::GetMaxMaterialAttribsSize() const noexcept
