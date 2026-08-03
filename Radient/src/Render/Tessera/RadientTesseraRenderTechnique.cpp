@@ -133,7 +133,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
 RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderContext& Context)
 {
     m_pFrameSRB.Release();
-    m_FrameActive = false;
+    m_pActiveViewState = nullptr;
+    m_FrameActive      = false;
 
     RadientViewImpl* pView = ClassPtrCast<RadientViewImpl>(Context.Attribs.pView);
     if (pView == nullptr)
@@ -143,7 +144,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
     if (pViewState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    pViewState->FrameTargets.ClearSceneColor(Context.pContext);
+    pViewState->FrameTargets.ClearGBuffer(Context.pContext);
 
     const RadientViewDesc& ViewDesc     = pView->GetDesc();
     const bool             HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
@@ -172,10 +173,13 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         m_DrawableCache.GetLightList(),
         m_pAssetManager->GetResourceManager(),
         GeometryFrameAttribs,
-        pViewState->FrameTargets);
+        pViewState->FrameTargets,
+        pViewState->FrameHistory);
 
     m_FrameActive = !RADIENT_FAILED(Status);
-    if (RADIENT_FAILED(Status))
+    if (m_FrameActive)
+        m_pActiveViewState = pViewState;
+    else
         m_pFrameSRB.Release();
 
     return Status;
@@ -206,7 +210,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_OPAQUE,
                 m_DrawableCache,
-                pViewState->FrameTargets);
+                pViewState->FrameTargets,
+                pViewState->FrameHistory);
             if (RADIENT_FAILED(Status))
                 return Status;
 
@@ -217,7 +222,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_MASK,
                 m_DrawableCache,
-                pViewState->FrameTargets);
+                pViewState->FrameTargets,
+                pViewState->FrameHistory);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
@@ -263,7 +269,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                 m_pFrameSRB,
                 GLTF::Material::ALPHA_MODE_BLEND,
                 m_DrawableCache,
-                pViewState->FrameTargets);
+                pViewState->FrameTargets,
+                pViewState->FrameHistory);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
@@ -275,9 +282,14 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
 void RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext&)
 {
     if (m_FrameActive)
-        m_GeometryRenderer.EndFrame();
+    {
+        VERIFY_EXPR(m_pActiveViewState != nullptr);
+        if (m_pActiveViewState != nullptr)
+            m_GeometryRenderer.EndFrame(m_pActiveViewState->FrameHistory);
+    }
 
-    m_FrameActive = false;
+    m_pActiveViewState = nullptr;
+    m_FrameActive      = false;
     m_pFrameSRB.Release();
 }
 

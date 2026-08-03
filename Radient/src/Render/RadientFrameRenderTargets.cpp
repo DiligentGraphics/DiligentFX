@@ -26,10 +26,47 @@
 
 #include "Render/RadientFrameRenderTargets.hpp"
 
+#include "Errors.hpp"
+
+#include <array>
 #include <utility>
 
 namespace Diligent
 {
+
+TEXTURE_FORMAT RadientFrameRenderTargets::GetGBufferFormat(GBufferTarget Target) noexcept
+{
+    switch (Target)
+    {
+        case GBUFFER_TARGET_SCENE_COLOR: return TEX_FORMAT_RGBA16_FLOAT;
+        case GBUFFER_TARGET_MOTION_VECTOR: return TEX_FORMAT_RG16_FLOAT;
+        case GBUFFER_TARGET_NORMAL: return TEX_FORMAT_RGBA16_FLOAT;
+        case GBUFFER_TARGET_BASE_COLOR: return TEX_FORMAT_RGBA8_UNORM;
+        case GBUFFER_TARGET_MATERIAL: return TEX_FORMAT_RG8_UNORM;
+        case GBUFFER_TARGET_IBL: return TEX_FORMAT_RGBA16_FLOAT;
+
+        default:
+            UNEXPECTED("Unexpected Radient G-buffer target");
+            return TEX_FORMAT_UNKNOWN;
+    }
+}
+
+const Char* RadientFrameRenderTargets::GetGBufferName(GBufferTarget Target) noexcept
+{
+    switch (Target)
+    {
+        case GBUFFER_TARGET_SCENE_COLOR: return "Radient HDR scene color";
+        case GBUFFER_TARGET_MOTION_VECTOR: return "Radient motion vectors";
+        case GBUFFER_TARGET_NORMAL: return "Radient normal";
+        case GBUFFER_TARGET_BASE_COLOR: return "Radient base color";
+        case GBUFFER_TARGET_MATERIAL: return "Radient material data";
+        case GBUFFER_TARGET_IBL: return "Radient specular IBL";
+
+        default:
+            UNEXPECTED("Unexpected Radient G-buffer target");
+            return "Radient G-buffer";
+    }
+}
 
 RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target)
 {
@@ -43,31 +80,44 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
     if (pDevice != nullptr && m_pOutputColorRTV == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const bool RecreateSceneColor =
-        m_pSceneColor == nullptr ||
-        m_pSceneColor->GetDesc().Width != Desc.Size.Width ||
-        m_pSceneColor->GetDesc().Height != Desc.Size.Height;
-
-    if (pDevice != nullptr && RecreateSceneColor)
+    bool RecreateGBuffer = false;
+    for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
     {
-        TextureDesc SceneColorDesc;
-        SceneColorDesc.Name      = "Radient HDR scene color";
-        SceneColorDesc.Type      = RESOURCE_DIM_TEX_2D;
-        SceneColorDesc.Width     = Desc.Size.Width;
-        SceneColorDesc.Height    = Desc.Size.Height;
-        SceneColorDesc.Format    = SceneColorFormat;
-        SceneColorDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
+        const GBufferTarget GBufferTargetId = static_cast<GBufferTarget>(TargetIndex);
+        ITexture* const     pTexture        = m_GBuffer[TargetIndex];
+        RecreateGBuffer |=
+            pTexture == nullptr ||
+            pTexture->GetDesc().Width != Desc.Size.Width ||
+            pTexture->GetDesc().Height != Desc.Size.Height ||
+            pTexture->GetDesc().Format != GetGBufferFormat(GBufferTargetId);
+    }
 
-        RefCntAutoPtr<ITexture> pSceneColor;
-        pDevice->CreateTexture(SceneColorDesc, nullptr, pSceneColor.GetAddressOfEmpty());
-        if (pSceneColor == nullptr ||
-            pSceneColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) == nullptr ||
-            pSceneColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) == nullptr)
+    if (pDevice != nullptr && RecreateGBuffer)
+    {
+        std::array<RefCntAutoPtr<ITexture>, GBUFFER_TARGET_COUNT> NewGBuffer;
+        for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
         {
-            return RADIENT_STATUS_INVALID_OPERATION;
+            const GBufferTarget GBufferTargetId = static_cast<GBufferTarget>(TargetIndex);
+
+            TextureDesc Texture;
+            Texture.Name      = GetGBufferName(GBufferTargetId);
+            Texture.Type      = RESOURCE_DIM_TEX_2D;
+            Texture.Width     = Desc.Size.Width;
+            Texture.Height    = Desc.Size.Height;
+            Texture.Format    = GetGBufferFormat(GBufferTargetId);
+            Texture.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
+
+            pDevice->CreateTexture(Texture, nullptr, NewGBuffer[TargetIndex].GetAddressOfEmpty());
+            ITexture* const pTexture = NewGBuffer[TargetIndex];
+            if (pTexture == nullptr ||
+                pTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) == nullptr ||
+                pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) == nullptr)
+            {
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
         }
 
-        m_pSceneColor = std::move(pSceneColor);
+        m_GBuffer = std::move(NewGBuffer);
         ++m_Version;
     }
     else if (pDevice == nullptr && m_Size != Desc.Size)
@@ -80,16 +130,33 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
     return RADIENT_STATUS_OK;
 }
 
-void RadientFrameRenderTargets::ClearSceneColor(IDeviceContext* pContext) const
+void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext) const
 {
-    ITextureView* pSceneColorRTV = GetSceneColorRTV();
-    if (pContext == nullptr || pSceneColorRTV == nullptr)
+    if (pContext == nullptr)
         return;
 
-    pContext->SetRenderTargets(1, &pSceneColorRTV, m_pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferRTVs{};
+    for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        GBufferRTVs[TargetIndex] = GetGBufferRTV(static_cast<GBufferTarget>(TargetIndex));
+        if (GBufferRTVs[TargetIndex] == nullptr)
+            return;
+    }
 
-    constexpr float ClearColor[] = {0.f, 0.f, 0.f, 1.f};
-    pContext->ClearRenderTarget(pSceneColorRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+    pContext->SetRenderTargets(GBUFFER_TARGET_COUNT,
+                               GBufferRTVs.data(),
+                               m_pDepthDSV,
+                               RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    constexpr float SceneColorClear[] = {0.f, 0.f, 0.f, 1.f};
+    constexpr float GBufferClear[]    = {0.f, 0.f, 0.f, 0.f};
+    for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        pContext->ClearRenderTarget(
+            GBufferRTVs[TargetIndex],
+            TargetIndex == GBUFFER_TARGET_SCENE_COLOR ? SceneColorClear : GBufferClear,
+            RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+    }
 }
 
 const RadientExtent2D& RadientFrameRenderTargets::GetSize() const
@@ -102,14 +169,32 @@ Uint32 RadientFrameRenderTargets::GetVersion() const
     return m_Version;
 }
 
+ITextureView* RadientFrameRenderTargets::GetGBufferRTV(GBufferTarget Target) const
+{
+    const Uint32 TargetIndex = static_cast<Uint32>(Target);
+    if (TargetIndex >= GBUFFER_TARGET_COUNT || m_GBuffer[TargetIndex] == nullptr)
+        return nullptr;
+
+    return m_GBuffer[TargetIndex]->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+}
+
+ITextureView* RadientFrameRenderTargets::GetGBufferSRV(GBufferTarget Target) const
+{
+    const Uint32 TargetIndex = static_cast<Uint32>(Target);
+    if (TargetIndex >= GBUFFER_TARGET_COUNT || m_GBuffer[TargetIndex] == nullptr)
+        return nullptr;
+
+    return m_GBuffer[TargetIndex]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+}
+
 ITextureView* RadientFrameRenderTargets::GetSceneColorRTV() const
 {
-    return m_pSceneColor != nullptr ? m_pSceneColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) : nullptr;
+    return GetGBufferRTV(GBUFFER_TARGET_SCENE_COLOR);
 }
 
 ITextureView* RadientFrameRenderTargets::GetSceneColorSRV() const
 {
-    return m_pSceneColor != nullptr ? m_pSceneColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+    return GetGBufferSRV(GBUFFER_TARGET_SCENE_COLOR);
 }
 
 ITextureView* RadientFrameRenderTargets::GetOutputColorRTV() const

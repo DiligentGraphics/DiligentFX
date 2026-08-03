@@ -81,7 +81,7 @@ TestRenderTarget CreateTestRenderTarget(IRenderDevice* pDevice, Uint32 Width, Ui
     return Result;
 }
 
-TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentHDRSceneTargets)
+TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentGBuffers)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
@@ -93,28 +93,47 @@ TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentHDRSceneTargets)
 
     RadientFrameRenderTargets First;
     ASSERT_EQ(First.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-    ASSERT_NE(First.GetSceneColorRTV(), nullptr);
-    ASSERT_NE(First.GetSceneColorSRV(), nullptr);
-    EXPECT_EQ(First.GetSceneColorRTV()->GetTexture()->GetDesc().Format,
-              RadientFrameRenderTargets::SceneColorFormat);
+    std::array<ITexture*, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> FirstGBuffer{};
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        const auto TargetId = static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex);
+        ASSERT_NE(First.GetGBufferRTV(TargetId), nullptr);
+        ASSERT_NE(First.GetGBufferSRV(TargetId), nullptr);
+        EXPECT_EQ(First.GetGBufferRTV(TargetId)->GetTexture(),
+                  First.GetGBufferSRV(TargetId)->GetTexture());
+        EXPECT_EQ(First.GetGBufferRTV(TargetId)->GetTexture()->GetDesc().Format,
+                  RadientFrameRenderTargets::GetGBufferFormat(TargetId));
+        FirstGBuffer[TargetIndex] = First.GetGBufferRTV(TargetId)->GetTexture();
+    }
     EXPECT_EQ(First.GetOutputColorRTV(), Target.pColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET));
 
-    const Uint32    InitialVersion   = First.GetVersion();
-    ITexture* const pFirstSceneColor = First.GetSceneColorRTV()->GetTexture();
+    const Uint32 InitialVersion = First.GetVersion();
     EXPECT_EQ(First.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
     EXPECT_EQ(First.GetVersion(), InitialVersion);
-    EXPECT_EQ(First.GetSceneColorRTV()->GetTexture(), pFirstSceneColor);
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        const auto TargetId = static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex);
+        EXPECT_EQ(First.GetGBufferRTV(TargetId)->GetTexture(), FirstGBuffer[TargetIndex]);
+    }
 
     RadientFrameRenderTargets Second;
     ASSERT_EQ(Second.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-    EXPECT_NE(Second.GetSceneColorRTV()->GetTexture(), pFirstSceneColor);
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        const auto TargetId = static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex);
+        EXPECT_NE(Second.GetGBufferRTV(TargetId)->GetTexture(), FirstGBuffer[TargetIndex]);
+    }
 
     TestRenderTarget ResizedTarget = CreateTestRenderTarget(pDevice, 64, 32);
     ASSERT_NE(ResizedTarget.pTarget, nullptr);
     ASSERT_EQ(First.Prepare(pDevice, *ResizedTarget.pTarget), RADIENT_STATUS_OK);
     EXPECT_GT(First.GetVersion(), InitialVersion);
     EXPECT_EQ(First.GetSize(), (RadientExtent2D{64, 32}));
-    EXPECT_NE(First.GetSceneColorRTV()->GetTexture(), pFirstSceneColor);
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        const auto TargetId = static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex);
+        EXPECT_NE(First.GetGBufferRTV(TargetId)->GetTexture(), FirstGBuffer[TargetIndex]);
+    }
 }
 
 void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE> ToneMappingModes)
@@ -132,7 +151,7 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
 
     RadientFrameRenderTargets Targets;
     ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-    Targets.ClearSceneColor(pContext);
+    Targets.ClearGBuffer(pContext);
 
     RefCntAutoPtr<IBuffer> pFrameAttribsCB;
     CreateUniformBuffer(pDevice,

@@ -29,6 +29,7 @@
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientLightList.hpp"
 #include "Render/RadientPBRRenderer.hpp"
+#include "Render/Tessera/RadientTesseraFrameHistory.hpp"
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientView.h"
@@ -66,9 +67,10 @@ public:
                               const RadientLightLists&                  LightList,
                               GLTF::ResourceManager*                    pResourceManager,
                               const RadientTesseraGeometryFrameAttribs& FrameAttribs,
-                              const RadientFrameRenderTargets&          Targets);
+                              const RadientFrameRenderTargets&          Targets,
+                              RadientTesseraFrameHistory&               FrameHistory);
 
-    void EndFrame();
+    void EndFrame(RadientTesseraFrameHistory& FrameHistory);
 
     RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
@@ -99,8 +101,6 @@ private:
     bool                                  m_DefaultMaterialTextureBindingsReady = false;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
-
-    Uint32 m_FrameIndex = 0;
 };
 
 } // namespace Diligent

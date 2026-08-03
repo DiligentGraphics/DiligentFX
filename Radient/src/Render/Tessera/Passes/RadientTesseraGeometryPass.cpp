@@ -121,17 +121,23 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
     if (m_NativeMultiDrawSupported == DEVICE_FEATURE_STATE_OPTIONAL)
         m_NativeMultiDrawSupported = pDevice->GetDeviceInfo().Features.NativeMultiDraw;
 
-    bool          RebuildDrawablePassData = false;
-    ITextureView* pColorRTV               = Targets.GetSceneColorRTV();
-    if (pColorRTV == nullptr)
-        return RADIENT_STATUS_OK;
+    bool RebuildDrawablePassData = false;
 
-    const TEXTURE_FORMAT RTVFormat = GetTextureViewFormat(pColorRTV);
+    std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> RTVFormats{};
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        ITextureView* const pRTV = Targets.GetGBufferRTV(static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex));
+        if (pRTV == nullptr)
+            return RADIENT_STATUS_OK;
+
+        RTVFormats[TargetIndex] = GetTextureViewFormat(pRTV);
+    }
+
     const TEXTURE_FORMAT DSVFormat = GetTextureViewFormat(Targets.GetDepthDSV());
-    if (m_RTVFormat != RTVFormat ||
+    if (m_RTVFormats != RTVFormats ||
         m_DSVFormat != DSVFormat)
     {
-        const RADIENT_STATUS Status = CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormat, DSVFormat);
+        const RADIENT_STATUS Status = CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormats, DSVFormat);
         if (RADIENT_FAILED(Status))
             return Status;
 
@@ -148,7 +154,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                                                    IShaderResourceBinding*            pFrameSRB,
                                                    GLTF::Material::ALPHA_MODE         AlphaMode,
                                                    const RadientTesseraDrawableCache& DrawableCache,
-                                                   const RadientFrameRenderTargets&   Targets)
+                                                   const RadientFrameRenderTargets&   Targets,
+                                                   RadientTesseraFrameHistory&        FrameHistory)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -172,9 +179,18 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     if (!m_PbrPSOCache)
         return RADIENT_STATUS_OK;
 
-    ITextureView* pColorRTV = Targets.GetSceneColorRTV();
-    ITextureView* pDepthDSV = Targets.GetDepthDSV();
-    pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    std::array<ITextureView*, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> GBufferRTVs{};
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        GBufferRTVs[TargetIndex] = Targets.GetGBufferRTV(static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex));
+        if (GBufferRTVs[TargetIndex] == nullptr)
+            return RADIENT_STATUS_OUT_OF_DATE;
+    }
+
+    pContext->SetRenderTargets(RadientFrameRenderTargets::GBUFFER_TARGET_COUNT,
+                               GBufferRTVs.data(),
+                               Targets.GetDepthDSV(),
+                               RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     const OrderedDrawableBatchMap& DrawableBatches = m_DrawableBatches[AlphaMode];
     if (DrawableBatches.empty())
@@ -283,14 +299,19 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 }
             }
 
-            void* const     pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
+            void* const            pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
+            const RadientMatrix4x4 PreviousTransform = FrameHistory.UpdateDrawableTransform(
+                Drawable.DrawableID,
+                Drawable.Generation,
+                *Drawable.pWorldMatrix);
             const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*Drawable.pWorldMatrix);
+            const float4x4& PrevNodeTransform = reinterpret_cast<const float4x4&>(PreviousTransform);
             const float4    CustomData{};
 
             GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData;
             AttribsData.PSOFlags       = Batch.PSOFlags;
             AttribsData.NodeMatrix     = &NodeTransform;
-            AttribsData.PrevNodeMatrix = &NodeTransform;
+            AttribsData.PrevNodeMatrix = &PrevNodeTransform;
             AttribsData.CustomData     = &CustomData;
             AttribsData.CustomDataSize = sizeof(CustomData);
 
@@ -582,6 +603,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
+        PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS |
         PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
         PBR_Renderer::PSO_FLAG_USE_IBL |
         PBR_Renderer::PSO_FLAG_USE_LIGHTS;
@@ -667,6 +689,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         Drawable.pWorldMatrix,
         Drawable.pEffectiveVisible,
         DrawableID,
+        Drawable.Generation,
         Drawable.ElementCount,
         Drawable.IsIndexed ?
             Drawable.FirstIndexLocation + Drawable.FirstElement :
@@ -718,18 +741,22 @@ void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID Dr
     }
 }
 
-RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&           Renderer,
-                                                           PBR_Renderer::PSO_FLAGS BaseRenderFlags,
-                                                           TEXTURE_FORMAT          RTVFormat,
-                                                           TEXTURE_FORMAT          DSVFormat)
+RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&                                                                      Renderer,
+                                                           PBR_Renderer::PSO_FLAGS                                                            BaseRenderFlags,
+                                                           const std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT>& RTVFormats,
+                                                           TEXTURE_FORMAT                                                                     DSVFormat)
 {
-    if (RTVFormat == TEX_FORMAT_UNKNOWN)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
+    for (TEXTURE_FORMAT RTVFormat : RTVFormats)
+    {
+        if (RTVFormat == TEX_FORMAT_UNKNOWN)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     GraphicsPipelineDesc GraphicsDesc;
-    GraphicsDesc.NumRenderTargets = 1;
-    GraphicsDesc.RTVFormats[0]    = RTVFormat;
-    GraphicsDesc.DSVFormat        = DSVFormat;
+    GraphicsDesc.NumRenderTargets = RadientFrameRenderTargets::GBUFFER_TARGET_COUNT;
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+        GraphicsDesc.RTVFormats[TargetIndex] = RTVFormats[TargetIndex];
+    GraphicsDesc.DSVFormat = DSVFormat;
 
     GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsDesc.RasterizerDesc.FrontCounterClockwise = true;
@@ -740,11 +767,11 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
     m_WireframePSOCache                  = Renderer.GetPsoCacheAccessor(GraphicsDesc);
 
     m_RenderFlags = BaseRenderFlags;
-    if (RequiresOutputSRGBConversion(RTVFormat))
+    if (RequiresOutputSRGBConversion(RTVFormats[RadientFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]))
         m_RenderFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 
-    m_RTVFormat = RTVFormat;
-    m_DSVFormat = DSVFormat;
+    m_RTVFormats = RTVFormats;
+    m_DSVFormat  = DSVFormat;
     for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)
         Batches.clear();
     m_DrawablePassData.clear();

@@ -29,22 +29,38 @@
 #include "RadientRenderer.h"
 #include "RefCntAutoPtr.hpp"
 
+#include <array>
+
 namespace Diligent
 {
 
-/// Owns the linear HDR scene color target and references the external output
-/// and depth targets supplied by the view.
+/// Owns the fixed Tessera G-buffer and references the external output and
+/// depth targets supplied by the view.
 class RadientFrameRenderTargets
 {
 public:
-    static constexpr TEXTURE_FORMAT SceneColorFormat = TEX_FORMAT_RGBA16_FLOAT;
+    enum GBufferTarget : Uint32
+    {
+        GBUFFER_TARGET_SCENE_COLOR,
+        GBUFFER_TARGET_MOTION_VECTOR,
+        GBUFFER_TARGET_NORMAL,
+        GBUFFER_TARGET_BASE_COLOR,
+        GBUFFER_TARGET_MATERIAL,
+        GBUFFER_TARGET_IBL,
+        GBUFFER_TARGET_COUNT
+    };
+
+    static TEXTURE_FORMAT GetGBufferFormat(GBufferTarget Target) noexcept;
+    static const Char*    GetGBufferName(GBufferTarget Target) noexcept;
 
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target);
-    void           ClearSceneColor(IDeviceContext* pContext) const;
+    void           ClearGBuffer(IDeviceContext* pContext) const;
 
     const RadientExtent2D& GetSize() const;
     Uint32                 GetVersion() const;
 
+    ITextureView* GetGBufferRTV(GBufferTarget Target) const;
+    ITextureView* GetGBufferSRV(GBufferTarget Target) const;
     ITextureView* GetSceneColorRTV() const;
     ITextureView* GetSceneColorSRV() const;
     ITextureView* GetOutputColorRTV() const;
@@ -54,7 +70,7 @@ private:
     RadientExtent2D m_Size;
     Uint32          m_Version = 0;
 
-    RefCntAutoPtr<ITexture> m_pSceneColor;
+    std::array<RefCntAutoPtr<ITexture>, GBUFFER_TARGET_COUNT> m_GBuffer;
 
     ITextureView* m_pOutputColorRTV = nullptr;
     ITextureView* m_pDepthDSV       = nullptr;

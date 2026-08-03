@@ -67,6 +67,7 @@ private:
 
         RefCntWeakPtr<IRadientView>       WeakView;
         RadientFrameRenderTargets         FrameTargets;
+        RadientTesseraFrameHistory        FrameHistory;
         RadientTesseraPostProcessPipeline PostProcessPipeline;
     };
 
@@ -87,7 +88,8 @@ private:
     std::vector<std::unique_ptr<ViewRenderState>> m_ViewRenderStates;
 
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
-    bool                                  m_FrameActive = false;
+    ViewRenderState*                      m_pActiveViewState = nullptr;
+    bool                                  m_FrameActive      = false;
 };
 
 } // namespace Diligent

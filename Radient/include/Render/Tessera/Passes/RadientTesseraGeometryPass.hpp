@@ -71,15 +71,16 @@ public:
                            IShaderResourceBinding*            pFrameSRB,
                            GLTF::Material::ALPHA_MODE         AlphaMode,
                            const RadientTesseraDrawableCache& DrawableCache,
-                           const RadientFrameRenderTargets&   Targets);
+                           const RadientFrameRenderTargets&   Targets,
+                           RadientTesseraFrameHistory&        FrameHistory);
 
 private:
     static constexpr Uint32 InvalidBatchItemIndex = ~Uint32{0};
 
-    RADIENT_STATUS CreatePsoCaches(PBR_Renderer&           Renderer,
-                                   PBR_Renderer::PSO_FLAGS BaseRenderFlags,
-                                   TEXTURE_FORMAT          RTVFormat,
-                                   TEXTURE_FORMAT          DSVFormat);
+    RADIENT_STATUS CreatePsoCaches(PBR_Renderer&                                                                      Renderer,
+                                   PBR_Renderer::PSO_FLAGS                                                            BaseRenderFlags,
+                                   const std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT>& RTVFormats,
+                                   TEXTURE_FORMAT                                                                     DSVFormat);
 
     struct DrawableBatchKey
     {
@@ -102,6 +103,7 @@ private:
         const Bool*             pEffectiveVisible = nullptr;
 
         RadientDrawableID DrawableID    = InvalidRadientDrawableID;
+        Uint32            Generation    = 0;
         Uint32            ElementCount  = 0;
         Uint32            FirstLocation = 0;
         Uint32            BaseVertex    = 0;
@@ -178,10 +180,10 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    TEXTURE_FORMAT       m_RTVFormat                      = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT       m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
-    bool                 m_EnableAsyncPipelineCompilation = true;
-    DEVICE_FEATURE_STATE m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
+    std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> m_RTVFormats{};
+    TEXTURE_FORMAT                                                              m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
+    bool                                                                        m_EnableAsyncPipelineCompilation = true;
+    DEVICE_FEATURE_STATE                                                        m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
 };
 
 } // namespace Diligent

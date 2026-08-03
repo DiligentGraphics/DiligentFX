@@ -25,6 +25,8 @@
  */
 
 #include "Render/RadientPBRRenderer.hpp"
+#include "Render/RadientFrameRenderTargets.hpp"
+#include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 #include "Core/RadientViewImpl.hpp"
 
 #include "Cast.hpp"
@@ -150,6 +152,48 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
               pFirstFrameSRB.RawPtr());
     EXPECT_EQ(pFirstViewImpl->GetIrradianceCubeSRV(), pFirstIrradiance);
     EXPECT_EQ(pFirstViewImpl->GetPrefilteredEnvMapSRV(), pFirstPrefiltered);
+}
+
+TEST(RadientPBRRendererGPUTest, CreatesTesseraGBufferPipeline)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* const pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const         pDevice  = pEnv->GetDevice();
+    IDeviceContext* const        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RadientTesseraGeometryRenderer GeometryRenderer{8, {}};
+    ASSERT_EQ(GeometryRenderer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+
+    PBR_Renderer* const pRenderer = GeometryRenderer.GetRenderer();
+    ASSERT_NE(pRenderer, nullptr);
+
+    GraphicsPipelineDesc GraphicsDesc;
+    GraphicsDesc.NumRenderTargets = RadientFrameRenderTargets::GBUFFER_TARGET_COUNT;
+    for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
+    {
+        GraphicsDesc.RTVFormats[TargetIndex] = RadientFrameRenderTargets::GetGBufferFormat(
+            static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex));
+    }
+    GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    PBR_Renderer::PsoCacheAccessor PsoCache = pRenderer->GetPsoCacheAccessor(GraphicsDesc);
+    const PBR_Renderer::PSOKey     PsoKey{
+        PBR_Renderer::RenderPassType::Main,
+        PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS,
+        PBR_Renderer::ALPHA_MODE_OPAQUE,
+        CULL_MODE_BACK,
+        PBR_Renderer::DebugViewType::None,
+        PBR_Renderer::LoadingAnimationMode::None,
+    };
+
+    IPipelineState* const pPSO = PsoCache.Get(
+        PsoKey,
+        PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+    ASSERT_NE(pPSO, nullptr);
+    EXPECT_EQ(pPSO->GetStatus(), PIPELINE_STATE_STATUS_READY);
 }
 
 } // namespace

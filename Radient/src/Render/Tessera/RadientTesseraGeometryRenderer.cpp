@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 namespace Diligent
 {
@@ -67,28 +68,37 @@ RadientCameraComponent GetCameraComponent(IRadientScene* pScene, RadientEntityID
     return Camera;
 }
 
+RadientTesseraCameraState CaptureCameraState(IRadientScene*                   pScene,
+                                             RadientEntityID                  CameraEntity,
+                                             const RadientFrameRenderTargets& Targets)
+{
+    RadientTesseraCameraState State;
+    State.Scene        = pScene;
+    State.Camera       = CameraEntity;
+    State.Attribs      = GetCameraComponent(pScene, CameraEntity);
+    State.ViewportSize = Targets.GetSize();
+    State.IsValid      = true;
+
+    if (pScene != nullptr && CameraEntity != InvalidRadientEntityID)
+        (void)pScene->GetCachedWorldMatrix(CameraEntity, State.World);
+
+    return State;
+}
+
 void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
-                              IRadientScene*                   pScene,
-                              RadientEntityID                  CameraEntity,
-                              const RadientFrameRenderTargets& Targets,
+                              const RadientTesseraCameraState& CameraState,
                               Uint32                           FrameIndex,
                               HLSL::CameraAttribs&             CameraAttribs)
 {
-    const RadientCameraComponent Camera     = GetCameraComponent(pScene, CameraEntity);
-    const RadientExtent2D&       TargetSize = Targets.GetSize();
+    const RadientCameraComponent& Camera     = CameraState.Attribs;
+    const RadientExtent2D&        TargetSize = CameraState.ViewportSize;
 
     const float Width            = static_cast<float>(TargetSize.Width);
     const float Height           = static_cast<float>(TargetSize.Height);
     const float Aspect           = Height > 0.f ? Width / Height : 1.f;
     const bool  NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
 
-    float4x4 CameraWorld = float4x4::Identity();
-    if (pScene != nullptr && CameraEntity != InvalidRadientEntityID)
-    {
-        RadientMatrix4x4 CameraWorldMatrix{};
-        if (RADIENT_SUCCEEDED(pScene->GetCachedWorldMatrix(CameraEntity, CameraWorldMatrix)))
-            CameraWorld = RadientMath::ToFloat4x4(CameraWorldMatrix);
-    }
+    const float4x4                      CameraWorld    = RadientMath::ToFloat4x4(CameraState.World);
     const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
     const float4x4                      CameraView     = CameraWorld.Inverse();
     const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
@@ -115,6 +125,67 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     CameraAttribs.mProjInv        = CameraProj.Matrix.Inverse();
     CameraAttribs.mViewProjInv    = CameraViewProj.Inverse();
     CameraAttribs.f4Position      = float4{float3::MakeVector(CameraWorld[3]), 1.f};
+}
+
+PBR_Renderer::CreateInfo::PSMainSourceInfo GetTesseraPBRPSMainSource(PBR_Renderer::PSO_FLAGS)
+{
+    static_assert(RadientFrameRenderTargets::GBUFFER_TARGET_COUNT == 6,
+                  "Update the Tessera PBR pixel shader outputs when the G-buffer layout changes");
+
+    PBR_Renderer::CreateInfo::PSMainSourceInfo Source;
+    std::stringstream                          Output;
+    Output << "struct PSOutput\n"
+           << "{\n"
+           << "    float4 Color      : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ";\n"
+           << "    float4 MotionVec  : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR << ";\n"
+           << "    float4 Normal     : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_NORMAL << ";\n"
+           << "    float4 BaseColor  : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR << ";\n"
+           << "    float4 Material   : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL << ";\n"
+           << "    float4 IBL        : SV_Target" << RadientFrameRenderTargets::GBUFFER_TARGET_IBL << ";\n"
+           << "};\n";
+    Source.OutputStruct = Output.str();
+
+    Source.Footer = R"(
+    PSOutput PSOut;
+
+    float3 Normal       = float3(0.0, 0.0, 0.0);
+    float2 MaterialData = float2(0.0, 0.0);
+    float3 IBL          = float3(0.0, 0.0, 0.0);
+
+#if UNSHADED
+    float4 OutColor     = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
+    float4 BaseColor    = float4(0.0, 0.0, 0.0, 0.0);
+    float2 MotionVector = float2(0.0, 0.0);
+#else
+    Normal       = Shading.BaseLayer.Normal.xyz;
+    MaterialData = float2(Shading.BaseLayer.Srf.PerceptualRoughness, Shading.BaseLayer.Metallic);
+    IBL          = GetBaseLayerSpecularIBL(Shading, SrfLighting);
+
+#   if ENABLE_CLEAR_COAT
+    {
+        Normal       = normalize(lerp(Normal, Shading.Clearcoat.Normal, Shading.Clearcoat.Factor));
+        MaterialData = lerp(MaterialData,
+                            float2(Shading.Clearcoat.Srf.PerceptualRoughness, 0.0),
+                            Shading.Clearcoat.Factor);
+        BaseColor.rgb = lerp(BaseColor.rgb, float3(1.0, 1.0, 1.0), Shading.Clearcoat.Factor);
+        IBL = lerp(IBL, GetClearcoatIBL(Shading, SrfLighting), Shading.Clearcoat.Factor);
+    }
+#   endif
+
+    MaterialData  *= Transmittance;
+    IBL           *= Transmittance;
+    BaseColor.rgb *= Transmittance;
+#endif
+
+    PSOut.Color     = OutColor;
+    PSOut.MotionVec = float4(MotionVector, 0.0, 1.0);
+    PSOut.Normal    = float4(Normal, 1.0);
+    PSOut.BaseColor = float4(BaseColor.rgb * BaseColor.a, BaseColor.a);
+    PSOut.Material  = float4(MaterialData * BaseColor.a, 0.0, BaseColor.a);
+    PSOut.IBL       = float4(IBL * BaseColor.a, BaseColor.a);
+    return PSOut;
+)";
+    return Source;
 }
 
 PBR_Renderer::LIGHT_TYPE GetPBRLightType(RADIENT_LIGHT_TYPE Type)
@@ -420,7 +491,8 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
                                                           const RadientLightLists&                  LightList,
                                                           GLTF::ResourceManager*                    pResourceManager,
                                                           const RadientTesseraGeometryFrameAttribs& FrameAttribs,
-                                                          const RadientFrameRenderTargets&          Targets)
+                                                          const RadientFrameRenderTargets&          Targets,
+                                                          RadientTesseraFrameHistory&               FrameHistory)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -440,8 +512,16 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        WriteCameraShaderAttribs(pDevice, FrameAttribs.pScene, FrameAttribs.Camera, Targets, m_FrameIndex, pFrameAttribs->Camera);
-        WriteCameraShaderAttribs(pDevice, FrameAttribs.pScene, FrameAttribs.Camera, Targets, m_FrameIndex, pFrameAttribs->PrevCamera);
+        const RadientTesseraCameraState  CurrentCamera   = CaptureCameraState(FrameAttribs.pScene, FrameAttribs.Camera, Targets);
+        const RadientTesseraCameraState* pPreviousCamera = FrameHistory.GetPreviousCamera(CurrentCamera);
+        if (pPreviousCamera == nullptr)
+            pPreviousCamera = &CurrentCamera;
+
+        const Uint32 FrameIndex         = FrameHistory.GetFrameIndex();
+        const Uint32 PreviousFrameIndex = pPreviousCamera != &CurrentCamera ? FrameIndex - 1u : FrameIndex;
+        WriteCameraShaderAttribs(pDevice, CurrentCamera, FrameIndex, pFrameAttribs->Camera);
+        WriteCameraShaderAttribs(pDevice, *pPreviousCamera, PreviousFrameIndex, pFrameAttribs->PrevCamera);
+        FrameHistory.SetCurrentCamera(CurrentCamera);
         WriteSceneLights(*m_pRenderer,
                          LightList,
                          FrameAttribs.Environment,
@@ -463,9 +543,9 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
     return RADIENT_STATUS_OK;
 }
 
-void RadientTesseraGeometryRenderer::EndFrame()
+void RadientTesseraGeometryRenderer::EndFrame(RadientTesseraFrameHistory& FrameHistory)
 {
-    ++m_FrameIndex;
+    FrameHistory.CommitFrame();
 }
 
 RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext)
@@ -501,6 +581,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.PackMatrixRowMajor        = true;
     RendererCI.ShaderTexturesArrayMode   = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
     RendererCI.MaterialTexturesArraySize = m_MaterialTextureSlotCount;
+    RendererCI.GetPSMainSource           = GetTesseraPBRPSMainSource;
 
     const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
     if (m_MultiDrawBatchSize > 1 &&
@@ -551,7 +632,6 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_ALL &
         ~(PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING |
-          PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS |
           PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB);
 
     return RADIENT_STATUS_OK;
