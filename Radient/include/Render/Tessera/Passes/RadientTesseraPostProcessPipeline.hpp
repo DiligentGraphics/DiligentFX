@@ -34,6 +34,7 @@
 #include "PostProcess/DepthOfField/interface/DepthOfField.hpp"
 #include "PostProcess/ScreenSpaceAmbientOcclusion/interface/ScreenSpaceAmbientOcclusion.hpp"
 #include "PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
+#include "PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 
 #include "RefCntAutoPtr.hpp"
 
@@ -71,6 +72,8 @@ public:
                            IDeviceContext*                  pContext,
                            const RadientFrameRenderTargets& Targets,
                            bool                             ResetTemporalHistory);
+
+    float2 GetCameraJitter() const noexcept;
 
 private:
     struct ColorPassPipelineDesc
@@ -149,20 +152,24 @@ private:
     std::unique_ptr<PostFXContext>               m_pPostFXContext;
     std::unique_ptr<ScreenSpaceAmbientOcclusion> m_pSSAO;
     std::unique_ptr<ScreenSpaceReflection>       m_pSSR;
+    std::unique_ptr<TemporalAntiAliasing>        m_pTemporalAntiAliasing;
     std::unique_ptr<DepthOfField>                m_pDepthOfField;
     std::unique_ptr<Bloom>                       m_pBloom;
     RadientBloomDesc                             m_Bloom;
     RadientSSAODesc                              m_SSAO;
     RadientSSRDesc                               m_SSR;
+    RadientTemporalAntiAliasingDesc              m_TemporalAntiAliasing;
     RadientDepthOfFieldDesc                      m_DepthOfField;
 
-    bool   m_SSAOEnabled          = false;
-    bool   m_SSREnabled           = false;
-    bool   m_DepthOfFieldEnabled  = false;
-    bool   m_BloomEnabled         = false;
-    bool   m_CompositionRequired  = false;
-    bool   m_ResetSSAO            = true;
-    Uint32 m_ComposedColorVersion = ~Uint32{0};
+    bool   m_SSAOEnabled                 = false;
+    bool   m_SSREnabled                  = false;
+    bool   m_TemporalAntiAliasingEnabled = false;
+    bool   m_DepthOfFieldEnabled         = false;
+    bool   m_BloomEnabled                = false;
+    bool   m_CompositionRequired         = false;
+    bool   m_ResetSSAO                   = true;
+    bool   m_ResetTemporalAntiAliasing   = true;
+    Uint32 m_ComposedColorVersion        = ~Uint32{0};
 };
 
 } // namespace Diligent

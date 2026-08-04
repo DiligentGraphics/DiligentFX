@@ -269,9 +269,9 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
     pContext->Flush();
 }
 
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRDOFAndBloomColorChain)
+TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRTAADOFAndBloomColorChain)
 {
-    // Exercise SSR composition followed by DOF and Bloom before the final output pass.
+    // Exercise SSR composition followed by TAA, DOF, and Bloom before the final output pass.
     GPUTestingEnvironment::ScopedReset AutoReset;
 
     GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
@@ -320,9 +320,10 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRDOFAndBloomColorChain)
     ASSERT_NE(pPreintegratedGGXSRV, nullptr);
 
     RadientViewDesc ViewDesc;
-    ViewDesc.Bloom.Enabled        = True;
-    ViewDesc.SSR.Enabled          = True;
-    ViewDesc.DepthOfField.Enabled = True;
+    ViewDesc.Bloom.Enabled                = True;
+    ViewDesc.SSR.Enabled                  = True;
+    ViewDesc.TemporalAntiAliasing.Enabled = True;
+    ViewDesc.DepthOfField.Enabled         = True;
 
     RadientTesseraPostProcessPipeline              Pipeline;
     RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
@@ -335,6 +336,8 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRDOFAndBloomColorChain)
         Targets.ClearGBuffer(pContext);
         PostProcessInfo.FrameIndex = FrameIndex;
         ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
+        if (FrameIndex > 0)
+            EXPECT_NE(Pipeline.GetCameraJitter(), float2{});
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
         Targets.CommitFrame();
     }

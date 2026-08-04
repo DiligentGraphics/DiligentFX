@@ -76,6 +76,7 @@ TEST(RadientTesseraFrameHistoryTest, KeepsCameraHistoryPerSceneCameraAndViewport
     Camera.Camera       = 7;
     Camera.ViewportSize = {1280, 720};
     Camera.World        = MakeTranslation(1.f);
+    Camera.Jitter       = {0.25f, -0.25f};
     Camera.IsValid      = true;
 
     EXPECT_EQ(History.GetPreviousCamera(Camera), nullptr);
@@ -87,6 +88,7 @@ TEST(RadientTesseraFrameHistoryTest, KeepsCameraHistoryPerSceneCameraAndViewport
     Current.World                     = MakeTranslation(2.f);
     ASSERT_NE(History.GetPreviousCamera(Current), nullptr);
     EXPECT_EQ(History.GetPreviousCamera(Current)->World, Camera.World);
+    EXPECT_EQ(History.GetPreviousCamera(Current)->Jitter, Camera.Jitter);
     History.SetCurrentCamera(Current);
     EXPECT_TRUE(History.HasCameraHistory());
 

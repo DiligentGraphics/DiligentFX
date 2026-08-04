@@ -28,6 +28,7 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
+#include "PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
@@ -70,13 +71,15 @@ RadientCameraComponent GetCameraComponent(IRadientScene* pScene, RadientEntityID
 
 RadientTesseraCameraState CaptureCameraState(IRadientScene*                   pScene,
                                              RadientEntityID                  CameraEntity,
-                                             const RadientFrameRenderTargets& Targets)
+                                             const RadientFrameRenderTargets& Targets,
+                                             const float2&                    Jitter)
 {
     RadientTesseraCameraState State;
     State.Scene        = pScene;
     State.Camera       = CameraEntity;
     State.Attribs      = GetCameraComponent(pScene, CameraEntity);
     State.ViewportSize = Targets.GetSize();
+    State.Jitter       = Jitter;
     State.IsValid      = true;
 
     if (pScene != nullptr && CameraEntity != InvalidRadientEntityID)
@@ -106,10 +109,12 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     // the expected coordinate system.
     const float4x4 CameraWorld =
         float4x4::Scale(1.f, 1.f, -1.f) * RadientMath::ToFloat4x4(CameraState.World);
-    const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne, UseReverseDepth);
-    const float4x4                      CameraView     = CameraWorld.Inverse();
-    const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
-    const float4x4                      CameraViewInv  = CameraWorld;
+    const RadientMath::CameraProjection CameraProj = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne, UseReverseDepth);
+    const float4x4                      JitteredProjection =
+        TemporalAntiAliasing::GetJitteredProjMatrix(CameraProj.Matrix, CameraState.Jitter);
+    const float4x4 CameraView     = CameraWorld.Inverse();
+    const float4x4 CameraViewProj = CameraView * JitteredProjection;
+    const float4x4 CameraViewInv  = CameraWorld;
 
     CameraAttribs.f4ViewportSize = float4{Width, Height, Width > 0.f ? 1.f / Width : 0.f, Height > 0.f ? 1.f / Height : 0.f};
     CameraAttribs.SetClipPlanes(UseReverseDepth ? CameraProj.FarPlaneZ : CameraProj.NearPlaneZ,
@@ -127,12 +132,13 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     CameraAttribs.fSensorWidth    = CameraProj.HorizontalAperture;
     CameraAttribs.fSensorHeight   = CameraProj.VerticalAperture;
     CameraAttribs.mView           = CameraView;
-    CameraAttribs.mProj           = CameraProj.Matrix;
+    CameraAttribs.mProj           = JitteredProjection;
     CameraAttribs.mViewProj       = CameraViewProj;
     CameraAttribs.mViewInv        = CameraViewInv;
-    CameraAttribs.mProjInv        = CameraProj.Matrix.Inverse();
+    CameraAttribs.mProjInv        = JitteredProjection.Inverse();
     CameraAttribs.mViewProjInv    = CameraViewProj.Inverse();
     CameraAttribs.f4Position      = float4{float3::MakeVector(CameraWorld[3]), 1.f};
+    CameraAttribs.f2Jitter        = CameraState.Jitter;
 }
 
 PBR_Renderer::CreateInfo::PSMainSourceInfo GetTesseraPBRPSMainSource(PBR_Renderer::PSO_FLAGS)
@@ -520,10 +526,15 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const RadientTesseraCameraState  CurrentCamera   = CaptureCameraState(FrameAttribs.pScene, FrameAttribs.Camera, Targets);
+        RadientTesseraCameraState        CurrentCamera   = CaptureCameraState(FrameAttribs.pScene, FrameAttribs.Camera, Targets, FrameAttribs.CameraJitter);
         const RadientTesseraCameraState* pPreviousCamera = FrameHistory.GetPreviousCamera(CurrentCamera);
         if (pPreviousCamera == nullptr)
-            pPreviousCamera = &CurrentCamera;
+        {
+            // A frame without compatible history establishes an unjittered
+            // baseline for both camera attributes and TAA accumulation.
+            CurrentCamera.Jitter = {};
+            pPreviousCamera      = &CurrentCamera;
+        }
 
         const Uint32 FrameIndex         = FrameHistory.GetFrameIndex();
         const Uint32 PreviousFrameIndex = pPreviousCamera != &CurrentCamera ? FrameIndex - 1u : FrameIndex;

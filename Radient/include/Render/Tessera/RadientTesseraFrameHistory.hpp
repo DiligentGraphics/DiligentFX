@@ -28,6 +28,7 @@
 
 #include "Render/RadientDrawList.hpp"
 #include "RadientScene.h"
+#include "BasicMath.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <vector>
@@ -45,6 +46,7 @@ struct RadientTesseraCameraState
     RadientCameraComponent       Attribs;
     RadientMatrix4x4             World;
     RadientExtent2D              ViewportSize;
+    float2                       Jitter;
     bool                         IsValid = false;
 };
 

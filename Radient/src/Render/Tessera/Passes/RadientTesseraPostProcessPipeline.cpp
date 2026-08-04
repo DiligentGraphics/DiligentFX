@@ -72,17 +72,18 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
 
 RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Info)
 {
-    IRenderDevice* const                   pDevice                 = Info.pDevice;
-    IDeviceContext* const                  pContext                = Info.pContext;
-    const RadientFrameRenderTargets&       Targets                 = Info.Targets;
-    const RadientToneMappingDesc&          ToneMapping             = Info.View.ToneMapping;
-    const RadientBloomDesc&                BloomDesc               = Info.View.Bloom;
-    const RadientSSAODesc&                 SSAO                    = Info.View.SSAO;
-    const RadientSSRDesc&                  SSR                     = Info.View.SSR;
-    const RadientDepthOfFieldDesc&         DepthOfFieldDesc        = Info.View.DepthOfField;
-    const Uint32                           FrameIndex              = Info.FrameIndex;
-    IBuffer* const                         pFrameAttribsCB         = Info.pFrameAttribsCB;
-    ITextureView* const                    pPreintegratedGGXSRV    = Info.pPreintegratedGGXSRV;
+    IRenderDevice* const                   pDevice                  = Info.pDevice;
+    IDeviceContext* const                  pContext                 = Info.pContext;
+    const RadientFrameRenderTargets&       Targets                  = Info.Targets;
+    const RadientToneMappingDesc&          ToneMapping              = Info.View.ToneMapping;
+    const RadientBloomDesc&                BloomDesc                = Info.View.Bloom;
+    const RadientTemporalAntiAliasingDesc& TemporalAntiAliasingDesc = Info.View.TemporalAntiAliasing;
+    const RadientSSAODesc&                 SSAO                     = Info.View.SSAO;
+    const RadientSSRDesc&                  SSR                      = Info.View.SSR;
+    const RadientDepthOfFieldDesc&         DepthOfFieldDesc         = Info.View.DepthOfField;
+    const Uint32                           FrameIndex               = Info.FrameIndex;
+    IBuffer* const                         pFrameAttribsCB          = Info.pFrameAttribsCB;
+    ITextureView* const                    pPreintegratedGGXSRV     = Info.pPreintegratedGGXSRV;
 
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -96,18 +97,20 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
     if (OutputFormat == TEX_FORMAT_UNKNOWN)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const bool SSAOEnabled          = SSAO.Enabled != False;
-    const bool SSREnabled           = SSR.Enabled != False;
-    const bool DepthOfFieldEnabled  = DepthOfFieldDesc.Enabled != False;
-    const bool BloomEnabled         = BloomDesc.Enabled != False;
-    const bool ScreenEffectsEnabled = SSAOEnabled || SSREnabled;
-    const bool ColorEffectsEnabled  = DepthOfFieldEnabled || BloomEnabled;
-    const bool PostFXEnabled        = ScreenEffectsEnabled || ColorEffectsEnabled;
+    const bool SSAOEnabled                 = SSAO.Enabled != False;
+    const bool SSREnabled                  = SSR.Enabled != False;
+    const bool TemporalAntiAliasingEnabled = TemporalAntiAliasingDesc.Enabled != False;
+    const bool DepthOfFieldEnabled         = DepthOfFieldDesc.Enabled != False;
+    const bool BloomEnabled                = BloomDesc.Enabled != False;
+    const bool ScreenEffectsEnabled        = SSAOEnabled || SSREnabled;
+    const bool ColorEffectsEnabled         = TemporalAntiAliasingEnabled || DepthOfFieldEnabled || BloomEnabled;
+    const bool PostFXEnabled               = ScreenEffectsEnabled || ColorEffectsEnabled;
 
-    ITextureView* pSSAOSRV         = nullptr;
-    ITextureView* pSSRSRV          = nullptr;
-    ITextureView* pDepthOfFieldSRV = nullptr;
-    ITextureView* pBloomSRV        = nullptr;
+    ITextureView* pSSAOSRV                 = nullptr;
+    ITextureView* pSSRSRV                  = nullptr;
+    ITextureView* pTemporalAntiAliasingSRV = nullptr;
+    ITextureView* pDepthOfFieldSRV         = nullptr;
+    ITextureView* pBloomSRV                = nullptr;
     if (PostFXEnabled)
     {
         if (Targets.GetDepthSRV() == nullptr ||
@@ -171,6 +174,20 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                 return RADIENT_STATUS_INVALID_OPERATION;
         }
 
+        if (TemporalAntiAliasingEnabled)
+        {
+            if (m_pTemporalAntiAliasing == nullptr)
+                m_pTemporalAntiAliasing = std::make_unique<TemporalAntiAliasing>(pDevice, TemporalAntiAliasing::CreateInfo{});
+
+            m_pTemporalAntiAliasing->PrepareResources(pDevice,
+                                                      pContext,
+                                                      m_pPostFXContext.get(),
+                                                      TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER);
+            pTemporalAntiAliasingSRV = m_pTemporalAntiAliasing->GetAccumulatedFrameSRV();
+            if (pTemporalAntiAliasingSRV == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
         if (DepthOfFieldEnabled)
         {
             if (m_pDepthOfField == nullptr)
@@ -206,6 +223,13 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         (!m_SSAOEnabled || m_FinalPass.TargetVersion != Targets.GetVersion() || m_SSAO != SSAO))
     {
         m_ResetSSAO = true;
+    }
+    if (TemporalAntiAliasingEnabled &&
+        (!m_TemporalAntiAliasingEnabled ||
+         m_FinalPass.TargetVersion != Targets.GetVersion() ||
+         m_TemporalAntiAliasing != TemporalAntiAliasingDesc))
+    {
+        m_ResetTemporalAntiAliasing = true;
     }
 
     const bool ToneMappingEnabled = ToneMappingAttribs.iToneMappingMode > TONE_MAPPING_MODE_NONE;
@@ -285,6 +309,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         m_CompositionPass = {};
     }
 
+    if (TemporalAntiAliasingEnabled)
+        pCurrentColorSRV = pTemporalAntiAliasingSRV;
     if (DepthOfFieldEnabled)
         pCurrentColorSRV = pDepthOfFieldSRV;
     if (BloomEnabled)
@@ -306,17 +332,28 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
     if (RADIENT_FAILED(FinalPassStatus))
         return FinalPassStatus;
 
-    m_pFrameAttribsCB      = pFrameAttribsCB;
-    m_pPreintegratedGGXSRV = pPreintegratedGGXSRV;
-    m_Bloom                = BloomDesc;
-    m_SSAO                 = SSAO;
-    m_SSR                  = SSR;
-    m_DepthOfField         = DepthOfFieldDesc;
-    m_SSAOEnabled          = SSAOEnabled;
-    m_SSREnabled           = SSREnabled;
-    m_DepthOfFieldEnabled  = DepthOfFieldEnabled;
-    m_BloomEnabled         = BloomEnabled;
+    m_pFrameAttribsCB             = pFrameAttribsCB;
+    m_pPreintegratedGGXSRV        = pPreintegratedGGXSRV;
+    m_Bloom                       = BloomDesc;
+    m_SSAO                        = SSAO;
+    m_SSR                         = SSR;
+    m_TemporalAntiAliasing        = TemporalAntiAliasingDesc;
+    m_DepthOfField                = DepthOfFieldDesc;
+    m_SSAOEnabled                 = SSAOEnabled;
+    m_SSREnabled                  = SSREnabled;
+    m_TemporalAntiAliasingEnabled = TemporalAntiAliasingEnabled;
+    m_DepthOfFieldEnabled         = DepthOfFieldEnabled;
+    m_BloomEnabled                = BloomEnabled;
     return RADIENT_STATUS_OK;
+}
+
+float2 RadientTesseraPostProcessPipeline::GetCameraJitter() const noexcept
+{
+    return m_TemporalAntiAliasingEnabled &&
+            !m_ResetTemporalAntiAliasing &&
+            m_pTemporalAntiAliasing != nullptr ?
+        m_pTemporalAntiAliasing->GetJitterOffset() :
+        float2{};
 }
 
 RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*                   pDevice,
@@ -327,11 +364,12 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    if (m_SSAOEnabled || m_SSREnabled || m_DepthOfFieldEnabled || m_BloomEnabled)
+    if (m_SSAOEnabled || m_SSREnabled || m_TemporalAntiAliasingEnabled || m_DepthOfFieldEnabled || m_BloomEnabled)
     {
         if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pFrameAttribsCB == nullptr ||
             (m_SSAOEnabled && m_pSSAO == nullptr) ||
             (m_SSREnabled && m_pSSR == nullptr) ||
+            (m_TemporalAntiAliasingEnabled && m_pTemporalAntiAliasing == nullptr) ||
             (m_DepthOfFieldEnabled && m_pDepthOfField == nullptr) ||
             (m_BloomEnabled && m_pBloom == nullptr))
         {
@@ -408,6 +446,30 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
                 return Status;
 
             pCurrentColorSRV = m_pComposedColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        }
+
+        if (m_TemporalAntiAliasingEnabled)
+        {
+            if (pCurrentColorSRV == nullptr)
+                return RADIENT_STATUS_OUT_OF_DATE;
+
+            HLSL::TemporalAntiAliasingAttribs TemporalAntiAliasingAttribs =
+                RadientPostFX::MakeTemporalAntiAliasingAttribs(m_TemporalAntiAliasing);
+            TemporalAntiAliasingAttribs.ResetAccumulation =
+                ResetTemporalHistory || m_ResetTemporalAntiAliasing;
+
+            TemporalAntiAliasing::RenderAttributes TemporalAntiAliasingRenderAttribs;
+            TemporalAntiAliasingRenderAttribs.pDevice         = pDevice;
+            TemporalAntiAliasingRenderAttribs.pDeviceContext  = pContext;
+            TemporalAntiAliasingRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
+            TemporalAntiAliasingRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
+            TemporalAntiAliasingRenderAttribs.pTAAAttribs     = &TemporalAntiAliasingAttribs;
+            m_pTemporalAntiAliasing->Execute(TemporalAntiAliasingRenderAttribs);
+
+            m_ResetTemporalAntiAliasing = false;
+            pCurrentColorSRV            = m_pTemporalAntiAliasing->GetAccumulatedFrameSRV();
+            if (pCurrentColorSRV == nullptr)
+                return RADIENT_STATUS_OUT_OF_DATE;
         }
 
         if (m_DepthOfFieldEnabled)

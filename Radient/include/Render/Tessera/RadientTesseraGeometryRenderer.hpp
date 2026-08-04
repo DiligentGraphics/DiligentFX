@@ -48,6 +48,7 @@ struct RadientTesseraGeometryFrameAttribs
     IRadientScene*                pScene                = nullptr;
     RadientEntityID               Camera                = InvalidRadientEntityID;
     ITextureView*                 pPrefilteredEnvMapSRV = nullptr;
+    float2                        CameraJitter;
 };
 
 /// Shared Tessera renderer state used by geometry passes.

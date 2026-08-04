@@ -124,11 +124,11 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
         return Status;
 
     RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{ViewState.FrameTargets, ViewDesc};
-    PostProcessInfo.pDevice               = Context.pDevice;
-    PostProcessInfo.pContext              = Context.pContext;
-    PostProcessInfo.FrameIndex            = ViewState.FrameHistory.GetFrameIndex();
-    PostProcessInfo.pFrameAttribsCB       = pPBRRenderer->GetFrameAttribsCB();
-    PostProcessInfo.pPreintegratedGGXSRV  = pPBRRenderer->GetPreintegratedGGX_SRV();
+    PostProcessInfo.pDevice              = Context.pDevice;
+    PostProcessInfo.pContext             = Context.pContext;
+    PostProcessInfo.FrameIndex           = ViewState.FrameHistory.GetFrameIndex();
+    PostProcessInfo.pFrameAttribsCB      = pPBRRenderer->GetFrameAttribsCB();
+    PostProcessInfo.pPreintegratedGGXSRV = pPBRRenderer->GetPreintegratedGGX_SRV();
     return ViewState.PostProcessPipeline.Prepare(PostProcessInfo);
 }
 
@@ -167,6 +167,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         ViewDesc.pScene,
         ViewDesc.Camera,
         pView->GetPrefilteredEnvMapSRV(),
+        pViewState->PostProcessPipeline.GetCameraJitter(),
     };
 
     const RADIENT_STATUS Status = m_GeometryRenderer.BeginFrame(
