@@ -4,6 +4,7 @@
 #include "BasicStructures.fxh"
 #include "PBR_Structures.fxh"
 #include "RenderPBR_Structures.fxh"
+#include "PBR_Shading.fxh"
 #include "RadientPostProcessStructures.fxh"
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
@@ -11,7 +12,9 @@ cbuffer cbRadientPostProcessAttribs
 {
     RadientPostProcessAttribs g_Attribs;
 }
+#endif
 
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE || ENABLE_SSR
 cbuffer cbFrameAttribs
 {
     PBRFrameAttribs g_Frame;
@@ -22,11 +25,45 @@ Texture2D g_ColorBuffer;
 #if ENABLE_SSAO
 Texture2D g_SSAO;
 #endif
+#if ENABLE_SSR
+Texture2D    g_SSR;
+Texture2D    g_SpecularIBL;
+Texture2D    g_Normal;
+Texture2D    g_MaterialData;
+Texture2D    g_BaseColor;
+Texture2D    g_PreintegratedGGX;
+SamplerState g_PreintegratedGGX_sampler;
+#endif
 
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
 {
     Color = g_ColorBuffer.Load(int3(VSOut.f4PixelPos.xy, 0));
+
+#if ENABLE_SSR
+    const float4 SpecularIBL = g_SpecularIBL.Load(int3(VSOut.f4PixelPos.xy, 0));
+    const float4 SSRRadiance = g_SSR.Load(int3(VSOut.f4PixelPos.xy, 0));
+    const float3 Normal      = g_Normal.Load(int3(VSOut.f4PixelPos.xy, 0)).xyz;
+    const float4 BaseColor   = g_BaseColor.Load(int3(VSOut.f4PixelPos.xy, 0));
+    const float4 Material    = g_MaterialData.Load(int3(VSOut.f4PixelPos.xy, 0));
+
+    const float Roughness = saturate(Material.x);
+    const float Metallic  = saturate(Material.y);
+    const SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectanceMR(BaseColor.rgb, Metallic, Roughness);
+
+    const float4 WorldPos = mul(float4(VSOut.f2NormalizedXY, DepthToNormalizedDeviceZ(0.5), 1.0),
+                                g_Frame.Camera.mViewProjInv);
+    const float3 ViewDir = normalize(g_Frame.Camera.f4Position.xyz - WorldPos.xyz / WorldPos.w);
+    const IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(SrfInfo,
+                                                       g_PreintegratedGGX,
+                                                       g_PreintegratedGGX_sampler,
+                                                       Normal,
+                                                       ViewDir);
+    const float3 SSR = GetSpecularIBL_GGX(SrfInfo, IBLInfo, SSRRadiance.rgb);
+
+    // SSR replaces the specular IBL contribution that was written by the PBR pass.
+    Color.rgb += (SSR - SpecularIBL.rgb) * SSRRadiance.w * Color.a;
+#endif
 
 #if ENABLE_SSAO
     // Attenuate occlusion by opacity because scene color may already contain

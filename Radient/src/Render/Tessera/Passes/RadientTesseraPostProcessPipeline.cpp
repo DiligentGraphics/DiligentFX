@@ -33,6 +33,7 @@
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 #include "ShaderMacroHelper.hpp"
+#include "CommonlyUsedStates.h"
 
 #include <vector>
 
@@ -74,8 +75,10 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
                                                           const RadientFrameRenderTargets& Targets,
                                                           const RadientToneMappingDesc&    ToneMapping,
                                                           const RadientSSAODesc&           SSAO,
+                                                          const RadientSSRDesc&            SSR,
                                                           Uint32                           FrameIndex,
-                                                          IBuffer*                         pFrameAttribsCB)
+                                                          IBuffer*                         pFrameAttribsCB,
+                                                          ITextureView*                    pPreintegratedGGXSRV)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -89,9 +92,13 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
     if (OutputFormat == TEX_FORMAT_UNKNOWN)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const bool    SSAOEnabled = SSAO.Enabled != False;
-    ITextureView* pSSAOSRV    = nullptr;
-    if (SSAOEnabled)
+    const bool SSAOEnabled   = SSAO.Enabled != False;
+    const bool SSREnabled    = SSR.Enabled != False;
+    const bool PostFXEnabled = SSAOEnabled || SSREnabled;
+
+    ITextureView* pSSAOSRV = nullptr;
+    ITextureView* pSSRSRV  = nullptr;
+    if (PostFXEnabled)
     {
         if (Targets.GetDepthSRV() == nullptr ||
             Targets.GetPreviousDepthSRV() == nullptr ||
@@ -107,21 +114,48 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
             CI.PackMatrixRowMajor = true;
             m_pPostFXContext      = std::make_unique<PostFXContext>(pDevice, CI);
         }
-        if (m_pSSAO == nullptr)
-            m_pSSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice, ScreenSpaceAmbientOcclusion::CreateInfo{});
 
         const RadientExtent2D& Size = Targets.GetSize();
         const PostFXContext::FEATURE_FLAGS PostFXFlags = Targets.GetUseReverseDepth() ?
             PostFXContext::FEATURE_FLAG_REVERSED_DEPTH :
             PostFXContext::FEATURE_FLAG_NONE;
         m_pPostFXContext->PrepareResources(pDevice, {FrameIndex, Size.Width, Size.Height}, PostFXFlags);
-        m_pSSAO->PrepareResources(pDevice,
-                                  pContext,
-                                  m_pPostFXContext.get(),
-                                  ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
-        pSSAOSRV = m_pSSAO->GetAmbientOcclusionSRV();
-        if (pSSAOSRV == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+
+        if (SSAOEnabled)
+        {
+            if (m_pSSAO == nullptr)
+                m_pSSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice, ScreenSpaceAmbientOcclusion::CreateInfo{});
+
+            m_pSSAO->PrepareResources(pDevice,
+                                      pContext,
+                                      m_pPostFXContext.get(),
+                                      ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
+            pSSAOSRV = m_pSSAO->GetAmbientOcclusionSRV();
+            if (pSSAOSRV == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        if (SSREnabled)
+        {
+            if (pPreintegratedGGXSRV == nullptr ||
+                Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR) == nullptr ||
+                Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL) == nullptr ||
+                Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_IBL) == nullptr)
+            {
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
+
+            if (m_pSSR == nullptr)
+                m_pSSR = std::make_unique<ScreenSpaceReflection>(pDevice, ScreenSpaceReflection::CreateInfo{});
+
+            m_pSSR->PrepareResources(pDevice,
+                                     pContext,
+                                     m_pPostFXContext.get(),
+                                     ScreenSpaceReflection::FEATURE_FLAG_NONE);
+            pSSRSRV = m_pSSR->GetSSRRadianceSRV();
+            if (pSSRSRV == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+        }
     }
 
     const HLSL::ToneMappingAttribs ToneMappingAttribs  = RadientPostFX::MakeToneMappingAttribs(ToneMapping);
@@ -137,6 +171,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
         m_ToneMappingMode != ToneMappingAttribs.iToneMappingMode ||
         m_ConvertOutputToSRGB != ConvertOutputToSRGB ||
         m_SSAOEnabled != SSAOEnabled ||
+        m_SSREnabled != SSREnabled ||
+        (SSREnabled && m_pPreintegratedGGXSRV != pPreintegratedGGXSRV) ||
         m_pFrameAttribsCB != pFrameAttribsCB)
     {
         const RADIENT_STATUS Status = CreatePipelineState(pDevice,
@@ -144,7 +180,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
                                                           ToneMappingAttribs.iToneMappingMode,
                                                           ConvertOutputToSRGB,
                                                           SSAOEnabled,
-                                                          pFrameAttribsCB);
+                                                          SSREnabled,
+                                                          pFrameAttribsCB,
+                                                          pPreintegratedGGXSRV);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -184,6 +222,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
 
     if (m_pSRB == nullptr ||
         m_TargetVersion != Targets.GetVersion() ||
+        m_pBoundSSRSRV != pSSRSRV ||
         m_pBoundSSAOSRV != pSSAOSRV)
     {
         m_pSRB.Release();
@@ -208,11 +247,38 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
             pSSAOVar->Set(pSSAOSRV);
         }
 
+        if (SSREnabled)
+        {
+            struct TextureBinding
+            {
+                const Char*   Name;
+                ITextureView* pView;
+            };
+            const TextureBinding TextureBindings[] = {
+                {"g_SSR", pSSRSRV},
+                {"g_SpecularIBL", Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_IBL)},
+                {"g_Normal", Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_NORMAL)},
+                {"g_MaterialData", Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL)},
+                {"g_BaseColor", Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR)},
+            };
+            for (const TextureBinding& Binding : TextureBindings)
+            {
+                IShaderResourceVariable* const pVariable =
+                    m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, Binding.Name);
+                if (pVariable == nullptr || Binding.pView == nullptr)
+                    return RADIENT_STATUS_INVALID_OPERATION;
+
+                pVariable->Set(Binding.pView);
+            }
+        }
+
         m_TargetVersion = Targets.GetVersion();
+        m_pBoundSSRSRV  = pSSRSRV;
         m_pBoundSSAOSRV = pSSAOSRV;
     }
 
     m_SSAO = SSAO;
+    m_SSR  = SSR;
     return RADIENT_STATUS_OK;
 }
 
@@ -224,10 +290,14 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    if (m_SSAOEnabled)
+    if (m_SSAOEnabled || m_SSREnabled)
     {
-        if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pSSAO == nullptr || m_pFrameAttribsCB == nullptr)
+        if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pFrameAttribsCB == nullptr ||
+            (m_SSAOEnabled && m_pSSAO == nullptr) ||
+            (m_SSREnabled && m_pSSR == nullptr))
+        {
             return RADIENT_STATUS_INVALID_OPERATION;
+        }
 
         ITextureView* const pDepthSRV         = Targets.GetDepthSRV();
         ITextureView* const pPreviousDepthSRV = ResetTemporalHistory ?
@@ -254,18 +324,38 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
         PostFXAttribs.pCameraAttribsCB    = m_pFrameAttribsCB;
         m_pPostFXContext->Execute(PostFXAttribs);
 
-        HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOAttribs = RadientPostFX::MakeSSAOAttribs(m_SSAO);
-        SSAOAttribs.ResetAccumulation                        = ResetTemporalHistory || m_ResetSSAO;
+        if (m_SSREnabled)
+        {
+            HLSL::ScreenSpaceReflectionAttribs SSRAttribs = RadientPostFX::MakeSSRAttribs(m_SSR);
 
-        ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs;
-        SSAORenderAttribs.pDevice          = pDevice;
-        SSAORenderAttribs.pDeviceContext   = pContext;
-        SSAORenderAttribs.pPostFXContext   = m_pPostFXContext.get();
-        SSAORenderAttribs.pDepthBufferSRV  = pDepthSRV;
-        SSAORenderAttribs.pNormalBufferSRV = pNormalSRV;
-        SSAORenderAttribs.pSSAOAttribs     = &SSAOAttribs;
-        m_pSSAO->Execute(SSAORenderAttribs);
-        m_ResetSSAO = false;
+            ScreenSpaceReflection::RenderAttributes SSRRenderAttribs;
+            SSRRenderAttribs.pDevice            = pDevice;
+            SSRRenderAttribs.pDeviceContext     = pContext;
+            SSRRenderAttribs.pPostFXContext     = m_pPostFXContext.get();
+            SSRRenderAttribs.pColorBufferSRV    = Targets.GetSceneColorSRV();
+            SSRRenderAttribs.pDepthBufferSRV    = pDepthSRV;
+            SSRRenderAttribs.pNormalBufferSRV   = pNormalSRV;
+            SSRRenderAttribs.pMaterialBufferSRV = Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL);
+            SSRRenderAttribs.pMotionVectorsSRV  = pMotionVectorsSRV;
+            SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
+            m_pSSR->Execute(SSRRenderAttribs);
+        }
+
+        if (m_SSAOEnabled)
+        {
+            HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOAttribs = RadientPostFX::MakeSSAOAttribs(m_SSAO);
+            SSAOAttribs.ResetAccumulation                        = ResetTemporalHistory || m_ResetSSAO;
+
+            ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs;
+            SSAORenderAttribs.pDevice          = pDevice;
+            SSAORenderAttribs.pDeviceContext   = pContext;
+            SSAORenderAttribs.pPostFXContext   = m_pPostFXContext.get();
+            SSAORenderAttribs.pDepthBufferSRV  = pDepthSRV;
+            SSAORenderAttribs.pNormalBufferSRV = pNormalSRV;
+            SSAORenderAttribs.pSSAOAttribs     = &SSAOAttribs;
+            m_pSSAO->Execute(SSAORenderAttribs);
+            m_ResetSSAO = false;
+        }
     }
 
     ITextureView* pOutputColorRTV = Targets.GetOutputColorRTV();
@@ -285,19 +375,24 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
                                                                       Int32          ToneMappingMode,
                                                                       bool           ConvertOutputToSRGB,
                                                                       bool           SSAOEnabled,
-                                                                      IBuffer*       pFrameAttribsCB)
+                                                                      bool           SSREnabled,
+                                                                      IBuffer*       pFrameAttribsCB,
+                                                                      ITextureView*  pPreintegratedGGXSRV)
 {
     m_pSRB.Release();
     m_pPSO.Release();
     m_pToneMappingAttribsCB.Release();
     m_pFrameAttribsCB.Release();
+    m_pPreintegratedGGXSRV.Release();
     m_TargetVersion = ~Uint32{0};
+    m_pBoundSSRSRV  = nullptr;
     m_pBoundSSAOSRV = nullptr;
 
     ShaderMacroHelper Macros;
     Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
     Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
     Macros.Add("ENABLE_SSAO", SSAOEnabled);
+    Macros.Add("ENABLE_SSR", SSREnabled);
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -320,15 +415,32 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
     if (pVS == nullptr || pPS == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const bool                              ToneMappingEnabled = ToneMappingMode > TONE_MAPPING_MODE_NONE;
+    const bool                              ToneMappingEnabled   = ToneMappingMode > TONE_MAPPING_MODE_NONE;
+    const bool                              FrameAttribsRequired = ToneMappingEnabled || SSREnabled;
     std::vector<ShaderResourceVariableDesc> Variables;
     Variables.push_back({SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
     if (SSAOEnabled)
         Variables.push_back({SHADER_TYPE_PIXEL, "g_SSAO", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
-    if (ToneMappingEnabled)
+    if (SSREnabled)
     {
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE});
+        Variables.push_back({SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_VARIABLE_TYPE_STATIC});
+    }
+    if (ToneMappingEnabled)
         Variables.push_back({SHADER_TYPE_PIXEL, "cbRadientPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC});
+    if (FrameAttribsRequired)
         Variables.push_back({SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC});
+
+    ImmutableSamplerDesc PreintegratedGGXSampler;
+    if (SSREnabled)
+    {
+        PreintegratedGGXSampler.ShaderStages         = SHADER_TYPE_PIXEL;
+        PreintegratedGGXSampler.SamplerOrTextureName = "g_PreintegratedGGX";
+        PreintegratedGGXSampler.Desc                 = Sam_LinearClamp;
     }
 
     GraphicsPipelineStateCreateInfo PSOCI;
@@ -336,6 +448,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
     PSOCI.PSODesc.PipelineType                               = PIPELINE_TYPE_GRAPHICS;
     PSOCI.PSODesc.ResourceLayout.Variables                   = Variables.data();
     PSOCI.PSODesc.ResourceLayout.NumVariables                = static_cast<Uint32>(Variables.size());
+    PSOCI.PSODesc.ResourceLayout.ImmutableSamplers           = SSREnabled ? &PreintegratedGGXSampler : nullptr;
+    PSOCI.PSODesc.ResourceLayout.NumImmutableSamplers        = SSREnabled ? 1u : 0u;
     PSOCI.GraphicsPipeline.NumRenderTargets                  = 1;
     PSOCI.GraphicsPipeline.RTVFormats[0]                     = OutputFormat;
     PSOCI.GraphicsPipeline.PrimitiveTopology                 = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -348,7 +462,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
     if (m_pPSO == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    if (ToneMappingEnabled)
+    if (FrameAttribsRequired)
     {
         IShaderResourceVariable* const pFrameAttribsVar =
             m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbFrameAttribs");
@@ -357,11 +471,22 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
         pFrameAttribsVar->Set(pFrameAttribsCB);
     }
 
-    m_pFrameAttribsCB     = pFrameAttribsCB;
-    m_OutputFormat        = OutputFormat;
-    m_ToneMappingMode     = ToneMappingMode;
-    m_ConvertOutputToSRGB = ConvertOutputToSRGB;
-    m_SSAOEnabled         = SSAOEnabled;
+    if (SSREnabled)
+    {
+        IShaderResourceVariable* const pPreintegratedGGXVar =
+            m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX");
+        if (pPreintegratedGGXVar == nullptr || pPreintegratedGGXSRV == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+        pPreintegratedGGXVar->Set(pPreintegratedGGXSRV);
+    }
+
+    m_pFrameAttribsCB          = pFrameAttribsCB;
+    m_pPreintegratedGGXSRV     = pPreintegratedGGXSRV;
+    m_OutputFormat             = OutputFormat;
+    m_ToneMappingMode          = ToneMappingMode;
+    m_ConvertOutputToSRGB      = ConvertOutputToSRGB;
+    m_SSAOEnabled              = SSAOEnabled;
+    m_SSREnabled               = SSREnabled;
     return RADIENT_STATUS_OK;
 }
 

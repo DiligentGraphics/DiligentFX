@@ -185,7 +185,7 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
     {
         RadientToneMappingDesc ToneMapping;
         ToneMapping.Mode = ToneMappingMode;
-        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, 0, pFrameAttribsCB),
+        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, 0, pFrameAttribsCB, nullptr),
                   RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, true), RADIENT_STATUS_OK);
     }
@@ -257,8 +257,84 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
                                    Targets,
                                    {},
                                    SSAO,
+                                   {},
                                    FrameIndex,
-                                   pFrameAttribsCB),
+                                   pFrameAttribsCB,
+                                   nullptr),
+                  RADIENT_STATUS_OK);
+        EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
+        Targets.CommitFrame();
+    }
+
+    pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+    pContext->Flush();
+}
+
+TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRComposition)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const         pDevice      = pEnvironment->GetDevice();
+    IDeviceContext* const        pContext     = pEnvironment->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    TestRenderTarget Target = CreateTestRenderTarget(pDevice, 32, 16);
+    ASSERT_NE(Target.pTarget, nullptr);
+
+    RadientFrameRenderTargets Targets;
+    ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
+    CreateUniformBuffer(pDevice,
+                        sizeof(HLSL::PBRFrameAttribs),
+                        "Radient SSR test frame attribs",
+                        pFrameAttribsCB.GetAddressOfEmpty());
+    ASSERT_NE(pFrameAttribsCB, nullptr);
+    {
+        MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext,
+                                                      pFrameAttribsCB,
+                                                      MAP_WRITE,
+                                                      MAP_FLAG_DISCARD};
+        ASSERT_TRUE(FrameAttribs);
+        *FrameAttribs                     = {};
+        FrameAttribs->Camera.mViewProj    = float4x4::Identity();
+        FrameAttribs->Camera.mViewProjInv = float4x4::Identity();
+        FrameAttribs->PrevCamera          = FrameAttribs->Camera;
+    }
+
+    TextureDesc BRDFDesc;
+    BRDFDesc.Name      = "Radient SSR test preintegrated GGX";
+    BRDFDesc.Type      = RESOURCE_DIM_TEX_2D;
+    BRDFDesc.Width     = 16;
+    BRDFDesc.Height    = 16;
+    BRDFDesc.Format    = TEX_FORMAT_RG16_FLOAT;
+    BRDFDesc.BindFlags = BIND_SHADER_RESOURCE;
+
+    RefCntAutoPtr<ITexture> pPreintegratedGGX;
+    pDevice->CreateTexture(BRDFDesc, nullptr, pPreintegratedGGX.GetAddressOfEmpty());
+    ASSERT_NE(pPreintegratedGGX, nullptr);
+    ITextureView* const pPreintegratedGGXSRV =
+        pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ASSERT_NE(pPreintegratedGGXSRV, nullptr);
+
+    RadientSSRDesc SSR;
+    SSR.Enabled = True;
+
+    RadientTesseraPostProcessPipeline Pipeline;
+    for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
+    {
+        Targets.ClearGBuffer(pContext);
+        ASSERT_EQ(Pipeline.Prepare(pDevice,
+                                   pContext,
+                                   Targets,
+                                   {},
+                                   {},
+                                   SSR,
+                                   FrameIndex,
+                                   pFrameAttribsCB,
+                                   pPreintegratedGGXSRV),
                   RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
         Targets.CommitFrame();
