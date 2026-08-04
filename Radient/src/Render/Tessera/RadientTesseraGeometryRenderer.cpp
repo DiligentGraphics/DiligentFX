@@ -87,6 +87,7 @@ RadientTesseraCameraState CaptureCameraState(IRadientScene*                   pS
 
 void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
                               const RadientTesseraCameraState& CameraState,
+                              bool                             UseReverseDepth,
                               Uint32                           FrameIndex,
                               HLSL::CameraAttribs&             CameraAttribs)
 {
@@ -105,13 +106,14 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     // the expected coordinate system.
     const float4x4 CameraWorld =
         float4x4::Scale(1.f, 1.f, -1.f) * RadientMath::ToFloat4x4(CameraState.World);
-    const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
+    const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne, UseReverseDepth);
     const float4x4                      CameraView     = CameraWorld.Inverse();
     const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
     const float4x4                      CameraViewInv  = CameraWorld;
 
     CameraAttribs.f4ViewportSize = float4{Width, Height, Width > 0.f ? 1.f / Width : 0.f, Height > 0.f ? 1.f / Height : 0.f};
-    CameraAttribs.SetClipPlanes(CameraProj.NearPlaneZ, CameraProj.FarPlaneZ);
+    CameraAttribs.SetClipPlanes(UseReverseDepth ? CameraProj.FarPlaneZ : CameraProj.NearPlaneZ,
+                                UseReverseDepth ? CameraProj.NearPlaneZ : CameraProj.FarPlaneZ);
     CameraAttribs.fSceneNearZ     = CameraAttribs.fNearPlaneZ;
     CameraAttribs.fSceneFarZ      = CameraAttribs.fFarPlaneZ;
     CameraAttribs.fSceneNearDepth = CameraAttribs.fNearPlaneDepth;
@@ -525,8 +527,8 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
 
         const Uint32 FrameIndex         = FrameHistory.GetFrameIndex();
         const Uint32 PreviousFrameIndex = pPreviousCamera != &CurrentCamera ? FrameIndex - 1u : FrameIndex;
-        WriteCameraShaderAttribs(pDevice, CurrentCamera, FrameIndex, pFrameAttribs->Camera);
-        WriteCameraShaderAttribs(pDevice, *pPreviousCamera, PreviousFrameIndex, pFrameAttribs->PrevCamera);
+        WriteCameraShaderAttribs(pDevice, CurrentCamera, Targets.GetUseReverseDepth(), FrameIndex, pFrameAttribs->Camera);
+        WriteCameraShaderAttribs(pDevice, *pPreviousCamera, Targets.GetUseReverseDepth(), PreviousFrameIndex, pFrameAttribs->PrevCamera);
         FrameHistory.SetCurrentCamera(CurrentCamera);
         WriteSceneLights(*m_pRenderer,
                          LightList,

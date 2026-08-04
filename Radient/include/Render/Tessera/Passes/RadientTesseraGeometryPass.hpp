@@ -80,7 +80,8 @@ private:
     RADIENT_STATUS CreatePsoCaches(PBR_Renderer&                                                                      Renderer,
                                    PBR_Renderer::PSO_FLAGS                                                            BaseRenderFlags,
                                    const std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT>& RTVFormats,
-                                   TEXTURE_FORMAT                                                                     DSVFormat);
+                                   TEXTURE_FORMAT                                                                     DSVFormat,
+                                   bool                                                                               UseReverseDepth);
 
     struct DrawableBatchKey
     {
@@ -182,6 +183,7 @@ private:
 
     std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> m_RTVFormats{};
     TEXTURE_FORMAT                                                              m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
+    bool                                                                        m_UseReverseDepth                = false;
     bool                                                                        m_EnableAsyncPipelineCompilation = true;
     DEVICE_FEATURE_STATE                                                        m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
 };

@@ -78,6 +78,25 @@ TEST(RadientMathTest, ToFloat2)
     EXPECT_EQ(Value.y, 2.f);
 }
 
+TEST(RadientMathTest, BuildsReverseDepthCameraProjection)
+{
+    RadientCameraComponent Camera;
+    Camera.ClippingRange = {0.25f, 100.f};
+
+    const RadientMath::CameraProjection Projection =
+        RadientMath::GetCameraProjection(Camera, 16.f / 9.f, false, true);
+
+    const auto ProjectDepth = [&](float CameraZ) {
+        const float4 ClipPosition = float4{0.f, 0.f, CameraZ, 1.f} * Projection.Matrix;
+        return ClipPosition.z / ClipPosition.w;
+    };
+
+    EXPECT_FLOAT_EQ(Projection.NearPlaneZ, Camera.ClippingRange.x);
+    EXPECT_FLOAT_EQ(Projection.FarPlaneZ, Camera.ClippingRange.y);
+    EXPECT_NEAR(ProjectDepth(Projection.NearPlaneZ), 1.f, EPSILON);
+    EXPECT_NEAR(ProjectDepth(Projection.FarPlaneZ), 0.f, EPSILON);
+}
+
 TEST(RadientMathTest, ToFloat3)
 {
     // Converts RadientFloat3 to Diligent float3 without changing component values.

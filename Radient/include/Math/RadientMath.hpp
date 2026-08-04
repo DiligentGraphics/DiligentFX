@@ -299,7 +299,8 @@ struct CameraProjection
 
 CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
                                      float                         Aspect,
-                                     bool                          NDCMinusOneToOne);
+                                     bool                          NDCMinusOneToOne,
+                                     bool                          UseReverseDepth);
 
 } // namespace RadientMath
 

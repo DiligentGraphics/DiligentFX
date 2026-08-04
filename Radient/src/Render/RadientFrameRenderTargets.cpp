@@ -75,6 +75,7 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     m_pOutputColorRTV = Target.GetColorRTV();
+    m_UseReverseDepth = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ == 0.f;
 
     // Tessera renders depth into its own shader-readable ping-pong textures so
     // post effects can consume both the current and previous frame depths.
@@ -199,7 +200,7 @@ void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext) const
     }
     pContext->ClearDepthStencil(pDepthDSV,
                                 CLEAR_DEPTH_FLAG,
-                                1.f,
+                                m_UseReverseDepth ? 0.f : 1.f,
                                 0,
                                 RESOURCE_STATE_TRANSITION_MODE_VERIFY);
 }

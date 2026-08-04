@@ -111,7 +111,10 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
             m_pSSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice, ScreenSpaceAmbientOcclusion::CreateInfo{});
 
         const RadientExtent2D& Size = Targets.GetSize();
-        m_pPostFXContext->PrepareResources(pDevice, {FrameIndex, Size.Width, Size.Height}, PostFXContext::FEATURE_FLAG_NONE);
+        const PostFXContext::FEATURE_FLAGS PostFXFlags = Targets.GetUseReverseDepth() ?
+            PostFXContext::FEATURE_FLAG_REVERSED_DEPTH :
+            PostFXContext::FEATURE_FLAG_NONE;
+        m_pPostFXContext->PrepareResources(pDevice, {FrameIndex, Size.Width, Size.Height}, PostFXFlags);
         m_pSSAO->PrepareResources(pDevice,
                                   pContext,
                                   m_pPostFXContext.get(),

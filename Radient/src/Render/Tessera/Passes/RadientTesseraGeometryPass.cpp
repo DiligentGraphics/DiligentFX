@@ -135,9 +135,14 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
 
     const TEXTURE_FORMAT DSVFormat = GetTextureViewFormat(Targets.GetDepthDSV());
     if (m_RTVFormats != RTVFormats ||
-        m_DSVFormat != DSVFormat)
+        m_DSVFormat != DSVFormat ||
+        m_UseReverseDepth != Targets.GetUseReverseDepth())
     {
-        const RADIENT_STATUS Status = CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormats, DSVFormat);
+        const RADIENT_STATUS Status = CreatePsoCaches(*pRenderer,
+                                                      Renderer.GetBaseRenderFlags(),
+                                                      RTVFormats,
+                                                      DSVFormat,
+                                                      Targets.GetUseReverseDepth());
         if (RADIENT_FAILED(Status))
             return Status;
 
@@ -744,7 +749,8 @@ void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID Dr
 RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&                                                                      Renderer,
                                                            PBR_Renderer::PSO_FLAGS                                                            BaseRenderFlags,
                                                            const std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT>& RTVFormats,
-                                                           TEXTURE_FORMAT                                                                     DSVFormat)
+                                                           TEXTURE_FORMAT                                                                     DSVFormat,
+                                                           bool                                                                               UseReverseDepth)
 {
     for (TEXTURE_FORMAT RTVFormat : RTVFormats)
     {
@@ -756,7 +762,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
     GraphicsDesc.NumRenderTargets = RadientFrameRenderTargets::GBUFFER_TARGET_COUNT;
     for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
         GraphicsDesc.RTVFormats[TargetIndex] = RTVFormats[TargetIndex];
-    GraphicsDesc.DSVFormat = DSVFormat;
+    GraphicsDesc.DSVFormat                  = DSVFormat;
+    GraphicsDesc.DepthStencilDesc.DepthFunc = UseReverseDepth ? COMPARISON_FUNC_GREATER : COMPARISON_FUNC_LESS;
 
     GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsDesc.RasterizerDesc.FrontCounterClockwise = true;
@@ -772,6 +779,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
 
     m_RTVFormats = RTVFormats;
     m_DSVFormat  = DSVFormat;
+    m_UseReverseDepth = UseReverseDepth;
     for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)
         Batches.clear();
     m_DrawablePassData.clear();

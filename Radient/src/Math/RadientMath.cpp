@@ -82,7 +82,8 @@ namespace RadientMath
 
 CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
                                      float                         Aspect,
-                                     bool                          NDCMinusOneToOne)
+                                     bool                          NDCMinusOneToOne,
+                                     bool                          UseReverseDepth)
 {
     static constexpr RadientCameraComponent DefaultCamera{};
 
@@ -93,15 +94,18 @@ CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
     Projection.NearPlaneZ         = Camera.ClippingRange.x > 0.f ? Camera.ClippingRange.x : DefaultCamera.ClippingRange.x;
     Projection.FarPlaneZ          = Camera.ClippingRange.y > Projection.NearPlaneZ ? Camera.ClippingRange.y : Projection.NearPlaneZ + 1.f;
 
+    const float MatrixNearPlaneZ = UseReverseDepth ? Projection.FarPlaneZ : Projection.NearPlaneZ;
+    const float MatrixFarPlaneZ  = UseReverseDepth ? Projection.NearPlaneZ : Projection.FarPlaneZ;
+
     if (Camera.Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC)
     {
         Projection.Matrix = float4x4::Ortho(Projection.HorizontalAperture, Projection.VerticalAperture,
-                                            Projection.NearPlaneZ, Projection.FarPlaneZ, NDCMinusOneToOne);
+                                            MatrixNearPlaneZ, MatrixFarPlaneZ, NDCMinusOneToOne);
     }
     else
     {
         const float FovY  = 2.f * std::atan(Projection.VerticalAperture / (2.f * Projection.FocalLength));
-        Projection.Matrix = float4x4::Projection(FovY, Aspect, Projection.NearPlaneZ, Projection.FarPlaneZ, NDCMinusOneToOne);
+        Projection.Matrix = float4x4::Projection(FovY, Aspect, MatrixNearPlaneZ, MatrixFarPlaneZ, NDCMinusOneToOne);
     }
 
     return Projection;

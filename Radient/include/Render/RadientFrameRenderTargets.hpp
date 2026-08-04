@@ -61,6 +61,7 @@ public:
 
     const RadientExtent2D& GetSize() const;
     Uint32                 GetVersion() const;
+    bool                   GetUseReverseDepth() const { return m_UseReverseDepth; }
 
     ITextureView* GetGBufferRTV(GBufferTarget Target) const;
     ITextureView* GetGBufferSRV(GBufferTarget Target) const;
@@ -81,6 +82,7 @@ private:
     ITextureView* m_pOutputColorRTV   = nullptr;
     Uint32        m_CurrentDepth      = 0;
     bool          m_DepthHistoryValid = false;
+    bool          m_UseReverseDepth   = false;
 };
 
 } // namespace Diligent

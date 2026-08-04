@@ -154,6 +154,8 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
 
     if (RequiresOutputSRGBConversion(m_RTVFormat))
         Attribs.Options |= EnvMapRenderer::OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB;
+    if (Targets.GetUseReverseDepth())
+        Attribs.Options |= EnvMapRenderer::OPTION_FLAG_USE_REVERSE_DEPTH;
 
     m_pRenderer->Prepare(pContext, Attribs, ToneMapping);
     m_pRenderer->Render(pContext);

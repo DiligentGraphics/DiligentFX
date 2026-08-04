@@ -93,6 +93,7 @@ TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentGBuffers)
 
     RadientFrameRenderTargets First;
     ASSERT_EQ(First.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
+    EXPECT_EQ(First.GetUseReverseDepth(), pDevice->GetDeviceInfo().NDC.MinZ == 0.f);
     std::array<ITexture*, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> FirstGBuffer{};
     for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
     {
