@@ -31,11 +31,11 @@ void RadientScene_C_UseCameraComponent(void)
     RadientCameraComponent Camera;
 
     Camera.Projection               = RADIENT_CAMERA_PROJECTION_PERSPECTIVE;
-    Camera.HorizontalAperture       = 2.0955f;
-    Camera.VerticalAperture         = 1.52908f;
+    Camera.HorizontalAperture       = 20.955f;
+    Camera.VerticalAperture         = 15.2908f;
     Camera.HorizontalApertureOffset = 0.f;
     Camera.VerticalApertureOffset   = 0.f;
-    Camera.FocalLength              = 5.f;
+    Camera.FocalLength              = 50.f;
     Camera.ClippingRange.x          = 0.1f;
     Camera.ClippingRange.y          = 1000.f;
     Camera.FStop                    = 0.f;

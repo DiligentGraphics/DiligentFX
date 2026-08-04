@@ -129,6 +129,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                                  ViewDesc.ToneMapping,
                                                  ViewDesc.SSAO,
                                                  ViewDesc.SSR,
+                                                 ViewDesc.DepthOfField,
                                                  ViewState.FrameHistory.GetFrameIndex(),
                                                  pPBRRenderer->GetFrameAttribsCB(),
                                                  pPBRRenderer->GetPreintegratedGGX_SRV());

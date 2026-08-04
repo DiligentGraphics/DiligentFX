@@ -53,11 +53,11 @@ static_assert(std::is_trivially_copyable<RadientCustomComponentData>::value, "Ra
 
 constexpr RadientCameraComponent DefaultCamera{};
 static_assert(DefaultCamera.Projection == RADIENT_CAMERA_PROJECTION_PERSPECTIVE, "Unexpected RadientCameraComponent projection default value");
-static_assert(DefaultCamera.HorizontalAperture == 2.0955f, "Unexpected RadientCameraComponent horizontal aperture default value");
-static_assert(DefaultCamera.VerticalAperture == 1.52908f, "Unexpected RadientCameraComponent vertical aperture default value");
+static_assert(DefaultCamera.HorizontalAperture == 20.955f, "Unexpected RadientCameraComponent horizontal aperture default value");
+static_assert(DefaultCamera.VerticalAperture == 15.2908f, "Unexpected RadientCameraComponent vertical aperture default value");
 static_assert(DefaultCamera.HorizontalApertureOffset == 0.f, "Unexpected RadientCameraComponent horizontal aperture offset default value");
 static_assert(DefaultCamera.VerticalApertureOffset == 0.f, "Unexpected RadientCameraComponent vertical aperture offset default value");
-static_assert(DefaultCamera.FocalLength == 5.f, "Unexpected RadientCameraComponent focal length default value");
+static_assert(DefaultCamera.FocalLength == 50.f, "Unexpected RadientCameraComponent focal length default value");
 static_assert(DefaultCamera.ClippingRange.x == 0.1f && DefaultCamera.ClippingRange.y == 1000.f, "Unexpected RadientCameraComponent clipping range default value");
 static_assert(DefaultCamera.FStop == 0.f, "Unexpected RadientCameraComponent f-stop default value");
 static_assert(DefaultCamera.FocusDistance == 0.f, "Unexpected RadientCameraComponent focus distance default value");

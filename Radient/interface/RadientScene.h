@@ -157,11 +157,11 @@ struct RadientCameraComponent
     /// Camera projection mode.
     RADIENT_CAMERA_PROJECTION Projection DEFAULT_INITIALIZER(RADIENT_CAMERA_PROJECTION_PERSPECTIVE);
 
-    /// Horizontal aperture in scene units.
-    Float32 HorizontalAperture DEFAULT_INITIALIZER(2.0955f);
+    /// Horizontal aperture in millimeters.
+    Float32 HorizontalAperture DEFAULT_INITIALIZER(20.955f);
 
-    /// Vertical aperture in scene units.
-    Float32 VerticalAperture DEFAULT_INITIALIZER(1.52908f);
+    /// Vertical aperture in millimeters.
+    Float32 VerticalAperture DEFAULT_INITIALIZER(15.2908f);
 
     /// Horizontal aperture offset in the same units as HorizontalAperture.
     Float32 HorizontalApertureOffset DEFAULT_INITIALIZER(0.f);
@@ -169,8 +169,8 @@ struct RadientCameraComponent
     /// Vertical aperture offset in the same units as VerticalAperture.
     Float32 VerticalApertureOffset DEFAULT_INITIALIZER(0.f);
 
-    /// Perspective focal length in scene units.
-    Float32 FocalLength DEFAULT_INITIALIZER(5.f);
+    /// Perspective focal length in millimeters.
+    Float32 FocalLength DEFAULT_INITIALIZER(50.f);
 
     /// Near and far clipping distances in scene units.
     RadientFloat2 ClippingRange DEFAULT_INITIALIZER({0.1f, 1000.f});

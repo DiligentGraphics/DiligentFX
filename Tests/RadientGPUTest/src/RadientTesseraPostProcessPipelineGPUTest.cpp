@@ -185,7 +185,7 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
     {
         RadientToneMappingDesc ToneMapping;
         ToneMapping.Mode = ToneMappingMode;
-        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, 0, pFrameAttribsCB, nullptr),
+        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, {}, 0, pFrameAttribsCB, nullptr),
                   RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, true), RADIENT_STATUS_OK);
     }
@@ -258,6 +258,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
                                    {},
                                    SSAO,
                                    {},
+                                   {},
                                    FrameIndex,
                                    pFrameAttribsCB,
                                    nullptr),
@@ -270,7 +271,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
     pContext->Flush();
 }
 
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRComposition)
+TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRAndDOFColorChain)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
@@ -322,6 +323,9 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRComposition)
     RadientSSRDesc SSR;
     SSR.Enabled = True;
 
+    RadientDepthOfFieldDesc DepthOfField;
+    DepthOfField.Enabled = True;
+
     RadientTesseraPostProcessPipeline Pipeline;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
@@ -332,6 +336,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRComposition)
                                    {},
                                    {},
                                    SSR,
+                                   DepthOfField,
                                    FrameIndex,
                                    pFrameAttribsCB,
                                    pPreintegratedGGXSRV),
