@@ -163,7 +163,7 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
 
     RadientFrameRenderTargets Targets;
     ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-    Targets.ClearGBuffer(pContext);
+    Targets.ClearGBuffer(pContext, {});
 
     RefCntAutoPtr<IBuffer> pFrameAttribsCB;
     CreateUniformBuffer(pDevice,
@@ -258,7 +258,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
     PostProcessInfo.pFrameAttribsCB = pFrameAttribsCB;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
-        Targets.ClearGBuffer(pContext);
+        Targets.ClearGBuffer(pContext, {});
         PostProcessInfo.FrameIndex = FrameIndex;
         ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
@@ -333,7 +333,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRTAADOFAndBloomColorCha
     PostProcessInfo.pPreintegratedGGXSRV = pPreintegratedGGXSRV;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
-        Targets.ClearGBuffer(pContext);
+        Targets.ClearGBuffer(pContext, {});
         PostProcessInfo.FrameIndex = FrameIndex;
         ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
         if (FrameIndex > 0)

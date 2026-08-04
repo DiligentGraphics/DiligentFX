@@ -165,7 +165,7 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
     return RADIENT_STATUS_OK;
 }
 
-void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext) const
+void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext, const RadientFloat4& ClearColor) const
 {
     if (pContext == nullptr)
         return;
@@ -189,7 +189,7 @@ void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext) const
 
     // Scene-color alpha accumulates opacity and is used to attenuate
     // screen-space effects over the background.
-    constexpr float SceneColorClear[] = {0.f, 0.f, 0.f, 0.f};
+    const float     SceneColorClear[] = {ClearColor.x, ClearColor.y, ClearColor.z, ClearColor.w};
     constexpr float GBufferClear[]    = {0.f, 0.f, 0.f, 0.f};
     for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
     {

@@ -508,6 +508,10 @@ struct RadientViewDesc
     /// Render target.
     IRadientRenderTarget* pRenderTarget DEFAULT_INITIALIZER(nullptr);
 
+    /// Linear RGBA color used to clear the view. Alpha controls background
+    /// opacity when composing screen-space effects.
+    RadientFloat4 ClearColor DEFAULT_INITIALIZER({0.f, 0.f, 0.f, 0.f});
+
     /// Debug visualization mode.
     RADIENT_DEBUG_VISUALIZATION DebugVisualization DEFAULT_INITIALIZER(RADIENT_DEBUG_VISUALIZATION_NONE);
 
@@ -568,6 +572,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     VIRTUAL RADIENT_STATUS METHOD(SetRenderTarget)(THIS_
                                                    IRadientRenderTarget* pRenderTarget) PURE;
 
+    /// Sets the linear RGBA clear color.
+    VIRTUAL RADIENT_STATUS METHOD(SetClearColor)(THIS_
+                                                 const RadientFloat4 REF ClearColor) PURE;
+
     /// Sets the debug visualization mode.
     VIRTUAL RADIENT_STATUS METHOD(SetDebugVisualization)(THIS_
                                                          RADIENT_DEBUG_VISUALIZATION DebugVisualization) PURE;
@@ -614,6 +622,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetScene(This, ...)          CALL_IFACE_METHOD(RadientView, SetScene,        This, __VA_ARGS__)
 #    define IRadientView_SetCamera(This, ...)         CALL_IFACE_METHOD(RadientView, SetCamera,       This, __VA_ARGS__)
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
+#    define IRadientView_SetClearColor(This, ...)     CALL_IFACE_METHOD(RadientView, SetClearColor,   This, __VA_ARGS__)
 #    define IRadientView_SetDebugVisualization(This, ...) CALL_IFACE_METHOD(RadientView, SetDebugVisualization, This, __VA_ARGS__)
 #    define IRadientView_SetEnvironment(This, ...)    CALL_IFACE_METHOD(RadientView, SetEnvironment,  This, __VA_ARGS__)
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)

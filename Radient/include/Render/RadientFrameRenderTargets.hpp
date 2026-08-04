@@ -56,7 +56,7 @@ public:
     static const Char*    GetGBufferName(GBufferTarget Target) noexcept;
 
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target);
-    void           ClearGBuffer(IDeviceContext* pContext) const;
+    void           ClearGBuffer(IDeviceContext* pContext, const RadientFloat4& ClearColor) const;
     void           CommitFrame() noexcept;
 
     const RadientExtent2D& GetSize() const;

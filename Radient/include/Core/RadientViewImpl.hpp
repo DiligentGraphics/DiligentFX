@@ -59,6 +59,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetRenderTarget(IRadientRenderTarget* pRenderTarget) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetClearColor(const RadientFloat4& ClearColor) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION DebugVisualization) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEnvironment(const RadientEnvironmentDesc& Environment) override final;

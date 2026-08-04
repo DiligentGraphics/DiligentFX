@@ -884,6 +884,14 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetRenderTarget(nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().pRenderTarget, nullptr);
 
+    const RadientFloat4 DefaultClearColor{};
+    EXPECT_EQ(pView->GetDesc().ClearColor, DefaultClearColor);
+
+    const RadientFloat4 ClearColor{0.1f, 0.2f, 0.3f, 0.4f};
+    EXPECT_EQ(pView->SetClearColor(ClearColor), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().ClearColor, ClearColor);
+    EXPECT_EQ(pView->SetClearColor(ClearColor), RADIENT_STATUS_NO_CHANGE);
+
     EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_NONE);
     EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_BASE_COLOR), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_BASE_COLOR);
@@ -1099,6 +1107,51 @@ TEST(RadientRendererTest, RejectsInvalidDebugVisualization)
 
     EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_COUNT), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_NONE);
+}
+
+TEST(RadientRendererTest, RejectsInvalidClearColor)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    const RadientFloat4 StoredClearColor = pView->GetDesc().ClearColor;
+    const auto          ExpectInvalid    = [&](const RadientFloat4& ClearColor) {
+        EXPECT_EQ(pView->SetClearColor(ClearColor), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pView->GetDesc().ClearColor, StoredClearColor);
+
+        RadientViewDesc InvalidViewDesc{};
+        InvalidViewDesc.ClearColor = ClearColor;
+
+        RefCntAutoPtr<IRadientView> pInvalidView;
+        EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pInvalidView), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pInvalidView, nullptr);
+    };
+
+    const Float32 NaN      = std::numeric_limits<Float32>::quiet_NaN();
+    const Float32 Infinity = std::numeric_limits<Float32>::infinity();
+
+    RadientFloat4 Invalid = StoredClearColor;
+    Invalid.x             = NaN;
+    ExpectInvalid(Invalid);
+
+    Invalid   = StoredClearColor;
+    Invalid.y = Infinity;
+    ExpectInvalid(Invalid);
+
+    Invalid   = StoredClearColor;
+    Invalid.z = -Infinity;
+    ExpectInvalid(Invalid);
+
+    Invalid   = StoredClearColor;
+    Invalid.w = NaN;
+    ExpectInvalid(Invalid);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)

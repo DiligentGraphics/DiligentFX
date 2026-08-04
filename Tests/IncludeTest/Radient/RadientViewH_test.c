@@ -29,6 +29,7 @@
 void RadientViewHeader_C_TestMacros(IRadientView* pView)
 {
     const RadientViewDesc*          pDesc                = IRadientView_GetDesc(pView);
+    RadientFloat4                   ClearColor           = {0};
     RadientEnvironmentDesc          Environment          = {0};
     RadientToneMappingDesc          ToneMapping          = {0};
     RadientBloomDesc                Bloom                = {0};
@@ -41,6 +42,7 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     Status = IRadientView_SetScene(pView, 0);
     Status = IRadientView_SetCamera(pView, InvalidRadientEntityID);
     Status = IRadientView_SetRenderTarget(pView, 0);
+    Status = IRadientView_SetClearColor(pView, &ClearColor);
     Status = IRadientView_SetDebugVisualization(pView, RADIENT_DEBUG_VISUALIZATION_BASE_COLOR);
     Status = IRadientView_SetEnvironment(pView, &Environment);
     Status = IRadientView_SetToneMapping(pView, &ToneMapping);

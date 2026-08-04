@@ -47,6 +47,11 @@ bool IsValidDebugVisualization(RADIENT_DEBUG_VISUALIZATION DebugVisualization)
     return DebugVisualization < RADIENT_DEBUG_VISUALIZATION_COUNT;
 }
 
+bool IsValidClearColor(const RadientFloat4& ClearColor)
+{
+    return RadientMath::IsFinite(ClearColor);
+}
+
 bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
 {
     return (Environment.pEnvironmentMap == nullptr ||
@@ -147,7 +152,8 @@ RadientViewImpl::~RadientViewImpl()
 
 RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
 {
-    if (!IsValidDebugVisualization(Desc.DebugVisualization) ||
+    if (!IsValidClearColor(Desc.ClearColor) ||
+        !IsValidDebugVisualization(Desc.DebugVisualization) ||
         !IsValidEnvironment(Desc.Environment) ||
         !IsValidToneMapping(Desc.ToneMapping) ||
         !IsValidBloom(Desc.Bloom) ||
@@ -191,6 +197,18 @@ RADIENT_STATUS RadientViewImpl::SetRenderTarget(IRadientRenderTarget* pRenderTar
 
     m_pRenderTarget      = pRenderTarget;
     m_Desc.pRenderTarget = m_pRenderTarget;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetClearColor(const RadientFloat4& ClearColor)
+{
+    if (!IsValidClearColor(ClearColor))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.ClearColor == ClearColor)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.ClearColor = ClearColor;
     return RADIENT_STATUS_OK;
 }
 
