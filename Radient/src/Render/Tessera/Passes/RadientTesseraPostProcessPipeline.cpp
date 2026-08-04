@@ -97,11 +97,14 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
     if (OutputFormat == TEX_FORMAT_UNKNOWN)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const bool SSAOEnabled                 = SSAO.Enabled != False;
-    const bool SSREnabled                  = SSR.Enabled != False;
-    const bool TemporalAntiAliasingEnabled = TemporalAntiAliasingDesc.Enabled != False;
-    const bool DepthOfFieldEnabled         = DepthOfFieldDesc.Enabled != False;
-    const bool BloomEnabled                = BloomDesc.Enabled != False;
+    // Debug visualizations must reach the output without image-altering effects.
+    // The final color pass is still used for the required output color conversion.
+    const bool PostProcessingEnabled       = Info.View.DebugVisualization == RADIENT_DEBUG_VISUALIZATION_NONE;
+    const bool SSAOEnabled                 = PostProcessingEnabled && SSAO.Enabled != False;
+    const bool SSREnabled                  = PostProcessingEnabled && SSR.Enabled != False;
+    const bool TemporalAntiAliasingEnabled = PostProcessingEnabled && TemporalAntiAliasingDesc.Enabled != False;
+    const bool DepthOfFieldEnabled         = PostProcessingEnabled && DepthOfFieldDesc.Enabled != False;
+    const bool BloomEnabled                = PostProcessingEnabled && BloomDesc.Enabled != False;
     const bool ScreenEffectsEnabled        = SSAOEnabled || SSREnabled;
     const bool ColorEffectsEnabled         = TemporalAntiAliasingEnabled || DepthOfFieldEnabled || BloomEnabled;
     const bool PostFXEnabled               = ScreenEffectsEnabled || ColorEffectsEnabled;
@@ -217,8 +220,11 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         }
     }
 
-    const HLSL::ToneMappingAttribs ToneMappingAttribs  = RadientPostFX::MakeToneMappingAttribs(ToneMapping);
-    const bool                     ConvertOutputToSRGB = RequiresOutputSRGBConversion(OutputFormat);
+    const HLSL::ToneMappingAttribs ToneMappingAttribs = RadientPostFX::MakeToneMappingAttribs(ToneMapping);
+    const Int32 ToneMappingMode = PostProcessingEnabled ?
+        ToneMappingAttribs.iToneMappingMode :
+        TONE_MAPPING_MODE_NONE;
+    const bool ConvertOutputToSRGB = RequiresOutputSRGBConversion(OutputFormat);
     if (SSAOEnabled &&
         (!m_SSAOEnabled || m_FinalPass.TargetVersion != Targets.GetVersion() || m_SSAO != SSAO))
     {
@@ -232,7 +238,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         m_ResetTemporalAntiAliasing = true;
     }
 
-    const bool ToneMappingEnabled = ToneMappingAttribs.iToneMappingMode > TONE_MAPPING_MODE_NONE;
+    const bool ToneMappingEnabled = ToneMappingMode > TONE_MAPPING_MODE_NONE;
     if (ToneMappingEnabled)
     {
         if (m_pToneMappingAttribsCB == nullptr)
@@ -318,7 +324,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
 
     ColorPassPrepareInfo FinalPassInfo{Targets};
     FinalPassInfo.Pipeline.OutputFormat         = OutputFormat;
-    FinalPassInfo.Pipeline.ToneMappingMode      = ToneMappingAttribs.iToneMappingMode;
+    FinalPassInfo.Pipeline.ToneMappingMode      = ToneMappingMode;
     FinalPassInfo.Pipeline.ConvertOutputToSRGB  = ConvertOutputToSRGB;
     FinalPassInfo.Pipeline.SSAOEnabled          = SSAOEnabled && !m_CompositionRequired;
     FinalPassInfo.Pipeline.SSREnabled           = SSREnabled && !m_CompositionRequired;

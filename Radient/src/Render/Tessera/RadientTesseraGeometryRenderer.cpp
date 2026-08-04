@@ -281,6 +281,7 @@ void WriteSceneLights(PBR_Renderer&                 Renderer,
                       const RadientLightLists&      LightList,
                       const RadientEnvironmentDesc& Environment,
                       ITextureView*                 pPrefilteredEnvMapSRV,
+                      PBR_Renderer::DebugViewType   DebugView,
                       HLSL::PBRFrameAttribs&        FrameAttribs)
 {
     HLSL::PBRLightAttribs* Lights = reinterpret_cast<HLSL::PBRLightAttribs*>(&FrameAttribs + 1);
@@ -330,7 +331,7 @@ void WriteSceneLights(PBR_Renderer&                 Renderer,
     RendererAttribs.PointSize         = 1.f;
     RendererAttribs.MipBias           = 0.f;
     RendererAttribs.LightCount        = static_cast<int>(LightCount);
-    RendererAttribs.DebugView         = 0;
+    RendererAttribs.DebugView         = static_cast<int>(DebugView);
 }
 
 void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
@@ -545,6 +546,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
                          LightList,
                          FrameAttribs.Environment,
                          FrameAttribs.pPrefilteredEnvMapSRV,
+                         FrameAttribs.DebugView,
                          *pFrameAttribs);
     }
 

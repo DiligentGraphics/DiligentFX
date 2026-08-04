@@ -115,7 +115,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                    Context.pDevice,
                                    Context.pContext,
                                    m_DrawableCache,
-                                   ViewState.FrameTargets);
+                                   ViewState.FrameTargets,
+                                   RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization));
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -168,6 +169,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         ViewDesc.Camera,
         pView->GetPrefilteredEnvMapSRV(),
         pViewState->PostProcessPipeline.GetCameraJitter(),
+        RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization),
     };
 
     const RADIENT_STATUS Status = m_GeometryRenderer.BeginFrame(

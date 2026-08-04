@@ -101,7 +101,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
                                                    IRenderDevice*                     pDevice,
                                                    IDeviceContext*                    pContext,
                                                    const RadientTesseraDrawableCache& DrawableCache,
-                                                   const RadientFrameRenderTargets&   Targets)
+                                                   const RadientFrameRenderTargets&   Targets,
+                                                   PBR_Renderer::DebugViewType        DebugView)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -122,6 +123,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
         m_NativeMultiDrawSupported = pDevice->GetDeviceInfo().Features.NativeMultiDraw;
 
     bool RebuildDrawablePassData = false;
+
+    if (m_DebugView != DebugView)
+    {
+        m_DebugView             = DebugView;
+        RebuildDrawablePassData = true;
+    }
 
     std::array<TEXTURE_FORMAT, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> RTVFormats{};
     for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
@@ -177,7 +184,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets, m_DebugView);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -631,7 +638,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         PSOFlags,
         ToPBRAlphaMode(AlphaMode),
         Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
-        PBR_Renderer::DebugViewType::None,
+        m_DebugView,
         PBR_Renderer::LoadingAnimationMode::None,
         0,
         &ShaderTextureIds,
