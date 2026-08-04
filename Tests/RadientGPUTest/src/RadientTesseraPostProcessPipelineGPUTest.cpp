@@ -180,13 +180,16 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
         *FrameAttribs = {};
     }
 
-    RadientTesseraPostProcessPipeline Pipeline;
+    RadientViewDesc                                ViewDesc;
+    RadientTesseraPostProcessPipeline              Pipeline;
+    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
+    PostProcessInfo.pDevice         = pDevice;
+    PostProcessInfo.pContext        = pContext;
+    PostProcessInfo.pFrameAttribsCB = pFrameAttribsCB;
     for (RADIENT_TONE_MAPPING_MODE ToneMappingMode : ToneMappingModes)
     {
-        RadientToneMappingDesc ToneMapping;
-        ToneMapping.Mode = ToneMappingMode;
-        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, {}, {}, 0, pFrameAttribsCB, nullptr),
-                  RADIENT_STATUS_OK);
+        ViewDesc.ToneMapping.Mode = ToneMappingMode;
+        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, true), RADIENT_STATUS_OK);
     }
 
@@ -245,25 +248,19 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
         FrameAttribs->PrevCamera          = FrameAttribs->Camera;
     }
 
-    RadientSSAODesc SSAO;
-    SSAO.Enabled = True;
+    RadientViewDesc ViewDesc;
+    ViewDesc.SSAO.Enabled = True;
 
-    RadientTesseraPostProcessPipeline Pipeline;
+    RadientTesseraPostProcessPipeline              Pipeline;
+    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
+    PostProcessInfo.pDevice         = pDevice;
+    PostProcessInfo.pContext        = pContext;
+    PostProcessInfo.pFrameAttribsCB = pFrameAttribsCB;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
         Targets.ClearGBuffer(pContext);
-        ASSERT_EQ(Pipeline.Prepare(pDevice,
-                                   pContext,
-                                   Targets,
-                                   {},
-                                   {},
-                                   SSAO,
-                                   {},
-                                   {},
-                                   FrameIndex,
-                                   pFrameAttribsCB,
-                                   nullptr),
-                  RADIENT_STATUS_OK);
+        PostProcessInfo.FrameIndex = FrameIndex;
+        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
         Targets.CommitFrame();
     }
@@ -322,31 +319,22 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRDOFAndBloomColorChain)
         pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     ASSERT_NE(pPreintegratedGGXSRV, nullptr);
 
-    RadientSSRDesc SSR;
-    SSR.Enabled = True;
+    RadientViewDesc ViewDesc;
+    ViewDesc.Bloom.Enabled        = True;
+    ViewDesc.SSR.Enabled          = True;
+    ViewDesc.DepthOfField.Enabled = True;
 
-    RadientDepthOfFieldDesc DepthOfField;
-    DepthOfField.Enabled = True;
-
-    RadientBloomDesc Bloom;
-    Bloom.Enabled = True;
-
-    RadientTesseraPostProcessPipeline Pipeline;
+    RadientTesseraPostProcessPipeline              Pipeline;
+    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
+    PostProcessInfo.pDevice              = pDevice;
+    PostProcessInfo.pContext             = pContext;
+    PostProcessInfo.pFrameAttribsCB      = pFrameAttribsCB;
+    PostProcessInfo.pPreintegratedGGXSRV = pPreintegratedGGXSRV;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
         Targets.ClearGBuffer(pContext);
-        ASSERT_EQ(Pipeline.Prepare(pDevice,
-                                   pContext,
-                                   Targets,
-                                   {},
-                                   Bloom,
-                                   {},
-                                   SSR,
-                                   DepthOfField,
-                                   FrameIndex,
-                                   pFrameAttribsCB,
-                                   pPreintegratedGGXSRV),
-                  RADIENT_STATUS_OK);
+        PostProcessInfo.FrameIndex = FrameIndex;
+        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
         Targets.CommitFrame();
     }

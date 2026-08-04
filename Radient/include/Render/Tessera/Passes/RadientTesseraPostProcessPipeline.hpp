@@ -48,17 +48,24 @@ namespace Diligent
 class RadientTesseraPostProcessPipeline
 {
 public:
-    RADIENT_STATUS Prepare(IRenderDevice*                   pDevice,
-                           IDeviceContext*                  pContext,
-                           const RadientFrameRenderTargets& Targets,
-                           const RadientToneMappingDesc&    ToneMapping,
-                           const RadientBloomDesc&          Bloom,
-                           const RadientSSAODesc&           SSAO,
-                           const RadientSSRDesc&            SSR,
-                           const RadientDepthOfFieldDesc&   DepthOfField,
-                           Uint32                           FrameIndex,
-                           IBuffer*                         pFrameAttribsCB,
-                           ITextureView*                    pPreintegratedGGXSRV);
+    struct PrepareInfo
+    {
+        PrepareInfo(const RadientFrameRenderTargets& RenderTargets,
+                    const RadientViewDesc&           ViewDesc) :
+            Targets{RenderTargets},
+            View{ViewDesc}
+        {}
+
+        const RadientFrameRenderTargets& Targets;
+        const RadientViewDesc&           View;
+        IRenderDevice*                   pDevice              = nullptr;
+        IDeviceContext*                  pContext             = nullptr;
+        Uint32                           FrameIndex           = 0;
+        IBuffer*                         pFrameAttribsCB      = nullptr;
+        ITextureView*                    pPreintegratedGGXSRV = nullptr;
+    };
+
+    RADIENT_STATUS Prepare(const PrepareInfo& Info);
 
     RADIENT_STATUS Execute(IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,

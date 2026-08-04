@@ -70,18 +70,20 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
 
 } // namespace
 
-RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*                   pDevice,
-                                                          IDeviceContext*                  pContext,
-                                                          const RadientFrameRenderTargets& Targets,
-                                                          const RadientToneMappingDesc&    ToneMapping,
-                                                          const RadientBloomDesc&          BloomDesc,
-                                                          const RadientSSAODesc&           SSAO,
-                                                          const RadientSSRDesc&            SSR,
-                                                          const RadientDepthOfFieldDesc&   DepthOfFieldDesc,
-                                                          Uint32                           FrameIndex,
-                                                          IBuffer*                         pFrameAttribsCB,
-                                                          ITextureView*                    pPreintegratedGGXSRV)
+RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Info)
 {
+    IRenderDevice* const                   pDevice                 = Info.pDevice;
+    IDeviceContext* const                  pContext                = Info.pContext;
+    const RadientFrameRenderTargets&       Targets                 = Info.Targets;
+    const RadientToneMappingDesc&          ToneMapping             = Info.View.ToneMapping;
+    const RadientBloomDesc&                BloomDesc               = Info.View.Bloom;
+    const RadientSSAODesc&                 SSAO                    = Info.View.SSAO;
+    const RadientSSRDesc&                  SSR                     = Info.View.SSR;
+    const RadientDepthOfFieldDesc&         DepthOfFieldDesc        = Info.View.DepthOfField;
+    const Uint32                           FrameIndex              = Info.FrameIndex;
+    IBuffer* const                         pFrameAttribsCB         = Info.pFrameAttribsCB;
+    ITextureView* const                    pPreintegratedGGXSRV    = Info.pPreintegratedGGXSRV;
+
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 

@@ -123,17 +123,13 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (RADIENT_FAILED(Status))
         return Status;
 
-    return ViewState.PostProcessPipeline.Prepare(Context.pDevice,
-                                                 Context.pContext,
-                                                 ViewState.FrameTargets,
-                                                 ViewDesc.ToneMapping,
-                                                 ViewDesc.Bloom,
-                                                 ViewDesc.SSAO,
-                                                 ViewDesc.SSR,
-                                                 ViewDesc.DepthOfField,
-                                                 ViewState.FrameHistory.GetFrameIndex(),
-                                                 pPBRRenderer->GetFrameAttribsCB(),
-                                                 pPBRRenderer->GetPreintegratedGGX_SRV());
+    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{ViewState.FrameTargets, ViewDesc};
+    PostProcessInfo.pDevice               = Context.pDevice;
+    PostProcessInfo.pContext              = Context.pContext;
+    PostProcessInfo.FrameIndex            = ViewState.FrameHistory.GetFrameIndex();
+    PostProcessInfo.pFrameAttribsCB       = pPBRRenderer->GetFrameAttribsCB();
+    PostProcessInfo.pPreintegratedGGXSRV  = pPBRRenderer->GetPreintegratedGGX_SRV();
+    return ViewState.PostProcessPipeline.Prepare(PostProcessInfo);
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderContext& Context)
