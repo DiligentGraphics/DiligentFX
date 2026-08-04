@@ -127,6 +127,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                                  Context.pContext,
                                                  ViewState.FrameTargets,
                                                  ViewDesc.ToneMapping,
+                                                 ViewDesc.Bloom,
                                                  ViewDesc.SSAO,
                                                  ViewDesc.SSR,
                                                  ViewDesc.DepthOfField,

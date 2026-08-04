@@ -29,6 +29,7 @@
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "RadientView.h"
 
+#include "PostProcess/Bloom/interface/Bloom.hpp"
 #include "PostProcess/Common/interface/PostFXContext.hpp"
 #include "PostProcess/DepthOfField/interface/DepthOfField.hpp"
 #include "PostProcess/ScreenSpaceAmbientOcclusion/interface/ScreenSpaceAmbientOcclusion.hpp"
@@ -51,6 +52,7 @@ public:
                            IDeviceContext*                  pContext,
                            const RadientFrameRenderTargets& Targets,
                            const RadientToneMappingDesc&    ToneMapping,
+                           const RadientBloomDesc&          Bloom,
                            const RadientSSAODesc&           SSAO,
                            const RadientSSRDesc&            SSR,
                            const RadientDepthOfFieldDesc&   DepthOfField,
@@ -141,6 +143,8 @@ private:
     std::unique_ptr<ScreenSpaceAmbientOcclusion> m_pSSAO;
     std::unique_ptr<ScreenSpaceReflection>       m_pSSR;
     std::unique_ptr<DepthOfField>                m_pDepthOfField;
+    std::unique_ptr<Bloom>                       m_pBloom;
+    RadientBloomDesc                             m_Bloom;
     RadientSSAODesc                              m_SSAO;
     RadientSSRDesc                               m_SSR;
     RadientDepthOfFieldDesc                      m_DepthOfField;
@@ -148,6 +152,7 @@ private:
     bool   m_SSAOEnabled          = false;
     bool   m_SSREnabled           = false;
     bool   m_DepthOfFieldEnabled  = false;
+    bool   m_BloomEnabled         = false;
     bool   m_CompositionRequired  = false;
     bool   m_ResetSSAO            = true;
     Uint32 m_ComposedColorVersion = ~Uint32{0};

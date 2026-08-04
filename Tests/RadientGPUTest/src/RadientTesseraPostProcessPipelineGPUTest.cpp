@@ -185,7 +185,7 @@ void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE>
     {
         RadientToneMappingDesc ToneMapping;
         ToneMapping.Mode = ToneMappingMode;
-        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, {}, 0, pFrameAttribsCB, nullptr),
+        ASSERT_EQ(Pipeline.Prepare(pDevice, pContext, Targets, ToneMapping, {}, {}, {}, {}, 0, pFrameAttribsCB, nullptr),
                   RADIENT_STATUS_OK);
         EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, true), RADIENT_STATUS_OK);
     }
@@ -256,6 +256,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
                                    pContext,
                                    Targets,
                                    {},
+                                   {},
                                    SSAO,
                                    {},
                                    {},
@@ -271,8 +272,9 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
     pContext->Flush();
 }
 
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRAndDOFColorChain)
+TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRDOFAndBloomColorChain)
 {
+    // Exercise SSR composition followed by DOF and Bloom before the final output pass.
     GPUTestingEnvironment::ScopedReset AutoReset;
 
     GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
@@ -326,6 +328,9 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRAndDOFColorChain)
     RadientDepthOfFieldDesc DepthOfField;
     DepthOfField.Enabled = True;
 
+    RadientBloomDesc Bloom;
+    Bloom.Enabled = True;
+
     RadientTesseraPostProcessPipeline Pipeline;
     for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
     {
@@ -334,6 +339,7 @@ TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRAndDOFColorChain)
                                    pContext,
                                    Targets,
                                    {},
+                                   Bloom,
                                    {},
                                    SSR,
                                    DepthOfField,

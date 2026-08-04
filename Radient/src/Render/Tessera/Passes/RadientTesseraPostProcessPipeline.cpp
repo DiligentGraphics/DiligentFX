@@ -74,6 +74,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
                                                           IDeviceContext*                  pContext,
                                                           const RadientFrameRenderTargets& Targets,
                                                           const RadientToneMappingDesc&    ToneMapping,
+                                                          const RadientBloomDesc&          BloomDesc,
                                                           const RadientSSAODesc&           SSAO,
                                                           const RadientSSRDesc&            SSR,
                                                           const RadientDepthOfFieldDesc&   DepthOfFieldDesc,
@@ -96,12 +97,15 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
     const bool SSAOEnabled          = SSAO.Enabled != False;
     const bool SSREnabled           = SSR.Enabled != False;
     const bool DepthOfFieldEnabled  = DepthOfFieldDesc.Enabled != False;
+    const bool BloomEnabled         = BloomDesc.Enabled != False;
     const bool ScreenEffectsEnabled = SSAOEnabled || SSREnabled;
-    const bool PostFXEnabled        = ScreenEffectsEnabled || DepthOfFieldEnabled;
+    const bool ColorEffectsEnabled  = DepthOfFieldEnabled || BloomEnabled;
+    const bool PostFXEnabled        = ScreenEffectsEnabled || ColorEffectsEnabled;
 
     ITextureView* pSSAOSRV         = nullptr;
     ITextureView* pSSRSRV          = nullptr;
     ITextureView* pDepthOfFieldSRV = nullptr;
+    ITextureView* pBloomSRV        = nullptr;
     if (PostFXEnabled)
     {
         if (Targets.GetDepthSRV() == nullptr ||
@@ -178,6 +182,20 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
             if (pDepthOfFieldSRV == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
         }
+
+        if (BloomEnabled)
+        {
+            if (m_pBloom == nullptr)
+                m_pBloom = std::make_unique<Bloom>(pDevice, Bloom::CreateInfo{});
+
+            m_pBloom->PrepareResources(pDevice,
+                                       pContext,
+                                       m_pPostFXContext.get(),
+                                       Bloom::FEATURE_FLAG_NONE);
+            pBloomSRV = m_pBloom->GetBloomTextureSRV();
+            if (pBloomSRV == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+        }
     }
 
     const HLSL::ToneMappingAttribs ToneMappingAttribs  = RadientPostFX::MakeToneMappingAttribs(ToneMapping);
@@ -215,7 +233,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
         Attribs->AverageLogLum = 0.3f;
     }
 
-    m_CompositionRequired          = ScreenEffectsEnabled && DepthOfFieldEnabled;
+    m_CompositionRequired          = ScreenEffectsEnabled && ColorEffectsEnabled;
     ITextureView* pCurrentColorSRV = pSceneColorSRV;
     if (m_CompositionRequired)
     {
@@ -267,6 +285,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
 
     if (DepthOfFieldEnabled)
         pCurrentColorSRV = pDepthOfFieldSRV;
+    if (BloomEnabled)
+        pCurrentColorSRV = pBloomSRV;
 
     ColorPassPrepareInfo FinalPassInfo{Targets};
     FinalPassInfo.Pipeline.OutputFormat         = OutputFormat;
@@ -286,12 +306,14 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(IRenderDevice*        
 
     m_pFrameAttribsCB      = pFrameAttribsCB;
     m_pPreintegratedGGXSRV = pPreintegratedGGXSRV;
+    m_Bloom                = BloomDesc;
     m_SSAO                 = SSAO;
     m_SSR                  = SSR;
     m_DepthOfField         = DepthOfFieldDesc;
     m_SSAOEnabled          = SSAOEnabled;
     m_SSREnabled           = SSREnabled;
     m_DepthOfFieldEnabled  = DepthOfFieldEnabled;
+    m_BloomEnabled         = BloomEnabled;
     return RADIENT_STATUS_OK;
 }
 
@@ -303,12 +325,13 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    if (m_SSAOEnabled || m_SSREnabled || m_DepthOfFieldEnabled)
+    if (m_SSAOEnabled || m_SSREnabled || m_DepthOfFieldEnabled || m_BloomEnabled)
     {
         if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pFrameAttribsCB == nullptr ||
             (m_SSAOEnabled && m_pSSAO == nullptr) ||
             (m_SSREnabled && m_pSSR == nullptr) ||
-            (m_DepthOfFieldEnabled && m_pDepthOfField == nullptr))
+            (m_DepthOfFieldEnabled && m_pDepthOfField == nullptr) ||
+            (m_BloomEnabled && m_pBloom == nullptr))
         {
             return RADIENT_STATUS_INVALID_OPERATION;
         }
@@ -403,9 +426,32 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             m_pDepthOfField->Execute(DepthOfFieldRenderAttribs);
 
             pCurrentColorSRV = m_pDepthOfField->GetDepthOfFieldTextureSRV();
-            if (pCurrentColorSRV == nullptr || pCurrentColorSRV != m_FinalPass.pBoundColorSRV)
+            if (pCurrentColorSRV == nullptr)
                 return RADIENT_STATUS_OUT_OF_DATE;
         }
+
+        if (m_BloomEnabled)
+        {
+            if (pCurrentColorSRV == nullptr)
+                return RADIENT_STATUS_OUT_OF_DATE;
+
+            HLSL::BloomAttribs BloomAttribs = RadientPostFX::MakeBloomAttribs(m_Bloom);
+
+            Bloom::RenderAttributes BloomRenderAttribs;
+            BloomRenderAttribs.pDevice         = pDevice;
+            BloomRenderAttribs.pDeviceContext  = pContext;
+            BloomRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
+            BloomRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
+            BloomRenderAttribs.pBloomAttribs   = &BloomAttribs;
+            m_pBloom->Execute(BloomRenderAttribs);
+
+            pCurrentColorSRV = m_pBloom->GetBloomTextureSRV();
+            if (pCurrentColorSRV == nullptr)
+                return RADIENT_STATUS_OUT_OF_DATE;
+        }
+
+        if (pCurrentColorSRV != m_FinalPass.pBoundColorSRV)
+            return RADIENT_STATUS_OUT_OF_DATE;
     }
 
     return ExecuteColorPass(pContext, m_FinalPass, Targets.GetOutputColorRTV());
