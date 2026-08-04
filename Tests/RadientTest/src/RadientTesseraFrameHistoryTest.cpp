@@ -80,16 +80,20 @@ TEST(RadientTesseraFrameHistoryTest, KeepsCameraHistoryPerSceneCameraAndViewport
 
     EXPECT_EQ(History.GetPreviousCamera(Camera), nullptr);
     History.SetCurrentCamera(Camera);
+    EXPECT_FALSE(History.HasCameraHistory());
     History.CommitFrame();
 
     RadientTesseraCameraState Current = Camera;
     Current.World                     = MakeTranslation(2.f);
     ASSERT_NE(History.GetPreviousCamera(Current), nullptr);
     EXPECT_EQ(History.GetPreviousCamera(Current)->World, Camera.World);
+    History.SetCurrentCamera(Current);
+    EXPECT_TRUE(History.HasCameraHistory());
 
     Current.ViewportSize = {1920, 1080};
     EXPECT_EQ(History.GetPreviousCamera(Current), nullptr);
     History.SetCurrentCamera(Current);
+    EXPECT_FALSE(History.HasCameraHistory());
     const RadientMatrix4x4 ResizedTransform = MakeTranslation(8.f);
     EXPECT_EQ(History.UpdateDrawableTransform(3, 1, ResizedTransform), ResizedTransform);
 

@@ -29,7 +29,12 @@
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "RadientView.h"
 
+#include "PostProcess/Common/interface/PostFXContext.hpp"
+#include "PostProcess/ScreenSpaceAmbientOcclusion/interface/ScreenSpaceAmbientOcclusion.hpp"
+
 #include "RefCntAutoPtr.hpp"
+
+#include <memory>
 
 namespace Diligent
 {
@@ -43,14 +48,20 @@ public:
                            IDeviceContext*                  pContext,
                            const RadientFrameRenderTargets& Targets,
                            const RadientToneMappingDesc&    ToneMapping,
+                           const RadientSSAODesc&           SSAO,
+                           Uint32                           FrameIndex,
                            IBuffer*                         pFrameAttribsCB);
-    RADIENT_STATUS Execute(IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Execute(IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientFrameRenderTargets& Targets,
+                           bool                             ResetTemporalHistory);
 
 private:
     RADIENT_STATUS CreatePipelineState(IRenderDevice* pDevice,
                                        TEXTURE_FORMAT OutputFormat,
                                        Int32          ToneMappingMode,
                                        bool           ConvertOutputToSRGB,
+                                       bool           SSAOEnabled,
                                        IBuffer*       pFrameAttribsCB);
 
 private:
@@ -59,10 +70,17 @@ private:
     RefCntAutoPtr<IPipelineState>         m_pPSO;
     RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
+    std::unique_ptr<PostFXContext>               m_pPostFXContext;
+    std::unique_ptr<ScreenSpaceAmbientOcclusion> m_pSSAO;
+    RadientSSAODesc                              m_SSAO;
+
     TEXTURE_FORMAT m_OutputFormat        = TEX_FORMAT_UNKNOWN;
     Int32          m_ToneMappingMode     = -1;
     bool           m_ConvertOutputToSRGB = false;
+    bool           m_SSAOEnabled         = false;
+    bool           m_ResetSSAO           = true;
     Uint32         m_TargetVersion       = ~Uint32{0};
+    ITextureView*  m_pBoundSSAOSRV       = nullptr;
 };
 
 } // namespace Diligent

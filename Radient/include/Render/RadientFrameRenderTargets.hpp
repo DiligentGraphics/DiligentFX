@@ -34,8 +34,8 @@
 namespace Diligent
 {
 
-/// Owns the fixed Tessera G-buffer and references the external output and
-/// depth targets supplied by the view.
+/// Owns the fixed Tessera G-buffer and shader-readable depth history, and
+/// references the external output target supplied by the view.
 class RadientFrameRenderTargets
 {
 public:
@@ -50,11 +50,14 @@ public:
         GBUFFER_TARGET_COUNT
     };
 
+    static constexpr TEXTURE_FORMAT DepthFormat = TEX_FORMAT_D32_FLOAT;
+
     static TEXTURE_FORMAT GetGBufferFormat(GBufferTarget Target) noexcept;
     static const Char*    GetGBufferName(GBufferTarget Target) noexcept;
 
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target);
     void           ClearGBuffer(IDeviceContext* pContext) const;
+    void           CommitFrame() noexcept;
 
     const RadientExtent2D& GetSize() const;
     Uint32                 GetVersion() const;
@@ -65,15 +68,19 @@ public:
     ITextureView* GetSceneColorSRV() const;
     ITextureView* GetOutputColorRTV() const;
     ITextureView* GetDepthDSV() const;
+    ITextureView* GetDepthSRV() const;
+    ITextureView* GetPreviousDepthSRV() const;
 
 private:
     RadientExtent2D m_Size;
     Uint32          m_Version = 0;
 
     std::array<RefCntAutoPtr<ITexture>, GBUFFER_TARGET_COUNT> m_GBuffer;
+    std::array<RefCntAutoPtr<ITexture>, 2>                    m_Depth;
 
-    ITextureView* m_pOutputColorRTV = nullptr;
-    ITextureView* m_pDepthDSV       = nullptr;
+    ITextureView* m_pOutputColorRTV   = nullptr;
+    Uint32        m_CurrentDepth      = 0;
+    bool          m_DepthHistoryValid = false;
 };
 
 } // namespace Diligent

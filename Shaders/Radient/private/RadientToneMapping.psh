@@ -19,11 +19,21 @@ cbuffer cbFrameAttribs
 #endif
 
 Texture2D g_ColorBuffer;
+#if ENABLE_SSAO
+Texture2D g_SSAO;
+#endif
 
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
 {
     Color = g_ColorBuffer.Load(int3(VSOut.f4PixelPos.xy, 0));
+
+#if ENABLE_SSAO
+    // Attenuate occlusion by opacity because scene color may already contain
+    // transparent geometry blended over the background.
+    const float Occlusion = lerp(1.0, g_SSAO.Load(int3(VSOut.f4PixelPos.xy, 0)).x, Color.a);
+    Color.rgb *= Occlusion;
+#endif
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     const float AverageLogLum = g_Attribs.AverageLogLum * exp2(-g_Frame.Camera.fExposure);

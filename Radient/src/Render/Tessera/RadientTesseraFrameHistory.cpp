@@ -34,6 +34,11 @@ Uint32 RadientTesseraFrameHistory::GetFrameIndex() const noexcept
     return static_cast<Uint32>(m_FrameNumber);
 }
 
+bool RadientTesseraFrameHistory::HasCameraHistory() const noexcept
+{
+    return m_HasCameraHistory;
+}
+
 const RadientTesseraCameraState* RadientTesseraFrameHistory::GetPreviousCamera(const RadientTesseraCameraState& CurrentCamera) const noexcept
 {
     if (!m_PreviousCamera.IsValid ||
@@ -52,7 +57,8 @@ void RadientTesseraFrameHistory::SetCurrentCamera(const RadientTesseraCameraStat
     // A different scene, camera, or viewport has no compatible temporal
     // history. Object transforms must be reset with the camera so the first
     // frame in the new view configuration produces zero motion.
-    if (GetPreviousCamera(CurrentCamera) == nullptr)
+    m_HasCameraHistory = GetPreviousCamera(CurrentCamera) != nullptr;
+    if (!m_HasCameraHistory)
         m_Drawables.clear();
 
     m_CurrentCamera = CurrentCamera;
@@ -88,8 +94,9 @@ RadientMatrix4x4 RadientTesseraFrameHistory::UpdateDrawableTransform(RadientDraw
 
 void RadientTesseraFrameHistory::CommitFrame() noexcept
 {
-    m_PreviousCamera = m_CurrentCamera;
-    m_CurrentCamera  = {};
+    m_PreviousCamera   = m_CurrentCamera;
+    m_CurrentCamera    = {};
+    m_HasCameraHistory = false;
     ++m_FrameNumber;
 }
 

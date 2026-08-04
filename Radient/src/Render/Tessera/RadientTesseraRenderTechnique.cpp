@@ -127,6 +127,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                                  Context.pContext,
                                                  ViewState.FrameTargets,
                                                  ViewDesc.ToneMapping,
+                                                 ViewDesc.SSAO,
+                                                 ViewState.FrameHistory.GetFrameIndex(),
                                                  pPBRRenderer->GetFrameAttribsCB());
 }
 
@@ -276,7 +278,10 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
         }
     }
 
-    return pViewState->PostProcessPipeline.Execute(Context.pContext, pViewState->FrameTargets);
+    return pViewState->PostProcessPipeline.Execute(Context.pDevice,
+                                                   Context.pContext,
+                                                   pViewState->FrameTargets,
+                                                   !pViewState->FrameHistory.HasCameraHistory());
 }
 
 void RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext&)
@@ -285,7 +290,10 @@ void RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext&)
     {
         VERIFY_EXPR(m_pActiveViewState != nullptr);
         if (m_pActiveViewState != nullptr)
+        {
             m_GeometryRenderer.EndFrame(m_pActiveViewState->FrameHistory);
+            m_pActiveViewState->FrameTargets.CommitFrame();
+        }
     }
 
     m_pActiveViewState = nullptr;

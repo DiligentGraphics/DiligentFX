@@ -55,6 +55,7 @@ class RadientTesseraFrameHistory
 {
 public:
     Uint32 GetFrameIndex() const noexcept;
+    bool   HasCameraHistory() const noexcept;
 
     const RadientTesseraCameraState* GetPreviousCamera(const RadientTesseraCameraState& CurrentCamera) const noexcept;
     void                             SetCurrentCamera(const RadientTesseraCameraState& CurrentCamera) noexcept;
@@ -79,7 +80,8 @@ private:
     RadientTesseraCameraState  m_PreviousCamera;
     RadientTesseraCameraState  m_CurrentCamera;
     std::vector<DrawableState> m_Drawables;
-    Uint64                     m_FrameNumber = 0;
+    Uint64                     m_FrameNumber      = 0;
+    bool                       m_HasCameraHistory = false;
 };
 
 } // namespace Diligent
