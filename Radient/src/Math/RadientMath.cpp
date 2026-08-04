@@ -104,15 +104,6 @@ CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
         Projection.Matrix = float4x4::Projection(FovY, Aspect, Projection.NearPlaneZ, Projection.FarPlaneZ, NDCMinusOneToOne);
     }
 
-    // Radient cameras follow OpenUSD/glTF convention and look along local -Z,
-    // while Diligent projection helpers expect +Z camera space. Bake the
-    // adapter into the projection matrix. With row-vector convention, this is
-    // equivalent to Scale(1, 1, -1) * Projection, i.e. negating the third row.
-    Projection.Matrix._31 = -Projection.Matrix._31;
-    Projection.Matrix._32 = -Projection.Matrix._32;
-    Projection.Matrix._33 = -Projection.Matrix._33;
-    Projection.Matrix._34 = -Projection.Matrix._34;
-
     return Projection;
 }
 

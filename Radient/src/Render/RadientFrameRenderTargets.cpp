@@ -186,7 +186,9 @@ void RadientFrameRenderTargets::ClearGBuffer(IDeviceContext* pContext) const
                                pDepthDSV,
                                RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    constexpr float SceneColorClear[] = {0.f, 0.f, 0.f, 1.f};
+    // Scene-color alpha accumulates opacity and is used to attenuate
+    // screen-space effects over the background.
+    constexpr float SceneColorClear[] = {0.f, 0.f, 0.f, 0.f};
     constexpr float GBufferClear[]    = {0.f, 0.f, 0.f, 0.f};
     for (Uint32 TargetIndex = 0; TargetIndex < GBUFFER_TARGET_COUNT; ++TargetIndex)
     {

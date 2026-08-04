@@ -98,7 +98,13 @@ void WriteCameraShaderAttribs(IRenderDevice*                   pDevice,
     const float Aspect           = Height > 0.f ? Width / Height : 1.f;
     const bool  NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
 
-    const float4x4                      CameraWorld    = RadientMath::ToFloat4x4(CameraState.World);
+    // Radient cameras follow the OpenUSD/glTF convention and look along local
+    // -Z, while Diligent shaders and post-processing effects use +Z camera
+    // space. Convert the camera transform instead of baking the adapter into
+    // the projection so effects that consume mView and mProj separately see
+    // the expected coordinate system.
+    const float4x4 CameraWorld =
+        float4x4::Scale(1.f, 1.f, -1.f) * RadientMath::ToFloat4x4(CameraState.World);
     const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
     const float4x4                      CameraView     = CameraWorld.Inverse();
     const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
