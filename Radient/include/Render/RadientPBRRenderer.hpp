@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "RadientView.h"
 #include "Render/RadientFrameSRBCache.hpp"
 
 #include "PBR_Renderer.hpp"
@@ -42,6 +43,10 @@ public:
                        IRenderStateCache* pStateCache,
                        IDeviceContext*    pContext,
                        const CreateInfo&  CI);
+
+    /// Converts a renderer-independent Radient debug visualization to the
+    /// corresponding PBR renderer debug view.
+    static DebugViewType GetDebugViewType(RADIENT_DEBUG_VISUALIZATION DebugVisualization) noexcept;
 
     /// Returns the cached immutable frame SRB for the IBL resources, creating it if necessary.
     RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources);

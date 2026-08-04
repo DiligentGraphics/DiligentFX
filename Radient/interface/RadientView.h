@@ -38,6 +38,53 @@ typedef struct IRadientView         IRadientView;
 
 // clang-format off
 
+/// Debug visualization mode.
+///
+/// Render techniques may use these modes to replace the regular shaded output
+/// with diagnostic material, geometry, lighting, or depth information.
+DILIGENT_TYPED_ENUM(RADIENT_DEBUG_VISUALIZATION, Uint8)
+{
+    /// Render the regular shaded image.
+    RADIENT_DEBUG_VISUALIZATION_NONE = 0,
+
+    RADIENT_DEBUG_VISUALIZATION_TEXCOORD0,
+    RADIENT_DEBUG_VISUALIZATION_TEXCOORD1,
+    RADIENT_DEBUG_VISUALIZATION_BASE_COLOR,
+    RADIENT_DEBUG_VISUALIZATION_TRANSPARENCY,
+    RADIENT_DEBUG_VISUALIZATION_OCCLUSION,
+    RADIENT_DEBUG_VISUALIZATION_EMISSIVE,
+    RADIENT_DEBUG_VISUALIZATION_METALLIC,
+    RADIENT_DEBUG_VISUALIZATION_ROUGHNESS,
+    RADIENT_DEBUG_VISUALIZATION_DIFFUSE_COLOR,
+    RADIENT_DEBUG_VISUALIZATION_SPECULAR_COLOR,
+    RADIENT_DEBUG_VISUALIZATION_REFLECTANCE90,
+    RADIENT_DEBUG_VISUALIZATION_MESH_NORMAL,
+    RADIENT_DEBUG_VISUALIZATION_SHADING_NORMAL,
+    RADIENT_DEBUG_VISUALIZATION_MOTION_VECTORS,
+    RADIENT_DEBUG_VISUALIZATION_N_DOT_V,
+    RADIENT_DEBUG_VISUALIZATION_PUNCTUAL_LIGHTING,
+    RADIENT_DEBUG_VISUALIZATION_DIFFUSE_IBL,
+    RADIENT_DEBUG_VISUALIZATION_SPECULAR_IBL,
+    RADIENT_DEBUG_VISUALIZATION_WHITE_BASE_COLOR,
+    RADIENT_DEBUG_VISUALIZATION_CLEAR_COAT,
+    RADIENT_DEBUG_VISUALIZATION_CLEAR_COAT_FACTOR,
+    RADIENT_DEBUG_VISUALIZATION_CLEAR_COAT_ROUGHNESS,
+    RADIENT_DEBUG_VISUALIZATION_CLEAR_COAT_NORMAL,
+    RADIENT_DEBUG_VISUALIZATION_SHEEN,
+    RADIENT_DEBUG_VISUALIZATION_SHEEN_COLOR,
+    RADIENT_DEBUG_VISUALIZATION_SHEEN_ROUGHNESS,
+    RADIENT_DEBUG_VISUALIZATION_ANISOTROPY_STRENGTH,
+    RADIENT_DEBUG_VISUALIZATION_ANISOTROPY_DIRECTION,
+    RADIENT_DEBUG_VISUALIZATION_IRIDESCENCE,
+    RADIENT_DEBUG_VISUALIZATION_IRIDESCENCE_FACTOR,
+    RADIENT_DEBUG_VISUALIZATION_IRIDESCENCE_THICKNESS,
+    RADIENT_DEBUG_VISUALIZATION_TRANSMISSION,
+    RADIENT_DEBUG_VISUALIZATION_THICKNESS,
+    RADIENT_DEBUG_VISUALIZATION_SCENE_DEPTH,
+
+    RADIENT_DEBUG_VISUALIZATION_COUNT
+};
+
 /// Tone mapping mode.
 DILIGENT_TYPED_ENUM(RADIENT_TONE_MAPPING_MODE, Uint8)
 {
@@ -461,6 +508,9 @@ struct RadientViewDesc
     /// Render target.
     IRadientRenderTarget* pRenderTarget DEFAULT_INITIALIZER(nullptr);
 
+    /// Debug visualization mode.
+    RADIENT_DEBUG_VISUALIZATION DebugVisualization DEFAULT_INITIALIZER(RADIENT_DEBUG_VISUALIZATION_NONE);
+
     /// Environment used for image-based lighting.
     RadientEnvironmentDesc Environment DEFAULT_INITIALIZER({});
 
@@ -518,6 +568,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     VIRTUAL RADIENT_STATUS METHOD(SetRenderTarget)(THIS_
                                                    IRadientRenderTarget* pRenderTarget) PURE;
 
+    /// Sets the debug visualization mode.
+    VIRTUAL RADIENT_STATUS METHOD(SetDebugVisualization)(THIS_
+                                                         RADIENT_DEBUG_VISUALIZATION DebugVisualization) PURE;
+
     /// Sets the environment used for image-based lighting.
     VIRTUAL RADIENT_STATUS METHOD(SetEnvironment)(THIS_
                                                   const RadientEnvironmentDesc REF Environment) PURE;
@@ -560,6 +614,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetScene(This, ...)          CALL_IFACE_METHOD(RadientView, SetScene,        This, __VA_ARGS__)
 #    define IRadientView_SetCamera(This, ...)         CALL_IFACE_METHOD(RadientView, SetCamera,       This, __VA_ARGS__)
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
+#    define IRadientView_SetDebugVisualization(This, ...) CALL_IFACE_METHOD(RadientView, SetDebugVisualization, This, __VA_ARGS__)
 #    define IRadientView_SetEnvironment(This, ...)    CALL_IFACE_METHOD(RadientView, SetEnvironment,  This, __VA_ARGS__)
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
 #    define IRadientView_SetToneMapping(This, ...)    CALL_IFACE_METHOD(RadientView, SetToneMapping,  This, __VA_ARGS__)

@@ -884,6 +884,11 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetRenderTarget(nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().pRenderTarget, nullptr);
 
+    EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_NONE);
+    EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_BASE_COLOR), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_BASE_COLOR);
+    EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_BASE_COLOR), RADIENT_STATUS_NO_CHANGE);
+
     // Environment settings are view-local and retain the referenced texture asset.
     const RadientEnvironmentDesc& DefaultEnvironment = pView->GetDesc().Environment;
     const RadientFloat3           DefaultColor{1.f, 1.f, 1.f};
@@ -1072,6 +1077,28 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().DepthOfField, DepthOfField);
     EXPECT_EQ(pView->SetDepthOfField(DepthOfField), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientRendererTest, RejectsInvalidDebugVisualization)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RadientViewDesc InvalidViewDesc{};
+    InvalidViewDesc.DebugVisualization = RADIENT_DEBUG_VISUALIZATION_COUNT;
+
+    RefCntAutoPtr<IRadientView> pView;
+    EXPECT_EQ(pRenderer->CreateView(InvalidViewDesc, &pView), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView, nullptr);
+
+    ASSERT_EQ(pRenderer->CreateView({}, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_COUNT), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_NONE);
 }
 
 TEST(RadientRendererTest, RejectsInvalidViewEnvironment)

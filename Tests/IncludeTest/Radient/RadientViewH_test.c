@@ -41,6 +41,7 @@ void RadientViewHeader_C_TestMacros(IRadientView* pView)
     Status = IRadientView_SetScene(pView, 0);
     Status = IRadientView_SetCamera(pView, InvalidRadientEntityID);
     Status = IRadientView_SetRenderTarget(pView, 0);
+    Status = IRadientView_SetDebugVisualization(pView, RADIENT_DEBUG_VISUALIZATION_BASE_COLOR);
     Status = IRadientView_SetEnvironment(pView, &Environment);
     Status = IRadientView_SetToneMapping(pView, &ToneMapping);
     Status = IRadientView_SetBloom(pView, &Bloom);

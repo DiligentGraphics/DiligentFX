@@ -42,6 +42,11 @@ namespace
 constexpr float  IBLClearColor[]         = {0.5f, 0.5f, 0.5f, 0.5f};
 constexpr Uint32 MaxSSRDepthHierarchyMip = 6;
 
+bool IsValidDebugVisualization(RADIENT_DEBUG_VISUALIZATION DebugVisualization)
+{
+    return DebugVisualization < RADIENT_DEBUG_VISUALIZATION_COUNT;
+}
+
 bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
 {
     return (Environment.pEnvironmentMap == nullptr ||
@@ -142,7 +147,8 @@ RadientViewImpl::~RadientViewImpl()
 
 RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
 {
-    if (!IsValidEnvironment(Desc.Environment) ||
+    if (!IsValidDebugVisualization(Desc.DebugVisualization) ||
+        !IsValidEnvironment(Desc.Environment) ||
         !IsValidToneMapping(Desc.ToneMapping) ||
         !IsValidBloom(Desc.Bloom) ||
         !IsValidTemporalAntiAliasing(Desc.TemporalAntiAliasing) ||
@@ -185,6 +191,18 @@ RADIENT_STATUS RadientViewImpl::SetRenderTarget(IRadientRenderTarget* pRenderTar
 
     m_pRenderTarget      = pRenderTarget;
     m_Desc.pRenderTarget = m_pRenderTarget;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION DebugVisualization)
+{
+    if (!IsValidDebugVisualization(DebugVisualization))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_Desc.DebugVisualization == DebugVisualization)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.DebugVisualization = DebugVisualization;
     return RADIENT_STATUS_OK;
 }
 

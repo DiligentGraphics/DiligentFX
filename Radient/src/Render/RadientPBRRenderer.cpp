@@ -34,6 +34,60 @@
 namespace Diligent
 {
 
+PBR_Renderer::DebugViewType RadientPBRRenderer::GetDebugViewType(RADIENT_DEBUG_VISUALIZATION DebugVisualization) noexcept
+{
+#define VERIFY_DEBUG_MODE_VALUE(RadientMode, PBRMode)                                                       \
+    static_assert(static_cast<Uint8>(RADIENT_DEBUG_VISUALIZATION_##RadientMode) == static_cast<Uint8>(DebugViewType::PBRMode), \
+                  "Radient and PBR debug modes must have matching values")
+
+    VERIFY_DEBUG_MODE_VALUE(NONE, None);
+    VERIFY_DEBUG_MODE_VALUE(TEXCOORD0, Texcoord0);
+    VERIFY_DEBUG_MODE_VALUE(TEXCOORD1, Texcoord1);
+    VERIFY_DEBUG_MODE_VALUE(BASE_COLOR, BaseColor);
+    VERIFY_DEBUG_MODE_VALUE(TRANSPARENCY, Transparency);
+    VERIFY_DEBUG_MODE_VALUE(OCCLUSION, Occlusion);
+    VERIFY_DEBUG_MODE_VALUE(EMISSIVE, Emissive);
+    VERIFY_DEBUG_MODE_VALUE(METALLIC, Metallic);
+    VERIFY_DEBUG_MODE_VALUE(ROUGHNESS, Roughness);
+    VERIFY_DEBUG_MODE_VALUE(DIFFUSE_COLOR, DiffuseColor);
+    VERIFY_DEBUG_MODE_VALUE(SPECULAR_COLOR, SpecularColor);
+    VERIFY_DEBUG_MODE_VALUE(REFLECTANCE90, Reflectance90);
+    VERIFY_DEBUG_MODE_VALUE(MESH_NORMAL, MeshNormal);
+    VERIFY_DEBUG_MODE_VALUE(SHADING_NORMAL, ShadingNormal);
+    VERIFY_DEBUG_MODE_VALUE(MOTION_VECTORS, MotionVectors);
+    VERIFY_DEBUG_MODE_VALUE(N_DOT_V, NdotV);
+    VERIFY_DEBUG_MODE_VALUE(PUNCTUAL_LIGHTING, PunctualLighting);
+    VERIFY_DEBUG_MODE_VALUE(DIFFUSE_IBL, DiffuseIBL);
+    VERIFY_DEBUG_MODE_VALUE(SPECULAR_IBL, SpecularIBL);
+    VERIFY_DEBUG_MODE_VALUE(WHITE_BASE_COLOR, WhiteBaseColor);
+    VERIFY_DEBUG_MODE_VALUE(CLEAR_COAT, ClearCoat);
+    VERIFY_DEBUG_MODE_VALUE(CLEAR_COAT_FACTOR, ClearCoatFactor);
+    VERIFY_DEBUG_MODE_VALUE(CLEAR_COAT_ROUGHNESS, ClearCoatRoughness);
+    VERIFY_DEBUG_MODE_VALUE(CLEAR_COAT_NORMAL, ClearCoatNormal);
+    VERIFY_DEBUG_MODE_VALUE(SHEEN, Sheen);
+    VERIFY_DEBUG_MODE_VALUE(SHEEN_COLOR, SheenColor);
+    VERIFY_DEBUG_MODE_VALUE(SHEEN_ROUGHNESS, SheenRoughness);
+    VERIFY_DEBUG_MODE_VALUE(ANISOTROPY_STRENGTH, AnisotropyStrength);
+    VERIFY_DEBUG_MODE_VALUE(ANISOTROPY_DIRECTION, AnisotropyDirection);
+    VERIFY_DEBUG_MODE_VALUE(IRIDESCENCE, Iridescence);
+    VERIFY_DEBUG_MODE_VALUE(IRIDESCENCE_FACTOR, IridescenceFactor);
+    VERIFY_DEBUG_MODE_VALUE(IRIDESCENCE_THICKNESS, IridescenceThickness);
+    VERIFY_DEBUG_MODE_VALUE(TRANSMISSION, Transmission);
+    VERIFY_DEBUG_MODE_VALUE(THICKNESS, Thickness);
+    VERIFY_DEBUG_MODE_VALUE(SCENE_DEPTH, SceneDepth);
+    VERIFY_DEBUG_MODE_VALUE(COUNT, NumDebugViews);
+
+#undef VERIFY_DEBUG_MODE_VALUE
+
+    if (DebugVisualization >= RADIENT_DEBUG_VISUALIZATION_COUNT)
+    {
+        UNEXPECTED("Unexpected Radient debug visualization");
+        return DebugViewType::None;
+    }
+
+    return static_cast<DebugViewType>(DebugVisualization);
+}
+
 RadientPBRRenderer::RadientPBRRenderer(IRenderDevice*     pDevice,
                                        IRenderStateCache* pStateCache,
                                        IDeviceContext*    pContext,
