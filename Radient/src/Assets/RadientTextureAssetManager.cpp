@@ -159,7 +159,11 @@ public:
         if (m_Standalone.pTexture != nullptr)
         {
             CreateStandaloneTextureSRVs();
-            SetTextureAttribs(float4{1, 1, 0, 0}, 0);
+            SetTextureAttribs(float4{1, 1, 0, 0},
+                              0,
+                              Desc.Width,
+                              Desc.Height,
+                              Desc.MipLevels);
         }
         else
             ClearTextureAttribs();
@@ -180,7 +184,12 @@ public:
         if (pAtlasSuballocation != nullptr)
         {
             const float4 UVScaleBias = pAtlasSuballocation->GetUVScaleBias();
-            SetTextureAttribs(UVScaleBias, pAtlasSuballocation->GetSlice());
+            const uint2  Size        = pAtlasSuballocation->GetSize();
+            SetTextureAttribs(UVScaleBias,
+                              pAtlasSuballocation->GetSlice(),
+                              Size.x,
+                              Size.y,
+                              pAtlasSuballocation->GetMipLevelCount());
         }
         else
         {
@@ -238,6 +247,25 @@ public:
             return {};
 
         return {0, ViewFormat};
+    }
+
+    bool GetTextureSamplingInfo(RadientTextureSamplingInfo& SamplingInfo) const noexcept
+    {
+        SamplingInfo = {};
+        if (!m_TextureAttribsInitialized.load(std::memory_order_acquire))
+            return false;
+
+        SamplingInfo.UVScaleBias = float4{
+            m_AtlasUVScaleX.load(std::memory_order_relaxed),
+            m_AtlasUVScaleY.load(std::memory_order_relaxed),
+            m_AtlasUVBiasX.load(std::memory_order_relaxed),
+            m_AtlasUVBiasY.load(std::memory_order_relaxed),
+        };
+        SamplingInfo.TextureSlice = m_TextureSlice.load(std::memory_order_relaxed);
+        SamplingInfo.Width        = m_TextureWidth.load(std::memory_order_relaxed);
+        SamplingInfo.Height       = m_TextureHeight.load(std::memory_order_relaxed);
+        SamplingInfo.MipLevels    = m_TextureMipLevels.load(std::memory_order_relaxed);
+        return true;
     }
 
     bool GetTextureAtlasAttribs(GLTF::Material::TextureShaderAttribs& Attribs) const noexcept
@@ -317,13 +345,20 @@ private:
         }
     }
 
-    void SetTextureAttribs(const float4& AtlasUVScaleAndBias, Uint32 TextureSlice) noexcept
+    void SetTextureAttribs(const float4& AtlasUVScaleAndBias,
+                           Uint32        TextureSlice,
+                           Uint32        Width,
+                           Uint32        Height,
+                           Uint32        MipLevels) noexcept
     {
         m_TextureSlice.store(static_cast<float>(TextureSlice), std::memory_order_relaxed);
         m_AtlasUVScaleX.store(AtlasUVScaleAndBias.x, std::memory_order_relaxed);
         m_AtlasUVScaleY.store(AtlasUVScaleAndBias.y, std::memory_order_relaxed);
         m_AtlasUVBiasX.store(AtlasUVScaleAndBias.z, std::memory_order_relaxed);
         m_AtlasUVBiasY.store(AtlasUVScaleAndBias.w, std::memory_order_relaxed);
+        m_TextureWidth.store(Width, std::memory_order_relaxed);
+        m_TextureHeight.store(Height, std::memory_order_relaxed);
+        m_TextureMipLevels.store(MipLevels, std::memory_order_relaxed);
         m_TextureAttribsInitialized.store(true, std::memory_order_release);
     }
 
@@ -335,6 +370,9 @@ private:
         m_AtlasUVScaleY.store(0.f, std::memory_order_relaxed);
         m_AtlasUVBiasX.store(0.f, std::memory_order_relaxed);
         m_AtlasUVBiasY.store(0.f, std::memory_order_relaxed);
+        m_TextureWidth.store(0, std::memory_order_relaxed);
+        m_TextureHeight.store(0, std::memory_order_relaxed);
+        m_TextureMipLevels.store(0, std::memory_order_relaxed);
     }
 
 private:
@@ -353,12 +391,15 @@ private:
     std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> m_GPUResourceStatus{RADIENT_STATUS_OK};
 
-    std::atomic_bool m_TextureAttribsInitialized{false};
-    AtomicFloat      m_TextureSlice{0.f};
-    AtomicFloat      m_AtlasUVScaleX{0.f};
-    AtomicFloat      m_AtlasUVScaleY{0.f};
-    AtomicFloat      m_AtlasUVBiasX{0.f};
-    AtomicFloat      m_AtlasUVBiasY{0.f};
+    std::atomic_bool    m_TextureAttribsInitialized{false};
+    AtomicFloat         m_TextureSlice{0.f};
+    AtomicFloat         m_AtlasUVScaleX{0.f};
+    AtomicFloat         m_AtlasUVScaleY{0.f};
+    AtomicFloat         m_AtlasUVBiasX{0.f};
+    AtomicFloat         m_AtlasUVBiasY{0.f};
+    std::atomic<Uint32> m_TextureWidth{0};
+    std::atomic<Uint32> m_TextureHeight{0};
+    std::atomic<Uint32> m_TextureMipLevels{0};
 
     // True when no deferred copy is required or all required copy callbacks
     // have enqueued commands. This is not a GPU completion fence.
@@ -763,6 +804,16 @@ ITextureView* RadientTextureAssetManager::GetTextureSRV(IRadientTextureAsset*  p
         return pImpl->GetStorage().GetTextureSRV(ViewType);
 
     return nullptr;
+}
+
+bool RadientTextureAssetManager::GetTextureSamplingInfo(IRadientTextureAsset*       pTextureAsset,
+                                                        RadientTextureSamplingInfo& SamplingInfo)
+{
+    if (RefCntAutoPtr<TextureAssetImpl> pImpl = TextureAssetImpl::ResolveAsset(pTextureAsset))
+        return pImpl->GetStorage().GetTextureSamplingInfo(SamplingInfo);
+
+    SamplingInfo = {};
+    return false;
 }
 
 RadientTextureBindingIdentity RadientTextureAssetManager::GetTextureBindingIdentity(

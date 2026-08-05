@@ -28,6 +28,7 @@
 
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
+#include "GraphicsAccessories.hpp"
 #include "RadientGPUTestHelpers.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "ThreadPool.hpp"
@@ -66,6 +67,13 @@ void VerifyUploadedTextureData(IDeviceContext&           Context,
     GLTF::Material::TextureShaderAttribs TextureAttribs;
     ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(&Texture, TextureAttribs));
 
+    RadientTextureSamplingInfo SamplingInfo;
+    ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(&Texture, SamplingInfo));
+    EXPECT_EQ(SamplingInfo.UVScaleBias, TextureAttribs.AtlasUVScaleAndBias);
+    EXPECT_EQ(SamplingInfo.TextureSlice, TextureAttribs.TextureSlice);
+    EXPECT_EQ(SamplingInfo.Width, ExpectedData.Width);
+    EXPECT_EQ(SamplingInfo.Height, ExpectedData.Height);
+
     ITextureView* pBackBufferRTV = SwapChain.GetCurrentBackBufferRTV();
     ASSERT_NE(pBackBufferRTV, nullptr);
 
@@ -95,9 +103,12 @@ void VerifyUploadedTextureData(IDeviceContext&           Context,
     Context.SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 
     const TextureDesc& UploadedDesc = pUploadedTexture->GetDesc();
-    const Uint32       SrcX         = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.z * static_cast<float>(UploadedDesc.Width) + 0.5f);
-    const Uint32       SrcY         = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.w * static_cast<float>(UploadedDesc.Height) + 0.5f);
-    const Uint32       SrcSlice     = static_cast<Uint32>(TextureAttribs.TextureSlice + 0.5f);
+    EXPECT_EQ(SamplingInfo.MipLevels,
+              std::min(UploadedDesc.MipLevels,
+                       ComputeMipLevelsCount(ExpectedData.Width, ExpectedData.Height)));
+    const Uint32 SrcX     = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.z * static_cast<float>(UploadedDesc.Width) + 0.5f);
+    const Uint32 SrcY     = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.w * static_cast<float>(UploadedDesc.Height) + 0.5f);
+    const Uint32 SrcSlice = static_cast<Uint32>(TextureAttribs.TextureSlice + 0.5f);
 
     ASSERT_GE(UploadedDesc.Width, SrcX + ExpectedData.Width);
     ASSERT_GE(UploadedDesc.Height, SrcY + ExpectedData.Height);
@@ -140,11 +151,19 @@ void VerifyUploadedStandaloneTextureData(IDeviceContext&           Context,
     EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.w, 0.f);
     EXPECT_FLOAT_EQ(TextureAttribs.TextureSlice, 0.f);
 
+    RadientTextureSamplingInfo SamplingInfo;
+    ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(&Texture, SamplingInfo));
+    EXPECT_EQ(SamplingInfo.UVScaleBias, TextureAttribs.AtlasUVScaleAndBias);
+    EXPECT_EQ(SamplingInfo.TextureSlice, TextureAttribs.TextureSlice);
+    EXPECT_EQ(SamplingInfo.Width, ExpectedData.Width);
+    EXPECT_EQ(SamplingInfo.Height, ExpectedData.Height);
+
     const TextureDesc& UploadedDesc = pUploadedTexture->GetDesc();
     ASSERT_EQ(UploadedDesc.Type, RESOURCE_DIM_TEX_2D_ARRAY);
     ASSERT_EQ(UploadedDesc.Width, ExpectedData.Width);
     ASSERT_EQ(UploadedDesc.Height, ExpectedData.Height);
     ASSERT_EQ(UploadedDesc.GetArraySize(), 1u);
+    EXPECT_EQ(SamplingInfo.MipLevels, UploadedDesc.MipLevels);
 
     ITextureView* pBackBufferRTV = SwapChain.GetCurrentBackBufferRTV();
     ASSERT_NE(pBackBufferRTV, nullptr);

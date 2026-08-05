@@ -63,6 +63,19 @@ enum class RadientTextureViewType : Uint8
     Count
 };
 
+/// Stable metadata required to sample a texture from its backing resource.
+/// The SRV is intentionally resolved separately because atlas growth may
+/// replace it while these addressing parameters remain unchanged.
+struct RadientTextureSamplingInfo
+{
+    float4 UVScaleBias  = {1.f, 1.f, 0.f, 0.f};
+    float  TextureSlice = 0.f;
+
+    Uint32 Width     = 0;
+    Uint32 Height    = 0;
+    Uint32 MipLevels = 0;
+};
+
 /// Stable identity of the logical resource and typed view used by a texture binding.
 struct RadientTextureBindingIdentity
 {
@@ -144,6 +157,13 @@ public:
     // the texture.
     static ITextureView* GetTextureSRV(IRadientTextureAsset*  pTextureAsset,
                                        RadientTextureViewType ViewType = RadientTextureViewType::Linear);
+
+    // Returns stable texture addressing metadata. The information is
+    // independent of the current SRV and remains valid when an atlas grows.
+    // Returns false and clears SamplingInfo until the texture attributes are
+    // initialized.
+    static bool GetTextureSamplingInfo(IRadientTextureAsset*       pTextureAsset,
+                                       RadientTextureSamplingInfo& SamplingInfo);
 
     // Returns the stable resource identity and resolved typed view format used
     // by the requested texture view. This method is thread-safe and may be
