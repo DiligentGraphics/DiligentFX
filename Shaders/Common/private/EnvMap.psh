@@ -15,7 +15,7 @@ cbuffer cbEnvMapRenderAttribs
     float g_AverageLogLum;
     float g_MipLevel;
     float g_Alpha;
-    float Unusued2;
+    float g_SphereMapWidth;
     
     float4 g_Scale;
 
@@ -23,8 +23,8 @@ cbuffer cbEnvMapRenderAttribs
 
     float g_SphereMapSlice;
     int   g_SphereMapRow0IsNegativeY;
-    float Padding1;
-    float Padding2;
+    float g_AtlasMipWidth;
+    float g_AtlasMipHeight;
 }
 
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
@@ -36,6 +36,36 @@ Texture2DArray EnvMap;
 #endif
 SamplerState EnvMap_sampler;
 
+#if ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
+float3 SampleSphereMapAtlas(float2 UV)
+{
+    // The atlas sampler cannot wrap because doing so would cross the atlas
+    // boundary rather than the sphere-map suballocation boundary. Sample at
+    // horizontal texel centers and perform the wrapping interpolation here;
+    // vertical interpolation is handled by the hardware sampler after the
+    // coordinate is clamped to the suballocation's texel centers.
+    float TexelX = UV.x * g_SphereMapWidth - 0.5;
+    float LeftX  = floor(TexelX);
+    float Weight = TexelX - LeftX;
+    float RightX = LeftX + 1.0;
+
+    LeftX  = LeftX < 0.0 ? LeftX + g_SphereMapWidth : LeftX;
+    RightX = RightX >= g_SphereMapWidth ? RightX - g_SphereMapWidth : RightX;
+
+    float V = UV.y * g_SphereMapUVScaleBias.y + g_SphereMapUVScaleBias.w;
+    V = clamp(V,
+              g_SphereMapUVScaleBias.w + 0.5 / g_AtlasMipHeight,
+              g_SphereMapUVScaleBias.w + g_SphereMapUVScaleBias.y - 0.5 / g_AtlasMipHeight);
+
+    float2 LeftUV  = float2(g_SphereMapUVScaleBias.z + (LeftX + 0.5) / g_AtlasMipWidth, V);
+    float2 RightUV = float2(g_SphereMapUVScaleBias.z + (RightX + 0.5) / g_AtlasMipWidth, V);
+
+    float3 LeftColor  = EnvMap.SampleLevel(EnvMap_sampler, float3(LeftUV, g_SphereMapSlice), g_MipLevel).rgb;
+    float3 RightColor = EnvMap.SampleLevel(EnvMap_sampler, float3(RightUV, g_SphereMapSlice), g_MipLevel).rgb;
+    return lerp(LeftColor, RightColor, Weight);
+}
+#endif
+
 float3 SampleEnvrionmentMap(float3 R, float g_MipLevel)
 {
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
@@ -43,8 +73,7 @@ float3 SampleEnvrionmentMap(float3 R, float g_MipLevel)
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE || ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
     float2 UV = TransformDirectionToSphereMapUV(R, g_SphereMapRow0IsNegativeY != 0);
 #    if ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
-    UV = UV * g_SphereMapUVScaleBias.xy + g_SphereMapUVScaleBias.zw;
-    return EnvMap.SampleLevel(EnvMap_sampler, float3(UV, g_SphereMapSlice), g_MipLevel).rgb;
+    return SampleSphereMapAtlas(UV);
 #    else
     return EnvMap.SampleLevel(EnvMap_sampler, UV, g_MipLevel).rgb;
 #    endif
