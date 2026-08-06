@@ -27,6 +27,7 @@
 #include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "Core/RadientViewImpl.hpp"
 
 #include "Cast.hpp"
@@ -254,11 +255,14 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
             ITextureView* const pSkyboxSRV = pSkyboxTexture != nullptr ?
                 RadientAssetManagerImpl::GetTextureSRV(pSkyboxTexture) :
                 nullptr;
-            if (pSkyboxSRV != nullptr)
+            RadientTextureSamplingInfo SamplingInfo;
+            if (pSkyboxSRV != nullptr &&
+                RadientTextureAssetManager::GetTextureSamplingInfo(pSkyboxTexture, SamplingInfo))
             {
                 const RADIENT_STATUS Status = m_SkyboxPass.Execute(Context.pContext,
                                                                    ViewDesc.Skybox,
                                                                    pSkyboxSRV,
+                                                                   SamplingInfo,
                                                                    pViewState->FrameTargets);
                 if (RADIENT_FAILED(Status))
                     return Status;

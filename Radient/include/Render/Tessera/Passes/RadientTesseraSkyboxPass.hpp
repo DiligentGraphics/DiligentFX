@@ -36,6 +36,7 @@ namespace Diligent
 
 class EnvMapRenderer;
 class RadientTesseraGeometryRenderer;
+struct RadientTextureSamplingInfo;
 
 /// Skybox render pass.
 class RadientTesseraSkyboxPass
@@ -47,10 +48,11 @@ public:
     RADIENT_STATUS Prepare(RadientTesseraGeometryRenderer&  Renderer,
                            IRenderDevice*                   pDevice,
                            const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(IDeviceContext*                  pContext,
-                           const RadientSkyboxDesc&         Skybox,
-                           ITextureView*                    pSkyboxSRV,
-                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Execute(IDeviceContext*                   pContext,
+                           const RadientSkyboxDesc&          Skybox,
+                           ITextureView*                     pSkyboxSRV,
+                           const RadientTextureSamplingInfo& SamplingInfo,
+                           const RadientFrameRenderTargets&  Targets);
 
 private:
     std::unique_ptr<EnvMapRenderer> m_pRenderer;

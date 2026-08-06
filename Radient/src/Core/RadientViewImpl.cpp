@@ -26,6 +26,7 @@
 
 #include "Core/RadientViewImpl.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "Render/RadientFrameSRBCache.hpp"
 
@@ -338,19 +339,23 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
         ResourcesCreated = true;
     }
 
-    IRadientTextureAsset*               pEnvironmentMap         = m_Desc.Environment.pEnvironmentMap;
-    ITextureView*                       pDirtyEnvironmentSRV    = nullptr;
+    IRadientTextureAsset*      pEnvironmentMap      = m_Desc.Environment.pEnvironmentMap;
+    ITextureView*              pDirtyEnvironmentSRV = nullptr;
+    RadientTextureSamplingInfo EnvironmentSamplingInfo;
+
     RefCntAutoPtr<IRadientTextureAsset> pPreparedEnvironmentMap = m_WeakPreparedEnvironmentMap.Lock();
     if (pEnvironmentMap != nullptr &&
         (ResourcesCreated || pPreparedEnvironmentMap != pEnvironmentMap))
     {
         pDirtyEnvironmentSRV = RadientAssetManagerImpl::GetTextureSRV(pEnvironmentMap);
+        if (!RadientTextureAssetManager::GetTextureSamplingInfo(pEnvironmentMap, EnvironmentSamplingInfo))
+            pDirtyEnvironmentSRV = nullptr;
     }
 
     // Keep the current IBL unchanged while a replacement environment is unavailable.
     if (pDirtyEnvironmentSRV != nullptr)
     {
-        PrecomputeIBLCubemaps(Renderer, pContext, pDirtyEnvironmentSRV);
+        PrecomputeIBLCubemaps(Renderer, pContext, pDirtyEnvironmentSRV, EnvironmentSamplingInfo);
         m_WeakPreparedEnvironmentMap = pEnvironmentMap;
     }
 
@@ -390,14 +395,20 @@ RADIENT_STATUS RadientViewImpl::CreateIBLResources(PBR_Renderer&   Renderer,
     return RADIENT_STATUS_OK;
 }
 
-void RadientViewImpl::PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
-                                            IDeviceContext* pContext,
-                                            ITextureView*   pEnvironmentMapSRV)
+void RadientViewImpl::PrecomputeIBLCubemaps(PBR_Renderer&                     Renderer,
+                                            IDeviceContext*                   pContext,
+                                            ITextureView*                     pEnvironmentMapSRV,
+                                            const RadientTextureSamplingInfo& SamplingInfo)
 {
     PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
-    Attribs.pEnvironmentMapSRV = pEnvironmentMapSRV;
-    Attribs.pIrradianceCube    = GetIrradianceCubeSRV() != nullptr ? GetIrradianceCubeSRV()->GetTexture() : nullptr;
-    Attribs.pPrefilteredEnvMap = GetPrefilteredEnvMapSRV() != nullptr ? GetPrefilteredEnvMapSRV()->GetTexture() : nullptr;
+    Attribs.pEnvironmentMapSRV        = pEnvironmentMapSRV;
+    Attribs.EnvironmentMapUVScaleBias = SamplingInfo.UVScaleBias;
+    Attribs.EnvironmentMapSlice       = SamplingInfo.TextureSlice;
+    Attribs.EnvironmentMapWidth       = SamplingInfo.Width;
+    Attribs.EnvironmentMapHeight      = SamplingInfo.Height;
+    Attribs.EnvironmentMapMipLevels   = SamplingInfo.MipLevels;
+    Attribs.pIrradianceCube           = GetIrradianceCubeSRV() != nullptr ? GetIrradianceCubeSRV()->GetTexture() : nullptr;
+    Attribs.pPrefilteredEnvMap        = GetPrefilteredEnvMapSRV() != nullptr ? GetPrefilteredEnvMapSRV()->GetTexture() : nullptr;
     Renderer.PrecomputeCubemaps(pContext, Attribs);
 }
 

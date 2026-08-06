@@ -26,10 +26,12 @@
 
 #include "Render/Tessera/Passes/RadientTesseraSkyboxPass.hpp"
 
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
 #include "EnvMapRenderer.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace Diligent
@@ -117,10 +119,11 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Prepare(RadientTesseraGeometryRenderer&
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                  pContext,
-                                                 const RadientSkyboxDesc&         Skybox,
-                                                 ITextureView*                    pSkyboxSRV,
-                                                 const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                   pContext,
+                                                 const RadientSkyboxDesc&          Skybox,
+                                                 ITextureView*                     pSkyboxSRV,
+                                                 const RadientTextureSamplingInfo& SamplingInfo,
+                                                 const RadientFrameRenderTargets&  Targets)
 {
     if (pContext == nullptr || Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
         return RADIENT_STATUS_OK;
@@ -130,6 +133,12 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
 
     if (pSkyboxSRV == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
+
+    if (SamplingInfo.MipLevels == 0)
+    {
+        UNEXPECTED("Skybox texture must expose at least one sampling-safe mip level");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     ITextureView* pColorRTV = Targets.GetSceneColorRTV();
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
@@ -147,10 +156,12 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
     ToneMapping.fLuminanceSaturation = 1.f;
 
     EnvMapRenderer::RenderAttribs Attribs;
-    Attribs.pEnvMap  = pSkyboxSRV;
-    Attribs.MipLevel = Skybox.MipLevel;
-    Attribs.Alpha    = 0.f;
-    Attribs.Scale    = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
+    Attribs.pEnvMap              = pSkyboxSRV;
+    Attribs.MipLevel             = std::min(Skybox.MipLevel, static_cast<float>(SamplingInfo.MipLevels - 1));
+    Attribs.Alpha                = 0.f;
+    Attribs.Scale                = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
+    Attribs.SphereMapUVScaleBias = SamplingInfo.UVScaleBias;
+    Attribs.SphereMapSlice       = SamplingInfo.TextureSlice;
 
     if (RequiresOutputSRGBConversion(m_RTVFormat))
         Attribs.Options |= EnvMapRenderer::OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB;

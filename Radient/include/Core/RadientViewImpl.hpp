@@ -36,6 +36,8 @@
 namespace Diligent
 {
 
+struct RadientTextureSamplingInfo;
+
 class PBR_Renderer;
 class RadientIBLResources;
 
@@ -92,9 +94,10 @@ private:
     RADIENT_STATUS CreateIBLResources(PBR_Renderer&   Renderer,
                                       IDeviceContext* pContext);
 
-    void PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
-                               IDeviceContext* pContext,
-                               ITextureView*   pEnvironmentMapSRV);
+    void PrecomputeIBLCubemaps(PBR_Renderer&                     Renderer,
+                               IDeviceContext*                   pContext,
+                               ITextureView*                     pEnvironmentMapSRV,
+                               const RadientTextureSamplingInfo& SamplingInfo);
 
     void CopyEnvironment(const RadientEnvironmentDesc& Environment);
     void CopySkybox(const RadientSkyboxDesc& Skybox);
