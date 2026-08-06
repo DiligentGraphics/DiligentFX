@@ -59,10 +59,10 @@ struct EnvMapRenderer::EnvMapShaderAttribs
 
     float4 SphereMapUVScaleBias{1, 1, 0, 0};
 
-    float SphereMapSlice = 0.f;
-    float Padding0       = 0.f;
-    float Padding1       = 0.f;
-    float Padding2       = 0.f;
+    float SphereMapSlice           = 0.f;
+    Int32 SphereMapRow0IsNegativeY = 0;
+    float Padding1                 = 0.f;
+    float Padding2                 = 0.f;
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
@@ -285,15 +285,17 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             m_ShaderAttribs->Alpha != Attribs.Alpha ||
             m_ShaderAttribs->Scale != float4{Attribs.Scale, 1} ||
             m_ShaderAttribs->SphereMapUVScaleBias != Attribs.SphereMapUVScaleBias ||
-            m_ShaderAttribs->SphereMapSlice != Attribs.SphereMapSlice)
+            m_ShaderAttribs->SphereMapSlice != Attribs.SphereMapSlice ||
+            m_ShaderAttribs->SphereMapRow0IsNegativeY != static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY))
         {
-            m_ShaderAttribs->ToneMapping          = ToneMapping;
-            m_ShaderAttribs->AverageLogLum        = Attribs.AverageLogLum;
-            m_ShaderAttribs->MipLevel             = Attribs.MipLevel;
-            m_ShaderAttribs->Alpha                = Attribs.Alpha;
-            m_ShaderAttribs->Scale                = float4{Attribs.Scale, 1};
-            m_ShaderAttribs->SphereMapUVScaleBias = Attribs.SphereMapUVScaleBias;
-            m_ShaderAttribs->SphereMapSlice       = Attribs.SphereMapSlice;
+            m_ShaderAttribs->ToneMapping              = ToneMapping;
+            m_ShaderAttribs->AverageLogLum            = Attribs.AverageLogLum;
+            m_ShaderAttribs->MipLevel                 = Attribs.MipLevel;
+            m_ShaderAttribs->Alpha                    = Attribs.Alpha;
+            m_ShaderAttribs->Scale                    = float4{Attribs.Scale, 1};
+            m_ShaderAttribs->SphereMapUVScaleBias     = Attribs.SphereMapUVScaleBias;
+            m_ShaderAttribs->SphereMapSlice           = Attribs.SphereMapSlice;
+            m_ShaderAttribs->SphereMapRow0IsNegativeY = static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY);
 
             pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             StateTransitionDesc Barrier{m_RenderAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
@@ -304,13 +306,14 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
     {
         if (MapHelper<EnvMapShaderAttribs> EnvMapAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
         {
-            EnvMapAttribs->ToneMapping          = ToneMapping;
-            EnvMapAttribs->AverageLogLum        = Attribs.AverageLogLum;
-            EnvMapAttribs->MipLevel             = Attribs.MipLevel;
-            EnvMapAttribs->Alpha                = Attribs.Alpha;
-            EnvMapAttribs->Scale                = float4{Attribs.Scale, 1};
-            EnvMapAttribs->SphereMapUVScaleBias = Attribs.SphereMapUVScaleBias;
-            EnvMapAttribs->SphereMapSlice       = Attribs.SphereMapSlice;
+            EnvMapAttribs->ToneMapping              = ToneMapping;
+            EnvMapAttribs->AverageLogLum            = Attribs.AverageLogLum;
+            EnvMapAttribs->MipLevel                 = Attribs.MipLevel;
+            EnvMapAttribs->Alpha                    = Attribs.Alpha;
+            EnvMapAttribs->Scale                    = float4{Attribs.Scale, 1};
+            EnvMapAttribs->SphereMapUVScaleBias     = Attribs.SphereMapUVScaleBias;
+            EnvMapAttribs->SphereMapSlice           = Attribs.SphereMapSlice;
+            EnvMapAttribs->SphereMapRow0IsNegativeY = static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY);
         }
     }
 }

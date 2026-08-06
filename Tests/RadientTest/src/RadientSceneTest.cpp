@@ -904,14 +904,16 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(DefaultEnvironment.Color, DefaultColor);
     EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
     EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
+    EXPECT_EQ(DefaultEnvironment.SphereMapRow0IsNegativeY, False);
 
     RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap = MakeTestTextureAsset("texture://environment", 7);
 
     RadientEnvironmentDesc Environment{};
-    Environment.pEnvironmentMap = pEnvironmentMap;
-    Environment.Color           = {0.25f, 0.5f, 1.f};
-    Environment.Intensity       = 2.f;
-    Environment.Exposure        = -1.f;
+    Environment.pEnvironmentMap          = pEnvironmentMap;
+    Environment.Color                    = {0.25f, 0.5f, 1.f};
+    Environment.Intensity                = 2.f;
+    Environment.Exposure                 = -1.f;
+    Environment.SphereMapRow0IsNegativeY = True;
 
     EXPECT_EQ(pView->SetEnvironment(Environment), RADIENT_STATUS_OK);
 
@@ -926,6 +928,7 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredEnvironment.Color, Environment.Color);
     EXPECT_EQ(StoredEnvironment.Intensity, Environment.Intensity);
     EXPECT_EQ(StoredEnvironment.Exposure, Environment.Exposure);
+    EXPECT_EQ(StoredEnvironment.SphereMapRow0IsNegativeY, Environment.SphereMapRow0IsNegativeY);
     EXPECT_EQ(pView->SetEnvironment(StoredEnvironment), RADIENT_STATUS_NO_CHANGE);
 
     // Skybox settings are view-local and copy raw texture URI strings.
@@ -934,12 +937,13 @@ TEST(RadientRendererTest, CreateView)
     RefCntAutoPtr<IRadientTextureAsset> pSkyboxTexture = MakeTestTextureAsset(SkyboxURI.c_str(), 3);
 
     RadientSkyboxDesc Skybox{};
-    Skybox.Source    = RADIENT_SKYBOX_SOURCE_TEXTURE;
-    Skybox.pTexture  = pSkyboxTexture;
-    Skybox.Color     = {0.25f, 0.5f, 1.f};
-    Skybox.Intensity = 2.f;
-    Skybox.Exposure  = -1.f;
-    Skybox.MipLevel  = 1.f;
+    Skybox.Source                   = RADIENT_SKYBOX_SOURCE_TEXTURE;
+    Skybox.pTexture                 = pSkyboxTexture;
+    Skybox.Color                    = {0.25f, 0.5f, 1.f};
+    Skybox.Intensity                = 2.f;
+    Skybox.Exposure                 = -1.f;
+    Skybox.MipLevel                 = 1.f;
+    Skybox.SphereMapRow0IsNegativeY = True;
 
     EXPECT_EQ(pView->SetSkybox(Skybox), RADIENT_STATUS_OK);
     SkyboxURI[0] = 'X';
@@ -955,6 +959,7 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredSkybox.Intensity, 2.f);
     EXPECT_EQ(StoredSkybox.Exposure, -1.f);
     EXPECT_EQ(StoredSkybox.MipLevel, 1.f);
+    EXPECT_EQ(StoredSkybox.SphereMapRow0IsNegativeY, True);
 
     EXPECT_EQ(pView->SetSkybox(StoredSkybox), RADIENT_STATUS_NO_CHANGE);
 

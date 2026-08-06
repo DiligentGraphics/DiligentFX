@@ -123,6 +123,7 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
                                                  const RadientSkyboxDesc&          Skybox,
                                                  ITextureView*                     pSkyboxSRV,
                                                  const RadientTextureSamplingInfo& SamplingInfo,
+                                                 bool                              SphereMapRow0IsNegativeY,
                                                  const RadientFrameRenderTargets&  Targets)
 {
     if (pContext == nullptr || Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
@@ -156,12 +157,13 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
     ToneMapping.fLuminanceSaturation = 1.f;
 
     EnvMapRenderer::RenderAttribs Attribs;
-    Attribs.pEnvMap              = pSkyboxSRV;
-    Attribs.MipLevel             = std::min(Skybox.MipLevel, static_cast<float>(SamplingInfo.MipLevels - 1));
-    Attribs.Alpha                = 0.f;
-    Attribs.Scale                = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
-    Attribs.SphereMapUVScaleBias = SamplingInfo.UVScaleBias;
-    Attribs.SphereMapSlice       = SamplingInfo.TextureSlice;
+    Attribs.pEnvMap                  = pSkyboxSRV;
+    Attribs.MipLevel                 = std::min(Skybox.MipLevel, static_cast<float>(SamplingInfo.MipLevels - 1));
+    Attribs.Alpha                    = 0.f;
+    Attribs.Scale                    = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
+    Attribs.SphereMapUVScaleBias     = SamplingInfo.UVScaleBias;
+    Attribs.SphereMapSlice           = SamplingInfo.TextureSlice;
+    Attribs.SphereMapRow0IsNegativeY = SphereMapRow0IsNegativeY;
 
     if (RequiresOutputSRGBConversion(m_RTVFormat))
         Attribs.Options |= EnvMapRenderer::OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB;

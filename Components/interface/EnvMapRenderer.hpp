@@ -141,6 +141,10 @@ public:
         /// Array slice containing a sphere map. Ignored for cube and
         /// Texture2D source views.
         float SphereMapSlice = 0;
+
+        /// Whether row 0 of a sphere map represents the negative Y direction.
+        /// Ignored for cube maps.
+        bool SphereMapRow0IsNegativeY = false;
     };
 
     /// Prepares the environment map renderer for rendering.

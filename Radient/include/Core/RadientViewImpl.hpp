@@ -115,6 +115,7 @@ private:
     std::unique_ptr<RadientIBLResources> m_pIBLResources;
 
     RefCntWeakPtr<IRadientTextureAsset> m_WeakPreparedEnvironmentMap;
+    Bool                                m_PreparedEnvironmentMapRow0IsNegativeY = False;
 };
 
 } // namespace Diligent

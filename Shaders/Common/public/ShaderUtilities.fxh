@@ -95,10 +95,13 @@ float2 GetMotionVector(float2 ClipPos, float2 PrevClipPos)
     return ClipPos - PrevClipPos;
 }
 
-float2 TransformDirectionToSphereMapUV(float3 Direction)
+float2 TransformDirectionToSphereMapUV(float3 Direction, bool Row0IsNegativeY)
 {
     float OneOverPi = 0.3183098862;
-    return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), asin(Direction.y)) + float2(0.5, 0.5);
+    float Latitude  = asin(Direction.y);
+    Latitude *= Row0IsNegativeY ? +1.0 : -1.0;
+
+    return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), Latitude) + float2(0.5, 0.5);
 }
 
 void BasisFromNormal(in  float3 N,

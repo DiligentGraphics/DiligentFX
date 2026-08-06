@@ -540,6 +540,10 @@ public:
         Uint32 EnvironmentMapWidth     = 0;
         Uint32 EnvironmentMapHeight    = 0;
         Uint32 EnvironmentMapMipLevels = 0;
+
+        /// Whether row 0 of a spherical environment map represents the
+        /// negative Y direction. Ignored for cube source views.
+        bool SphereMapRow0IsNegativeY = false;
     };
 
     /// Precompute cubemaps used by IBL.

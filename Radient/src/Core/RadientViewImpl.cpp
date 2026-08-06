@@ -345,7 +345,9 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
 
     RefCntAutoPtr<IRadientTextureAsset> pPreparedEnvironmentMap = m_WeakPreparedEnvironmentMap.Lock();
     if (pEnvironmentMap != nullptr &&
-        (ResourcesCreated || pPreparedEnvironmentMap != pEnvironmentMap))
+        (ResourcesCreated ||
+         pPreparedEnvironmentMap != pEnvironmentMap ||
+         m_PreparedEnvironmentMapRow0IsNegativeY != m_Desc.Environment.SphereMapRow0IsNegativeY))
     {
         pDirtyEnvironmentSRV = RadientAssetManagerImpl::GetTextureSRV(pEnvironmentMap);
         if (!RadientTextureAssetManager::GetTextureSamplingInfo(pEnvironmentMap, EnvironmentSamplingInfo))
@@ -356,7 +358,8 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
     if (pDirtyEnvironmentSRV != nullptr)
     {
         PrecomputeIBLCubemaps(Renderer, pContext, pDirtyEnvironmentSRV, EnvironmentSamplingInfo);
-        m_WeakPreparedEnvironmentMap = pEnvironmentMap;
+        m_WeakPreparedEnvironmentMap             = pEnvironmentMap;
+        m_PreparedEnvironmentMapRow0IsNegativeY = m_Desc.Environment.SphereMapRow0IsNegativeY;
     }
 
     return RADIENT_STATUS_OK;
@@ -407,6 +410,7 @@ void RadientViewImpl::PrecomputeIBLCubemaps(PBR_Renderer&                     Re
     Attribs.EnvironmentMapWidth       = SamplingInfo.Width;
     Attribs.EnvironmentMapHeight      = SamplingInfo.Height;
     Attribs.EnvironmentMapMipLevels   = SamplingInfo.MipLevels;
+    Attribs.SphereMapRow0IsNegativeY = m_Desc.Environment.SphereMapRow0IsNegativeY;
     Attribs.pIrradianceCube           = GetIrradianceCubeSRV() != nullptr ? GetIrradianceCubeSRV()->GetTexture() : nullptr;
     Attribs.pPrefilteredEnvMap        = GetPrefilteredEnvMapSRV() != nullptr ? GetPrefilteredEnvMapSRV()->GetTexture() : nullptr;
     Renderer.PrecomputeCubemaps(pContext, Attribs);

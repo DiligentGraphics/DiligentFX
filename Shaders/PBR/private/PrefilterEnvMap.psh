@@ -26,7 +26,7 @@ cbuffer cbConstants
 
     float g_EnvMapSlice;
     uint  g_NumSamples;
-    uint  g_Padding0;
+    int   g_SphereMapRow0IsNegativeY;
     uint  g_Padding1;
 }
 
@@ -35,7 +35,7 @@ float3 SampleEnvrionmentMap(float3 R, float MipLevel)
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
     return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, R, MipLevel).rgb;
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE || ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
-    float2 UV = TransformDirectionToSphereMapUV(R);
+    float2 UV = TransformDirectionToSphereMapUV(R, g_SphereMapRow0IsNegativeY != 0);
 #    if ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
     UV = UV * g_EnvMapUVScaleBias.xy + g_EnvMapUVScaleBias.zw;
     return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, float3(UV, g_EnvMapSlice), MipLevel).rgb;

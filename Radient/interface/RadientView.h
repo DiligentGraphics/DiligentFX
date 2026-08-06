@@ -438,6 +438,10 @@ struct RadientSkyboxDesc
     /// Mip level used for skybox sampling.
     Float32 MipLevel DEFAULT_INITIALIZER(0.f);
 
+    /// Whether row 0 of a spherical skybox texture represents the negative Y
+    /// direction. Ignored for cube maps and when Source is RADIENT_SKYBOX_SOURCE_ENVIRONMENT.
+    Bool SphereMapRow0IsNegativeY DEFAULT_INITIALIZER(False);
+
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientSkyboxDesc& Rhs) const
     {
@@ -446,7 +450,8 @@ struct RadientSkyboxDesc
             Color == Rhs.Color &&
             Intensity == Rhs.Intensity &&
             Exposure == Rhs.Exposure &&
-            MipLevel == Rhs.MipLevel;
+            MipLevel == Rhs.MipLevel &&
+            SphereMapRow0IsNegativeY == Rhs.SphereMapRow0IsNegativeY;
     }
 
     bool operator!=(const RadientSkyboxDesc& Rhs) const
@@ -473,13 +478,19 @@ struct RadientEnvironmentDesc
     /// Exposure multiplier as a power of 2.
     Float32 Exposure DEFAULT_INITIALIZER(0.f);
 
+    /// Whether row 0 of a spherical environment map represents the negative Y
+    /// direction. Ignored for cube maps. This setting also applies when the
+    /// skybox uses the environment.
+    Bool SphereMapRow0IsNegativeY DEFAULT_INITIALIZER(False);
+
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientEnvironmentDesc& Rhs) const
     {
         return pEnvironmentMap == Rhs.pEnvironmentMap &&
             Color == Rhs.Color &&
             Intensity == Rhs.Intensity &&
-            Exposure == Rhs.Exposure;
+            Exposure == Rhs.Exposure &&
+            SphereMapRow0IsNegativeY == Rhs.SphereMapRow0IsNegativeY;
     }
 
     bool operator!=(const RadientEnvironmentDesc& Rhs) const

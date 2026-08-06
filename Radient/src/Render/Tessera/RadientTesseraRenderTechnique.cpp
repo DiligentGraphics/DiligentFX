@@ -236,15 +236,18 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
 
         if (HasSkybox)
         {
-            IRadientTextureAsset* pSkyboxTexture = nullptr;
+            IRadientTextureAsset* pSkyboxTexture            = nullptr;
+            bool                  SphereMapRow0IsNegativeY = false;
             switch (ViewDesc.Skybox.Source)
             {
                 case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
-                    pSkyboxTexture = ViewDesc.Environment.pEnvironmentMap;
+                    pSkyboxTexture           = ViewDesc.Environment.pEnvironmentMap;
+                    SphereMapRow0IsNegativeY = ViewDesc.Environment.SphereMapRow0IsNegativeY;
                     break;
 
                 case RADIENT_SKYBOX_SOURCE_TEXTURE:
-                    pSkyboxTexture = ViewDesc.Skybox.pTexture;
+                    pSkyboxTexture           = ViewDesc.Skybox.pTexture;
+                    SphereMapRow0IsNegativeY = ViewDesc.Skybox.SphereMapRow0IsNegativeY;
                     break;
 
                 default:
@@ -263,6 +266,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                                                                    ViewDesc.Skybox,
                                                                    pSkyboxSRV,
                                                                    SamplingInfo,
+                                                                   SphereMapRow0IsNegativeY,
                                                                    pViewState->FrameTargets);
                 if (RADIENT_FAILED(Status))
                     return Status;

@@ -769,7 +769,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
 
         float EnvMapSlice;
         uint  NumSamples;
-        uint  Padding0 = 0;
+        int   SphereMapRow0IsNegativeY;
         uint  Padding1 = 0;
 
         PrecomputeEnvMapAttribs(const TextureDesc&               EnvMapDesc,
@@ -783,7 +783,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
             EnvMapHeight{static_cast<float>(Attribs.EnvironmentMapHeight != 0 ? Attribs.EnvironmentMapHeight : EnvMapDesc.Height)},
             EnvMapMipCount{static_cast<float>(Attribs.EnvironmentMapMipLevels != 0 ? Attribs.EnvironmentMapMipLevels : EnvMapDesc.MipLevels)},
             EnvMapSlice{Attribs.EnvironmentMapSlice},
-            NumSamples{_NumSamples}
+            NumSamples{_NumSamples},
+            SphereMapRow0IsNegativeY{static_cast<int>(Attribs.SphereMapRow0IsNegativeY)}
         {}
     };
 
