@@ -526,6 +526,20 @@ public:
 
         /// Whether to optimize samples.
         bool OptimizeSamples = true;
+
+        /// UV scale and bias used to address a spherical environment map in
+        /// its backing texture. The identity transform samples the full image.
+        float4 EnvironmentMapUVScaleBias = {1.f, 1.f, 0.f, 0.f};
+
+        /// Array slice containing a spherical environment map. Ignored for
+        /// Texture2D and cube source views.
+        float EnvironmentMapSlice = 0.f;
+
+        /// Logical spherical environment map dimensions and usable mip count.
+        /// Zero values use the source texture description.
+        Uint32 EnvironmentMapWidth     = 0;
+        Uint32 EnvironmentMapHeight    = 0;
+        Uint32 EnvironmentMapMipLevels = 0;
     };
 
     /// Precompute cubemaps used by IBL.
@@ -977,6 +991,7 @@ protected:
         {
             ENV_MAP_TYPE_CUBE = 0,
             ENV_MAP_TYPE_SPHERE,
+            ENV_MAP_TYPE_SPHERE_ARRAY,
             ENV_MAP_TYPE_NUM_TYPES
         };
 

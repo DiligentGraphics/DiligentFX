@@ -760,23 +760,29 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     struct PrecomputeEnvMapAttribs
     {
         float4x4 Rotation;
+        float4   EnvMapUVScaleBias;
 
         float Roughness;
         float EnvMapWidth;
         float EnvMapHeight;
         float EnvMapMipCount;
 
-        uint NumSamples;
-        uint Padding0 = 0;
-        uint Padding1 = 0;
-        uint Padding2 = 0;
+        float EnvMapSlice;
+        uint  NumSamples;
+        uint  Padding0 = 0;
+        uint  Padding1 = 0;
 
-        PrecomputeEnvMapAttribs(const TextureDesc& EnvMapDesc, const float4x4& _Rotation, uint _NumSamples) :
+        PrecomputeEnvMapAttribs(const TextureDesc&               EnvMapDesc,
+                                const PrecomputeCubemapsAttribs& Attribs,
+                                const float4x4&                  _Rotation,
+                                uint                             _NumSamples) :
             Rotation{_Rotation},
+            EnvMapUVScaleBias{Attribs.EnvironmentMapUVScaleBias},
             Roughness{0.0f},
-            EnvMapWidth{static_cast<float>(EnvMapDesc.Width)},
-            EnvMapHeight{static_cast<float>(EnvMapDesc.Height)},
-            EnvMapMipCount{static_cast<float>(EnvMapDesc.MipLevels)},
+            EnvMapWidth{static_cast<float>(Attribs.EnvironmentMapWidth != 0 ? Attribs.EnvironmentMapWidth : EnvMapDesc.Width)},
+            EnvMapHeight{static_cast<float>(Attribs.EnvironmentMapHeight != 0 ? Attribs.EnvironmentMapHeight : EnvMapDesc.Height)},
+            EnvMapMipCount{static_cast<float>(Attribs.EnvironmentMapMipLevels != 0 ? Attribs.EnvironmentMapMipLevels : EnvMapDesc.MipLevels)},
+            EnvMapSlice{Attribs.EnvironmentMapSlice},
             NumSamples{_NumSamples}
         {}
     };
@@ -786,10 +792,27 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     if (Attribs.OptimizeSamples)
         FeatureFlags |= IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES;
 
-    const TextureDesc&             EnvMapDesc = Attribs.pEnvironmentMapSRV->GetTexture()->GetDesc();
-    const IBL_PSOKey::ENV_MAP_TYPE EnvMapType = EnvMapDesc.IsCube() ?
-        IBL_PSOKey::ENV_MAP_TYPE_CUBE :
-        IBL_PSOKey::ENV_MAP_TYPE_SPHERE;
+    const TextureDesc& EnvMapDesc = Attribs.pEnvironmentMapSRV->GetTexture()->GetDesc();
+
+    IBL_PSOKey::ENV_MAP_TYPE EnvMapType = IBL_PSOKey::ENV_MAP_TYPE_NUM_TYPES;
+    switch (Attribs.pEnvironmentMapSRV->GetDesc().TextureDim)
+    {
+        case RESOURCE_DIM_TEX_CUBE:
+            EnvMapType = IBL_PSOKey::ENV_MAP_TYPE_CUBE;
+            break;
+
+        case RESOURCE_DIM_TEX_2D:
+            EnvMapType = IBL_PSOKey::ENV_MAP_TYPE_SPHERE;
+            break;
+
+        case RESOURCE_DIM_TEX_2D_ARRAY:
+            EnvMapType = IBL_PSOKey::ENV_MAP_TYPE_SPHERE_ARRAY;
+            break;
+
+        default:
+            UNEXPECTED("Environment map SRV must be a cube, 2D, or 2D array texture view");
+            return;
+    }
 
     const TextureDesc& IrradianceCubeDesc    = Attribs.pIrradianceCube->GetDesc();
     const TextureDesc& PrefilteredEnvMapDesc = Attribs.pPrefilteredEnvMap->GetDesc();
@@ -799,6 +822,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
         .Add("OPTIMIZE_SAMPLES", (FeatureFlags & IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES) != 0)
         .Add("ENV_MAP_TYPE_CUBE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_CUBE))
         .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE))
+        .Add("ENV_MAP_TYPE_SPHERE_ARRAY", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE_ARRAY))
         .Add("ENV_MAP_TYPE", static_cast<int>(EnvMapType));
 
     IBL_RenderTechnique& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, IrradianceCubeDesc.Format}];
@@ -931,7 +955,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     VERIFY_EXPR(cbConstantsVar);
     ProcessCubemapFaces(pCtx, Attribs.pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         VERIFY_EXPR(mip == 0);
-        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Matrices[face], NumDiffuseSamples};
+        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Attribs, Matrices[face], NumDiffuseSamples};
         cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
 
         DrawAttribs drawAttrs{4, DRAW_FLAG_VERIFY_ALL};
@@ -949,7 +973,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     cbConstantsVar = ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_VERTEX, "cbConstants"};
     VERIFY_EXPR(cbConstantsVar);
     ProcessCubemapFaces(pCtx, Attribs.pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
-        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Matrices[face], NumSpecularSamples};
+        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Attribs, Matrices[face], NumSpecularSamples};
         EnvMapAttribs.Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapMipLevels - 1);
         cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
 
