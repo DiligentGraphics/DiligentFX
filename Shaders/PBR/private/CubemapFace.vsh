@@ -1,16 +1,17 @@
 cbuffer cbConstants
 {
     float4x4 g_Rotation;
+    float4   g_EnvMapUVScaleBias;
 
     float g_Roughness;
     float g_EnvMapWidth;
     float g_EnvMapHeight;
     float g_EnvMipCount;
-    
+
+    float g_EnvMapSlice;
     uint  g_NumSamples;
-    uint  g_Padding0;
+    int   g_SphereMapRow0IsNegativeY;
     uint  g_Padding1;
-    uint  g_Padding2;
 }
 
 void main(in uint VertexId     : SV_VertexID,
