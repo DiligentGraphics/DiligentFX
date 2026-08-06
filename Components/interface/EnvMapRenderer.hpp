@@ -133,6 +133,14 @@ public:
 
         /// Scaling factor to apply to the environment map.
         float3 Scale = {1, 1, 1};
+
+        /// UV scale and bias used to address a sphere map in its backing
+        /// texture. The identity transform samples the full image.
+        float4 SphereMapUVScaleBias = {1, 1, 0, 0};
+
+        /// Array slice containing a sphere map. Ignored for cube and
+        /// Texture2D source views.
+        float SphereMapSlice = 0;
     };
 
     /// Prepares the environment map renderer for rendering.
@@ -150,6 +158,7 @@ private:
         {
             ENV_MAP_TYPE_CUBE = 0,
             ENV_MAP_TYPE_SPHERE,
+            ENV_MAP_TYPE_SPHERE_ARRAY,
             ENV_MAP_TYPE_COUNT
         };
 
@@ -180,7 +189,15 @@ private:
             }
         };
     };
+
+    struct SRBData
+    {
+        RefCntAutoPtr<IShaderResourceBinding> pSRB;
+        IShaderResourceVariable*              pEnvMapVar = nullptr;
+    };
+
     IPipelineState* GetPSO(const PSOKey& Key);
+    SRBData*        GetSRBData(PSOKey::ENV_MAP_TYPE EnvMapType, IPipelineState* pPSO);
 
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
     RefCntAutoPtr<IRenderStateCache> m_pStateCache;
@@ -195,10 +212,12 @@ private:
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
 
-    IPipelineState* m_pCurrentPSO = nullptr;
+    // Resource view dimensions are part of the shader resource contract.
+    // Other PSO key attributes do not affect SRB compatibility.
+    std::array<SRBData, PSOKey::ENV_MAP_TYPE_COUNT> m_SRBData;
 
-    RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    IShaderResourceVariable*              m_pEnvMapVar = nullptr;
+    IPipelineState* m_pCurrentPSO     = nullptr;
+    SRBData*        m_pCurrentSRBData = nullptr;
 
     struct EnvMapShaderAttribs;
     std::unique_ptr<EnvMapShaderAttribs> m_ShaderAttribs;

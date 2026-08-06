@@ -18,12 +18,21 @@ cbuffer cbEnvMapRenderAttribs
     float Unusued2;
     
     float4 g_Scale;
+
+    float4 g_SphereMapUVScaleBias;
+
+    float g_SphereMapSlice;
+    float Padding0;
+    float Padding1;
+    float Padding2;
 }
 
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
 TextureCube  EnvMap;
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
 Texture2D    EnvMap;
+#elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
+Texture2DArray EnvMap;
 #endif
 SamplerState EnvMap_sampler;
 
@@ -31,8 +40,14 @@ float3 SampleEnvrionmentMap(float3 R, float g_MipLevel)
 {
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
     return EnvMap.SampleLevel(EnvMap_sampler, R, g_MipLevel).rgb;
-#elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
-    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSphereMapUV(R), g_MipLevel).rgb;
+#elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE || ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
+    float2 UV = TransformDirectionToSphereMapUV(R);
+#    if ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
+    UV = UV * g_SphereMapUVScaleBias.xy + g_SphereMapUVScaleBias.zw;
+    return EnvMap.SampleLevel(EnvMap_sampler, float3(UV, g_SphereMapSlice), g_MipLevel).rgb;
+#    else
+    return EnvMap.SampleLevel(EnvMap_sampler, UV, g_MipLevel).rgb;
+#    endif
 #endif
 }
 
