@@ -574,9 +574,10 @@ bool HnRenderDelegate::PrecomputeIBLCubemaps(ITextureView* pEnvironmentMapSRV)
     }
 
     PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
-    Attribs.pEnvironmentMapSRV = pEnvironmentMapSRV;
-    Attribs.pIrradianceCube    = m_pIrradianceCubeSRV->GetTexture();
-    Attribs.pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
+    Attribs.pEnvironmentMapSRV       = pEnvironmentMapSRV;
+    Attribs.pIrradianceCube          = m_pIrradianceCubeSRV->GetTexture();
+    Attribs.pPrefilteredEnvMap       = m_pPrefilteredEnvMapSRV->GetTexture();
+    Attribs.SphereMapRow0IsNegativeY = true;
     m_USDRenderer->PrecomputeCubemaps(m_pContext, Attribs);
     return true;
 }
