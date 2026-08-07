@@ -4,6 +4,7 @@ if(TARGET gtest)
     if(DILIGENT_BUILD_FX_TESTS)
         add_subdirectory(RadientTest)
         add_subdirectory(RadientGPUTest)
+        add_subdirectory(RadientRenderTest)
     endif()
 endif()
 
