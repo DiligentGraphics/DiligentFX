@@ -28,6 +28,7 @@
 
 #include "RadientRenderTestManifest.hpp"
 #include "RadientRenderTestOptions.hpp"
+#include "RadientRenderTestFixture.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Math/RadientMath.hpp"
@@ -147,46 +148,27 @@ private:
 class RadientRenderScene
 {
 public:
-    RadientRenderScene(IRenderDevice*                 pDevice,
+    RadientRenderScene(IRadientEngine*                pEngine,
+                       IRadientRenderer*              pRenderer,
+                       IRadientView*                  pView,
                        IDeviceContext*                pContext,
                        ISwapChain*                    pSwapChain,
                        const RadientRenderTestCamera& Camera) :
-        m_pContext{pContext}
+        m_pContext{pContext},
+        m_pRenderer{pRenderer},
+        m_pView{pView}
     {
-        RadientEngineCreateInfo EngineCI{};
-        EngineCI.Backend.Desc.Name         = "Radient render test backend";
-        EngineCI.Backend.Desc.Type         = RADIENT_BACKEND_TYPE_LOCAL;
-        EngineCI.Backend.pDevice           = pDevice;
-        EngineCI.Backend.pImmediateContext = pContext;
-        EngineCI.Backend.pSwapChain        = pSwapChain;
-        EngineCI.Assets.Desc.Name          = "Radient render test assets";
-        EngineCI.WorkerThreadCount         = 2;
-        m_Status                           = CreateRadientEngine(EngineCI, &m_pEngine);
-        if (RADIENT_FAILED(m_Status))
-            return;
-
         RadientSceneDesc SceneDesc{};
         SceneDesc.Name = "Radient render test scene";
-        m_Status       = m_pEngine->CreateScene(SceneDesc, &m_pScene);
+        m_Status       = pEngine->CreateScene(SceneDesc, &m_pScene);
         if (RADIENT_FAILED(m_Status))
             return;
 
-        m_Status = m_pEngine->CreateSceneWriter(m_pScene, &m_pWriter);
+        m_Status = pEngine->CreateSceneWriter(m_pScene, &m_pWriter);
         if (RADIENT_FAILED(m_Status))
             return;
 
-        m_Status = m_pEngine->CreateSceneImporter(m_pWriter, &m_pImporter);
-        if (RADIENT_FAILED(m_Status))
-            return;
-
-        m_Status = m_pEngine->GetAssetManager(&m_pAssetManager);
-        if (RADIENT_FAILED(m_Status))
-            return;
-
-        RadientRendererDesc RendererDesc{};
-        RendererDesc.Name                           = "Radient render test renderer";
-        RendererDesc.EnableAsyncPipelineCompilation = False;
-        m_Status                                    = m_pEngine->CreateRenderer(RendererDesc, &m_pRenderer);
+        m_Status = pEngine->CreateSceneImporter(m_pWriter, &m_pImporter);
         if (RADIENT_FAILED(m_Status))
             return;
 
@@ -228,28 +210,30 @@ public:
         if (RADIENT_FAILED(m_Status))
             return;
 
-        RadientViewDesc ViewDesc{};
-        ViewDesc.Name                         = "Radient render test view";
-        ViewDesc.pScene                       = m_pScene;
-        ViewDesc.Camera                       = m_CameraEntity;
-        ViewDesc.pRenderTarget                = m_pRenderTarget;
-        ViewDesc.ClearColor                   = {0.05f, 0.05f, 0.05f, 1.f};
-        ViewDesc.ToneMapping.AutoExposure     = False;
-        ViewDesc.ToneMapping.LightAdaptation  = False;
-        ViewDesc.TemporalAntiAliasing.Enabled = False;
-        m_Status                              = m_pRenderer->CreateView(ViewDesc, &m_pView);
+        m_Status = m_pWriter->CommitChanges();
         if (RADIENT_FAILED(m_Status))
             return;
 
-        m_Status = m_pWriter->CommitChanges();
+        m_Status = m_pView->SetScene(m_pScene);
+        if (RADIENT_FAILED(m_Status))
+            return;
+        m_ViewAttached = true;
+
+        m_Status = m_pView->SetCamera(m_CameraEntity);
+        if (RADIENT_FAILED(m_Status))
+            return;
+
+        m_Status = m_pView->SetRenderTarget(m_pRenderTarget);
     }
 
     ~RadientRenderScene()
     {
-        if (m_pView != nullptr)
+        if (m_ViewAttached)
+        {
             m_pView->SetRenderTarget(nullptr);
-        if (m_pAssetManager != nullptr)
-            m_pAssetManager->Stop(m_pContext);
+            m_pView->SetCamera(InvalidRadientEntityID);
+            m_pView->SetScene(nullptr);
+        }
     }
 
     RADIENT_STATUS GetStatus() const
@@ -341,11 +325,9 @@ private:
 private:
     IDeviceContext* m_pContext = nullptr;
 
-    RefCntAutoPtr<IRadientEngine>        m_pEngine;
     RefCntAutoPtr<IRadientScene>         m_pScene;
     RefCntAutoPtr<IRadientSceneWriter>   m_pWriter;
     RefCntAutoPtr<IRadientSceneImporter> m_pImporter;
-    RefCntAutoPtr<IRadientAssetManager>  m_pAssetManager;
     RefCntAutoPtr<IRadientRenderer>      m_pRenderer;
     RefCntAutoPtr<IRadientRenderTarget>  m_pRenderTarget;
     RefCntAutoPtr<IRadientView>          m_pView;
@@ -354,9 +336,10 @@ private:
     RadientEntityID m_CameraEntity = InvalidRadientEntityID;
     RadientEntityID m_ModelRoot    = InvalidRadientEntityID;
     RADIENT_STATUS  m_Status       = RADIENT_STATUS_INVALID_OPERATION;
+    bool            m_ViewAttached = false;
 };
 
-class RadientManifestRenderTest final : public ::testing::Test
+class RadientManifestRenderTest final : public RadientRender
 {
 public:
     explicit RadientManifestRenderTest(const RadientRenderTestCase& TestCase) :
@@ -377,6 +360,9 @@ private:
         ASSERT_NE(pDevice, nullptr);
         ASSERT_NE(pContext, nullptr);
         ASSERT_NE(pSwapChain, nullptr);
+        ASSERT_NE(GetEngine(), nullptr);
+        ASSERT_NE(GetRenderer(), nullptr);
+        ASSERT_NE(GetView(), nullptr);
 
         RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{pSwapChain, IID_TestingSwapChain};
         ASSERT_NE(pTestingSwapChain, nullptr);
@@ -407,7 +393,7 @@ private:
         }
         pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
 
-        RadientRenderScene Scene{pDevice, pContext, pSwapChain, m_TestCase.Camera};
+        RadientRenderScene Scene{GetEngine(), GetRenderer(), GetView(), pContext, pSwapChain, m_TestCase.Camera};
         ASSERT_EQ(Scene.GetStatus(), RADIENT_STATUS_OK);
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))
@@ -466,7 +452,7 @@ void RegisterRadientRenderTests()
             nullptr,
             __FILE__,
             __LINE__,
-            [pTestCase]() -> ::testing::Test* {
+            [pTestCase]() -> RadientRender* {
                 return new RadientManifestRenderTest{*pTestCase};
             });
     }
