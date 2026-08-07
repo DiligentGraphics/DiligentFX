@@ -172,6 +172,12 @@ bool ParseCamera(const Json&              Object,
     if (length(Camera.Up) == 0)
         return SetError(Error, Path + ".up must not be a zero vector");
 
+    const float3 ViewDirection = Camera.Target - Camera.Eye;
+    if (length(ViewDirection) == 0)
+        return SetError(Error, Path + ".eye and .target must be different");
+    if (length(cross(Camera.Up, ViewDirection)) == 0)
+        return SetError(Error, Path + ".up must not be parallel to the view direction");
+
     return true;
 }
 

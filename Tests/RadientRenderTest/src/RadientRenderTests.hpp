@@ -24,41 +24,14 @@
  *  of the possibility of such damages.
  */
 
-#include "gtest/gtest.h"
+#pragma once
 
-#include "GPUTestingEnvironment.hpp"
-#include "RadientRenderTestManifest.hpp"
-#include "RadientRenderTestOptions.hpp"
-#include "RadientRenderTests.hpp"
-
-#if PLATFORM_WIN32
-#    include <crtdbg.h>
-#endif
-
-int main(int argc, char** argv)
+namespace Diligent
 {
-#if PLATFORM_WIN32
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
+namespace Testing
+{
 
-    ::testing::InitGoogleTest(&argc, argv);
+void RegisterRadientRenderTests();
 
-    if (!Diligent::Testing::InitializeRadientRenderTestOptions(argc, argv))
-        return -1;
-    if (!Diligent::Testing::InitializeRadientRenderTestManifest(
-            Diligent::Testing::GetRadientRenderTestOptions()))
-    {
-        return -1;
-    }
-    Diligent::Testing::RegisterRadientRenderTests();
-
-    auto* pEnvironment = Diligent::Testing::GPUTestingEnvironment::Initialize(argc, argv);
-    if (pEnvironment == nullptr)
-        return -1;
-
-    ::testing::AddGlobalTestEnvironment(pEnvironment);
-
-    const int Result = RUN_ALL_TESTS();
-    std::cout << "\n\n\n";
-    return Result;
-}
+} // namespace Testing
+} // namespace Diligent
