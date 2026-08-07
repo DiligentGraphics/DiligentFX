@@ -180,7 +180,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
                                               const RadientViewDesc REF Desc,
                                               IRadientView**            ppView) PURE;
 
-    /// Renders one frame.
+    /// Renders one frame. Returns RADIENT_STATUS_PENDING when the frame is
+    /// rendered with ready content while renderer-specific drawable resources
+    /// are still being prepared asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(Render)(THIS_
                                           const RadientRenderAttribs REF Attribs) PURE;
 };

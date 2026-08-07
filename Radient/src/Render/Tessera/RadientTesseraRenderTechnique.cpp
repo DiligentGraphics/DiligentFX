@@ -74,7 +74,14 @@ RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Sce
         *m_pThreadPool,
         m_GeometryRenderer.GetMaterialCache(),
     };
-    return m_DrawableCache.SyncScene(Scene, &MaterialResolveContext);
+    const RADIENT_STATUS Status = m_DrawableCache.SyncScene(Scene, &MaterialResolveContext);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    // Keep rendering ready content, but report that renderer-specific mesh or
+    // material work is still in flight so explicit synchronization points can
+    // wait without relying on a fixed number of warm-up frames.
+    return m_DrawableCache.HasPendingRenderables() ? RADIENT_STATUS_PENDING : Status;
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderContext& Context)

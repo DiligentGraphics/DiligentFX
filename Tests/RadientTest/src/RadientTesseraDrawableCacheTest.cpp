@@ -893,6 +893,7 @@ TEST(RadientTesseraDrawableCacheTest, ReadyMeshWaitsForMaterialCache)
     EXPECT_EQ(DrawableCache.SyncScene(*pScene, &MaterialContext), RADIENT_STATUS_OK);
     EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+    EXPECT_TRUE(DrawableCache.HasPendingRenderables());
     pScene->ClearPendingRenderChanges();
 
     MeshProvider.NumCalls = 0;
@@ -948,6 +949,7 @@ TEST(RadientTesseraDrawableCacheTest, MaterialProcessingDefersAndSharesDrawables
     ASSERT_EQ(PrepareDrawableMaterialCache(*pMaterialCache), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.SyncScene(*pScene, &MaterialContext), RADIENT_STATUS_OK);
     ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
+    EXPECT_FALSE(DrawableCache.HasPendingRenderables());
 
     const RadientDrawList::ItemListType& Items =
         DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();

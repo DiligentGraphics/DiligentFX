@@ -228,6 +228,11 @@ public:
         return m_SceneRevisions;
     }
 
+    bool HasPendingRenderables() const
+    {
+        return !m_PendingRenderableEntities.empty();
+    }
+
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
     {
         if (DrawableID >= m_DrawableSlots.size())

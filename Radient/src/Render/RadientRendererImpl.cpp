@@ -151,7 +151,11 @@ RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
     if (RADIENT_FAILED(UpdateStatus))
         return UpdateStatus;
 
-    return m_RenderPipeline->Render(Attribs);
+    const RADIENT_STATUS RenderStatus = m_RenderPipeline->Render(Attribs);
+    if (RADIENT_FAILED(RenderStatus))
+        return RenderStatus;
+
+    return UpdateStatus == RADIENT_STATUS_PENDING ? RADIENT_STATUS_PENDING : RenderStatus;
 }
 
 } // namespace Diligent

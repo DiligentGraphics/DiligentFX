@@ -91,7 +91,11 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
         return SyncStatus;
     pSceneImpl->ClearPendingRenderChanges();
 
-    return m_pTechnique->PrepareFrame(Context);
+    const RADIENT_STATUS PrepareStatus = m_pTechnique->PrepareFrame(Context);
+    if (RADIENT_FAILED(PrepareStatus))
+        return PrepareStatus;
+
+    return SyncStatus == RADIENT_STATUS_PENDING ? RADIENT_STATUS_PENDING : PrepareStatus;
 }
 
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
