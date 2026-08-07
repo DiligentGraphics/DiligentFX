@@ -26,6 +26,9 @@
 
 #include "RadientRenderTestFixture.hpp"
 
+#include "RadientRenderTestOptions.hpp"
+
+#include "FileSystem.hpp"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientEngine.h"
 #include "RefCntAutoPtr.hpp"
@@ -40,12 +43,15 @@ namespace Testing
 namespace
 {
 
+constexpr char EnvironmentMapFileName[] = "furstenstein_1k.hdr";
+
 class RadientRenderSuiteResources
 {
 public:
     RadientRenderSuiteResources(IRenderDevice*  pDevice,
                                 IDeviceContext* pContext,
-                                ISwapChain*     pSwapChain) :
+                                ISwapChain*     pSwapChain,
+                                const char*     EnvironmentMapPath) :
         m_pContext{pContext}
     {
         RadientEngineCreateInfo EngineCI{};
@@ -63,6 +69,17 @@ public:
         if (RADIENT_FAILED(m_Status))
             return;
 
+        RadientTextureLoadInfo EnvironmentLoadInfo{};
+        EnvironmentLoadInfo.URI = EnvironmentMapPath;
+        m_Status                = m_pAssetManager->LoadTexture(EnvironmentLoadInfo, &m_pEnvironmentMap);
+        if (m_Status != RADIENT_STATUS_OK && m_Status != RADIENT_STATUS_PENDING)
+            return;
+        if (m_pEnvironmentMap == nullptr)
+        {
+            m_Status = RADIENT_STATUS_INVALID_OPERATION;
+            return;
+        }
+
         RadientRendererDesc RendererDesc{};
         RendererDesc.Name                           = "Radient render test renderer";
         RendererDesc.EnableAsyncPipelineCompilation = False;
@@ -78,6 +95,8 @@ public:
         ViewDesc.ToneMapping.AutoExposure     = False;
         ViewDesc.ToneMapping.LightAdaptation  = False;
         ViewDesc.TemporalAntiAliasing.Enabled = False;
+        ViewDesc.Environment.pEnvironmentMap  = m_pEnvironmentMap;
+        ViewDesc.Skybox.Source                = RADIENT_SKYBOX_SOURCE_ENVIRONMENT;
         m_Status                              = m_pRenderer->CreateView(ViewDesc, &m_pView);
     }
 
@@ -114,6 +133,11 @@ public:
         return m_pRenderer;
     }
 
+    IRadientTextureAsset* GetEnvironmentMap() const
+    {
+        return m_pEnvironmentMap;
+    }
+
     IRadientView* GetView() const
     {
         return m_pView;
@@ -124,6 +148,7 @@ private:
 
     RefCntAutoPtr<IRadientEngine>       m_pEngine;
     RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
+    RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     RefCntAutoPtr<IRadientRenderer>     m_pRenderer;
     RefCntAutoPtr<IRadientView>         m_pView;
     RADIENT_STATUS                      m_Status = RADIENT_STATUS_INVALID_OPERATION;
@@ -145,7 +170,15 @@ void RadientRenderTestFixture::SetUpTestSuite()
     ASSERT_NE(pContext, nullptr);
     ASSERT_NE(pSwapChain, nullptr);
 
-    s_pSuiteResources = std::make_unique<RadientRenderSuiteResources>(pDevice, pContext, pSwapChain);
+    const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+    const std::string               EnvironmentMapPath =
+        FileSystem::JoinPath(FileSystem::JoinPath(Options.AssetsDirectory, "Environments"),
+                             EnvironmentMapFileName);
+    ASSERT_TRUE(FileSystem::FileExists(EnvironmentMapPath.c_str()))
+        << "Environment map does not exist: " << EnvironmentMapPath;
+
+    s_pSuiteResources =
+        std::make_unique<RadientRenderSuiteResources>(pDevice, pContext, pSwapChain, EnvironmentMapPath.c_str());
     ASSERT_EQ(s_pSuiteResources->GetStatus(), RADIENT_STATUS_OK);
 }
 
@@ -167,6 +200,11 @@ IRadientAssetManager* RadientRenderTestFixture::GetAssetManager()
 IRadientRenderer* RadientRenderTestFixture::GetRenderer()
 {
     return s_pSuiteResources != nullptr ? s_pSuiteResources->GetRenderer() : nullptr;
+}
+
+IRadientTextureAsset* RadientRenderTestFixture::GetEnvironmentMap()
+{
+    return s_pSuiteResources != nullptr ? s_pSuiteResources->GetEnvironmentMap() : nullptr;
 }
 
 IRadientView* RadientRenderTestFixture::GetView()

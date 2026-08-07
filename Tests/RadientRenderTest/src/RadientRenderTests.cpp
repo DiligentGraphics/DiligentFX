@@ -31,6 +31,7 @@
 #include "RadientRenderTestFixture.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "FileSystem.hpp"
 #include "GPUTestingEnvironment.hpp"
@@ -151,12 +152,14 @@ public:
     RadientRenderScene(IRadientEngine*                pEngine,
                        IRadientRenderer*              pRenderer,
                        IRadientView*                  pView,
+                       IRadientTextureAsset*          pEnvironmentMap,
                        IDeviceContext*                pContext,
                        ISwapChain*                    pSwapChain,
                        const RadientRenderTestCamera& Camera) :
         m_pContext{pContext},
         m_pRenderer{pRenderer},
-        m_pView{pView}
+        m_pView{pView},
+        m_pEnvironmentMap{pEnvironmentMap}
     {
         RadientSceneDesc SceneDesc{};
         SceneDesc.Name = "Radient render test scene";
@@ -278,6 +281,11 @@ public:
             if (RADIENT_FAILED(SceneStatus))
                 return SceneStatus;
 
+            const RADIENT_STATUS EnvironmentStatus =
+                RadientTextureAssetManager::GetGPUResourceStatus(m_pEnvironmentMap);
+            if (RADIENT_FAILED(EnvironmentStatus))
+                return EnvironmentStatus;
+
             const RADIENT_STATUS RenderStatus = RenderFrame(Time);
             if (RADIENT_FAILED(RenderStatus))
                 return RenderStatus;
@@ -287,6 +295,7 @@ public:
 
             if (ImportStatus == RADIENT_STATUS_OK &&
                 SceneStatus == RADIENT_STATUS_OK &&
+                EnvironmentStatus == RADIENT_STATUS_OK &&
                 RenderStatus == RADIENT_STATUS_OK)
             {
                 return RADIENT_STATUS_OK;
@@ -331,6 +340,7 @@ private:
     RefCntAutoPtr<IRadientRenderer>      m_pRenderer;
     RefCntAutoPtr<IRadientRenderTarget>  m_pRenderTarget;
     RefCntAutoPtr<IRadientView>          m_pView;
+    RefCntAutoPtr<IRadientTextureAsset>  m_pEnvironmentMap;
     RefCntAutoPtr<IRadientSceneAsset>    m_pSceneAsset;
 
     RadientEntityID m_CameraEntity = InvalidRadientEntityID;
@@ -393,7 +403,13 @@ private:
         }
         pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
 
-        RadientRenderScene Scene{GetEngine(), GetRenderer(), GetView(), pContext, pSwapChain, m_TestCase.Camera};
+        RadientRenderScene Scene{GetEngine(),
+                                 GetRenderer(),
+                                 GetView(),
+                                 GetEnvironmentMap(),
+                                 pContext,
+                                 pSwapChain,
+                                 m_TestCase.Camera};
         ASSERT_EQ(Scene.GetStatus(), RADIENT_STATUS_OK);
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))

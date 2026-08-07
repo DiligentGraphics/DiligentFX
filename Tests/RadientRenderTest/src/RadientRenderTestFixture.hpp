@@ -34,6 +34,7 @@ namespace Diligent
 typedef struct IRadientAssetManager IRadientAssetManager;
 typedef struct IRadientEngine       IRadientEngine;
 typedef struct IRadientRenderer     IRadientRenderer;
+typedef struct IRadientTextureAsset IRadientTextureAsset;
 typedef struct IRadientView         IRadientView;
 
 namespace Testing
@@ -52,6 +53,7 @@ protected:
     static IRadientEngine*       GetEngine();
     static IRadientAssetManager* GetAssetManager();
     static IRadientRenderer*     GetRenderer();
+    static IRadientTextureAsset* GetEnvironmentMap();
     static IRadientView*         GetView();
 };
 

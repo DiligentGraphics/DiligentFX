@@ -38,6 +38,7 @@ namespace Testing
 struct RadientRenderTestOptions
 {
     std::string ModelsDirectory;
+    std::string AssetsDirectory;
     std::string GoldenImagesDirectory;
     std::string OutputDirectory;
 

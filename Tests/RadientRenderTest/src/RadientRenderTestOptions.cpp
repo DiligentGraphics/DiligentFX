@@ -73,18 +73,19 @@ bool InitializeRadientRenderTestOptions(int argc, const char* const* argv)
     CommandLineParser Parser{argc, argv};
 
     const bool HasModelsDirectory = Parser.Parse("models", Options.ModelsDirectory, false);
-    const bool HasGoldenImagesDirectory =
-        Parser.Parse("golden_images", Options.GoldenImagesDirectory, false);
+    const bool HasAssetsDirectory = Parser.Parse("assets", Options.AssetsDirectory, false);
     const bool HasOutputDirectory = Parser.Parse("output", Options.OutputDirectory, false);
 
-    if (!HasModelsDirectory || !HasGoldenImagesDirectory || !HasOutputDirectory)
+    if (!HasModelsDirectory || !HasAssetsDirectory || !HasOutputDirectory)
     {
         std::cerr << "Usage: " << argv[0]
-                  << " --models=<directory> --golden_images=<directory> --output=<directory> "
+                  << " --models=<directory> --assets=<directory> --output=<directory> "
                      "[--width=512] [--height=512] [--max_channel_error=0] "
                      "[--max_bad_pixel_ratio=0] [GPU and gtest options]\n";
         return false;
     }
+
+    Options.GoldenImagesDirectory = FileSystem::JoinPath(Options.AssetsDirectory, "GoldenImages");
 
     Parser.Parse("width", Options.Width, false);
     Parser.Parse("height", Options.Height, false);
@@ -95,7 +96,8 @@ bool InitializeRadientRenderTestOptions(int argc, const char* const* argv)
 
     bool IsValid = true;
     IsValid &= ValidateDirectory("--models", Options.ModelsDirectory);
-    IsValid &= ValidateDirectory("--golden_images", Options.GoldenImagesDirectory);
+    IsValid &= ValidateDirectory("--assets", Options.AssetsDirectory);
+    IsValid &= ValidateDirectory("GoldenImages asset directory", Options.GoldenImagesDirectory);
     IsValid &= PrepareOutputDirectory(Options.OutputDirectory);
 
     if (Options.Width == 0 || Options.Height == 0)
