@@ -29,6 +29,7 @@
 #include "CommandLineParser.hpp"
 #include "FileSystem.hpp"
 
+#include <cmath>
 #include <iostream>
 
 namespace Diligent
@@ -75,24 +76,49 @@ bool InitializeRadientRenderTestOptions(int argc, const char* const* argv)
     const bool HasGoldenImagesDirectory =
         Parser.Parse("golden_images", Options.GoldenImagesDirectory, false);
     const bool HasOutputDirectory = Parser.Parse("output", Options.OutputDirectory, false);
-    const bool HasConfigFile      = Parser.Parse("config", Options.ConfigFile, false);
 
-    if (!HasModelsDirectory || !HasGoldenImagesDirectory || !HasOutputDirectory || !HasConfigFile)
+    if (!HasModelsDirectory || !HasGoldenImagesDirectory || !HasOutputDirectory)
     {
         std::cerr << "Usage: " << argv[0]
-                  << " --models=<directory> --golden_images=<directory> --output=<directory> --config=<file> [GPU and gtest options]\n";
+                  << " --models=<directory> --golden_images=<directory> --output=<directory> "
+                     "[--width=512] [--height=512] [--max_channel_error=0] "
+                     "[--max_bad_pixel_ratio=0] [GPU and gtest options]\n";
         return false;
     }
+
+    Parser.Parse("width", Options.Width, false);
+    Parser.Parse("height", Options.Height, false);
+
+    Uint32 MaxChannelError = Options.Comparison.MaxChannelError;
+    Parser.Parse("max_channel_error", MaxChannelError, false);
+    Parser.Parse("max_bad_pixel_ratio", Options.Comparison.MaxBadPixelRatio, false);
 
     bool IsValid = true;
     IsValid &= ValidateDirectory("--models", Options.ModelsDirectory);
     IsValid &= ValidateDirectory("--golden_images", Options.GoldenImagesDirectory);
     IsValid &= PrepareOutputDirectory(Options.OutputDirectory);
 
-    if (Options.ConfigFile.empty() || !FileSystem::FileExists(Options.ConfigFile.c_str()))
+    if (Options.Width == 0 || Options.Height == 0)
     {
-        std::cerr << "RadientRenderTest: --config must specify an existing file: '"
-                  << Options.ConfigFile << "'\n";
+        std::cerr << "RadientRenderTest: --width and --height must be greater than zero\n";
+        IsValid = false;
+    }
+
+    if (MaxChannelError > 255)
+    {
+        std::cerr << "RadientRenderTest: --max_channel_error must be in the [0, 255] range\n";
+        IsValid = false;
+    }
+    else
+    {
+        Options.Comparison.MaxChannelError = static_cast<Uint8>(MaxChannelError);
+    }
+
+    if (!std::isfinite(Options.Comparison.MaxBadPixelRatio) ||
+        Options.Comparison.MaxBadPixelRatio < 0 ||
+        Options.Comparison.MaxBadPixelRatio > 1)
+    {
+        std::cerr << "RadientRenderTest: --max_bad_pixel_ratio must be finite and in the [0, 1] range\n";
         IsValid = false;
     }
 

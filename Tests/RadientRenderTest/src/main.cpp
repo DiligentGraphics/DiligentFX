@@ -27,6 +27,7 @@
 #include "gtest/gtest.h"
 
 #include "GPUTestingEnvironment.hpp"
+#include "RadientRenderTestManifest.hpp"
 #include "RadientRenderTestOptions.hpp"
 
 #if PLATFORM_WIN32
@@ -43,6 +44,11 @@ int main(int argc, char** argv)
 
     if (!Diligent::Testing::InitializeRadientRenderTestOptions(argc, argv))
         return -1;
+    if (!Diligent::Testing::InitializeRadientRenderTestManifest(
+            Diligent::Testing::GetRadientRenderTestOptions()))
+    {
+        return -1;
+    }
 
     auto* pEnvironment = Diligent::Testing::GPUTestingEnvironment::Initialize(argc, argv);
     if (pEnvironment == nullptr)

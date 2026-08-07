@@ -26,30 +26,56 @@
 
 #pragma once
 
+#include "BasicMath.hpp"
+#include "GraphicsTypes.h"
 #include "TestingSwapChainBase.hpp"
 
+#include <array>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace Diligent
 {
 namespace Testing
 {
 
-struct RadientRenderTestOptions
+struct RadientRenderTestOptions;
+
+struct RadientRenderTestCamera
 {
-    std::string ModelsDirectory;
-    std::string GoldenImagesDirectory;
-    std::string OutputDirectory;
-
-    Uint32 Width  = 512;
-    Uint32 Height = 512;
-
-    TestImageComparisonAttribs Comparison;
+    float3 Eye;
+    float3 Target = float3{0, 0, 0};
+    float3 Up     = float3{0, 1, 0};
+    float  Fov    = 45;
 };
 
-bool InitializeRadientRenderTestOptions(int argc, const char* const* argv);
+struct RadientRenderTestStatistics
+{
+    std::optional<Uint32> MultiDrawIndexed;
+    std::optional<Uint32> MapBufferMax;
+    std::optional<Uint32> UpdateBufferMax;
+};
 
-const RadientRenderTestOptions& GetRadientRenderTestOptions();
+struct RadientRenderTestCase
+{
+    std::string Name;
+    std::string Model;
+
+    RadientRenderTestCamera                                                                               Camera;
+    TestImageComparisonAttribs                                                                            Comparison;
+    std::array<std::optional<RadientRenderTestStatistics>, static_cast<size_t>(RENDER_DEVICE_TYPE_COUNT)> Statistics;
+};
+
+struct RadientRenderTestManifest
+{
+    Uint32                             Version = 0;
+    std::vector<RadientRenderTestCase> Tests;
+};
+
+bool InitializeRadientRenderTestManifest(const RadientRenderTestOptions& Options);
+
+const RadientRenderTestManifest& GetRadientRenderTestManifest();
 
 } // namespace Testing
 } // namespace Diligent

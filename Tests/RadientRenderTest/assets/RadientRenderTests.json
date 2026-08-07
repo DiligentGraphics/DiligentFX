@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "tests": [
+    {
+      "name": "DamagedHelmet",
+      "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      },
+      "statistics": {
+        "d3d11": {
+          "multiDrawIndexed": 1,
+          "mapBufferMax": 2,
+          "updateBufferMax": 1
+        },
+        "d3d12": {
+          "multiDrawIndexed": 1,
+          "mapBufferMax": 2,
+          "updateBufferMax": 1
+        },
+        "vk": {
+          "multiDrawIndexed": 1,
+          "mapBufferMax": 2,
+          "updateBufferMax": 1
+        }
+      }
+    }
+  ]
+}
