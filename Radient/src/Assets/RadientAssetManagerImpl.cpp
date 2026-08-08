@@ -201,6 +201,7 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     CreateInfo.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
     CreateInfo.DefaultAtlasDesc.Desc.Width     = RadientDefaultTextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.Height    = RadientDefaultTextureAtlasSize;
+    CreateInfo.DefaultAtlasDesc.Desc.MipLevels = 0;
     CreateInfo.DefaultAtlasDesc.Desc.ArraySize = RadientDefaultTextureAtlasSlices;
     CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_TYPELESS;
     CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;

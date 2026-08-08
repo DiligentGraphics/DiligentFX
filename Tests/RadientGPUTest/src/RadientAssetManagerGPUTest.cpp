@@ -354,7 +354,11 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), nullptr);
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatNormalTextureAttribId), nullptr);
 
-    EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pWhite), nullptr);
+    ITextureView* const pWhiteSRV = RadientAssetManagerImpl::GetTextureSRV(pWhite);
+    ASSERT_NE(pWhiteSRV, nullptr);
+    const TextureDesc& AtlasDesc = pWhiteSRV->GetTexture()->GetDesc();
+    EXPECT_EQ(AtlasDesc.MipLevels, ComputeMipLevelsCount(AtlasDesc));
+
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pBlack), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pNormal), nullptr);
     EXPECT_NE(RadientAssetManagerImpl::GetTextureSRV(pPhysicalDesc), nullptr);
