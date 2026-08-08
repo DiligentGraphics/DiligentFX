@@ -40,7 +40,9 @@ struct RadientRenderTestOptions
     std::string ModelsDirectory;
     std::string AssetsDirectory;
     std::string GoldenImagesDirectory;
-    std::string OutputDirectory;
+    std::string GoldenImageDifferencesDirectory;
+
+    bool UpdateGoldenImages = false;
 
     Uint32 Width  = 512;
     Uint32 Height = 512;

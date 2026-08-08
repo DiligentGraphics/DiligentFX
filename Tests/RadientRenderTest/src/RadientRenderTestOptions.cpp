@@ -52,7 +52,7 @@ bool ValidateDirectory(const char* OptionName, const std::string& Path)
     return false;
 }
 
-bool PrepareOutputDirectory(const std::string& Path)
+bool PrepareDirectory(const char* DirectoryName, const std::string& Path)
 {
     if (!Path.empty() &&
         (FileSystem::IsDirectory(Path.c_str()) ||
@@ -61,8 +61,8 @@ bool PrepareOutputDirectory(const std::string& Path)
         return true;
     }
 
-    std::cerr << "RadientRenderTest: --output must specify a directory that exists or can be created: '"
-              << Path << "'\n";
+    std::cerr << "RadientRenderTest: " << DirectoryName
+              << " directory does not exist and could not be created: '" << Path << "'\n";
     return false;
 }
 
@@ -74,19 +74,20 @@ bool InitializeRadientRenderTestOptions(int argc, const char* const* argv)
 
     const bool HasModelsDirectory = Parser.Parse("models", Options.ModelsDirectory, false);
     const bool HasAssetsDirectory = Parser.Parse("assets", Options.AssetsDirectory, false);
-    const bool HasOutputDirectory = Parser.Parse("output", Options.OutputDirectory, false);
 
-    if (!HasModelsDirectory || !HasAssetsDirectory || !HasOutputDirectory)
+    if (!HasModelsDirectory || !HasAssetsDirectory)
     {
         std::cerr << "Usage: " << argv[0]
-                  << " --models=<directory> --assets=<directory> --output=<directory> "
-                     "[--width=512] [--height=512] [--max_channel_error=0] "
+                  << " --models=<directory> --assets=<directory> "
+                     "[--update_golden_images] [--width=512] [--height=512] [--max_channel_error=0] "
                      "[--max_bad_pixel_ratio=0] [GPU and gtest options]\n";
         return false;
     }
 
-    Options.GoldenImagesDirectory = FileSystem::JoinPath(Options.AssetsDirectory, "GoldenImages");
+    Options.GoldenImagesDirectory           = FileSystem::JoinPath(Options.AssetsDirectory, "GoldenImages");
+    Options.GoldenImageDifferencesDirectory = FileSystem::JoinPath(Options.AssetsDirectory, "GoldenImagesDifferences");
 
+    Parser.Parse("update_golden_images", Options.UpdateGoldenImages, false);
     Parser.Parse("width", Options.Width, false);
     Parser.Parse("height", Options.Height, false);
 
@@ -98,7 +99,7 @@ bool InitializeRadientRenderTestOptions(int argc, const char* const* argv)
     IsValid &= ValidateDirectory("--models", Options.ModelsDirectory);
     IsValid &= ValidateDirectory("--assets", Options.AssetsDirectory);
     IsValid &= ValidateDirectory("GoldenImages asset directory", Options.GoldenImagesDirectory);
-    IsValid &= PrepareOutputDirectory(Options.OutputDirectory);
+    IsValid &= PrepareDirectory("GoldenImagesDifferences", Options.GoldenImageDifferencesDirectory);
 
     if (Options.Width == 0 || Options.Height == 0)
     {

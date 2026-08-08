@@ -381,12 +381,10 @@ private:
         const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
         ASSERT_NE(BackendSuffix, nullptr);
 
-        const std::string ImageBaseName  = m_TestCase.Name + '_' + BackendSuffix;
-        const std::string ImageFileName  = ImageBaseName + ".png";
-        const std::string ModelPath      = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
-        const std::string ReferencePath  = FileSystem::JoinPath(Options.GoldenImagesDirectory, ImageFileName);
-        const std::string OutputBasePath = FileSystem::JoinPath(Options.OutputDirectory, ImageBaseName);
-        const std::string OutputPath     = OutputBasePath + ".png";
+        const std::string ImageBaseName     = m_TestCase.Name + '_' + BackendSuffix;
+        const std::string ModelPath         = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
+        const std::string ReferenceBasePath = FileSystem::JoinPath(Options.GoldenImagesDirectory, ImageBaseName);
+        const std::string ReferencePath     = ReferenceBasePath + ".png";
 
         ASSERT_TRUE(FileSystem::FileExists(ModelPath.c_str()))
             << "Model does not exist: " << ModelPath;
@@ -435,19 +433,33 @@ private:
                 EXPECT_LE(Counters.UpdateBuffer, *Statistics->UpdateBufferMax);
         }
 
-        pTestingSwapChain->DumpBackBuffer(OutputBasePath.c_str());
-
         if (!HasReference)
         {
-            ADD_FAILURE() << "Reference image does not exist: " << ReferencePath
-                          << ". Rendered candidate: " << OutputPath;
+            if (Options.UpdateGoldenImages)
+            {
+                pTestingSwapChain->DumpBackBuffer(ReferenceBasePath.c_str());
+                ADD_FAILURE() << "Reference image did not exist and was created: " << ReferencePath;
+            }
+            else
+            {
+                const std::string CandidateBasePath = FileSystem::JoinPath(Options.GoldenImageDifferencesDirectory, ImageBaseName);
+                const std::string CandidatePath     = CandidateBasePath + ".png";
+                pTestingSwapChain->DumpBackBuffer(CandidateBasePath.c_str());
+                ADD_FAILURE() << "Reference image does not exist: " << ReferencePath
+                              << ". Rendered candidate: " << CandidatePath;
+            }
             return;
         }
 
-        CurrentDirectoryScope OutputDirectory{Options.OutputDirectory};
-        ASSERT_TRUE(OutputDirectory)
-            << "Failed to use output directory for comparison artifacts: " << Options.OutputDirectory;
-        pTestingSwapChain->CompareWithSnapshot(nullptr);
+        {
+            CurrentDirectoryScope DifferencesDirectory{Options.GoldenImageDifferencesDirectory};
+            ASSERT_TRUE(DifferencesDirectory)
+                << "Failed to use golden image differences directory: " << Options.GoldenImageDifferencesDirectory;
+            pTestingSwapChain->CompareWithSnapshot(nullptr);
+        }
+
+        if (Options.UpdateGoldenImages)
+            pTestingSwapChain->DumpBackBuffer(ReferenceBasePath.c_str());
     }
 
 private:
