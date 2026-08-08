@@ -128,7 +128,15 @@ DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
     RADIENT_SKYBOX_SOURCE_ENVIRONMENT,
 
     /// Render the explicit texture asset as the skybox.
-    RADIENT_SKYBOX_SOURCE_TEXTURE
+    RADIENT_SKYBOX_SOURCE_TEXTURE,
+
+    /// Render the view's diffuse irradiance cubemap as the skybox.
+    RADIENT_SKYBOX_SOURCE_IRRADIANCE,
+
+    /// Render the view's prefiltered environment cubemap as the skybox.
+    RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT,
+
+    RADIENT_SKYBOX_SOURCE_COUNT
 };
 
 // clang-format on
@@ -439,7 +447,8 @@ struct RadientSkyboxDesc
     Float32 MipLevel DEFAULT_INITIALIZER(0.f);
 
     /// Whether row 0 of a spherical skybox texture represents the negative Y
-    /// direction. Ignored for cube maps and when Source is RADIENT_SKYBOX_SOURCE_ENVIRONMENT.
+    /// direction. Used only when Source is RADIENT_SKYBOX_SOURCE_TEXTURE and
+    /// ignored for cube maps.
     Bool SphereMapRow0IsNegativeY DEFAULT_INITIALIZER(False);
 
 #if DILIGENT_CPP_INTERFACE

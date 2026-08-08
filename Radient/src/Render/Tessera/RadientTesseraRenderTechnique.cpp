@@ -55,6 +55,23 @@ IThreadPool* ValidateThreadPool(IThreadPool* pThreadPool)
     return pThreadPool;
 }
 
+bool GetTextureViewSamplingInfo(ITextureView*               pTextureView,
+                                RadientTextureSamplingInfo& SamplingInfo) noexcept
+{
+    if (pTextureView == nullptr)
+        return false;
+
+    ITexture* const pTexture = pTextureView->GetTexture();
+    if (pTexture == nullptr)
+        return false;
+
+    const TextureDesc& Desc = pTexture->GetDesc();
+    SamplingInfo.Width      = Desc.Width;
+    SamplingInfo.Height     = Desc.Height;
+    SamplingInfo.MipLevels  = Desc.MipLevels;
+    return SamplingInfo.MipLevels != 0;
+}
+
 } // namespace
 
 RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*               pThreadPool,
@@ -243,18 +260,31 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
 
         if (HasSkybox)
         {
-            IRadientTextureAsset* pSkyboxTexture            = nullptr;
-            bool                  SphereMapRow0IsNegativeY = false;
+            ITextureView*              pSkyboxSRV = nullptr;
+            RadientTextureSamplingInfo SamplingInfo;
+            bool                       SphereMapRow0IsNegativeY = false;
             switch (ViewDesc.Skybox.Source)
             {
                 case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
-                    pSkyboxTexture           = ViewDesc.Environment.pEnvironmentMap;
+                    pSkyboxSRV = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Environment.pEnvironmentMap);
+                    RadientTextureAssetManager::GetTextureSamplingInfo(ViewDesc.Environment.pEnvironmentMap, SamplingInfo);
                     SphereMapRow0IsNegativeY = ViewDesc.Environment.SphereMapRow0IsNegativeY;
                     break;
 
                 case RADIENT_SKYBOX_SOURCE_TEXTURE:
-                    pSkyboxTexture           = ViewDesc.Skybox.pTexture;
+                    pSkyboxSRV = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Skybox.pTexture);
+                    RadientTextureAssetManager::GetTextureSamplingInfo(ViewDesc.Skybox.pTexture, SamplingInfo);
                     SphereMapRow0IsNegativeY = ViewDesc.Skybox.SphereMapRow0IsNegativeY;
+                    break;
+
+                case RADIENT_SKYBOX_SOURCE_IRRADIANCE:
+                    pSkyboxSRV = pView->GetIrradianceCubeSRV();
+                    GetTextureViewSamplingInfo(pSkyboxSRV, SamplingInfo);
+                    break;
+
+                case RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT:
+                    pSkyboxSRV = pView->GetPrefilteredEnvMapSRV();
+                    GetTextureViewSamplingInfo(pSkyboxSRV, SamplingInfo);
                     break;
 
                 default:
@@ -262,12 +292,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                     break;
             }
 
-            ITextureView* const pSkyboxSRV = pSkyboxTexture != nullptr ?
-                RadientAssetManagerImpl::GetTextureSRV(pSkyboxTexture) :
-                nullptr;
-            RadientTextureSamplingInfo SamplingInfo;
-            if (pSkyboxSRV != nullptr &&
-                RadientTextureAssetManager::GetTextureSamplingInfo(pSkyboxTexture, SamplingInfo))
+            if (pSkyboxSRV != nullptr && SamplingInfo.MipLevels != 0)
             {
                 const RADIENT_STATUS Status = m_SkyboxPass.Execute(Context.pContext,
                                                                    ViewDesc.Skybox,

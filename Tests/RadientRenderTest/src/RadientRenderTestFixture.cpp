@@ -43,7 +43,7 @@ namespace Testing
 namespace
 {
 
-constexpr char EnvironmentMapFileName[] = "furstenstein_1k.hdr";
+constexpr char EnvironmentMapFileName[] = "colosseum_1k.hdr";
 
 class RadientRenderSuiteResources
 {
@@ -96,7 +96,8 @@ public:
         ViewDesc.ToneMapping.LightAdaptation  = False;
         ViewDesc.TemporalAntiAliasing.Enabled = False;
         ViewDesc.Environment.pEnvironmentMap  = m_pEnvironmentMap;
-        ViewDesc.Skybox.Source                = RADIENT_SKYBOX_SOURCE_ENVIRONMENT;
+        ViewDesc.Skybox.Source                = RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT;
+        ViewDesc.Skybox.MipLevel              = 1;
         m_Status                              = m_pRenderer->CreateView(ViewDesc, &m_pView);
     }
 
