@@ -130,6 +130,11 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     ITextureView* const pFirstPrefiltered = pFirstViewImpl->GetPrefilteredEnvMapSRV();
     ASSERT_NE(pFirstIrradiance, nullptr);
     ASSERT_NE(pFirstPrefiltered, nullptr);
+    if (pDevice->GetDeviceInfo().IsD3DDevice() || pDevice->GetDeviceInfo().IsVulkanDevice())
+    {
+        EXPECT_EQ(pFirstIrradiance->GetTexture()->GetState(), RESOURCE_STATE_SHADER_RESOURCE);
+        EXPECT_EQ(pFirstPrefiltered->GetTexture()->GetState(), RESOURCE_STATE_SHADER_RESOURCE);
+    }
 
     EXPECT_NE(pFirstIrradiance, pSecondViewImpl->GetIrradianceCubeSRV());
     EXPECT_NE(pFirstPrefiltered, pSecondViewImpl->GetPrefilteredEnvMapSRV());

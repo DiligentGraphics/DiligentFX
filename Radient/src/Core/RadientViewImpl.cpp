@@ -361,6 +361,17 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
         m_WeakPreparedEnvironmentMap             = pEnvironmentMap;
         m_PreparedEnvironmentMapRow0IsNegativeY = m_Desc.Environment.SphereMapRow0IsNegativeY;
     }
+    else if (ResourcesCreated)
+    {
+        // PrecomputeIBLCubemaps() transitions its outputs after rendering. If
+        // the environment is not ready yet, publish the cleared fallback maps
+        // in a shader-readable state instead.
+        StateTransitionDesc Barriers[] = {
+            {GetIrradianceCubeSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+            {GetPrefilteredEnvMapSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+        pContext->TransitionResourceStates(_countof(Barriers), Barriers);
+    }
 
     return RADIENT_STATUS_OK;
 }
