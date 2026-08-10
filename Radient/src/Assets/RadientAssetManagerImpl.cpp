@@ -364,6 +364,14 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     MaterialManagerCI.DefaultTextures = m_DefaultMaterialTextures;
 
     m_pMaterialManager = RadientMaterialAssetManager::Create(MaterialManagerCI);
+
+    RadientMaterialCreateInfo DefaultMaterialCI{};
+    const RADIENT_STATUS      DefaultMaterialStatus =
+        m_pMaterialManager != nullptr ?
+        m_pMaterialManager->CreateMaterial(DefaultMaterialCI, m_pDefaultMaterial.GetAddressOfEmpty()) :
+        RADIENT_STATUS_INVALID_OPERATION;
+    if (RADIENT_FAILED(DefaultMaterialStatus) || m_pDefaultMaterial == nullptr)
+        LOG_ERROR_AND_THROW("Failed to create the default Radient material");
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
@@ -765,6 +773,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::Import
                                         ResolvedSourceURI,
                                         pDocument,
                                         ImportedScene.Materials,
+                                        m_pDefaultMaterial,
                                         ImportedScene);
 }
 

@@ -157,6 +157,7 @@ private:
     RadientTextureAssetManagerSharedPtr  m_pTextureManager;
     RadientMaterialDefaultTextures       m_DefaultMaterialTextures;
     RadientMaterialAssetManagerSharedPtr m_pMaterialManager;
+    RefCntAutoPtr<IRadientMaterialAsset> m_pDefaultMaterial;
     RadientMeshAssetManagerSharedPtr     m_pMeshManager;
 
     RadientAssetCache<ScenePayloadImpl> m_SceneAssetCache;

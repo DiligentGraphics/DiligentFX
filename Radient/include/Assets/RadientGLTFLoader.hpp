@@ -64,6 +64,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                          const std::string&                      SourceURI,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
+                         IRadientMaterialAsset*                  pDefaultMaterial,
                          RadientImport::ImportedDocument&        Scene);
 
 } // namespace RadientGLTFLoader

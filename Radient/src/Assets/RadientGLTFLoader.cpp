@@ -427,12 +427,14 @@ public:
                       GLTF::Model&                   Model,
                       const RadientGLTFGeometryPlan& GeometryPlan,
                       const MaterialAssetList&       Materials,
+                      IRadientMaterialAsset*         pDefaultMaterial,
                       MeshAssetList&                 Meshes) :
         m_ThreadPool{ThreadPool},
         m_MeshManager{MeshManager},
         m_Model{Model},
         m_GeometryPlan{GeometryPlan},
         m_Materials{Materials},
+        m_pDefaultMaterial{pDefaultMaterial},
         m_Meshes{Meshes}
     {
     }
@@ -545,6 +547,8 @@ public:
             Primitive.IndexCount                      = pIndexData->IndexCount;
             if (PlannedPrimitive.MaterialId >= 0 && static_cast<size_t>(PlannedPrimitive.MaterialId) < m_Materials.size())
                 Primitive.pMaterial = m_Materials[static_cast<size_t>(PlannedPrimitive.MaterialId)];
+            else if (PlannedPrimitive.MaterialId < 0)
+                Primitive.pMaterial = m_pDefaultMaterial;
 
             GeometryIndices.push_back(LocalGeometryIndex);
         }
@@ -583,6 +587,7 @@ private:
     GLTF::Model&                   m_Model;
     const RadientGLTFGeometryPlan& m_GeometryPlan;
     const MaterialAssetList&       m_Materials;
+    IRadientMaterialAsset*         m_pDefaultMaterial = nullptr;
     MeshAssetList&                 m_Meshes;
     RADIENT_STATUS                 m_Status = RADIENT_STATUS_OK;
 };
@@ -698,6 +703,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                          const std::string&                      SourceURI,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
+                         IRadientMaterialAsset*                  pDefaultMaterial,
                          RadientImport::ImportedDocument&        Scene)
 {
     VERIFY_EXPR(pDocument != nullptr);
@@ -713,7 +719,13 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
     if (RADIENT_FAILED(Status))
         return Status;
 
-    RadientMeshLoader MeshLoader{ThreadPool, MeshManager, MetadataModel, GeometryPlan, Materials, Scene.Meshes};
+    RadientMeshLoader MeshLoader{ThreadPool,
+                                 MeshManager,
+                                 MetadataModel,
+                                 GeometryPlan,
+                                 Materials,
+                                 pDefaultMaterial,
+                                 Scene.Meshes};
 
     GLTF::ModelBuilder Builder{ModelCI, MetadataModel};
     Builder.BuildModel(GltfModel, -1, MeshLoader);

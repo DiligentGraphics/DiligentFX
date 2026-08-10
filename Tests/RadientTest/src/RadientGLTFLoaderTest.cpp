@@ -825,9 +825,16 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                          const std::string&                      GLTFPath,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
-                         RadientImport::ImportedDocument&        Scene)
+                         RadientImport::ImportedDocument&        Scene,
+                         IRadientMaterialAsset*                  pDefaultMaterial = nullptr)
 {
-    return RadientGLTFLoader::LoadScene(ThreadPool, MeshManager, GLTFPath, pDocument, Materials, Scene);
+    return RadientGLTFLoader::LoadScene(ThreadPool,
+                                        MeshManager,
+                                        GLTFPath,
+                                        pDocument,
+                                        Materials,
+                                        pDefaultMaterial,
+                                        Scene);
 }
 
 } // namespace
@@ -1177,6 +1184,56 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsCreatesMaterialAssetWithoutTextures)
     EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.w, 1.0f);
     EXPECT_FLOAT_EQ(pMaterial->Attribs.MetallicFactor, 0.125f);
     EXPECT_FLOAT_EQ(pMaterial->Attribs.RoughnessFactor, 0.875f);
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFMeshFile(TempDir, false);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
+    EXPECT_TRUE(Materials.empty());
+
+    RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
+    RadientMaterialCreateInfo            DefaultMaterialCI{};
+    ASSERT_EQ(pMaterialManager->CreateMaterial(DefaultMaterialCI, pDefaultMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pDefaultMaterial, nullptr);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(LoadScene(*pThreadPool,
+                        *pMeshManager,
+                        GLTFPath,
+                        pDocument,
+                        Materials,
+                        Scene,
+                        pDefaultMaterial),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+
+    ProcessQueuedTasks(*pThreadPool);
+
+    const RadientDrawableMeshResolveResult DrawableMesh =
+        RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
+    ASSERT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(DrawableMesh.pMesh, nullptr);
+    ASSERT_EQ(DrawableMesh.pMesh->Primitives.size(), 1u);
+    EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].pMaterialAsset, pDefaultMaterial.RawPtr());
+    EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].pMaterial,
+              RadientMaterialAssetManager::GetRenderData(pDefaultMaterial).pMaterial);
+
+    pThreadPool->StopThreads();
 }
 
 TEST(RadientGLTFLoaderTest, LoadMaterialsTracksTextureDependencies)
