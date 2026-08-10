@@ -28,6 +28,7 @@
 
 #include "BasicMath.hpp"
 #include "GraphicsTypes.h"
+#include "RadientView.h"
 #include "TestingSwapChainBase.hpp"
 
 #include <array>
@@ -62,6 +63,7 @@ struct RadientRenderTestCase
     std::string Name;
     std::string Model;
 
+    RadientToneMappingDesc                                                                                ToneMapping;
     RadientRenderTestCamera                                                                               Camera;
     TestImageComparisonAttribs                                                                            Comparison;
     std::array<std::optional<RadientRenderTestStatistics>, static_cast<size_t>(RENDER_DEVICE_TYPE_COUNT)> Statistics;

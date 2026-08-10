@@ -211,6 +211,28 @@ bool ParseComparison(const Json&                 Object,
     return true;
 }
 
+bool ParseToneMapping(const Json&             Object,
+                      RadientToneMappingDesc& ToneMapping,
+                      const std::string&      Path,
+                      std::string&            Error)
+{
+    if (!Object.is_object())
+        return SetError(Error, Path + " must be an object");
+
+    if (const auto AverageLogLumIt = Object.find("averageLogLum"); AverageLogLumIt != Object.end())
+    {
+        float Value = 0.f;
+        if (!ParseFloat(*AverageLogLumIt, Value, Path + ".averageLogLum", Error))
+            return false;
+        if (Value <= 0.f)
+            return SetError(Error, Path + ".averageLogLum must be greater than zero");
+
+        ToneMapping.AverageLogLum = Value;
+    }
+
+    return true;
+}
+
 bool IsValidTestName(const std::string& Name)
 {
     if (Name.empty())
@@ -253,6 +275,13 @@ bool ParseTestCase(const Json&                     Object,
         return SetError(Error, Path + ".camera is required");
     if (!ParseCamera(*CameraIt, Test.Camera, Path + ".camera", Error))
         return false;
+
+    if (const auto ToneMappingIt = Object.find("toneMapping");
+        ToneMappingIt != Object.end() &&
+        !ParseToneMapping(*ToneMappingIt, Test.ToneMapping, Path + ".toneMapping", Error))
+    {
+        return false;
+    }
 
     Test.Comparison = Options.Comparison;
     if (const auto ComparisonIt = Object.find("comparison");

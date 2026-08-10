@@ -401,6 +401,10 @@ private:
         }
         pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
 
+        const RADIENT_STATUS ToneMappingStatus = GetView()->SetToneMapping(m_TestCase.ToneMapping);
+        ASSERT_TRUE(ToneMappingStatus == RADIENT_STATUS_OK ||
+                    ToneMappingStatus == RADIENT_STATUS_NO_CHANGE);
+
         RadientRenderScene Scene{GetEngine(),
                                  GetRenderer(),
                                  GetView(),

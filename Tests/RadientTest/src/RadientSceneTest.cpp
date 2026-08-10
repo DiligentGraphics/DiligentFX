@@ -967,10 +967,10 @@ TEST(RadientRendererTest, CreateView)
     // render technique that will consume them.
     const RadientToneMappingDesc& DefaultToneMapping = pView->GetDesc().ToneMapping;
     EXPECT_EQ(DefaultToneMapping.Mode, RADIENT_TONE_MAPPING_MODE_UNCHARTED2);
-    EXPECT_EQ(DefaultToneMapping.AutoExposure, True);
+    EXPECT_EQ(DefaultToneMapping.AutoExposure, False);
     EXPECT_EQ(DefaultToneMapping.AverageLogLum, 0.3f);
     EXPECT_EQ(DefaultToneMapping.MiddleGray, 0.18f);
-    EXPECT_EQ(DefaultToneMapping.LightAdaptation, True);
+    EXPECT_EQ(DefaultToneMapping.LightAdaptation, False);
     EXPECT_EQ(DefaultToneMapping.WhitePoint, 3.f);
     EXPECT_EQ(DefaultToneMapping.LuminanceSaturation, 1.f);
 

@@ -92,8 +92,6 @@ public:
         RadientViewDesc ViewDesc{};
         ViewDesc.Name                         = "Radient render test view";
         ViewDesc.ClearColor                   = {0.05f, 0.05f, 0.05f, 1.f};
-        ViewDesc.ToneMapping.AutoExposure     = False;
-        ViewDesc.ToneMapping.LightAdaptation  = False;
         ViewDesc.TemporalAntiAliasing.Enabled = False;
         ViewDesc.Environment.pEnvironmentMap  = m_pEnvironmentMap;
         ViewDesc.Skybox.Source                = RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT;

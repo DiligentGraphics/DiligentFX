@@ -173,7 +173,7 @@ struct RadientToneMappingDesc
     RADIENT_TONE_MAPPING_MODE Mode DEFAULT_INITIALIZER(RADIENT_TONE_MAPPING_MODE_UNCHARTED2);
 
     /// Enables automatic exposure calculation.
-    Bool AutoExposure DEFAULT_INITIALIZER(True);
+    Bool AutoExposure DEFAULT_INITIALIZER(False);
 
     /// Average logarithmic scene luminance used when automatic exposure is disabled.
     Float32 AverageLogLum DEFAULT_INITIALIZER(0.3f);
@@ -182,7 +182,7 @@ struct RadientToneMappingDesc
     Float32 MiddleGray DEFAULT_INITIALIZER(0.18f);
 
     /// Enables temporal adaptation to luminance changes.
-    Bool LightAdaptation DEFAULT_INITIALIZER(True);
+    Bool LightAdaptation DEFAULT_INITIALIZER(False);
 
     /// White point used by tone mapping operators.
     Float32 WhitePoint DEFAULT_INITIALIZER(3.f);
