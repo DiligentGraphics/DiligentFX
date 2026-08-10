@@ -58,7 +58,7 @@ namespace
 constexpr Uint64 RadientDefaultIndexBufferSize       = 16ull * 1024ull * 1024ull;
 constexpr Uint64 RadientDefaultMaxIndexBufferSize    = 256ull * 1024ull * 1024ull;
 constexpr Uint32 RadientDefaultVertexPoolSize        = 1024u * 1024u;
-constexpr Uint32 RadientDefaultTextureAtlasSize      = 4096u;
+constexpr Uint32 RadientDefaultTextureAtlasSize      = 2048u;
 constexpr Uint32 RadientDefaultTextureAtlasSlices    = 1u;
 constexpr Uint32 RadientDefaultTextureAtlasMaxSlices = 2048u;
 

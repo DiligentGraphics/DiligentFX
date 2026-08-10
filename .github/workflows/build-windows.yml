@@ -30,6 +30,7 @@ jobs:
     runs-on: windows-2022
 
     strategy:
+      fail-fast: false
       matrix:
         name:            ["Win10"]
         toolset:         ["Win32", "x64"]
@@ -82,7 +83,7 @@ jobs:
 
     - name: Set up build environment
       if: success()
-      uses: DiligentGraphics/github-action/setup-build-env@v23
+      uses: DiligentGraphics/github-action/setup-build-env@v24
       with:
         platform:        ${{ matrix.platform }}
         cmake-generator: ${{ matrix.cmake_generator }}
@@ -125,3 +126,51 @@ jobs:
       uses: DiligentGraphics/github-action/run-radient-gpu-tests@v23
       with:
         mode: wgpu
+
+    - name: Clone Radient Test Data
+      id: radient_test_data
+      if: ${{ (success() || failure()) && steps.build.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: actions/checkout@v6
+      with:
+        repository: DiligentGraphics/DiligentTestData
+        ref:        radient
+        path:       RadientTestData
+
+    - name: Clone glTF Sample Assets
+      id: gltf_sample_assets
+      if: ${{ (success() || failure()) && steps.build.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: actions/checkout@v6
+      with:
+        repository: KhronosGroup/glTF-Sample-Assets
+        ref:        ${{env.DILIGENT_GLTF_SAMPLE_ASSETS_COMMIT}}
+        path:       glTF-Sample-Assets
+
+    - name: RadientRenderTest D3D11
+      if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      with:
+        mode:                 d3d11_sw
+        models-path:          ${{github.workspace}}/glTF-Sample-Assets
+        assets-path:          ${{github.workspace}}/RadientTestData
+        update-golden-images: true
+
+    - name: RadientRenderTest D3D12
+      if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      with:
+        mode:                 d3d12_sw
+        models-path:          ${{github.workspace}}/glTF-Sample-Assets
+        assets-path:          ${{github.workspace}}/RadientTestData
+        update-golden-images: true
+
+    - name: Upload Radient Render Images
+      if: ${{ always() && !cancelled() && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: RadientRenderImages-Windows-${{matrix.toolset}}-${{matrix.build_type}}
+        path: |
+          RadientTestData/GoldenImages/**/*_d3d11.png
+          RadientTestData/GoldenImages/**/*_d3d12.png
+          RadientTestData/GoldenImages/**/*_wgpu.png
+          RadientTestData/GoldenImagesDifferences
+        if-no-files-found: error
