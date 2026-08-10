@@ -189,7 +189,10 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
 {
     if (HasUV)
     {
-        TSNormal.xy *= NormalInfo.Face;
+        // NormalInfo.Normal already accounts for the face orientation, so the
+        // reconstructed bitangent changes sign through cross(T, N). Reverse
+        // only the tangent to negate the complete TBN basis on back faces.
+        TSNormal.x *= NormalInfo.Face;
         return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal);
     }
     else
