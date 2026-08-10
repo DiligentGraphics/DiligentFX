@@ -56,9 +56,24 @@ public:
     virtual RADIENT_STATUS PrepareFrame(const RadientRenderContext& Context) override final;
     virtual RADIENT_STATUS BeginFrame(const RadientRenderContext& Context) override final;
     virtual RADIENT_STATUS Render(const RadientRenderContext& Context) override final;
-    virtual void           EndFrame(const RadientRenderContext& Context) override final;
+    virtual RADIENT_STATUS EndFrame(const RadientRenderContext& Context) override final;
 
 private:
+    struct SceneRenderState
+    {
+        SceneRenderState(IRadientScene* pScene, bool EnableAsyncPipelineCompilation) :
+            WeakScene{pScene},
+            GeometryPass{EnableAsyncPipelineCompilation}
+        {}
+
+        RefCntWeakPtr<IRadientScene> WeakScene;
+
+        // Drawable IDs and the geometry-pass batches indexed by them belong to
+        // the same scene-specific identity domain.
+        RadientTesseraDrawableCache DrawableCache;
+        RadientTesseraGeometryPass  GeometryPass;
+    };
+
     struct ViewRenderState
     {
         explicit ViewRenderState(IRadientView* pView) :
@@ -71,25 +86,36 @@ private:
         RadientTesseraPostProcessPipeline PostProcessPipeline;
     };
 
+    SceneRenderState* FindSceneRenderState(const IRadientScene* pScene, bool PruneExpired);
+    SceneRenderState& GetOrCreateSceneRenderState(const IRadientScene& Scene);
+
     ViewRenderState* FindViewRenderState(IRadientView* pView, bool PruneExpired);
     ViewRenderState& GetOrCreateViewRenderState(IRadientView* pView);
+
+    RADIENT_STATUS ValidateActiveFrameContext(const RadientRenderContext& Context,
+                                              const Char*                 Operation) const;
 
 private:
     RefCntAutoPtr<IThreadPool>             m_pThreadPool;
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
-    RadientTesseraDrawableCache    m_DrawableCache;
     RadientTesseraGeometryRenderer m_GeometryRenderer;
-    RadientTesseraGeometryPass     m_ForwardPass;
     RadientTesseraSkyboxPass       m_SkyboxPass;
+
+    bool m_EnableAsyncPipelineCompilation = true;
+
+    // Per-scene renderer state is retained without extending scene lifetime.
+    // Expired entries are removed when another scene is synchronized.
+    std::vector<std::unique_ptr<SceneRenderState>> m_SceneRenderStates;
 
     // Per-view render targets and PostFX state are retained weakly with the
     // view so independent views never share renderer-specific frame history.
     std::vector<std::unique_ptr<ViewRenderState>> m_ViewRenderStates;
 
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
-    ViewRenderState*                      m_pActiveViewState = nullptr;
-    bool                                  m_FrameActive      = false;
+    ViewRenderState*                      m_pActiveViewState  = nullptr;
+    SceneRenderState*                     m_pActiveSceneState = nullptr;
+    bool                                  m_FrameActive       = false;
 };
 
 } // namespace Diligent

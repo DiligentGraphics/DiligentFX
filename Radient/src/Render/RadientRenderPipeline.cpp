@@ -124,9 +124,9 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_pTechnique->Render(Context);
-    m_pTechnique->EndFrame(Context);
-    return Status;
+    const RADIENT_STATUS RenderStatus = m_pTechnique->Render(Context);
+    const RADIENT_STATUS EndStatus    = m_pTechnique->EndFrame(Context);
+    return RenderStatus != RADIENT_STATUS_OK ? RenderStatus : EndStatus;
 }
 
 } // namespace Diligent

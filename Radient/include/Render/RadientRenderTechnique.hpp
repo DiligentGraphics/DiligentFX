@@ -57,7 +57,7 @@ public:
     /// BeginFrame() succeeds, including when Render() reports a failure.
     virtual RADIENT_STATUS BeginFrame(const RadientRenderContext& Context) = 0;
     virtual RADIENT_STATUS Render(const RadientRenderContext& Context)     = 0;
-    virtual void           EndFrame(const RadientRenderContext& Context)   = 0;
+    virtual RADIENT_STATUS EndFrame(const RadientRenderContext& Context)   = 0;
 };
 
 } // namespace Diligent
