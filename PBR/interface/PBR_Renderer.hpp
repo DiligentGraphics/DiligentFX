@@ -872,8 +872,10 @@ public:
     ///
     /// \remarks    The function initializes the following parameters:
     ///             - PrefilteredCubeLastMip
+    ///             - EnvironmentRotation
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer,
-                                     ITextureView*                      pPrefilteredEnvMapSRV) const;
+                                     ITextureView*                      pPrefilteredEnvMapSRV,
+                                     float                              EnvironmentYaw = 0.f) const;
 
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize = sizeof(float4)) const;

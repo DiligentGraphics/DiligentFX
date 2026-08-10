@@ -278,28 +278,33 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
             ITextureView*              pSkyboxSRV = nullptr;
             RadientTextureSamplingInfo SamplingInfo;
             bool                       SphereMapRow0IsNegativeY = false;
+            Float32                    Yaw                      = 0.f;
             switch (ViewDesc.Skybox.Source)
             {
                 case RADIENT_SKYBOX_SOURCE_ENVIRONMENT:
                     pSkyboxSRV = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Environment.pEnvironmentMap);
                     RadientTextureAssetManager::GetTextureSamplingInfo(ViewDesc.Environment.pEnvironmentMap, SamplingInfo);
                     SphereMapRow0IsNegativeY = ViewDesc.Environment.SphereMapRow0IsNegativeY;
+                    Yaw                      = ViewDesc.Environment.Yaw;
                     break;
 
                 case RADIENT_SKYBOX_SOURCE_TEXTURE:
                     pSkyboxSRV = RadientAssetManagerImpl::GetTextureSRV(ViewDesc.Skybox.pTexture);
                     RadientTextureAssetManager::GetTextureSamplingInfo(ViewDesc.Skybox.pTexture, SamplingInfo);
                     SphereMapRow0IsNegativeY = ViewDesc.Skybox.SphereMapRow0IsNegativeY;
+                    Yaw                      = ViewDesc.Skybox.Yaw;
                     break;
 
                 case RADIENT_SKYBOX_SOURCE_IRRADIANCE:
                     pSkyboxSRV = pView->GetIrradianceCubeSRV();
                     GetTextureViewSamplingInfo(pSkyboxSRV, SamplingInfo);
+                    Yaw = ViewDesc.Environment.Yaw;
                     break;
 
                 case RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT:
                     pSkyboxSRV = pView->GetPrefilteredEnvMapSRV();
                     GetTextureViewSamplingInfo(pSkyboxSRV, SamplingInfo);
+                    Yaw = ViewDesc.Environment.Yaw;
                     break;
 
                 default:
@@ -314,6 +319,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                                                                    pSkyboxSRV,
                                                                    SamplingInfo,
                                                                    SphereMapRow0IsNegativeY,
+                                                                   Yaw,
                                                                    ViewState.FrameTargets);
                 if (RADIENT_FAILED(Status))
                     return Status;

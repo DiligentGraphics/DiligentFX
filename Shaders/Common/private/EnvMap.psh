@@ -25,6 +25,9 @@ cbuffer cbEnvMapRenderAttribs
     int   g_SphereMapRow0IsNegativeY;
     float g_AtlasMipWidth;
     float g_AtlasMipHeight;
+
+    float2 g_EnvironmentRotation;
+    float2 g_Padding;
 }
 
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
@@ -68,6 +71,8 @@ float3 SampleSphereMapAtlas(float2 UV)
 
 float3 SampleEnvrionmentMap(float3 R, float g_MipLevel)
 {
+    R = RotateDirectionAroundY(R, g_EnvironmentRotation);
+
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
     return EnvMap.SampleLevel(EnvMap_sampler, R, g_MipLevel).rgb;
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE || ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY

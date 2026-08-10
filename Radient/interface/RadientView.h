@@ -450,6 +450,11 @@ struct RadientSkyboxDesc
     /// Mip level used for skybox sampling.
     Float32 MipLevel DEFAULT_INITIALIZER(0.f);
 
+    /// Horizontal orientation of an explicit skybox texture, in radians.
+    /// Rotation is around the world-up axis (+Y); positive angles rotate +X
+    /// toward -Z. Used only when Source is RADIENT_SKYBOX_SOURCE_TEXTURE.
+    Float32 Yaw DEFAULT_INITIALIZER(0.f);
+
     /// Whether row 0 of a spherical skybox texture represents the negative Y
     /// direction. Used only when Source is RADIENT_SKYBOX_SOURCE_TEXTURE and
     /// ignored for cube maps.
@@ -464,6 +469,7 @@ struct RadientSkyboxDesc
             Intensity == Rhs.Intensity &&
             Exposure == Rhs.Exposure &&
             MipLevel == Rhs.MipLevel &&
+            Yaw == Rhs.Yaw &&
             SphereMapRow0IsNegativeY == Rhs.SphereMapRow0IsNegativeY;
     }
 
@@ -491,6 +497,11 @@ struct RadientEnvironmentDesc
     /// Exposure multiplier as a power of 2.
     Float32 Exposure DEFAULT_INITIALIZER(0.f);
 
+    /// Horizontal orientation of the environment, in radians. Rotation is around
+    /// the world-up axis (+Y); positive angles rotate +X toward -Z.
+    /// Applied to image-based lighting and environment-derived skyboxes.
+    Float32 Yaw DEFAULT_INITIALIZER(0.f);
+
     /// Whether row 0 of a spherical environment map represents the negative Y
     /// direction. Ignored for cube maps. This setting also applies when the
     /// skybox uses the environment.
@@ -503,6 +514,7 @@ struct RadientEnvironmentDesc
             Color == Rhs.Color &&
             Intensity == Rhs.Intensity &&
             Exposure == Rhs.Exposure &&
+            Yaw == Rhs.Yaw &&
             SphereMapRow0IsNegativeY == Rhs.SphereMapRow0IsNegativeY;
     }
 

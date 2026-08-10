@@ -59,7 +59,8 @@ bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
             Environment.pEnvironmentMap->GetType() == RADIENT_ASSET_TYPE_TEXTURE) &&
         RadientMath::IsFiniteNonNegative(Environment.Color) &&
         RadientMath::IsFiniteNonNegative(Environment.Intensity) &&
-        RadientMath::IsFinite(Environment.Exposure);
+        RadientMath::IsFinite(Environment.Exposure) &&
+        RadientMath::IsFinite(Environment.Yaw);
 }
 
 bool IsValidToneMapping(const RadientToneMappingDesc& ToneMapping)

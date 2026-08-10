@@ -109,6 +109,13 @@ float2 TransformDirectionToSphereMapUV(float3 Direction, bool Row0IsNegativeY)
     return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), Latitude) + float2(0.5, 0.5);
 }
 
+float3 RotateDirectionAroundY(float3 Direction, float2 Rotation)
+{
+    return float3(Rotation.x * Direction.x + Rotation.y * Direction.z,
+                  Direction.y,
+                  -Rotation.y * Direction.x + Rotation.x * Direction.z);
+}
+
 void BasisFromNormal(in  float3 N,
                      out float3 T,
                      out float3 B)

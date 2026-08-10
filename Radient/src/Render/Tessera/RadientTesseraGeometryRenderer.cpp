@@ -319,7 +319,7 @@ void WriteSceneLights(PBR_Renderer&                 Renderer,
     });
 
     HLSL::PBRRendererShaderParameters& RendererAttribs = FrameAttribs.Renderer;
-    Renderer.SetInternalShaderParameters(RendererAttribs, pPrefilteredEnvMapSRV);
+    Renderer.SetInternalShaderParameters(RendererAttribs, pPrefilteredEnvMapSRV, Environment.Yaw);
     RendererAttribs.OcclusionStrength = 1.f;
     RendererAttribs.EmissionScale     = 1.f;
     RendererAttribs.AverageLogLum     = 0.f;

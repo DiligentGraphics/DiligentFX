@@ -132,6 +132,10 @@ struct PBRRendererShaderParameters
 
 	float4 IBLScale;
 
+    // Cosine and sine of the environment rotation around the positive Y axis.
+    float2 EnvironmentRotation;
+    float2 Padding1;
+
     float OcclusionStrength;
     float EmissionScale;
     float PointSize; // OpenGL and Vulkan

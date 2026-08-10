@@ -134,6 +134,10 @@ public:
         /// Scaling factor to apply to the environment map.
         float3 Scale = {1, 1, 1};
 
+        /// Horizontal orientation of the environment, in radians. Rotation is
+        /// around the positive Y axis; positive angles rotate +X toward -Z.
+        float Yaw = 0;
+
         /// UV scale and bias used to address a sphere map in its backing
         /// texture. The identity transform samples the full image.
         float4 SphereMapUVScaleBias = {1, 1, 0, 0};

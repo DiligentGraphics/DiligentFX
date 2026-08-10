@@ -65,6 +65,9 @@ struct EnvMapRenderer::EnvMapShaderAttribs
     Int32 SphereMapRow0IsNegativeY = 0;
     float AtlasMipWidth            = 1.f;
     float AtlasMipHeight           = 1.f;
+
+    float2 EnvironmentRotation{1.f, 0.f};
+    float2 Padding{};
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
@@ -290,6 +293,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
     const float        AtlasMipWidth  = static_cast<float>(std::max(EnvMapDesc.Width >> MipIndex, 1u));
     const float        AtlasMipHeight = static_cast<float>(std::max(EnvMapDesc.Height >> MipIndex, 1u));
     const float        SphereMapWidth = std::max(std::floor(AtlasMipWidth * Attribs.SphereMapUVScaleBias.x + 0.5f), 1.f);
+    const float2       EnvironmentRotation{std::cos(Attribs.Yaw), std::sin(Attribs.Yaw)};
 
     if (m_ShaderAttribs)
     {
@@ -303,7 +307,8 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             m_ShaderAttribs->SphereMapRow0IsNegativeY != static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY) ||
             m_ShaderAttribs->SphereMapWidth != SphereMapWidth ||
             m_ShaderAttribs->AtlasMipWidth != AtlasMipWidth ||
-            m_ShaderAttribs->AtlasMipHeight != AtlasMipHeight)
+            m_ShaderAttribs->AtlasMipHeight != AtlasMipHeight ||
+            m_ShaderAttribs->EnvironmentRotation != EnvironmentRotation)
         {
             m_ShaderAttribs->ToneMapping              = ToneMapping;
             m_ShaderAttribs->AverageLogLum            = Attribs.AverageLogLum;
@@ -316,6 +321,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             m_ShaderAttribs->SphereMapWidth           = SphereMapWidth;
             m_ShaderAttribs->AtlasMipWidth            = AtlasMipWidth;
             m_ShaderAttribs->AtlasMipHeight           = AtlasMipHeight;
+            m_ShaderAttribs->EnvironmentRotation      = EnvironmentRotation;
 
             pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             StateTransitionDesc Barrier{m_RenderAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
@@ -337,6 +343,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             EnvMapAttribs->SphereMapWidth           = SphereMapWidth;
             EnvMapAttribs->AtlasMipWidth            = AtlasMipWidth;
             EnvMapAttribs->AtlasMipHeight           = AtlasMipHeight;
+            EnvMapAttribs->EnvironmentRotation      = EnvironmentRotation;
         }
     }
 }

@@ -28,6 +28,7 @@
 
 #include "RadientRenderTestOptions.hpp"
 
+#include "BasicMath.hpp"
 #include "FileSystem.hpp"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientEngine.h"
@@ -44,6 +45,8 @@ namespace
 {
 
 constexpr char EnvironmentMapFileName[] = "colosseum_1k.hdr";
+// The Khronos glTF Sample Renderer uses +Z as the environment front direction.
+constexpr float KhronosDefaultEnvironmentRotation = PI_F * 0.5f;
 
 class RadientRenderSuiteResources
 {
@@ -94,6 +97,7 @@ public:
         ViewDesc.ClearColor                   = {0.05f, 0.05f, 0.05f, 1.f};
         ViewDesc.TemporalAntiAliasing.Enabled = False;
         ViewDesc.Environment.pEnvironmentMap  = m_pEnvironmentMap;
+        ViewDesc.Environment.Yaw              = KhronosDefaultEnvironmentRotation;
         ViewDesc.Skybox.Source                = RADIENT_SKYBOX_SOURCE_PREFILTERED_ENVIRONMENT;
         ViewDesc.Skybox.MipLevel              = 1;
         m_Status                              = m_pRenderer->CreateView(ViewDesc, &m_pView);

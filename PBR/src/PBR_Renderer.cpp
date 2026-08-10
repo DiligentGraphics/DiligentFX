@@ -27,6 +27,7 @@
 #include "PBR_Renderer.hpp"
 
 #include <array>
+#include <cmath>
 #include <vector>
 #include <limits.h>
 
@@ -2555,11 +2556,13 @@ void PBR_Renderer::ApplyOITAttenuation(IDeviceContext* pCtx, IPipelineState* pPS
 }
 
 void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer,
-                                               ITextureView*                      pPrefilteredEnvMapSRV) const
+                                               ITextureView*                      pPrefilteredEnvMapSRV,
+                                               float                              EnvironmentYaw) const
 {
     Renderer.PrefilteredCubeLastMip = m_Settings.EnableIBL && pPrefilteredEnvMapSRV != nullptr ?
         static_cast<float>(pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels - 1) :
         0.f;
+    Renderer.EnvironmentRotation = float2{std::cos(EnvironmentYaw), std::sin(EnvironmentYaw)};
 }
 
 Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize) const

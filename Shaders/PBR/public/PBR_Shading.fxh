@@ -226,6 +226,8 @@ float3 SamplePrefilteredEnvMap(in TextureCube  PrefilteredEnvMap,
 
 struct IBLSamplingInfo
 {
+    // Geometric directions remain in world space. Environment orientation is
+    // applied separately to the direction passed to an environment-map sample.
     float3 N;
     float3 V;
     float3 L;
@@ -312,21 +314,25 @@ float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
 // Specular component of the image-based light (IBL) using the split-sum approximation.
 float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
                           in IBLSamplingInfo        IBLInfo,
+                          in float2                 EnvironmentRotation,
                           in TextureCube            PrefilteredEnvMap,
                           in SamplerState           PrefilteredEnvMap_sampler,
                           in float                  PrefilteredEnvMapLastMip)
 {
-    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapLastMip;
-    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
+    float  lod                  = SrfInfo.PerceptualRoughness * PrefilteredEnvMapLastMip;
+    float3 EnvironmentDirection = RotateDirectionAroundY(IBLInfo.L, EnvironmentRotation);
+    float3 SpecularLight        = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, EnvironmentDirection, lod);
     return GetSpecularIBL_GGX(SrfInfo, IBLInfo, SpecularLight);
 }
 
 float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
                         in IBLSamplingInfo        IBLInfo,
+                        in float2                 EnvironmentRotation,
                         in TextureCube            IrradianceMap,
                         in SamplerState           IrradianceMap_sampler)
-{    
-    float3 Irradiance = IrradianceMap.Sample(IrradianceMap_sampler, IBLInfo.N).rgb;
+{
+    float3 EnvironmentDirection = RotateDirectionAroundY(IBLInfo.N, EnvironmentRotation);
+    float3 Irradiance           = IrradianceMap.Sample(IrradianceMap_sampler, EnvironmentDirection).rgb;
 #if !USE_HDR_IBL_CUBEMAPS
     Irradiance = TO_LINEAR(Irradiance);
 #endif
@@ -355,6 +361,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in float        SheenRoughness,
                               in float3       n,
                               in float3       v,
+                              in float2       EnvironmentRotation,
                               in float        PrefilteredCubeLastMip,
                               in Texture2D    PreintegratedCharlie,
                               in SamplerState PreintegratedCharlie_sampler,
@@ -363,12 +370,13 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
 {
     float NdotV = dot_sat(n, v);
 
-    float  lod        = SheenRoughness * PrefilteredCubeLastMip;
-    float3 reflection = normalize(reflect(-v, n));
+    float  lod                  = SheenRoughness * PrefilteredCubeLastMip;
+    float3 Reflection           = normalize(reflect(-v, n));
+    float3 EnvironmentDirection = RotateDirectionAroundY(Reflection, EnvironmentRotation);
 
     float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;
 
-    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, reflection, lod);
+    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, EnvironmentDirection, lod);
     return SpecularLight * SheenColor * brdf;
 }
 
@@ -730,6 +738,7 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
 #if USE_IBL
 void ApplyIBL(in SurfaceShadingInfo Shading,
               in float              PrefilteredCubeLastMip,
+              in float2             EnvironmentRotation,
               in Texture2D          PreintegratedGGX,
               in SamplerState       PreintegratedGGX_sampler,
               in TextureCube        IrradianceMap,
@@ -751,7 +760,7 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
             Shading.BaseLayer.Normal, Shading.View);
 
         SrfLighting.Base.DiffuseIBL =
-            GetLambertianIBL(Shading.BaseLayer.Srf, IBLInfo, IrradianceMap, IrradianceMap_sampler);
+            GetLambertianIBL(Shading.BaseLayer.Srf, IBLInfo, EnvironmentRotation, IrradianceMap, IrradianceMap_sampler);
 #       if ENABLE_TRANSMISSION
         {
             SrfLighting.Base.DiffuseIBL *= 1.0 - Shading.Transmission;
@@ -774,13 +783,13 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 #       endif
 
         SrfLighting.Base.SpecularIBL =
-            GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
+            GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, EnvironmentRotation, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
     }
 #   if ENABLE_SHEEN
     {
         // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
         SrfLighting.Sheen.SpecularIBL =
-             GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeLastMip,
+             GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, EnvironmentRotation, PrefilteredCubeLastMip,
                             PreintegratedCharlie, PreintegratedCharlie_sampler,
                             PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
     }
@@ -793,7 +802,7 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
             Shading.Clearcoat.Normal, Shading.View);
 
         SrfLighting.Clearcoat.SpecularIBL =
-            GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
+            GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, EnvironmentRotation, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
     }
 #   endif
 }

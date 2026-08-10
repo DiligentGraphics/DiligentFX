@@ -124,6 +124,7 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
                                                  ITextureView*                     pSkyboxSRV,
                                                  const RadientTextureSamplingInfo& SamplingInfo,
                                                  bool                              SphereMapRow0IsNegativeY,
+                                                 Float32                           Yaw,
                                                  const RadientFrameRenderTargets&  Targets)
 {
     if (pContext == nullptr || Skybox.Source == RADIENT_SKYBOX_SOURCE_NONE)
@@ -161,6 +162,7 @@ RADIENT_STATUS RadientTesseraSkyboxPass::Execute(IDeviceContext*                
     Attribs.MipLevel                 = std::min(Skybox.MipLevel, static_cast<float>(SamplingInfo.MipLevels - 1));
     Attribs.Alpha                    = 0.f;
     Attribs.Scale                    = GetLightingScale(Skybox.Color, Skybox.Intensity, Skybox.Exposure);
+    Attribs.Yaw                      = Yaw;
     Attribs.SphereMapUVScaleBias     = SamplingInfo.UVScaleBias;
     Attribs.SphereMapSlice           = SamplingInfo.TextureSlice;
     Attribs.SphereMapRow0IsNegativeY = SphereMapRow0IsNegativeY;

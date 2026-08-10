@@ -33,6 +33,7 @@
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
+#include "BasicMath.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
@@ -904,6 +905,7 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(DefaultEnvironment.Color, DefaultColor);
     EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
     EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
+    EXPECT_EQ(DefaultEnvironment.Yaw, 0.f);
     EXPECT_EQ(DefaultEnvironment.SphereMapRow0IsNegativeY, False);
 
     RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap = MakeTestTextureAsset("texture://environment", 7);
@@ -913,6 +915,7 @@ TEST(RadientRendererTest, CreateView)
     Environment.Color                    = {0.25f, 0.5f, 1.f};
     Environment.Intensity                = 2.f;
     Environment.Exposure                 = -1.f;
+    Environment.Yaw                      = PI_F * 0.5f;
     Environment.SphereMapRow0IsNegativeY = True;
 
     EXPECT_EQ(pView->SetEnvironment(Environment), RADIENT_STATUS_OK);
@@ -928,10 +931,13 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredEnvironment.Color, Environment.Color);
     EXPECT_EQ(StoredEnvironment.Intensity, Environment.Intensity);
     EXPECT_EQ(StoredEnvironment.Exposure, Environment.Exposure);
+    EXPECT_EQ(StoredEnvironment.Yaw, Environment.Yaw);
     EXPECT_EQ(StoredEnvironment.SphereMapRow0IsNegativeY, Environment.SphereMapRow0IsNegativeY);
     EXPECT_EQ(pView->SetEnvironment(StoredEnvironment), RADIENT_STATUS_NO_CHANGE);
 
     // Skybox settings are view-local and copy raw texture URI strings.
+    EXPECT_EQ(pView->GetDesc().Skybox.Yaw, 0.f);
+
     std::string SkyboxURI = "texture://skybox";
 
     RefCntAutoPtr<IRadientTextureAsset> pSkyboxTexture = MakeTestTextureAsset(SkyboxURI.c_str(), 3);
@@ -943,6 +949,7 @@ TEST(RadientRendererTest, CreateView)
     Skybox.Intensity                = 2.f;
     Skybox.Exposure                 = -1.f;
     Skybox.MipLevel                 = 1.f;
+    Skybox.Yaw                      = -PI_F * 0.25f;
     Skybox.SphereMapRow0IsNegativeY = True;
 
     EXPECT_EQ(pView->SetSkybox(Skybox), RADIENT_STATUS_OK);
@@ -959,6 +966,7 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(StoredSkybox.Intensity, 2.f);
     EXPECT_EQ(StoredSkybox.Exposure, -1.f);
     EXPECT_EQ(StoredSkybox.MipLevel, 1.f);
+    EXPECT_EQ(StoredSkybox.Yaw, Skybox.Yaw);
     EXPECT_EQ(StoredSkybox.SphereMapRow0IsNegativeY, True);
 
     EXPECT_EQ(pView->SetSkybox(StoredSkybox), RADIENT_STATUS_NO_CHANGE);
@@ -1204,6 +1212,10 @@ TEST(RadientRendererTest, RejectsInvalidViewEnvironment)
 
     InvalidEnvironment          = StoredEnvironment;
     InvalidEnvironment.Exposure = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidEnvironment(InvalidEnvironment);
+
+    InvalidEnvironment     = StoredEnvironment;
+    InvalidEnvironment.Yaw = std::numeric_limits<Float32>::quiet_NaN();
     ExpectInvalidEnvironment(InvalidEnvironment);
 }
 

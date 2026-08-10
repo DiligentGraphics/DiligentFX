@@ -53,6 +53,7 @@ public:
                            ITextureView*                     pSkyboxSRV,
                            const RadientTextureSamplingInfo& SamplingInfo,
                            bool                              SphereMapRow0IsNegativeY,
+                           Float32                           Yaw,
                            const RadientFrameRenderTargets&  Targets);
 
 private:
