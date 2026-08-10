@@ -189,11 +189,15 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
 {
     if (HasUV)
     {
-        // NormalInfo.Normal already accounts for the face orientation, so the
-        // reconstructed bitangent changes sign through cross(T, N). Reverse
-        // only the tangent to negate the complete TBN basis on back faces.
-        TSNormal.x *= NormalInfo.Face;
-        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal);
+        // Build the tangent frame for the original surface orientation, then
+        // negate the complete transformed normal when rendering the back face.
+        const float3 SurfaceNormal = NormalInfo.Normal * NormalInfo.Face;
+        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx,
+                                               NormalInfo.dPos_dy,
+                                               dUV_dx,
+                                               dUV_dy,
+                                               SurfaceNormal,
+                                               TSNormal) * NormalInfo.Face;
     }
     else
     {
