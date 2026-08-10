@@ -2,17 +2,56 @@
   "version": 1,
   "tests": [
     {
+        "name": "AlphaBlendModeTest",
+        "model": "Models/AlphaBlendModeTest/glTF-Binary/AlphaBlendModeTest.glb",
+        "camera": {
+            "eye": [ 0.0, 1.1, 11.0 ],
+            "target": [ 0.0, 1.1, 0.0 ]
+        },
+        "toneMapping": {
+            "averageLogLum": 0.5
+        }
+    },
+    {
       "name": "DamagedHelmet",
       "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
       "camera": {
         "eye": [0.0, 0.0, 3.0]
-      },
-      "statistics": {
-        "d3d11": {
-          "multiDrawIndexed": 0,
-          "mapBufferMax": 3,
-          "updateBufferMax": 1
-        }
+      }
+    },
+    {
+      "name": "CompareBaseColor",
+      "model": "Models/CompareBaseColor/glTF-Binary/CompareBaseColor.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 4.0]
+      }
+    },
+    {
+      "name": "CompareClearcoat",
+      "model": "Models/CompareClearcoat/glTF-Binary/CompareClearcoat.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 4.0]
+      }
+    },
+    {
+      "name": "CompareMetallic",
+      "model": "Models/CompareMetallic/glTF-Binary/CompareMetallic.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      }
+    },
+    {
+      "name": "CompareNormal",
+      "model": "Models/CompareNormal/glTF-Binary/CompareNormal.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      }
+    },
+    {
+      "name": "CompareRoughness",
+      "model": "Models/CompareRoughness/glTF-Binary/CompareRoughness.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
       }
     }
   ]
