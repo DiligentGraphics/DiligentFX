@@ -53,6 +53,15 @@
       "camera": {
         "eye": [0.0, 0.0, 3.0]
       }
+    },
+    {
+      "name": "EnvironmentTest",
+      "model": "Models/EnvironmentTest/glTF/EnvironmentTest.gltf",
+      "camera": {
+        "eye": [-0.56, 4.77, 27.0],
+        "target": [-0.56, 4.77, -1.1]
+      },
+      "directionalLight": false
     }
   ]
 }

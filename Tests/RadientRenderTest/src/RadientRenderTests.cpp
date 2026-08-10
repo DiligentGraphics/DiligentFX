@@ -155,7 +155,8 @@ public:
                        IRadientTextureAsset*          pEnvironmentMap,
                        IDeviceContext*                pContext,
                        ISwapChain*                    pSwapChain,
-                       const RadientRenderTestCamera& Camera) :
+                       const RadientRenderTestCamera& Camera,
+                       bool                           DirectionalLight) :
         m_pContext{pContext},
         m_pRenderer{pRenderer},
         m_pView{pView},
@@ -199,19 +200,22 @@ public:
         if (RADIENT_FAILED(m_Status))
             return;
 
-        RadientEntityDesc LightDesc{};
-        LightDesc.Name              = "Render test directional light";
-        RadientEntityID LightEntity = InvalidRadientEntityID;
-        m_Status                    = m_pWriter->CreateEntity(LightDesc, LightEntity);
-        if (RADIENT_FAILED(m_Status))
-            return;
+        if (DirectionalLight)
+        {
+            RadientEntityDesc LightDesc{};
+            LightDesc.Name              = "Render test directional light";
+            RadientEntityID LightEntity = InvalidRadientEntityID;
+            m_Status                    = m_pWriter->CreateEntity(LightDesc, LightEntity);
+            if (RADIENT_FAILED(m_Status))
+                return;
 
-        RadientLightComponent Light{};
-        Light.Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
-        Light.Intensity = 2.f;
-        m_Status        = m_pWriter->SetLight(LightEntity, Light);
-        if (RADIENT_FAILED(m_Status))
-            return;
+            RadientLightComponent Light{};
+            Light.Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+            Light.Intensity = 2.f;
+            m_Status        = m_pWriter->SetLight(LightEntity, Light);
+            if (RADIENT_FAILED(m_Status))
+                return;
+        }
 
         m_Status = m_pWriter->CommitChanges();
         if (RADIENT_FAILED(m_Status))
@@ -411,7 +415,8 @@ private:
                                  GetEnvironmentMap(),
                                  pContext,
                                  pSwapChain,
-                                 m_TestCase.Camera};
+                                 m_TestCase.Camera,
+                                 m_TestCase.DirectionalLight};
         ASSERT_EQ(Scene.GetStatus(), RADIENT_STATUS_OK);
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))

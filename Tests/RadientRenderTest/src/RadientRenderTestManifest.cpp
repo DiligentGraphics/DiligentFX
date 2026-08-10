@@ -283,6 +283,14 @@ bool ParseTestCase(const Json&                     Object,
         return false;
     }
 
+    if (const auto DirectionalLightIt = Object.find("directionalLight"); DirectionalLightIt != Object.end())
+    {
+        if (!DirectionalLightIt->is_boolean())
+            return SetError(Error, Path + ".directionalLight must be a boolean");
+
+        Test.DirectionalLight = DirectionalLightIt->get<bool>();
+    }
+
     Test.Comparison = Options.Comparison;
     if (const auto ComparisonIt = Object.find("comparison");
         ComparisonIt != Object.end() &&

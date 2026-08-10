@@ -67,6 +67,7 @@ struct RadientRenderTestCase
     RadientRenderTestCamera                                                                               Camera;
     TestImageComparisonAttribs                                                                            Comparison;
     std::array<std::optional<RadientRenderTestStatistics>, static_cast<size_t>(RENDER_DEVICE_TYPE_COUNT)> Statistics;
+    bool                                                                                                  DirectionalLight = true;
 };
 
 struct RadientRenderTestManifest
