@@ -175,6 +175,9 @@ struct RadientToneMappingDesc
     /// Enables automatic exposure calculation.
     Bool AutoExposure DEFAULT_INITIALIZER(True);
 
+    /// Average logarithmic scene luminance used when automatic exposure is disabled.
+    Float32 AverageLogLum DEFAULT_INITIALIZER(0.3f);
+
     /// Middle gray value used by tone mapping operators.
     Float32 MiddleGray DEFAULT_INITIALIZER(0.18f);
 
@@ -195,6 +198,7 @@ struct RadientToneMappingDesc
     {
         return (Mode == Rhs.Mode &&
                 AutoExposure == Rhs.AutoExposure &&
+                AverageLogLum == Rhs.AverageLogLum &&
                 MiddleGray == Rhs.MiddleGray &&
                 LightAdaptation == Rhs.LightAdaptation &&
                 WhitePoint == Rhs.WhitePoint &&

@@ -65,6 +65,7 @@ bool IsValidEnvironment(const RadientEnvironmentDesc& Environment)
 bool IsValidToneMapping(const RadientToneMappingDesc& ToneMapping)
 {
     return ToneMapping.Mode < RADIENT_TONE_MAPPING_MODE_COUNT &&
+        RadientMath::IsFinitePositive(ToneMapping.AverageLogLum) &&
         RadientMath::IsFinitePositive(ToneMapping.MiddleGray) &&
         RadientMath::IsFinitePositive(ToneMapping.WhitePoint) &&
         RadientMath::IsFiniteNonNegative(ToneMapping.LuminanceSaturation) &&

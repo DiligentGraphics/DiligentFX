@@ -968,6 +968,7 @@ TEST(RadientRendererTest, CreateView)
     const RadientToneMappingDesc& DefaultToneMapping = pView->GetDesc().ToneMapping;
     EXPECT_EQ(DefaultToneMapping.Mode, RADIENT_TONE_MAPPING_MODE_UNCHARTED2);
     EXPECT_EQ(DefaultToneMapping.AutoExposure, True);
+    EXPECT_EQ(DefaultToneMapping.AverageLogLum, 0.3f);
     EXPECT_EQ(DefaultToneMapping.MiddleGray, 0.18f);
     EXPECT_EQ(DefaultToneMapping.LightAdaptation, True);
     EXPECT_EQ(DefaultToneMapping.WhitePoint, 3.f);
@@ -976,6 +977,7 @@ TEST(RadientRendererTest, CreateView)
     RadientToneMappingDesc ToneMapping{};
     ToneMapping.Mode            = RADIENT_TONE_MAPPING_MODE_AGX_CUSTOM;
     ToneMapping.AutoExposure    = False;
+    ToneMapping.AverageLogLum   = 0.5f;
     ToneMapping.MiddleGray      = 0.2f;
     ToneMapping.LightAdaptation = False;
     ToneMapping.WhitePoint      = 4.f;
@@ -1240,6 +1242,10 @@ TEST(RadientRendererTest, RejectsInvalidToneMappingSettings)
     const Float32 InvalidPositiveValues[] = {0.f, -0.1f, NaN, Infinity};
     for (Float32 Value : InvalidPositiveValues)
     {
+        Invalid               = StoredToneMapping;
+        Invalid.AverageLogLum = Value;
+        ExpectInvalid(Invalid);
+
         Invalid            = StoredToneMapping;
         Invalid.MiddleGray = Value;
         ExpectInvalid(Invalid);

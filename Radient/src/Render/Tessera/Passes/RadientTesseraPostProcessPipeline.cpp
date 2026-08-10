@@ -259,10 +259,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         if (!Attribs)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        Attribs->ToneMapping = ToneMappingAttribs;
-        // Hydrogent currently uses a fixed luminance value. Automatic
-        // luminance reduction will replace this value in a later stage.
-        Attribs->AverageLogLum = 0.3f;
+        Attribs->ToneMapping   = ToneMappingAttribs;
+        Attribs->AverageLogLum = ToneMapping.AverageLogLum;
     }
 
     m_CompositionRequired          = ScreenEffectsEnabled && ColorEffectsEnabled;
