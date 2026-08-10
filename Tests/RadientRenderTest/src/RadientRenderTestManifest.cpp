@@ -82,6 +82,15 @@ bool ParseFloat3(const Json& Value, float3& Result, const std::string& Path, std
         ParseFloat(Value[2], Result.z, Path + "[2]", Error);
 }
 
+bool ParseFloat2(const Json& Value, float2& Result, const std::string& Path, std::string& Error)
+{
+    if (!Value.is_array() || Value.size() != 2)
+        return SetError(Error, Path + " must be an array of two numbers");
+
+    return ParseFloat(Value[0], Result.x, Path + "[0]", Error) &&
+        ParseFloat(Value[1], Result.y, Path + "[1]", Error);
+}
+
 bool ParseUint32(const Json&            Object,
                  const char*            Name,
                  std::optional<Uint32>& Result,
@@ -167,8 +176,17 @@ bool ParseCamera(const Json&              Object,
         return false;
     }
 
+    if (const auto ClippingRangeIt = Object.find("clippingRange");
+        ClippingRangeIt != Object.end() &&
+        !ParseFloat2(*ClippingRangeIt, Camera.ClippingRange, Path + ".clippingRange", Error))
+    {
+        return false;
+    }
+
     if (Camera.Fov <= 0 || Camera.Fov >= 180)
         return SetError(Error, Path + ".fov must be in the (0, 180) range");
+    if (Camera.ClippingRange.x <= 0 || Camera.ClippingRange.y <= Camera.ClippingRange.x)
+        return SetError(Error, Path + ".clippingRange must contain positive near and far distances in ascending order");
     if (length(Camera.Up) == 0)
         return SetError(Error, Path + ".up must not be a zero vector");
 

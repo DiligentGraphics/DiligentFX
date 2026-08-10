@@ -46,9 +46,10 @@ struct RadientRenderTestOptions;
 struct RadientRenderTestCamera
 {
     float3 Eye;
-    float3 Target = float3{0, 0, 0};
-    float3 Up     = float3{0, 1, 0};
-    float  Fov    = 45;
+    float3 Target        = float3{0, 0, 0};
+    float3 Up            = float3{0, 1, 0};
+    float2 ClippingRange = float2{0.1f, 1000.f};
+    float  Fov           = 45;
 };
 
 struct RadientRenderTestStatistics

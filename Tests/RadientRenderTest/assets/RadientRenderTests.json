@@ -2,21 +2,22 @@
   "version": 1,
   "tests": [
     {
-        "name": "AlphaBlendModeTest",
-        "model": "Models/AlphaBlendModeTest/glTF-Binary/AlphaBlendModeTest.glb",
-        "camera": {
-            "eye": [ 0.0, 1.1, 11.0 ],
-            "target": [ 0.0, 1.1, 0.0 ]
-        },
-        "toneMapping": {
-            "averageLogLum": 0.5
-        }
+      "name": "AlphaBlendModeTest",
+      "model": "Models/AlphaBlendModeTest/glTF-Binary/AlphaBlendModeTest.glb",
+      "camera": {
+        "eye": [0.0, 1.1, 11.0],
+        "target": [0.0, 1.1, 0.0]
+      },
+      "toneMapping": {
+        "averageLogLum": 0.5
+      }
     },
     {
-      "name": "DamagedHelmet",
-      "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+      "name": "BoxVertexColors",
+      "model": "Models/BoxVertexColors/glTF-Binary/BoxVertexColors.glb",
       "camera": {
-        "eye": [0.0, 0.0, 3.0]
+        "eye": [2.5, 2.5, 2.5],
+        "target": [0.5, 0.5, 0.5]
       }
     },
     {
@@ -55,6 +56,13 @@
       }
     },
     {
+      "name": "DamagedHelmet",
+      "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      }
+    },
+    {
       "name": "EnvironmentTest",
       "model": "Models/EnvironmentTest/glTF/EnvironmentTest.gltf",
       "camera": {
@@ -69,6 +77,15 @@
       "camera": {
         "eye": [0.0, -0.3, 12.0],
         "target": [0.0, -0.3, -1.6]
+      }
+    },
+    {
+      "name": "MetalRoughSpheresNoTextures",
+      "model": "Models/MetalRoughSpheresNoTextures/glTF-Binary/MetalRoughSpheresNoTextures.glb",
+      "camera": {
+        "eye": [0.003, 0.00275, 0.01],
+        "target": [0.003, 0.00275, 0.0],
+        "clippingRange": [0.001, 1.0]
       }
     },
     {

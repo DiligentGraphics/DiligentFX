@@ -196,7 +196,8 @@ public:
         RadientCameraComponent CameraComponent{};
         CameraComponent.FocalLength = CameraComponent.VerticalAperture /
             (2.f * std::tan(Camera.Fov * PI_F / 360.f));
-        m_Status = m_pWriter->SetCamera(m_CameraEntity, CameraComponent);
+        CameraComponent.ClippingRange = {Camera.ClippingRange.x, Camera.ClippingRange.y};
+        m_Status                      = m_pWriter->SetCamera(m_CameraEntity, CameraComponent);
         if (RADIENT_FAILED(m_Status))
             return;
 
