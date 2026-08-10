@@ -386,15 +386,22 @@ private:
         const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
         ASSERT_NE(BackendSuffix, nullptr);
 
-        const std::string ImageBaseName     = m_TestCase.Name + '_' + BackendSuffix;
-        const std::string ModelPath         = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
-        const std::string ReferenceBasePath = FileSystem::JoinPath(Options.GoldenImagesDirectory, ImageBaseName);
-        const std::string ReferencePath     = ReferenceBasePath + ".png";
+        const std::string ImageBaseName      = m_TestCase.Name + '_' + BackendSuffix;
+        const std::string ModelPath          = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
+        const std::string ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
+        const std::string ReferenceBasePath  = FileSystem::JoinPath(ReferenceDirectory, ImageBaseName);
+        const std::string ReferencePath      = ReferenceBasePath + ".png";
 
         ASSERT_TRUE(FileSystem::FileExists(ModelPath.c_str()))
             << "Model does not exist: " << ModelPath;
 
         const bool HasReference = FileSystem::FileExists(ReferencePath.c_str());
+        if (Options.UpdateGoldenImages)
+        {
+            ASSERT_TRUE(FileSystem::IsDirectory(ReferenceDirectory.c_str()) ||
+                        FileSystem::CreateDirectory(ReferenceDirectory.c_str()))
+                << "Failed to create golden image directory: " << ReferenceDirectory;
+        }
         if (HasReference)
         {
             ASSERT_TRUE(pTestingSwapChain->LoadReferenceImage(ReferencePath.c_str()))

@@ -34,7 +34,8 @@
       "camera": {
         "eye": [0.0, 0.05, 0.9],
         "target": [0.0, 0.05, 0.0]
-      }
+      },
+      "directionalLight": false
     },
     {
       "name": "CompareBaseColor",
