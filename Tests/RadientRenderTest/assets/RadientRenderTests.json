@@ -21,6 +21,22 @@
       }
     },
     {
+      "name": "ClearCoatTest",
+      "model": "Models/ClearCoatTest/glTF-Binary/ClearCoatTest.glb",
+      "camera": {
+        "eye": [-2.1, 0.3, 16.0],
+        "target": [-2.1, 0.3, 0.0]
+      }
+    },
+    {
+      "name": "CompareAmbientOcclusion",
+      "model": "Models/CompareAmbientOcclusion/glTF-Binary/CompareAmbientOcclusion.glb",
+      "camera": {
+        "eye": [0.0, 0.05, 0.9],
+        "target": [0.0, 0.05, 0.0]
+      }
+    },
+    {
       "name": "CompareBaseColor",
       "model": "Models/CompareBaseColor/glTF-Binary/CompareBaseColor.glb",
       "camera": {
@@ -93,6 +109,79 @@
       "model": "Models/MultiUVTest/glTF-Binary/MultiUVTest.glb",
       "camera": {
         "eye": [3.0, 3.0, 3.0]
+      }
+    },
+    {
+      "name": "NormalTangentMirrorTest",
+      "model": "Models/NormalTangentMirrorTest/glTF-Binary/NormalTangentMirrorTest.glb",
+      "camera": {
+        "eye": [0.0, -0.075, 3.75],
+        "target": [0.0, -0.075, 0.0]
+      }
+    },
+    {
+      "name": "NormalTangentTest",
+      "model": "Models/NormalTangentTest/glTF-Binary/NormalTangentTest.glb",
+      "camera": {
+        "eye": [0.0, -0.125, 2.7],
+        "target": [0.0, -0.125, 0.0]
+      }
+    },
+    {
+      "name": "OrientationTest",
+      "model": "Models/OrientationTest/glTF-Binary/OrientationTest.glb",
+      "camera": {
+        "eye": [14.0, 14.0, 14.0]
+      }
+    },
+    {
+      "name": "TextureCoordinateTest",
+      "model": "Models/TextureCoordinateTest/glTF-Binary/TextureCoordinateTest.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.2]
+      }
+    },
+    {
+      "name": "TextureEncodingTest",
+      "model": "Models/TextureEncodingTest/glTF-Binary/TextureEncodingTest.glb",
+      "camera": {
+        "eye": [0.5, -0.5, 20.0],
+        "target": [0.5, -0.5, 0.0]
+      }
+    },
+    {
+      "name": "TextureSettingsTest",
+      "model": "Models/TextureSettingsTest/glTF-Binary/TextureSettingsTest.glb",
+      "camera": {
+        "eye": [0.0, -0.6, 14.0],
+        "target": [0.0, -0.6, 0.0]
+      }
+    },
+    {
+      "name": "TextureTransformMultiTest",
+      "model": "Models/TextureTransformMultiTest/glTF-Binary/TextureTransformMultiTest.glb",
+      "camera": {
+        "eye": [0.0, -0.2, 3.5],
+        "target": [0.0, -0.2, 0.0]
+      },
+      "directionalLight": false
+    },
+    {
+      "name": "TextureTransformTest",
+      "model": "Models/TextureTransformTest/glTF/TextureTransformTest.gltf",
+      "camera": {
+        "eye": [0.0, 0.0, 4.5]
+      },
+      "directionalLight": false,
+      "toneMapping": {
+        "averageLogLum": 0.5
+      }
+    },
+    {
+      "name": "UnlitTest",
+      "model": "Models/UnlitTest/glTF-Binary/UnlitTest.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 7.0]
       }
     }
   ]
