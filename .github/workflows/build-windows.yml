@@ -79,11 +79,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v23
+      uses: DiligentGraphics/github-action/checkout@v25
 
     - name: Set up build environment
       if: success()
-      uses: DiligentGraphics/github-action/setup-build-env@v24
+      uses: DiligentGraphics/github-action/setup-build-env@v25
       with:
         platform:        ${{ matrix.platform }}
         cmake-generator: ${{ matrix.cmake_generator }}
@@ -91,7 +91,7 @@ jobs:
 
     - name: Configure CMake
       if: success()
-      uses: DiligentGraphics/github-action/configure-cmake@v23
+      uses: DiligentGraphics/github-action/configure-cmake@v25
       with:
         generator:  ${{ matrix.cmake_generator }}
         vs-arch:    ${{ matrix.toolset }}
@@ -101,29 +101,29 @@ jobs:
     - name: Build
       id:   build
       if: success()
-      uses: DiligentGraphics/github-action/build@v23
+      uses: DiligentGraphics/github-action/build@v25
 
     - name: RadientTest
       if:   ${{ success() && matrix.name != 'UWP'}}
-      uses: DiligentGraphics/github-action/run-radient-tests@v23
+      uses: DiligentGraphics/github-action/run-radient-tests@v25
 
     - name: RadientGPUTest D3D11
       # NB: it is essential to include failure() to override the default status check of success()
       #     that is automatically applied to if conditions that don't contain a status check function.
       if:   ${{ (success() || failure() && steps.build.outcome == 'success') && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v23
+      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v25
       with:
         mode: d3d11_sw
 
     - name: RadientGPUTest D3D12
       if:   ${{ (success() || failure() && steps.build.outcome == 'success') && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v23
+      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v25
       with:
         mode: d3d12_sw
 
     - name: RadientGPUTest WebGPU
       if:   ${{ (success() || failure() && steps.build.outcome == 'success') && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v23
+      uses: DiligentGraphics/github-action/run-radient-gpu-tests@v25
       with:
         mode: wgpu
 
@@ -147,7 +147,7 @@ jobs:
 
     - name: RadientRenderTest D3D11
       if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v25
       with:
         mode:                 d3d11_sw
         models-path:          ${{github.workspace}}/glTF-Sample-Assets
@@ -156,7 +156,7 @@ jobs:
 
     - name: RadientRenderTest D3D12
       if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v25
       with:
         mode:                 d3d12_sw
         models-path:          ${{github.workspace}}/glTF-Sample-Assets
@@ -165,7 +165,7 @@ jobs:
 
     - name: RadientRenderTest WebGPU
       if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
-      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v25
       with:
         mode:                 wgpu
         models-path:          ${{github.workspace}}/glTF-Sample-Assets
