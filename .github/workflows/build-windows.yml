@@ -163,6 +163,15 @@ jobs:
         assets-path:          ${{github.workspace}}/RadientTestData
         update-golden-images: true
 
+    - name: RadientRenderTest WebGPU
+      if: ${{ (success() || failure()) && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
+      uses: DiligentGraphics/github-action/run-radient-render-tests@v24
+      with:
+        mode:                 wgpu
+        models-path:          ${{github.workspace}}/glTF-Sample-Assets
+        assets-path:          ${{github.workspace}}/RadientTestData
+        update-golden-images: true
+
     - name: Upload Radient Render Images
       if: ${{ always() && !cancelled() && steps.build.outcome == 'success' && steps.radient_test_data.outcome == 'success' && steps.gltf_sample_assets.outcome == 'success' && matrix.name == 'Win10' }}
       uses: actions/upload-artifact@v7
