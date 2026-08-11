@@ -52,14 +52,21 @@ float3 TransformTangentSpaceNormalGrad(in float3 dPos_dx,     // Position dx der
     float d = dUV_dx.x * dUV_dy.y - dUV_dy.x * dUV_dx.y;
     if (d != 0.0)
     {
+        // The derivative formulas divide the tangent and bitangent by d, but
+        // the tangent is normalized and the bitangent is only used to determine
+        // orientation. The determinant magnitude therefore cancels, and only
+        // its sign is required.
+        const float dSign = d < 0.0 ? -1.0 : +1.0;
+
         float3 n = MacroNormal;
-        float3 t = (dUV_dy.y * dPos_dx - dUV_dx.y * dPos_dy) / d;
-        t = normalize(t - n * dot(n, t));
+        float3 t = (dUV_dy.y * dPos_dx - dUV_dx.y * dPos_dy) * dSign;
+        t -= n * dot(n, t);
+        t *= rsqrt(max(dot(t, t), 1e-20));
 
         // Deriving the bitangent independently preserves both transform and
         // UV handedness. Normal maps consumed by this helper use the direction
         // opposite to dP/dV, so use the derivative to orient cross(T, N).
-        float3 ReferenceB = (dUV_dx.x * dPos_dy - dUV_dy.x * dPos_dx) / d;
+        float3 ReferenceB = (dUV_dx.x * dPos_dy - dUV_dy.x * dPos_dx) * dSign;
         float3 b = cross(t, n);
         b *= dot(b, ReferenceB) > 0.0 ? -1.0 : +1.0;
 
