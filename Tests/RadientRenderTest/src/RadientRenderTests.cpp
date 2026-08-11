@@ -153,11 +153,9 @@ public:
                        IRadientRenderer*              pRenderer,
                        IRadientView*                  pView,
                        IRadientTextureAsset*          pEnvironmentMap,
-                       IDeviceContext*                pContext,
                        ISwapChain*                    pSwapChain,
                        const RadientRenderTestCamera& Camera,
                        bool                           DirectionalLight) :
-        m_pContext{pContext},
         m_pRenderer{pRenderer},
         m_pView{pView},
         m_pEnvironmentMap{pEnvironmentMap}
@@ -266,7 +264,7 @@ public:
         return RADIENT_FAILED(CommitStatus) ? CommitStatus : Status;
     }
 
-    RADIENT_STATUS RenderUntilReady()
+    RADIENT_STATUS RenderUntilReady(IRenderDevice* pDevice, IDeviceContext* pContext)
     {
         const auto Deadline = std::chrono::steady_clock::now() + RenderReadyTimeout;
         double     Time     = 0.0;
@@ -291,12 +289,12 @@ public:
             if (RADIENT_FAILED(EnvironmentStatus))
                 return EnvironmentStatus;
 
-            const RADIENT_STATUS RenderStatus = RenderFrame(Time);
+            const RADIENT_STATUS RenderStatus = RenderFrame(pContext, Time);
             if (RADIENT_FAILED(RenderStatus))
                 return RenderStatus;
 
-            m_pContext->Flush();
-            m_pContext->FinishFrame();
+            pContext->Flush();
+            pContext->FinishFrame();
 
             if (ImportStatus == RADIENT_STATUS_OK &&
                 SceneStatus == RADIENT_STATUS_OK &&
@@ -308,16 +306,21 @@ public:
 
             Time += 1.0 / 60.0;
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
+
+            // Since frame submission is not throttled, wait for the GPU
+            // to avoid queuing an unlimited number of frames.
+            pContext->WaitForIdle();
+            pDevice->ReleaseStaleResources();
         }
 
         return RADIENT_STATUS_PENDING;
     }
 
-    RADIENT_STATUS RenderMeasuredFrame(DeviceContextCommandCounters& Counters)
+    RADIENT_STATUS RenderMeasuredFrame(IDeviceContext* pContext, DeviceContextCommandCounters& Counters)
     {
-        const DeviceContextCommandCounters Before = m_pContext->GetStats().CommandCounters;
-        const RADIENT_STATUS               Status = RenderFrame(0.0);
-        const DeviceContextCommandCounters After  = m_pContext->GetStats().CommandCounters;
+        const DeviceContextCommandCounters Before = pContext->GetStats().CommandCounters;
+        const RADIENT_STATUS               Status = RenderFrame(pContext, 0.0);
+        const DeviceContextCommandCounters After  = pContext->GetStats().CommandCounters;
 
         Counters.MultiDrawIndexed = After.MultiDrawIndexed - Before.MultiDrawIndexed;
         Counters.MapBuffer        = After.MapBuffer - Before.MapBuffer;
@@ -326,19 +329,17 @@ public:
     }
 
 private:
-    RADIENT_STATUS RenderFrame(double Time)
+    RADIENT_STATUS RenderFrame(IDeviceContext* pContext, double Time)
     {
         RadientRenderAttribs Attribs{};
         Attribs.pView          = m_pView;
-        Attribs.pDeviceContext = m_pContext;
+        Attribs.pDeviceContext = pContext;
         Attribs.Time           = Time;
         Attribs.DeltaTime      = 1.0 / 60.0;
         return m_pRenderer->Render(Attribs);
     }
 
 private:
-    IDeviceContext* m_pContext = nullptr;
-
     RefCntAutoPtr<IRadientScene>         m_pScene;
     RefCntAutoPtr<IRadientSceneWriter>   m_pWriter;
     RefCntAutoPtr<IRadientSceneImporter> m_pImporter;
@@ -421,7 +422,6 @@ private:
                                  GetRenderer(),
                                  GetView(),
                                  GetEnvironmentMap(),
-                                 pContext,
                                  pSwapChain,
                                  m_TestCase.Camera,
                                  m_TestCase.DirectionalLight};
@@ -429,11 +429,11 @@ private:
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))
             << "Import failed with Radient status " << static_cast<Int32>(ImportStatus);
-        ASSERT_EQ(Scene.RenderUntilReady(), RADIENT_STATUS_OK)
+        ASSERT_EQ(Scene.RenderUntilReady(pDevice, pContext), RADIENT_STATUS_OK)
             << "Timed out waiting for imported scene and renderer resources";
 
         DeviceContextCommandCounters Counters{};
-        ASSERT_EQ(Scene.RenderMeasuredFrame(Counters), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.RenderMeasuredFrame(pContext, Counters), RADIENT_STATUS_OK);
 
         RecordProperty("multiDrawIndexed", Counters.MultiDrawIndexed);
         RecordProperty("mapBuffer", Counters.MapBuffer);
