@@ -85,7 +85,7 @@ public:
 
         RadientRendererDesc RendererDesc{};
         RendererDesc.Name                           = "Radient render test renderer";
-        RendererDesc.EnableAsyncPipelineCompilation = False;
+        RendererDesc.EnableAsyncPipelineCompilation = True;
         m_Status                                    = m_pEngine->CreateRenderer(RendererDesc, &m_pRenderer);
         if (RADIENT_FAILED(m_Status))
             return;

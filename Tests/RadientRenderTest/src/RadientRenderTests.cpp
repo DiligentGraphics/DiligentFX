@@ -266,10 +266,11 @@ public:
 
     RADIENT_STATUS RenderUntilReady(IRenderDevice* pDevice, IDeviceContext* pContext)
     {
-        const auto Deadline = std::chrono::steady_clock::now() + RenderReadyTimeout;
-        double     Time     = 0.0;
+        const auto Deadline       = std::chrono::steady_clock::now() + RenderReadyTimeout;
+        double     Time           = 0.0;
+        bool       OutputComplete = false;
 
-        while (std::chrono::steady_clock::now() < Deadline)
+        while (!OutputComplete && std::chrono::steady_clock::now() < Deadline)
         {
             const RADIENT_STATUS ImportStatus = m_pImporter->ProcessPendingImports();
             if (RADIENT_FAILED(ImportStatus))
@@ -293,16 +294,16 @@ public:
             if (RADIENT_FAILED(RenderStatus))
                 return RenderStatus;
 
+            OutputComplete = ImportStatus == RADIENT_STATUS_OK &&
+                SceneStatus == RADIENT_STATUS_OK &&
+                EnvironmentStatus == RADIENT_STATUS_OK &&
+                RenderStatus == RADIENT_STATUS_OK;
+
             pContext->Flush();
             pContext->FinishFrame();
 
-            if (ImportStatus == RADIENT_STATUS_OK &&
-                SceneStatus == RADIENT_STATUS_OK &&
-                EnvironmentStatus == RADIENT_STATUS_OK &&
-                RenderStatus == RADIENT_STATUS_OK)
-            {
-                return RADIENT_STATUS_OK;
-            }
+            if (OutputComplete)
+                break;
 
             Time += 1.0 / 60.0;
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -313,7 +314,7 @@ public:
             pDevice->ReleaseStaleResources();
         }
 
-        return RADIENT_STATUS_PENDING;
+        return OutputComplete ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
     }
 
     RADIENT_STATUS RenderMeasuredFrame(IDeviceContext* pContext, DeviceContextCommandCounters& Counters)
