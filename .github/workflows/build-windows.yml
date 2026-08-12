@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   precheks:
     name:    Win10 -> Pre-checks
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
     - name: Clone DiligentCore
@@ -27,7 +27,7 @@ jobs:
 
   build:
     needs:   precheks
-    runs-on: windows-2022
+    runs-on: windows-2025
 
     strategy:
       fail-fast: false
@@ -35,7 +35,7 @@ jobs:
         name:            ["Win10"]
         toolset:         ["Win32", "x64"]
         build_type:      ["Debug", "Release"]
-        cmake_generator: ["Visual Studio 17 2022"]
+        cmake_generator: ["Visual Studio 18 2026"]
         cmake_args:      ["-DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_NO_WEBGPU=OFF"]
         platform:        ["Win32"]
 
@@ -44,7 +44,7 @@ jobs:
             platform:        "Win32"
             toolset:         "x64"
             build_type:      "RelWithDebInfo"
-            cmake_generator: "Visual Studio 17 2022"
+            cmake_generator: "Visual Studio 18 2026"
             cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_DEVELOPMENT=ON -DDILIGENT_BUILD_FX_TESTS=ON"
 
           - name:            "Win10-Ninja"
@@ -65,14 +65,14 @@ jobs:
             platform:        "UWP"
             toolset:         "x64"
             build_type:      "Debug"
-            cmake_generator: "Visual Studio 17 2022"
+            cmake_generator: "Visual Studio 18 2026"
             cmake_args:      "-DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0"
 
           - name:            "UWP"
             platform:        "UWP"
             toolset:         "x64"
             build_type:      "Release"
-            cmake_generator: "Visual Studio 17 2022"
+            cmake_generator: "Visual Studio 18 2026"
             cmake_args:      "-DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0"
 
     name: Win10 -> ${{ matrix.name }}-${{ matrix.toolset }}, ${{ matrix.build_type }}

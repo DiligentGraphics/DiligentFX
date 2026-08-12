@@ -6,7 +6,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os:         ["windows-latest", "ubuntu-24.04", "macos-26"]
+        os:         ["windows-2025", "ubuntu-24.04", "macos-26"]
         build_type: ["Debug", "Release"]
 
         exclude:
@@ -15,7 +15,7 @@ jobs:
             build_type: "Release"
 
         include:
-          - os:         "windows-latest"
+          - os:         "windows-2025"
             host_name:  "Win10"
             cmake_args: "-DDILIGENT_NO_WEBGPU=ON"
 
