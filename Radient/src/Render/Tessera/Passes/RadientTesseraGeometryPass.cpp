@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/Passes/RadientTesseraGeometryPass.hpp"
 
+#include "Assets/RadientAssetStatus.hpp"
 #include "Math/RadientMath.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
@@ -64,9 +65,27 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
         Format == TEX_FORMAT_BGRA8_UNORM;
 }
 
-bool IsPipelineReady(IPipelineState* pPSO)
+RADIENT_STATUS GetPipelineStatus(IPipelineState* pPSO)
 {
-    return pPSO != nullptr && pPSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
+    if (pPSO == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    switch (pPSO->GetStatus())
+    {
+        case PIPELINE_STATE_STATUS_READY:
+            return RADIENT_STATUS_OK;
+
+        case PIPELINE_STATE_STATUS_UNINITIALIZED:
+        case PIPELINE_STATE_STATUS_COMPILING:
+            return RADIENT_STATUS_PENDING;
+
+        case PIPELINE_STATE_STATUS_FAILED:
+            return RADIENT_STATUS_FAILED;
+
+        default:
+            UNEXPECTED("Unexpected pipeline state status");
+            return RADIENT_STATUS_INVALID_OPERATION;
+    }
 }
 
 PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
@@ -242,7 +261,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
-    DrawState State;
+    DrawState      State;
+    RADIENT_STATUS Result = RADIENT_STATUS_OK;
 
     auto RenderPendingDraws = [&]() -> RADIENT_STATUS {
         if (pMappedPrimitiveData != nullptr)
@@ -269,8 +289,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
         // Pipeline and SRB readiness are shared by the whole batch, so each
         // potentially expensive query is made once instead of once per drawable.
-        if (!IsPipelineReady(Batch.pPSO))
+        const RADIENT_STATUS PipelineStatus = GetPipelineStatus(Batch.pPSO);
+
+        Result = CombineDependencyStatus(Result, PipelineStatus);
+        if (PipelineStatus != RADIENT_STATUS_OK)
             continue;
+
         if (Batch.MaterialSRB.GetSRB() == nullptr)
             continue;
 
@@ -292,11 +316,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             {
                 AttribsBufferOffset = AlignUp(AttribsBufferOffset, ConstantBufferOffsetAlignment);
                 if (Uint64{AttribsBufferOffset} + PrimitiveAttribsRange > PrimitiveAttribsBufferSize)
-                {
-                    const RADIENT_STATUS Status = RenderPendingDraws();
-                    if (RADIENT_FAILED(Status))
-                        return Status;
-                }
+                    Result = CombineDependencyStatus(Result, RenderPendingDraws());
             }
 
             const Uint32 PrimitiveAttribsOffset = AttribsBufferOffset;
@@ -379,7 +399,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         }
     }
 
-    return RenderPendingDraws();
+    const RADIENT_STATUS RenderStatus = RenderPendingDraws();
+    return CombineDependencyStatus(Result, RenderStatus);
 }
 
 RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*         pContext,
@@ -784,8 +805,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::CreatePsoCaches(PBR_Renderer&        
     if (RequiresOutputSRGBConversion(RTVFormats[RadientFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]))
         m_RenderFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 
-    m_RTVFormats = RTVFormats;
-    m_DSVFormat  = DSVFormat;
+    m_RTVFormats      = RTVFormats;
+    m_DSVFormat       = DSVFormat;
     m_UseReverseDepth = UseReverseDepth;
     for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)
         Batches.clear();

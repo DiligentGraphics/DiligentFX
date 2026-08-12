@@ -27,6 +27,7 @@
 #include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Core/RadientViewImpl.hpp"
 
@@ -243,34 +244,28 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
     const RadientViewDesc& ViewDesc     = pView->GetDesc();
     const bool             HasDrawables = !SceneState.DrawableCache.GetDrawLists().IsEmpty();
     const bool             HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
+    RADIENT_STATUS         FrameStatus  = RADIENT_STATUS_OK;
+
+    const auto ExecuteGeometryPass = [&](GLTF::Material::ALPHA_MODE AlphaMode) {
+        const RADIENT_STATUS Status = SceneState.GeometryPass.Execute(
+            m_GeometryRenderer,
+            Context.pDevice,
+            Context.pContext,
+            m_pFrameSRB,
+            AlphaMode,
+            SceneState.DrawableCache,
+            ViewState.FrameTargets,
+            ViewState.FrameHistory);
+
+        FrameStatus = CombineDependencyStatus(FrameStatus, Status);
+    };
 
     if (m_FrameActive)
     {
         if (HasDrawables)
         {
-            RADIENT_STATUS Status = SceneState.GeometryPass.Execute(
-                m_GeometryRenderer,
-                Context.pDevice,
-                Context.pContext,
-                m_pFrameSRB,
-                GLTF::Material::ALPHA_MODE_OPAQUE,
-                SceneState.DrawableCache,
-                ViewState.FrameTargets,
-                ViewState.FrameHistory);
-            if (RADIENT_FAILED(Status))
-                return Status;
-
-            Status = SceneState.GeometryPass.Execute(
-                m_GeometryRenderer,
-                Context.pDevice,
-                Context.pContext,
-                m_pFrameSRB,
-                GLTF::Material::ALPHA_MODE_MASK,
-                SceneState.DrawableCache,
-                ViewState.FrameTargets,
-                ViewState.FrameHistory);
-            if (RADIENT_FAILED(Status))
-                return Status;
+            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_OPAQUE);
+            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_MASK);
         }
 
         if (HasSkybox)
@@ -321,31 +316,20 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                                                                    SphereMapRow0IsNegativeY,
                                                                    Yaw,
                                                                    ViewState.FrameTargets);
-                if (RADIENT_FAILED(Status))
-                    return Status;
+                FrameStatus = CombineDependencyStatus(FrameStatus, Status);
             }
         }
 
         if (HasDrawables)
-        {
-            const RADIENT_STATUS Status = SceneState.GeometryPass.Execute(
-                m_GeometryRenderer,
-                Context.pDevice,
-                Context.pContext,
-                m_pFrameSRB,
-                GLTF::Material::ALPHA_MODE_BLEND,
-                SceneState.DrawableCache,
-                ViewState.FrameTargets,
-                ViewState.FrameHistory);
-            if (RADIENT_FAILED(Status))
-                return Status;
-        }
+            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_BLEND);
     }
 
-    return ViewState.PostProcessPipeline.Execute(Context.pDevice,
-                                                 Context.pContext,
-                                                 ViewState.FrameTargets,
-                                                 !ViewState.FrameHistory.HasCameraHistory());
+    const RADIENT_STATUS PostProcessStatus = ViewState.PostProcessPipeline.Execute(
+        Context.pDevice,
+        Context.pContext,
+        ViewState.FrameTargets,
+        !ViewState.FrameHistory.HasCameraHistory());
+    return CombineDependencyStatus(FrameStatus, PostProcessStatus);
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext& Context)
