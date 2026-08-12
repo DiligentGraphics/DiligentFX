@@ -308,7 +308,7 @@ public:
         {
             const bool AllCopiesEnqueued = !m_AnyCopyCommandEnqueueFailed.load(std::memory_order_acquire);
             m_AllCopyCommandsEnqueued.store(AllCopiesEnqueued, std::memory_order_release);
-            SetGPUResourceStatus(AllCopiesEnqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION);
+            SetGPUResourceStatus(AllCopiesEnqueued ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED);
             return true;
         }
 
@@ -667,7 +667,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     RefCntAutoPtr<TextureAssetImpl> pTextureAsset = TextureAssetImpl::Create(std::move(AssetURI));
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!pTextureAsset)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     TextureSource.MakeMemoryCopy();
 
@@ -733,7 +733,7 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
                 pAssetLocation.GetAddressOfEmpty());
         if (Status != RADIENT_STATUS_OK || pAssetLocation == nullptr)
         {
-            pTextureAsset->Fail(Status != RADIENT_STATUS_OK ? Status : RADIENT_STATUS_INVALID_OPERATION);
+            pTextureAsset->Fail(Status != RADIENT_STATUS_OK ? Status : RADIENT_STATUS_FAILED);
             return ASYNC_TASK_STATUS_COMPLETE;
         }
     }
@@ -741,7 +741,7 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
     const std::string TextureCacheKey = TextureSource.MakeCacheKey(pAssetLocation);
     if (TextureCacheKey.empty())
     {
-        pTextureAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+        pTextureAsset->Fail(RADIENT_STATUS_FAILED);
         return ASYNC_TASK_STATUS_COMPLETE;
     }
 
@@ -767,7 +767,7 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
     if (LoaderStatus != RADIENT_STATUS_OK || pLoader == nullptr)
     {
         pTextureAsset->GetStorage().SetFailedStatus(
-            RADIENT_FAILED(LoaderStatus) ? LoaderStatus : RADIENT_STATUS_INVALID_OPERATION);
+            RADIENT_FAILED(LoaderStatus) ? LoaderStatus : RADIENT_STATUS_FAILED);
         return ASYNC_TASK_STATUS_COMPLETE;
     }
 
@@ -784,7 +784,7 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
     RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = m_WeakUploadManager.Lock();
     if (!pResourceManager || !pUploadManager)
     {
-        TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        TextureStorage.SetGPUResourceStatus(RADIENT_STATUS_CANCELLED);
         return ASYNC_TASK_STATUS_COMPLETE;
     }
 
@@ -883,7 +883,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
 
     const TextureDesc& TexDesc = Loader.GetTextureDesc();
     if (TexDesc.Is3D())
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_UNSUPPORTED;
 
     TextureStorage& Texture = pTextureAsset->GetStorage();
     Texture.ResetGPUResourceState(TexDesc.Format);
@@ -918,7 +918,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                                                                    TexDesc.Height,
                                                                    TextureCacheKey.c_str());
         if (pAtlasSuballocation == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_FAILED;
         Texture.SetAtlasSuballocation(pAtlasSuballocation);
 
         const TextureDesc           AtlasDesc  = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
@@ -955,7 +955,7 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation != DEVICE_FEATURE_STATE_DISABLED)
         {
             if (Texture.CreateTexture(m_pDevice, StorageDesc) == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
     }
 

@@ -194,12 +194,12 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
     catch (const std::exception& Error)
     {
         LOG_ERROR_MESSAGE("Failed to create Radient renderer: ", Error.what());
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     }
     catch (...)
     {
         LOG_ERROR_MESSAGE("Failed to create Radient renderer");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     }
 
     return RADIENT_STATUS_OK;

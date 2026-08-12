@@ -228,7 +228,7 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
     }
 
     if (pBuffer == nullptr && m_pImpl->RequiredBufferSize != 0)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     if (m_pImpl->DirtyRangeStart < m_pImpl->DirtyRangeEnd)
     {

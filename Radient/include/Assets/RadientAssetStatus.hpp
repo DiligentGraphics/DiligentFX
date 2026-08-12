@@ -33,6 +33,8 @@ namespace Diligent
 
 // Combines the current aggregate status with one dependency status.
 // A failure is terminal and takes priority over all non-failure statuses.
+// A specific failure takes priority over FAILED, while FAILED takes priority
+// over CANCELLED so that cancellation does not hide an execution failure.
 // If there are no failures, PENDING takes priority over OK because the owner
 // cannot report completion while any dependency is still loading.
 // Other non-failure statuses, such as NO_GPU_DATA, are preserved unless a
@@ -44,7 +46,24 @@ inline RADIENT_STATUS CombineDependencyStatus(RADIENT_STATUS Status,
     if (DependencyStatus == RADIENT_STATUS_OK)
         return Status;
 
-    // Preserve the first failure that was already observed.
+    const auto GetFailurePriority = [](RADIENT_STATUS FailureStatus) noexcept {
+        if (FailureStatus == RADIENT_STATUS_CANCELLED)
+            return 1;
+        if (FailureStatus == RADIENT_STATUS_FAILED)
+            return 2;
+        return 3;
+    };
+
+    // Prefer a more informative failure regardless of dependency traversal
+    // order. Preserve the first failure when priorities are equal.
+    if (RADIENT_FAILED(Status) &&
+        RADIENT_FAILED(DependencyStatus) &&
+        GetFailurePriority(DependencyStatus) > GetFailurePriority(Status))
+    {
+        return DependencyStatus;
+    }
+
+    // Preserve the first failure of the highest priority observed so far.
     if (RADIENT_FAILED(Status))
         return Status;
 

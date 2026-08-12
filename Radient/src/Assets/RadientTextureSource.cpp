@@ -299,7 +299,7 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
             pAssetData->GetData() == nullptr ||
             pAssetData->GetSize() == 0)
         {
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_INVALID_DATA;
         }
 
         LoadInfo.Name = pAssetData->GetResolvedURI();
@@ -316,7 +316,7 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
     }
 
     if (pLoader == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     *ppLoader = pLoader.Detach();
     return RADIENT_STATUS_OK;

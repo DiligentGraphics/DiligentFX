@@ -152,7 +152,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                       ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
             pSSAOSRV = m_pSSAO->GetAmbientOcclusionSRV();
             if (pSSAOSRV == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
 
         if (SSREnabled)
@@ -174,7 +174,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                      ScreenSpaceReflection::FEATURE_FLAG_NONE);
             pSSRSRV = m_pSSR->GetSSRRadianceSRV();
             if (pSSRSRV == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
 
         if (TemporalAntiAliasingEnabled)
@@ -188,7 +188,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                                       TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER);
             pTemporalAntiAliasingSRV = m_pTemporalAntiAliasing->GetAccumulatedFrameSRV();
             if (pTemporalAntiAliasingSRV == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
 
         if (DepthOfFieldEnabled)
@@ -202,7 +202,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                               RadientPostFX::GetDepthOfFieldFeatureFlags(DepthOfFieldDesc));
             pDepthOfFieldSRV = m_pDepthOfField->GetDepthOfFieldTextureSRV();
             if (pDepthOfFieldSRV == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
 
         if (BloomEnabled)
@@ -216,7 +216,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                        Bloom::FEATURE_FLAG_NONE);
             pBloomSRV = m_pBloom->GetBloomTextureSRV();
             if (pBloomSRV == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
     }
 
@@ -249,7 +249,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                 m_pToneMappingAttribsCB.GetAddressOfEmpty(),
                                 USAGE_DYNAMIC);
             if (m_pToneMappingAttribsCB == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
         }
 
         MapHelper<HLSL::RadientPostProcessAttribs> Attribs{pContext,
@@ -257,7 +257,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
                                                            MAP_WRITE,
                                                            MAP_FLAG_DISCARD};
         if (!Attribs)
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_FAILED;
 
         Attribs->ToneMapping   = ToneMappingAttribs;
         Attribs->AverageLogLum = ToneMapping.AverageLogLum;
@@ -280,7 +280,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
             RefCntAutoPtr<ITexture> pComposedColor;
             pDevice->CreateTexture(Desc, nullptr, pComposedColor.GetAddressOfEmpty());
             if (pComposedColor == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
 
             m_pComposedColor       = std::move(pComposedColor);
             m_ComposedColorVersion = Targets.GetVersion();
@@ -288,7 +288,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
 
         ITextureView* const pComposedColorSRV = m_pComposedColor->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         if (pComposedColorSRV == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_FAILED;
 
         ColorPassPrepareInfo PrepareInfo{Targets};
         PrepareInfo.Pipeline.OutputFormat         = GetTextureViewFormat(pComposedColorSRV);
@@ -551,7 +551,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::PrepareColorPass(IRenderDevice
         Pass.pSRB.Release();
         Pass.pPSO->CreateShaderResourceBinding(Pass.pSRB.GetAddressOfEmpty(), true);
         if (Pass.pSRB == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_FAILED;
 
         IShaderResourceVariable* const pColorVar =
             Pass.pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
@@ -632,7 +632,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
     ShaderCI.Macros     = Macros;
     pDevice->CreateShader(ShaderCI, pPS.GetAddressOfEmpty());
     if (pVS == nullptr || pPS == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     const bool                              ToneMappingEnabled   = Desc.ToneMappingMode > TONE_MAPPING_MODE_NONE;
     const bool                              FrameAttribsRequired = ToneMappingEnabled || Desc.SSREnabled;
@@ -679,7 +679,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::CreatePipelineState(IRenderDev
     PSOCI.pPS                                                = pPS;
     pDevice->CreateGraphicsPipelineState(PSOCI, Pass.pPSO.GetAddressOfEmpty());
     if (Pass.pPSO == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     if (FrameAttribsRequired)
     {

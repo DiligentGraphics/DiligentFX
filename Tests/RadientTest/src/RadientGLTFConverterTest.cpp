@@ -161,7 +161,7 @@ void ExpectQuaternionNear(const RadientQuaternion& Value, const RadientQuaternio
 
 void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexSourceResult& Result)
 {
-    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_DATA);
     EXPECT_EQ(Result.pSource, nullptr);
     ExpectFloat3Eq(Result.BBMin, float3{0.f, 0.f, 0.f});
     ExpectFloat3Eq(Result.BBMax, float3{0.f, 0.f, 0.f});
@@ -169,7 +169,7 @@ void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexSourceResult& Res
 
 void ExpectDefaultResult(const RadientGLTFConverter::MeshIndexSourceResult& Result)
 {
-    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_DATA);
     EXPECT_EQ(Result.pSource, nullptr);
 }
 
@@ -502,7 +502,8 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourceRejectsInvalidArguments)
 
     RadientGLTFConverter::MeshVertexSourceResult Result =
         RadientGLTFConverter::CreateMeshVertexSource(GltfModel, Primitive, {});
-    ExpectDefaultResult(Result);
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Result.pSource, nullptr);
 
     Result = RadientGLTFConverter::CreateMeshVertexSource(GltfModel, Primitive, pDocument);
     ExpectDefaultResult(Result);
@@ -673,7 +674,8 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexSourceReturnsDefaultResultOnFailur
 
     RadientGLTFConverter::MeshIndexSourceResult Result =
         RadientGLTFConverter::CreateMeshIndexSource(GltfModel, Primitive, {}, TestVertexCount);
-    ExpectDefaultResult(Result);
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Result.pSource, nullptr);
 
     Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, Primitive, pDocument, 0);
     ExpectDefaultResult(Result);

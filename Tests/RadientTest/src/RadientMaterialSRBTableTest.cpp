@@ -279,6 +279,24 @@ TEST(RadientMaterialSRBTableTest, MaterializesAndRefreshesEntryInPlace)
     EXPECT_EQ(Lease.GetMaterialBufferGeneration(), 40u);
 }
 
+TEST(RadientMaterialSRBTableTest, ReportsSRBCreationFailure)
+{
+    RadientMaterialSRBTable       Table;
+    const RadientMaterialSRBLease Lease = TestMaterialSRBRecipe{1}.Acquire(Table);
+    ASSERT_TRUE(Lease);
+
+    EXPECT_EQ(Table.Prepare(
+                  1,
+                  0,
+                  0,
+                  ResolveTestSRV,
+                  [](ITextureView* const*, Uint32) {
+                      return RefCntAutoPtr<IShaderResourceBinding>{};
+                  }),
+              RADIENT_STATUS_FAILED);
+    EXPECT_EQ(Lease.GetSRB(), nullptr);
+}
+
 TEST(RadientMaterialSRBTableTest, MaterialBufferRefreshKeepsPreviousSRBUntilReplacementIsReady)
 {
     RadientMaterialSRBTable       Table;
@@ -640,7 +658,7 @@ TEST(RadientMaterialSRBTableTest, CompactMappingDistinguishesTypedViews)
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
     Testing::TestingEnvironment::ErrorScope       ExpectedErrors{"Material requires more than 1 distinct texture bindings"};
     EXPECT_EQ(AcquireTestMaterialSRB(Table, Flags, 1, Textures, MakeDefaultBindings(), Lease, ShaderTextureIds),
-              RADIENT_STATUS_INVALID_OPERATION);
+              RADIENT_STATUS_UNSUPPORTED);
     EXPECT_FALSE(Lease);
     EXPECT_EQ(Table.GetSize(), 0u);
 }

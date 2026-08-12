@@ -183,7 +183,7 @@ RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset* p
 
     const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pModel);
     if (pImportedScene == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity);
 }

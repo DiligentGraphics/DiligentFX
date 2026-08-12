@@ -270,7 +270,7 @@ private:
                             std::unordered_set<int>& VisitedNodes)
     {
         if (NodeIndex < 0 || static_cast<size_t>(NodeIndex) >= m_GltfModel.GetNodeCount())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+            return RADIENT_STATUS_INVALID_DATA;
 
         if (!VisitedNodes.emplace(NodeIndex).second)
             return RADIENT_STATUS_OK;
@@ -297,7 +297,7 @@ private:
     RADIENT_STATUS ScanMesh(int MeshIndex)
     {
         if (MeshIndex < 0 || static_cast<size_t>(MeshIndex) >= m_Meshes.size())
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+            return RADIENT_STATUS_INVALID_DATA;
 
         if (m_ScannedMeshes[static_cast<size_t>(MeshIndex)])
             return RADIENT_STATUS_OK;
@@ -321,7 +321,7 @@ private:
 
             const PlannedVertexData* pVertexData = GetVertexData(VertexDataIndex);
             if (pVertexData == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
 
             Uint32 IndexDataIndex = ~0u;
 
@@ -353,7 +353,7 @@ private:
         RadientGLTFConverter::MeshVertexSourceResult VertexSource =
             RadientGLTFConverter::CreateMeshVertexSource(m_GltfModel, GltfPrimitive, m_pDocument);
         if (RADIENT_FAILED(VertexSource.Status) || VertexSource.pSource == nullptr)
-            return RADIENT_FAILED(VertexSource.Status) ? VertexSource.Status : RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_FAILED(VertexSource.Status) ? VertexSource.Status : RADIENT_STATUS_FAILED;
 
         PlannedVertexData VertexData;
         VertexData.VertexCount = VertexSource.pSource->GetVertexCount();
@@ -364,7 +364,7 @@ private:
                                                                    std::move(VertexSource.pSource),
                                                                    VertexData.pVertexData.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || VertexData.pVertexData == nullptr)
-            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
         VertexDataIndex = static_cast<Uint32>(m_VertexData.size());
         m_VertexData.emplace_back(std::move(VertexData));
@@ -388,7 +388,7 @@ private:
         RadientGLTFConverter::MeshIndexSourceResult IndexSource =
             RadientGLTFConverter::CreateMeshIndexSource(m_GltfModel, GltfPrimitive, m_pDocument, VertexCount);
         if (RADIENT_FAILED(IndexSource.Status) || IndexSource.pSource == nullptr)
-            return RADIENT_FAILED(IndexSource.Status) ? IndexSource.Status : RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_FAILED(IndexSource.Status) ? IndexSource.Status : RADIENT_STATUS_FAILED;
 
         PlannedIndexData IndexData;
         IndexData.IndexCount = IndexSource.pSource->GetIndexCount();
@@ -397,7 +397,7 @@ private:
                                                                   std::move(IndexSource.pSource),
                                                                   IndexData.pIndexData.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || IndexData.pIndexData == nullptr)
-            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
         IndexDataIndex = static_cast<Uint32>(m_IndexData.size());
         m_IndexData.emplace_back(std::move(IndexData));
@@ -458,7 +458,7 @@ public:
         GLTF::Mesh* pNewMesh = GetLoadedMesh(LoadedMeshId);
         if (pNewMesh == nullptr)
         {
-            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            m_Status = RADIENT_STATUS_FAILED;
             return nullptr;
         }
 
@@ -469,7 +469,7 @@ public:
         if (pPlannedMesh == nullptr ||
             pPlannedMesh->Primitives.empty())
         {
-            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            m_Status = RADIENT_STATUS_INVALID_DATA;
             return pNewMesh;
         }
 
@@ -509,7 +509,7 @@ public:
                 pVertexData->pVertexData == nullptr ||
                 pIndexData->pIndexData == nullptr)
             {
-                m_Status = RADIENT_STATUS_INVALID_OPERATION;
+                m_Status = RADIENT_STATUS_FAILED;
                 return pNewMesh;
             }
 
@@ -569,7 +569,7 @@ public:
                                                              pMeshAsset.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || pMeshAsset == nullptr)
         {
-            m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+            m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
             return pNewMesh;
         }
 

@@ -225,7 +225,7 @@ RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAssetLocation(const Radien
             ResolvedURI,
             ResolveFilesystemPathForRead(ResolveInfo.URI, ResolveInfo.BaseURI))};
     pLocation->QueryInterface(IID_RadientAssetLocation, ppLocation);
-    return *ppLocation != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    return *ppLocation != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED;
 }
 
 RADIENT_STATUS RadientFilesystemAssetResolver::OpenAsset(IRadientAssetLocation* pLocation,
@@ -263,7 +263,7 @@ RADIENT_STATUS RadientFilesystemAssetResolver::OpenAsset(IRadientAssetLocation* 
     RefCntAutoPtr<RadientAssetDataImpl> pAssetData{
         MakeNewRCObj<RadientAssetDataImpl>()(std::move(Data), Location)};
     pAssetData->QueryInterface(IID_RadientAssetData, ppData);
-    return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    return *ppData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED;
 }
 
 } // namespace Diligent

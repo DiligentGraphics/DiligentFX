@@ -124,7 +124,7 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
                 pTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) == nullptr ||
                 pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) == nullptr)
             {
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
             }
         }
 
@@ -145,7 +145,7 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
                 pTexture->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL) == nullptr ||
                 pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) == nullptr)
             {
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_FAILED;
             }
         }
 

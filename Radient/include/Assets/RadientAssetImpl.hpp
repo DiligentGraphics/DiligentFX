@@ -178,7 +178,7 @@ public:
     {
         if (pPayload == nullptr)
         {
-            Fail(RADIENT_STATUS_INVALID_OPERATION);
+            Fail(RADIENT_STATUS_FAILED);
             return false;
         }
 
@@ -192,7 +192,7 @@ public:
         if (Status == RADIENT_STATUS_OK ||
             Status == RADIENT_STATUS_PENDING)
         {
-            Status = RADIENT_STATUS_INVALID_OPERATION;
+            Status = RADIENT_STATUS_FAILED;
         }
 
         m_PayloadStatus.store(Status, std::memory_order_release);
@@ -224,7 +224,7 @@ public:
             return PayloadStatus;
 
         RefCntAutoPtr<PayloadType> pPayload = GetPayload();
-        return pPayload ? pPayload->GetStorage().GetLoadStatus() : RADIENT_STATUS_INVALID_OPERATION;
+        return pPayload ? pPayload->GetStorage().GetLoadStatus() : RADIENT_STATUS_FAILED;
     }
 
     /// Reports payload load/source-processing status for a generic asset pointer.

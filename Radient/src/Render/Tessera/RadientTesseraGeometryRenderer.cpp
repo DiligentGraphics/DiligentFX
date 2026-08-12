@@ -449,7 +449,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
 
             ITextureView* const pTextureSRV = RadientTextureAssetManager::GetTextureSRV(Binding.pTexture, Binding.ViewType);
             if (pTextureSRV == nullptr)
-                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, nullptr};
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_FAILED, nullptr};
 
             if (pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
             {
@@ -525,7 +525,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
         MapHelper<HLSL::PBRFrameAttribs> MappedFrameAttribs{pContext, m_pRenderer->GetFrameAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
         HLSL::PBRFrameAttribs*           pFrameAttribs = MappedFrameAttribs;
         if (pFrameAttribs == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_FAILED;
 
         RadientTesseraCameraState        CurrentCamera   = CaptureCameraState(FrameAttribs.pScene, FrameAttribs.Camera, Targets, FrameAttribs.CameraJitter);
         const RadientTesseraCameraState* pPreviousCamera = FrameHistory.GetPreviousCamera(CurrentCamera);
@@ -585,7 +585,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     if (pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
     {
         LOG_ERROR_MESSAGE("Radient geometry rendering requires texture subresource views");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_UNSUPPORTED;
     }
 
     PBR_Renderer::CreateInfo RendererCI;
@@ -627,7 +627,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
                         pPrimitiveAttribsCB.GetAddressOfEmpty(),
                         USAGE_DYNAMIC);
     if (pPrimitiveAttribsCB == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     RendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
 
     m_pRenderer                     = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
@@ -645,7 +645,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     if (m_pRenderer->GetFrameAttribsCB() == nullptr)
     {
         m_pRenderer.reset();
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     }
 
     // Tessera enables material and geometry features per drawable. Only flags

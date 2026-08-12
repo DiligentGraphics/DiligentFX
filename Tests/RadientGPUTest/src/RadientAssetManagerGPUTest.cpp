@@ -738,8 +738,8 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
         EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
     }
 
-    // After Stop() and manager release, texture load tasks observe expired GPU
-    // upload dependencies and exit without completing the texture load.
+    // After Stop() and manager release, accepted texture load tasks observe
+    // expired GPU upload dependencies and are cancelled.
     ReleaseWorker.Trigger();
     pThreadPool->StopThreads();
 
@@ -747,7 +747,7 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     {
         EXPECT_NE(Textures[i], nullptr) << i;
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_OK) << i;
-        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[i]), RADIENT_STATUS_INVALID_OPERATION) << i;
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[i]), RADIENT_STATUS_CANCELLED) << i;
         EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(Textures[i]), nullptr) << i;
     }
 }
@@ -805,7 +805,7 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
     // Stop() shuts down the upload manager and drains the blocked callbacks.
     // No texture copy was enqueued, so the GPU resource status reaches a terminal failure.
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
-    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_FAILED);
     EXPECT_EQ(RadientAssetManagerImpl::GetTextureSRV(pTexture), nullptr);
 }
 

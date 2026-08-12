@@ -77,7 +77,19 @@ DILIGENT_TYPED_ENUM(RADIENT_STATUS, Int32)
     RADIENT_STATUS_INVALID_ARGUMENT = -2,
 
     /// The operation is not valid for the current state.
-    RADIENT_STATUS_INVALID_OPERATION = -3
+    RADIENT_STATUS_INVALID_OPERATION = -3,
+
+    /// The operation was valid, but failed during execution for an unspecified reason.
+    RADIENT_STATUS_FAILED = -4,
+
+    /// Source data exists, but is malformed, corrupt, or cannot be decoded.
+    RADIENT_STATUS_INVALID_DATA = -5,
+
+    /// The operation or source data is valid, but is not supported by this implementation.
+    RADIENT_STATUS_UNSUPPORTED = -6,
+
+    /// An accepted asynchronous operation was cancelled before completion.
+    RADIENT_STATUS_CANCELLED = -7
 };
 
 // clang-format on

@@ -55,7 +55,7 @@ namespace RadientGLTFConverter
 struct MeshVertexSourceResult
 {
     /// Conversion status. On failure, the whole result remains default-initialized.
-    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_ARGUMENT;
+    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_DATA;
 
     /// CPU vertex source created from the GLTF primitive.
     std::unique_ptr<RadientMeshVertexSource> pSource;
@@ -68,7 +68,7 @@ struct MeshVertexSourceResult
 struct MeshIndexSourceResult
 {
     /// Conversion status. On failure, the whole result remains default-initialized.
-    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_ARGUMENT;
+    RADIENT_STATUS Status = RADIENT_STATUS_INVALID_DATA;
 
     /// CPU index source created from the GLTF primitive.
     std::unique_ptr<RadientMeshIndexSource> pSource;

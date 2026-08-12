@@ -177,12 +177,12 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
                     catch (const std::exception& Error)
                     {
                         LOG_ERROR_MESSAGE("Failed to process Tessera material data: ", Error.what());
-                        Data->PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+                        Data->PublishFailure(RADIENT_STATUS_FAILED);
                     }
                     catch (...)
                     {
                         LOG_ERROR_MESSAGE("Failed to process Tessera material data");
-                        Data->PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+                        Data->PublishFailure(RADIENT_STATUS_FAILED);
                     }
                     return ASYNC_TASK_STATUS_COMPLETE;
                 });
@@ -288,7 +288,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), static_cast<Uint32>(MaterialAttribsSize));
     if (!MaterialBufferAllocation)
     {
-        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        Data.PublishFailure(RADIENT_STATUS_FAILED);
         return;
     }
 

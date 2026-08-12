@@ -385,7 +385,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     pThreadPool->StopThreads();
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
-    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_CANCELLED);
     EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
 }
 

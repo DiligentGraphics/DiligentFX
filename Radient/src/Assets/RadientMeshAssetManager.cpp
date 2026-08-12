@@ -318,7 +318,7 @@ void UpdateMeshUploadProgress(MeshDataStatusStorage& Data,
                               bool                   CopyScheduled) noexcept
 {
     if (!CopyScheduled)
-        Data.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        Data.SetGPUResourceStatus(RADIENT_STATUS_FAILED);
 
     const Uint32 PrevPendingUploads = Data.PendingUploads.fetch_sub(1, std::memory_order_acq_rel);
     VERIFY_EXPR(PrevPendingUploads > 0);
@@ -425,7 +425,7 @@ RADIENT_STATUS InitializeMeshIndexData(GLTF::ResourceManager*        pResourceMa
     IndexData.pIndexAllocation = pResourceManager->AllocateIndices(IndexSource.GetIndexDataSize(),
                                                                    alignof(Uint32));
     if (IndexData.pIndexAllocation == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     return RADIENT_STATUS_OK;
 }
@@ -451,7 +451,7 @@ RADIENT_STATUS InitializeMeshVertexData(GLTF::ResourceManager*         pResource
 
     VertexData.pVertexAllocation = pResourceManager->AllocateVertices(LayoutKey, VertexSource.GetVertexCount());
     if (VertexData.pVertexAllocation == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     return RADIENT_STATUS_OK;
 }
@@ -620,7 +620,7 @@ void CreateMeshIndexDataFromSource(const RadientMeshIndexSource& IndexSource,
     }
     else if (pResourceManager == nullptr || pUploadManager == nullptr)
     {
-        IndexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        IndexData.SetGPUResourceStatus(RADIENT_STATUS_CANCELLED);
     }
     else
     {
@@ -632,7 +632,7 @@ void CreateMeshIndexDataFromSource(const RadientMeshIndexSource& IndexSource,
         else if (IndexData.pIndexAllocation == nullptr ||
                  IndexSource.GetIndexCount() == 0)
         {
-            IndexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+            IndexData.SetGPUResourceStatus(RADIENT_STATUS_FAILED);
         }
         else
         {
@@ -668,7 +668,7 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
     }
     else if (pResourceManager == nullptr || pUploadManager == nullptr)
     {
-        VertexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+        VertexData.SetGPUResourceStatus(RADIENT_STATUS_CANCELLED);
     }
     else
     {
@@ -701,7 +701,7 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
         }
         else if (VertexData.pVertexAllocation == nullptr)
         {
-            VertexData.SetGPUResourceStatus(RADIENT_STATUS_INVALID_OPERATION);
+            VertexData.SetGPUResourceStatus(RADIENT_STATUS_FAILED);
         }
         else
         {
@@ -781,14 +781,14 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
                                                                         std::make_unique<RadientMeshVertexSource>(MeshCI),
                                                                         pVertexData.GetAddressOfEmpty());
     if (RADIENT_FAILED(Status) || pVertexData == nullptr)
-        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
     RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
     Status = CreateMeshIndexData(ThreadPool,
                                  std::make_unique<RadientMeshIndexSource>(MeshCI),
                                  pIndexData.GetAddressOfEmpty());
     if (RADIENT_FAILED(Status) || pIndexData == nullptr)
-        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
     const RadientMeshGeometryData GeometryData{pVertexData, pIndexData};
     return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
@@ -809,7 +809,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&        
     RefCntAutoPtr<MeshIndexDataAssetImpl> pIndexDataAsset =
         MeshIndexDataAssetImpl::Create(MakeRadientAssetURI("mesh-index-data"));
     if (pIndexDataAsset == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     RefCntAutoPtr<IAsyncTask> pLoadTask =
         CreateAsyncWorkTask(
@@ -817,7 +817,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&        
              pIndexSource = std::move(pIndexSource),
              pIndexDataAsset](Uint32) mutable //
             {
-                const auto FailIndexData = [&pIndexDataAsset](RADIENT_STATUS Status = RADIENT_STATUS_INVALID_OPERATION) {
+                const auto FailIndexData = [&pIndexDataAsset](RADIENT_STATUS Status = RADIENT_STATUS_FAILED) {
                     pIndexDataAsset->Fail(Status);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 };
@@ -889,7 +889,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
     RefCntAutoPtr<MeshVertexDataAssetImpl> pVertexDataAsset =
         MeshVertexDataAssetImpl::Create(MakeRadientAssetURI("mesh-vertex-data"));
     if (pVertexDataAsset == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     RefCntAutoPtr<IAsyncTask> pLoadTask =
         CreateAsyncWorkTask(
@@ -897,7 +897,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
              pVertexSource = std::move(pVertexSource),
              pVertexDataAsset](Uint32) mutable //
             {
-                const auto FailVertexData = [&pVertexDataAsset](RADIENT_STATUS Status = RADIENT_STATUS_INVALID_OPERATION) {
+                const auto FailVertexData = [&pVertexDataAsset](RADIENT_STATUS Status = RADIENT_STATUS_FAILED) {
                     pVertexDataAsset->Fail(Status);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 };
@@ -1020,7 +1020,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
         MeshAssetImpl::Create(MakeRadientAssetURI("mesh"));
     VERIFY_EXPR(pMeshAsset != nullptr);
     if (!pMeshAsset)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
@@ -1050,7 +1050,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
              ConcreteGeometries    = std::move(ConcreteGeometries),
              CanonicalStableViewCI = std::move(CanonicalStableViewCI)](Uint32) mutable //
             {
-                const auto FailMesh = [&pMeshAsset](RADIENT_STATUS Status = RADIENT_STATUS_INVALID_OPERATION) {
+                const auto FailMesh = [&pMeshAsset](RADIENT_STATUS Status = RADIENT_STATUS_FAILED) {
                     pMeshAsset->Fail(Status);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 };

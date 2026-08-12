@@ -92,7 +92,7 @@ struct ImportedSceneStorage
     void SetFailedStatus(RADIENT_STATUS Status) noexcept
     {
         if (Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_PENDING)
-            Status = RADIENT_STATUS_INVALID_OPERATION;
+            Status = RADIENT_STATUS_FAILED;
 
         GPUResourceStatus.store(Status, std::memory_order_release);
         LoadStatus.store(Status, std::memory_order_release);
@@ -470,7 +470,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
     if (SceneFormat != RADIENT_SCENE_FORMAT_GLTF)
     {
         LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(SceneFormat), " is not supported yet.");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_UNSUPPORTED;
     }
 
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
@@ -478,7 +478,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
         SceneAssetImpl::Create(SourceURI);
     VERIFY_EXPR(pModelAsset != nullptr);
     if (!pModelAsset)
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
 
     pModelAsset->QueryInterface(IID_RadientSceneAsset, ppScene);
 
@@ -489,13 +489,13 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                 RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
                 if (pSelf == nullptr)
                 {
-                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    pModelAsset->Fail(RADIENT_STATUS_CANCELLED);
                     return ASYNC_TASK_STATUS_CANCELLED;
                 }
 
                 if (pSelf->m_Stopped.load(std::memory_order_acquire))
                 {
-                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    pModelAsset->Fail(RADIENT_STATUS_CANCELLED);
                     return ASYNC_TASK_STATUS_CANCELLED;
                 }
 
@@ -511,14 +511,14 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                 }
                 if (pSceneLocation == nullptr)
                 {
-                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    pModelAsset->Fail(RADIENT_STATUS_FAILED);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
 
                 const char* ResolvedSourceURI = pSceneLocation->GetLocation();
                 if (ResolvedSourceURI == nullptr || ResolvedSourceURI[0] == '\0')
                 {
-                    pModelAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+                    pModelAsset->Fail(RADIENT_STATUS_FAILED);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
 
@@ -543,7 +543,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                 if (OpenStatus != RADIENT_STATUS_OK || pSceneData == nullptr)
                 {
                     pModelAsset->GetStorage().SetFailedStatus(
-                        OpenStatus != RADIENT_STATUS_OK ? OpenStatus : RADIENT_STATUS_INVALID_OPERATION);
+                        OpenStatus != RADIENT_STATUS_OK ? OpenStatus : RADIENT_STATUS_FAILED);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
 
@@ -785,7 +785,7 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
     ImportedSceneStorage& SceneStorage = Scene.GetStorage();
 
     RadientImport::ImportedDocument ImportedScene;
-    RADIENT_STATUS                  Status = RADIENT_STATUS_INVALID_OPERATION;
+    RADIENT_STATUS                  Status = RADIENT_STATUS_FAILED;
     try
     {
         switch (Format)
@@ -796,7 +796,7 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
 
             default:
                 LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(Format), " is not supported yet.");
-                Status = RADIENT_STATUS_INVALID_OPERATION;
+                Status = RADIENT_STATUS_UNSUPPORTED;
                 break;
         }
     }

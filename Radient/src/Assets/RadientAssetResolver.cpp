@@ -44,7 +44,7 @@ RADIENT_STATUS CheckAsset(IRadientAssetResolver*         pResolver,
 
     return pLocation != nullptr ?
         pResolver->CheckAsset(pLocation) :
-        RADIENT_STATUS_INVALID_OPERATION;
+        RADIENT_STATUS_FAILED;
 }
 
 RADIENT_STATUS OpenAsset(IRadientAssetResolver*         pResolver,
@@ -66,7 +66,7 @@ RADIENT_STATUS OpenAsset(IRadientAssetResolver*         pResolver,
 
     return pLocation != nullptr ?
         pResolver->OpenAsset(pLocation, ppData) :
-        RADIENT_STATUS_INVALID_OPERATION;
+        RADIENT_STATUS_FAILED;
 }
 
 // Creates the built-in resolver for filesystem paths and file:// URIs.

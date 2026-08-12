@@ -404,7 +404,7 @@ RADIENT_STATUS RadientViewImpl::CreateIBLResources(PBR_Renderer&   Renderer,
     if (pIrradianceCubeSRV == nullptr || pPrefilteredEnvMapSRV == nullptr)
     {
         UNEXPECTED("Failed to create Radient view IBL resources");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     }
 
     m_pIBLResources = std::make_unique<RadientIBLResources>(pIrradianceCubeSRV, pPrefilteredEnvMapSRV);

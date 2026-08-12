@@ -240,7 +240,11 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
                                               const std::shared_ptr<const GLTF::Document>& pDocument)
 {
     if (pDocument == nullptr)
-        return {};
+    {
+        MeshVertexSourceResult Result;
+        Result.Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return Result;
+    }
 
     const int* pPositionAccessor = GltfPrimitive.GetAttribute(GLTF::PositionAttributeName);
     if (pPositionAccessor == nullptr)
@@ -317,7 +321,11 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
                                             Uint32                                       VertexCount)
 {
     if (pDocument == nullptr)
-        return {};
+    {
+        MeshIndexSourceResult Result;
+        Result.Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return Result;
+    }
 
     std::shared_ptr<MeshSourceDataOwner> pOwner = std::make_shared<MeshSourceDataOwner>(pDocument);
     RadientMeshIndexSource::CreateInfo   IndexCI;
@@ -382,7 +390,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
     for (const GLTF::Node& SrcNode : GLTFModel.Nodes)
     {
         if (SrcNode.Index < 0 || static_cast<size_t>(SrcNode.Index) >= Scene.Nodes.size())
-            return RADIENT_STATUS_INVALID_OPERATION;
+            return RADIENT_STATUS_INVALID_DATA;
 
         RadientImport::ImportedNode& DstNode = Scene.Nodes[static_cast<size_t>(SrcNode.Index)];
         DstNode.Name                         = SrcNode.Name;
@@ -392,7 +400,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
         {
             DstNode.pMesh = GetRadientMeshAsset(*SrcNode.pMesh);
             if (DstNode.pMesh == nullptr)
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_INVALID_DATA;
         }
 
         if (SrcNode.pCamera != nullptr)
@@ -412,7 +420,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                 pChild->Index < 0 ||
                 static_cast<size_t>(pChild->Index) >= Scene.Nodes.size())
             {
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_INVALID_DATA;
             }
 
             DstNode.Children.push_back(static_cast<Uint32>(pChild->Index));
@@ -433,7 +441,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                 pRootNode->Index < 0 ||
                 static_cast<size_t>(pRootNode->Index) >= Scene.Nodes.size())
             {
-                return RADIENT_STATUS_INVALID_OPERATION;
+                return RADIENT_STATUS_INVALID_DATA;
             }
 
             DstScene.RootNodes.push_back(static_cast<Uint32>(pRootNode->Index));

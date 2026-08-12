@@ -307,7 +307,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 if (pMappedPrimitiveData == nullptr)
                 {
                     UNEXPECTED("Unable to map PBR primitive attributes buffer");
-                    return RADIENT_STATUS_INVALID_OPERATION;
+                    return RADIENT_STATUS_FAILED;
                 }
             }
 

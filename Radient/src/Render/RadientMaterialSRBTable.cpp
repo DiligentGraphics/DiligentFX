@@ -263,7 +263,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
                     if (NextTextureSlot >= MaxTextureSlots)
                     {
                         LOG_ERROR_MESSAGE("Material requires more than ", MaxTextureSlots, " distinct texture bindings");
-                        Status = RADIENT_STATUS_INVALID_OPERATION;
+                        Status = RADIENT_STATUS_UNSUPPORTED;
                         return;
                     }
                     ++NextTextureSlot;
@@ -284,7 +284,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
     if (!Lease)
     {
         ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return RADIENT_STATUS_FAILED;
     }
 
     return RADIENT_STATUS_OK;
@@ -377,7 +377,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             if (TextureStatus == RADIENT_STATUS_OK && ResolveResult.pTextureSRV == nullptr)
             {
                 UNEXPECTED("Texture SRV resolver returned OK without an SRV");
-                TextureStatus = RADIENT_STATUS_INVALID_OPERATION;
+                TextureStatus = RADIENT_STATUS_FAILED;
             }
 
             EntryStatus = CombineDependencyStatus(EntryStatus, TextureStatus);
@@ -393,7 +393,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             CreateSRB(TextureSRVs.data(), static_cast<Uint32>(TextureSRVs.size()));
         if (pSRB == nullptr)
         {
-            Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
+            Status = CombineDependencyStatus(Status, RADIENT_STATUS_FAILED);
             continue;
         }
 
