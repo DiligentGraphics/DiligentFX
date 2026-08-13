@@ -8,6 +8,9 @@
         "eye": [0.0, 1.1, 11.0],
         "target": [0.0, 1.1, 0.0]
       },
+      "debugVisualizations": [
+        "Transparency"
+      ],
       "toneMapping": {
         "averageLogLum": 0.5
       }
@@ -26,7 +29,13 @@
       "camera": {
         "eye": [-2.1, 0.3, 16.0],
         "target": [-2.1, 0.3, 0.0]
-      }
+      },
+      "debugVisualizations": [
+        "ClearCoat",
+        "ClearCoatFactor",
+        "ClearCoatNormal",
+        "ClearCoatRoughness"
+      ]
     },
     {
       "name": "CompareAmbientOcclusion",
@@ -35,6 +44,9 @@
         "eye": [0.0, 0.05, 0.9],
         "target": [0.0, 0.05, 0.0]
       },
+      "debugVisualizations": [
+        "Occlusion"
+      ],
       "directionalLight": false
     },
     {
@@ -42,42 +54,68 @@
       "model": "Models/CompareBaseColor/glTF-Binary/CompareBaseColor.glb",
       "camera": {
         "eye": [0.0, 0.0, 4.0]
-      }
+      },
+      "debugVisualizations": [
+        "BaseColor"
+      ]
     },
     {
       "name": "CompareClearcoat",
       "model": "Models/CompareClearcoat/glTF-Binary/CompareClearcoat.glb",
       "camera": {
         "eye": [0.0, 0.0, 4.0]
-      }
+      },
+      "debugVisualizations": [
+        "ClearCoat"
+      ]
     },
     {
       "name": "CompareMetallic",
       "model": "Models/CompareMetallic/glTF-Binary/CompareMetallic.glb",
       "camera": {
         "eye": [0.0, 0.0, 3.0]
-      }
+      },
+      "debugVisualizations": [
+        "Metallic"
+      ]
     },
     {
       "name": "CompareNormal",
       "model": "Models/CompareNormal/glTF-Binary/CompareNormal.glb",
       "camera": {
         "eye": [0.0, 0.0, 3.0]
-      }
+      },
+      "debugVisualizations": [
+        "ShadingNormal"
+      ]
     },
     {
       "name": "CompareRoughness",
       "model": "Models/CompareRoughness/glTF-Binary/CompareRoughness.glb",
       "camera": {
         "eye": [0.0, 0.0, 3.0]
-      }
+      },
+      "debugVisualizations": [
+        "Roughness"
+      ]
     },
     {
       "name": "DamagedHelmet",
       "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
       "camera": {
         "eye": [0.0, 0.0, 3.0]
-      }
+      },
+      "debugVisualizations": [
+        "Emissive",
+        "DiffuseColor",
+        "SpecularColor",
+        "MeshNormal",
+        "ShadingNormal",
+        "NdotV",
+        "PunctualLighting",
+        "DiffuseIBL",
+        "SpecularIBL"
+      ]
     },
     {
       "name": "EnvironmentTest",
@@ -110,7 +148,11 @@
       "model": "Models/MultiUVTest/glTF-Binary/MultiUVTest.glb",
       "camera": {
         "eye": [3.0, 3.0, 3.0]
-      }
+      },
+      "debugVisualizations": [
+        "Texcoord0",
+        "Texcoord1"
+      ]
     },
     {
       "name": "NormalTangentMirrorTest",
@@ -118,7 +160,10 @@
       "camera": {
         "eye": [0.0, -0.075, 3.75],
         "target": [0.0, -0.075, 0.0]
-      }
+      },
+      "debugVisualizations": [
+        "ShadingNormal"
+      ]
     },
     {
       "name": "NormalTangentTest",
@@ -126,7 +171,10 @@
       "camera": {
         "eye": [0.0, -0.125, 2.7],
         "target": [0.0, -0.125, 0.0]
-      }
+      },
+      "debugVisualizations": [
+        "ShadingNormal"
+      ]
     },
     {
       "name": "OrientationTest",
