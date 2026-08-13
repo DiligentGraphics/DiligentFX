@@ -35,6 +35,7 @@
 #include "Math/RadientMath.hpp"
 #include "FileSystem.hpp"
 #include "GPUTestingEnvironment.hpp"
+#include "Render/RadientPBRRenderer.hpp"
 #include "RadientEngine.h"
 #include "RefCntAutoPtr.hpp"
 #include "TestingSwapChainBase.hpp"
@@ -145,6 +146,27 @@ private:
     std::filesystem::path m_OriginalDirectory;
     bool                  m_Active = false;
 };
+
+const char* GetDebugVisualizationName(RADIENT_DEBUG_VISUALIZATION Visualization)
+{
+    return PBR_Renderer::GetDebugViewTypeString(
+        RadientPBRRenderer::GetDebugViewType(Visualization));
+}
+
+std::string GetImageBaseName(const RadientRenderTestCase& TestCase,
+                             RADIENT_DEBUG_VISUALIZATION  Visualization,
+                             const char*                  BackendSuffix)
+{
+    std::string Name = TestCase.Name;
+    if (Visualization != RADIENT_DEBUG_VISUALIZATION_NONE)
+    {
+        Name += '_';
+        Name += GetDebugVisualizationName(Visualization);
+    }
+    Name += '_';
+    Name += BackendSuffix;
+    return Name;
+}
 
 class RadientRenderScene
 {
@@ -364,6 +386,16 @@ public:
     {}
 
 private:
+    struct OutputCapture
+    {
+        RADIENT_DEBUG_VISUALIZATION Visualization = RADIENT_DEBUG_VISUALIZATION_NONE;
+        std::string                 ImageBaseName;
+        std::string                 ReferenceDirectory;
+        std::string                 ReferenceBasePath;
+        std::string                 ReferencePath;
+        bool                        HasReference = false;
+    };
+
     void TestBody() override
     {
         GPUTestingEnvironment::ScopedReset AutoReset;
@@ -388,36 +420,20 @@ private:
         const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
         ASSERT_NE(BackendSuffix, nullptr);
 
-        const std::string ImageBaseName      = m_TestCase.Name + '_' + BackendSuffix;
-        const std::string ModelPath          = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
-        const std::string ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
-        const std::string ReferenceBasePath  = FileSystem::JoinPath(ReferenceDirectory, ImageBaseName);
-        const std::string ReferencePath      = ReferenceBasePath + ".png";
-
+        const std::string ModelPath = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
         ASSERT_TRUE(FileSystem::FileExists(ModelPath.c_str()))
             << "Model does not exist: " << ModelPath;
 
-        const bool HasReference = FileSystem::FileExists(ReferencePath.c_str());
-        if (Options.UpdateGoldenImages)
-        {
-            ASSERT_TRUE(FileSystem::IsDirectory(ReferenceDirectory.c_str()) ||
-                        FileSystem::CreateDirectory(ReferenceDirectory.c_str()))
-                << "Failed to create golden image directory: " << ReferenceDirectory;
-        }
-        if (HasReference)
-        {
-            ASSERT_TRUE(pTestingSwapChain->LoadReferenceImage(ReferencePath.c_str()))
-                << "Failed to load reference image: " << ReferencePath;
-        }
-        else
-        {
-            pSwapChain->Resize(Options.Width, Options.Height, pSwapChain->GetDesc().PreTransform);
-        }
-        pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
+        const OutputCapture Output = MakeOutputCapture(RADIENT_DEBUG_VISUALIZATION_NONE, BackendSuffix);
+        ASSERT_TRUE(PrepareOutputCapture(pTestingSwapChain, pSwapChain, Output));
 
         const RADIENT_STATUS ToneMappingStatus = GetView()->SetToneMapping(m_TestCase.ToneMapping);
         ASSERT_TRUE(ToneMappingStatus == RADIENT_STATUS_OK ||
                     ToneMappingStatus == RADIENT_STATUS_NO_CHANGE);
+
+        const RADIENT_STATUS SetVisualizationStatus = GetView()->SetDebugVisualization(Output.Visualization);
+        ASSERT_TRUE(SetVisualizationStatus == RADIENT_STATUS_OK ||
+                    SetVisualizationStatus == RADIENT_STATUS_NO_CHANGE);
 
         RadientRenderScene Scene{GetEngine(),
                                  GetRenderer(),
@@ -451,23 +467,93 @@ private:
                 EXPECT_LE(Counters.UpdateBuffer, *Statistics->UpdateBufferMax);
         }
 
-        if (!HasReference)
+        CaptureOutput(pTestingSwapChain, Output);
+    }
+
+    OutputCapture MakeOutputCapture(RADIENT_DEBUG_VISUALIZATION Visualization,
+                                    const char*                 BackendSuffix) const
+    {
+        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+
+        OutputCapture Output;
+        Output.Visualization      = Visualization;
+        Output.ImageBaseName      = GetImageBaseName(m_TestCase, Visualization, BackendSuffix);
+        Output.ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
+        Output.ReferenceBasePath  = FileSystem::JoinPath(Output.ReferenceDirectory, Output.ImageBaseName);
+        Output.ReferencePath      = Output.ReferenceBasePath + ".png";
+        Output.HasReference       = FileSystem::FileExists(Output.ReferencePath.c_str());
+        return Output;
+    }
+
+    ::testing::AssertionResult PrepareOutputCapture(ITestingSwapChain*   pTestingSwapChain,
+                                                    ISwapChain*          pSwapChain,
+                                                    const OutputCapture& Output)
+    {
+        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+
+        if (Options.UpdateGoldenImages &&
+            !FileSystem::IsDirectory(Output.ReferenceDirectory.c_str()) &&
+            !FileSystem::CreateDirectory(Output.ReferenceDirectory.c_str()))
+        {
+            return ::testing::AssertionFailure()
+                << "Failed to create golden image directory: " << Output.ReferenceDirectory;
+        }
+
+        if (Output.HasReference)
+        {
+            if (!SelectReferenceImage(pTestingSwapChain, Output))
+            {
+                return ::testing::AssertionFailure()
+                    << "Failed to load reference image: " << Output.ReferencePath;
+            }
+        }
+        else
+        {
+            pSwapChain->Resize(Options.Width, Options.Height, pSwapChain->GetDesc().PreTransform);
+        }
+
+        return ::testing::AssertionSuccess();
+    }
+
+    bool SelectReferenceImage(ITestingSwapChain*   pTestingSwapChain,
+                              const OutputCapture& Output)
+    {
+        if (m_ActiveReferencePath == Output.ReferencePath)
+            return true;
+
+        if (!pTestingSwapChain->LoadReferenceImage(Output.ReferencePath.c_str()))
+            return false;
+
+        m_ActiveReferencePath = Output.ReferencePath;
+        return true;
+    }
+
+    void CaptureOutput(ITestingSwapChain*   pTestingSwapChain,
+                       const OutputCapture& Output)
+    {
+        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+
+        if (!Output.HasReference)
         {
             if (Options.UpdateGoldenImages)
             {
-                pTestingSwapChain->DumpBackBuffer(ReferenceBasePath.c_str());
-                ADD_FAILURE() << "Reference image did not exist and was created: " << ReferencePath;
+                pTestingSwapChain->DumpBackBuffer(Output.ReferenceBasePath.c_str());
+                ADD_FAILURE() << "Reference image did not exist and was created: " << Output.ReferencePath;
             }
             else
             {
-                const std::string CandidateBasePath = FileSystem::JoinPath(Options.GoldenImageDifferencesDirectory, ImageBaseName);
+                const std::string CandidateBasePath = FileSystem::JoinPath(Options.GoldenImageDifferencesDirectory, Output.ImageBaseName);
                 const std::string CandidatePath     = CandidateBasePath + ".png";
                 pTestingSwapChain->DumpBackBuffer(CandidateBasePath.c_str());
-                ADD_FAILURE() << "Reference image does not exist: " << ReferencePath
+                ADD_FAILURE() << "Reference image does not exist: " << Output.ReferencePath
                               << ". Rendered candidate: " << CandidatePath;
             }
             return;
         }
+
+        ASSERT_TRUE(SelectReferenceImage(pTestingSwapChain, Output))
+            << "Failed to load reference image: " << Output.ReferencePath;
+        pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
 
         {
             CurrentDirectoryScope DifferencesDirectory{Options.GoldenImageDifferencesDirectory};
@@ -477,11 +563,12 @@ private:
         }
 
         if (Options.UpdateGoldenImages)
-            pTestingSwapChain->DumpBackBuffer(ReferenceBasePath.c_str());
+            pTestingSwapChain->DumpBackBuffer(Output.ReferenceBasePath.c_str());
     }
 
 private:
     const RadientRenderTestCase& m_TestCase;
+    std::string                  m_ActiveReferencePath;
 };
 
 } // namespace
