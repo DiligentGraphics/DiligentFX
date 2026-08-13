@@ -28,6 +28,7 @@
 
 #include "RadientRenderTestOptions.hpp"
 
+#include "Render/RadientPBRRenderer.hpp"
 #include "json.hpp"
 
 #include <cctype>
@@ -35,6 +36,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace Diligent
@@ -251,6 +253,51 @@ bool ParseToneMapping(const Json&             Object,
     return true;
 }
 
+bool ParseDebugVisualizations(const Json&                               Value,
+                              std::vector<RADIENT_DEBUG_VISUALIZATION>& Result,
+                              const std::string&                        Path,
+                              std::string&                              Error)
+{
+    if (!Value.is_array())
+        return SetError(Error, Path + " must be an array");
+
+    static const std::unordered_map<std::string, RADIENT_DEBUG_VISUALIZATION> ModesByName = [] {
+        std::unordered_map<std::string, RADIENT_DEBUG_VISUALIZATION> Map;
+        Map.reserve(RADIENT_DEBUG_VISUALIZATION_COUNT - RADIENT_DEBUG_VISUALIZATION_NONE - 1);
+        for (Uint32 ModeIndex = RADIENT_DEBUG_VISUALIZATION_NONE + 1;
+             ModeIndex < RADIENT_DEBUG_VISUALIZATION_COUNT;
+             ++ModeIndex)
+        {
+            const auto Mode    = static_cast<RADIENT_DEBUG_VISUALIZATION>(ModeIndex);
+            const auto PBRMode = RadientPBRRenderer::GetDebugViewType(Mode);
+            Map.emplace(PBR_Renderer::GetDebugViewTypeString(PBRMode), Mode);
+        }
+        return Map;
+    }();
+
+    std::unordered_set<Uint32> Modes;
+    Result.reserve(Value.size());
+    for (size_t Index = 0; Index < Value.size(); ++Index)
+    {
+        const Json& Entry = Value[Index];
+        if (!Entry.is_string())
+            return SetError(Error, Path + '[' + std::to_string(Index) + "] must be a string");
+
+        const std::string Name   = Entry.get<std::string>();
+        const auto        ModeIt = ModesByName.find(Name);
+        if (ModeIt == ModesByName.end())
+            return SetError(Error, Path + " contains unknown debug visualization '" + Name + '\'');
+
+        const RADIENT_DEBUG_VISUALIZATION Mode = ModeIt->second;
+        if (!Modes.emplace(static_cast<Uint32>(Mode)).second)
+            return SetError(Error, Path + " contains duplicate debug visualization '" + Name + '\'');
+
+        Result.push_back(Mode);
+    }
+
+    return true;
+}
+
 bool IsValidTestName(const std::string& Name)
 {
     if (Name.empty())
@@ -307,6 +354,16 @@ bool ParseTestCase(const Json&                     Object,
             return SetError(Error, Path + ".directionalLight must be a boolean");
 
         Test.DirectionalLight = DirectionalLightIt->get<bool>();
+    }
+
+    if (const auto DebugVisualizationsIt = Object.find("debugVisualizations");
+        DebugVisualizationsIt != Object.end() &&
+        !ParseDebugVisualizations(*DebugVisualizationsIt,
+                                  Test.DebugVisualizations,
+                                  Path + ".debugVisualizations",
+                                  Error))
+    {
+        return false;
     }
 
     Test.Comparison = Options.Comparison;
