@@ -43,6 +43,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <system_error>
 #include <thread>
@@ -168,6 +169,20 @@ std::string GetImageBaseName(const RadientRenderTestCase& TestCase,
     return Name;
 }
 
+void FlipImageVertically(std::vector<Uint8>& Pixels, Uint32 Width, Uint32 Height)
+{
+    const size_t       RowSize = static_cast<size_t>(Width) * 4;
+    std::vector<Uint8> TempRow(RowSize);
+    for (Uint32 TopRow = 0; TopRow < Height / 2; ++TopRow)
+    {
+        Uint8* const pTopRow    = Pixels.data() + static_cast<size_t>(TopRow) * RowSize;
+        Uint8* const pBottomRow = Pixels.data() + static_cast<size_t>(Height - 1 - TopRow) * RowSize;
+        std::memcpy(TempRow.data(), pTopRow, RowSize);
+        std::memcpy(pTopRow, pBottomRow, RowSize);
+        std::memcpy(pBottomRow, TempRow.data(), RowSize);
+    }
+}
+
 class RadientRenderScene
 {
 public:
@@ -286,72 +301,33 @@ public:
         return RADIENT_FAILED(CommitStatus) ? CommitStatus : Status;
     }
 
-    RADIENT_STATUS RenderUntilReady(IRenderDevice* pDevice, IDeviceContext* pContext)
+    RADIENT_STATUS PrepareFrame()
     {
-        const auto Deadline       = std::chrono::steady_clock::now() + RenderReadyTimeout;
-        double     Time           = 0.0;
-        bool       OutputComplete = false;
+        const RADIENT_STATUS ImportStatus = m_pImporter->ProcessPendingImports();
+        if (RADIENT_FAILED(ImportStatus))
+            return ImportStatus;
 
-        while (!OutputComplete && std::chrono::steady_clock::now() < Deadline)
-        {
-            const RADIENT_STATUS ImportStatus = m_pImporter->ProcessPendingImports();
-            if (RADIENT_FAILED(ImportStatus))
-                return ImportStatus;
+        const RADIENT_STATUS CommitStatus = m_pWriter->CommitChanges();
+        if (RADIENT_FAILED(CommitStatus))
+            return CommitStatus;
 
-            const RADIENT_STATUS CommitStatus = m_pWriter->CommitChanges();
-            if (RADIENT_FAILED(CommitStatus))
-                return CommitStatus;
+        const RADIENT_STATUS SceneStatus =
+            RadientAssetManagerImpl::GetSceneGPUResourceStatus(m_pSceneAsset);
+        if (RADIENT_FAILED(SceneStatus))
+            return SceneStatus;
 
-            const RADIENT_STATUS SceneStatus =
-                RadientAssetManagerImpl::GetSceneGPUResourceStatus(m_pSceneAsset);
-            if (RADIENT_FAILED(SceneStatus))
-                return SceneStatus;
+        const RADIENT_STATUS EnvironmentStatus =
+            RadientTextureAssetManager::GetGPUResourceStatus(m_pEnvironmentMap);
+        if (RADIENT_FAILED(EnvironmentStatus))
+            return EnvironmentStatus;
 
-            const RADIENT_STATUS EnvironmentStatus =
-                RadientTextureAssetManager::GetGPUResourceStatus(m_pEnvironmentMap);
-            if (RADIENT_FAILED(EnvironmentStatus))
-                return EnvironmentStatus;
-
-            const RADIENT_STATUS RenderStatus = RenderFrame(pContext, Time);
-            if (RADIENT_FAILED(RenderStatus))
-                return RenderStatus;
-
-            OutputComplete = ImportStatus == RADIENT_STATUS_OK &&
+        return (ImportStatus == RADIENT_STATUS_OK &&
                 SceneStatus == RADIENT_STATUS_OK &&
-                EnvironmentStatus == RADIENT_STATUS_OK &&
-                RenderStatus == RADIENT_STATUS_OK;
-
-            pContext->Flush();
-            pContext->FinishFrame();
-
-            if (OutputComplete)
-                break;
-
-            Time += 1.0 / 60.0;
-            std::this_thread::sleep_for(std::chrono::milliseconds{1});
-
-            // Since frame submission is not throttled, wait for the GPU
-            // to avoid queuing an unlimited number of frames.
-            pContext->WaitForIdle();
-            pDevice->ReleaseStaleResources();
-        }
-
-        return OutputComplete ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
+                EnvironmentStatus == RADIENT_STATUS_OK) ?
+            RADIENT_STATUS_OK :
+            RADIENT_STATUS_PENDING;
     }
 
-    RADIENT_STATUS RenderMeasuredFrame(IDeviceContext* pContext, DeviceContextCommandCounters& Counters)
-    {
-        const DeviceContextCommandCounters Before = pContext->GetStats().CommandCounters;
-        const RADIENT_STATUS               Status = RenderFrame(pContext, 0.0);
-        const DeviceContextCommandCounters After  = pContext->GetStats().CommandCounters;
-
-        Counters.MultiDrawIndexed = After.MultiDrawIndexed - Before.MultiDrawIndexed;
-        Counters.MapBuffer        = After.MapBuffer - Before.MapBuffer;
-        Counters.UpdateBuffer     = After.UpdateBuffer - Before.UpdateBuffer;
-        return Status;
-    }
-
-private:
     RADIENT_STATUS RenderFrame(IDeviceContext* pContext, double Time)
     {
         RadientRenderAttribs Attribs{};
@@ -386,14 +362,18 @@ public:
     {}
 
 private:
-    struct OutputCapture
+    struct CaptureEntry
     {
         RADIENT_DEBUG_VISUALIZATION Visualization = RADIENT_DEBUG_VISUALIZATION_NONE;
         std::string                 ImageBaseName;
         std::string                 ReferenceDirectory;
         std::string                 ReferenceBasePath;
         std::string                 ReferencePath;
-        bool                        HasReference = false;
+        std::vector<Uint8>          ReferencePixels;
+        Uint32                      ReferenceWidth  = 0;
+        Uint32                      ReferenceHeight = 0;
+        bool                        HasReference    = false;
+        bool                        Captured        = false;
     };
 
     void TestBody() override
@@ -416,24 +396,20 @@ private:
         RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{pSwapChain, IID_TestingSwapChain};
         ASSERT_NE(pTestingSwapChain, nullptr);
 
-        const RadientRenderTestOptions& Options       = GetRadientRenderTestOptions();
-        const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
-        ASSERT_NE(BackendSuffix, nullptr);
+        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
 
         const std::string ModelPath = FileSystem::JoinPath(Options.ModelsDirectory, m_TestCase.Model);
         ASSERT_TRUE(FileSystem::FileExists(ModelPath.c_str()))
             << "Model does not exist: " << ModelPath;
 
-        const OutputCapture Output = MakeOutputCapture(RADIENT_DEBUG_VISUALIZATION_NONE, BackendSuffix);
-        ASSERT_TRUE(PrepareOutputCapture(pTestingSwapChain, pSwapChain, Output));
+        std::vector<CaptureEntry> Captures = PrepareCaptures(pDevice, pSwapChain);
+        if (Captures.empty())
+            return;
+        pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
 
         const RADIENT_STATUS ToneMappingStatus = GetView()->SetToneMapping(m_TestCase.ToneMapping);
         ASSERT_TRUE(ToneMappingStatus == RADIENT_STATUS_OK ||
                     ToneMappingStatus == RADIENT_STATUS_NO_CHANGE);
-
-        const RADIENT_STATUS SetVisualizationStatus = GetView()->SetDebugVisualization(Output.Visualization);
-        ASSERT_TRUE(SetVisualizationStatus == RADIENT_STATUS_OK ||
-                    SetVisualizationStatus == RADIENT_STATUS_NO_CHANGE);
 
         RadientRenderScene Scene{GetEngine(),
                                  GetRenderer(),
@@ -446,114 +422,217 @@ private:
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))
             << "Import failed with Radient status " << static_cast<Int32>(ImportStatus);
-        ASSERT_EQ(Scene.RenderUntilReady(pDevice, pContext), RADIENT_STATUS_OK)
+
+        const auto Deadline            = std::chrono::steady_clock::now() + RenderReadyTimeout;
+        size_t     PendingCaptureCount = Captures.size();
+        double     Time                = 0.0;
+
+        // Render every output once after dependencies become ready to request
+        // all asynchronous PSO permutations before capture readback begins.
+        bool AllCapturesRequested = false;
+
+        while (PendingCaptureCount != 0 && std::chrono::steady_clock::now() < Deadline)
+        {
+            const RADIENT_STATUS PrepareStatus = Scene.PrepareFrame();
+            ASSERT_FALSE(RADIENT_FAILED(PrepareStatus));
+            const bool DependenciesReady = PrepareStatus == RADIENT_STATUS_OK;
+
+            for (CaptureEntry& Capture : Captures)
+            {
+                if (Capture.Captured)
+                    continue;
+
+                const RADIENT_STATUS VisualizationStatus = GetView()->SetDebugVisualization(Capture.Visualization);
+                ASSERT_TRUE(VisualizationStatus == RADIENT_STATUS_OK ||
+                            VisualizationStatus == RADIENT_STATUS_NO_CHANGE);
+
+                const DeviceContextCommandCounters Before       = pContext->GetStats().CommandCounters;
+                const RADIENT_STATUS               RenderStatus = Scene.RenderFrame(pContext, Time);
+                const DeviceContextCommandCounters After        = pContext->GetStats().CommandCounters;
+                ASSERT_FALSE(RADIENT_FAILED(RenderStatus));
+
+                if (AllCapturesRequested && DependenciesReady && RenderStatus == RADIENT_STATUS_OK)
+                {
+                    DeviceContextCommandCounters Counters{};
+                    Counters.MultiDrawIndexed = After.MultiDrawIndexed - Before.MultiDrawIndexed;
+                    Counters.MapBuffer        = After.MapBuffer - Before.MapBuffer;
+                    Counters.UpdateBuffer     = After.UpdateBuffer - Before.UpdateBuffer;
+
+                    if (Capture.Visualization == RADIENT_DEBUG_VISUALIZATION_NONE)
+                        ValidateStatistics(pDevice->GetDeviceInfo().Type, Counters);
+
+                    CaptureOutput(pTestingSwapChain, Capture);
+                    Capture.Captured = true;
+                    --PendingCaptureCount;
+                }
+
+                pContext->Flush();
+                pContext->FinishFrame();
+            }
+
+            if (PendingCaptureCount == 0)
+                break;
+
+            AllCapturesRequested = DependenciesReady;
+            Time += 1.0 / 60.0;
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+
+            pContext->WaitForIdle();
+            pDevice->ReleaseStaleResources();
+        }
+
+        ASSERT_EQ(PendingCaptureCount, 0u)
             << "Timed out waiting for imported scene and renderer resources";
+    }
 
-        DeviceContextCommandCounters Counters{};
-        ASSERT_EQ(Scene.RenderMeasuredFrame(pContext, Counters), RADIENT_STATUS_OK);
-
+    void ValidateStatistics(RENDER_DEVICE_TYPE                  DeviceType,
+                            const DeviceContextCommandCounters& Counters)
+    {
         RecordProperty("multiDrawIndexed", Counters.MultiDrawIndexed);
         RecordProperty("mapBuffer", Counters.MapBuffer);
         RecordProperty("updateBuffer", Counters.UpdateBuffer);
 
-        const auto& Statistics = m_TestCase.Statistics[static_cast<size_t>(pDevice->GetDeviceInfo().Type)];
-        if (Statistics)
+        const auto& Statistics = m_TestCase.Statistics[static_cast<size_t>(DeviceType)];
+        if (!Statistics)
+            return;
+
+        if (Statistics->MultiDrawIndexed)
+            EXPECT_EQ(Counters.MultiDrawIndexed, *Statistics->MultiDrawIndexed);
+        if (Statistics->MapBufferMax)
+            EXPECT_LE(Counters.MapBuffer, *Statistics->MapBufferMax);
+        if (Statistics->UpdateBufferMax)
+            EXPECT_LE(Counters.UpdateBuffer, *Statistics->UpdateBufferMax);
+    }
+
+    std::vector<CaptureEntry> PrepareCaptures(IRenderDevice* pDevice,
+                                              ISwapChain*    pSwapChain)
+    {
+        const RadientRenderTestOptions& Options       = GetRadientRenderTestOptions();
+        const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
+        if (BackendSuffix == nullptr)
         {
-            if (Statistics->MultiDrawIndexed)
-                EXPECT_EQ(Counters.MultiDrawIndexed, *Statistics->MultiDrawIndexed);
-            if (Statistics->MapBufferMax)
-                EXPECT_LE(Counters.MapBuffer, *Statistics->MapBufferMax);
-            if (Statistics->UpdateBufferMax)
-                EXPECT_LE(Counters.UpdateBuffer, *Statistics->UpdateBufferMax);
+            ADD_FAILURE() << "Unsupported render device type";
+            return {};
         }
 
-        CaptureOutput(pTestingSwapChain, Output);
-    }
+        const std::string ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
 
-    OutputCapture MakeOutputCapture(RADIENT_DEBUG_VISUALIZATION Visualization,
-                                    const char*                 BackendSuffix) const
-    {
-        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+        std::vector<CaptureEntry> Captures;
+        Captures.reserve(1 + m_TestCase.DebugVisualizations.size());
 
-        OutputCapture Output;
-        Output.Visualization      = Visualization;
-        Output.ImageBaseName      = GetImageBaseName(m_TestCase, Visualization, BackendSuffix);
-        Output.ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
-        Output.ReferenceBasePath  = FileSystem::JoinPath(Output.ReferenceDirectory, Output.ImageBaseName);
-        Output.ReferencePath      = Output.ReferenceBasePath + ".png";
-        Output.HasReference       = FileSystem::FileExists(Output.ReferencePath.c_str());
-        return Output;
-    }
+        const auto AddCapture = [&](RADIENT_DEBUG_VISUALIZATION Visualization) {
+            CaptureEntry Capture;
+            Capture.Visualization      = Visualization;
+            Capture.ImageBaseName      = GetImageBaseName(m_TestCase, Visualization, BackendSuffix);
+            Capture.ReferenceDirectory = ReferenceDirectory;
+            Capture.ReferenceBasePath  = FileSystem::JoinPath(ReferenceDirectory, Capture.ImageBaseName);
+            Capture.ReferencePath      = Capture.ReferenceBasePath + ".png";
+            Captures.push_back(std::move(Capture));
+        };
 
-    ::testing::AssertionResult PrepareOutputCapture(ITestingSwapChain*   pTestingSwapChain,
-                                                    ISwapChain*          pSwapChain,
-                                                    const OutputCapture& Output)
-    {
-        const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
+        AddCapture(RADIENT_DEBUG_VISUALIZATION_NONE);
+        for (RADIENT_DEBUG_VISUALIZATION Visualization : m_TestCase.DebugVisualizations)
+            AddCapture(Visualization);
 
         if (Options.UpdateGoldenImages &&
-            !FileSystem::IsDirectory(Output.ReferenceDirectory.c_str()) &&
-            !FileSystem::CreateDirectory(Output.ReferenceDirectory.c_str()))
+            !FileSystem::IsDirectory(ReferenceDirectory.c_str()) &&
+            !FileSystem::CreateDirectory(ReferenceDirectory.c_str()))
         {
-            return ::testing::AssertionFailure()
-                << "Failed to create golden image directory: " << Output.ReferenceDirectory;
+            ADD_FAILURE() << "Failed to create golden image directory: " << ReferenceDirectory;
+            return {};
         }
 
-        if (Output.HasReference)
+        Uint32 ReferenceWidth  = 0;
+        Uint32 ReferenceHeight = 0;
+        for (CaptureEntry& Capture : Captures)
         {
-            if (!SelectReferenceImage(pTestingSwapChain, Output))
+            if (!FileSystem::FileExists(Capture.ReferencePath.c_str()))
+                continue;
+
+            if (!LoadTestImage(Capture.ReferencePath.c_str(),
+                               Capture.ReferencePixels,
+                               Capture.ReferenceWidth,
+                               Capture.ReferenceHeight))
             {
-                return ::testing::AssertionFailure()
-                    << "Failed to load reference image: " << Output.ReferencePath;
+                ADD_FAILURE() << "Failed to load reference image: " << Capture.ReferencePath;
+                continue;
             }
+
+            if (ReferenceWidth != 0 &&
+                (Capture.ReferenceWidth != ReferenceWidth || Capture.ReferenceHeight != ReferenceHeight))
+            {
+                ADD_FAILURE() << "Reference image " << Capture.ReferencePath << " has dimensions "
+                              << Capture.ReferenceWidth << 'x' << Capture.ReferenceHeight
+                              << ", but all capture references must use "
+                              << ReferenceWidth << 'x' << ReferenceHeight;
+                Capture.ReferencePixels.clear();
+                Capture.ReferenceWidth  = 0;
+                Capture.ReferenceHeight = 0;
+                continue;
+            }
+
+            if (ReferenceWidth == 0)
+            {
+                ReferenceWidth  = Capture.ReferenceWidth;
+                ReferenceHeight = Capture.ReferenceHeight;
+            }
+
+            if (pDevice->GetDeviceInfo().IsGLDevice())
+                FlipImageVertically(Capture.ReferencePixels, Capture.ReferenceWidth, Capture.ReferenceHeight);
+
+            Capture.HasReference = true;
         }
-        else
+
+        if (ReferenceWidth == 0)
         {
-            pSwapChain->Resize(Options.Width, Options.Height, pSwapChain->GetDesc().PreTransform);
+            ReferenceWidth  = Options.Width;
+            ReferenceHeight = Options.Height;
         }
 
-        return ::testing::AssertionSuccess();
+        pSwapChain->Resize(ReferenceWidth, ReferenceHeight, pSwapChain->GetDesc().PreTransform);
+
+        return Captures;
     }
 
-    bool SelectReferenceImage(ITestingSwapChain*   pTestingSwapChain,
-                              const OutputCapture& Output)
-    {
-        if (m_ActiveReferencePath == Output.ReferencePath)
-            return true;
-
-        if (!pTestingSwapChain->LoadReferenceImage(Output.ReferencePath.c_str()))
-            return false;
-
-        m_ActiveReferencePath = Output.ReferencePath;
-        return true;
-    }
-
-    void CaptureOutput(ITestingSwapChain*   pTestingSwapChain,
-                       const OutputCapture& Output)
+    void CaptureOutput(ITestingSwapChain*  pTestingSwapChain,
+                       const CaptureEntry& Capture)
     {
         const RadientRenderTestOptions& Options = GetRadientRenderTestOptions();
 
-        if (!Output.HasReference)
+        if (!Capture.HasReference)
         {
+            // The file may exist but have failed to load or have dimensions
+            // inconsistent with the other references. PrepareCaptures() has
+            // already reported that error and left the capture without usable
+            // reference data so that a replacement can still be rendered.
+            const bool ReferenceExists = FileSystem::FileExists(Capture.ReferencePath.c_str());
             if (Options.UpdateGoldenImages)
             {
-                pTestingSwapChain->DumpBackBuffer(Output.ReferenceBasePath.c_str());
-                ADD_FAILURE() << "Reference image did not exist and was created: " << Output.ReferencePath;
+                // Updating is enabled, so replace the missing or unusable
+                // golden image directly.
+                pTestingSwapChain->DumpBackBuffer(Capture.ReferenceBasePath.c_str());
+                if (!ReferenceExists)
+                    ADD_FAILURE() << "Reference image did not exist and was created: " << Capture.ReferencePath;
             }
             else
             {
-                const std::string CandidateBasePath = FileSystem::JoinPath(Options.GoldenImageDifferencesDirectory, Output.ImageBaseName);
+                // Preserve the golden-image directory and write the rendered
+                // candidate alongside the ordinary comparison differences.
+                const std::string CandidateBasePath = FileSystem::JoinPath(Options.GoldenImageDifferencesDirectory, Capture.ImageBaseName);
                 const std::string CandidatePath     = CandidateBasePath + ".png";
                 pTestingSwapChain->DumpBackBuffer(CandidateBasePath.c_str());
-                ADD_FAILURE() << "Reference image does not exist: " << Output.ReferencePath
-                              << ". Rendered candidate: " << CandidatePath;
+                if (!ReferenceExists)
+                {
+                    ADD_FAILURE() << "Reference image does not exist: " << Capture.ReferencePath
+                                  << ". Rendered candidate: " << CandidatePath;
+                }
             }
             return;
         }
 
-        ASSERT_TRUE(SelectReferenceImage(pTestingSwapChain, Output))
-            << "Failed to load reference image: " << Output.ReferencePath;
-        pTestingSwapChain->SetImageComparisonAttribs(m_TestCase.Comparison);
+        pTestingSwapChain->SetReferenceData(Capture.ReferencePixels.data(),
+                                            static_cast<size_t>(Capture.ReferenceWidth) * 4,
+                                            false);
 
         {
             CurrentDirectoryScope DifferencesDirectory{Options.GoldenImageDifferencesDirectory};
@@ -563,12 +642,11 @@ private:
         }
 
         if (Options.UpdateGoldenImages)
-            pTestingSwapChain->DumpBackBuffer(Output.ReferenceBasePath.c_str());
+            pTestingSwapChain->DumpBackBuffer(Capture.ReferenceBasePath.c_str());
     }
 
 private:
     const RadientRenderTestCase& m_TestCase;
-    std::string                  m_ActiveReferencePath;
 };
 
 } // namespace
