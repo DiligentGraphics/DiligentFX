@@ -16,6 +16,7 @@ float4 SRGBAToLinear(float4 sRGBA)
 
 float3 FastSRGBToLinear(float3 sRGB)
 {
+    sRGB = saturate(sRGB);
     return pow(sRGB, float3(2.2, 2.2, 2.2));
 }
 
@@ -26,6 +27,7 @@ float4 FastSRGBAToLinear(float4 sRGBA)
 
 float3 LinearToSRGB(float3 RGB)
 {
+    RGB = saturate(RGB);
     float3 bGreater = step(float3(0.0031308, 0.0031308, 0.0031308), RGB);
     return lerp(RGB * 12.92,
                 (pow(RGB, float3(1.0 / 2.4, 1.0 / 2.4, 1.0 / 2.4)) * 1.055) - float3(0.055, 0.055, 0.055),
