@@ -506,8 +506,8 @@ PSOutput main(in VSOutput VSOut,
                     Shading,
                     g_Frame.Lights[i],
 #                   if ENABLE_SHEEN
-                        g_SheenAlbedoScalingLUT,
-                        g_SheenAlbedoScalingLUT_sampler,
+                        g_PreintegratedSheen,
+                        g_PreintegratedSheen_sampler,
 #                   endif
 #                   if ENABLE_SHADOWS
                         g_ShadowMap,
@@ -526,7 +526,7 @@ PSOutput main(in VSOutput VSOut,
                      g_IrradianceMap,     g_IrradianceMap_sampler,
                      g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
 #                    if ENABLE_SHEEN
-                         g_PreintegratedCharlie, g_PreintegratedCharlie_sampler,
+                         g_PreintegratedSheen, g_PreintegratedSheen_sampler,
 #                    endif
                      SrfLighting);
         }

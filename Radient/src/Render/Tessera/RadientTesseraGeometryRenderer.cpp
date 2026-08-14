@@ -593,7 +593,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.EnableAO                  = true;
     RendererCI.EnableEmissive            = true;
     RendererCI.EnableClearCoat           = true;
-    RendererCI.EnableSheen               = false;
+    RendererCI.EnableSheen               = true;
     RendererCI.EnableAnisotropy          = true;
     RendererCI.EnableIridescence         = true;
     RendererCI.EnableShadows             = false;

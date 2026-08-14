@@ -180,8 +180,7 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     FrameResources.emplace("g_PreintegratedGGX");
     FrameResources.emplace("g_IrradianceMap");
     FrameResources.emplace("g_PrefilteredEnvMap");
-    FrameResources.emplace("g_PreintegratedCharlie");
-    FrameResources.emplace("g_SheenAlbedoScalingLUT");
+    FrameResources.emplace("g_PreintegratedSheen");
     FrameResources.emplace("g_ShadowMap");
     FrameResources.emplace("g_ShadowMap_sampler");
     // Only move separate samplers to the frame signature. Combined GL samplers
@@ -241,14 +240,10 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     VERIFY_EXPR(pMaterialSignature);
 
     if (m_Settings.EnableIBL)
-    {
         pFrameSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
-        if (m_Settings.EnableSheen)
-            pFrameSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
-    }
 
     if (m_Settings.EnableSheen)
-        pFrameSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
+        pFrameSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedSheen")->Set(m_pPreintegratedSheen_SRV);
 
     m_ResourceSignatures = {std::move(pFrameSignature), std::move(pMaterialSignature)};
 }

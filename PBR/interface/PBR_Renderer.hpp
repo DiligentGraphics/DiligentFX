@@ -297,13 +297,6 @@ public:
         /// The number of samples for BRDF LUT creation.
         Uint32 NumBRDFSamples = 512;
 
-        /// If Sheen is enabled, this parameter specifies the path to the sheen look-up table.
-        const char* SheenAlbedoScalingLUTPath = nullptr;
-
-        /// If IBL and Sheen are enabled, this parameter specifies the path to the
-        /// preintegrated Charlie BRDF look-up table.
-        const char* PreintegratedCharlieBRDFPath = nullptr;
-
         /// Input layout description.
         ///
         /// \remarks    The renderer uses the following input layout:
@@ -464,14 +457,15 @@ public:
     virtual ~PBR_Renderer();
 
     // clang-format off
-    IRenderDevice* GetDevice() const               { return m_Device; }
-    ITextureView* GetPreintegratedGGX_SRV() const  { return m_pPreintegratedGGX_SRV; }
-    ITextureView* GetWhiteTexSRV() const           { return m_pWhiteTexSRV; }
-    ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
-    ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
-    IBuffer*      GetPBRPrimitiveAttribsCB() const { return m_PBRPrimitiveAttribsCB; }
-    IBuffer*      GetPBRMaterialAttribsCB() const  { return m_PBRMaterialAttribsCB; }
-    IBuffer*      GetJointsBuffer() const          { return m_JointsBuffer; }
+    IRenderDevice* GetDevice() const                 { return m_Device; }
+    ITextureView* GetPreintegratedGGX_SRV() const    { return m_pPreintegratedGGX_SRV; }
+    ITextureView* GetPreintegratedSheen_SRV() const  { return m_pPreintegratedSheen_SRV; }
+    ITextureView* GetWhiteTexSRV() const             { return m_pWhiteTexSRV; }
+    ITextureView* GetBlackTexSRV() const             { return m_pBlackTexSRV; }
+    ITextureView* GetDefaultNormalMapSRV() const     { return m_pDefaultNormalMapSRV; }
+    IBuffer*      GetPBRPrimitiveAttribsCB() const   { return m_PBRPrimitiveAttribsCB; }
+    IBuffer*      GetPBRMaterialAttribsCB() const    { return m_PBRMaterialAttribsCB; }
+    IBuffer*      GetJointsBuffer() const            { return m_JointsBuffer; }
     // clang-format on
 
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
@@ -968,8 +962,15 @@ protected:
     virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc);
 
 private:
+    enum class BRDFType : Uint8
+    {
+        GGX,
+        Sheen
+    };
+
     void PrecomputeBRDF(IDeviceContext* pCtx,
-                        Uint32          NumBRDFSamples = 512);
+                        Uint32          NumBRDFSamples,
+                        BRDFType        Type);
 
     void CreatePSO(PsoHashMapType&             PsoHashMap,
                    const GraphicsPipelineDesc& GraphicsDesc,
@@ -1054,8 +1055,7 @@ protected:
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView> m_pPreintegratedGGX_SRV;
-    RefCntAutoPtr<ITextureView> m_pPreintegratedCharlie_SRV;
-    RefCntAutoPtr<ITextureView> m_pSheenAlbedoScaling_LUT_SRV;
+    RefCntAutoPtr<ITextureView> m_pPreintegratedSheen_SRV;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;

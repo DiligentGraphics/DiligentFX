@@ -90,15 +90,11 @@ SamplerState g_LinearClampSampler;
     Texture2D    g_PreintegratedGGX;
 #   define       g_PreintegratedGGX_sampler g_LinearClampSampler
 
-#   if ENABLE_SHEEN
-        Texture2D g_PreintegratedCharlie;
-#       define    g_PreintegratedCharlie_sampler g_LinearClampSampler
-#   endif
 #endif
 
 #if ENABLE_SHEEN
-    Texture2D     g_SheenAlbedoScalingLUT;
-#       define    g_SheenAlbedoScalingLUT_sampler g_LinearClampSampler
+    Texture2D g_PreintegratedSheen;
+#   define    g_PreintegratedSheen_sampler g_LinearClampSampler
 #endif
 
 // Access textures by name:

@@ -253,8 +253,7 @@ void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     FrameResources.emplace("g_PreintegratedGGX");
     FrameResources.emplace("g_IrradianceMap");
     FrameResources.emplace("g_PrefilteredEnvMap");
-    FrameResources.emplace("g_PreintegratedCharlie");
-    FrameResources.emplace("g_SheenAlbedoScalingLUT");
+    FrameResources.emplace("g_PreintegratedSheen");
     FrameResources.emplace("g_ShadowMap");
     FrameResources.emplace("g_ShadowMap_sampler");
     // Only move separate samplers to the frame signature.
@@ -312,18 +311,10 @@ void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     VERIFY_EXPR(ResourceSignature);
 
     if (m_Settings.EnableIBL)
-    {
         FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
-        if (m_Settings.EnableSheen)
-        {
-            FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
-        }
-    }
 
     if (m_Settings.EnableSheen)
-    {
-        FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
-    }
+        FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedSheen")->Set(m_pPreintegratedSheen_SRV);
     m_ResourceSignatures = {std::move(FrameAttribsSignature), std::move(ResourceSignature)};
 }
 

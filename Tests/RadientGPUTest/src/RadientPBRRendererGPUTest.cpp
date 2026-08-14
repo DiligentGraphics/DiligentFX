@@ -62,10 +62,16 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
 
     PBR_Renderer::CreateInfo RendererCI{};
     RendererCI.EnableIBL             = false;
+    RendererCI.EnableSheen           = true;
     RendererCI.EnableShadows         = true;
     RendererCI.CreateDefaultTextures = false;
+    RendererCI.NumBRDFSamples        = 16;
 
     RadientPBRRenderer Renderer{pDevice, nullptr, pContext, RendererCI};
+
+    ITextureView* const pPreintegratedSheen = Renderer.GetPreintegratedSheen_SRV();
+    ASSERT_NE(pPreintegratedSheen, nullptr);
+    EXPECT_EQ(pPreintegratedSheen->GetDesc().Format, TEX_FORMAT_RG16_FLOAT);
 
     RefCntAutoPtr<IShaderResourceBinding> pFrameSRB;
     RefCntAutoPtr<IShaderResourceBinding> pMaterialSRB;
@@ -78,6 +84,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_EQ(FrameDesc.BindingIndex, 0);
     EXPECT_TRUE(HasResource(FrameDesc, "cbFrameAttribs"));
     EXPECT_TRUE(HasResource(FrameDesc, "g_ShadowMap"));
+    EXPECT_TRUE(HasResource(FrameDesc, "g_PreintegratedSheen"));
     EXPECT_FALSE(HasResource(FrameDesc, "cbPrimitiveAttribs"));
     EXPECT_FALSE(HasResource(FrameDesc, "cbMaterialAttribs"));
     EXPECT_FALSE(HasResource(FrameDesc, "g_BaseColorMap"));
@@ -86,6 +93,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_EQ(MaterialDesc.BindingIndex, 1);
     EXPECT_FALSE(HasResource(MaterialDesc, "cbFrameAttribs"));
     EXPECT_FALSE(HasResource(MaterialDesc, "g_ShadowMap"));
+    EXPECT_FALSE(HasResource(MaterialDesc, "g_PreintegratedSheen"));
     EXPECT_TRUE(HasResource(MaterialDesc, "cbPrimitiveAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "cbMaterialAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "g_BaseColorMap"));

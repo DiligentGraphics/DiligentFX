@@ -1,0 +1,67 @@
+#include "FullScreenTriangleVSOutput.fxh"
+#include "PBR_PrecomputeCommon.fxh"
+
+#ifndef NUM_SAMPLES
+#    define NUM_SAMPLES 512u
+#endif
+
+float3 ImportanceSampleCharlie(float2 Xi, float SheenRoughness)
+{
+    float Alpha    = max(SheenRoughness * SheenRoughness, 1e-6);
+    float Phi      = 2.0 * PI * Xi.x;
+    float SinTheta = pow(Xi.y, Alpha / (2.0 * Alpha + 1.0));
+    float CosTheta = sqrt(saturate(1.0 - SinTheta * SinTheta));
+    return float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
+}
+
+float AshikhminVisibility(float NdotL, float NdotV)
+{
+    return saturate(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)));
+}
+
+float2 IntegrateSheenBRDF(float SheenRoughness, float NdotV, uint NumSamples)
+{
+    float3 V = float3(sqrt(saturate(1.0 - NdotV * NdotV)), 0.0, NdotV);
+
+    float CharlieBRDF      = 0.0;
+    float DirectionalAlbedo = 0.0;
+    for (uint i = 0u; i < NumSamples; ++i)
+    {
+        float2 Xi = Hammersley2D(i, NumSamples);
+
+        // Integrate the Charlie split-sum term using Charlie importance sampling.
+        float3 H     = ImportanceSampleCharlie(Xi, SheenRoughness);
+        float3 L     = 2.0 * dot(V, H) * H - V;
+        float  NdotL = saturate(L.z);
+        if (NdotL > 0.0)
+        {
+            float NdotH = saturate(H.z);
+            float VdotH = saturate(dot(V, H));
+            float D     = NormalDistribution_Charlie(NdotH, SheenRoughness);
+            CharlieBRDF += AshikhminVisibility(NdotL, NdotV) * D * NdotL * VdotH;
+        }
+
+        // Integrate the directional albedo of the actual sheen BRDF. Cosine-
+        // weighted sampling cancels NdotL and leaves PI * D * visibility.
+        float Phi      = 2.0 * PI * Xi.x;
+        float CosTheta = sqrt(1.0 - Xi.y);
+        float SinTheta = sqrt(Xi.y);
+        
+        L = float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
+        H = normalize(V + L);
+        
+        DirectionalAlbedo +=
+            PI * NormalDistribution_Charlie(saturate(H.z), SheenRoughness) *
+            SheenVisibility(CosTheta, NdotV, SheenRoughness);
+    }
+
+    // R: Charlie split-sum term. G: sheen directional albedo.
+    return float2(8.0 * PI * CharlieBRDF, DirectionalAlbedo) / float(NumSamples);
+}
+
+void PrecomputeSheenBRDF_PS(FullScreenTriangleVSOutput VSOut,
+                            out float2                 SheenBRDF : SV_Target)
+{
+    float2 UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
+    SheenBRDF = IntegrateSheenBRDF(UV.y, UV.x, NUM_SAMPLES);
+}

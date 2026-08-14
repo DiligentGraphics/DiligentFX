@@ -363,8 +363,8 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in float3       v,
                               in float2       EnvironmentRotation,
                               in float        PrefilteredCubeLastMip,
-                              in Texture2D    PreintegratedCharlie,
-                              in SamplerState PreintegratedCharlie_sampler,
+                              in Texture2D    PreintegratedSheen,
+                              in SamplerState PreintegratedSheen_sampler,
                               in TextureCube  PrefilteredEnvMap,
                               in SamplerState PrefilteredEnvMap_sampler)
 {
@@ -374,7 +374,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
     float3 Reflection           = normalize(reflect(-v, n));
     float3 EnvironmentDirection = RotateDirectionAroundY(Reflection, EnvironmentRotation);
 
-    float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;
+    float brdf = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).r;
 
     float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, EnvironmentDirection, lod);
     return SpecularLight * SheenColor * brdf;
@@ -616,8 +616,8 @@ SurfaceLightingInfo GetDefaultSurfaceLightingInfo()
 void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
                         in    PBRLightAttribs        Light,
 #if ENABLE_SHEEN
-                        in    Texture2D              AlbedoScalingLUT,
-                        in    SamplerState           AlbedoScalingLUT_sampler,
+                        in    Texture2D              PreintegratedSheen,
+                        in    SamplerState           PreintegratedSheen_sampler,
 #endif 
 #if ENABLE_SHADOWS
                         in    Texture2DArray<float>  ShadowMap,
@@ -720,8 +720,8 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
     
         float MaxFactor = max(max(Shading.Sheen.Color.r, Shading.Sheen.Color.g), Shading.Sheen.Color.b);
         float AlbedoScaling =
-            min(1.0 - MaxFactor * AlbedoScalingLUT.Sample(AlbedoScalingLUT_sampler, float2(NdotV, Shading.Sheen.Roughness)).r,
-                1.0 - MaxFactor * AlbedoScalingLUT.Sample(AlbedoScalingLUT_sampler, float2(NdotL, Shading.Sheen.Roughness)).r);
+            min(1.0 - MaxFactor * PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, Shading.Sheen.Roughness)).g,
+                1.0 - MaxFactor * PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotL, Shading.Sheen.Roughness)).g);
         BasePunctual *= AlbedoScaling;
     }
 #endif
@@ -746,8 +746,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
               in TextureCube        PrefilteredEnvMap,
               in SamplerState       PrefilteredEnvMap_sampler,
 #   if ENABLE_SHEEN
-              in Texture2D    PreintegratedCharlie,
-              in SamplerState PreintegratedCharlie_sampler,
+              in Texture2D    PreintegratedSheen,
+              in SamplerState PreintegratedSheen_sampler,
 #   endif
               inout SurfaceLightingInfo SrfLighting)
 {
@@ -790,8 +790,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
         // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
         SrfLighting.Sheen.SpecularIBL =
              GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, EnvironmentRotation, PrefilteredCubeLastMip,
-                            PreintegratedCharlie, PreintegratedCharlie_sampler,
-                            PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
+                            PreintegratedSheen, PreintegratedSheen_sampler,
+                            PrefilteredEnvMap,  PrefilteredEnvMap_sampler);
     }
 #   endif
 

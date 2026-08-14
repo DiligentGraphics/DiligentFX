@@ -38,7 +38,6 @@
 #include "MapHelper.hpp"
 #include "GraphicsAccessories.hpp"
 #include "PlatformMisc.hpp"
-#include "TextureUtilities.h"
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.hpp"
 
@@ -336,8 +335,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_InputLayout{CI.InputLayout},
     m_Settings{
         [this](CreateInfo CI) {
-            CI.InputLayout               = m_InputLayout;
-            CI.SheenAlbedoScalingLUTPath = nullptr;
+            CI.InputLayout = m_InputLayout;
             return CI;
         }(CI)},
     m_Device{pDevice, pStateCache},
@@ -347,7 +345,12 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
 {
     if (m_Settings.EnableIBL)
     {
-        PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
+        PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples, BRDFType::GGX);
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples, BRDFType::Sheen);
     }
 
     if (m_Settings.CreateDefaultTextures)
@@ -401,57 +404,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
         m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
         m_pDefaultPhysDescSRV->SetSampler(pDefaultSampler);
-    }
-
-    if (m_Settings.EnableSheen)
-    {
-        if (CI.SheenAlbedoScalingLUTPath != nullptr)
-        {
-            TextureLoadInfo LoadInfo{"Sheen Albedo Scaling"};
-            LoadInfo.Format = TEX_FORMAT_R8_UNORM;
-            RefCntAutoPtr<ITexture> SheenAlbedoScalingLUT;
-            CreateTextureFromFile(CI.SheenAlbedoScalingLUTPath, LoadInfo, m_Device, &SheenAlbedoScalingLUT);
-            if (SheenAlbedoScalingLUT)
-            {
-                m_pSheenAlbedoScaling_LUT_SRV = SheenAlbedoScalingLUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-                StateTransitionDesc Barriers{SheenAlbedoScalingLUT, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                pCtx->TransitionResourceState(Barriers);
-            }
-            else
-            {
-                LOG_ERROR_MESSAGE("Failed to load sheen albedo scaling look-up table from file ", CI.SheenAlbedoScalingLUTPath);
-            }
-        }
-        else
-        {
-            UNEXPECTED("Sheen albedo scaling look-up table path is not specified");
-        }
-
-        if (m_Settings.EnableIBL)
-        {
-            if (CI.PreintegratedCharlieBRDFPath != nullptr)
-            {
-                TextureLoadInfo LoadInfo{"Preintegrated Charlie BRDF"};
-                LoadInfo.Format    = TEX_FORMAT_R8_UNORM;
-                LoadInfo.Swizzle.R = TEXTURE_COMPONENT_SWIZZLE_B;
-                RefCntAutoPtr<ITexture> PreintegratedCharlieBRDF;
-                CreateTextureFromFile(CI.PreintegratedCharlieBRDFPath, LoadInfo, m_Device, &PreintegratedCharlieBRDF);
-                if (PreintegratedCharlieBRDF)
-                {
-                    m_pPreintegratedCharlie_SRV = PreintegratedCharlieBRDF->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-                    StateTransitionDesc Barriers{PreintegratedCharlieBRDF, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                    pCtx->TransitionResourceState(Barriers);
-                }
-                else
-                {
-                    LOG_ERROR_MESSAGE("Failed to load preintegrated Charlie BRDF look-up table from file ", CI.PreintegratedCharlieBRDFPath);
-                }
-            }
-            else
-            {
-                UNEXPECTED("Preintegrated Charlie BRDF look-up table path is not specified");
-            }
-        }
     }
 
     {
@@ -547,10 +499,14 @@ PBR_Renderer::~PBR_Renderer()
 }
 
 void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
-                                  Uint32          NumBRDFSamples)
+                                  Uint32          NumBRDFSamples,
+                                  BRDFType        Type)
 {
+    VERIFY_EXPR(Type == BRDFType::GGX || Type == BRDFType::Sheen);
+    const bool IsGGX = Type == BRDFType::GGX;
+
     TextureDesc TexDesc;
-    TexDesc.Name      = "Preintegrated GGX";
+    TexDesc.Name      = IsGGX ? "Preintegrated GGX" : "Preintegrated Sheen";
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
     TexDesc.Usage     = USAGE_DEFAULT;
     TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
@@ -559,70 +515,62 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
     TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
     TexDesc.MipLevels = 1;
 
-    RefCntAutoPtr<ITexture> pPreintegratedGGX = m_Device.CreateTexture(TexDesc);
-    m_pPreintegratedGGX_SRV                   = pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    RefCntAutoPtr<ITexture>      pPreintegratedBRDF = m_Device.CreateTexture(TexDesc);
+    RefCntAutoPtr<ITextureView>& pPreintegratedBRDF_SRV =
+        IsGGX ? m_pPreintegratedGGX_SRV : m_pPreintegratedSheen_SRV;
+    pPreintegratedBRDF_SRV = pPreintegratedBRDF->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-    RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+    PSODesc.Name         = IsGGX ? "Precompute BRDF LUT PSO" : "Precompute sheen BRDF LUT PSO";
+    PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
+
+    GraphicsPipeline.NumRenderTargets             = 1;
+    GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
+    GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+    GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+
+    ShaderMacroHelper Macros;
+    Macros.AddShaderMacro("NUM_SAMPLES", NumBRDFSamples);
+    ShaderCI.Macros = Macros;
+
+    RefCntAutoPtr<IShader> pVS;
     {
-        GraphicsPipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
-        GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+        ShaderCI.Desc       = {"Full screen triangle VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "FullScreenTriangleVS";
+        ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
 
-        PSODesc.Name         = "Precompute BRDF LUT PSO";
-        PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-
-        GraphicsPipeline.NumRenderTargets             = 1;
-        GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
-        GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
-
-        ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
-
-        ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("NUM_SAMPLES", NumBRDFSamples);
-        ShaderCI.Macros = Macros;
-
-        RefCntAutoPtr<IShader> pVS;
-        {
-            ShaderCI.Desc       = {"Full screen triangle VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "FullScreenTriangleVS";
-            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
-
-            pVS = m_Device.CreateShader(ShaderCI);
-        }
-
-        // Create pixel shader
-        RefCntAutoPtr<IShader> pPS;
-        {
-            ShaderCI.Desc       = {"Precompute BRDF PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "PrecomputeBRDF_PS";
-            ShaderCI.FilePath   = "PrecomputeBRDF.psh";
-
-            pPS = m_Device.CreateShader(ShaderCI);
-        }
-
-        // Finally, create the pipeline state
-        PSOCreateInfo.pVS  = pVS;
-        PSOCreateInfo.pPS  = pPS;
-        PrecomputeBRDF_PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        pVS = m_Device.CreateShader(ShaderCI);
     }
-    pCtx->SetPipelineState(PrecomputeBRDF_PSO);
 
-    ITextureView* pRTVs[] = {pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
-    pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    DrawAttribs attrs(3, DRAW_FLAG_VERIFY_ALL);
-    pCtx->Draw(attrs);
-
-    // clang-format off
-    StateTransitionDesc Barriers[] =
+    RefCntAutoPtr<IShader> pPS;
     {
-        {pPreintegratedGGX, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE}
-    };
-    // clang-format on
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+        ShaderCI.Desc       = {IsGGX ? "Precompute BRDF PS" : "Precompute sheen BRDF PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = IsGGX ? "PrecomputeBRDF_PS" : "PrecomputeSheenBRDF_PS";
+        ShaderCI.FilePath   = IsGGX ? "PrecomputeBRDF.psh" : "PrecomputeSheenBRDF.psh";
+
+        pPS = m_Device.CreateShader(ShaderCI);
+    }
+
+    PSOCreateInfo.pVS = pVS;
+    PSOCreateInfo.pPS = pPS;
+
+    RefCntAutoPtr<IPipelineState> pPrecomputeBRDFPSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    pCtx->SetPipelineState(pPrecomputeBRDFPSO);
+
+    ITextureView* pRTVs[] = {pPreintegratedBRDF->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
+    pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->Draw(DrawAttribs{3, DRAW_FLAG_VERIFY_ALL});
+
+    StateTransitionDesc Barrier{pPreintegratedBRDF, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+    pCtx->TransitionResourceState(Barrier);
 }
 
 static Uint32 GetDefaultDiffuseSamplesCount(const GraphicsAdapterInfo& AdapterInfo)
@@ -1351,17 +1299,10 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_PreintegratedGGX", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
         AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
         AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
-
-        if (m_Settings.EnableSheen)
-        {
-            AddTextureAndSampler("g_PreintegratedCharlie", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        }
     }
 
     if (m_Settings.EnableSheen)
-    {
-        AddTextureAndSampler("g_SheenAlbedoScalingLUT", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-    }
+        AddTextureAndSampler("g_PreintegratedSheen", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
     if (m_Settings.EnableShadows)
     {
@@ -1415,16 +1356,9 @@ void PBR_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     if (m_Settings.EnableIBL)
     {
         ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
-        if (m_Settings.EnableSheen)
-        {
-            ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
-        }
     }
-
     if (m_Settings.EnableSheen)
-    {
-        ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
-    }
+        ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedSheen")->Set(m_pPreintegratedSheen_SRV);
     m_ResourceSignatures = {std::move(ResourceSignature)};
 }
 
@@ -2562,6 +2496,7 @@ void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters
     Renderer.PrefilteredCubeLastMip = m_Settings.EnableIBL && pPrefilteredEnvMapSRV != nullptr ?
         static_cast<float>(pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels - 1) :
         0.f;
+
     Renderer.EnvironmentRotation = float2{std::cos(EnvironmentYaw), std::sin(EnvironmentYaw)};
 }
 
