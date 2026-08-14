@@ -44,7 +44,8 @@ class RadientIBLResources final
 {
 public:
     RadientIBLResources(ITextureView* pIrradianceCubeSRV,
-                        ITextureView* pPrefilteredEnvMapSRV);
+                        ITextureView* pPrefilteredEnvMapSRV,
+                        ITextureView* pPrefilteredSheenEnvMapSRV);
     ~RadientIBLResources();
 
     // clang-format off
@@ -64,6 +65,11 @@ public:
         return m_pPrefilteredEnvMapSRV;
     }
 
+    ITextureView* GetPrefilteredSheenEnvMapSRV() const noexcept
+    {
+        return m_pPrefilteredSheenEnvMapSRV;
+    }
+
 private:
     friend class RadientFrameSRBCache;
 
@@ -71,6 +77,7 @@ private:
 
     RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
     RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
+    RefCntAutoPtr<ITextureView> m_pPrefilteredSheenEnvMapSRV;
 
     std::weak_ptr<RadientFrameSRBCacheState> m_WeakCache;
 };

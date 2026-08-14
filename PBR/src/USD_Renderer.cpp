@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2025 Diligent Graphics LLC
+ *  Copyright 2023-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -253,6 +253,7 @@ void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     FrameResources.emplace("g_PreintegratedGGX");
     FrameResources.emplace("g_IrradianceMap");
     FrameResources.emplace("g_PrefilteredEnvMap");
+    FrameResources.emplace("g_PrefilteredSheenEnvMap");
     FrameResources.emplace("g_PreintegratedSheen");
     FrameResources.emplace("g_ShadowMap");
     FrameResources.emplace("g_ShadowMap_sampler");

@@ -365,8 +365,8 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in float        PrefilteredCubeLastMip,
                               in Texture2D    PreintegratedSheen,
                               in SamplerState PreintegratedSheen_sampler,
-                              in TextureCube  PrefilteredEnvMap,
-                              in SamplerState PrefilteredEnvMap_sampler)
+                              in TextureCube  PrefilteredSheenEnvMap,
+                              in SamplerState PrefilteredSheenEnvMap_sampler)
 {
     float NdotV = dot_sat(n, v);
 
@@ -376,7 +376,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
 
     float brdf = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).r;
 
-    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, EnvironmentDirection, lod);
+    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredSheenEnvMap, PrefilteredSheenEnvMap_sampler, EnvironmentDirection, lod);
     return SpecularLight * SheenColor * brdf;
 }
 
@@ -748,6 +748,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 #   if ENABLE_SHEEN
               in Texture2D    PreintegratedSheen,
               in SamplerState PreintegratedSheen_sampler,
+              in TextureCube  PrefilteredSheenEnvMap,
+              in SamplerState PrefilteredSheenEnvMap_sampler,
 #   endif
               inout SurfaceLightingInfo SrfLighting)
 {
@@ -787,11 +789,10 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
     }
 #   if ENABLE_SHEEN
     {
-        // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
         SrfLighting.Sheen.SpecularIBL =
              GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, EnvironmentRotation, PrefilteredCubeLastMip,
                             PreintegratedSheen, PreintegratedSheen_sampler,
-                            PrefilteredEnvMap,  PrefilteredEnvMap_sampler);
+                            PrefilteredSheenEnvMap, PrefilteredSheenEnvMap_sampler);
     }
 #   endif
 

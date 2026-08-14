@@ -510,6 +510,10 @@ public:
         /// Output prefiltered environment map texture.
         ITexture* pPrefilteredEnvMap = nullptr;
 
+        /// Optional output environment map prefiltered with the Charlie
+        /// distribution for sheen IBL.
+        ITexture* pPrefilteredSheenEnvMap = nullptr;
+
         /// Number of samples for diffuse irradiance precomputation.
         /// If 0, the renderer will choose the optimal number of samples.
         Uint32 NumDiffuseSamples = 0;
@@ -856,9 +860,12 @@ public:
                              Uint32                  FirstTexture,
                              Uint32                  TextureCount) const;
 
+    /// Binds IBL cubemaps. If pPrefilteredSheenEnvMapSRV is null, the
+    /// GGX-prefiltered environment map is used for sheen.
     void SetIBLResourceViews(IShaderResourceBinding* pSRB,
                              ITextureView*           pIrradianceCubeSRV,
-                             ITextureView*           pPrefilteredEnvMapSRV) const;
+                             ITextureView*           pPrefilteredEnvMapSRV,
+                             ITextureView*           pPrefilteredSheenEnvMapSRV = nullptr) const;
 
     void SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const;
 
@@ -992,7 +999,8 @@ protected:
         enum PSO_TYPE : Uint8
         {
             PSO_TYPE_IRRADIANCE_CUBE = 0,
-            PSO_TYPE_PREFILTERED_ENV_MAP,
+            PSO_TYPE_PREFILTERED_GGX_ENV_MAP,
+            PSO_TYPE_PREFILTERED_CHARLIE_ENV_MAP,
         };
         enum ENV_MAP_TYPE : Uint8
         {

@@ -165,7 +165,8 @@ RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(Ra
                       BindMaterialAttribsBuffer);
     SetIBLResourceViews(pFrameSRB,
                         pResources->GetIrradianceCubeSRV(),
-                        pResources->GetPrefilteredEnvMapSRV());
+                        pResources->GetPrefilteredEnvMapSRV(),
+                        pResources->GetPrefilteredSheenEnvMapSRV());
 
     m_FrameSRBCache.Add(pResources, pFrameSRB);
     return pFrameSRB;
@@ -180,6 +181,7 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     FrameResources.emplace("g_PreintegratedGGX");
     FrameResources.emplace("g_IrradianceMap");
     FrameResources.emplace("g_PrefilteredEnvMap");
+    FrameResources.emplace("g_PrefilteredSheenEnvMap");
     FrameResources.emplace("g_PreintegratedSheen");
     FrameResources.emplace("g_ShadowMap");
     FrameResources.emplace("g_ShadowMap_sampler");

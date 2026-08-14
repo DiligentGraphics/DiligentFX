@@ -67,8 +67,8 @@ TEST(RadientFrameSRBCacheGPUTest, ResourceDestructionRemovesEntry)
 
     RadientFrameSRBCache Cache;
 
-    auto pResources      = std::make_unique<RadientIBLResources>(nullptr, nullptr);
-    auto pOtherResources = std::make_unique<RadientIBLResources>(nullptr, nullptr);
+    auto pResources      = std::make_unique<RadientIBLResources>(nullptr, nullptr, nullptr);
+    auto pOtherResources = std::make_unique<RadientIBLResources>(nullptr, nullptr, nullptr);
 
     Cache.Add(pResources.get(), pFrameSRB);
     Cache.Add(pResources.get(), pFrameSRB);
@@ -87,7 +87,7 @@ TEST(RadientFrameSRBCacheGPUTest, ResourcesMayOutliveCache)
     RefCntAutoPtr<IShaderResourceBinding> pFrameSRB = CreateTestFrameSRB();
     ASSERT_NE(pFrameSRB, nullptr);
 
-    auto pResources = std::make_unique<RadientIBLResources>(nullptr, nullptr);
+    auto pResources = std::make_unique<RadientIBLResources>(nullptr, nullptr, nullptr);
     {
         RadientFrameSRBCache Cache;
         Cache.Add(pResources.get(), pFrameSRB);

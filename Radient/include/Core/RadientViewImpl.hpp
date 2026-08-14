@@ -89,6 +89,7 @@ public:
     RadientIBLResources* GetIBLResources() const noexcept { return m_pIBLResources.get(); }
     ITextureView*        GetIrradianceCubeSRV() const noexcept;
     ITextureView*        GetPrefilteredEnvMapSRV() const noexcept;
+    ITextureView*        GetPrefilteredSheenEnvMapSRV() const noexcept;
 
 private:
     RADIENT_STATUS CreateIBLResources(PBR_Renderer&   Renderer,

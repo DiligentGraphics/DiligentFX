@@ -527,6 +527,7 @@ PSOutput main(in VSOutput VSOut,
                      g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
 #                    if ENABLE_SHEEN
                          g_PreintegratedSheen, g_PreintegratedSheen_sampler,
+                         g_PrefilteredSheenEnvMap, g_PrefilteredSheenEnvMap_sampler,
 #                    endif
                      SrfLighting);
         }

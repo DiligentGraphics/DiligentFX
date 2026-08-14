@@ -15,6 +15,14 @@ float2 Hammersley2D(uint i, uint N)
     return float2(float(i) / float(N), rdi);
 }
 
+float3 TransformHemisphereSampleToWorld(float3 Sample, float3 N)
+{
+    float3 UpVector = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 TangentX = normalize(cross(UpVector, N));
+    float3 TangentY = cross(N, TangentX);
+    return TangentX * Sample.x + TangentY * Sample.y + N * Sample.z;
+}
+
 // Based on http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_slides.pdf
 float3 ImportanceSampleGGX(float2 Xi, float PerceptualRoughness, float3 N)
 {
@@ -28,11 +36,17 @@ float3 ImportanceSampleGGX(float2 Xi, float PerceptualRoughness, float3 N)
     H.x = SinTheta * cos( Phi );
     H.y = SinTheta * sin( Phi );
     H.z = CosTheta;
-    float3 UpVector = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-    float3 TangentX = normalize( cross( UpVector, N ) );
-    float3 TangentY = cross( N, TangentX );
-    // Tangent to world space
-    return TangentX * H.x + TangentY * H.y + N * H.z;
+    return TransformHemisphereSampleToWorld(H, N);
+}
+
+float3 ImportanceSampleCharlie(float2 Xi, float SheenRoughness, float3 N)
+{
+    float Alpha    = max(SheenRoughness * SheenRoughness, 1e-6);
+    float Phi      = 2.0 * PI * Xi.x;
+    float SinTheta = pow(Xi.y, Alpha / (2.0 * Alpha + 1.0));
+    float CosTheta = sqrt(saturate(1.0 - SinTheta * SinTheta));
+    float3 H       = float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
+    return TransformHemisphereSampleToWorld(H, N);
 }
 
 float ComputeCubeMapPixelSolidAngle(float Width, float Height)

@@ -80,9 +80,11 @@ private:
 };
 
 RadientIBLResources::RadientIBLResources(ITextureView* pIrradianceCubeSRV,
-                                         ITextureView* pPrefilteredEnvMapSRV) :
+                                         ITextureView* pPrefilteredEnvMapSRV,
+                                         ITextureView* pPrefilteredSheenEnvMapSRV) :
     m_pIrradianceCubeSRV{pIrradianceCubeSRV},
-    m_pPrefilteredEnvMapSRV{pPrefilteredEnvMapSRV}
+    m_pPrefilteredEnvMapSRV{pPrefilteredEnvMapSRV},
+    m_pPrefilteredSheenEnvMapSRV{pPrefilteredSheenEnvMapSRV}
 {
 }
 

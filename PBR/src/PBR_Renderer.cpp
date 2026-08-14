@@ -695,6 +695,12 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
         return;
     }
 
+    if (Attribs.pPrefilteredSheenEnvMap == Attribs.pPrefilteredEnvMap)
+    {
+        UNEXPECTED("GGX and Charlie prefiltering require distinct output cubemaps");
+        return;
+    }
+
     Uint32 NumDiffuseSamples  = Attribs.NumDiffuseSamples;
     Uint32 NumSpecularSamples = Attribs.NumSpecularSamples;
     if (NumSpecularSamples == 0)
@@ -764,8 +770,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
             return;
     }
 
-    const TextureDesc& IrradianceCubeDesc    = Attribs.pIrradianceCube->GetDesc();
-    const TextureDesc& PrefilteredEnvMapDesc = Attribs.pPrefilteredEnvMap->GetDesc();
+    const TextureDesc& IrradianceCubeDesc = Attribs.pIrradianceCube->GetDesc();
 
     ShaderMacroHelper Macros;
     Macros
@@ -831,60 +836,68 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
         PrecomputeIrradianceCubeTech.PSO->CreateShaderResourceBinding(&PrecomputeIrradianceCubeTech.SRB, true);
     }
 
-    IBL_RenderTechnique& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, PrefilteredEnvMapDesc.Format}];
-    if (!PrefilterEnvMapTech.IsInitialized())
-    {
-        ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
-        ShaderCI.Macros                     = Macros;
-        ShaderCI.CompileFlags               = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+    const auto GetPrefilterEnvMapTech = [&](IBL_PSOKey::PSO_TYPE PSOType, TEXTURE_FORMAT RTVFormat) -> IBL_RenderTechnique& {
+        VERIFY_EXPR(PSOType == IBL_PSOKey::PSO_TYPE_PREFILTERED_GGX_ENV_MAP ||
+                    PSOType == IBL_PSOKey::PSO_TYPE_PREFILTERED_CHARLIE_ENV_MAP);
+        const bool IsCharlie = PSOType == IBL_PSOKey::PSO_TYPE_PREFILTERED_CHARLIE_ENV_MAP;
 
-        RefCntAutoPtr<IShader> pVS;
+        IBL_RenderTechnique& Tech = m_IBL_PSOCache[IBL_PSOKey{PSOType, EnvMapType, FeatureFlags, RTVFormat}];
+        if (!Tech.IsInitialized())
         {
-            ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "CubemapFace.vsh";
+            ShaderCreateInfo ShaderCI;
+            ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+            ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+            ShaderMacroHelper PrefilterMacros   = Macros;
+            PrefilterMacros.Add("PREFILTER_ENV_MAP_CHARLIE", IsCharlie);
+            ShaderCI.Macros       = PrefilterMacros;
+            ShaderCI.CompileFlags = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
-            pVS = m_Device.CreateShader(ShaderCI);
+            RefCntAutoPtr<IShader> pVS;
+            {
+                ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
+                ShaderCI.EntryPoint = "main";
+                ShaderCI.FilePath   = "CubemapFace.vsh";
+
+                pVS = m_Device.CreateShader(ShaderCI);
+            }
+
+            RefCntAutoPtr<IShader> pPS;
+            {
+                ShaderCI.Desc       = {IsCharlie ? "Prefilter sheen environment map PS" : "Prefilter environment map PS", SHADER_TYPE_PIXEL, true};
+                ShaderCI.EntryPoint = "main";
+                ShaderCI.FilePath   = "PrefilterEnvMap.psh";
+
+                pPS = m_Device.CreateShader(ShaderCI);
+            }
+
+            GraphicsPipelineStateCreateInfo PSOCreateInfo;
+            PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+            GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+            PSODesc.Name         = IsCharlie ? "Prefilter sheen environment map PSO" : "Prefilter environment map PSO";
+            PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
+
+            GraphicsPipeline.NumRenderTargets             = 1;
+            GraphicsPipeline.RTVFormats[0]                = RTVFormat;
+            GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+            GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+            GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+            PSOCreateInfo.pVS = pVS;
+            PSOCreateInfo.pPS = pPS;
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_VS_PS, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_INLINE_CONSTANTS)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
+            PSODesc.ResourceLayout = ResourceLayout;
+
+            Tech.PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            Tech.PSO->CreateShaderResourceBinding(&Tech.SRB, true);
         }
-
-        // Create pixel shader
-        RefCntAutoPtr<IShader> pPS;
-        {
-            ShaderCI.Desc       = {"Prefilter environment map PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "PrefilterEnvMap.psh";
-
-            pPS = m_Device.CreateShader(ShaderCI);
-        }
-
-        GraphicsPipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
-        GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-        PSODesc.Name         = "Prefilter environment map PSO";
-        PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-
-        GraphicsPipeline.NumRenderTargets             = 1;
-        GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapDesc.Format;
-        GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
-
-        PSOCreateInfo.pVS = pVS;
-        PSOCreateInfo.pPS = pPS;
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_VS_PS, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_INLINE_CONSTANTS)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
-        PSODesc.ResourceLayout = ResourceLayout;
-
-        PrefilterEnvMapTech.PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        PrefilterEnvMapTech.PSO->CreateShaderResourceBinding(&PrefilterEnvMapTech.SRB, true);
-    }
+        return Tech;
+    };
 
     // clang-format off
     const std::array<float4x4, 6> Matrices =
@@ -915,24 +928,31 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     ShaderResourceVariableX{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(nullptr);
 
 
-    pCtx->SetPipelineState(PrefilterEnvMapTech.PSO);
-    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(Attribs.pEnvironmentMapSRV);
-    pCtx->CommitShaderResources(PrefilterEnvMapTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    const Uint32 PrefilteredEnvMapMipLevels = PrefilteredEnvMapDesc.MipLevels;
+    const auto PrecomputePrefilteredEnvMap = [&](ITexture* pPrefilteredEnvMap, IBL_PSOKey::PSO_TYPE PSOType) {
+        const TextureDesc&   PrefilteredEnvMapDesc = pPrefilteredEnvMap->GetDesc();
+        IBL_RenderTechnique& Tech                  = GetPrefilterEnvMapTech(PSOType, PrefilteredEnvMapDesc.Format);
 
-    cbConstantsVar = ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_VERTEX, "cbConstants"};
-    VERIFY_EXPR(cbConstantsVar);
-    ProcessCubemapFaces(pCtx, Attribs.pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
-        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Attribs, Matrices[face], NumSpecularSamples};
-        EnvMapAttribs.Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapMipLevels - 1);
-        cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
+        pCtx->SetPipelineState(Tech.PSO);
+        ShaderResourceVariableX{Tech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(Attribs.pEnvironmentMapSRV);
+        pCtx->CommitShaderResources(Tech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-        DrawAttribs drawAttrs{4, DRAW_FLAG_VERIFY_ALL};
-        pCtx->Draw(drawAttrs);
-    });
+        cbConstantsVar = ShaderResourceVariableX{Tech.SRB, SHADER_TYPE_VERTEX, "cbConstants"};
+        VERIFY_EXPR(cbConstantsVar);
+        ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
+            PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Attribs, Matrices[face], NumSpecularSamples};
+            EnvMapAttribs.Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapDesc.MipLevels - 1);
+            cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
 
-    // Release reference to the environment map
-    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(nullptr);
+            pCtx->Draw(DrawAttribs{4, DRAW_FLAG_VERIFY_ALL});
+        });
+
+        // Release the reference retained by the dynamic shader variable.
+        ShaderResourceVariableX{Tech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(nullptr);
+    };
+
+    PrecomputePrefilteredEnvMap(Attribs.pPrefilteredEnvMap, IBL_PSOKey::PSO_TYPE_PREFILTERED_GGX_ENV_MAP);
+    if (Attribs.pPrefilteredSheenEnvMap != nullptr)
+        PrecomputePrefilteredEnvMap(Attribs.pPrefilteredSheenEnvMap, IBL_PSOKey::PSO_TYPE_PREFILTERED_CHARLIE_ENV_MAP);
 
 
     // clang-format off
@@ -943,6 +963,12 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     };
     // clang-format on
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+
+    if (Attribs.pPrefilteredSheenEnvMap != nullptr)
+    {
+        StateTransitionDesc Barrier{Attribs.pPrefilteredSheenEnvMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+        pCtx->TransitionResourceState(Barrier);
+    }
 }
 
 
@@ -1012,7 +1038,8 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
 void PBR_Renderer::SetIBLResourceViews(IShaderResourceBinding* pSRB,
                                        ITextureView*           pIrradianceCubeSRV,
-                                       ITextureView*           pPrefilteredEnvMapSRV) const
+                                       ITextureView*           pPrefilteredEnvMapSRV,
+                                       ITextureView*           pPrefilteredSheenEnvMapSRV) const
 {
     if (!m_Settings.EnableIBL)
         return;
@@ -1025,6 +1052,11 @@ void PBR_Renderer::SetIBLResourceViews(IShaderResourceBinding* pSRB,
 
     ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_IrradianceMap"}.Set(pIrradianceCubeSRV);
     ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"}.Set(pPrefilteredEnvMapSRV);
+    if (m_Settings.EnableSheen)
+    {
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_PrefilteredSheenEnvMap"}.Set(
+            pPrefilteredSheenEnvMapSRV != nullptr ? pPrefilteredSheenEnvMapSRV : pPrefilteredEnvMapSRV);
+    }
 }
 
 void PBR_Renderer::SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const
@@ -1299,6 +1331,8 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_PreintegratedGGX", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
         AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
         AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
+        if (m_Settings.EnableSheen)
+            AddTextureAndSampler("g_PrefilteredSheenEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
     }
 
     if (m_Settings.EnableSheen)

@@ -360,7 +360,7 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
     if (pDirtyEnvironmentSRV != nullptr)
     {
         PrecomputeIBLCubemaps(Renderer, pContext, pDirtyEnvironmentSRV, EnvironmentSamplingInfo);
-        m_WeakPreparedEnvironmentMap             = pEnvironmentMap;
+        m_WeakPreparedEnvironmentMap            = pEnvironmentMap;
         m_PreparedEnvironmentMapRow0IsNegativeY = m_Desc.Environment.SphereMapRow0IsNegativeY;
     }
     else if (ResourcesCreated)
@@ -373,6 +373,12 @@ RADIENT_STATUS RadientViewImpl::Prepare(PBR_Renderer&   Renderer,
             {GetPrefilteredEnvMapSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
         pContext->TransitionResourceStates(_countof(Barriers), Barriers);
+
+        if (ITextureView* pPrefilteredSheenEnvMapSRV = GetPrefilteredSheenEnvMapSRV())
+        {
+            StateTransitionDesc Barrier{pPrefilteredSheenEnvMapSRV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            pContext->TransitionResourceState(Barrier);
+        }
     }
 
     return RADIENT_STATUS_OK;
@@ -401,13 +407,30 @@ RADIENT_STATUS RadientViewImpl::CreateIBLResources(PBR_Renderer&   Renderer,
     if (pPrefilteredEnvMap != nullptr)
         pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-    if (pIrradianceCubeSRV == nullptr || pPrefilteredEnvMapSRV == nullptr)
+    RefCntAutoPtr<ITextureView> pPrefilteredSheenEnvMapSRV;
+    if (Renderer.GetSettings().EnableSheen)
+    {
+        RefCntAutoPtr<ITexture> pPrefilteredSheenEnvMap =
+            Renderer.CreatePrefilteredEnvMap(pContext,
+                                             "Radient prefiltered sheen environment map",
+                                             PBR_Renderer::PrefilteredEnvMapFmt,
+                                             PBR_Renderer::PrefilteredEnvMapDim,
+                                             IBLClearColor);
+        if (pPrefilteredSheenEnvMap != nullptr)
+            pPrefilteredSheenEnvMapSRV = pPrefilteredSheenEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    }
+
+    if (pIrradianceCubeSRV == nullptr ||
+        pPrefilteredEnvMapSRV == nullptr ||
+        (Renderer.GetSettings().EnableSheen && pPrefilteredSheenEnvMapSRV == nullptr))
     {
         UNEXPECTED("Failed to create Radient view IBL resources");
         return RADIENT_STATUS_FAILED;
     }
 
-    m_pIBLResources = std::make_unique<RadientIBLResources>(pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
+    m_pIBLResources = std::make_unique<RadientIBLResources>(pIrradianceCubeSRV,
+                                                            pPrefilteredEnvMapSRV,
+                                                            pPrefilteredSheenEnvMapSRV);
     return RADIENT_STATUS_OK;
 }
 
@@ -423,9 +446,10 @@ void RadientViewImpl::PrecomputeIBLCubemaps(PBR_Renderer&                     Re
     Attribs.EnvironmentMapWidth       = SamplingInfo.Width;
     Attribs.EnvironmentMapHeight      = SamplingInfo.Height;
     Attribs.EnvironmentMapMipLevels   = SamplingInfo.MipLevels;
-    Attribs.SphereMapRow0IsNegativeY = m_Desc.Environment.SphereMapRow0IsNegativeY;
+    Attribs.SphereMapRow0IsNegativeY  = m_Desc.Environment.SphereMapRow0IsNegativeY;
     Attribs.pIrradianceCube           = GetIrradianceCubeSRV() != nullptr ? GetIrradianceCubeSRV()->GetTexture() : nullptr;
     Attribs.pPrefilteredEnvMap        = GetPrefilteredEnvMapSRV() != nullptr ? GetPrefilteredEnvMapSRV()->GetTexture() : nullptr;
+    Attribs.pPrefilteredSheenEnvMap   = GetPrefilteredSheenEnvMapSRV() != nullptr ? GetPrefilteredSheenEnvMapSRV()->GetTexture() : nullptr;
     Renderer.PrecomputeCubemaps(pContext, Attribs);
 }
 
@@ -437,6 +461,11 @@ ITextureView* RadientViewImpl::GetIrradianceCubeSRV() const noexcept
 ITextureView* RadientViewImpl::GetPrefilteredEnvMapSRV() const noexcept
 {
     return m_pIBLResources != nullptr ? m_pIBLResources->GetPrefilteredEnvMapSRV() : nullptr;
+}
+
+ITextureView* RadientViewImpl::GetPrefilteredSheenEnvMapSRV() const noexcept
+{
+    return m_pIBLResources != nullptr ? m_pIBLResources->GetPrefilteredSheenEnvMapSRV() : nullptr;
 }
 
 void RadientViewImpl::CopyEnvironment(const RadientEnvironmentDesc& Environment)

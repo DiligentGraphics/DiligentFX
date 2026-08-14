@@ -87,6 +87,11 @@ SamplerState g_LinearClampSampler;
     TextureCube  g_PrefilteredEnvMap;
 #   define       g_PrefilteredEnvMap_sampler g_LinearClampSampler
 
+#   if ENABLE_SHEEN
+    TextureCube  g_PrefilteredSheenEnvMap;
+#       define   g_PrefilteredSheenEnvMap_sampler g_LinearClampSampler
+#   endif
+
     Texture2D    g_PreintegratedGGX;
 #   define       g_PreintegratedGGX_sampler g_LinearClampSampler
 

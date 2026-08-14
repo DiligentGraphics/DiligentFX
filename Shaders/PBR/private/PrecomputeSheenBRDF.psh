@@ -5,15 +5,6 @@
 #    define NUM_SAMPLES 512u
 #endif
 
-float3 ImportanceSampleCharlie(float2 Xi, float SheenRoughness)
-{
-    float Alpha    = max(SheenRoughness * SheenRoughness, 1e-6);
-    float Phi      = 2.0 * PI * Xi.x;
-    float SinTheta = pow(Xi.y, Alpha / (2.0 * Alpha + 1.0));
-    float CosTheta = sqrt(saturate(1.0 - SinTheta * SinTheta));
-    return float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
-}
-
 float AshikhminVisibility(float NdotL, float NdotV)
 {
     return saturate(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)));
@@ -30,7 +21,7 @@ float2 IntegrateSheenBRDF(float SheenRoughness, float NdotV, uint NumSamples)
         float2 Xi = Hammersley2D(i, NumSamples);
 
         // Integrate the Charlie split-sum term using Charlie importance sampling.
-        float3 H     = ImportanceSampleCharlie(Xi, SheenRoughness);
+        float3 H     = ImportanceSampleCharlie(Xi, SheenRoughness, float3(0.0, 0.0, 1.0));
         float3 L     = 2.0 * dot(V, H) * H - V;
         float  NdotL = saturate(L.z);
         if (NdotL > 0.0)

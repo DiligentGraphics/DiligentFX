@@ -5,6 +5,10 @@
 #   define OPTIMIZE_SAMPLES 1
 #endif
 
+#ifndef PREFILTER_ENV_MAP_CHARLIE
+#   define PREFILTER_ENV_MAP_CHARLIE 0
+#endif
+
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
 TextureCube  g_EnvironmentMap;
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
@@ -67,7 +71,11 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
     for( uint i = 0u; i < g_NumSamples; i++ )
     {
         float2 Xi = Hammersley2D( i, g_NumSamples );
-        float3 H  = ImportanceSampleGGX( Xi, PerceptualRoughness, N );
+#if PREFILTER_ENV_MAP_CHARLIE
+        float3 H  = ImportanceSampleCharlie(Xi, PerceptualRoughness, N);
+#else
+        float3 H  = ImportanceSampleGGX(Xi, PerceptualRoughness, N);
+#endif
         float3 L  = 2.0 * dot(V, H) * H - V;
         float NoL = clamp(dot(N, L), 0.0, 1.0);
         float VoH = clamp(dot(V, H), 0.0, 1.0);
@@ -80,7 +88,11 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
 
             // Probability Distribution Function
             float AlphaRoughness = PerceptualRoughness * PerceptualRoughness;
+#if PREFILTER_ENV_MAP_CHARLIE
+            float pdf = max(NormalDistribution_Charlie(NoH, PerceptualRoughness) * NoH / max(4.0 * VoH, 1e-6), 0.0001);
+#else
             float pdf = max(SmithGGXSampleDirectionPDF(V, N, L, AlphaRoughness), 0.0001);
+#endif
            
             // Solid angle of current smple
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);

@@ -110,7 +110,9 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     ASSERT_NE(pContext, nullptr);
 
     PBR_Renderer::CreateInfo RendererCI{};
-    RendererCI.EnableIBL = true;
+    RendererCI.EnableIBL      = true;
+    RendererCI.EnableSheen    = true;
+    RendererCI.NumBRDFSamples = 16;
 
     RadientPBRRenderer Renderer{pDevice, nullptr, pContext, RendererCI};
 
@@ -134,18 +136,22 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
     RefCntAutoPtr<IShaderResourceBinding> pSecondFrameSRB =
         Renderer.GetOrCreateFrameSRB(pSecondViewImpl->GetIBLResources());
 
-    ITextureView* const pFirstIrradiance  = pFirstViewImpl->GetIrradianceCubeSRV();
-    ITextureView* const pFirstPrefiltered = pFirstViewImpl->GetPrefilteredEnvMapSRV();
+    ITextureView* const pFirstIrradiance       = pFirstViewImpl->GetIrradianceCubeSRV();
+    ITextureView* const pFirstPrefiltered      = pFirstViewImpl->GetPrefilteredEnvMapSRV();
+    ITextureView* const pFirstPrefilteredSheen = pFirstViewImpl->GetPrefilteredSheenEnvMapSRV();
     ASSERT_NE(pFirstIrradiance, nullptr);
     ASSERT_NE(pFirstPrefiltered, nullptr);
+    ASSERT_NE(pFirstPrefilteredSheen, nullptr);
     if (pDevice->GetDeviceInfo().IsD3DDevice() || pDevice->GetDeviceInfo().IsVulkanDevice())
     {
         EXPECT_EQ(pFirstIrradiance->GetTexture()->GetState(), RESOURCE_STATE_SHADER_RESOURCE);
         EXPECT_EQ(pFirstPrefiltered->GetTexture()->GetState(), RESOURCE_STATE_SHADER_RESOURCE);
+        EXPECT_EQ(pFirstPrefilteredSheen->GetTexture()->GetState(), RESOURCE_STATE_SHADER_RESOURCE);
     }
 
     EXPECT_NE(pFirstIrradiance, pSecondViewImpl->GetIrradianceCubeSRV());
     EXPECT_NE(pFirstPrefiltered, pSecondViewImpl->GetPrefilteredEnvMapSRV());
+    EXPECT_NE(pFirstPrefilteredSheen, pSecondViewImpl->GetPrefilteredSheenEnvMapSRV());
 
     ASSERT_NE(pFirstFrameSRB, nullptr);
     ASSERT_NE(pSecondFrameSRB, nullptr);
@@ -155,16 +161,21 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
         pFirstFrameSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap");
     IShaderResourceVariable* const pFirstPrefilteredVar =
         pFirstFrameSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap");
+    IShaderResourceVariable* const pFirstPrefilteredSheenVar =
+        pFirstFrameSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredSheenEnvMap");
     ASSERT_NE(pFirstIrradianceVar, nullptr);
     ASSERT_NE(pFirstPrefilteredVar, nullptr);
+    ASSERT_NE(pFirstPrefilteredSheenVar, nullptr);
     EXPECT_EQ(pFirstIrradianceVar->Get(), pFirstIrradiance);
     EXPECT_EQ(pFirstPrefilteredVar->Get(), pFirstPrefiltered);
+    EXPECT_EQ(pFirstPrefilteredSheenVar->Get(), pFirstPrefilteredSheen);
 
     ASSERT_EQ(pFirstViewImpl->Prepare(Renderer, pContext), RADIENT_STATUS_OK);
     EXPECT_EQ(Renderer.GetOrCreateFrameSRB(pFirstViewImpl->GetIBLResources()).RawPtr(),
               pFirstFrameSRB.RawPtr());
     EXPECT_EQ(pFirstViewImpl->GetIrradianceCubeSRV(), pFirstIrradiance);
     EXPECT_EQ(pFirstViewImpl->GetPrefilteredEnvMapSRV(), pFirstPrefiltered);
+    EXPECT_EQ(pFirstViewImpl->GetPrefilteredSheenEnvMapSRV(), pFirstPrefilteredSheen);
 }
 
 TEST(RadientPBRRendererGPUTest, CreatesTesseraGBufferPipeline)
