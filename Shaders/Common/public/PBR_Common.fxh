@@ -503,9 +503,14 @@ float SheenVisibility(float NdotL, float NdotV, float SheenRoughness)
 
 float3 SheenSpecularBRDF(float3 SheenColor, float SheenRoughness, float NdotL, float NdotV, float NdotH)
 {
-    float D   = NormalDistribution_Charlie(NdotH, SheenRoughness);
-    float Vis = SheenVisibility(NdotL, NdotV, SheenRoughness);
-    return SheenColor * D * Vis;
+    float3 BRDF = float3(0.0, 0.0, 0.0);
+    if (SheenRoughness > 0.0)
+    {
+        float D   = NormalDistribution_Charlie(NdotH, SheenRoughness);
+        float Vis = SheenVisibility(NdotL, NdotV, SheenRoughness);
+        BRDF = SheenColor * D * Vis;
+    }
+    return BRDF;
 }
 
 #endif // _PBR_COMMON_FXH_

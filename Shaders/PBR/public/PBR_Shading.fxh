@@ -357,6 +357,19 @@ float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
 #endif
 }
 
+float2 SamplePreintegratedSheenBRDF(in Texture2D    PreintegratedSheen,
+                                    in SamplerState PreintegratedSheen_sampler,
+                                    in float        NdotV,
+                                    in float        SheenRoughness)
+{
+    // At zero roughness, Charlie converges to an infinitely narrow grazing
+    // lobe that a finite rasterized lookup table cannot represent.
+    float2 BRDF = float2(0.0, 0.0);
+    if (SheenRoughness > 0.0)
+        BRDF = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).rg;
+    return BRDF;
+}
+
 float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in float        SheenRoughness,
                               in float3       n,
@@ -368,16 +381,20 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in TextureCube  PrefilteredSheenEnvMap,
                               in SamplerState PrefilteredSheenEnvMap_sampler)
 {
-    float NdotV = dot_sat(n, v);
+    float3 SpecularIBL = float3(0.0, 0.0, 0.0);
+    if (SheenRoughness > 0.0)
+    {
+        float  NdotV               = dot_sat(n, v);
+        float  lod                 = SheenRoughness * PrefilteredCubeLastMip;
+        float3 Reflection          = normalize(reflect(-v, n));
+        float3 EnvironmentDirection = RotateDirectionAroundY(Reflection, EnvironmentRotation);
 
-    float  lod                  = SheenRoughness * PrefilteredCubeLastMip;
-    float3 Reflection           = normalize(reflect(-v, n));
-    float3 EnvironmentDirection = RotateDirectionAroundY(Reflection, EnvironmentRotation);
+        float brdf = SamplePreintegratedSheenBRDF(PreintegratedSheen, PreintegratedSheen_sampler, NdotV, SheenRoughness).r;
 
-    float brdf = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).r;
-
-    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredSheenEnvMap, PrefilteredSheenEnvMap_sampler, EnvironmentDirection, lod);
-    return SpecularLight * SheenColor * brdf;
+        float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredSheenEnvMap, PrefilteredSheenEnvMap_sampler, EnvironmentDirection, lod);
+        SpecularIBL = SpecularLight * SheenColor * brdf;
+    }
+    return SpecularIBL;
 }
 
 
@@ -719,9 +736,13 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
         SrfLighting.Sheen.Punctual += ApplyDirectionalLightSheen(LightDirection, LightIntensity, Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View);
     
         float MaxFactor = max(max(Shading.Sheen.Color.r, Shading.Sheen.Color.g), Shading.Sheen.Color.b);
+        float DirectionalAlbedoV = SamplePreintegratedSheenBRDF(
+            PreintegratedSheen, PreintegratedSheen_sampler, NdotV, Shading.Sheen.Roughness).g;
+        float DirectionalAlbedoL = SamplePreintegratedSheenBRDF(
+            PreintegratedSheen, PreintegratedSheen_sampler, NdotL, Shading.Sheen.Roughness).g;
         float AlbedoScaling =
-            min(1.0 - MaxFactor * PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, Shading.Sheen.Roughness)).g,
-                1.0 - MaxFactor * PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotL, Shading.Sheen.Roughness)).g);
+            min(1.0 - MaxFactor * DirectionalAlbedoV,
+                1.0 - MaxFactor * DirectionalAlbedoL);
         BasePunctual *= AlbedoScaling;
     }
 #endif
