@@ -56,6 +56,13 @@
       }
     },
     {
+      "name": "BoxInterleaved",
+      "model": "Models/BoxInterleaved/glTF-Binary/BoxInterleaved.glb",
+      "camera": {
+        "eye": [2.0, 2.0, 2.0]
+      }
+    },
+    {
       "name": "BoxVertexColors",
       "model": "Models/BoxVertexColors/glTF-Binary/BoxVertexColors.glb",
       "camera": {
@@ -164,6 +171,17 @@
         "PunctualLighting",
         "DiffuseIBL",
         "SpecularIBL"
+      ]
+    },
+    {
+      "name": "EmissiveStrengthTest",
+      "model": "Models/EmissiveStrengthTest/glTF-Binary/EmissiveStrengthTest.glb",
+      "camera": {
+        "eye": [0.0, -1.0, 22.0],
+        "target": [0.0, -1.0, 0.0]
+      },
+      "debugVisualizations": [
+        "Emissive"
       ]
     },
     {
