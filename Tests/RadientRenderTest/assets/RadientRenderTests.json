@@ -156,6 +156,17 @@
       ]
     },
     {
+      "name": "CompareSheen",
+      "model": "Models/CompareSheen/glTF-Binary/CompareSheen.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      },
+      "debugVisualizations": [
+        "Sheen"
+      ],
+      "directionalLight": false
+    },
+    {
       "name": "DamagedHelmet",
       "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
       "camera": {
@@ -249,6 +260,20 @@
       "camera": {
         "eye": [14.0, 14.0, 14.0]
       }
+    },
+    {
+      "name": "SheenTestGrid",
+      "model": "Models/SheenTestGrid/glTF-Binary/SheenTestGrid.glb",
+      "camera": {
+        "eye": [0.0, 0.055, 0.8],
+        "target": [0.0, 0.055, 0.0]
+      },
+      "debugVisualizations": [
+        "Sheen",
+        "SheenColor",
+        "SheenRoughness"
+      ],
+      "directionalLight": false
     },
     {
       "name": "TextureCoordinateTest",
