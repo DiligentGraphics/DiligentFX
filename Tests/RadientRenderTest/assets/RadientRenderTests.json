@@ -133,6 +133,13 @@
       ]
     },
     {
+      "name": "CompareIridescence",
+      "model": "Models/CompareIridescence/glTF-Binary/CompareIridescence.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 3.0]
+      }
+    },
+    {
       "name": "CompareMetallic",
       "model": "Models/CompareMetallic/glTF-Binary/CompareMetallic.glb",
       "camera": {
@@ -210,6 +217,29 @@
         "target": [-0.56, 4.77, -1.1]
       },
       "directionalLight": false
+    },
+    {
+      "name": "IridescenceDielectricSpheres",
+      "model": "Models/IridescenceDielectricSpheres/glTF/IridescenceDielectricSpheres.gltf",
+      "camera": {
+        "eye": [0.0, 0.0, 50.0]
+      },
+      "debugVisualizations": [
+        "Iridescence"
+      ],
+      "toneMapping": {
+        "averageLogLum": 0.5
+      }
+    },
+    {
+      "name": "IridescenceMetallicSpheres",
+      "model": "Models/IridescenceMetallicSpheres/glTF/IridescenceMetallicSpheres.gltf",
+      "camera": {
+        "eye": [0.0, 0.0, 50.0]
+      },
+      "debugVisualizations": [
+        "Iridescence"
+      ]
     },
     {
       "name": "MetalRoughSpheres",
