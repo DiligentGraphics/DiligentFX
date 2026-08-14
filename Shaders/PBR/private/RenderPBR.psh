@@ -233,20 +233,38 @@ SheenShadingInfo ReadSheenLayerProperties(in VSOutput              VSOut,
 #endif
 
 #if ENABLE_IRIDESCENCE
-IridescenceShadingInfo ReadIridescenceProperties(in VSOutput              VSOut, 
-                                                 in PBRMaterialShaderInfo Material,
-                                                 in BaseLayerShadingInfo  BaseLayer)
+IridescenceShadingInfo ReadIridescenceProperties(in    VSOutput              VSOut,
+                                                 in    PBRMaterialShaderInfo Material,
+                                                 inout BaseLayerShadingInfo  BaseLayer,
+                                                 in    float3                BaseColor)
 {
     IridescenceShadingInfo Iridescence;
-    
-    Iridescence.Factor    = GetIridescence(VSOut, Material, g_Frame.Renderer.MipBias);
+    Iridescence.Thickness = 0.0;
+
+    if (Material.Iridescence.Factor <= 0.0)
+        return Iridescence;
+
+    float IridescenceFactor = GetIridescence(VSOut, Material, g_Frame.Renderer.MipBias);
+    if (IridescenceFactor <= 0.0)
+        return Iridescence;
+
     Iridescence.Thickness = GetIridescenceThickness(VSOut, Material, g_Frame.Renderer.MipBias);
+    if (Iridescence.Thickness <= 0.0)
+        return Iridescence;
 
-    Iridescence.Fresnel = EvalIridescence(1.0, Material.Iridescence.IOR, BaseLayer.NdotV, Iridescence.Thickness, BaseLayer.Srf.Reflectance0);
-    Iridescence.F0      = SchlickToF0(BaseLayer.NdotV, Iridescence.Fresnel, float3(1.0, 1.0, 1.0));
+    float3 DielectricF0 = BaseLayer.Srf.Reflectance0;
+    float3 MetallicF0   = BaseLayer.Srf.Reflectance0;
+    if (Material.Basic.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    {
+        DielectricF0 = float3(0.04, 0.04, 0.04);
+        MetallicF0   = BaseColor;
+    }
 
-    if (Iridescence.Thickness == 0.0)
-        Iridescence.Factor = 0.0;
+    float3 FresnelDielectric = EvalIridescence(1.0, Material.Iridescence.IOR, BaseLayer.NdotV, Iridescence.Thickness, DielectricF0);
+    float3 FresnelMetallic   = EvalIridescence(1.0, Material.Iridescence.IOR, BaseLayer.NdotV, Iridescence.Thickness, MetallicF0);
+
+    BaseLayer.Srf.IridescenceFresnel = lerp(FresnelDielectric, FresnelMetallic, BaseLayer.Metallic);
+    BaseLayer.Srf.IridescenceFactor  = IridescenceFactor;
 
     return Iridescence;
 }
@@ -356,11 +374,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
     
 #   if ENABLE_IRIDESCENCE
     {
-        Shading.Iridescence = ReadIridescenceProperties(VSOut, Material, Shading.BaseLayer);
-    
-        Shading.BaseLayer.Srf.Reflectance0 = lerp(Shading.BaseLayer.Srf.Reflectance0,
-                                                  Shading.Iridescence.F0,
-                                                  float3(Shading.Iridescence.Factor, Shading.Iridescence.Factor, Shading.Iridescence.Factor));
+        Shading.Iridescence = ReadIridescenceProperties(VSOut, Material, Shading.BaseLayer, BaseColor.rgb);
     }
 #   endif
     

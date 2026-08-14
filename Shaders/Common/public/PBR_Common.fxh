@@ -88,20 +88,6 @@ float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
 
-float SchlickToF0(float VdotH, float f, float f90)
-{
-    float x  = clamp(1.0 - VdotH, 0.0, 1.0);
-    float x5 = clamp(pow5(x), 0.0, 0.9999);
-    return (f - f90 * x5) / (1.0 - x5);
-}
-
-float3 SchlickToF0(float VdotH, float3 f, float3 f90)
-{
-    float x  = clamp(1.0 - VdotH, 0.0, 1.0);
-    float x5 = clamp(pow5(x), 0.0, 0.9999);
-    return (f - f90 * x5) / (1.0 - x5);
-}
-
 // Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
 // see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
 float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
@@ -365,6 +351,11 @@ struct SurfaceReflectanceInfo
     float3 Reflectance0;
     float3 Reflectance90;
     float3 DiffuseColor;
+#if ENABLE_IRIDESCENCE
+    // Effective view-dependent iridescence Fresnel used by direct and image-based lighting.
+    float3 IridescenceFresnel;
+    float  IridescenceFactor;
+#endif
 };
 
 // BRDF with Lambertian diffuse term and Smith-GGX specular term.
@@ -398,6 +389,9 @@ void SmithGGX_BRDF(in float3                 PointToLight,
         float  D   = NormalDistribution_GGX(angularInfo.NdotH, AlphaRoughness);
         float  Vis = SmithGGXVisibilityCorrelated(angularInfo.NdotL, angularInfo.NdotV, AlphaRoughness);
         float3 F   = SchlickReflection(angularInfo.VdotH, SrfInfo.Reflectance0, SrfInfo.Reflectance90);
+#if ENABLE_IRIDESCENCE
+        F = lerp(F, SrfInfo.IridescenceFresnel, SrfInfo.IridescenceFactor);
+#endif
 
         DiffuseContrib = (1.0 - F) * LambertianDiffuse(SrfInfo.DiffuseColor);
         SpecContrib    = F * Vis * D;
@@ -448,6 +442,9 @@ void SmithGGX_BRDF_Anisotropic(in float3                 PointToLight,
             AlphaRoughnessB);
         
         float3 F = SchlickReflection(angularInfo.VdotH, SrfInfo.Reflectance0, SrfInfo.Reflectance90);
+#if ENABLE_IRIDESCENCE
+        F = lerp(F, SrfInfo.IridescenceFresnel, SrfInfo.IridescenceFactor);
+#endif
 
         DiffuseContrib = (1.0 - F) * LambertianDiffuse(SrfInfo.DiffuseColor);
         SpecContrib    = F * Vis * D;

@@ -241,10 +241,6 @@ struct IBLSamplingInfo
 IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
                                    in Texture2D    PreintegratedBRDF,
                                    in SamplerState PreintegratedBRDF_sampler,
-#if ENABLE_IRIDESCENCE
-                                   in float3       IridescenceFresnel,
-                                   in float        IridescenceFactor,
-#endif
                                    in float3       N,
                                    in float3       V)
 {
@@ -267,7 +263,7 @@ IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
         Info.k_S = SchlickReflection(Info.NdotV, SrfInfo.Reflectance0, Reflectance90);
 #       if ENABLE_IRIDESCENCE
         {
-            Info.k_S = lerp(Info.k_S, IridescenceFresnel, IridescenceFactor);
+            Info.k_S = lerp(Info.k_S, SrfInfo.IridescenceFresnel, SrfInfo.IridescenceFactor);
         }
 #       endif
     }
@@ -307,7 +303,11 @@ float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
     // https://bruop.github.io/ibl/#single_scattering_results
     return SpecularLight * (IBLInfo.k_S * IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y);
 #else
-    return SpecularLight * (SrfInfo.Reflectance0 * IBLInfo.PreIntBRDF.x + SrfInfo.Reflectance90 * IBLInfo.PreIntBRDF.y);
+    float3 SpecularIBL = SpecularLight * (SrfInfo.Reflectance0 * IBLInfo.PreIntBRDF.x + SrfInfo.Reflectance90 * IBLInfo.PreIntBRDF.y);
+#   if ENABLE_IRIDESCENCE
+    SpecularIBL = lerp(SpecularIBL, SpecularLight * SrfInfo.IridescenceFresnel, SrfInfo.IridescenceFactor);
+#   endif
+    return SpecularIBL;
 #endif
 }
 
@@ -453,6 +453,10 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
 
     SrfInfo.Reflectance0  = Reflectance0;
     SrfInfo.Reflectance90 = float3(R90, R90, R90);
+#if ENABLE_IRIDESCENCE
+    SrfInfo.IridescenceFresnel = float3(0.0, 0.0, 0.0);
+    SrfInfo.IridescenceFactor  = 0.0;
+#endif
 
     return SrfInfo;
 }
@@ -476,6 +480,10 @@ SurfaceReflectanceInfo GetSurfaceReflectanceMR(float3 BaseColor,
 
     SrfInfo.Reflectance0  = Reflectance0;
     SrfInfo.Reflectance90 = float3(R90, R90, R90);
+#if ENABLE_IRIDESCENCE
+    SrfInfo.IridescenceFresnel = float3(0.0, 0.0, 0.0);
+    SrfInfo.IridescenceFactor  = 0.0;
+#endif
 
     return SrfInfo;
 }
@@ -494,6 +502,10 @@ SurfaceReflectanceInfo GetSurfaceReflectanceClearCoat(float Roughness, float  IO
     float R90 = 1.0;
     SrfInfo.Reflectance0  = float3(f0, f0, f0);
     SrfInfo.Reflectance90 = float3(R90, R90, R90);
+#if ENABLE_IRIDESCENCE
+    SrfInfo.IridescenceFresnel = float3(0.0, 0.0, 0.0);
+    SrfInfo.IridescenceFactor  = 0.0;
+#endif
 
     return SrfInfo;
 }
@@ -529,10 +541,7 @@ struct SheenShadingInfo
 
 struct IridescenceShadingInfo
 {
-    float  Factor;
-    float  Thickness;
-    float3 Fresnel;
-    float3 F0;
+    float Thickness;
 };
 
 struct AnisotropyShadingInfo
@@ -777,9 +786,6 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
     {
         IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(
             Shading.BaseLayer.Srf, PreintegratedGGX, PreintegratedGGX_sampler,
-#           if ENABLE_IRIDESCENCE
-                Shading.Iridescence.Fresnel, Shading.Iridescence.Factor,
-#           endif
             Shading.BaseLayer.Normal, Shading.View);
 
         SrfLighting.Base.DiffuseIBL =
@@ -1003,11 +1009,11 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
     {        
-        return Shading.Iridescence.Fresnel;
+        return Shading.BaseLayer.Srf.IridescenceFresnel;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_FACTOR && ENABLE_IRIDESCENCE)
     {        
-        return Shading.Iridescence.Factor * float3(1.0, 1.0, 1.0);
+        return Shading.BaseLayer.Srf.IridescenceFactor * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS && ENABLE_IRIDESCENCE)
     {
