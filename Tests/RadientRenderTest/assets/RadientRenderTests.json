@@ -63,6 +63,13 @@
       }
     },
     {
+      "name": "BoxTexturedNonPowerOfTwo",
+      "model": "Models/BoxTexturedNonPowerOfTwo/glTF-Binary/BoxTexturedNonPowerOfTwo.glb",
+      "camera": {
+        "eye": [2.0, 2.0, 2.0]
+      }
+    },
+    {
       "name": "BoxVertexColors",
       "model": "Models/BoxVertexColors/glTF-Binary/BoxVertexColors.glb",
       "camera": {
@@ -288,6 +295,14 @@
       "camera": {
         "eye": [0.5, -0.5, 20.0],
         "target": [0.5, -0.5, 0.0]
+      }
+    },
+    {
+      "name": "TextureLinearInterpolationTest",
+      "model": "Models/TextureLinearInterpolationTest/glTF-Binary/TextureLinearInterpolationTest.glb",
+      "camera": {
+        "eye": [0.0, 0.5, 7.0],
+        "target": [0.0, 0.5, 0.0]
       }
     },
     {
