@@ -255,7 +255,9 @@ IridescenceShadingInfo ReadIridescenceProperties(in VSOutput              VSOut,
 #if ENABLE_ANISOTROPY
 AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput              VSOut,
                                                in PBRMaterialShaderInfo Material,
-                                               in BaseLayerShadingInfo  BaseLayer)
+                                               in BaseLayerShadingInfo  BaseLayer,
+                                               in PerturbNormalInfo     NormalInfo,
+                                               in NormalMapUVInfo       NMUVInfo)
 {
     float3 PackedAnisotropy = GetAnisotropy(VSOut, Material, g_Frame.Renderer.MipBias);
 
@@ -270,23 +272,42 @@ AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput              VSOut,
     Anisotropy.Direction = Direction;
     Anisotropy.Strength  = PackedAnisotropy.z;
     
-    float3 Tangent = float3(1.0, 0.0, 0.0);
+    float3 Tangent;
 #   if USE_VERTEX_TANGENTS
     {
-        Tangent = VSOut.Tangent;
+        float3 SurfaceNormal = NormalInfo.Normal * NormalInfo.Face;
+        Tangent = normalize(VSOut.Tangent - SurfaceNormal * dot(SurfaceNormal, VSOut.Tangent));
+        Tangent *= NormalInfo.Face;
     }
 #   else
     {
-        // GLTF spec states that SamplerName all meshes with materials that use anisotropy SHOULD supply TANGENT vectors as a mesh attribute.
+        // The glTF specification requires a tangent space for anisotropic
+        // materials. Reconstruct it from the normal-map UVs when the mesh does
+        // not provide tangents.
         // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy#anisotropy
-        // If tangent attribute is not supplied, tangents should be computed from screen-space derivatives.
-        // However, such tangents may be discontinuous (normals are always continuous), so we don't use them.
+        float d = NMUVInfo.dUV_dx.x * NMUVInfo.dUV_dy.y - NMUVInfo.dUV_dy.x * NMUVInfo.dUV_dx.y;
+        if (d != 0.0)
+        {
+            Tangent = PerturbNormal(NormalInfo,
+                                    NMUVInfo.dUV_dx,
+                                    NMUVInfo.dUV_dy,
+                                    float3(1.0, 0.0, 0.0),
+                                    true);
+        }
+        else
+        {
+            float3 UnusedBitangent;
+            BasisFromNormal(NormalInfo.Normal, Tangent, UnusedBitangent);
+        }
     }
 #   endif
-    float3 Bitangent = cross(Tangent, BaseLayer.Normal);
-    
-    Anisotropy.Tangent   = normalize(mul(float3(Direction, 0.0), MatrixFromRows(Tangent, Bitangent, BaseLayer.Normal)));
-    Anisotropy.Bitangent = cross(BaseLayer.Normal, Anisotropy.Tangent);
+
+    // Anisotropy is defined in the geometric tangent frame. Keep this frame
+    // independent of normal-map detail and renormalize it after interpolation.
+    float3 Bitangent = cross(NormalInfo.Normal, Tangent) * NormalInfo.Face;
+
+    Anisotropy.Tangent   = normalize(Direction.x * Tangent + Direction.y * Bitangent);
+    Anisotropy.Bitangent = cross(NormalInfo.Normal, Anisotropy.Tangent);
 
     // Roughness along the anisotropy bitangent is the material roughness, while the tangent roughness increases with anisotropy.
     Anisotropy.AlphaRoughnessT = lerp(BaseLayer.Srf.PerceptualRoughness * BaseLayer.Srf.PerceptualRoughness, 1.0, Anisotropy.Strength * Anisotropy.Strength);
@@ -329,7 +350,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
     
 #   if ENABLE_ANISOTROPY
     {
-        Shading.Anisotropy = ReadAnisotropyProperties(VSOut, Material, Shading.BaseLayer);
+        Shading.Anisotropy = ReadAnisotropyProperties(VSOut, Material, Shading.BaseLayer, NormalInfo, NMUVInfo);
     }
 #   endif
     

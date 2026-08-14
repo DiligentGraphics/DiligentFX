@@ -16,6 +16,46 @@
       }
     },
     {
+      "name": "AnisotropyDiscTest",
+      "model": "Models/AnisotropyDiscTest/glTF-Binary/AnisotropyDiscTest.glb",
+      "camera": {
+        "eye": [-0.5, 1.25, 8.0],
+        "target": [-0.5, 1.25, 0.0]
+      },
+      "debugVisualizations": [
+        "AnisotropyDirection",
+        "AnisotropyStrength"
+      ],
+      "directionalLight": false,
+      "toneMapping": {
+        "averageLogLum": 0.5
+      }
+    },
+    {
+      "name": "AnisotropyRotationTest",
+      "model": "Models/AnisotropyRotationTest/glTF-Binary/AnisotropyRotationTest.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 8.0],
+        "target": [0.0, 0.0, 0.0]
+      },
+      "directionalLight": false
+    },
+    {
+      "name": "AnisotropyStrengthTest",
+      "model": "Models/AnisotropyStrengthTest/glTF-Binary/AnisotropyStrengthTest.glb",
+      "camera": {
+        "eye": [-0.45, 2.7, 10.0],
+        "target": [-0.45, 2.7, 0.0]
+      },
+      "debugVisualizations": [
+        "AnisotropyStrength"
+      ],
+      "directionalLight": false,
+      "toneMapping": {
+        "averageLogLum": 0.5
+      }
+    },
+    {
       "name": "BoxVertexColors",
       "model": "Models/BoxVertexColors/glTF-Binary/BoxVertexColors.glb",
       "camera": {
@@ -47,6 +87,15 @@
       "debugVisualizations": [
         "Occlusion"
       ],
+      "directionalLight": false
+    },
+    {
+      "name": "CompareAnisotropy",
+      "model": "Models/CompareAnisotropy/glTF-Binary/CompareAnisotropy.glb",
+      "camera": {
+        "eye": [0.0, 0.5, 3.0],
+        "target": [0.0, 0.5, 0.0]
+      },
       "directionalLight": false
     },
     {
