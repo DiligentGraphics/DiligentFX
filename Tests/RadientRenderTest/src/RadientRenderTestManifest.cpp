@@ -356,6 +356,14 @@ bool ParseTestCase(const Json&                     Object,
         Test.DirectionalLight = DirectionalLightIt->get<bool>();
     }
 
+    if (const auto EnableIBLIt = Object.find("enableIBL"); EnableIBLIt != Object.end())
+    {
+        if (!EnableIBLIt->is_boolean())
+            return SetError(Error, Path + ".enableIBL must be a boolean");
+
+        Test.EnableIBL = EnableIBLIt->get<bool>();
+    }
+
     if (const auto DebugVisualizationsIt = Object.find("debugVisualizations");
         DebugVisualizationsIt != Object.end() &&
         !ParseDebugVisualizations(*DebugVisualizationsIt,

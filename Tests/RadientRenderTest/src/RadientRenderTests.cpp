@@ -411,6 +411,10 @@ private:
         ASSERT_TRUE(ToneMappingStatus == RADIENT_STATUS_OK ||
                     ToneMappingStatus == RADIENT_STATUS_NO_CHANGE);
 
+        const RADIENT_STATUS IBLStatus = GetView()->SetIBLEnabled(m_TestCase.EnableIBL);
+        ASSERT_TRUE(IBLStatus == RADIENT_STATUS_OK ||
+                    IBLStatus == RADIENT_STATUS_NO_CHANGE);
+
         RadientRenderScene Scene{GetEngine(),
                                  GetRenderer(),
                                  GetView(),
