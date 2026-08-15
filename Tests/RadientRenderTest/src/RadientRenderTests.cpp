@@ -35,6 +35,7 @@
 #include "Math/RadientMath.hpp"
 #include "FileSystem.hpp"
 #include "GPUTestingEnvironment.hpp"
+#include "GraphicsAccessories.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "RadientEngine.h"
 #include "RefCntAutoPtr.hpp"
@@ -61,29 +62,6 @@ static constexpr std::chrono::seconds RenderReadyTimeout{120};
 bool IsPendingOrOK(RADIENT_STATUS Status)
 {
     return Status == RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK;
-}
-
-const char* GetBackendSuffix(RENDER_DEVICE_TYPE DeviceType)
-{
-    switch (DeviceType)
-    {
-        case RENDER_DEVICE_TYPE_D3D11:
-            return "d3d11";
-        case RENDER_DEVICE_TYPE_D3D12:
-            return "d3d12";
-        case RENDER_DEVICE_TYPE_GL:
-            return "gl";
-        case RENDER_DEVICE_TYPE_GLES:
-            return "gles";
-        case RENDER_DEVICE_TYPE_VULKAN:
-            return "vk";
-        case RENDER_DEVICE_TYPE_METAL:
-            return "mtl";
-        case RENDER_DEVICE_TYPE_WEBGPU:
-            return "wgpu";
-        default:
-            return nullptr;
-    }
 }
 
 RadientTransform MakeCameraTransform(const RadientRenderTestCamera& Camera)
@@ -512,14 +490,11 @@ private:
                                               ISwapChain*    pSwapChain)
     {
         const RadientRenderTestOptions& Options       = GetRadientRenderTestOptions();
-        const char* const               BackendSuffix = GetBackendSuffix(pDevice->GetDeviceInfo().Type);
-        if (BackendSuffix == nullptr)
-        {
-            ADD_FAILURE() << "Unsupported render device type";
-            return {};
-        }
+        const char* const               BackendSuffix = GetRenderDeviceTypeShortString(pDevice->GetDeviceInfo().Type);
 
-        const std::string ReferenceDirectory = FileSystem::JoinPath(Options.GoldenImagesDirectory, m_TestCase.Name);
+        const std::string ReferenceDirectory = FileSystem::JoinPath(
+            FileSystem::JoinPath(Options.GoldenImagesDirectory, "GLTF"),
+            m_TestCase.Name);
 
         std::vector<CaptureEntry> Captures;
         Captures.reserve(1 + m_TestCase.DebugVisualizations.size());
