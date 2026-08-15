@@ -76,8 +76,9 @@ private:
 
     struct ViewRenderState
     {
-        explicit ViewRenderState(IRadientView* pView) :
-            WeakView{pView}
+        ViewRenderState(IRadientView* pView, float PostFXTransitionDuration) :
+            WeakView{pView},
+            PostProcessPipeline{PostFXTransitionDuration}
         {}
 
         RefCntWeakPtr<IRadientView>       WeakView;
@@ -102,7 +103,8 @@ private:
     RadientTesseraGeometryRenderer m_GeometryRenderer;
     RadientTesseraSkyboxPass       m_SkyboxPass;
 
-    bool m_EnableAsyncPipelineCompilation = true;
+    bool  m_EnableAsyncPipelineCompilation = true;
+    float m_PostFXTransitionDuration       = 1.f;
 
     // Per-scene renderer state is retained without extending scene lifetime.
     // Expired entries are removed when another scene is synchronized.

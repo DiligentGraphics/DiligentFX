@@ -123,6 +123,10 @@ public:
     {
         bool EnableAsyncCreation = false;
         bool PackMatrixRowMajor  = false;
+
+        /// Duration, in seconds, over which newly ready effects fade in.
+        /// Zero applies the effect immediately.
+        float TransitionDuration = 1.0f;
     };
 
 public:
@@ -138,7 +142,7 @@ public:
 
     SHADER_COMPILE_FLAGS GetShaderCompileFlags(bool CompileAsynchronously) const;
 
-    float GetInterpolationSpeed() const;
+    float GetTransitionAlpha(float ElapsedTime) const;
 
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
 
@@ -250,10 +254,9 @@ private:
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
-    FrameDesc               m_FrameDesc               = {};
-    SupportedDeviceFeatures m_SupportedFeatures       = {};
-    bool                    m_PSOsReady               = false;
-    float                   m_AlphaFallbackMultiplier = 1.0f;
+    FrameDesc               m_FrameDesc         = {};
+    SupportedDeviceFeatures m_SupportedFeatures = {};
+    bool                    m_PSOsReady         = false;
 
     RefCntAutoPtr<IShader> m_pVSCopyTexture;
     RefCntAutoPtr<IShader> m_pPSCopyTexture;

@@ -1,5 +1,5 @@
 ﻿/*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -352,9 +352,12 @@ SHADER_COMPILE_FLAGS PostFXContext::GetShaderCompileFlags(bool CompileAsynchrono
     return Flags;
 }
 
-float PostFXContext::GetInterpolationSpeed() const
+float PostFXContext::GetTransitionAlpha(float ElapsedTime) const
 {
-    return m_AlphaFallbackMultiplier;
+    if (m_Settings.TransitionDuration <= 0.0f)
+        return 1.0f;
+
+    return std::min(std::max(ElapsedTime / m_Settings.TransitionDuration, 0.0f), 1.0f);
 }
 
 ITextureView* PostFXContext::Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const

@@ -274,7 +274,7 @@ void Bloom::UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool Res
     if (ResetTimer)
         m_FrameTimer.Restart();
 
-    float Alpha = std::min(std::max(m_FrameTimer.GetElapsedTimef(), 0.0f), 1.0f);
+    const float Alpha = RenderAttribs.pPostFXContext->GetTransitionAlpha(m_FrameTimer.GetElapsedTimef());
 
     bool UpdateRequired = m_BloomAttribs->AlphaInterpolation != Alpha || memcmp(RenderAttribs.pBloomAttribs, m_BloomAttribs.get(), sizeof(HLSL::BloomAttribs)) != 0;
     if (UpdateRequired)

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -792,7 +792,7 @@ void ScreenSpaceAmbientOcclusion::UpdateConstantBuffer(const RenderAttributes& R
     if (ResetTimer)
         m_FrameTimer.Restart();
 
-    float Alpha = std::min(std::max(m_FrameTimer.GetElapsedTimef(), 0.0f), 1.0f);
+    const float Alpha = RenderAttribs.pPostFXContext->GetTransitionAlpha(m_FrameTimer.GetElapsedTimef());
 
     bool ResetAccumulation =
         m_LastFrameIdx == ~0u ||                            // No history on the first frame

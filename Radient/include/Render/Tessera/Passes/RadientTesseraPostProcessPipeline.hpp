@@ -49,6 +49,10 @@ namespace Diligent
 class RadientTesseraPostProcessPipeline
 {
 public:
+    explicit RadientTesseraPostProcessPipeline(float TransitionDuration = 1.f) noexcept :
+        m_TransitionDuration{TransitionDuration}
+    {}
+
     struct PrepareInfo
     {
         PrepareInfo(const RadientFrameRenderTargets& RenderTargets,
@@ -170,6 +174,7 @@ private:
     bool   m_ResetSSAO                   = true;
     bool   m_ResetTemporalAntiAliasing   = true;
     Uint32 m_ComposedColorVersion        = ~Uint32{0};
+    float  m_TransitionDuration          = 1.f;
 };
 
 } // namespace Diligent

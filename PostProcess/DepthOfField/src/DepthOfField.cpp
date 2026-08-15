@@ -794,7 +794,7 @@ void DepthOfField::UpdateConstantBuffers(const RenderAttributes& RenderAttribs, 
     if (ResetTimer)
         m_FrameTimer.Restart();
 
-    float Alpha = std::min(std::max(m_FrameTimer.GetElapsedTimef() * RenderAttribs.pPostFXContext->GetInterpolationSpeed(), 0.0f), 1.0f);
+    const float Alpha = RenderAttribs.pPostFXContext->GetTransitionAlpha(m_FrameTimer.GetElapsedTimef());
 
     if (RenderAttribs.pDOFAttribs->BokehKernelRingCount != m_pDOFAttribs->BokehKernelRingCount || RenderAttribs.pDOFAttribs->BokehKernelRingDensity != m_pDOFAttribs->BokehKernelRingDensity)
     {

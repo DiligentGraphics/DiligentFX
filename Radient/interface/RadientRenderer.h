@@ -62,6 +62,10 @@ struct RadientRendererDesc
     /// Multi-draw is automatically disabled when the backend cannot provide a
     /// primitive ID through native multi-draw or base-instance emulation.
     Uint32 MultiDrawBatchSize DEFAULT_INITIALIZER(16);
+
+    /// Duration, in seconds, over which newly ready post-processing effects
+    /// fade in. Zero applies effects immediately.
+    Float32 PostFXTransitionDuration DEFAULT_INITIALIZER(1.f);
 };
 typedef struct RadientRendererDesc RadientRendererDesc;
 

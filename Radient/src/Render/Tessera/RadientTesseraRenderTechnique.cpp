@@ -34,6 +34,8 @@
 #include "Cast.hpp"
 #include "Errors.hpp"
 
+#include <cmath>
+
 namespace Diligent
 {
 
@@ -54,6 +56,18 @@ IThreadPool* ValidateThreadPool(IThreadPool* pThreadPool)
         LOG_ERROR_AND_THROW("Radient Tessera render technique thread pool must not be null");
 
     return pThreadPool;
+}
+
+float ValidatePostFXTransitionDuration(float Duration)
+{
+    if (!std::isfinite(Duration) || Duration < 0.f)
+    {
+        constexpr float DefaultDuration = 1.f;
+        LOG_ERROR_MESSAGE("Radient post-FX transition duration must be finite and non-negative. Using the default value of ", DefaultDuration, " second.");
+        return DefaultDuration;
+    }
+
+    return Duration;
 }
 
 bool GetTextureViewSamplingInfo(ITextureView*               pTextureView,
@@ -83,7 +97,8 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*       
     m_GeometryRenderer{Desc.MaterialTextureSlotCount,
                        GetDefaultMaterialTextures(pAssetManager),
                        Desc.MultiDrawBatchSize},
-    m_EnableAsyncPipelineCompilation{Desc.EnableAsyncPipelineCompilation == True}
+    m_EnableAsyncPipelineCompilation{Desc.EnableAsyncPipelineCompilation == True},
+    m_PostFXTransitionDuration{ValidatePostFXTransitionDuration(Desc.PostFXTransitionDuration)}
 {}
 
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
@@ -470,7 +485,7 @@ RadientTesseraRenderTechnique::ViewRenderState& RadientTesseraRenderTechnique::G
     if (ViewRenderState* pState = FindViewRenderState(pView, true))
         return *pState;
 
-    m_ViewRenderStates.push_back(std::make_unique<ViewRenderState>(pView));
+    m_ViewRenderStates.push_back(std::make_unique<ViewRenderState>(pView, m_PostFXTransitionDuration));
     return *m_ViewRenderStates.back();
 }
 

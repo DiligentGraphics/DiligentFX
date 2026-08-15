@@ -132,6 +132,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
         {
             PostFXContext::CreateInfo CI;
             CI.PackMatrixRowMajor = true;
+            CI.TransitionDuration = m_TransitionDuration;
             m_pPostFXContext      = std::make_unique<PostFXContext>(pDevice, CI);
         }
 
@@ -221,9 +222,11 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
     }
 
     const HLSL::ToneMappingAttribs ToneMappingAttribs = RadientPostFX::MakeToneMappingAttribs(ToneMapping);
+
     const Int32 ToneMappingMode = PostProcessingEnabled ?
         ToneMappingAttribs.iToneMappingMode :
         TONE_MAPPING_MODE_NONE;
+
     const bool ConvertOutputToSRGB = RequiresOutputSRGBConversion(OutputFormat);
     if (SSAOEnabled &&
         (!m_SSAOEnabled || m_FinalPass.TargetVersion != Targets.GetVersion() || m_SSAO != SSAO))
@@ -443,8 +446,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
         if (m_CompositionRequired)
         {
             ITextureView* const  pComposedColorRTV = m_pComposedColor != nullptr ?
-                 m_pComposedColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) :
-                 nullptr;
+                m_pComposedColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET) :
+                nullptr;
             const RADIENT_STATUS Status            = ExecuteColorPass(pContext, m_CompositionPass, pComposedColorRTV);
             if (RADIENT_FAILED(Status))
                 return Status;
