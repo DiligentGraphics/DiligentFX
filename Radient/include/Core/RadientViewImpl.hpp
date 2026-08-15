@@ -65,6 +65,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION DebugVisualization) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetIBLEnabled(Bool Enabled) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEnvironment(const RadientEnvironmentDesc& Environment) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;

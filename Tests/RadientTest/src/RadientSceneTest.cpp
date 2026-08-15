@@ -898,6 +898,11 @@ TEST(RadientRendererTest, CreateView)
     EXPECT_EQ(pView->GetDesc().DebugVisualization, RADIENT_DEBUG_VISUALIZATION_BASE_COLOR);
     EXPECT_EQ(pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_BASE_COLOR), RADIENT_STATUS_NO_CHANGE);
 
+    EXPECT_EQ(pView->GetDesc().EnableIBL, True);
+    EXPECT_EQ(pView->SetIBLEnabled(False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().EnableIBL, False);
+    EXPECT_EQ(pView->SetIBLEnabled(False), RADIENT_STATUS_NO_CHANGE);
+
     // Environment settings are view-local and retain the referenced texture asset.
     const RadientEnvironmentDesc& DefaultEnvironment = pView->GetDesc().Environment;
     const RadientFloat3           DefaultColor{1.f, 1.f, 1.f};

@@ -551,6 +551,10 @@ struct RadientViewDesc
     /// Debug visualization mode.
     RADIENT_DEBUG_VISUALIZATION DebugVisualization DEFAULT_INITIALIZER(RADIENT_DEBUG_VISUALIZATION_NONE);
 
+    /// Enables image-based lighting. This setting does not affect skybox
+    /// rendering, which is controlled independently by Skybox.
+    Bool EnableIBL DEFAULT_INITIALIZER(True);
+
     /// Environment used for image-based lighting.
     RadientEnvironmentDesc Environment DEFAULT_INITIALIZER({});
 
@@ -616,6 +620,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     VIRTUAL RADIENT_STATUS METHOD(SetDebugVisualization)(THIS_
                                                          RADIENT_DEBUG_VISUALIZATION DebugVisualization) PURE;
 
+    /// Enables or disables image-based lighting.
+    VIRTUAL RADIENT_STATUS METHOD(SetIBLEnabled)(THIS_
+                                                 Bool Enabled) PURE;
+
     /// Sets the environment used for image-based lighting.
     VIRTUAL RADIENT_STATUS METHOD(SetEnvironment)(THIS_
                                                   const RadientEnvironmentDesc REF Environment) PURE;
@@ -660,6 +668,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
 #    define IRadientView_SetClearColor(This, ...)     CALL_IFACE_METHOD(RadientView, SetClearColor,   This, __VA_ARGS__)
 #    define IRadientView_SetDebugVisualization(This, ...) CALL_IFACE_METHOD(RadientView, SetDebugVisualization, This, __VA_ARGS__)
+#    define IRadientView_SetIBLEnabled(This, ...)     CALL_IFACE_METHOD(RadientView, SetIBLEnabled,   This, __VA_ARGS__)
 #    define IRadientView_SetEnvironment(This, ...)    CALL_IFACE_METHOD(RadientView, SetEnvironment,  This, __VA_ARGS__)
 #    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
 #    define IRadientView_SetToneMapping(This, ...)    CALL_IFACE_METHOD(RadientView, SetToneMapping,  This, __VA_ARGS__)

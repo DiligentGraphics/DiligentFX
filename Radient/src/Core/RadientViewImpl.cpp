@@ -227,6 +227,15 @@ RADIENT_STATUS RadientViewImpl::SetDebugVisualization(RADIENT_DEBUG_VISUALIZATIO
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientViewImpl::SetIBLEnabled(Bool Enabled)
+{
+    if (m_Desc.EnableIBL == Enabled)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Desc.EnableIBL = Enabled;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientViewImpl::SetEnvironment(const RadientEnvironmentDesc& Environment)
 {
     if (!IsValidEnvironment(Environment))

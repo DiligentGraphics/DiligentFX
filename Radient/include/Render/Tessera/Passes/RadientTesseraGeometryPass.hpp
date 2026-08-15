@@ -65,7 +65,8 @@ public:
                            IDeviceContext*                    pContext,
                            const RadientTesseraDrawableCache& DrawableCache,
                            const RadientFrameRenderTargets&   Targets,
-                           PBR_Renderer::DebugViewType        DebugView);
+                           PBR_Renderer::DebugViewType        DebugView,
+                           bool                               EnableIBL);
     RADIENT_STATUS Execute(RadientTesseraGeometryRenderer&    Renderer,
                            IRenderDevice*                     pDevice,
                            IDeviceContext*                    pContext,
@@ -186,6 +187,7 @@ private:
     TEXTURE_FORMAT                                                              m_DSVFormat                      = TEX_FORMAT_UNKNOWN;
     bool                                                                        m_UseReverseDepth                = false;
     bool                                                                        m_EnableAsyncPipelineCompilation = true;
+    bool                                                                        m_EnableIBL                      = true;
     DEVICE_FEATURE_STATE                                                        m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
     PBR_Renderer::DebugViewType                                                  m_DebugView                      = PBR_Renderer::DebugViewType::None;
 };

@@ -121,7 +121,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
                                                    IDeviceContext*                    pContext,
                                                    const RadientTesseraDrawableCache& DrawableCache,
                                                    const RadientFrameRenderTargets&   Targets,
-                                                   PBR_Renderer::DebugViewType        DebugView)
+                                                   PBR_Renderer::DebugViewType        DebugView,
+                                                   bool                               EnableIBL)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -146,6 +147,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
     if (m_DebugView != DebugView)
     {
         m_DebugView             = DebugView;
+        RebuildDrawablePassData = true;
+    }
+
+    if (m_EnableIBL != EnableIBL)
+    {
+        m_EnableIBL             = EnableIBL;
         RebuildDrawablePassData = true;
     }
 
@@ -203,7 +210,13 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets, m_DebugView);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer,
+                                                     pDevice,
+                                                     pContext,
+                                                     DrawableCache,
+                                                     Targets,
+                                                     m_DebugView,
+                                                     m_EnableIBL);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -638,8 +651,9 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
         PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS |
         PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
-        PBR_Renderer::PSO_FLAG_USE_IBL |
         PBR_Renderer::PSO_FLAG_USE_LIGHTS;
+    if (m_EnableIBL)
+        PSOFlags |= PBR_Renderer::PSO_FLAG_USE_IBL;
     PSOFlags &= m_RenderFlags;
     PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 

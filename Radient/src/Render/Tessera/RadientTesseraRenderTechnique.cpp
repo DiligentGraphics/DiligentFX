@@ -148,7 +148,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                                Context.pContext,
                                                pSceneState->DrawableCache,
                                                ViewState.FrameTargets,
-                                               RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization));
+                                               RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization),
+                                               ViewDesc.EnableIBL);
     if (RADIENT_FAILED(Status))
         return Status;
 
