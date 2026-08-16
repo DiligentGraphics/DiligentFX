@@ -36,12 +36,15 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientAsset         IRadientAsset;
-typedef struct IRadientMeshAsset     IRadientMeshAsset;
-typedef struct IRadientMaterialAsset IRadientMaterialAsset;
-typedef struct IRadientTextureAsset  IRadientTextureAsset;
-typedef struct IRadientSceneAsset    IRadientSceneAsset;
-typedef struct IDeviceContext        IDeviceContext;
+typedef struct IRadientAsset              IRadientAsset;
+typedef struct IRadientMeshAsset          IRadientMeshAsset;
+typedef struct IRadientMaterialAsset      IRadientMaterialAsset;
+typedef struct IRadientMaterialDefinition IRadientMaterialDefinition;
+typedef struct IRadientTextureAsset       IRadientTextureAsset;
+typedef struct IRadientSceneAsset         IRadientSceneAsset;
+typedef struct IDeviceContext             IDeviceContext;
+
+typedef struct RadientMaterialDefinitionCreateInfo RadientMaterialDefinitionCreateInfo;
 
 // clang-format off
 
@@ -505,6 +508,13 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               const RadientMeshCreateInfo REF MeshCI,
                                               IRadientMeshAsset**             ppMesh) PURE;
 
+    /// Creates an immutable material definition from in-memory metadata.
+    /// The definition copies all creation data and remains valid independently
+    /// of the asset manager. On success, ppDefinition receives a strong reference.
+    VIRTUAL RADIENT_STATUS METHOD(CreateMaterialDefinition)(THIS_
+                                                            const RadientMaterialDefinitionCreateInfo REF DefinitionCI,
+                                                            IRadientMaterialDefinition**                  ppDefinition) PURE;
+
     /// Creates a material asset.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
                                                   const RadientMaterialCreateInfo REF MaterialCI,
@@ -555,6 +565,7 @@ DILIGENT_END_INTERFACE
 
 #    define IRadientAssetManager_GetDesc(This)                 CALL_IFACE_METHOD(RadientAssetManager, GetDesc,        This)
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateMaterialDefinition(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateMaterialDefinition, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)

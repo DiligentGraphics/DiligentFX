@@ -26,6 +26,8 @@
 
 #include "RadientMaterials.h"
 
+#include "Assets/RadientMaterialAssetManager.hpp"
+
 #include "DebugUtilities.hpp"
 #include "Errors.hpp"
 #include "ObjectBase.hpp"
@@ -685,21 +687,21 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
 
 } // namespace
 
-RADIENT_STATUS CreateRadientMaterialDefinition(const RadientMaterialDefinitionCreateInfo& CreateInfo,
-                                               IRadientMaterialDefinition**               ppDefinition)
+RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
+                                                             IRadientMaterialDefinition**               ppDefinition)
 {
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppDefinition = nullptr;
 
-    const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionCreateInfo(CreateInfo);
+    const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionCreateInfo(DefinitionCI);
     if (ValidationStatus != RADIENT_STATUS_OK)
         return ValidationStatus;
 
     try
     {
         RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{
-            MakeNewRCObj<RadientMaterialDefinitionImpl>()(CreateInfo)};
+            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionCI)};
         *ppDefinition = pDefinition.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -711,14 +713,3 @@ RADIENT_STATUS CreateRadientMaterialDefinition(const RadientMaterialDefinitionCr
 }
 
 } // namespace Diligent
-
-extern "C"
-{
-
-    Diligent::RADIENT_STATUS Diligent_CreateRadientMaterialDefinition(
-        const Diligent::RadientMaterialDefinitionCreateInfo& CreateInfo,
-        Diligent::IRadientMaterialDefinition**               ppDefinition)
-    {
-        return Diligent::CreateRadientMaterialDefinition(CreateInfo, ppDefinition);
-    }
-}

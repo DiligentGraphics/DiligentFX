@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "RadientMaterials.h"
 #include "RadientTextureAssetManager.hpp"
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -100,6 +101,9 @@ public:
     ~RadientMaterialAssetManager();
 
     static RadientMaterialAssetManagerSharedPtr Create(const CreateInfo& CI = {});
+
+    RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
+                                    IRadientMaterialDefinition**               ppDefinition);
 
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);

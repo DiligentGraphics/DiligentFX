@@ -99,11 +99,11 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*       pInst
     (void)Status;
 }
 
-void RadientMaterials_C_TestCreateFunction(void)
+void RadientMaterials_C_TestAssetManagerMacros(IRadientAssetManager* pAssetManager)
 {
     RadientMaterialDefinitionCreateInfo CreateInfo  = {0};
     IRadientMaterialDefinition*         pDefinition = 0;
-    RADIENT_STATUS                      Status      = Diligent_CreateRadientMaterialDefinition(&CreateInfo, &pDefinition);
+    RADIENT_STATUS                      Status      = IRadientAssetManager_CreateMaterialDefinition(pAssetManager, &CreateInfo, &pDefinition);
 
     (void)pDefinition;
     (void)Status;

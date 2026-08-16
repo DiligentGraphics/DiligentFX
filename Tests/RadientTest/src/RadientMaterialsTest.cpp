@@ -25,6 +25,7 @@
  */
 
 #include "RadientMaterials.h"
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "RefCntAutoPtr.hpp"
@@ -48,6 +49,16 @@ ValueType GetParameter(IRadientMaterialInstance&      Instance,
     return Value;
 }
 
+RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
+                                IRadientMaterialDefinition**               ppDefinition)
+{
+    // Definitions own their copied schema and defaults and may outlive the manager.
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    return pAssetManager != nullptr ?
+        pAssetManager->CreateMaterialDefinition(DefinitionCI, ppDefinition) :
+        RADIENT_STATUS_FAILED;
+}
+
 RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     const RadientMaterialParameterDesc* pParameters,
     Uint32                              ParameterCount,
@@ -60,7 +71,7 @@ RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     DefinitionCI.ParameterCount = ParameterCount;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    EXPECT_EQ(CreateRadientMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     return pDefinition;
 }
 
@@ -85,7 +96,7 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     DefinitionCI.ParameterCount = 1;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    ASSERT_EQ(CreateRadientMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
     DefinitionName[0] = 'X';
@@ -122,6 +133,18 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_TRUE(ByIndex);
     EXPECT_EQ(pDefinition->FindParameter("Missing", &ByName), RADIENT_STATUS_NOT_FOUND);
     EXPECT_FALSE(ByName);
+}
+
+TEST(RadientMaterialsTest, AssetManagerReportsDefinitionStatus)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientMaterialDefinitionCreateInfo       DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(pAssetManager->CreateMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
 }
 
 TEST(RadientMaterialsTest, WriterUpdatesSharedInstance)
@@ -376,7 +399,7 @@ TEST(RadientMaterialsTest, RejectsInvalidDefinitionSchema)
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
 
     DefinitionCI.Desc.Domain = RADIENT_MATERIAL_DOMAIN_COUNT;
-    EXPECT_EQ(CreateRadientMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
 
     std::array<RadientMaterialParameterDesc, 2> Parameters{};
@@ -388,14 +411,14 @@ TEST(RadientMaterialsTest, RejectsInvalidDefinitionSchema)
     DefinitionCI.Desc.Domain    = RADIENT_MATERIAL_DOMAIN_SURFACE;
     DefinitionCI.pParameters    = Parameters.data();
     DefinitionCI.ParameterCount = static_cast<Uint32>(Parameters.size());
-    EXPECT_EQ(CreateRadientMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
 
     Parameters[1].Name      = "TextureArray";
     Parameters[1].ID        = 2;
     Parameters[1].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize = 0;
-    EXPECT_EQ(CreateRadientMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
 }
 

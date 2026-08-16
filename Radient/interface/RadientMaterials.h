@@ -453,15 +453,4 @@ DILIGENT_END_INTERFACE
 // clang-format on
 
 
-#include "../../../DiligentCore/Primitives/interface/DefineGlobalFuncHelperMacros.h"
-
-/// Creates an immutable in-memory material definition. The function copies all
-/// creation metadata and default values and retains default textures. On
-/// success, ppDefinition receives a strong reference to the definition.
-RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientMaterialDefinition)(
-    const RadientMaterialDefinitionCreateInfo REF CreateInfo,
-    IRadientMaterialDefinition**                  ppDefinition);
-
-#include "../../../DiligentCore/Primitives/interface/UndefGlobalFuncHelperMacros.h"
-
 DILIGENT_END_NAMESPACE // namespace Diligent

@@ -29,6 +29,7 @@
 #include "gtest/gtest.h"
 
 #include "RadientEngine.h"
+#include "RadientMaterials.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
@@ -522,10 +523,15 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     ASSERT_NE(pAssetManager, nullptr);
 
     EXPECT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
-    RefCntAutoPtr<IRadientMeshAsset>     pMesh;
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    RefCntAutoPtr<IRadientTextureAsset>  pTexture;
-    RefCntAutoPtr<IRadientSceneAsset>    pScene;
+    RefCntAutoPtr<IRadientMeshAsset>          pMesh;
+    RefCntAutoPtr<IRadientMaterialDefinition> pMaterialDefinition;
+    RefCntAutoPtr<IRadientMaterialAsset>      pMaterial;
+    RefCntAutoPtr<IRadientTextureAsset>       pTexture;
+    RefCntAutoPtr<IRadientSceneAsset>         pScene;
+
+    EXPECT_EQ(pAssetManager->CreateMaterialDefinition(RadientMaterialDefinitionCreateInfo{}, pMaterialDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMaterialDefinition, nullptr);
 
     static constexpr RadientMaterialCreateInfo MaterialCI{};
     EXPECT_EQ(pAssetManager->CreateMaterial(MaterialCI, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);

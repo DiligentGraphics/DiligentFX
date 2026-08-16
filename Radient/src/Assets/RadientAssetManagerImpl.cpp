@@ -406,6 +406,20 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
         RADIENT_STATUS_INVALID_OPERATION;
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::CreateMaterialDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
+                                                                 IRadientMaterialDefinition**               ppDefinition)
+{
+    if (ppDefinition == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppDefinition == nullptr, "Output material definition pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppDefinition = nullptr;
+
+    if (m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pMaterialManager->CreateDefinition(DefinitionCI, ppDefinition);
+}
+
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                        IRadientMaterialAsset**          ppMaterial)
 {
@@ -700,7 +714,12 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
             return RadientTextureAssetManager::GetLoadStatus(pAsset);
 
         case RADIENT_ASSET_TYPE_MATERIAL:
+        {
+            RefCntAutoPtr<IRadientMaterialDefinition> pDefinition{pAsset, IID_RadientMaterialDefinition};
+            if (pDefinition != nullptr)
+                return pDefinition->GetStatus();
             return RadientMaterialAssetManager::GetLoadStatus(pAsset);
+        }
 
         default:
             return RADIENT_STATUS_OK;

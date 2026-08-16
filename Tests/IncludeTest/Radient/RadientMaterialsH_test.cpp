@@ -71,7 +71,8 @@ void RadientMaterials_CPP_UseTypes()
     (void)IsEqual;
 }
 
-void RadientMaterials_CPP_TestInterfaces(IRadientMaterialDefinition*     pDefinition,
+void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetManager,
+                                         IRadientMaterialDefinition*     pDefinition,
                                          IRadientMaterialInstance*       pInstance,
                                          IRadientMaterialInstanceWriter* pWriter,
                                          IRadientTextureAsset*           pTexture)
@@ -98,7 +99,7 @@ void RadientMaterials_CPP_TestInterfaces(IRadientMaterialDefinition*     pDefini
     Status               = pWriter->Commit();
 
     RadientMaterialDefinitionCreateInfo CreateInfo;
-    Status = CreateRadientMaterialDefinition(CreateInfo, &pDefinition);
+    Status = pAssetManager->CreateMaterialDefinition(CreateInfo, &pDefinition);
 
     (void)Desc;
     (void)Status;
