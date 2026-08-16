@@ -11,6 +11,7 @@ set(SOURCE
     src/Assets/RadientFilesystemAssetResolver.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
+    src/Assets/RadientMaterials.cpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
@@ -107,6 +108,7 @@ set(INTERFACE
     interface/Radient.h
     interface/RadientAssetResolver.h
     interface/RadientAssets.h
+    interface/RadientMaterials.h
     interface/RadientBackend.h
     interface/RadientEngine.h
     interface/RadientMath.h
