@@ -345,7 +345,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     }
 }
 
-void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
+POST_FX_EXECUTION_STATUS ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -362,7 +362,7 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
 
-    bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs) && RenderAttribs.pPostFXContext->IsPSOsReady();
+    const bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs) && RenderAttribs.pPostFXContext->IsPSOsReady();
     UpdateConstantBuffer(RenderAttribs, !AllPSOsReady);
 
     if (AllPSOsReady)
@@ -384,6 +384,10 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
         m_Resources[ResourceIdx].Release();
+
+    return AllPSOsReady ?
+        POST_FX_EXECUTION_STATUS_READY :
+        POST_FX_EXECUTION_STATUS_PENDING;
 }
 
 bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSAOAttribs, FEATURE_FLAGS& FeatureFlags)

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -126,8 +126,9 @@ public:
     /// Prepares the effect for rendering.
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
-    /// Executes the effect.
-    void Execute(const RenderAttributes& RenderAttribs);
+    /// Executes the effect. Returns POST_FX_EXECUTION_STATUS_PENDING after
+    /// writing the placeholder texture while asynchronous pipeline creation is pending.
+    POST_FX_EXECUTION_STATUS Execute(const RenderAttributes& RenderAttribs);
 
     /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs, FEATURE_FLAGS& FeatureFlags);

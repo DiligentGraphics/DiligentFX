@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/Passes/RadientTesseraPostProcessPipeline.hpp"
 
+#include "Assets/RadientAssetStatus.hpp"
 #include "Render/RadientPostFXParameters.hpp"
 
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
@@ -371,6 +372,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
+    bool PostFXReady = true;
     if (m_SSAOEnabled || m_SSREnabled || m_TemporalAntiAliasingEnabled || m_DepthOfFieldEnabled || m_BloomEnabled)
     {
         if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pFrameAttribsCB == nullptr ||
@@ -409,6 +411,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
         PostFXAttribs.pCameraAttribsCB    = m_pFrameAttribsCB;
         m_pPostFXContext->Execute(PostFXAttribs);
 
+        PostFXReady = m_pPostFXContext->IsPSOsReady();
+
         if (m_SSREnabled)
         {
             HLSL::ScreenSpaceReflectionAttribs SSRAttribs = RadientPostFX::MakeSSRAttribs(m_SSR);
@@ -438,8 +442,11 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             SSAORenderAttribs.pDepthBufferSRV  = pDepthSRV;
             SSAORenderAttribs.pNormalBufferSRV = pNormalSRV;
             SSAORenderAttribs.pSSAOAttribs     = &SSAOAttribs;
-            m_pSSAO->Execute(SSAORenderAttribs);
-            m_ResetSSAO = false;
+            const bool SSAOReady =
+                m_pSSAO->Execute(SSAORenderAttribs) == POST_FX_EXECUTION_STATUS_READY;
+            PostFXReady &= SSAOReady;
+            if (SSAOReady)
+                m_ResetSSAO = false;
         }
 
         ITextureView* pCurrentColorSRV = Targets.GetSceneColorSRV();
@@ -525,7 +532,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             return RADIENT_STATUS_OUT_OF_DATE;
     }
 
-    return ExecuteColorPass(pContext, m_FinalPass, Targets.GetOutputColorRTV());
+    const RADIENT_STATUS ExecuteStatus = ExecuteColorPass(pContext, m_FinalPass, Targets.GetOutputColorRTV());
+    const RADIENT_STATUS PostFXStatus  = PostFXReady ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
+    return CombineDependencyStatus(ExecuteStatus, PostFXStatus);
 }
 
 RADIENT_STATUS RadientTesseraPostProcessPipeline::PrepareColorPass(IRenderDevice*              pDevice,

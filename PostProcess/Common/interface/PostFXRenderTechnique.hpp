@@ -36,6 +36,12 @@
 namespace Diligent
 {
 
+enum POST_FX_EXECUTION_STATUS : Uint8
+{
+    POST_FX_EXECUTION_STATUS_READY = 0,
+    POST_FX_EXECUTION_STATUS_PENDING,
+};
+
 struct PostFXRenderTechnique
 {
     static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*          pDevice,
