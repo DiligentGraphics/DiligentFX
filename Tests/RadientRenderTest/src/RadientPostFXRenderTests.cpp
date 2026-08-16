@@ -241,6 +241,245 @@ RADIENT_STATUS AddDrawable(IRadientSceneWriter*    pWriter,
 
 } // namespace
 
+TEST_F(RadientRender, Bloom)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
+    ASSERT_NE(pEnvironment, nullptr);
+
+    IRenderDevice* const  pDevice    = pEnvironment->GetDevice();
+    IDeviceContext* const pContext   = pEnvironment->GetDeviceContext();
+    ISwapChain* const     pSwapChain = pEnvironment->GetSwapChain();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+    ASSERT_NE(pSwapChain, nullptr);
+    ASSERT_NE(GetEngine(), nullptr);
+    ASSERT_NE(GetAssetManager(), nullptr);
+    ASSERT_NE(GetRenderer(), nullptr);
+
+    RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{pSwapChain, IID_TestingSwapChain};
+    ASSERT_NE(pTestingSwapChain, nullptr);
+
+    PostFXCapture Capture;
+    ASSERT_TRUE(Capture.Prepare(pDevice, pSwapChain));
+
+    const auto CreateMaterial = [&](const char*   Name,
+                                    RadientFloat4 BaseColor,
+                                    Float32       Metallic,
+                                    Float32       Roughness,
+                                    RadientFloat3 Emissive) {
+        RadientMaterialCreateInfo MaterialCI{};
+        MaterialCI.Name            = Name;
+        MaterialCI.BaseColorFactor = BaseColor;
+        MaterialCI.MetallicFactor  = Metallic;
+        MaterialCI.RoughnessFactor = Roughness;
+        MaterialCI.EmissiveFactor  = Emissive;
+
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        const RADIENT_STATUS                 Status = GetAssetManager()->CreateMaterial(MaterialCI, &pMaterial);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pMaterial, nullptr);
+        return pMaterial;
+    };
+
+    const auto CreateCube = [&](const char* Name, IRadientMaterialAsset* pMaterial) {
+        RadientCubeMeshCreateInfo CubeCI{};
+        CubeCI.Name      = Name;
+        CubeCI.Size      = 1.f;
+        CubeCI.pMaterial = pMaterial;
+
+        RefCntAutoPtr<IRadientMeshAsset> pCube;
+        const RADIENT_STATUS             Status = CreateRadientCubeMesh(GetAssetManager(), CubeCI, &pCube);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pCube, nullptr);
+        return pCube;
+    };
+
+    const auto CreateSphere = [&](const char* Name, Float32 Radius, IRadientMaterialAsset* pMaterial) {
+        RadientSphereMeshCreateInfo SphereCI{};
+        SphereCI.Name         = Name;
+        SphereCI.Radius       = Radius;
+        SphereCI.Subdivisions = 16;
+        SphereCI.pMaterial    = pMaterial;
+
+        RefCntAutoPtr<IRadientMeshAsset> pSphere;
+        const RADIENT_STATUS             Status = CreateRadientSphereMesh(GetAssetManager(), SphereCI, &pSphere);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pSphere, nullptr);
+        return pSphere;
+    };
+
+    RefCntAutoPtr<IRadientMaterialAsset> pBackdropMaterial =
+        CreateMaterial("Bloom backdrop material", {0.012f, 0.015f, 0.02f, 1.f}, 0.f, 1.f, {});
+    RefCntAutoPtr<IRadientMaterialAsset> pBrightEmissiveMaterial =
+        CreateMaterial("Bloom bright emissive material", {0.f, 0.f, 0.f, 1.f}, 0.f, 1.f, {10.f, 2.5f, 0.4f});
+    RefCntAutoPtr<IRadientMaterialAsset> pDimEmissiveMaterial =
+        CreateMaterial("Bloom dim emissive material", {0.f, 0.f, 0.f, 1.f}, 0.f, 1.f, {0.35f, 0.1f, 0.025f});
+    RefCntAutoPtr<IRadientMaterialAsset> pGlossyMaterial =
+        CreateMaterial("Bloom glossy material", {0.25f, 0.35f, 0.55f, 1.f}, 1.f, 0.08f, {});
+    ASSERT_NE(pBackdropMaterial, nullptr);
+    ASSERT_NE(pBrightEmissiveMaterial, nullptr);
+    ASSERT_NE(pDimEmissiveMaterial, nullptr);
+    ASSERT_NE(pGlossyMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pBackdrop = CreateCube("Bloom backdrop", pBackdropMaterial);
+    RefCntAutoPtr<IRadientMeshAsset> pBrightEmissiveSphere =
+        CreateSphere("Bloom bright emissive sphere", 0.55f, pBrightEmissiveMaterial);
+    RefCntAutoPtr<IRadientMeshAsset> pDimEmissiveSphere =
+        CreateSphere("Bloom dim emissive sphere", 0.4f, pDimEmissiveMaterial);
+    RefCntAutoPtr<IRadientMeshAsset> pGlossySphere =
+        CreateSphere("Bloom glossy sphere", 0.9f, pGlossyMaterial);
+    ASSERT_NE(pBackdrop, nullptr);
+    ASSERT_NE(pBrightEmissiveSphere, nullptr);
+    ASSERT_NE(pDimEmissiveSphere, nullptr);
+    ASSERT_NE(pGlossySphere, nullptr);
+
+    RadientSceneDesc SceneDesc{};
+    SceneDesc.Name = "Bloom render test scene";
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(GetEngine()->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(GetEngine()->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
+    ASSERT_NE(pWriter, nullptr);
+
+    RadientTransform FloorTransform{};
+    FloorTransform.Position = {0.f, -0.1f, 0.f};
+    FloorTransform.Scale    = {7.f, 0.2f, 6.f};
+    ASSERT_EQ(AddDrawable(pWriter, "Floor", pBackdrop, FloorTransform), RADIENT_STATUS_OK);
+
+    RadientTransform BackWallTransform{};
+    BackWallTransform.Position = {0.f, 2.5f, -2.8f};
+    BackWallTransform.Scale    = {7.f, 5.f, 0.2f};
+    ASSERT_EQ(AddDrawable(pWriter, "Back wall", pBackdrop, BackWallTransform), RADIENT_STATUS_OK);
+
+    RadientTransform BrightEmissiveTransform{};
+    BrightEmissiveTransform.Position = {-1.6f, 1.25f, -0.5f};
+    ASSERT_EQ(AddDrawable(pWriter, "Bright emissive sphere", pBrightEmissiveSphere, BrightEmissiveTransform), RADIENT_STATUS_OK);
+
+    RadientTransform DimEmissiveTransform{};
+    DimEmissiveTransform.Position = {-1.6f, 0.45f, 0.65f};
+    ASSERT_EQ(AddDrawable(pWriter, "Dim emissive sphere", pDimEmissiveSphere, DimEmissiveTransform), RADIENT_STATUS_OK);
+
+    RadientTransform GlossyTransform{};
+    GlossyTransform.Position = {0.8f, 0.9f, -0.25f};
+    ASSERT_EQ(AddDrawable(pWriter, "Glossy sphere", pGlossySphere, GlossyTransform), RADIENT_STATUS_OK);
+
+    RadientEntityDesc LightDesc{};
+    LightDesc.Name      = "Bloom directional light";
+    LightDesc.Transform = MakeCameraTransform(float3{},
+                                              float3{-0.35f, -0.65f, -1.f},
+                                              float3{0.f, 1.f, 0.f});
+
+    RadientEntityID LightEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(LightDesc, LightEntity), RADIENT_STATUS_OK);
+
+    RadientLightComponent Light{};
+    Light.Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+    Light.Color     = {0.8f, 0.9f, 1.f};
+    Light.Intensity = 8.f;
+    ASSERT_EQ(pWriter->SetLight(LightEntity, Light), RADIENT_STATUS_OK);
+
+    RadientEntityDesc CameraDesc{};
+    CameraDesc.Name      = "Bloom test camera";
+    CameraDesc.Transform = MakeCameraTransform(float3{4.5f, 3.f, 7.f},
+                                               float3{0.f, 0.8f, -0.5f},
+                                               float3{0.f, 1.f, 0.f});
+
+    RadientEntityID CameraEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(CameraDesc, CameraEntity), RADIENT_STATUS_OK);
+
+    RadientCameraComponent Camera{};
+    Camera.FocalLength   = Camera.VerticalAperture / (2.f * std::tan(42.f * PI_F / 360.f));
+    Camera.ClippingRange = {0.1f, 100.f};
+    ASSERT_EQ(pWriter->SetCamera(CameraEntity, Camera), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientRenderTargetDesc TargetDesc{};
+    TargetDesc.Name       = "Bloom render test target";
+    TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
+    TargetDesc.pSwapChain = pSwapChain;
+    TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
+    TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
+
+    RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
+    ASSERT_EQ(GetRenderer()->CreateRenderTarget(TargetDesc, &pRenderTarget), RADIENT_STATUS_OK);
+    ASSERT_NE(pRenderTarget, nullptr);
+
+    RadientViewDesc ViewDesc{};
+    ViewDesc.Name                         = "Bloom render test view";
+    ViewDesc.pScene                       = pScene;
+    ViewDesc.Camera                       = CameraEntity;
+    ViewDesc.pRenderTarget                = pRenderTarget;
+    ViewDesc.ClearColor                   = {0.005f, 0.005f, 0.008f, 1.f};
+    ViewDesc.EnableIBL                    = False;
+    ViewDesc.ToneMapping.Mode             = RADIENT_TONE_MAPPING_MODE_UNCHARTED2;
+    ViewDesc.ToneMapping.AutoExposure     = False;
+    ViewDesc.ToneMapping.AverageLogLum    = 0.3f;
+    ViewDesc.ToneMapping.LightAdaptation  = False;
+    ViewDesc.TemporalAntiAliasing.Enabled = False;
+    ViewDesc.Bloom.Enabled                = True;
+    ViewDesc.Bloom.Intensity              = 0.35f;
+    ViewDesc.Bloom.Threshold              = 1.f;
+    ViewDesc.Bloom.SoftThreshold          = 0.1f;
+    ViewDesc.Bloom.Radius                 = 0.75f;
+
+    double     Time        = 0.0;
+    const auto RenderFrame = [&](IRadientView* pView) {
+        RadientRenderAttribs Attribs{};
+        Attribs.pView          = pView;
+        Attribs.pDeviceContext = pContext;
+        Attribs.Time           = Time;
+        Attribs.DeltaTime      = 1.0 / 60.0;
+
+        const RADIENT_STATUS Status = GetRenderer()->Render(Attribs);
+
+        pContext->Flush();
+        pContext->FinishFrame();
+        pContext->WaitForIdle();
+        pDevice->ReleaseStaleResources();
+
+        Time += 1.0 / 60.0;
+        return Status;
+    };
+
+    RefCntAutoPtr<IRadientView> pWarmupView;
+    ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pWarmupView), RADIENT_STATUS_OK);
+    ASSERT_NE(pWarmupView, nullptr);
+
+    const auto     Deadline     = std::chrono::steady_clock::now() + RenderReadyTimeout;
+    RADIENT_STATUS WarmupStatus = RADIENT_STATUS_PENDING;
+    while (WarmupStatus == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
+    {
+        WarmupStatus = RenderFrame(pWarmupView);
+        ASSERT_FALSE(RADIENT_FAILED(WarmupStatus));
+        if (WarmupStatus == RADIENT_STATUS_PENDING)
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    ASSERT_EQ(WarmupStatus, RADIENT_STATUS_OK)
+        << "Timed out waiting for the Bloom scene and renderer resources";
+
+    pWarmupView.Release();
+    Time = 0.0;
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    static constexpr Uint32 StableFrameCount = 16;
+    for (Uint32 FrameIndex = 0; FrameIndex < StableFrameCount; ++FrameIndex)
+    {
+        ASSERT_EQ(RenderFrame(pView), RADIENT_STATUS_OK)
+            << "Capture view became pending after renderer warm-up at frame " << FrameIndex;
+    }
+
+    Capture.Capture(pTestingSwapChain);
+}
+
 TEST_F(RadientRender, SSAO)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
