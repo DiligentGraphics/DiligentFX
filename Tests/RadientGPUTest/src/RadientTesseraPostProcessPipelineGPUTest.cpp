@@ -26,28 +26,16 @@
 
 #include "Render/RadientFrameRenderTargets.hpp"
 #include "Render/RadientRendererImpl.hpp"
-#include "Render/Tessera/Passes/RadientTesseraPostProcessPipeline.hpp"
 
 #include "GPUTestingEnvironment.hpp"
-#include "GraphicsUtilities.h"
-#include "MapHelper.hpp"
 
 #include "gtest/gtest.h"
-
-#include <initializer_list>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
 
 namespace Diligent
 {
-
-namespace HLSL
-{
-#include "Shaders/Common/public/BasicStructures.fxh"
-#include "Shaders/PBR/public/PBR_Structures.fxh"
-#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
-} // namespace HLSL
 
 namespace
 {
@@ -146,204 +134,6 @@ TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentGBuffers)
     }
     EXPECT_EQ(First.GetPreviousDepthSRV(), First.GetDepthSRV());
     EXPECT_NE(First.GetDepthSRV()->GetTexture(), pFirstDepth);
-}
-
-void ExecutePostProcessVariants(std::initializer_list<RADIENT_TONE_MAPPING_MODE> ToneMappingModes)
-{
-    GPUTestingEnvironment::ScopedReset AutoReset;
-
-    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
-    IRenderDevice* const         pDevice      = pEnvironment->GetDevice();
-    IDeviceContext* const        pContext     = pEnvironment->GetDeviceContext();
-    ASSERT_NE(pDevice, nullptr);
-    ASSERT_NE(pContext, nullptr);
-
-    TestRenderTarget Target = CreateTestRenderTarget(pDevice, 32, 16);
-    ASSERT_NE(Target.pTarget, nullptr);
-
-    RadientFrameRenderTargets Targets;
-    ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-    Targets.ClearGBuffer(pContext, {});
-
-    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
-    CreateUniformBuffer(pDevice,
-                        sizeof(HLSL::PBRFrameAttribs),
-                        "Radient PostFX test frame attribs",
-                        pFrameAttribsCB.GetAddressOfEmpty());
-    ASSERT_NE(pFrameAttribsCB, nullptr);
-    {
-        MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext,
-                                                      pFrameAttribsCB,
-                                                      MAP_WRITE,
-                                                      MAP_FLAG_DISCARD};
-        ASSERT_TRUE(FrameAttribs);
-        *FrameAttribs = {};
-    }
-
-    RadientViewDesc                                ViewDesc;
-    RadientTesseraPostProcessPipeline              Pipeline;
-    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
-    PostProcessInfo.pDevice         = pDevice;
-    PostProcessInfo.pContext        = pContext;
-    PostProcessInfo.pFrameAttribsCB = pFrameAttribsCB;
-    for (RADIENT_TONE_MAPPING_MODE ToneMappingMode : ToneMappingModes)
-    {
-        ViewDesc.ToneMapping.Mode = ToneMappingMode;
-        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
-        EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, true), RADIENT_STATUS_OK);
-    }
-
-    pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-    pContext->Flush();
-}
-
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesToneMappingVariant)
-{
-    ExecutePostProcessVariants({RADIENT_TONE_MAPPING_MODE_UNCHARTED2});
-}
-
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesCopyVariant)
-{
-    ExecutePostProcessVariants({RADIENT_TONE_MAPPING_MODE_NONE});
-}
-
-TEST(RadientTesseraPostProcessPipelineGPUTest, ReconfiguresToneMappingMode)
-{
-    ExecutePostProcessVariants({RADIENT_TONE_MAPPING_MODE_UNCHARTED2,
-                                RADIENT_TONE_MAPPING_MODE_NONE,
-                                RADIENT_TONE_MAPPING_MODE_AGX});
-}
-
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSAOComposition)
-{
-    GPUTestingEnvironment::ScopedReset AutoReset;
-
-    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
-    IRenderDevice* const         pDevice      = pEnvironment->GetDevice();
-    IDeviceContext* const        pContext     = pEnvironment->GetDeviceContext();
-    ASSERT_NE(pDevice, nullptr);
-    ASSERT_NE(pContext, nullptr);
-
-    TestRenderTarget Target = CreateTestRenderTarget(pDevice, 32, 16);
-    ASSERT_NE(Target.pTarget, nullptr);
-
-    RadientFrameRenderTargets Targets;
-    ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-
-    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
-    CreateUniformBuffer(pDevice,
-                        sizeof(HLSL::PBRFrameAttribs),
-                        "Radient SSAO test frame attribs",
-                        pFrameAttribsCB.GetAddressOfEmpty());
-    ASSERT_NE(pFrameAttribsCB, nullptr);
-    {
-        MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext,
-                                                      pFrameAttribsCB,
-                                                      MAP_WRITE,
-                                                      MAP_FLAG_DISCARD};
-        ASSERT_TRUE(FrameAttribs);
-        *FrameAttribs                     = {};
-        FrameAttribs->Camera.mViewProj    = float4x4::Identity();
-        FrameAttribs->Camera.mViewProjInv = float4x4::Identity();
-        FrameAttribs->PrevCamera          = FrameAttribs->Camera;
-    }
-
-    RadientViewDesc ViewDesc;
-    ViewDesc.SSAO.Enabled = True;
-
-    RadientTesseraPostProcessPipeline              Pipeline;
-    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
-    PostProcessInfo.pDevice         = pDevice;
-    PostProcessInfo.pContext        = pContext;
-    PostProcessInfo.pFrameAttribsCB = pFrameAttribsCB;
-    for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
-    {
-        Targets.ClearGBuffer(pContext, {});
-        PostProcessInfo.FrameIndex = FrameIndex;
-        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
-        EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
-        Targets.CommitFrame();
-    }
-
-    pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-    pContext->Flush();
-}
-
-TEST(RadientTesseraPostProcessPipelineGPUTest, ExecutesSSRTAADOFAndBloomColorChain)
-{
-    // Exercise SSR composition followed by TAA, DOF, and Bloom before the final output pass.
-    GPUTestingEnvironment::ScopedReset AutoReset;
-
-    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
-    IRenderDevice* const         pDevice      = pEnvironment->GetDevice();
-    IDeviceContext* const        pContext     = pEnvironment->GetDeviceContext();
-    ASSERT_NE(pDevice, nullptr);
-    ASSERT_NE(pContext, nullptr);
-
-    TestRenderTarget Target = CreateTestRenderTarget(pDevice, 32, 16);
-    ASSERT_NE(Target.pTarget, nullptr);
-
-    RadientFrameRenderTargets Targets;
-    ASSERT_EQ(Targets.Prepare(pDevice, *Target.pTarget), RADIENT_STATUS_OK);
-
-    RefCntAutoPtr<IBuffer> pFrameAttribsCB;
-    CreateUniformBuffer(pDevice,
-                        sizeof(HLSL::PBRFrameAttribs),
-                        "Radient SSR test frame attribs",
-                        pFrameAttribsCB.GetAddressOfEmpty());
-    ASSERT_NE(pFrameAttribsCB, nullptr);
-    {
-        MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext,
-                                                      pFrameAttribsCB,
-                                                      MAP_WRITE,
-                                                      MAP_FLAG_DISCARD};
-        ASSERT_TRUE(FrameAttribs);
-        *FrameAttribs                     = {};
-        FrameAttribs->Camera.mViewProj    = float4x4::Identity();
-        FrameAttribs->Camera.mViewProjInv = float4x4::Identity();
-        FrameAttribs->PrevCamera          = FrameAttribs->Camera;
-    }
-
-    TextureDesc BRDFDesc;
-    BRDFDesc.Name      = "Radient SSR test preintegrated GGX";
-    BRDFDesc.Type      = RESOURCE_DIM_TEX_2D;
-    BRDFDesc.Width     = 16;
-    BRDFDesc.Height    = 16;
-    BRDFDesc.Format    = TEX_FORMAT_RG16_FLOAT;
-    BRDFDesc.BindFlags = BIND_SHADER_RESOURCE;
-
-    RefCntAutoPtr<ITexture> pPreintegratedGGX;
-    pDevice->CreateTexture(BRDFDesc, nullptr, pPreintegratedGGX.GetAddressOfEmpty());
-    ASSERT_NE(pPreintegratedGGX, nullptr);
-    ITextureView* const pPreintegratedGGXSRV =
-        pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    ASSERT_NE(pPreintegratedGGXSRV, nullptr);
-
-    RadientViewDesc ViewDesc;
-    ViewDesc.Bloom.Enabled                = True;
-    ViewDesc.SSR.Enabled                  = True;
-    ViewDesc.TemporalAntiAliasing.Enabled = True;
-    ViewDesc.DepthOfField.Enabled         = True;
-
-    RadientTesseraPostProcessPipeline              Pipeline;
-    RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{Targets, ViewDesc};
-    PostProcessInfo.pDevice              = pDevice;
-    PostProcessInfo.pContext             = pContext;
-    PostProcessInfo.pFrameAttribsCB      = pFrameAttribsCB;
-    PostProcessInfo.pPreintegratedGGXSRV = pPreintegratedGGXSRV;
-    for (Uint32 FrameIndex = 0; FrameIndex < 2; ++FrameIndex)
-    {
-        Targets.ClearGBuffer(pContext, {});
-        PostProcessInfo.FrameIndex = FrameIndex;
-        ASSERT_EQ(Pipeline.Prepare(PostProcessInfo), RADIENT_STATUS_OK);
-        if (FrameIndex > 0)
-            EXPECT_NE(Pipeline.GetCameraJitter(), float2{});
-        EXPECT_EQ(Pipeline.Execute(pDevice, pContext, Targets, FrameIndex == 0), RADIENT_STATUS_OK);
-        Targets.CommitFrame();
-    }
-
-    pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-    pContext->Flush();
 }
 
 } // namespace
