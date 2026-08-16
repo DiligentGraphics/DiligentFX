@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ public:
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
     /// Executes the bloom effect.
-    void Execute(const RenderAttributes& RenderAttribs);
+    POST_FX_EXECUTION_STATUS Execute(const RenderAttributes& RenderAttribs);
 
     /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::BloomAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);

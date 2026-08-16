@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -289,7 +289,7 @@ void DepthOfField::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDev
     }
 }
 
-void DepthOfField::Execute(const RenderAttributes& RenderAttribs)
+POST_FX_EXECUTION_STATUS DepthOfField::Execute(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -304,7 +304,7 @@ void DepthOfField::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "DepthOfField"};
 
-    bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
+    const bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
     UpdateConstantBuffers(RenderAttribs, !AllPSOsReady);
     if (AllPSOsReady)
     {
@@ -328,6 +328,10 @@ void DepthOfField::Execute(const RenderAttributes& RenderAttribs)
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
         m_Resources[ResourceIdx].Release();
+
+    return AllPSOsReady ?
+        POST_FX_EXECUTION_STATUS_READY :
+        POST_FX_EXECUTION_STATUS_PENDING;
 }
 
 bool DepthOfField::UpdateUI(HLSL::DepthOfFieldAttribs& Attribs, FEATURE_FLAGS& FeatureFlags)

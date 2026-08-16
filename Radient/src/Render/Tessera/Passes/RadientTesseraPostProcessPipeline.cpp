@@ -69,6 +69,25 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
         Format == TEX_FORMAT_BGRA8_UNORM;
 }
 
+RADIENT_STATUS GetRadientPostFXStatus(POST_FX_EXECUTION_STATUS Status)
+{
+    switch (Status)
+    {
+        case POST_FX_EXECUTION_STATUS_READY:
+            return RADIENT_STATUS_OK;
+
+        case POST_FX_EXECUTION_STATUS_PENDING:
+            return RADIENT_STATUS_PENDING;
+
+        case POST_FX_EXECUTION_STATUS_FAILED:
+            return RADIENT_STATUS_FAILED;
+
+        default:
+            UNEXPECTED("Unexpected post-FX execution status");
+            return RADIENT_STATUS_INVALID_OPERATION;
+    }
+}
+
 } // namespace
 
 RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Info)
@@ -372,7 +391,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    bool PostFXReady = true;
+    RADIENT_STATUS PostFXStatus = RADIENT_STATUS_OK;
     if (m_SSAOEnabled || m_SSREnabled || m_TemporalAntiAliasingEnabled || m_DepthOfFieldEnabled || m_BloomEnabled)
     {
         if (pDevice == nullptr || m_pPostFXContext == nullptr || m_pFrameAttribsCB == nullptr ||
@@ -411,7 +430,8 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
         PostFXAttribs.pCameraAttribsCB    = m_pFrameAttribsCB;
         m_pPostFXContext->Execute(PostFXAttribs);
 
-        PostFXReady = m_pPostFXContext->IsPSOsReady();
+        if (!m_pPostFXContext->IsPSOsReady())
+            PostFXStatus = RADIENT_STATUS_PENDING;
 
         if (m_SSREnabled)
         {
@@ -427,7 +447,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             SSRRenderAttribs.pMaterialBufferSRV = Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL);
             SSRRenderAttribs.pMotionVectorsSRV  = pMotionVectorsSRV;
             SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
-            m_pSSR->Execute(SSRRenderAttribs);
+            PostFXStatus = CombineDependencyStatus(
+                PostFXStatus,
+                GetRadientPostFXStatus(m_pSSR->Execute(SSRRenderAttribs)));
         }
 
         if (m_SSAOEnabled)
@@ -442,10 +464,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             SSAORenderAttribs.pDepthBufferSRV  = pDepthSRV;
             SSAORenderAttribs.pNormalBufferSRV = pNormalSRV;
             SSAORenderAttribs.pSSAOAttribs     = &SSAOAttribs;
-            const bool SSAOReady =
-                m_pSSAO->Execute(SSAORenderAttribs) == POST_FX_EXECUTION_STATUS_READY;
-            PostFXReady &= SSAOReady;
-            if (SSAOReady)
+            const POST_FX_EXECUTION_STATUS SSAOStatus = m_pSSAO->Execute(SSAORenderAttribs);
+            PostFXStatus = CombineDependencyStatus(PostFXStatus, GetRadientPostFXStatus(SSAOStatus));
+            if (SSAOStatus == POST_FX_EXECUTION_STATUS_READY)
                 m_ResetSSAO = false;
         }
 
@@ -478,10 +499,16 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             TemporalAntiAliasingRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
             TemporalAntiAliasingRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
             TemporalAntiAliasingRenderAttribs.pTAAAttribs     = &TemporalAntiAliasingAttribs;
-            m_pTemporalAntiAliasing->Execute(TemporalAntiAliasingRenderAttribs);
+            const POST_FX_EXECUTION_STATUS TemporalAntiAliasingStatus =
+                m_pTemporalAntiAliasing->Execute(TemporalAntiAliasingRenderAttribs);
+            PostFXStatus = CombineDependencyStatus(
+                PostFXStatus,
+                GetRadientPostFXStatus(TemporalAntiAliasingStatus));
 
-            m_ResetTemporalAntiAliasing = false;
-            pCurrentColorSRV            = m_pTemporalAntiAliasing->GetAccumulatedFrameSRV();
+            if (TemporalAntiAliasingStatus == POST_FX_EXECUTION_STATUS_READY)
+                m_ResetTemporalAntiAliasing = false;
+
+            pCurrentColorSRV = m_pTemporalAntiAliasing->GetAccumulatedFrameSRV();
             if (pCurrentColorSRV == nullptr)
                 return RADIENT_STATUS_OUT_OF_DATE;
         }
@@ -501,7 +528,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             DepthOfFieldRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
             DepthOfFieldRenderAttribs.pDepthBufferSRV = pDepthSRV;
             DepthOfFieldRenderAttribs.pDOFAttribs     = &DepthOfFieldAttribs;
-            m_pDepthOfField->Execute(DepthOfFieldRenderAttribs);
+            PostFXStatus = CombineDependencyStatus(
+                PostFXStatus,
+                GetRadientPostFXStatus(m_pDepthOfField->Execute(DepthOfFieldRenderAttribs)));
 
             pCurrentColorSRV = m_pDepthOfField->GetDepthOfFieldTextureSRV();
             if (pCurrentColorSRV == nullptr)
@@ -521,7 +550,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             BloomRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
             BloomRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
             BloomRenderAttribs.pBloomAttribs   = &BloomAttribs;
-            m_pBloom->Execute(BloomRenderAttribs);
+            PostFXStatus = CombineDependencyStatus(
+                PostFXStatus,
+                GetRadientPostFXStatus(m_pBloom->Execute(BloomRenderAttribs)));
 
             pCurrentColorSRV = m_pBloom->GetBloomTextureSRV();
             if (pCurrentColorSRV == nullptr)
@@ -533,7 +564,6 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
     }
 
     const RADIENT_STATUS ExecuteStatus = ExecuteColorPass(pContext, m_FinalPass, Targets.GetOutputColorRTV());
-    const RADIENT_STATUS PostFXStatus  = PostFXReady ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
     return CombineDependencyStatus(ExecuteStatus, PostFXStatus);
 }
 

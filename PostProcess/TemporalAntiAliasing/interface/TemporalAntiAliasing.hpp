@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ public:
                           Uint32          AccumulationBufferIdx = 0);
 
     /// Executes the effect.
-    void Execute(const RenderAttributes& RenderAttribs);
+    POST_FX_EXECUTION_STATUS Execute(const RenderAttributes& RenderAttribs);
 
     /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags);

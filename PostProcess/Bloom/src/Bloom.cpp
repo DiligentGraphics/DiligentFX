@@ -404,7 +404,7 @@ void Bloom::ComputePlaceholderTexture(const RenderAttributes& RenderAttribs)
     RenderAttribs.pPostFXContext->CopyTextureColor(CopyTextureAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV(), m_Resources[RESOURCE_IDENTIFIER_OUTPUT_COLOR].GetTextureRTV());
 }
 
-void Bloom::Execute(const RenderAttributes& RenderAttribs)
+POST_FX_EXECUTION_STATUS Bloom::Execute(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -417,7 +417,7 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "Bloom"};
 
-    bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
+    const bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
     UpdateConstantBuffer(RenderAttribs, !AllPSOsReady);
     if (AllPSOsReady)
     {
@@ -433,6 +433,10 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
         m_Resources[ResourceIdx].Release();
+
+    return AllPSOsReady ?
+        POST_FX_EXECUTION_STATUS_READY :
+        POST_FX_EXECUTION_STATUS_PENDING;
 }
 
 Bloom::RenderTechnique& Bloom::GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags)

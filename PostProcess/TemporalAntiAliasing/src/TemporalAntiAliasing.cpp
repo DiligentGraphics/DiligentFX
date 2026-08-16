@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -166,7 +166,7 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice*  pDevice,
     }
 }
 
-void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
+POST_FX_EXECUTION_STATUS TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -180,7 +180,7 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     {
         LOG_ERROR_MESSAGE("Accumulation buffer with index ", RenderAttribs.AccumulationBufferIdx,
                           " is not found, which indicates that PrepareResources() method was not called.");
-        return;
+        return POST_FX_EXECUTION_STATUS_FAILED;
     }
 
     AccumulationBufferInfo& AccBuffer = Iter->second;
@@ -190,7 +190,8 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
 
     AccBuffer.UpdateConstantBuffer(RenderAttribs.pDeviceContext, *RenderAttribs.pTAAAttribs);
 
-    if (m_AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    const bool AllPSOsReady = m_AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady();
+    if (AllPSOsReady)
     {
         ComputeTemporalAccumulation(RenderAttribs, AccBuffer);
     }
@@ -198,6 +199,10 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     {
         ComputePlaceholderTexture(RenderAttribs, AccBuffer);
     }
+
+    return AllPSOsReady ?
+        POST_FX_EXECUTION_STATUS_READY :
+        POST_FX_EXECUTION_STATUS_PENDING;
 }
 
 ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame, Uint32 AccumulationBufferIdx) const
