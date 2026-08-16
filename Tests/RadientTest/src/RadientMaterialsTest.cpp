@@ -85,7 +85,6 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     Parameter.Name          = ParameterName;
     Parameter.ID            = 17;
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
-    Parameter.Flags         = RADIENT_MATERIAL_PARAMETER_FLAG_SPECIALIZATION;
     Parameter.pDefaultValue = &DefaultColor;
 
     RadientMaterialDefinitionCreateInfo DefinitionCI{};
@@ -115,7 +114,6 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_STREQ(StoredParameter.Name, "BaseColor");
     EXPECT_EQ(StoredParameter.ID, 17u);
     EXPECT_EQ(StoredParameter.Type, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4);
-    EXPECT_EQ(StoredParameter.Flags, RADIENT_MATERIAL_PARAMETER_FLAG_SPECIALIZATION);
     ASSERT_NE(StoredParameter.pDefaultValue, nullptr);
 
     RadientFloat4 StoredDefault{};

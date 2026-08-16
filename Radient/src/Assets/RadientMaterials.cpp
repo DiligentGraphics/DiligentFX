@@ -135,7 +135,6 @@ RADIENT_STATUS ValidateMaterialDefinitionCreateInfo(const RadientMaterialDefinit
             Desc.ID == InvalidRadientMaterialParameterID ||
             Desc.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
             Desc.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT ||
-            (Desc.Flags & ~RADIENT_MATERIAL_PARAMETER_FLAGS_ALL) != RADIENT_MATERIAL_PARAMETER_FLAG_NONE ||
             !GetMaterialParameterDataSize(Desc, DataSize) ||
             (IsTextureParameter(Desc.Type) &&
              (Desc.pDefaultValue != nullptr || (Desc.ArraySize != 1 && Desc.pDefaultTexture != nullptr))) ||

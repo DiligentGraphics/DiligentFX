@@ -31,7 +31,6 @@ void RadientMaterials_C_UseTypes(void)
     RadientMaterialParameterID          ParameterID = InvalidRadientMaterialParameterID;
     RADIENT_MATERIAL_DOMAIN             Domain      = RADIENT_MATERIAL_DOMAIN_SURFACE;
     RADIENT_MATERIAL_PARAMETER_TYPE     Type        = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
-    RADIENT_MATERIAL_PARAMETER_FLAGS    Flags       = RADIENT_MATERIAL_PARAMETER_FLAG_SPECIALIZATION;
     RadientMaterialParameterHandle      Handle      = {0};
     RadientMaterialDefinitionDesc       Desc        = {0};
     RadientMaterialParameterDesc        Parameter   = {0};
@@ -43,7 +42,6 @@ void RadientMaterials_C_UseTypes(void)
     (void)ParameterID;
     (void)Domain;
     (void)Type;
-    (void)Flags;
     (void)Handle;
     (void)Desc;
     (void)Parameter;

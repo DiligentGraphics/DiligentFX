@@ -127,23 +127,6 @@ DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_PARAMETER_TYPE, Uint8)
 };
 
 
-/// Material parameter flags.
-DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_PARAMETER_FLAGS, Uint8)
-{
-    /// The parameter has no special behavior.
-    RADIENT_MATERIAL_PARAMETER_FLAG_NONE = 0u,
-
-    /// Changing the parameter may select a different compiled material variant.
-    RADIENT_MATERIAL_PARAMETER_FLAG_SPECIALIZATION = 1u << 0u,
-
-    /// Last individual material parameter flag. This value is reserved for validation.
-    RADIENT_MATERIAL_PARAMETER_FLAG_LAST = RADIENT_MATERIAL_PARAMETER_FLAG_SPECIALIZATION,
-
-    /// Bit mask containing all valid material parameter flags.
-    RADIENT_MATERIAL_PARAMETER_FLAGS_ALL = (RADIENT_MATERIAL_PARAMETER_FLAG_LAST << 1u) - 1u
-};
-DEFINE_FLAG_ENUM_OPERATORS(RADIENT_MATERIAL_PARAMETER_FLAGS)
-
 // clang-format on
 
 
@@ -211,9 +194,6 @@ struct RadientMaterialParameterDesc
 
     /// Parameter type.
     RADIENT_MATERIAL_PARAMETER_TYPE Type DEFAULT_INITIALIZER(RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN);
-
-    /// Parameter flags.
-    RADIENT_MATERIAL_PARAMETER_FLAGS Flags DEFAULT_INITIALIZER(RADIENT_MATERIAL_PARAMETER_FLAG_NONE);
 
     /// Number of values or textures in the parameter array. Must not be zero.
     Uint32 ArraySize DEFAULT_INITIALIZER(1);
