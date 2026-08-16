@@ -453,5 +453,315 @@ TEST_F(RadientRender, SSAO)
     Capture.Capture(pTestingSwapChain);
 }
 
+TEST_F(RadientRender, SSR)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
+    ASSERT_NE(pEnvironment, nullptr);
+
+    IRenderDevice* const  pDevice    = pEnvironment->GetDevice();
+    IDeviceContext* const pContext   = pEnvironment->GetDeviceContext();
+    ISwapChain* const     pSwapChain = pEnvironment->GetSwapChain();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+    ASSERT_NE(pSwapChain, nullptr);
+    ASSERT_NE(GetEngine(), nullptr);
+    ASSERT_NE(GetAssetManager(), nullptr);
+    ASSERT_NE(GetRenderer(), nullptr);
+
+    RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{pSwapChain, IID_TestingSwapChain};
+    ASSERT_NE(pTestingSwapChain, nullptr);
+
+    PostFXCapture Capture;
+    ASSERT_TRUE(Capture.Prepare(pDevice, pSwapChain));
+
+    // Uniform IBL provides stable baseline illumination while the colored
+    // scene geometry supplies spatially varying radiance for SSR.
+    static constexpr Uint32                                     EnvironmentWidth  = 16;
+    static constexpr Uint32                                     EnvironmentHeight = 8;
+    std::array<Uint8, EnvironmentWidth * EnvironmentHeight * 4> WhiteEnvironmentPixels;
+    WhiteEnvironmentPixels.fill(255);
+
+    RadientTextureData EnvironmentData{};
+    EnvironmentData.Width  = EnvironmentWidth;
+    EnvironmentData.Height = EnvironmentHeight;
+    EnvironmentData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    EnvironmentData.pData  = WhiteEnvironmentPixels.data();
+    EnvironmentData.Stride = EnvironmentWidth * 4;
+
+    RadientTextureLoadInfo EnvironmentLoadInfo{};
+    EnvironmentLoadInfo.pTextureData = &EnvironmentData;
+
+    RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap;
+    ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(EnvironmentLoadInfo, &pEnvironmentMap)));
+    ASSERT_NE(pEnvironmentMap, nullptr);
+
+    static constexpr Uint32                              CheckerWidth    = 112;
+    static constexpr Uint32                              CheckerHeight   = 64;
+    static constexpr Uint32                              CheckerCellSize = 16;
+    static constexpr std::array<std::array<Uint8, 3>, 2> CheckerColors{{
+        {220, 205, 175},
+        {115, 155, 190},
+    }};
+    std::array<Uint8, CheckerWidth * CheckerHeight * 4>  CheckerPixels;
+    for (Uint32 y = 0; y < CheckerHeight; ++y)
+    {
+        for (Uint32 x = 0; x < CheckerWidth; ++x)
+        {
+            const auto&  Color        = CheckerColors[(x / CheckerCellSize + y / CheckerCellSize) & 1u];
+            const size_t Offset       = (static_cast<size_t>(y) * CheckerWidth + x) * 4;
+            CheckerPixels[Offset + 0] = Color[0];
+            CheckerPixels[Offset + 1] = Color[1];
+            CheckerPixels[Offset + 2] = Color[2];
+            CheckerPixels[Offset + 3] = 255;
+        }
+    }
+
+    RadientTextureData CheckerData{};
+    CheckerData.Width  = CheckerWidth;
+    CheckerData.Height = CheckerHeight;
+    CheckerData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    CheckerData.pData  = CheckerPixels.data();
+    CheckerData.Stride = CheckerWidth * 4;
+
+    RadientTextureLoadInfo CheckerLoadInfo{};
+    CheckerLoadInfo.pTextureData = &CheckerData;
+    CheckerLoadInfo.IsSRGB       = True;
+
+    RefCntAutoPtr<IRadientTextureAsset> pCheckerTexture;
+    ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(CheckerLoadInfo, &pCheckerTexture)));
+    ASSERT_NE(pCheckerTexture, nullptr);
+
+    const auto CreateMaterial = [&](const char*           Name,
+                                    RadientFloat4         BaseColor,
+                                    Float32               Metallic,
+                                    Float32               Roughness,
+                                    IRadientTextureAsset* pBaseColorTexture = nullptr) {
+        RadientMaterialCreateInfo MaterialCI{};
+        MaterialCI.Name              = Name;
+        MaterialCI.BaseColorFactor   = BaseColor;
+        MaterialCI.MetallicFactor    = Metallic;
+        MaterialCI.RoughnessFactor   = Roughness;
+        MaterialCI.pBaseColorTexture = pBaseColorTexture;
+
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        const RADIENT_STATUS                 Status = GetAssetManager()->CreateMaterial(MaterialCI, &pMaterial);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pMaterial, nullptr);
+        return pMaterial;
+    };
+
+    const auto CreateCube = [&](const char* Name, IRadientMaterialAsset* pMaterial) {
+        RadientCubeMeshCreateInfo CubeCI{};
+        CubeCI.Name      = Name;
+        CubeCI.Size      = 1.f;
+        CubeCI.pMaterial = pMaterial;
+
+        RefCntAutoPtr<IRadientMeshAsset> pCube;
+        const RADIENT_STATUS             Status = CreateRadientCubeMesh(GetAssetManager(), CubeCI, &pCube);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pCube, nullptr);
+        return pCube;
+    };
+
+    const auto CreateSphere = [&](const char* Name, IRadientMaterialAsset* pMaterial) {
+        RadientSphereMeshCreateInfo SphereCI{};
+        SphereCI.Name         = Name;
+        SphereCI.Radius       = 0.65f;
+        SphereCI.Subdivisions = 16;
+        SphereCI.pMaterial    = pMaterial;
+
+        RefCntAutoPtr<IRadientMeshAsset> pSphere;
+        const RADIENT_STATUS             Status = CreateRadientSphereMesh(GetAssetManager(), SphereCI, &pSphere);
+        EXPECT_TRUE(IsPendingOrOK(Status));
+        EXPECT_NE(pSphere, nullptr);
+        return pSphere;
+    };
+
+    RefCntAutoPtr<IRadientMaterialAsset> pWallMaterial =
+        CreateMaterial("SSR wall material", {1.f, 1.f, 1.f, 1.f}, 0.f, 1.f, pCheckerTexture);
+    ASSERT_NE(pWallMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pWallCube = CreateCube("SSR wall cube", pWallMaterial);
+    ASSERT_NE(pWallCube, nullptr);
+
+    static constexpr std::array<Float32, 5>                                 FloorRoughness{0.f, 0.15f, 0.3f, 0.45f, 0.6f};
+    std::array<RefCntAutoPtr<IRadientMaterialAsset>, FloorRoughness.size()> FloorMaterials;
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, FloorRoughness.size()>     FloorCubes;
+    for (size_t StripeIndex = 0; StripeIndex < FloorRoughness.size(); ++StripeIndex)
+    {
+        const std::string Suffix    = std::to_string(StripeIndex);
+        FloorMaterials[StripeIndex] = CreateMaterial(("SSR floor material " + Suffix).c_str(),
+                                                     {0.35f, 0.35f, 0.35f, 1.f},
+                                                     1.f,
+                                                     FloorRoughness[StripeIndex]);
+        ASSERT_NE(FloorMaterials[StripeIndex], nullptr);
+        FloorCubes[StripeIndex] = CreateCube(("SSR floor stripe " + Suffix).c_str(), FloorMaterials[StripeIndex]);
+        ASSERT_NE(FloorCubes[StripeIndex], nullptr);
+    }
+
+    static constexpr std::array<RadientFloat4, FloorRoughness.size()>     SphereColors{{
+        {0.8f, 0.05f, 0.05f, 1.f},
+        {0.8f, 0.55f, 0.05f, 1.f},
+        {0.05f, 0.8f, 0.05f, 1.f},
+        {0.05f, 0.6f, 0.8f, 1.f},
+        {0.05f, 0.05f, 0.8f, 1.f},
+    }};
+    std::array<RefCntAutoPtr<IRadientMaterialAsset>, SphereColors.size()> SphereMaterials;
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, SphereColors.size()>     Spheres;
+    for (size_t SphereIndex = 0; SphereIndex < SphereColors.size(); ++SphereIndex)
+    {
+        const std::string Suffix     = std::to_string(SphereIndex);
+        SphereMaterials[SphereIndex] = CreateMaterial(("SSR sphere material " + Suffix).c_str(),
+                                                      SphereColors[SphereIndex],
+                                                      1.f,
+                                                      0.15f);
+        ASSERT_NE(SphereMaterials[SphereIndex], nullptr);
+        Spheres[SphereIndex] = CreateSphere(("SSR sphere " + Suffix).c_str(), SphereMaterials[SphereIndex]);
+        ASSERT_NE(Spheres[SphereIndex], nullptr);
+    }
+
+    RadientSceneDesc SceneDesc{};
+    SceneDesc.Name = "SSR render test scene";
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(GetEngine()->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(GetEngine()->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
+    ASSERT_NE(pWriter, nullptr);
+
+    static constexpr Float32 FloorWidth  = 7.f;
+    const Float32            StripeWidth = FloorWidth / static_cast<Float32>(FloorCubes.size());
+    for (size_t StripeIndex = 0; StripeIndex < FloorCubes.size(); ++StripeIndex)
+    {
+        RadientTransform FloorTransform{};
+        FloorTransform.Position = {
+            -FloorWidth * 0.5f + StripeWidth * (static_cast<Float32>(StripeIndex) + 0.5f),
+            -0.1f,
+            0.f,
+        };
+        FloorTransform.Scale = {StripeWidth, 0.2f, 7.f};
+
+        const std::string Name = "Floor roughness stripe " + std::to_string(StripeIndex);
+        ASSERT_EQ(AddDrawable(pWriter, Name.c_str(), FloorCubes[StripeIndex], FloorTransform), RADIENT_STATUS_OK);
+    }
+
+    RadientTransform BackWallTransform{};
+    BackWallTransform.Position = {0.f, 2.f, -2.5f};
+    BackWallTransform.Scale    = {7.f, 4.f, 0.2f};
+    ASSERT_EQ(AddDrawable(pWriter, "Back wall", pWallCube, BackWallTransform), RADIENT_STATUS_OK);
+
+    RadientTransform LeftWallTransform{};
+    LeftWallTransform.Position = {-3.5f, 2.f, 0.f};
+    LeftWallTransform.Scale    = {0.2f, 4.f, 7.f};
+    ASSERT_EQ(AddDrawable(pWriter, "Left wall", pWallCube, LeftWallTransform), RADIENT_STATUS_OK);
+
+    for (size_t SphereIndex = 0; SphereIndex < Spheres.size(); ++SphereIndex)
+    {
+        RadientTransform SphereTransform{};
+        SphereTransform.Position = {
+            -FloorWidth * 0.5f + StripeWidth * (static_cast<Float32>(SphereIndex) + 0.5f),
+            0.75f,
+            -1.5f,
+        };
+        const std::string Name = "Sphere " + std::to_string(SphereIndex);
+        ASSERT_EQ(AddDrawable(pWriter, Name.c_str(), Spheres[SphereIndex], SphereTransform), RADIENT_STATUS_OK);
+    }
+
+    RadientEntityDesc CameraDesc{};
+    CameraDesc.Name      = "SSR test camera";
+    CameraDesc.Transform = MakeCameraTransform(float3{6.f, 4.5f, 8.f},
+                                               float3{0.f, 0.6f, 0.f},
+                                               float3{0.f, 1.f, 0.f});
+
+    RadientEntityID CameraEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(CameraDesc, CameraEntity), RADIENT_STATUS_OK);
+
+    RadientCameraComponent Camera{};
+    Camera.FocalLength   = Camera.VerticalAperture / (2.f * std::tan(45.f * PI_F / 360.f));
+    Camera.ClippingRange = {0.1f, 100.f};
+    ASSERT_EQ(pWriter->SetCamera(CameraEntity, Camera), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientRenderTargetDesc TargetDesc{};
+    TargetDesc.Name       = "SSR render test target";
+    TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
+    TargetDesc.pSwapChain = pSwapChain;
+    TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
+    TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
+
+    RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
+    ASSERT_EQ(GetRenderer()->CreateRenderTarget(TargetDesc, &pRenderTarget), RADIENT_STATUS_OK);
+    ASSERT_NE(pRenderTarget, nullptr);
+
+    RadientViewDesc ViewDesc{};
+    ViewDesc.Name                         = "SSR render test view";
+    ViewDesc.pScene                       = pScene;
+    ViewDesc.Camera                       = CameraEntity;
+    ViewDesc.pRenderTarget                = pRenderTarget;
+    ViewDesc.ClearColor                   = {0.025f, 0.025f, 0.025f, 1.f};
+    ViewDesc.EnableIBL                    = True;
+    ViewDesc.Environment.pEnvironmentMap  = pEnvironmentMap;
+    ViewDesc.ToneMapping.Mode             = RADIENT_TONE_MAPPING_MODE_NONE;
+    ViewDesc.TemporalAntiAliasing.Enabled = False;
+    ViewDesc.SSR.Enabled                  = True;
+    ViewDesc.SSR.RoughnessThreshold       = 0.7f;
+
+    double     Time        = 0.0;
+    const auto RenderFrame = [&](IRadientView* pView) {
+        RadientRenderAttribs Attribs{};
+        Attribs.pView          = pView;
+        Attribs.pDeviceContext = pContext;
+        Attribs.Time           = Time;
+        Attribs.DeltaTime      = 1.0 / 60.0;
+
+        const RADIENT_STATUS Status = GetRenderer()->Render(Attribs);
+
+        pContext->Flush();
+        pContext->FinishFrame();
+        pContext->WaitForIdle();
+        pDevice->ReleaseStaleResources();
+
+        Time += 1.0 / 60.0;
+        return Status;
+    };
+
+    RefCntAutoPtr<IRadientView> pWarmupView;
+    ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pWarmupView), RADIENT_STATUS_OK);
+    ASSERT_NE(pWarmupView, nullptr);
+
+    const auto     Deadline     = std::chrono::steady_clock::now() + RenderReadyTimeout;
+    RADIENT_STATUS WarmupStatus = RADIENT_STATUS_PENDING;
+    while (WarmupStatus == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
+    {
+        WarmupStatus = RenderFrame(pWarmupView);
+        ASSERT_FALSE(RADIENT_FAILED(WarmupStatus));
+        if (WarmupStatus == RADIENT_STATUS_PENDING)
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    ASSERT_EQ(WarmupStatus, RADIENT_STATUS_OK)
+        << "Timed out waiting for the SSR scene and renderer resources";
+
+    pWarmupView.Release();
+    Time = 0.0;
+
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    ASSERT_NE(pView, nullptr);
+
+    static constexpr Uint32 StableFrameCount = 16;
+    for (Uint32 FrameIndex = 0; FrameIndex < StableFrameCount; ++FrameIndex)
+    {
+        ASSERT_EQ(RenderFrame(pView), RADIENT_STATUS_OK)
+            << "Capture view became pending after renderer warm-up at frame " << FrameIndex;
+    }
+
+    Capture.Capture(pTestingSwapChain);
+}
+
 } // namespace Testing
 } // namespace Diligent
