@@ -206,6 +206,37 @@ RADIENT_STATUS CreateMeshViewFromSource(RadientMeshAssetManager&          MeshMa
 
 } // namespace
 
+TEST(RadientMeshAssetManagerTest, DrawableMeshRemainsPendingUntilPayloadIsReady)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    RadientMeshPrimitiveCreateInfo   Primitive{};
+    const RadientMeshViewCreateInfo  View = MakeMeshView(Primitive);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_EQ(CreateMeshViewFromSource(*pMeshManager, *pThreadPool, MakeMeshSources(), View, pMesh),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+
+    // The drawable cache queries mesh handles before their worker task may have
+    // published a payload. This state must remain retryable rather than looking
+    // like a terminal resolution failure.
+    const RadientDrawableMeshResolveResult PendingResult =
+        RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    EXPECT_EQ(PendingResult.Status, RADIENT_STATUS_PENDING);
+    EXPECT_EQ(PendingResult.pMesh, nullptr);
+
+    DrainThreadPool(*pThreadPool);
+
+    const RadientDrawableMeshResolveResult ReadyResult =
+        RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    EXPECT_EQ(ReadyResult.Status, RADIENT_STATUS_OK);
+    EXPECT_NE(ReadyResult.pMesh, nullptr);
+}
+
 TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
 {
     // Mesh data creation enqueues asynchronous work, so the test needs at

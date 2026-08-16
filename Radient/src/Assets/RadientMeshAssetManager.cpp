@@ -1137,9 +1137,13 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
 RadientDrawableMeshResolveResult RadientMeshAssetManager::GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                                           bool               RequireGPUResourcesReady)
 {
-    RefCntAutoPtr<MeshAssetImpl> pMeshImpl = MeshAssetImpl::ResolveAsset(pMesh);
+    RefCntAutoPtr<MeshAssetImpl> pMeshImpl{pMesh, IID_MeshAssetImpl};
     if (!pMeshImpl)
         return RadientDrawableMeshResolveResult{};
+
+    const RADIENT_STATUS PayloadStatus = pMeshImpl->GetPayloadStatus();
+    if (PayloadStatus != RADIENT_STATUS_OK)
+        return {nullptr, PayloadStatus};
 
     return ResolveDrawableMesh(pMeshImpl->GetStorage(), RequireGPUResourcesReady);
 }
