@@ -61,6 +61,30 @@ namespace
 static constexpr Uint32 TestVertexCount = 3;
 static constexpr float  EPSILON         = 1e-5f;
 
+struct StandardMaterialTextureTestInfo
+{
+    Uint32      TextureAttribId;
+    const char* ParameterName;
+};
+
+static constexpr std::array<StandardMaterialTextureTestInfo, 15> StandardMaterialTextureTestInfos{{
+    {GLTF::DefaultBaseColorTextureAttribId, "BaseColorTexture"},
+    {GLTF::DefaultMetallicRoughnessTextureAttribId, "MetallicRoughnessTexture"},
+    {GLTF::DefaultNormalTextureAttribId, "NormalTexture"},
+    {GLTF::DefaultOcclusionTextureAttribId, "OcclusionTexture"},
+    {GLTF::DefaultEmissiveTextureAttribId, "EmissiveTexture"},
+    {GLTF::DefaultClearcoatTextureAttribId, "ClearCoatTexture"},
+    {GLTF::DefaultClearcoatRoughnessTextureAttribId, "ClearCoatRoughnessTexture"},
+    {GLTF::DefaultClearcoatNormalTextureAttribId, "ClearCoatNormalTexture"},
+    {GLTF::DefaultSheenColorTextureAttribId, "SheenColorTexture"},
+    {GLTF::DefaultSheenRoughnessTextureAttribId, "SheenRoughnessTexture"},
+    {GLTF::DefaultAnisotropyTextureAttribId, "AnisotropyTexture"},
+    {GLTF::DefaultIridescenceTextureAttribId, "IridescenceTexture"},
+    {GLTF::DefaultIridescenceThicknessTextureAttribId, "IridescenceThicknessTexture"},
+    {GLTF::DefaultTransmissionTextureAttribId, "TransmissionTexture"},
+    {GLTF::DefaultThicknessTextureAttribId, "ThicknessTexture"},
+}};
+
 template <typename ValueType>
 ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
 {
@@ -665,25 +689,60 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AlphaCutoff"), 0.25f);
     EXPECT_EQ(GetMaterialParameter<Bool>(*pInstance, "DoubleSided"), True);
 
-    static constexpr const char* TextureParameterNames[] = {
-        "BaseColorTexture",
-        "MetallicRoughnessTexture",
-        "NormalTexture",
-        "OcclusionTexture",
-        "EmissiveTexture",
-        "ClearCoatTexture",
-        "ClearCoatRoughnessTexture",
-        "ClearCoatNormalTexture",
-        "SheenColorTexture",
-        "SheenRoughnessTexture",
-        "AnisotropyTexture",
-        "IridescenceTexture",
-        "IridescenceThicknessTexture",
-        "TransmissionTexture",
-        "ThicknessTexture",
-    };
-    for (const char* ParameterName : TextureParameterNames)
-        EXPECT_EQ(GetMaterialTexture(*pInstance, ParameterName), pTexture);
+    for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
+        EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), pTexture);
+}
+
+TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSemantics)
+{
+    GLTF::Material        Material = MakeExtendedGLTFMaterial(true);
+    GLTF::MaterialBuilder Builder{Material};
+
+    for (size_t TextureIndex = 0; TextureIndex < StandardMaterialTextureTestInfos.size(); ++TextureIndex)
+    {
+        const StandardMaterialTextureTestInfo& TextureInfo    = StandardMaterialTextureTestInfos[TextureIndex];
+        GLTF::Material::TextureShaderAttribs&  TextureAttribs = Builder.GetTextureAttrib(TextureInfo.TextureAttribId);
+
+        TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
+        TextureAttribs.UVScaleAndRotation = float2x2{
+            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
+            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
+        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_MIRROR : TEXTURE_ADDRESS_CLAMP);
+        TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
+    }
+    Builder.Finalize();
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+        ConvertMaterial(Material, nullptr, 0, DefinitionCI);
+    ASSERT_NE(pInstance, nullptr);
+
+    for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
+    {
+        const GLTF::Material::TextureShaderAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId);
+        const std::string                           Name{TextureInfo.ParameterName};
+
+        EXPECT_EQ(GetMaterialParameter<Int32>(*pInstance, (Name + "UVSelector").c_str()), Expected.GetUVSelector());
+
+        const float2x2 ActualUVScaleAndRotation =
+            GetMaterialParameter<float2x2>(*pInstance, (Name + "UVScaleAndRotation").c_str());
+        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._11, Expected.UVScaleAndRotation._11);
+        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._12, Expected.UVScaleAndRotation._12);
+        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._21, Expected.UVScaleAndRotation._21);
+        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._22, Expected.UVScaleAndRotation._22);
+
+        const RadientFloat2 ActualUVBias =
+            GetMaterialParameter<RadientFloat2>(*pInstance, (Name + "UVBias").c_str());
+        EXPECT_FLOAT_EQ(ActualUVBias.x, Expected.UBias);
+        EXPECT_FLOAT_EQ(ActualUVBias.y, Expected.VBias);
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, (Name + "WrapU").c_str()),
+                  static_cast<Uint32>(Expected.GetWrapUMode()));
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, (Name + "WrapV").c_str()),
+                  static_cast<Uint32>(Expected.GetWrapVMode()));
+        EXPECT_EQ(GetMaterialTexture(*pInstance, Name.c_str()), nullptr);
+    }
 }
 
 TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)

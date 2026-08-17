@@ -42,25 +42,45 @@ struct StandardMaterialTextureSemantic
     Uint32                                  TextureAttribId;
     RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS Texture;
     RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS RequiredFeature;
-    const char*                             ParameterName;
+    const char*                             TextureParameterName;
+    const char*                             UVSelectorParameterName;
+    const char*                             UVScaleAndRotationParameterName;
+    const char*                             UVBiasParameterName;
+    const char*                             WrapUParameterName;
+    const char*                             WrapVParameterName;
 };
 
 static constexpr std::array<StandardMaterialTextureSemantic, 15> StandardMaterialTextureSemantics{{
-    {GLTF::DefaultBaseColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE, "BaseColorTexture"},
-    {GLTF::DefaultMetallicRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE, "MetallicRoughnessTexture"},
-    {GLTF::DefaultNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE, "NormalTexture"},
-    {GLTF::DefaultOcclusionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE, "OcclusionTexture"},
-    {GLTF::DefaultEmissiveTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE, "EmissiveTexture"},
-    {GLTF::DefaultClearcoatTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT, "ClearCoatTexture"},
-    {GLTF::DefaultClearcoatRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT, "ClearCoatRoughnessTexture"},
-    {GLTF::DefaultClearcoatNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT, "ClearCoatNormalTexture"},
-    {GLTF::DefaultSheenColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN, "SheenColorTexture"},
-    {GLTF::DefaultSheenRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN, "SheenRoughnessTexture"},
-    {GLTF::DefaultAnisotropyTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY, "AnisotropyTexture"},
-    {GLTF::DefaultIridescenceTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE, "IridescenceTexture"},
-    {GLTF::DefaultIridescenceThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE, "IridescenceThicknessTexture"},
-    {GLTF::DefaultTransmissionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION, "TransmissionTexture"},
-    {GLTF::DefaultThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME, "ThicknessTexture"},
+    {GLTF::DefaultBaseColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
+     "BaseColorTexture", "BaseColorTextureUVSelector", "BaseColorTextureUVScaleAndRotation", "BaseColorTextureUVBias", "BaseColorTextureWrapU", "BaseColorTextureWrapV"},
+    {GLTF::DefaultMetallicRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
+     "MetallicRoughnessTexture", "MetallicRoughnessTextureUVSelector", "MetallicRoughnessTextureUVScaleAndRotation", "MetallicRoughnessTextureUVBias", "MetallicRoughnessTextureWrapU", "MetallicRoughnessTextureWrapV"},
+    {GLTF::DefaultNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
+     "NormalTexture", "NormalTextureUVSelector", "NormalTextureUVScaleAndRotation", "NormalTextureUVBias", "NormalTextureWrapU", "NormalTextureWrapV"},
+    {GLTF::DefaultOcclusionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
+     "OcclusionTexture", "OcclusionTextureUVSelector", "OcclusionTextureUVScaleAndRotation", "OcclusionTextureUVBias", "OcclusionTextureWrapU", "OcclusionTextureWrapV"},
+    {GLTF::DefaultEmissiveTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
+     "EmissiveTexture", "EmissiveTextureUVSelector", "EmissiveTextureUVScaleAndRotation", "EmissiveTextureUVBias", "EmissiveTextureWrapU", "EmissiveTextureWrapV"},
+    {GLTF::DefaultClearcoatTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
+     "ClearCoatTexture", "ClearCoatTextureUVSelector", "ClearCoatTextureUVScaleAndRotation", "ClearCoatTextureUVBias", "ClearCoatTextureWrapU", "ClearCoatTextureWrapV"},
+    {GLTF::DefaultClearcoatRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
+     "ClearCoatRoughnessTexture", "ClearCoatRoughnessTextureUVSelector", "ClearCoatRoughnessTextureUVScaleAndRotation", "ClearCoatRoughnessTextureUVBias", "ClearCoatRoughnessTextureWrapU", "ClearCoatRoughnessTextureWrapV"},
+    {GLTF::DefaultClearcoatNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
+     "ClearCoatNormalTexture", "ClearCoatNormalTextureUVSelector", "ClearCoatNormalTextureUVScaleAndRotation", "ClearCoatNormalTextureUVBias", "ClearCoatNormalTextureWrapU", "ClearCoatNormalTextureWrapV"},
+    {GLTF::DefaultSheenColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN,
+     "SheenColorTexture", "SheenColorTextureUVSelector", "SheenColorTextureUVScaleAndRotation", "SheenColorTextureUVBias", "SheenColorTextureWrapU", "SheenColorTextureWrapV"},
+    {GLTF::DefaultSheenRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN,
+     "SheenRoughnessTexture", "SheenRoughnessTextureUVSelector", "SheenRoughnessTextureUVScaleAndRotation", "SheenRoughnessTextureUVBias", "SheenRoughnessTextureWrapU", "SheenRoughnessTextureWrapV"},
+    {GLTF::DefaultAnisotropyTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY,
+     "AnisotropyTexture", "AnisotropyTextureUVSelector", "AnisotropyTextureUVScaleAndRotation", "AnisotropyTextureUVBias", "AnisotropyTextureWrapU", "AnisotropyTextureWrapV"},
+    {GLTF::DefaultIridescenceTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE,
+     "IridescenceTexture", "IridescenceTextureUVSelector", "IridescenceTextureUVScaleAndRotation", "IridescenceTextureUVBias", "IridescenceTextureWrapU", "IridescenceTextureWrapV"},
+    {GLTF::DefaultIridescenceThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE,
+     "IridescenceThicknessTexture", "IridescenceThicknessTextureUVSelector", "IridescenceThicknessTextureUVScaleAndRotation", "IridescenceThicknessTextureUVBias", "IridescenceThicknessTextureWrapU", "IridescenceThicknessTextureWrapV"},
+    {GLTF::DefaultTransmissionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION,
+     "TransmissionTexture", "TransmissionTextureUVSelector", "TransmissionTextureUVScaleAndRotation", "TransmissionTextureUVBias", "TransmissionTextureWrapU", "TransmissionTextureWrapV"},
+    {GLTF::DefaultThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME,
+     "ThicknessTexture", "ThicknessTextureUVSelector", "ThicknessTextureUVScaleAndRotation", "ThicknessTextureUVBias", "ThicknessTextureWrapU", "ThicknessTextureWrapV"},
 }};
 
 bool HasFeature(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features,
@@ -106,6 +126,36 @@ IRadientTextureAsset* GetTexture(const GLTF::Material&        Material,
     return ppTextures != nullptr && TextureId >= 0 && static_cast<Uint32>(TextureId) < TextureCount ?
         ppTextures[TextureId] :
         nullptr;
+}
+
+RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                  Material,
+                                           const StandardMaterialTextureSemantic& Semantic,
+                                           IRadientMaterialDefinition&            Definition,
+                                           IRadientMaterialInstanceWriter&        Writer)
+{
+    // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
+    // are intentionally not part of the imported material instance.
+    const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
+    const Int32                                 UVSelector     = TextureAttribs.GetUVSelector();
+    const RadientFloat2                         UVBias{TextureAttribs.UBias, TextureAttribs.VBias};
+    const Uint32                                WrapU = static_cast<Uint32>(TextureAttribs.GetWrapUMode());
+    const Uint32                                WrapV = static_cast<Uint32>(TextureAttribs.GetWrapVMode());
+
+    RADIENT_STATUS Status = SetParameter(Definition, Writer, Semantic.UVSelectorParameterName,
+                                         &UVSelector, static_cast<Uint32>(sizeof(UVSelector)));
+    if (Status == RADIENT_STATUS_OK)
+        Status = SetParameter(Definition, Writer, Semantic.UVScaleAndRotationParameterName,
+                              &TextureAttribs.UVScaleAndRotation, static_cast<Uint32>(sizeof(TextureAttribs.UVScaleAndRotation)));
+    if (Status == RADIENT_STATUS_OK)
+        Status = SetParameter(Definition, Writer, Semantic.UVBiasParameterName,
+                              &UVBias, static_cast<Uint32>(sizeof(UVBias)));
+    if (Status == RADIENT_STATUS_OK)
+        Status = SetParameter(Definition, Writer, Semantic.WrapUParameterName,
+                              &WrapU, static_cast<Uint32>(sizeof(WrapU)));
+    if (Status == RADIENT_STATUS_OK)
+        Status = SetParameter(Definition, Writer, Semantic.WrapVParameterName,
+                              &WrapV, static_cast<Uint32>(sizeof(WrapV)));
+    return Status;
 }
 
 } // namespace
@@ -292,12 +342,16 @@ RADIENT_STATUS PopulateMaterialInstance(
         if (!HasTexture(DefinitionCI.Textures, Semantic.Texture))
             continue;
 
+        Status = SetTextureBindingParameters(Material, Semantic, Definition, Writer);
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
         IRadientTextureAsset* pTexture =
             GetTexture(Material, Semantic.TextureAttribId, ppTextures, TextureCount);
         if (pTexture == nullptr)
             continue;
 
-        Status = SetTexture(Definition, Writer, Semantic.ParameterName, pTexture);
+        Status = SetTexture(Definition, Writer, Semantic.TextureParameterName, pTexture);
         if (Status != RADIENT_STATUS_OK)
             return Status;
     }

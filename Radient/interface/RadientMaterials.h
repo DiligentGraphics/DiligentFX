@@ -377,6 +377,12 @@ struct RadientStandardMaterialDefinitionCreateInfo
     /// Texture semantics present in the definition. Extension texture semantics
     /// require their corresponding feature. Unlit materials only support the
     /// base-color texture semantic.
+    ///
+    /// Every declared SemanticTexture parameter is accompanied by mutable
+    /// SemanticTextureUVSelector (INT), SemanticTextureUVScaleAndRotation
+    /// (FLOAT2X2), SemanticTextureUVBias (FLOAT2), and SemanticTextureWrapU
+    /// and SemanticTextureWrapV (UINT) parameters. Wrap values use the
+    /// corresponding Diligent texture address mode value.
     RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS Textures DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NONE);
 };
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
