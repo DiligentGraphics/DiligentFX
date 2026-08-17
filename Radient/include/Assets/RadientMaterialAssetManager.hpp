@@ -129,6 +129,10 @@ public:
     // sources loaded without a GPU backend.
     static RADIENT_STATUS GetGPUResourceStatus(IRadientAsset* pMaterial);
 
+    // Returns the definition-backed instance retained by the material asset,
+    // or null when the asset has no definition-backed instance.
+    static RefCntAutoPtr<IRadientMaterialInstance> GetInstance(IRadientMaterialAsset* pMaterial);
+
     // Returns the resolved material and its immutable render textures,
     // including semantic defaults selected for failed requested textures.
     // This method lazily updates texture atlas attributes in the stored material
@@ -138,6 +142,15 @@ public:
 
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
+
+    RADIENT_STATUS CreateStandardMaterialInstance(const RadientMaterialCreateInfo& MaterialCI,
+                                                  IRadientMaterialInstance**       ppInstance);
+
+    RADIENT_STATUS CreateMaterialAsset(GLTF::Material               Material,
+                                       IRadientTextureAsset* const* ppTextures,
+                                       Uint32                       TextureCount,
+                                       IRadientMaterialInstance*    pInstance,
+                                       IRadientMaterialAsset**      ppMaterial);
 
     RadientMaterialDefaultTextures              m_DefaultTextures;
     WeakObjectCache<IRadientMaterialDefinition> m_StandardMaterialDefinitions;

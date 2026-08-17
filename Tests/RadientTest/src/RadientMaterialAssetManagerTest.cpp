@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 
+#include "RadientTestAssetHelpers.hpp"
+
 #include "gtest/gtest.h"
 
 #include <utility>
@@ -34,6 +36,25 @@ using namespace Diligent;
 
 namespace
 {
+
+template <typename ValueType>
+ValueType GetInstanceParameter(IRadientMaterialInstance& Instance, const char* Name)
+{
+    ValueType                      Value{};
+    IRadientMaterialDefinition*    pDefinition = Instance.GetDefinition();
+    RadientMaterialParameterHandle Handle;
+    EXPECT_NE(pDefinition, nullptr);
+    if (pDefinition != nullptr)
+    {
+        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
+        if (Handle)
+        {
+            EXPECT_EQ(Instance.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+                      RADIENT_STATUS_OK);
+        }
+    }
+    return Value;
+}
 
 RadientMaterialCreateInfo MakeTestMaterialCreateInfo()
 {
@@ -88,6 +109,71 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(RenderData.TextureCount, 0u);
 
     VerifyTestMaterial(*RenderData.pMaterial, MaterialCI);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<RadientFloat4>(*pInstance, "BaseColorFactor").x,
+                    MaterialCI.BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "MetallicFactor"),
+                    MaterialCI.MetallicFactor);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "RoughnessFactor"),
+                    MaterialCI.RoughnessFactor);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<RadientFloat3>(*pInstance, "EmissiveFactor").z,
+                    MaterialCI.EmissiveFactor.z);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "AlphaCutoff"),
+                    MaterialCI.AlphaCutoff);
+    EXPECT_EQ(GetInstanceParameter<Bool>(*pInstance, "DoubleSided"), MaterialCI.DoubleSided);
+
+    RadientMaterialParameterHandle TextureHandle;
+    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &TextureHandle),
+              RADIENT_STATUS_NOT_FOUND);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
+    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, pSecondMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialInstance> pSecondInstance = RadientMaterialAssetManager::GetInstance(pSecondMaterial);
+    ASSERT_NE(pSecondInstance, nullptr);
+    EXPECT_EQ(pSecondInstance->GetDefinition(), pInstance->GetDefinition());
+}
+
+TEST(RadientMaterialAssetManagerTest, CreateMaterialDefinitionIncludesUsedTextures)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture =
+        Testing::MakeTestTextureAsset("texture://base-color");
+
+    RadientMaterialCreateInfo MaterialCI{};
+    MaterialCI.pBaseColorTexture = pBaseColorTexture;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, pMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+
+    RadientMaterialParameterHandle BaseColorTextureHandle;
+    ASSERT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &BaseColorTextureHandle),
+              RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    ASSERT_EQ(pInstance->GetTexture(BaseColorTextureHandle, 0, pStoredTexture.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pBaseColorTexture);
+
+    RadientMaterialParameterHandle NormalTextureHandle;
+    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("NormalTexture", &NormalTextureHandle),
+              RADIENT_STATUS_NOT_FOUND);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialWithoutTextures;
+    ASSERT_EQ(pMaterialManager->CreateMaterial({}, pMaterialWithoutTextures.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialInstance> pInstanceWithoutTextures =
+        RadientMaterialAssetManager::GetInstance(pMaterialWithoutTextures);
+    ASSERT_NE(pInstanceWithoutTextures, nullptr);
+    EXPECT_NE(pInstanceWithoutTextures->GetDefinition(), pInstance->GetDefinition());
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)
@@ -159,6 +245,11 @@ TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
     // the manager that created it has been destroyed.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "RoughnessFactor"),
+                    MaterialCI.RoughnessFactor);
 
     const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
     ASSERT_NE(pGLTFMaterial, nullptr);

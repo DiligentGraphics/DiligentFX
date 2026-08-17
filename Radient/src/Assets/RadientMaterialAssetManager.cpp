@@ -184,11 +184,12 @@ struct MaterialStorage
         return pFallbackTexture != nullptr ? pFallbackTexture : pRequestedTexture;
     }
 
-    GLTF::Material                      Material;
-    bool                                TextureAttribsReady           = false;
-    bool                                TextureBindingIdentitiesReady = false;
-    mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
-    mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
+    GLTF::Material                          Material;
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    bool                                    TextureAttribsReady           = false;
+    bool                                    TextureBindingIdentitiesReady = false;
+    mutable std::atomic<RADIENT_STATUS>     LoadStatus{RADIENT_STATUS_OK};
+    mutable std::atomic<RADIENT_STATUS>     GPUResourceStatus{RADIENT_STATUS_OK};
 
     TextureArray RequestedTextures;
     TextureArray FallbackTextures;
@@ -248,8 +249,8 @@ public:
 using MaterialAssetImpl =
     RadientAssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset, IID_MaterialAssetImpl, RADIENT_ASSET_TYPE_MATERIAL, MaterialPayloadImpl>;
 
-RADIENT_STATUS CreateMaterialAsset(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
-                                   IRadientMaterialAsset**            ppMaterial)
+RADIENT_STATUS CreateMaterialAssetFromPayload(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
+                                              IRadientMaterialAsset**            ppMaterial)
 {
     VERIFY_EXPR(pPayload != nullptr);
     VERIFY_EXPR(ppMaterial != nullptr);
@@ -261,6 +262,31 @@ RADIENT_STATUS CreateMaterialAsset(RefCntAutoPtr<MaterialPayloadImpl> pPayload,
         MaterialAssetImpl::Create(MakeRadientAssetURI("material"), std::move(pPayload));
     *ppMaterial = pMaterial.Detach();
     return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS SetMaterialInstanceParameter(IRadientMaterialDefinition&     Definition,
+                                            IRadientMaterialInstanceWriter& Writer,
+                                            const char*                     Name,
+                                            const void*                     pData,
+                                            Uint32                          DataSize)
+{
+    RadientMaterialParameterHandle Handle;
+    const RADIENT_STATUS           FindStatus = Definition.FindParameter(Name, &Handle);
+    return FindStatus == RADIENT_STATUS_OK ?
+        Writer.SetParameter(Handle, pData, DataSize) :
+        FindStatus;
+}
+
+RADIENT_STATUS SetMaterialInstanceTexture(IRadientMaterialDefinition&     Definition,
+                                          IRadientMaterialInstanceWriter& Writer,
+                                          const char*                     Name,
+                                          IRadientTextureAsset*           pTexture)
+{
+    RadientMaterialParameterHandle Handle;
+    const RADIENT_STATUS           FindStatus = Definition.FindParameter(Name, &Handle);
+    return FindStatus == RADIENT_STATUS_OK ?
+        Writer.SetTexture(Handle, 0, pTexture) :
+        FindStatus;
 }
 
 bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
@@ -335,6 +361,14 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    const RADIENT_STATUS                    InstanceStatus =
+        CreateStandardMaterialInstance(MaterialCI, pInstance.GetAddressOfEmpty());
+    if (InstanceStatus != RADIENT_STATUS_OK)
+        return InstanceStatus;
+
+    // Preserve the existing renderer representation until it consumes the
+    // definition-backed instance directly.
     GLTF::Material        Material;
     GLTF::MaterialBuilder Builder{Material};
 
@@ -368,16 +402,114 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(const RadientMaterial
     AddMaterialTexture(GLTF::DefaultEmissiveTextureAttribId, MaterialCI.pEmissiveTexture);
 
     Builder.Finalize();
-    return CreateGLTFMaterial(std::move(Material),
-                              Textures.data(),
-                              static_cast<Uint32>(Textures.size()),
-                              ppMaterial);
+    return CreateMaterialAsset(std::move(Material),
+                               Textures.data(),
+                               static_cast<Uint32>(Textures.size()),
+                               pInstance,
+                               ppMaterial);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
+    const RadientMaterialCreateInfo& MaterialCI,
+    IRadientMaterialInstance**       ppInstance)
+{
+    VERIFY_EXPR(ppInstance != nullptr && *ppInstance == nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    if (MaterialCI.pBaseColorTexture != nullptr)
+        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR;
+    if (MaterialCI.pMetallicRoughnessTexture != nullptr)
+        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS;
+    if (MaterialCI.pNormalTexture != nullptr)
+        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
+    if (MaterialCI.pOcclusionTexture != nullptr)
+        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION;
+    if (MaterialCI.pEmissiveTexture != nullptr)
+        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RADIENT_STATUS                            Status =
+        CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    struct ParameterValue
+    {
+        const char* Name;
+        const void* pData;
+        Uint32      Size;
+    };
+    const ParameterValue Parameters[] = {
+        {"BaseColorFactor", &MaterialCI.BaseColorFactor, static_cast<Uint32>(sizeof(MaterialCI.BaseColorFactor))},
+        {"MetallicFactor", &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
+        {"RoughnessFactor", &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
+        {"EmissiveFactor", &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
+        {"AlphaCutoff", &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
+        {"DoubleSided", &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
+    };
+
+    for (const ParameterValue& Parameter : Parameters)
+    {
+        Status = SetMaterialInstanceParameter(*pDefinition, *pWriter, Parameter.Name, Parameter.pData, Parameter.Size);
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+    }
+
+    struct TextureValue
+    {
+        const char*           Name;
+        IRadientTextureAsset* pTexture;
+    };
+    const TextureValue Textures[] = {
+        {"BaseColorTexture", MaterialCI.pBaseColorTexture},
+        {"MetallicRoughnessTexture", MaterialCI.pMetallicRoughnessTexture},
+        {"NormalTexture", MaterialCI.pNormalTexture},
+        {"OcclusionTexture", MaterialCI.pOcclusionTexture},
+        {"EmissiveTexture", MaterialCI.pEmissiveTexture},
+    };
+
+    for (const TextureValue& Texture : Textures)
+    {
+        if (Texture.pTexture == nullptr)
+            continue;
+
+        Status = SetMaterialInstanceTexture(*pDefinition, *pWriter, Texture.Name, Texture.pTexture);
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+    }
+
+    Status = pWriter->Commit();
+    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+        return Status;
+
+    *ppInstance = pInstance.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
     GLTF::Material               Material,
     IRadientTextureAsset* const* ppTextures,
     Uint32                       TextureCount,
+    IRadientMaterialAsset**      ppMaterial)
+{
+    return CreateMaterialAsset(std::move(Material), ppTextures, TextureCount, nullptr, ppMaterial);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateMaterialAsset(
+    GLTF::Material               Material,
+    IRadientTextureAsset* const* ppTextures,
+    Uint32                       TextureCount,
+    IRadientMaterialInstance*    pInstance,
     IRadientMaterialAsset**      ppMaterial)
 {
     if (ppMaterial == nullptr)
@@ -390,6 +522,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
     RefCntAutoPtr<MaterialPayloadImpl> pPayload = MaterialPayloadImpl::Create();
 
     MaterialStorage& MaterialData = pPayload->GetStorage();
+    MaterialData.pInstance        = pInstance;
     SetDefaultMaterialTextures(MaterialData, Material, m_DefaultTextures);
 
     // Actual GLTF textures override fallbacks and may use custom attributes.
@@ -401,7 +534,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
             return true;
         });
     MaterialData.Material = std::move(Material);
-    return CreateMaterialAsset(std::move(pPayload), ppMaterial);
+    return CreateMaterialAssetFromPayload(std::move(pPayload), ppMaterial);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)
@@ -420,6 +553,12 @@ RADIENT_STATUS RadientMaterialAssetManager::GetGPUResourceStatus(IRadientAsset* 
         return PayloadStatus;
 
     return pImpl->GetStorage().GetGPUResourceStatus();
+}
+
+RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialAssetManager::GetInstance(IRadientMaterialAsset* pMaterial)
+{
+    RefCntAutoPtr<MaterialAssetImpl> pImpl = MaterialAssetImpl::ResolveAsset(pMaterial);
+    return pImpl ? pImpl->GetStorage().pInstance : RefCntAutoPtr<IRadientMaterialInstance>{};
 }
 
 RadientMaterialRenderData RadientMaterialAssetManager::GetRenderData(IRadientMaterialAsset* pMaterial)

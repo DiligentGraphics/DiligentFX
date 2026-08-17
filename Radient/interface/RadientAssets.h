@@ -525,7 +525,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                                     const RadientStandardMaterialDefinitionCreateInfo REF DefinitionCI,
                                                                     IRadientMaterialDefinition**                          ppDefinition) PURE;
 
-    /// Creates a material asset.
+    /// Creates a standard metallic-roughness material asset. This convenience
+    /// path obtains a cached standard material definition and initializes a
+    /// definition-backed instance from MaterialCI.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   IRadientMaterialAsset**             ppMaterial) PURE;
