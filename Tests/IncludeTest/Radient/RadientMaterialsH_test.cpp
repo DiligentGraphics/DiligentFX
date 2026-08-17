@@ -56,8 +56,10 @@ void RadientMaterials_CPP_UseTypes()
     RadientMaterialParameterHandle              Handle;
     RadientMaterialDefinitionDesc               Desc;
     RadientMaterialParameterDesc                Parameter;
-    RadientMaterialDefinitionCreateInfo         CreateInfo;
     RadientStandardMaterialDefinitionCreateInfo StandardCI;
+
+    Desc.pParameters    = &Parameter;
+    Desc.ParameterCount = 1;
 
     StandardCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
         RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN |
@@ -71,7 +73,6 @@ void RadientMaterials_CPP_UseTypes()
 
     (void)Desc;
     (void)Parameter;
-    (void)CreateInfo;
     (void)StandardCI;
     (void)IsValid;
     (void)IsEqual;
@@ -104,8 +105,6 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetM
     Status               = pWriter->SetTexture(Handle, 0, pTexture);
     Status               = pWriter->Commit();
 
-    RadientMaterialDefinitionCreateInfo CreateInfo;
-    Status = pAssetManager->CreateMaterialDefinition(CreateInfo, &pDefinition);
     RadientStandardMaterialDefinitionCreateInfo StandardCI;
     IRadientMaterialDefinition*                 pStandardDefinition = nullptr;
     Status                                                          = pAssetManager->CreateStandardMaterialDefinition(StandardCI, &pStandardDefinition);

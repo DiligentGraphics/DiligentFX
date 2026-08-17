@@ -113,12 +113,6 @@ public:
         return RADIENT_STATUS_OK;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterialDefinition(const RadientMaterialDefinitionCreateInfo&,
-                                                                       IRadientMaterialDefinition**) override final
-    {
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo&,
                                                                                IRadientMaterialDefinition**) override final
     {

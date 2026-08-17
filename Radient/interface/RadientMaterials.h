@@ -304,18 +304,6 @@ struct RadientMaterialParameterHandle
 typedef struct RadientMaterialParameterHandle RadientMaterialParameterHandle;
 
 
-/// Immutable material definition description.
-struct RadientMaterialDefinitionDesc
-{
-    /// Definition name used for diagnostics.
-    const Char* Name DEFAULT_INITIALIZER(nullptr);
-
-    /// Material execution domain.
-    RADIENT_MATERIAL_DOMAIN Domain DEFAULT_INITIALIZER(RADIENT_MATERIAL_DOMAIN_SURFACE);
-};
-typedef struct RadientMaterialDefinitionDesc RadientMaterialDefinitionDesc;
-
-
 /// Material parameter metadata and default value.
 struct RadientMaterialParameterDesc
 {
@@ -341,11 +329,19 @@ struct RadientMaterialParameterDesc
 typedef struct RadientMaterialParameterDesc RadientMaterialParameterDesc;
 
 
-/// Generic material definition creation attributes.
-struct RadientMaterialDefinitionCreateInfo
+/// Immutable material definition description.
+///
+/// Material definitions copy the description, parameter metadata, default
+/// values, and asset reference when they are created. The description returned
+/// by IRadientMaterialDefinition::GetDesc() remains valid for the lifetime of
+/// the definition.
+struct RadientMaterialDefinitionDesc
 {
-    /// Material definition description.
-    RadientMaterialDefinitionDesc Desc DEFAULT_INITIALIZER({});
+    /// Definition name used for diagnostics.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Material execution domain.
+    RADIENT_MATERIAL_DOMAIN Domain DEFAULT_INITIALIZER(RADIENT_MATERIAL_DOMAIN_SURFACE);
 
     /// Optional persistent asset identity. The definition copies the URI.
     RadientAssetReference Reference DEFAULT_INITIALIZER({});
@@ -358,7 +354,7 @@ struct RadientMaterialDefinitionCreateInfo
     /// Number of elements in pParameters. May be zero.
     Uint32 ParameterCount DEFAULT_INITIALIZER(0);
 };
-typedef struct RadientMaterialDefinitionCreateInfo RadientMaterialDefinitionCreateInfo;
+typedef struct RadientMaterialDefinitionDesc RadientMaterialDefinitionDesc;
 
 
 /// Built-in standard material definition creation attributes.

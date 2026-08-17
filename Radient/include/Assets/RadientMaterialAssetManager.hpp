@@ -103,8 +103,8 @@ public:
 
     static RadientMaterialAssetManagerSharedPtr Create(const CreateInfo& CI = {});
 
-    RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
-                                    IRadientMaterialDefinition**               ppDefinition);
+    static RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
+                                           IRadientMaterialDefinition**         ppDefinition);
 
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                     IRadientMaterialDefinition**                       ppDefinition);

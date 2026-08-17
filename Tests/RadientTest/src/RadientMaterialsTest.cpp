@@ -26,6 +26,7 @@
 
 #include "RadientMaterials.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "RefCntAutoPtr.hpp"
@@ -51,14 +52,10 @@ ValueType GetParameter(IRadientMaterialInstance&      Instance,
     return Value;
 }
 
-RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
-                                IRadientMaterialDefinition**               ppDefinition)
+RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
+                                IRadientMaterialDefinition**         ppDefinition)
 {
-    // Definitions own their copied schema and defaults and may outlive the manager.
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    return pAssetManager != nullptr ?
-        pAssetManager->CreateMaterialDefinition(DefinitionCI, ppDefinition) :
-        RADIENT_STATUS_FAILED;
+    return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ppDefinition);
 }
 
 RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
@@ -66,23 +63,23 @@ RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     Uint32                              ParameterCount,
     const char*                         Name = "Test material definition")
 {
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Desc.Name      = Name;
-    DefinitionCI.Reference      = {"material-definition://test", 7};
-    DefinitionCI.pParameters    = pParameters;
-    DefinitionCI.ParameterCount = ParameterCount;
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = Name;
+    DefinitionDesc.Reference      = {"material-definition://test", 7};
+    DefinitionDesc.pParameters    = pParameters;
+    DefinitionDesc.ParameterCount = ParameterCount;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     return pDefinition;
 }
 
-void ExpectInvalidDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
-                             const char*                                ExpectedError)
+void ExpectInvalidDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
+                             const char*                          ExpectedError)
 {
     TestingEnvironment::ErrorScope            ExpectedErrors{ExpectedError};
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+    EXPECT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
 }
@@ -109,23 +106,28 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
     Parameter.pDefaultValue = &DefaultColor;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Desc.Name      = DefinitionName;
-    DefinitionCI.Desc.Domain    = RADIENT_MATERIAL_DOMAIN_SURFACE;
-    DefinitionCI.Reference      = {"material-definition://copied", 11};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = DefinitionName;
+    DefinitionDesc.Domain         = RADIENT_MATERIAL_DOMAIN_SURFACE;
+    DefinitionDesc.Reference      = {"material-definition://copied", 11};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    ASSERT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
     DefinitionName[0] = 'X';
     ParameterName[0]  = 'X';
     DefaultColor      = {};
 
-    EXPECT_STREQ(pDefinition->GetDesc().Name, "Copied definition");
-    EXPECT_EQ(pDefinition->GetDesc().Domain, RADIENT_MATERIAL_DOMAIN_SURFACE);
+    const RadientMaterialDefinitionDesc& StoredDesc = pDefinition->GetDesc();
+    EXPECT_STREQ(StoredDesc.Name, "Copied definition");
+    EXPECT_EQ(StoredDesc.Domain, RADIENT_MATERIAL_DOMAIN_SURFACE);
+    EXPECT_STREQ(StoredDesc.Reference.URI, "material-definition://copied");
+    EXPECT_EQ(StoredDesc.Reference.Version, 11u);
+    ASSERT_EQ(StoredDesc.ParameterCount, 1u);
+    ASSERT_NE(StoredDesc.pParameters, nullptr);
     EXPECT_STREQ(pDefinition->GetReference().URI, "material-definition://copied");
     EXPECT_EQ(pDefinition->GetReference().Version, 11u);
     EXPECT_EQ(pDefinition->GetType(), RADIENT_ASSET_TYPE_MATERIAL);
@@ -133,6 +135,7 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     ASSERT_EQ(pDefinition->GetParameterCount(), 1u);
 
     const RadientMaterialParameterDesc& StoredParameter = pDefinition->GetParameterDesc(0);
+    EXPECT_EQ(&StoredParameter, &StoredDesc.pParameters[0]);
     EXPECT_STREQ(StoredParameter.Name, "BaseColor");
     EXPECT_EQ(StoredParameter.Type, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4);
     ASSERT_NE(StoredParameter.pDefaultValue, nullptr);
@@ -159,9 +162,9 @@ TEST(RadientMaterialsTest, AssetManagerReportsDefinitionStatus)
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientMaterialDefinitionCreateInfo       DefinitionCI{};
+    RadientMaterialDefinitionDesc             DefinitionDesc{};
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    ASSERT_EQ(pAssetManager->CreateMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
 }
@@ -406,16 +409,16 @@ TEST(RadientMaterialsTest, InstanceRetainsDefinitionAndTextures)
 
 TEST(RadientMaterialsTest, RejectsInvalidDefinitionDomain)
 {
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Desc.Domain = RADIENT_MATERIAL_DOMAIN_COUNT;
-    ExpectInvalidDefinition(DefinitionCI, "Invalid material definition domain");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Domain = RADIENT_MATERIAL_DOMAIN_COUNT;
+    ExpectInvalidDefinition(DefinitionDesc, "Invalid material definition domain");
 }
 
 TEST(RadientMaterialsTest, RejectsMissingDefinitionParameterArray)
 {
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "parameters, but pParameters is null");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "parameters, but pParameters is null");
 }
 
 TEST(RadientMaterialsTest, RejectsNullMaterialParameterName)
@@ -423,10 +426,10 @@ TEST(RadientMaterialsTest, RejectsNullMaterialParameterName)
     RadientMaterialParameterDesc Parameter{};
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 0 name must not be null");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 0 name must not be null");
 }
 
 TEST(RadientMaterialsTest, RejectsEmptyMaterialParameterName)
@@ -435,10 +438,10 @@ TEST(RadientMaterialsTest, RejectsEmptyMaterialParameterName)
     Parameter.Name = "";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 0 name must not be empty");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 0 name must not be empty");
 }
 
 TEST(RadientMaterialsTest, RejectsInvalidMaterialParameterType)
@@ -446,15 +449,15 @@ TEST(RadientMaterialsTest, RejectsInvalidMaterialParameterType)
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name = "InvalidType";
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
 
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 'InvalidType' has invalid type");
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'InvalidType' has invalid type");
 
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_COUNT;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 'InvalidType' has invalid type");
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'InvalidType' has invalid type");
 }
 
 TEST(RadientMaterialsTest, RejectsZeroMaterialParameterArraySize)
@@ -464,10 +467,10 @@ TEST(RadientMaterialsTest, RejectsZeroMaterialParameterArraySize)
     Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.ArraySize = 0;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 'ZeroArraySize' array size must not be zero");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'ZeroArraySize' array size must not be zero");
 }
 
 TEST(RadientMaterialsTest, RejectsMaterialParameterDataSizeOverflow)
@@ -477,10 +480,10 @@ TEST(RadientMaterialsTest, RejectsMaterialParameterDataSizeOverflow)
     Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4;
     Parameter.ArraySize = std::numeric_limits<Uint32>::max();
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 'OversizedArray' data size exceeds the supported limit");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'OversizedArray' data size exceeds the supported limit");
 }
 
 TEST(RadientMaterialsTest, RejectsTextureMaterialParameterDefaultValue)
@@ -492,10 +495,10 @@ TEST(RadientMaterialsTest, RejectsTextureMaterialParameterDefaultValue)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameter.pDefaultValue = &DefaultValue;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Texture material parameter 'Texture' must use pDefaultTexture instead of pDefaultValue");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Texture material parameter 'Texture' must use pDefaultTexture instead of pDefaultValue");
 }
 
 TEST(RadientMaterialsTest, RejectsTextureArrayDefaultTexture)
@@ -508,10 +511,10 @@ TEST(RadientMaterialsTest, RejectsTextureArrayDefaultTexture)
     Parameter.ArraySize       = 2;
     Parameter.pDefaultTexture = pTexture;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Texture array material parameter 'TextureArray' must not specify pDefaultTexture");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Texture array material parameter 'TextureArray' must not specify pDefaultTexture");
 }
 
 TEST(RadientMaterialsTest, RejectsNonTextureMaterialParameterDefaultTexture)
@@ -523,10 +526,10 @@ TEST(RadientMaterialsTest, RejectsNonTextureMaterialParameterDefaultTexture)
     Parameter.Type            = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultTexture = pTexture;
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = &Parameter;
-    DefinitionCI.ParameterCount = 1;
-    ExpectInvalidDefinition(DefinitionCI, "Non-texture material parameter 'Value' must not specify pDefaultTexture");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+    ExpectInvalidDefinition(DefinitionDesc, "Non-texture material parameter 'Value' must not specify pDefaultTexture");
 }
 
 TEST(RadientMaterialsTest, RejectsDuplicateMaterialParameterNames)
@@ -536,10 +539,10 @@ TEST(RadientMaterialsTest, RejectsDuplicateMaterialParameterNames)
     Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[1]      = Parameters[0];
 
-    RadientMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.pParameters    = Parameters.data();
-    DefinitionCI.ParameterCount = static_cast<Uint32>(Parameters.size());
-    ExpectInvalidDefinition(DefinitionCI, "Material parameter 1 name 'Duplicate' duplicates parameter 0");
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+    ExpectInvalidDefinition(DefinitionDesc, "Material parameter 1 name 'Duplicate' duplicates parameter 0");
 }
 
 TEST(RadientMaterialsTest, StandardDefinitionsAreCached)

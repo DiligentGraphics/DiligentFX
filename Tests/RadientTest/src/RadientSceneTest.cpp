@@ -529,7 +529,7 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     RefCntAutoPtr<IRadientTextureAsset>       pTexture;
     RefCntAutoPtr<IRadientSceneAsset>         pScene;
 
-    EXPECT_EQ(pAssetManager->CreateMaterialDefinition(RadientMaterialDefinitionCreateInfo{}, pMaterialDefinition.GetAddressOfEmpty()),
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(RadientStandardMaterialDefinitionCreateInfo{}, pMaterialDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMaterialDefinition, nullptr);
 

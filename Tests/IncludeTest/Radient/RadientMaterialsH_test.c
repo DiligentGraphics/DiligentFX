@@ -37,7 +37,6 @@ void RadientMaterials_C_UseTypes(void)
     RadientMaterialParameterHandle              Handle      = {0};
     RadientMaterialDefinitionDesc               Desc        = {0};
     RadientMaterialParameterDesc                Parameter   = {0};
-    RadientMaterialDefinitionCreateInfo         CreateInfo  = {0};
     RadientStandardMaterialDefinitionCreateInfo StandardCI  = {0};
     IRadientMaterialDefinition*                 pDefinition = 0;
     IRadientMaterialInstance*                   pInstance   = 0;
@@ -52,7 +51,6 @@ void RadientMaterials_C_UseTypes(void)
     (void)Handle;
     (void)Desc;
     (void)Parameter;
-    (void)CreateInfo;
     (void)StandardCI;
     (void)pDefinition;
     (void)pInstance;
@@ -107,14 +105,10 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*       pInst
 
 void RadientMaterials_C_TestAssetManagerMacros(IRadientAssetManager* pAssetManager)
 {
-    RadientMaterialDefinitionCreateInfo         CreateInfo          = {0};
     RadientStandardMaterialDefinitionCreateInfo StandardCI          = {0};
-    IRadientMaterialDefinition*                 pDefinition         = 0;
     IRadientMaterialDefinition*                 pStandardDefinition = 0;
-    RADIENT_STATUS                              Status              = IRadientAssetManager_CreateMaterialDefinition(pAssetManager, &CreateInfo, &pDefinition);
-    Status                                                          = IRadientAssetManager_CreateStandardMaterialDefinition(pAssetManager, &StandardCI, &pStandardDefinition);
+    RADIENT_STATUS                              Status              = IRadientAssetManager_CreateStandardMaterialDefinition(pAssetManager, &StandardCI, &pStandardDefinition);
 
-    (void)pDefinition;
     (void)pStandardDefinition;
     (void)Status;
 }

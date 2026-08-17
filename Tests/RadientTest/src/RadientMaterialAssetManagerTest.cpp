@@ -136,7 +136,7 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(pSecondInstance->GetDefinition(), pInstance->GetDefinition());
 }
 
-TEST(RadientMaterialAssetManagerTest, CreateMaterialDefinitionIncludesUsedTextures)
+TEST(RadientMaterialAssetManagerTest, CreateMaterialIncludesUsedTexturesInDefinition)
 {
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);

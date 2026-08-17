@@ -113,81 +113,81 @@ bool GetMaterialParameterDataSize(const RadientMaterialParameterDesc& Desc, Uint
     return true;
 }
 
-RADIENT_STATUS ValidateMaterialDefinitionCreateInfo(const RadientMaterialDefinitionCreateInfo& CreateInfo)
+RADIENT_STATUS ValidateMaterialDefinitionDesc(const RadientMaterialDefinitionDesc& Desc)
 {
-    if (CreateInfo.Desc.Domain >= RADIENT_MATERIAL_DOMAIN_COUNT)
+    if (Desc.Domain >= RADIENT_MATERIAL_DOMAIN_COUNT)
     {
-        LOG_ERROR_MESSAGE("Invalid material definition domain ", Uint32{CreateInfo.Desc.Domain});
+        LOG_ERROR_MESSAGE("Invalid material definition domain ", Uint32{Desc.Domain});
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
-    if (CreateInfo.ParameterCount != 0 && CreateInfo.pParameters == nullptr)
+    if (Desc.ParameterCount != 0 && Desc.pParameters == nullptr)
     {
-        LOG_ERROR_MESSAGE("Material definition declares ", CreateInfo.ParameterCount,
+        LOG_ERROR_MESSAGE("Material definition declares ", Desc.ParameterCount,
                           " parameters, but pParameters is null");
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
     std::unordered_map<std::string, Uint32> Names;
-    Names.reserve(CreateInfo.ParameterCount);
+    Names.reserve(Desc.ParameterCount);
 
-    for (Uint32 Index = 0; Index < CreateInfo.ParameterCount; ++Index)
+    for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {
-        const RadientMaterialParameterDesc& Desc = CreateInfo.pParameters[Index];
-        if (Desc.Name == nullptr)
+        const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
+        if (Parameter.Name == nullptr)
         {
             LOG_ERROR_MESSAGE("Material parameter ", Index, " name must not be null");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        if (Desc.Name[0] == '\0')
+        if (Parameter.Name[0] == '\0')
         {
             LOG_ERROR_MESSAGE("Material parameter ", Index, " name must not be empty");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        if (Desc.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
-            Desc.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT)
+        if (Parameter.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
+            Parameter.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT)
         {
-            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' has invalid type ", Uint32{Desc.Type});
+            LOG_ERROR_MESSAGE("Material parameter '", Parameter.Name, "' has invalid type ", Uint32{Parameter.Type});
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        if (Desc.ArraySize == 0)
+        if (Parameter.ArraySize == 0)
         {
-            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' array size must not be zero");
+            LOG_ERROR_MESSAGE("Material parameter '", Parameter.Name, "' array size must not be zero");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         Uint32 DataSize;
-        if (!GetMaterialParameterDataSize(Desc, DataSize))
+        if (!GetMaterialParameterDataSize(Parameter, DataSize))
         {
-            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' data size exceeds the supported limit");
+            LOG_ERROR_MESSAGE("Material parameter '", Parameter.Name, "' data size exceeds the supported limit");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
-        if (IsTextureParameter(Desc.Type))
+        if (IsTextureParameter(Parameter.Type))
         {
-            if (Desc.pDefaultValue != nullptr)
+            if (Parameter.pDefaultValue != nullptr)
             {
-                LOG_ERROR_MESSAGE("Texture material parameter '", Desc.Name,
+                LOG_ERROR_MESSAGE("Texture material parameter '", Parameter.Name,
                                   "' must use pDefaultTexture instead of pDefaultValue");
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
-            if (Desc.ArraySize != 1 && Desc.pDefaultTexture != nullptr)
+            if (Parameter.ArraySize != 1 && Parameter.pDefaultTexture != nullptr)
             {
-                LOG_ERROR_MESSAGE("Texture array material parameter '", Desc.Name,
+                LOG_ERROR_MESSAGE("Texture array material parameter '", Parameter.Name,
                                   "' must not specify pDefaultTexture");
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
         }
-        else if (Desc.pDefaultTexture != nullptr)
+        else if (Parameter.pDefaultTexture != nullptr)
         {
-            LOG_ERROR_MESSAGE("Non-texture material parameter '", Desc.Name,
+            LOG_ERROR_MESSAGE("Non-texture material parameter '", Parameter.Name,
                               "' must not specify pDefaultTexture");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
-        const auto InsertResult = Names.emplace(Desc.Name, Index);
+        const auto InsertResult = Names.emplace(Parameter.Name, Index);
         if (!InsertResult.second)
         {
-            LOG_ERROR_MESSAGE("Material parameter ", Index, " name '", Desc.Name,
+            LOG_ERROR_MESSAGE("Material parameter ", Index, " name '", Parameter.Name,
                               "' duplicates parameter ", InsertResult.first->second);
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
@@ -475,29 +475,33 @@ class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDe
 public:
     using TBase = ObjectBase<IRadientMaterialDefinition>;
 
-    RadientMaterialDefinitionImpl(IReferenceCounters*                        pRefCounters,
-                                  const RadientMaterialDefinitionCreateInfo& CreateInfo) :
+    RadientMaterialDefinitionImpl(IReferenceCounters*                  pRefCounters,
+                                  const RadientMaterialDefinitionDesc& Desc) :
         TBase{pRefCounters},
-        m_Name{CreateInfo.Desc.Name != nullptr ? CreateInfo.Desc.Name : ""},
-        m_ReferenceURI{CreateInfo.Reference.URI != nullptr ? CreateInfo.Reference.URI : ""},
-        m_HasReferenceURI{CreateInfo.Reference.URI != nullptr},
+        m_Name{Desc.Name != nullptr ? Desc.Name : ""},
+        m_ReferenceURI{Desc.Reference.URI != nullptr ? Desc.Reference.URI : ""},
+        m_HasReferenceURI{Desc.Reference.URI != nullptr},
         m_DefinitionHandle{s_NextMaterialDefinitionHandle.fetch_add(1, std::memory_order_relaxed)}
     {
-        m_Desc          = CreateInfo.Desc;
-        m_Desc.Name     = m_Name.c_str();
-        m_Reference     = CreateInfo.Reference;
-        m_Reference.URI = m_HasReferenceURI ? m_ReferenceURI.c_str() : nullptr;
+        m_Desc           = Desc;
+        m_Desc.Name      = m_Name.c_str();
+        m_Reference      = Desc.Reference;
+        m_Reference.URI  = m_HasReferenceURI ? m_ReferenceURI.c_str() : nullptr;
+        m_Desc.Reference = m_Reference;
 
-        m_Parameters.resize(CreateInfo.ParameterCount);
-        m_ParameterNames.reserve(CreateInfo.ParameterCount);
+        m_Parameters.resize(Desc.ParameterCount);
+        m_ParameterNameStorage.resize(Desc.ParameterCount);
+        m_DefaultValues.resize(Desc.ParameterCount);
+        m_DefaultTextures.resize(Desc.ParameterCount);
+        m_ParameterIndices.reserve(Desc.ParameterCount);
 
-        for (Uint32 Index = 0; Index < CreateInfo.ParameterCount; ++Index)
+        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
         {
-            const RadientMaterialParameterDesc& SourceDesc = CreateInfo.pParameters[Index];
-            Parameter&                          Dst        = m_Parameters[Index];
+            const RadientMaterialParameterDesc& SourceDesc = Desc.pParameters[Index];
+            RadientMaterialParameterDesc&       Dst        = m_Parameters[Index];
 
-            Dst.Name = SourceDesc.Name;
-            Dst.Desc = SourceDesc;
+            m_ParameterNameStorage[Index] = SourceDesc.Name;
+            Dst                           = SourceDesc;
 
             Uint32     DataSize        = 0;
             const bool IsValidDataSize = GetMaterialParameterDataSize(SourceDesc, DataSize);
@@ -505,22 +509,26 @@ public:
             (void)IsValidDataSize;
             if (DataSize != 0)
             {
-                Dst.DefaultValue.resize(DataSize, 0);
+                m_DefaultValues[Index].resize(DataSize, 0);
                 if (SourceDesc.pDefaultValue != nullptr)
-                    std::memcpy(Dst.DefaultValue.data(), SourceDesc.pDefaultValue, DataSize);
+                    std::memcpy(m_DefaultValues[Index].data(), SourceDesc.pDefaultValue, DataSize);
             }
-            Dst.pDefaultTexture = SourceDesc.pDefaultTexture;
+            m_DefaultTextures[Index] = SourceDesc.pDefaultTexture;
 
-            m_ParameterNames.emplace(Dst.Name, Index);
+            m_ParameterIndices.emplace(m_ParameterNameStorage[Index], Index);
         }
 
         // Set pointers only after all movable storage has reached its final location.
-        for (Parameter& Param : m_Parameters)
+        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
         {
-            Param.Desc.Name            = Param.Name.c_str();
-            Param.Desc.pDefaultValue   = Param.DefaultValue.empty() ? nullptr : Param.DefaultValue.data();
-            Param.Desc.pDefaultTexture = Param.pDefaultTexture;
+            RadientMaterialParameterDesc& Param = m_Parameters[Index];
+            Param.Name                          = m_ParameterNameStorage[Index].c_str();
+            Param.pDefaultValue                 = m_DefaultValues[Index].empty() ? nullptr : m_DefaultValues[Index].data();
+            Param.pDefaultTexture               = m_DefaultTextures[Index];
         }
+
+        m_Desc.pParameters    = m_Parameters.empty() ? nullptr : m_Parameters.data();
+        m_Desc.ParameterCount = static_cast<Uint32>(m_Parameters.size());
     }
 
     IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinition, IID_RadientAsset, TBase)
@@ -558,7 +566,7 @@ public:
             static constexpr RadientMaterialParameterDesc InvalidDesc{};
             return InvalidDesc;
         }
-        return m_Parameters[Index].Desc;
+        return m_Parameters[Index];
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameterHandle(Uint32                          Index,
@@ -586,8 +594,8 @@ public:
         if (Name == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        const auto It = m_ParameterNames.find(Name);
-        if (It == m_ParameterNames.end())
+        const auto It = m_ParameterIndices.find(Name);
+        if (It == m_ParameterIndices.end())
             return RADIENT_STATUS_NOT_FOUND;
 
         return GetParameterHandle(It->second, pHandle);
@@ -596,14 +604,6 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateInstance(IRadientMaterialInstance** ppInstance) const override final;
 
 private:
-    struct Parameter
-    {
-        std::string                         Name;
-        RadientMaterialParameterDesc        Desc;
-        std::vector<Uint8>                  DefaultValue;
-        RefCntAutoPtr<IRadientTextureAsset> pDefaultTexture;
-    };
-
     std::string m_Name;
     std::string m_ReferenceURI;
     bool        m_HasReferenceURI = false;
@@ -612,8 +612,11 @@ private:
     RadientAssetReference         m_Reference;
     const RadientHandle           m_DefinitionHandle;
 
-    std::vector<Parameter>                  m_Parameters;
-    std::unordered_map<std::string, Uint32> m_ParameterNames;
+    std::vector<RadientMaterialParameterDesc>        m_Parameters;
+    std::vector<std::string>                         m_ParameterNameStorage;
+    std::vector<std::vector<Uint8>>                  m_DefaultValues;
+    std::vector<RefCntAutoPtr<IRadientTextureAsset>> m_DefaultTextures;
+    std::unordered_map<std::string, Uint32>          m_ParameterIndices;
 };
 
 class RadientMaterialInstanceWriterImpl;
@@ -937,21 +940,21 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
 
 } // namespace
 
-RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
-                                                             IRadientMaterialDefinition**               ppDefinition)
+RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
+                                                             IRadientMaterialDefinition**         ppDefinition)
 {
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppDefinition = nullptr;
 
-    const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionCreateInfo(DefinitionCI);
+    const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionDesc(DefinitionDesc);
     if (ValidationStatus != RADIENT_STATUS_OK)
         return ValidationStatus;
 
     try
     {
         RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{
-            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionCI)};
+            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionDesc)};
         *ppDefinition = pDefinition.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -986,15 +989,15 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(con
                                                      BuildStandardMaterialParameters(DefinitionCI);
                                                  const std::string DefinitionName = "Radient " + CacheKey;
 
-                                                 RadientMaterialDefinitionCreateInfo GenericDefinitionCI{};
-                                                 GenericDefinitionCI.Desc.Name      = DefinitionName.c_str();
-                                                 GenericDefinitionCI.Desc.Domain    = RADIENT_MATERIAL_DOMAIN_SURFACE;
-                                                 GenericDefinitionCI.Reference      = {CacheKey.c_str(), 1};
-                                                 GenericDefinitionCI.pParameters    = Parameters.data();
-                                                 GenericDefinitionCI.ParameterCount = static_cast<Uint32>(Parameters.size());
+                                                 RadientMaterialDefinitionDesc DefinitionDesc{};
+                                                 DefinitionDesc.Name           = DefinitionName.c_str();
+                                                 DefinitionDesc.Domain         = RADIENT_MATERIAL_DOMAIN_SURFACE;
+                                                 DefinitionDesc.Reference      = {CacheKey.c_str(), 1};
+                                                 DefinitionDesc.pParameters    = Parameters.data();
+                                                 DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
 
                                                  RefCntAutoPtr<IRadientMaterialDefinition> pNewDefinition;
-                                                 DefinitionStatus = CreateDefinition(GenericDefinitionCI, pNewDefinition.GetAddressOfEmpty());
+                                                 DefinitionStatus = CreateDefinition(DefinitionDesc, pNewDefinition.GetAddressOfEmpty());
                                                  return pNewDefinition;
                                              })
                 .first;
