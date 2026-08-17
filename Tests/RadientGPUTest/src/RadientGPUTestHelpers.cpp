@@ -45,9 +45,10 @@ namespace RadientGPUTest
 namespace
 {
 
-static constexpr Uint32 TestVertexPoolSize       = 1024;
-static constexpr Uint64 TestIndexBufferSize      = 1024 * 1024;
-static constexpr Uint32 TestTextureAtlasMaxSlice = 16;
+static constexpr Uint32 TestVertexPoolSize        = 1024;
+static constexpr Uint64 TestIndexBufferSize       = 1024 * 1024;
+static constexpr Uint32 TestTextureAtlasMaxSlice  = 16;
+static constexpr auto   TextureManagerWaitTimeout = std::chrono::seconds{10};
 
 Uint32 GetTextureStride(const TestTextureParams& Params)
 {
@@ -214,7 +215,8 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
 {
     using namespace std::chrono_literals;
 
-    for (Uint32 i = 0; i < 256; ++i)
+    const auto Deadline = std::chrono::steady_clock::now() + TextureManagerWaitTimeout;
+    do
     {
         const RadientTextureAssetManagerStats Stats = Manager->GetStats();
         if (IsTextureManagerIdle(Stats))
@@ -222,9 +224,10 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
 
         if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             PumpUploadManager(UploadManager, Context);
-        else
-            std::this_thread::sleep_for(1ms);
-    }
+
+        // Avoid busy-waiting while asynchronous texture work is in progress.
+        std::this_thread::sleep_for(1ms);
+    } while (std::chrono::steady_clock::now() < Deadline);
 
     return IsTextureManagerIdle(Manager->GetStats());
 }
@@ -233,14 +236,15 @@ bool WaitForPendingCopyCommandEnqueueCallbacks(const RadientTextureAssetManagerS
 {
     using namespace std::chrono_literals;
 
-    for (Uint32 i = 0; i < 256; ++i)
+    const auto Deadline = std::chrono::steady_clock::now() + TextureManagerWaitTimeout;
+    do
     {
         const RadientTextureAssetManagerStats Stats = Manager->GetStats();
         if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
         std::this_thread::sleep_for(1ms);
-    }
+    } while (std::chrono::steady_clock::now() < Deadline);
 
     return Manager->GetStats().PendingCopyCommandEnqueueCallbacks != 0;
 }

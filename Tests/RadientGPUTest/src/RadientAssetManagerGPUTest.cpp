@@ -51,6 +51,8 @@ using namespace std::chrono_literals;
 namespace
 {
 
+static constexpr auto TextureManagerWaitTimeout = std::chrono::seconds{10};
+
 std::vector<Uint8> MakeTexturePixels(Uint32 Width,
                                      Uint32 Height,
                                      Uint32 Stride,
@@ -105,14 +107,15 @@ bool IsPendingOrOK(RADIENT_STATUS Status)
 
 bool WaitForPendingCopyCommandEnqueueCallbacks(RadientAssetManagerImpl& AssetManager)
 {
-    for (Uint32 i = 0; i < 256; ++i)
+    const auto Deadline = std::chrono::steady_clock::now() + TextureManagerWaitTimeout;
+    do
     {
         const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
         if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
         std::this_thread::sleep_for(1ms);
-    }
+    } while (std::chrono::steady_clock::now() < Deadline);
 
     return AssetManager.GetTextureManagerStats().PendingCopyCommandEnqueueCallbacks != 0;
 }
@@ -121,7 +124,8 @@ bool WaitForTextureManagerIdle(RadientAssetManagerImpl& AssetManager,
                                IRenderDevice*           pDevice,
                                IDeviceContext*          pContext)
 {
-    for (Uint32 i = 0; i < 256; ++i)
+    const auto Deadline = std::chrono::steady_clock::now() + TextureManagerWaitTimeout;
+    do
     {
         const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
         if (Stats.PendingTextureLoads == 0 &&
@@ -137,11 +141,10 @@ bool WaitForTextureManagerIdle(RadientAssetManagerImpl& AssetManager,
             pContext->Flush();
             pContext->FinishFrame();
         }
-        else
-        {
-            std::this_thread::sleep_for(1ms);
-        }
-    }
+
+        // Avoid busy-waiting while asynchronous texture work is in progress.
+        std::this_thread::sleep_for(1ms);
+    } while (std::chrono::steady_clock::now() < Deadline);
 
     const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();
     return Stats.PendingTextureLoads == 0 &&
