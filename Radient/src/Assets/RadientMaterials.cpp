@@ -29,15 +29,30 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 
 #include "DebugUtilities.hpp"
+#include "EngineMemory.h"
 #include "Errors.hpp"
+#include "FixedLinearAllocator.hpp"
+#include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "STDAllocator.hpp"
+
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
 
 #include <atomic>
 #include <array>
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -451,6 +466,106 @@ std::vector<RadientMaterialParameterDesc> BuildStandardMaterialParameters(const 
     return Parameters;
 }
 
+// Parameter descriptors, strings, and default values reside in Memory.
+// Default texture pointers are retained directly by their descriptors.
+struct PackedMaterialDefinitionData
+{
+    PackedMaterialDefinitionData(void* pData, IMemoryAllocator& Allocator) :
+        Memory{pData, STDDeleterRawMem<void>{Allocator}}
+    {}
+
+    PackedMaterialDefinitionData(PackedMaterialDefinitionData&& Other) noexcept :
+        Memory{std::move(Other.Memory)},
+        Desc{Other.Desc}
+    {
+        Other.Desc = {};
+    }
+
+    PackedMaterialDefinitionData(const PackedMaterialDefinitionData&)            = delete;
+    PackedMaterialDefinitionData& operator=(const PackedMaterialDefinitionData&) = delete;
+    PackedMaterialDefinitionData& operator=(PackedMaterialDefinitionData&&)      = delete;
+
+    ~PackedMaterialDefinitionData()
+    {
+        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+        {
+            if (Desc.pParameters[Index].pDefaultTexture != nullptr)
+                Desc.pParameters[Index].pDefaultTexture->Release();
+        }
+    }
+
+    std::unique_ptr<void, STDDeleterRawMem<void>> Memory;
+    RadientMaterialDefinitionDesc                 Desc;
+};
+
+PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDefinitionDesc& Desc)
+{
+    const Char* const DefinitionName = Desc.Name != nullptr ? Desc.Name : "";
+
+    FixedLinearAllocator Allocator{GetRawAllocator()};
+    Allocator.AddSpace<RadientMaterialParameterDesc>(Desc.ParameterCount);
+    Allocator.AddSpaceForString(DefinitionName);
+    Allocator.AddSpaceForString(Desc.Reference.URI);
+
+    for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+    {
+        const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
+        Allocator.AddSpaceForString(Parameter.Name);
+
+        Uint32     DataSize        = 0;
+        const bool IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
+        VERIFY_EXPR(IsValidDataSize);
+        (void)IsValidDataSize;
+        Allocator.AddSpace(DataSize, alignof(Uint32));
+    }
+
+    // Reserve one block, then use a second allocator as a cursor over it.
+    Allocator.Reserve();
+    const size_t MemorySize = Allocator.GetReservedSize();
+    void* const  pMemory    = Allocator.ReleaseOwnership();
+
+    PackedMaterialDefinitionData Data{pMemory, GetRawAllocator()};
+    FixedLinearAllocator         Writer{pMemory, MemorySize};
+
+    RadientMaterialParameterDesc* const pParameters =
+        Writer.Allocate<RadientMaterialParameterDesc>(Desc.ParameterCount);
+
+    Data.Desc               = Desc;
+    Data.Desc.Name          = Writer.CopyString(DefinitionName);
+    Data.Desc.Reference     = Desc.Reference;
+    Data.Desc.Reference.URI = Writer.CopyString(Desc.Reference.URI);
+    Data.Desc.pParameters   = pParameters;
+
+    for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+    {
+        const RadientMaterialParameterDesc& Src = Desc.pParameters[Index];
+        RadientMaterialParameterDesc&       Dst = pParameters[Index];
+        Dst                                     = Src;
+        Dst.Name                                = Writer.CopyString(Src.Name);
+
+        Uint32     DataSize        = 0;
+        const bool IsValidDataSize = GetMaterialParameterDataSize(Src, DataSize);
+        VERIFY_EXPR(IsValidDataSize);
+        (void)IsValidDataSize;
+        if (DataSize != 0)
+        {
+            void* const pDefaultValue = Writer.Allocate(DataSize, alignof(Uint32));
+            if (Src.pDefaultValue != nullptr)
+                std::memcpy(pDefaultValue, Src.pDefaultValue, DataSize);
+            else
+                std::memset(pDefaultValue, 0, DataSize);
+            Dst.pDefaultValue = pDefaultValue;
+        }
+
+        if (Dst.pDefaultTexture != nullptr)
+            Dst.pDefaultTexture->AddRef();
+    }
+
+    VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
+
+    return Data;
+}
+
 struct MaterialParameterValue
 {
     std::vector<Uint8>                               Data;
@@ -478,64 +593,24 @@ public:
     RadientMaterialDefinitionImpl(IReferenceCounters*                  pRefCounters,
                                   const RadientMaterialDefinitionDesc& Desc) :
         TBase{pRefCounters},
-        m_Name{Desc.Name != nullptr ? Desc.Name : ""},
-        m_ReferenceURI{Desc.Reference.URI != nullptr ? Desc.Reference.URI : ""},
-        m_HasReferenceURI{Desc.Reference.URI != nullptr},
+        m_Data{PackMaterialDefinitionData(Desc)},
+        m_ParameterIndices{},
         m_DefinitionHandle{s_NextMaterialDefinitionHandle.fetch_add(1, std::memory_order_relaxed)}
     {
-        m_Desc           = Desc;
-        m_Desc.Name      = m_Name.c_str();
-        m_Reference      = Desc.Reference;
-        m_Reference.URI  = m_HasReferenceURI ? m_ReferenceURI.c_str() : nullptr;
-        m_Desc.Reference = m_Reference;
-
-        m_Parameters.resize(Desc.ParameterCount);
-        m_ParameterNameStorage.resize(Desc.ParameterCount);
-        m_DefaultValues.resize(Desc.ParameterCount);
-        m_DefaultTextures.resize(Desc.ParameterCount);
-        m_ParameterIndices.reserve(Desc.ParameterCount);
-
-        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+        m_ParameterIndices.reserve(m_Data.Desc.ParameterCount);
+        for (Uint32 Index = 0; Index < m_Data.Desc.ParameterCount; ++Index)
         {
-            const RadientMaterialParameterDesc& SourceDesc = Desc.pParameters[Index];
-            RadientMaterialParameterDesc&       Dst        = m_Parameters[Index];
-
-            m_ParameterNameStorage[Index] = SourceDesc.Name;
-            Dst                           = SourceDesc;
-
-            Uint32     DataSize        = 0;
-            const bool IsValidDataSize = GetMaterialParameterDataSize(SourceDesc, DataSize);
-            VERIFY_EXPR(IsValidDataSize);
-            (void)IsValidDataSize;
-            if (DataSize != 0)
-            {
-                m_DefaultValues[Index].resize(DataSize, 0);
-                if (SourceDesc.pDefaultValue != nullptr)
-                    std::memcpy(m_DefaultValues[Index].data(), SourceDesc.pDefaultValue, DataSize);
-            }
-            m_DefaultTextures[Index] = SourceDesc.pDefaultTexture;
-
-            m_ParameterIndices.emplace(m_ParameterNameStorage[Index], Index);
+            const bool Inserted =
+                m_ParameterIndices.emplace(m_Data.Desc.pParameters[Index].Name, Index).second;
+            VERIFY_EXPR(Inserted);
         }
-
-        // Set pointers only after all movable storage has reached its final location.
-        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
-        {
-            RadientMaterialParameterDesc& Param = m_Parameters[Index];
-            Param.Name                          = m_ParameterNameStorage[Index].c_str();
-            Param.pDefaultValue                 = m_DefaultValues[Index].empty() ? nullptr : m_DefaultValues[Index].data();
-            Param.pDefaultTexture               = m_DefaultTextures[Index];
-        }
-
-        m_Desc.pParameters    = m_Parameters.empty() ? nullptr : m_Parameters.data();
-        m_Desc.ParameterCount = static_cast<Uint32>(m_Parameters.size());
     }
 
     IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinition, IID_RadientAsset, TBase)
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
-        return m_Reference;
+        return m_Data.Desc.Reference;
     }
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
@@ -545,7 +620,7 @@ public:
 
     virtual const RadientMaterialDefinitionDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        return m_Desc;
+        return m_Data.Desc;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetStatus() const override final
@@ -555,18 +630,18 @@ public:
 
     virtual Uint32 DILIGENT_CALL_TYPE GetParameterCount() const override final
     {
-        return static_cast<Uint32>(m_Parameters.size());
+        return m_Data.Desc.ParameterCount;
     }
 
     virtual const RadientMaterialParameterDesc& DILIGENT_CALL_TYPE GetParameterDesc(Uint32 Index) const override final
     {
-        if (Index >= m_Parameters.size())
+        if (Index >= m_Data.Desc.ParameterCount)
         {
             UNEXPECTED("Material parameter index ", Index, " is out of range");
             static constexpr RadientMaterialParameterDesc InvalidDesc{};
             return InvalidDesc;
         }
-        return m_Parameters[Index];
+        return m_Data.Desc.pParameters[Index];
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameterHandle(Uint32                          Index,
@@ -576,7 +651,7 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
         *pHandle = {};
 
-        if (Index >= m_Parameters.size())
+        if (Index >= m_Data.Desc.ParameterCount)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         pHandle->Definition = m_DefinitionHandle;
@@ -604,19 +679,13 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateInstance(IRadientMaterialInstance** ppInstance) const override final;
 
 private:
-    std::string m_Name;
-    std::string m_ReferenceURI;
-    bool        m_HasReferenceURI = false;
+    using ParameterIndexMap = absl::flat_hash_map<const Char*, Uint32, CStringHash<Char>, CStringCompare<Char>>;
 
-    RadientMaterialDefinitionDesc m_Desc;
-    RadientAssetReference         m_Reference;
-    const RadientHandle           m_DefinitionHandle;
-
-    std::vector<RadientMaterialParameterDesc>        m_Parameters;
-    std::vector<std::string>                         m_ParameterNameStorage;
-    std::vector<std::vector<Uint8>>                  m_DefaultValues;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> m_DefaultTextures;
-    std::unordered_map<std::string, Uint32>          m_ParameterIndices;
+    const PackedMaterialDefinitionData m_Data;
+    // Map keys reference parameter names packed in m_Data. Declaring the map
+    // after m_Data ensures that the keys are destroyed before their strings.
+    ParameterIndexMap   m_ParameterIndices;
+    const RadientHandle m_DefinitionHandle;
 };
 
 class RadientMaterialInstanceWriterImpl;

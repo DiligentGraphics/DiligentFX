@@ -34,6 +34,7 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 
@@ -139,6 +140,7 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_STREQ(StoredParameter.Name, "BaseColor");
     EXPECT_EQ(StoredParameter.Type, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4);
     ASSERT_NE(StoredParameter.pDefaultValue, nullptr);
+    EXPECT_EQ(reinterpret_cast<std::uintptr_t>(StoredParameter.pDefaultValue) % alignof(Float32), 0u);
 
     RadientFloat4 StoredDefault{};
     std::memcpy(&StoredDefault, StoredParameter.pDefaultValue, sizeof(StoredDefault));
@@ -167,6 +169,32 @@ TEST(RadientMaterialsTest, AssetManagerReportsDefinitionStatus)
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
+}
+
+TEST(RadientMaterialsTest, FindsParametersByNameRegardlessOfDeclarationOrder)
+{
+    std::array<RadientMaterialParameterDesc, 3> Parameters{};
+    Parameters[0].Name = "Zeta";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[1].Name = "Alpha";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[2].Name = "Middle";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
+    ASSERT_NE(pDefinition, nullptr);
+
+    for (Uint32 Index = 0; Index < static_cast<Uint32>(Parameters.size()); ++Index)
+    {
+        RadientMaterialParameterHandle Handle;
+        EXPECT_EQ(pDefinition->FindParameter(Parameters[Index].Name, &Handle), RADIENT_STATUS_OK);
+        EXPECT_EQ(Handle.Index, Index);
+    }
+
+    RadientMaterialParameterHandle MissingHandle;
+    EXPECT_EQ(pDefinition->FindParameter("Missing", &MissingHandle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_FALSE(MissingHandle);
 }
 
 TEST(RadientMaterialsTest, WriterUpdatesSharedInstance)
