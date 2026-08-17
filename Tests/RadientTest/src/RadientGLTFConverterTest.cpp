@@ -27,9 +27,11 @@
 #include "TempDirectory.hpp"
 #include "gtest/gtest.h"
 
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "GLTFDocument.hpp"
+#include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "RadientTestAssetHelpers.hpp"
@@ -58,6 +60,139 @@ namespace
 
 static constexpr Uint32 TestVertexCount = 3;
 static constexpr float  EPSILON         = 1e-5f;
+
+template <typename ValueType>
+ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
+{
+    ValueType                      Value{};
+    IRadientMaterialDefinition*    pDefinition = Instance.GetDefinition();
+    RadientMaterialParameterHandle Handle;
+    EXPECT_NE(pDefinition, nullptr);
+    if (pDefinition != nullptr)
+    {
+        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
+        if (Handle)
+        {
+            EXPECT_EQ(Instance.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+                      RADIENT_STATUS_OK);
+        }
+    }
+    return Value;
+}
+
+RefCntAutoPtr<IRadientTextureAsset> GetMaterialTexture(IRadientMaterialInstance& Instance,
+                                                       const char*               Name)
+{
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    IRadientMaterialDefinition*         pDefinition = Instance.GetDefinition();
+    RadientMaterialParameterHandle      Handle;
+    EXPECT_NE(pDefinition, nullptr);
+    if (pDefinition != nullptr)
+    {
+        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
+        if (Handle)
+            EXPECT_EQ(Instance.GetTexture(Handle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    }
+    return pTexture;
+}
+
+GLTF::Material MakeExtendedGLTFMaterial(bool AddTextures)
+{
+    GLTF::Material Material;
+    Material.Attribs.BaseColorFactor          = float4{0.1f, 0.2f, 0.3f, 0.4f};
+    Material.Attribs.EmissiveFactor           = float3{0.5f, 0.6f, 0.7f};
+    Material.Attribs.NormalScale              = 0.8f;
+    Material.Attribs.AlphaMode                = GLTF::Material::ALPHA_MODE_MASK;
+    Material.Attribs.AlphaCutoff              = 0.25f;
+    Material.Attribs.MetallicFactor           = 0.35f;
+    Material.Attribs.RoughnessFactor          = 0.45f;
+    Material.Attribs.OcclusionFactor          = 0.55f;
+    Material.Attribs.ClearcoatFactor          = 0.65f;
+    Material.Attribs.ClearcoatRoughnessFactor = 0.75f;
+    Material.Attribs.ClearcoatNormalScale     = 0.85f;
+    Material.DoubleSided                      = true;
+    Material.HasClearcoat                     = true;
+
+    Material.Sheen                  = std::make_unique<GLTF::Material::SheenShaderAttribs>();
+    Material.Sheen->ColorFactor     = float3{0.15f, 0.25f, 0.35f};
+    Material.Sheen->RoughnessFactor = 0.46f;
+
+    Material.Anisotropy           = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
+    Material.Anisotropy->Strength = 0.56f;
+    Material.Anisotropy->Rotation = 0.66f;
+
+    Material.Iridescence                   = std::make_unique<GLTF::Material::IridescenceShaderAttribs>();
+    Material.Iridescence->Factor           = 0.76f;
+    Material.Iridescence->IOR              = 1.4f;
+    Material.Iridescence->ThicknessMinimum = 120.f;
+    Material.Iridescence->ThicknessMaximum = 360.f;
+
+    Material.Transmission         = std::make_unique<GLTF::Material::TransmissionShaderAttribs>();
+    Material.Transmission->Factor = 0.86f;
+    Material.Transmission->IOR    = 1.45f;
+
+    Material.Volume                      = std::make_unique<GLTF::Material::VolumeShaderAttribs>();
+    Material.Volume->ThicknessFactor     = 0.96f;
+    Material.Volume->AttenuationColor    = float3{0.2f, 0.4f, 0.6f};
+    Material.Volume->AttenuationDistance = 12.f;
+
+    if (AddTextures)
+    {
+        GLTF::MaterialBuilder Builder{Material};
+        for (Uint32 TextureAttribId = GLTF::DefaultBaseColorTextureAttribId;
+             TextureAttribId <= GLTF::DefaultThicknessTextureAttribId;
+             ++TextureAttribId)
+        {
+            Builder.SetTextureId(TextureAttribId, 0);
+        }
+        Builder.Finalize();
+    }
+
+    return Material;
+}
+
+RefCntAutoPtr<IRadientMaterialInstance> ConvertMaterial(
+    const GLTF::Material&                        Material,
+    IRadientTextureAsset* const*                 ppTextures,
+    Uint32                                       TextureCount,
+    RadientStandardMaterialDefinitionCreateInfo& DefinitionCI)
+{
+    RADIENT_STATUS Status = RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RadientMaterialAssetManagerSharedPtr      pManager = RadientMaterialAssetManager::Create();
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    Status = pManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    Status = RadientGLTFConverter::PopulateMaterialInstance(
+        Material, ppTextures, TextureCount, *pDefinition, *pWriter);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    Status = pWriter->Commit();
+    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE);
+    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+        return {};
+    return pInstance;
+}
 
 const std::array<float, 9> TestPositions{
     -1.f, 2.f, 3.f,
@@ -485,6 +620,113 @@ void ExpectCreateMeshIndexSourcePacksIndices(const IndexData&              Indic
 }
 
 } // namespace
+
+TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
+{
+    const GLTF::Material Material = MakeExtendedGLTFMaterial(true);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture =
+        MakeTestTextureAsset("texture://gltf-standard-material");
+    IRadientTextureAsset* const Textures[] = {pTexture};
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+        ConvertMaterial(Material, Textures, 1, DefinitionCI);
+    ASSERT_NE(pInstance, nullptr);
+
+    EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS);
+    EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL);
+    EXPECT_EQ(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL);
+
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").w, 0.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "MetallicFactor"), 0.35f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "RoughnessFactor"), 0.45f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "EmissiveFactor").z, 0.7f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "NormalScale"), 0.8f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "OcclusionStrength"), 0.55f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatFactor"), 0.65f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatRoughnessFactor"), 0.75f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatNormalScale"), 0.85f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "SheenColorFactor").y, 0.25f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "SheenRoughnessFactor"), 0.46f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AnisotropyStrength"), 0.56f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AnisotropyRotation"), 0.66f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceFactor"), 0.76f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceIOR"), 1.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceThicknessMinimum"), 120.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceThicknessMaximum"), 360.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "TransmissionFactor"), 0.86f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IOR"), 1.45f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ThicknessFactor"), 0.96f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "AttenuationColor").y, 0.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AttenuationDistance"), 12.f);
+    EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, "AlphaMode"),
+              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_MASK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AlphaCutoff"), 0.25f);
+    EXPECT_EQ(GetMaterialParameter<Bool>(*pInstance, "DoubleSided"), True);
+
+    static constexpr const char* TextureParameterNames[] = {
+        "BaseColorTexture",
+        "MetallicRoughnessTexture",
+        "NormalTexture",
+        "OcclusionTexture",
+        "EmissiveTexture",
+        "ClearCoatTexture",
+        "ClearCoatRoughnessTexture",
+        "ClearCoatNormalTexture",
+        "SheenColorTexture",
+        "SheenRoughnessTexture",
+        "AnisotropyTexture",
+        "IridescenceTexture",
+        "IridescenceThicknessTexture",
+        "TransmissionTexture",
+        "ThicknessTexture",
+    };
+    for (const char* ParameterName : TextureParameterNames)
+        EXPECT_EQ(GetMaterialTexture(*pInstance, ParameterName), pTexture);
+}
+
+TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)
+{
+    RefCntAutoPtr<IRadientTextureAsset> pTexture =
+        MakeTestTextureAsset("texture://gltf-unlit-material");
+    IRadientTextureAsset* const Textures[] = {pTexture};
+
+    GLTF::Material Material;
+    Material.Attribs.Workflow        = GLTF::Material::PBR_WORKFLOW_UNLIT;
+    Material.Attribs.BaseColorFactor = float4{0.2f, 0.4f, 0.6f, 0.8f};
+    Material.Attribs.AlphaMode       = GLTF::Material::ALPHA_MODE_BLEND;
+    GLTF::MaterialBuilder Builder{Material};
+    Builder.SetTextureId(GLTF::DefaultBaseColorTextureAttribId, 0);
+    Builder.Finalize();
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+        ConvertMaterial(Material, Textures, 1, DefinitionCI);
+    ASSERT_NE(pInstance, nullptr);
+
+    EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_UNLIT);
+    EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    EXPECT_EQ(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").z, 0.6f);
+    EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, "AlphaMode"),
+              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND);
+    EXPECT_EQ(GetMaterialTexture(*pInstance, "BaseColorTexture"), pTexture);
+
+    RadientMaterialParameterHandle Handle;
+    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("MetallicFactor", &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("NormalTexture", &Handle), RADIENT_STATUS_NOT_FOUND);
+}
+
+TEST(RadientGLTFConverterTest, RejectsDeprecatedSpecularGlossinessMaterial)
+{
+    GLTF::Material Material;
+    Material.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    EXPECT_EQ(RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI),
+              RADIENT_STATUS_UNSUPPORTED);
+}
 
 TEST(RadientGLTFConverterTest, CreateMeshVertexSourceRejectsInvalidArguments)
 {

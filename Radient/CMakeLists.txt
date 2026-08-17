@@ -24,6 +24,7 @@ set(SOURCE
     src/Core/RadientEngineImpl.cpp
     src/Core/RadientViewImpl.cpp
     src/Import/RadientGLTFConverter.cpp
+    src/Import/RadientGLTFMaterialConverter.cpp
     src/Import/RadientSceneImporterImpl.cpp
     src/Math/RadientMath.cpp
     src/Render/RadientDrawList.cpp

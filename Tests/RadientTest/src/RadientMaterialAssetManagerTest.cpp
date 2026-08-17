@@ -212,6 +212,17 @@ TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependenci
     EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.z, BaseColorFactor.z);
     EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.w, BaseColorFactor.w);
     EXPECT_TRUE(pGLTFMaterial->DoubleSided);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+    const RadientFloat4 StoredBaseColor = GetInstanceParameter<RadientFloat4>(*pInstance, "BaseColorFactor");
+    EXPECT_FLOAT_EQ(StoredBaseColor.x, BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(StoredBaseColor.y, BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(StoredBaseColor.z, BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(StoredBaseColor.w, BaseColorFactor.w);
+    EXPECT_EQ(GetInstanceParameter<Uint32>(*pInstance, "AlphaMode"),
+              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE);
+    EXPECT_EQ(GetInstanceParameter<Bool>(*pInstance, "DoubleSided"), True);
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialRejectsInvalidArguments)

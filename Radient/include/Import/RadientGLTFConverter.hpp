@@ -36,6 +36,10 @@ namespace Diligent
 {
 
 struct IRadientSceneWriter;
+struct IRadientMaterialDefinition;
+struct IRadientMaterialInstanceWriter;
+struct IRadientTextureAsset;
+struct RadientStandardMaterialDefinitionCreateInfo;
 class RadientMeshIndexSource;
 class RadientMeshVertexSource;
 
@@ -43,6 +47,7 @@ namespace GLTF
 {
 
 class Document;
+struct Material;
 struct Model;
 struct TinyGltfModelView;
 struct TinyGltfPrimitiveView;
@@ -51,6 +56,25 @@ struct TinyGltfPrimitiveView;
 
 namespace RadientGLTFConverter
 {
+
+/// Infers the immutable standard-material schema required by a GLTF material.
+///
+/// Deprecated specular-glossiness materials are not representable by the
+/// standard material model and return RADIENT_STATUS_UNSUPPORTED.
+RADIENT_STATUS ConvertMaterialDefinition(
+    const GLTF::Material&                        Material,
+    RadientStandardMaterialDefinitionCreateInfo& DefinitionCI);
+
+/// Copies GLTF material values and resolved texture assets into an instance writer.
+///
+/// \p Definition must describe the schema returned by ConvertMaterialDefinition().
+/// The function does not commit \p Writer.
+RADIENT_STATUS PopulateMaterialInstance(
+    const GLTF::Material&           Material,
+    IRadientTextureAsset* const*    ppTextures,
+    Uint32                          TextureCount,
+    IRadientMaterialDefinition&     Definition,
+    IRadientMaterialInstanceWriter& Writer);
 
 struct MeshVertexSourceResult
 {

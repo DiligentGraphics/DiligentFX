@@ -146,6 +146,11 @@ private:
     RADIENT_STATUS CreateStandardMaterialInstance(const RadientMaterialCreateInfo& MaterialCI,
                                                   IRadientMaterialInstance**       ppInstance);
 
+    RADIENT_STATUS CreateGLTFMaterialInstance(const GLTF::Material&        Material,
+                                              IRadientTextureAsset* const* ppTextures,
+                                              Uint32                       TextureCount,
+                                              IRadientMaterialInstance**   ppInstance);
+
     RADIENT_STATUS CreateMaterialAsset(GLTF::Material               Material,
                                        IRadientTextureAsset* const* ppTextures,
                                        Uint32                       TextureCount,

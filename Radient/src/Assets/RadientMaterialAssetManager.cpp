@@ -32,6 +32,7 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFBuilder.hpp"
+#include "Import/RadientGLTFConverter.hpp"
 #include "Math/RadientMath.hpp"
 
 #include <algorithm>
@@ -289,6 +290,42 @@ RADIENT_STATUS SetMaterialInstanceTexture(IRadientMaterialDefinition&     Defini
         FindStatus;
 }
 
+template <typename InitializeType>
+RADIENT_STATUS CreateInitializedStandardMaterialInstance(
+    RadientMaterialAssetManager&                       Manager,
+    const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
+    InitializeType&&                                   Initialize,
+    IRadientMaterialInstance**                         ppInstance)
+{
+    VERIFY_EXPR(ppInstance != nullptr && *ppInstance == nullptr);
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RADIENT_STATUS                            Status = Manager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    Status = Initialize(*pDefinition, *pWriter);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    Status = pWriter->Commit();
+    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+        return Status;
+
+    *ppInstance = pInstance.Detach();
+    return RADIENT_STATUS_OK;
+}
+
 bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
 {
     if (MaterialData.TextureAttribsReady)
@@ -427,73 +464,61 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
     if (MaterialCI.pEmissiveTexture != nullptr)
         DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    RADIENT_STATUS                            Status =
-        CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
+    return CreateInitializedStandardMaterialInstance(
+        *this,
+        DefinitionCI,
+        [&](IRadientMaterialDefinition&     Definition,
+            IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
+            struct ParameterValue
+            {
+                const char* Name;
+                const void* pData;
+                Uint32      Size;
+            };
+            const ParameterValue Parameters[] = {
+                {"BaseColorFactor", &MaterialCI.BaseColorFactor, static_cast<Uint32>(sizeof(MaterialCI.BaseColorFactor))},
+                {"MetallicFactor", &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
+                {"RoughnessFactor", &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
+                {"EmissiveFactor", &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
+                {"AlphaCutoff", &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
+                {"DoubleSided", &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
+            };
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
+            for (const ParameterValue& Parameter : Parameters)
+            {
+                const RADIENT_STATUS Status = SetMaterialInstanceParameter(
+                    Definition, Writer, Parameter.Name, Parameter.pData, Parameter.Size);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+            }
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
+            struct TextureValue
+            {
+                const char*           Name;
+                IRadientTextureAsset* pTexture;
+            };
+            const TextureValue Textures[] = {
+                {"BaseColorTexture", MaterialCI.pBaseColorTexture},
+                {"MetallicRoughnessTexture", MaterialCI.pMetallicRoughnessTexture},
+                {"NormalTexture", MaterialCI.pNormalTexture},
+                {"OcclusionTexture", MaterialCI.pOcclusionTexture},
+                {"EmissiveTexture", MaterialCI.pEmissiveTexture},
+            };
 
-    struct ParameterValue
-    {
-        const char* Name;
-        const void* pData;
-        Uint32      Size;
-    };
-    const ParameterValue Parameters[] = {
-        {"BaseColorFactor", &MaterialCI.BaseColorFactor, static_cast<Uint32>(sizeof(MaterialCI.BaseColorFactor))},
-        {"MetallicFactor", &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
-        {"RoughnessFactor", &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
-        {"EmissiveFactor", &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
-        {"AlphaCutoff", &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
-        {"DoubleSided", &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
-    };
+            for (const TextureValue& Texture : Textures)
+            {
+                if (Texture.pTexture == nullptr)
+                    continue;
 
-    for (const ParameterValue& Parameter : Parameters)
-    {
-        Status = SetMaterialInstanceParameter(*pDefinition, *pWriter, Parameter.Name, Parameter.pData, Parameter.Size);
-        if (Status != RADIENT_STATUS_OK)
-            return Status;
-    }
+                const RADIENT_STATUS Status = SetMaterialInstanceTexture(
+                    Definition, Writer, Texture.Name, Texture.pTexture);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+            }
 
-    struct TextureValue
-    {
-        const char*           Name;
-        IRadientTextureAsset* pTexture;
-    };
-    const TextureValue Textures[] = {
-        {"BaseColorTexture", MaterialCI.pBaseColorTexture},
-        {"MetallicRoughnessTexture", MaterialCI.pMetallicRoughnessTexture},
-        {"NormalTexture", MaterialCI.pNormalTexture},
-        {"OcclusionTexture", MaterialCI.pOcclusionTexture},
-        {"EmissiveTexture", MaterialCI.pEmissiveTexture},
-    };
-
-    for (const TextureValue& Texture : Textures)
-    {
-        if (Texture.pTexture == nullptr)
-            continue;
-
-        Status = SetMaterialInstanceTexture(*pDefinition, *pWriter, Texture.Name, Texture.pTexture);
-        if (Status != RADIENT_STATUS_OK)
-            return Status;
-    }
-
-    Status = pWriter->Commit();
-    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
-        return Status;
-
-    *ppInstance = pInstance.Detach();
-    return RADIENT_STATUS_OK;
+            return RADIENT_STATUS_OK;
+        },
+        ppInstance);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
@@ -502,7 +527,47 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterial(
     Uint32                       TextureCount,
     IRadientMaterialAsset**      ppMaterial)
 {
-    return CreateMaterialAsset(std::move(Material), ppTextures, TextureCount, nullptr, ppMaterial);
+    if (ppMaterial == nullptr || (ppTextures == nullptr && TextureCount != 0))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    const RADIENT_STATUS                    InstanceStatus =
+        CreateGLTFMaterialInstance(Material, ppTextures, TextureCount, pInstance.GetAddressOfEmpty());
+    if (InstanceStatus != RADIENT_STATUS_OK)
+        return InstanceStatus;
+
+    return CreateMaterialAsset(std::move(Material), ppTextures, TextureCount, pInstance, ppMaterial);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateGLTFMaterialInstance(
+    const GLTF::Material&        Material,
+    IRadientTextureAsset* const* ppTextures,
+    Uint32                       TextureCount,
+    IRadientMaterialInstance**   ppInstance)
+{
+    VERIFY_EXPR(ppInstance != nullptr && *ppInstance == nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RADIENT_STATUS                              Status =
+        RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI);
+    if (Status == RADIENT_STATUS_UNSUPPORTED)
+    {
+        // The deprecated specular-glossiness workflow remains renderable
+        // through the legacy GLTF payload, but has no standard definition.
+        return RADIENT_STATUS_OK;
+    }
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    return CreateInitializedStandardMaterialInstance(
+        *this,
+        DefinitionCI,
+        [&](IRadientMaterialDefinition&     Definition,
+            IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
+            return RadientGLTFConverter::PopulateMaterialInstance(
+                Material, ppTextures, TextureCount, Definition, Writer);
+        },
+        ppInstance);
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterialAsset(

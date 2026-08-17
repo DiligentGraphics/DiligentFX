@@ -1184,6 +1184,8 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsCreatesMaterialAssetWithoutTextures)
     EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.w, 1.0f);
     EXPECT_FLOAT_EQ(pMaterial->Attribs.MetallicFactor, 0.125f);
     EXPECT_FLOAT_EQ(pMaterial->Attribs.RoughnessFactor, 0.875f);
+
+    EXPECT_NE(RadientMaterialAssetManager::GetInstance(Materials[0]), nullptr);
 }
 
 TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive)
