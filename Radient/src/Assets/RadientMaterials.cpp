@@ -115,9 +115,15 @@ bool GetMaterialParameterDataSize(const RadientMaterialParameterDesc& Desc, Uint
 
 RADIENT_STATUS ValidateMaterialDefinitionCreateInfo(const RadientMaterialDefinitionCreateInfo& CreateInfo)
 {
-    if (CreateInfo.Desc.Domain >= RADIENT_MATERIAL_DOMAIN_COUNT ||
-        (CreateInfo.ParameterCount != 0 && CreateInfo.pParameters == nullptr))
+    if (CreateInfo.Desc.Domain >= RADIENT_MATERIAL_DOMAIN_COUNT)
     {
+        LOG_ERROR_MESSAGE("Invalid material definition domain ", Uint32{CreateInfo.Desc.Domain});
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+    if (CreateInfo.ParameterCount != 0 && CreateInfo.pParameters == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Material definition declares ", CreateInfo.ParameterCount,
+                          " parameters, but pParameters is null");
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
@@ -127,16 +133,62 @@ RADIENT_STATUS ValidateMaterialDefinitionCreateInfo(const RadientMaterialDefinit
     for (Uint32 Index = 0; Index < CreateInfo.ParameterCount; ++Index)
     {
         const RadientMaterialParameterDesc& Desc = CreateInfo.pParameters[Index];
-        Uint32                              DataSize;
-        if (Desc.Name == nullptr || Desc.Name[0] == '\0' ||
-            Desc.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
-            Desc.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT ||
-            !GetMaterialParameterDataSize(Desc, DataSize) ||
-            (IsTextureParameter(Desc.Type) &&
-             (Desc.pDefaultValue != nullptr || (Desc.ArraySize != 1 && Desc.pDefaultTexture != nullptr))) ||
-            (!IsTextureParameter(Desc.Type) && Desc.pDefaultTexture != nullptr) ||
-            !Names.emplace(Desc.Name, Index).second)
+        if (Desc.Name == nullptr)
         {
+            LOG_ERROR_MESSAGE("Material parameter ", Index, " name must not be null");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (Desc.Name[0] == '\0')
+        {
+            LOG_ERROR_MESSAGE("Material parameter ", Index, " name must not be empty");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (Desc.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
+            Desc.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT)
+        {
+            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' has invalid type ", Uint32{Desc.Type});
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (Desc.ArraySize == 0)
+        {
+            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' array size must not be zero");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        Uint32 DataSize;
+        if (!GetMaterialParameterDataSize(Desc, DataSize))
+        {
+            LOG_ERROR_MESSAGE("Material parameter '", Desc.Name, "' data size exceeds the supported limit");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        if (IsTextureParameter(Desc.Type))
+        {
+            if (Desc.pDefaultValue != nullptr)
+            {
+                LOG_ERROR_MESSAGE("Texture material parameter '", Desc.Name,
+                                  "' must use pDefaultTexture instead of pDefaultValue");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+            if (Desc.ArraySize != 1 && Desc.pDefaultTexture != nullptr)
+            {
+                LOG_ERROR_MESSAGE("Texture array material parameter '", Desc.Name,
+                                  "' must not specify pDefaultTexture");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+        }
+        else if (Desc.pDefaultTexture != nullptr)
+        {
+            LOG_ERROR_MESSAGE("Non-texture material parameter '", Desc.Name,
+                              "' must not specify pDefaultTexture");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        const auto InsertResult = Names.emplace(Desc.Name, Index);
+        if (!InsertResult.second)
+        {
+            LOG_ERROR_MESSAGE("Material parameter ", Index, " name '", Desc.Name,
+                              "' duplicates parameter ", InsertResult.first->second);
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
     }
@@ -160,41 +212,70 @@ RADIENT_STATUS ValidateStandardMaterialDefinitionCreateInfo(const RadientStandar
 {
     const Uint32 Features = static_cast<Uint32>(CreateInfo.Features);
     const Uint32 Textures = static_cast<Uint32>(CreateInfo.Textures);
-    if (CreateInfo.Model >= RADIENT_STANDARD_MATERIAL_MODEL_COUNT ||
-        (Features & ~static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL)) != 0 ||
-        (Textures & ~static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL)) != 0)
+    if (CreateInfo.Model >= RADIENT_STANDARD_MATERIAL_MODEL_COUNT)
     {
+        LOG_ERROR_MESSAGE("Invalid standard material model ", Uint32{CreateInfo.Model});
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    const Uint32 UnsupportedFeatures = Features & ~static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL);
+    if (UnsupportedFeatures != 0)
+    {
+        LOG_ERROR_MESSAGE("Standard material feature flags contain unsupported bits ", UnsupportedFeatures);
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    const Uint32 UnsupportedTextures = Textures & ~static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL);
+    if (UnsupportedTextures != 0)
+    {
+        LOG_ERROR_MESSAGE("Standard material texture flags contain unsupported bits ", UnsupportedTextures);
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
     if (CreateInfo.Model == RADIENT_STANDARD_MATERIAL_MODEL_UNLIT)
     {
-        const Uint32 SupportedTextures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR;
-        return Features == RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE &&
-                (Textures & ~SupportedTextures) == 0 ?
-            RADIENT_STATUS_OK :
-            RADIENT_STATUS_INVALID_ARGUMENT;
+        if (Features != RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE)
+        {
+            LOG_ERROR_MESSAGE("Unlit standard materials do not support optional material features");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        const Uint32 UnsupportedUnlitTextures = Textures & ~static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR);
+        if (UnsupportedUnlitTextures != 0)
+        {
+            LOG_ERROR_MESSAGE("Unlit standard materials only support the base-color texture semantic");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        return RADIENT_STATUS_OK;
     }
 
     struct FeatureTextureSet
     {
         RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Feature;
         Uint32                                  Textures;
+        const Char*                             Description;
     };
 
     static constexpr std::array<FeatureTextureSet, 6> FeatureTextures{{
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL,
+         "Clear-coat texture semantics require the clear-coat material feature"},
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ALL},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ALL,
+         "Sheen texture semantics require the sheen material feature"},
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY,
+         "The anisotropy texture semantic requires the anisotropy material feature"},
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_ALL},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_ALL,
+         "Iridescence texture semantics require the iridescence material feature"},
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION,
+         "The transmission texture semantic requires the transmission material feature"},
         {RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME,
-         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS},
+         RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS,
+         "The thickness texture semantic requires the volume material feature"},
     }};
 
     for (const FeatureTextureSet& Set : FeatureTextures)
@@ -202,6 +283,7 @@ RADIENT_STATUS ValidateStandardMaterialDefinitionCreateInfo(const RadientStandar
         if ((Textures & Set.Textures) != 0 &&
             !HasStandardMaterialFeature(CreateInfo.Features, Set.Feature))
         {
+            LOG_ERROR_MESSAGE(Set.Description);
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
     }
@@ -209,6 +291,7 @@ RADIENT_STATUS ValidateStandardMaterialDefinitionCreateInfo(const RadientStandar
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME) &&
         !HasStandardMaterialFeature(CreateInfo.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION))
     {
+        LOG_ERROR_MESSAGE("The volume material feature requires the transmission material feature");
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
