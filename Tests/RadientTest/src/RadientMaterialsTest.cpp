@@ -303,7 +303,7 @@ TEST(RadientMaterialsTest, CloneCreatesIndependentInstance)
     EXPECT_FLOAT_EQ(GetParameter<Float32>(*pClone, Handle), UpdatedValue);
 }
 
-TEST(RadientMaterialsTest, WritersMergeChangesToDifferentParameters)
+TEST(RadientMaterialsTest, WritersApplyIndependentChanges)
 {
     const Float32 DefaultValue = 0.f;
     const Float32 FirstValue   = 1.f;

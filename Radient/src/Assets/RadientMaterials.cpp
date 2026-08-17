@@ -38,8 +38,6 @@
 #include <cstring>
 #include <exception>
 #include <limits>
-#include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -380,13 +378,6 @@ bool operator==(const MaterialParameterValue& Lhs, const MaterialParameterValue&
     return true;
 }
 
-struct MaterialInstanceState
-{
-    std::vector<MaterialParameterValue> Values;
-};
-
-using MaterialInstanceStatePtr = std::shared_ptr<const MaterialInstanceState>;
-
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
 {
 public:
@@ -545,24 +536,11 @@ public:
                                 std::vector<RadientMaterialParameterHandle>  Handles,
                                 std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> Types,
                                 std::vector<MaterialParameterValue>          Values) :
-        RadientMaterialInstanceImpl{
-            pRefCounters,
-            pDefinition,
-            std::move(Handles),
-            std::move(Types),
-            std::make_shared<MaterialInstanceState>(MaterialInstanceState{std::move(Values)})}
-    {}
-
-    RadientMaterialInstanceImpl(IReferenceCounters*                          pRefCounters,
-                                IRadientMaterialDefinition*                  pDefinition,
-                                std::vector<RadientMaterialParameterHandle>  Handles,
-                                std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> Types,
-                                MaterialInstanceStatePtr                     pState) :
         TBase{pRefCounters},
         m_pDefinition{pDefinition},
         m_Handles{std::move(Handles)},
         m_Types{std::move(Types)},
-        m_pState{std::move(pState)}
+        m_Values{std::move(Values)}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstance, TBase)
@@ -574,7 +552,7 @@ public:
 
     virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
     {
-        return m_Version.load(std::memory_order_acquire);
+        return m_Version;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
@@ -586,8 +564,7 @@ public:
         if (IsTextureParameter(m_Types[Handle.Index]))
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const MaterialInstanceStatePtr pState = GetState();
-        const std::vector<Uint8>&      Data   = pState->Values[Handle.Index].Data;
+        const std::vector<Uint8>& Data = m_Values[Handle.Index].Data;
         if (pData == nullptr || DataSize != static_cast<Uint32>(Data.size()))
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -608,8 +585,7 @@ public:
         if (!IsTextureParameter(m_Types[Handle.Index]))
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const MaterialInstanceStatePtr pState   = GetState();
-        const auto&                    Textures = pState->Values[Handle.Index].Textures;
+        const auto& Textures = m_Values[Handle.Index].Textures;
         if (ArrayIndex >= Textures.size())
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -630,58 +606,34 @@ private:
         return Handle.Index < m_Handles.size() && m_Handles[Handle.Index] == Handle;
     }
 
-    MaterialInstanceStatePtr GetState() const
+    RADIENT_STATUS Commit(std::vector<std::optional<MaterialParameterValue>>& Changes) noexcept
     {
-        std::lock_guard<std::mutex> Lock{m_StateMutex};
-        return m_pState;
-    }
+        bool StateChanged = false;
+        for (size_t Index = 0; Index < Changes.size(); ++Index)
+        {
+            if (Changes[Index].has_value() &&
+                !(m_Values[Index] == *Changes[Index]))
+            {
+                MaterialParameterValue& Change = *Changes[Index];
+                m_Values[Index].Data.swap(Change.Data);
+                m_Values[Index].Textures.swap(Change.Textures);
+                StateChanged = true;
+            }
+        }
 
-    RADIENT_STATUS Commit(const std::vector<std::optional<MaterialParameterValue>>& Changes)
-    {
-        bool HasChanges = false;
-        for (const auto& Change : Changes)
-            HasChanges = HasChanges || Change.has_value();
-        if (!HasChanges)
+        if (!StateChanged)
             return RADIENT_STATUS_NO_CHANGE;
 
-        try
-        {
-            std::lock_guard<std::mutex> Lock{m_StateMutex};
-
-            auto pNewState    = std::make_shared<MaterialInstanceState>(*m_pState);
-            bool StateChanged = false;
-            for (size_t Index = 0; Index < Changes.size(); ++Index)
-            {
-                if (Changes[Index].has_value() &&
-                    !(pNewState->Values[Index] == *Changes[Index]))
-                {
-                    pNewState->Values[Index] = *Changes[Index];
-                    StateChanged             = true;
-                }
-            }
-
-            if (!StateChanged)
-                return RADIENT_STATUS_NO_CHANGE;
-
-            m_pState = std::move(pNewState);
-            m_Version.fetch_add(1, std::memory_order_release);
-            return RADIENT_STATUS_OK;
-        }
-        catch (const std::exception& Error)
-        {
-            LOG_ERROR_MESSAGE("Failed to update Radient material instance: ", Error.what());
-            return RADIENT_STATUS_FAILED;
-        }
+        ++m_Version;
+        return RADIENT_STATUS_OK;
     }
 
 private:
     RefCntAutoPtr<IRadientMaterialDefinition>          m_pDefinition;
     const std::vector<RadientMaterialParameterHandle>  m_Handles;
     const std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> m_Types;
-
-    mutable std::mutex       m_StateMutex;
-    MaterialInstanceStatePtr m_pState;
-    std::atomic<Uint64>      m_Version{1};
+    std::vector<MaterialParameterValue>                m_Values;
+    Uint64                                             m_Version = 1;
 };
 
 class RadientMaterialInstanceWriterImpl final : public ObjectBase<IRadientMaterialInstanceWriter>
@@ -690,12 +642,10 @@ public:
     using TBase = ObjectBase<IRadientMaterialInstanceWriter>;
 
     RadientMaterialInstanceWriterImpl(IReferenceCounters*          pRefCounters,
-                                      RadientMaterialInstanceImpl* pInstance,
-                                      MaterialInstanceStatePtr     pBaseState) :
+                                      RadientMaterialInstanceImpl* pInstance) :
         TBase{pRefCounters},
         m_pInstance{pInstance},
-        m_pBaseState{std::move(pBaseState)},
-        m_Changes(m_pBaseState->Values.size())
+        m_Changes(m_pInstance->m_Values.size())
     {
     }
 
@@ -711,7 +661,7 @@ public:
 
         const MaterialParameterValue& CurrentValue = m_Changes[Handle.Index].has_value() ?
             *m_Changes[Handle.Index] :
-            m_pBaseState->Values[Handle.Index];
+            m_pInstance->m_Values[Handle.Index];
         const std::vector<Uint8>&     Data         = CurrentValue.Data;
         if (pData == nullptr || DataSize != static_cast<Uint32>(Data.size()))
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -721,7 +671,7 @@ public:
 
         MaterialParameterValue NewValue = CurrentValue;
         std::memcpy(NewValue.Data.data(), pData, NewValue.Data.size());
-        if (NewValue == m_pBaseState->Values[Handle.Index])
+        if (NewValue == m_pInstance->m_Values[Handle.Index])
             m_Changes[Handle.Index].reset();
         else
             m_Changes[Handle.Index] = std::move(NewValue);
@@ -738,7 +688,7 @@ public:
 
         const MaterialParameterValue& CurrentValue = m_Changes[Handle.Index].has_value() ?
             *m_Changes[Handle.Index] :
-            m_pBaseState->Values[Handle.Index];
+            m_pInstance->m_Values[Handle.Index];
         const auto&                   Textures     = CurrentValue.Textures;
         if (ArrayIndex >= Textures.size())
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -748,7 +698,7 @@ public:
 
         MaterialParameterValue NewValue = CurrentValue;
         NewValue.Textures[ArrayIndex]   = pTexture;
-        if (NewValue == m_pBaseState->Values[Handle.Index])
+        if (NewValue == m_pInstance->m_Values[Handle.Index])
             m_Changes[Handle.Index].reset();
         else
             m_Changes[Handle.Index] = std::move(NewValue);
@@ -760,7 +710,6 @@ public:
         const RADIENT_STATUS Status = m_pInstance->Commit(m_Changes);
         if (Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE)
         {
-            m_pBaseState = m_pInstance->GetState();
             for (auto& Change : m_Changes)
                 Change.reset();
         }
@@ -769,7 +718,6 @@ public:
 
 private:
     RefCntAutoPtr<RadientMaterialInstanceImpl>         m_pInstance;
-    MaterialInstanceStatePtr                           m_pBaseState;
     std::vector<std::optional<MaterialParameterValue>> m_Changes;
 };
 
@@ -860,8 +808,7 @@ RADIENT_STATUS RadientMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanc
     {
         RefCntAutoPtr<RadientMaterialInstanceWriterImpl> pWriter{
             MakeNewRCObj<RadientMaterialInstanceWriterImpl>()(
-                const_cast<RadientMaterialInstanceImpl*>(this),
-                GetState())};
+                const_cast<RadientMaterialInstanceImpl*>(this))};
         *ppWriter = pWriter.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -885,7 +832,7 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
                 m_pDefinition,
                 m_Handles,
                 m_Types,
-                GetState())};
+                m_Values)};
         *ppInstance = pInstance.Detach();
         return RADIENT_STATUS_OK;
     }

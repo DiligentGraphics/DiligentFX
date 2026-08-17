@@ -471,18 +471,19 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Stable, thread-safe material instance.
+/// Mutable material instance.
 ///
-/// An instance owns a versioned immutable parameter state. A writer publishes a
-/// new state without changing the instance identity, so every object that shares
-/// the instance observes the update.
+/// Every object that shares an instance observes changes committed through one
+/// of its writers. Material instances and their writers are not thread-safe. The
+/// caller is responsible for synchronizing all access to them and must ensure
+/// that an instance is not accessed concurrently with a writer commit.
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
 {
     /// Returns a borrowed pointer to the definition retained by this instance.
     VIRTUAL IRadientMaterialDefinition* METHOD(GetDefinition)(THIS) CONST PURE;
 
     /// Returns a monotonically increasing version of the parameter state. The
-    /// version changes after every successful writer commit.
+    /// version changes after every commit that modifies at least one parameter.
     VIRTUAL Uint64 METHOD(GetVersion)(THIS) CONST PURE;
 
     /// Copies the complete scalar, vector, matrix, or value array identified by
@@ -501,8 +502,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
                                               Uint32                         ArrayIndex,
                                               IRadientTextureAsset**         ppTexture) CONST PURE;
 
-    /// Creates a writer initialized with the current parameter state. On success,
-    /// ppWriter receives a strong reference to the writer.
+    /// Creates a reusable writer with no pending changes. On success, ppWriter
+    /// receives a strong reference to the writer.
     VIRTUAL RADIENT_STATUS METHOD(CreateWriter)(THIS_
                                                 IRadientMaterialInstanceWriter** ppWriter) CONST PURE;
 
@@ -541,8 +542,9 @@ DILIGENT_END_INTERFACE
 
 /// Reusable material instance writer.
 ///
-/// A writer is not thread-safe. It owns a private parameter copy and never
-/// modifies the definition. Changes are applied atomically by Commit().
+/// A writer records only parameters changed through SetParameter() and
+/// SetTexture(). The writer and its material instance are not thread-safe and
+/// must not be accessed concurrently with Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
@@ -561,12 +563,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
                                               Uint32                         ArrayIndex,
                                               IRadientTextureAsset*          pTexture) PURE;
 
-    /// Atomically publishes the writer's changes to its material instance. The
-    /// writer remains valid after the call. On success or RADIENT_STATUS_NO_CHANGE,
-    /// pending changes are cleared and the writer is rebased on the latest instance
-    /// state. On failure, pending changes are retained so the operation can be
-    /// retried. Changes to different parameters are merged with commits made since
-    /// this writer was created. For the same parameter, the later commit wins.
+    /// Applies the writer's pending changes to its material instance as one logical
+    /// update. The writer remains valid after the call. On success or
+    /// RADIENT_STATUS_NO_CHANGE, pending changes are cleared. On failure, pending
+    /// changes are retained so the operation can be retried.
     VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
