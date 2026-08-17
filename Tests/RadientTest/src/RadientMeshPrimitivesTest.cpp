@@ -119,6 +119,12 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo&,
+                                                                               IRadientMaterialDefinition**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo&,
                                                              IRadientMaterialAsset**) override final
     {

@@ -31,6 +31,7 @@
 #include "RadientTextureAssetManager.hpp"
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "WeakObjectCache.hpp"
 
 #include <memory>
 
@@ -105,6 +106,9 @@ public:
     RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionCreateInfo& DefinitionCI,
                                     IRadientMaterialDefinition**               ppDefinition);
 
+    RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
+                                                    IRadientMaterialDefinition**                       ppDefinition);
+
     RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                   IRadientMaterialAsset**          ppMaterial);
 
@@ -135,7 +139,8 @@ public:
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
 
-    RadientMaterialDefaultTextures m_DefaultTextures;
+    RadientMaterialDefaultTextures              m_DefaultTextures;
+    WeakObjectCache<IRadientMaterialDefinition> m_StandardMaterialDefinitions;
 };
 
 } // namespace Diligent

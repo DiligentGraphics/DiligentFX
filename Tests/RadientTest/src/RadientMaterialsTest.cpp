@@ -83,7 +83,6 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
 
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name          = ParameterName;
-    Parameter.ID            = 17;
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
     Parameter.pDefaultValue = &DefaultColor;
 
@@ -112,7 +111,6 @@ TEST(RadientMaterialsTest, DefinitionCopiesSchemaAndDefaults)
 
     const RadientMaterialParameterDesc& StoredParameter = pDefinition->GetParameterDesc(0);
     EXPECT_STREQ(StoredParameter.Name, "BaseColor");
-    EXPECT_EQ(StoredParameter.ID, 17u);
     EXPECT_EQ(StoredParameter.Type, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4);
     ASSERT_NE(StoredParameter.pDefaultValue, nullptr);
 
@@ -153,11 +151,9 @@ TEST(RadientMaterialsTest, WriterUpdatesSharedInstance)
 
     std::array<RadientMaterialParameterDesc, 2> Parameters{};
     Parameters[0].Name            = "BaseColor";
-    Parameters[0].ID              = 1;
     Parameters[0].Type            = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
     Parameters[0].pDefaultValue   = &DefaultColor;
     Parameters[1].Name            = "BaseColorTexture";
-    Parameters[1].ID              = 2;
     Parameters[1].Type            = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].pDefaultTexture = pDefaultTexture;
 
@@ -227,7 +223,6 @@ TEST(RadientMaterialsTest, UnchangedWriterDoesNotAdvanceVersion)
 
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name          = "Roughness";
-    Parameter.ID            = 1;
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultRoughness;
 
@@ -253,7 +248,6 @@ TEST(RadientMaterialsTest, DefinitionSpecificHandlesAreRejected)
 
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name          = "Value";
-    Parameter.ID            = 1;
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultValue;
 
@@ -284,7 +278,6 @@ TEST(RadientMaterialsTest, CloneCreatesIndependentInstance)
 
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name          = "Value";
-    Parameter.ID            = 1;
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultValue;
 
@@ -318,11 +311,9 @@ TEST(RadientMaterialsTest, WritersMergeChangesToDifferentParameters)
 
     std::array<RadientMaterialParameterDesc, 2> Parameters{};
     Parameters[0].Name          = "First";
-    Parameters[0].ID            = 1;
     Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[0].pDefaultValue = &DefaultValue;
     Parameters[1].Name          = "Second";
-    Parameters[1].ID            = 2;
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[1].pDefaultValue = &DefaultValue;
 
@@ -361,7 +352,6 @@ TEST(RadientMaterialsTest, InstanceRetainsDefinitionAndTextures)
 
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name            = "Texture";
-    Parameter.ID              = 1;
     Parameter.Type            = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameter.pDefaultTexture = pTexture;
 
@@ -402,7 +392,6 @@ TEST(RadientMaterialsTest, RejectsInvalidDefinitionSchema)
 
     std::array<RadientMaterialParameterDesc, 2> Parameters{};
     Parameters[0].Name = "Duplicate";
-    Parameters[0].ID   = 1;
     Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[1]      = Parameters[0];
 
@@ -413,11 +402,114 @@ TEST(RadientMaterialsTest, RejectsInvalidDefinitionSchema)
               RADIENT_STATUS_INVALID_ARGUMENT);
 
     Parameters[1].Name      = "TextureArray";
-    Parameters[1].ID        = 2;
     Parameters[1].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize = 0;
     EXPECT_EQ(CreateDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientMaterialsTest, StandardDefinitionsAreCached)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
+        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN;
+    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pFirstDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinition> pSecondDefinition;
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pFirstDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pSecondDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pFirstDefinition, nullptr);
+    ASSERT_NE(pSecondDefinition, nullptr);
+    EXPECT_EQ(pFirstDefinition, pSecondDefinition);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pFirstDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    RadientMaterialParameterHandle BaseColorHandle;
+    ASSERT_EQ(pFirstDefinition->FindParameter("BaseColorFactor", &BaseColorHandle), RADIENT_STATUS_OK);
+    const RadientFloat4 BaseColor = GetParameter<RadientFloat4>(*pInstance, BaseColorHandle);
+    EXPECT_FLOAT_EQ(BaseColor.x, 1.f);
+    EXPECT_FLOAT_EQ(BaseColor.y, 1.f);
+    EXPECT_FLOAT_EQ(BaseColor.z, 1.f);
+    EXPECT_FLOAT_EQ(BaseColor.w, 1.f);
+
+    RadientMaterialParameterHandle ClearCoatHandle;
+    RadientMaterialParameterHandle SheenHandle;
+    RadientMaterialParameterHandle NormalScaleHandle;
+    RadientMaterialParameterHandle NormalTextureHandle;
+    EXPECT_EQ(pFirstDefinition->FindParameter("ClearCoatFactor", &ClearCoatHandle), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstDefinition->FindParameter("SheenColorFactor", &SheenHandle), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstDefinition->FindParameter("NormalScale", &NormalScaleHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstDefinition->FindParameter("NormalTexture", &NormalTextureHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_EQ(pInstance->GetTexture(NormalTextureHandle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pTexture, nullptr);
+
+    DefinitionCI.Textures &= ~RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
+    RefCntAutoPtr<IRadientMaterialDefinition> pDifferentDefinition;
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDifferentDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_NE(pFirstDefinition, pDifferentDefinition);
+}
+
+TEST(RadientMaterialsTest, StandardUnlitMaterialHasOnlyApplicableSchema)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Model    = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
+    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+    RadientMaterialParameterHandle Handle;
+    EXPECT_EQ(pDefinition->FindParameter("BaseColorFactor", &Handle), RADIENT_STATUS_OK);
+    EXPECT_EQ(pDefinition->FindParameter("BaseColorTexture", &Handle), RADIENT_STATUS_OK);
+    EXPECT_EQ(pDefinition->FindParameter("AlphaMode", &Handle), RADIENT_STATUS_OK);
+    EXPECT_EQ(pDefinition->FindParameter("MetallicFactor", &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pDefinition->FindParameter("EmissiveFactor", &Handle), RADIENT_STATUS_NOT_FOUND);
+
+    DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+    pDefinition.Release();
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE;
+    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientMaterialsTest, StandardMaterialRejectsInvalidFeatureCombinations)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NONE;
+    DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME;
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME |
+        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION;
+    EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
 }
 
 } // namespace

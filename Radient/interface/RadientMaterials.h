@@ -40,12 +40,6 @@ typedef struct IRadientMaterialDefinition     IRadientMaterialDefinition;
 typedef struct IRadientMaterialInstance       IRadientMaterialInstance;
 typedef struct IRadientMaterialInstanceWriter IRadientMaterialInstanceWriter;
 
-/// Stable identifier assigned to a material parameter by its authoring source.
-typedef Uint64 RadientMaterialParameterID;
-
-/// Invalid material parameter identifier.
-static DILIGENT_CONSTEXPR RadientMaterialParameterID InvalidRadientMaterialParameterID = 0;
-
 // clang-format off
 
 /// Material execution domain.
@@ -127,6 +121,145 @@ DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_PARAMETER_TYPE, Uint8)
 };
 
 
+/// Built-in standard material model.
+DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_MODEL, Uint8)
+{
+    /// glTF metallic-roughness physically based material.
+    RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS = 0,
+
+    /// Unlit material whose output is the base color.
+    RADIENT_STANDARD_MATERIAL_MODEL_UNLIT,
+
+    /// Number of standard material models. This value is not a valid model.
+    RADIENT_STANDARD_MATERIAL_MODEL_COUNT
+};
+
+
+/// Optional features compiled into a standard metallic-roughness material definition.
+DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS, Uint32)
+{
+    /// No optional material features.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE = 0u,
+
+    /// Layer a dielectric clear coat over the base material.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT = 1u << 0u,
+
+    /// Enable the cloth-like sheen lobe.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN = 1u << 1u,
+
+    /// Enable anisotropic specular reflection.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY = 1u << 2u,
+
+    /// Enable thin-film iridescence.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE = 1u << 3u,
+
+    /// Enable light transmission through the surface.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION = 1u << 4u,
+
+    /// Enable volume thickness and attenuation. Transmission must also be enabled.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME = 1u << 5u,
+
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_LAST = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME,
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL =
+        (RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_LAST << 1u) - 1u
+};
+DEFINE_FLAG_ENUM_OPERATORS(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS)
+
+
+/// Texture semantics declared by a standard material definition.
+///
+/// Declaring a texture adds the corresponding texture parameter to every
+/// instance of the definition. The texture value itself remains mutable.
+DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS, Uint32)
+{
+    /// The definition declares no texture parameters.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NONE = 0u,
+
+    /// Base color and opacity texture.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR = 1u << 0u,
+
+    /// Combined metallic-roughness texture.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS = 1u << 1u,
+
+    /// Tangent-space normal texture.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL = 1u << 2u,
+
+    /// Ambient occlusion texture.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION = 1u << 3u,
+
+    /// Emissive color texture.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE = 1u << 4u,
+
+    /// Clear-coat strength texture. The clear-coat feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT = 1u << 5u,
+
+    /// Clear-coat roughness texture. The clear-coat feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS = 1u << 6u,
+
+    /// Clear-coat normal texture. The clear-coat feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL = 1u << 7u,
+
+    /// All clear-coat texture semantics.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL =
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL,
+
+    /// Sheen color texture. The sheen feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR = 1u << 8u,
+
+    /// Sheen roughness texture. The sheen feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS = 1u << 9u,
+
+    /// All sheen texture semantics.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ALL =
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS,
+
+    /// Anisotropy strength and direction texture. The anisotropy feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY = 1u << 10u,
+
+    /// Iridescence strength texture. The iridescence feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE = 1u << 11u,
+
+    /// Iridescence thickness texture. The iridescence feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS = 1u << 12u,
+
+    /// All iridescence texture semantics.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_ALL =
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS,
+
+    /// Transmission strength texture. The transmission feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION = 1u << 13u,
+
+    /// Volume thickness texture. The volume feature is required.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS = 1u << 14u,
+
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_LAST = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS,
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL =
+        (RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_LAST << 1u) - 1u
+};
+DEFINE_FLAG_ENUM_OPERATORS(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS)
+
+
+/// Alpha mode stored in a standard material instance.
+DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_ALPHA_MODE, Uint32)
+{
+    /// The material is fully opaque.
+    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE = 0,
+
+    /// Fragments below AlphaCutoff are discarded.
+    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_MASK,
+
+    /// The material uses alpha blending.
+    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND,
+
+    /// Number of alpha modes. This value is not a valid mode.
+    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_COUNT
+};
+
+
 // clang-format on
 
 
@@ -189,9 +322,6 @@ struct RadientMaterialParameterDesc
     /// Parameter name used for authoring and reflection.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Stable identifier assigned by the material authoring source.
-    RadientMaterialParameterID ID DEFAULT_INITIALIZER(InvalidRadientMaterialParameterID);
-
     /// Parameter type.
     RADIENT_MATERIAL_PARAMETER_TYPE Type DEFAULT_INITIALIZER(RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN);
 
@@ -220,15 +350,36 @@ struct RadientMaterialDefinitionCreateInfo
     /// Optional persistent asset identity. The definition copies the URI.
     RadientAssetReference Reference DEFAULT_INITIALIZER({});
 
-    /// Array of ParameterCount parameter descriptions. Parameter names and IDs
-    /// must be unique within the definition. The definition copies all metadata
-    /// and default values and retains default textures during creation.
+    /// Array of ParameterCount parameter descriptions. Parameter names must be
+    /// unique within the definition. The definition copies all metadata and
+    /// default values and retains default textures during creation.
     const RadientMaterialParameterDesc* pParameters DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pParameters. May be zero.
     Uint32 ParameterCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientMaterialDefinitionCreateInfo RadientMaterialDefinitionCreateInfo;
+
+
+/// Built-in standard material definition creation attributes.
+///
+/// Model, Features, and Textures define the immutable parameter schema.
+/// Compatible descriptions may resolve to the same cached definition.
+struct RadientStandardMaterialDefinitionCreateInfo
+{
+    /// Standard shading model.
+    RADIENT_STANDARD_MATERIAL_MODEL Model DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS);
+
+    /// Optional features present in the definition. Unlit materials do not
+    /// support optional metallic-roughness features.
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+
+    /// Texture semantics present in the definition. Extension texture semantics
+    /// require their corresponding feature. Unlit materials only support the
+    /// base-color texture semantic.
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS Textures DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NONE);
+};
+typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 
 
 // {0C0DCA2D-FB29-445A-87D6-2BF9EFD5E9FD}

@@ -53,10 +53,18 @@ static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE == 17, "Unexpected RADIENT
 
 void RadientMaterials_CPP_UseTypes()
 {
-    RadientMaterialParameterHandle      Handle;
-    RadientMaterialDefinitionDesc       Desc;
-    RadientMaterialParameterDesc        Parameter;
-    RadientMaterialDefinitionCreateInfo CreateInfo;
+    RadientMaterialParameterHandle              Handle;
+    RadientMaterialDefinitionDesc               Desc;
+    RadientMaterialParameterDesc                Parameter;
+    RadientMaterialDefinitionCreateInfo         CreateInfo;
+    RadientStandardMaterialDefinitionCreateInfo StandardCI;
+
+    StandardCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
+        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN |
+        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE;
+    StandardCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ALL |
+        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_ALL;
 
     const bool IsValid = static_cast<bool>(Handle);
     const bool IsEqual = Handle == RadientMaterialParameterHandle{};
@@ -64,6 +72,7 @@ void RadientMaterials_CPP_UseTypes()
     (void)Desc;
     (void)Parameter;
     (void)CreateInfo;
+    (void)StandardCI;
     (void)IsValid;
     (void)IsEqual;
 }
@@ -97,11 +106,15 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetM
 
     RadientMaterialDefinitionCreateInfo CreateInfo;
     Status = pAssetManager->CreateMaterialDefinition(CreateInfo, &pDefinition);
+    RadientStandardMaterialDefinitionCreateInfo StandardCI;
+    IRadientMaterialDefinition*                 pStandardDefinition = nullptr;
+    Status                                                          = pAssetManager->CreateStandardMaterialDefinition(StandardCI, &pStandardDefinition);
 
     (void)Desc;
     (void)Status;
     (void)ParamCount;
     (void)ParamDesc;
+    (void)pStandardDefinition;
     (void)pClone;
     (void)Version;
 }

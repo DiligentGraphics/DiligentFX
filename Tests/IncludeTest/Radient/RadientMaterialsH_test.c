@@ -28,24 +28,32 @@
 
 void RadientMaterials_C_UseTypes(void)
 {
-    RadientMaterialParameterID          ParameterID = InvalidRadientMaterialParameterID;
-    RADIENT_MATERIAL_DOMAIN             Domain      = RADIENT_MATERIAL_DOMAIN_SURFACE;
-    RADIENT_MATERIAL_PARAMETER_TYPE     Type        = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
-    RadientMaterialParameterHandle      Handle      = {0};
-    RadientMaterialDefinitionDesc       Desc        = {0};
-    RadientMaterialParameterDesc        Parameter   = {0};
-    RadientMaterialDefinitionCreateInfo CreateInfo  = {0};
-    IRadientMaterialDefinition*         pDefinition = 0;
-    IRadientMaterialInstance*           pInstance   = 0;
-    IRadientMaterialInstanceWriter*     pWriter     = 0;
+    RADIENT_MATERIAL_DOMAIN                     Domain      = RADIENT_MATERIAL_DOMAIN_SURFACE;
+    RADIENT_MATERIAL_PARAMETER_TYPE             Type        = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+    RADIENT_STANDARD_MATERIAL_MODEL             Model       = RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS;
+    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS     Features    = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS     Textures    = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL;
+    RADIENT_STANDARD_MATERIAL_ALPHA_MODE        AlphaMode   = RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE;
+    RadientMaterialParameterHandle              Handle      = {0};
+    RadientMaterialDefinitionDesc               Desc        = {0};
+    RadientMaterialParameterDesc                Parameter   = {0};
+    RadientMaterialDefinitionCreateInfo         CreateInfo  = {0};
+    RadientStandardMaterialDefinitionCreateInfo StandardCI  = {0};
+    IRadientMaterialDefinition*                 pDefinition = 0;
+    IRadientMaterialInstance*                   pInstance   = 0;
+    IRadientMaterialInstanceWriter*             pWriter     = 0;
 
-    (void)ParameterID;
     (void)Domain;
     (void)Type;
+    (void)Model;
+    (void)Features;
+    (void)Textures;
+    (void)AlphaMode;
     (void)Handle;
     (void)Desc;
     (void)Parameter;
     (void)CreateInfo;
+    (void)StandardCI;
     (void)pDefinition;
     (void)pInstance;
     (void)pWriter;
@@ -99,10 +107,14 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*       pInst
 
 void RadientMaterials_C_TestAssetManagerMacros(IRadientAssetManager* pAssetManager)
 {
-    RadientMaterialDefinitionCreateInfo CreateInfo  = {0};
-    IRadientMaterialDefinition*         pDefinition = 0;
-    RADIENT_STATUS                      Status      = IRadientAssetManager_CreateMaterialDefinition(pAssetManager, &CreateInfo, &pDefinition);
+    RadientMaterialDefinitionCreateInfo         CreateInfo          = {0};
+    RadientStandardMaterialDefinitionCreateInfo StandardCI          = {0};
+    IRadientMaterialDefinition*                 pDefinition         = 0;
+    IRadientMaterialDefinition*                 pStandardDefinition = 0;
+    RADIENT_STATUS                              Status              = IRadientAssetManager_CreateMaterialDefinition(pAssetManager, &CreateInfo, &pDefinition);
+    Status                                                          = IRadientAssetManager_CreateStandardMaterialDefinition(pAssetManager, &StandardCI, &pStandardDefinition);
 
     (void)pDefinition;
+    (void)pStandardDefinition;
     (void)Status;
 }

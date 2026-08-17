@@ -420,6 +420,20 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterialDefinition(const RadientMa
     return m_pMaterialManager->CreateDefinition(DefinitionCI, ppDefinition);
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
+                                                                         IRadientMaterialDefinition**                       ppDefinition)
+{
+    if (ppDefinition == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppDefinition == nullptr, "Output material definition pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppDefinition = nullptr;
+
+    if (m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, ppDefinition);
+}
+
 RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                        IRadientMaterialAsset**          ppMaterial)
 {
