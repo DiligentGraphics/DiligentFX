@@ -755,7 +755,8 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
     }
 
     VERIFY_EXPR(m_ValueCount == Desc.ParameterCount);
-    VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
+    if (Writer.GetReservedSize() != 0)
+        VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
 }
 
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
@@ -940,7 +941,9 @@ private:
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept
     {
-        return Handle.Definition == m_DefinitionHandle && Handle.Index < m_Data.GetValueCount();
+        return Handle.Definition == m_DefinitionHandle &&
+            Handle.Index < m_Data.GetValueCount() &&
+            Handle.Reserved == 0;
     }
 
     RADIENT_STATUS Commit(const PackedMaterialInstanceData& ScratchData,
