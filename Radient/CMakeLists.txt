@@ -11,13 +11,14 @@ set(SOURCE
     src/Assets/RadientFilesystemAssetResolver.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
-    src/Assets/RadientMaterials.cpp
+    src/Assets/RadientMaterial.cpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Assets/RadientMeshVertexSource.cpp
     src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
     src/Assets/RadientMeshViewSource.cpp
+    src/Assets/RadientStandardMaterial.cpp
     src/Assets/RadientTextureAssetManager.cpp
     src/Assets/RadientTextureSource.cpp
     src/Core/RadientBackendImpl.cpp
