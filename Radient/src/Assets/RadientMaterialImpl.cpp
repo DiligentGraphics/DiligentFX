@@ -26,25 +26,15 @@
 
 #include "RadientMaterials.h"
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMaterialImpl.hpp"
 
 #include "DebugUtilities.hpp"
 #include "DynamicBitSet.hpp"
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
-#include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
-
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4127) // conditional expression is constant
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/flat_hash_map.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
 
 #include <atomic>
 #include <cstring>
@@ -207,39 +197,10 @@ RADIENT_STATUS ValidateMaterialDefinitionDesc(const RadientMaterialDefinitionDes
     return RADIENT_STATUS_OK;
 }
 
-// Parameter descriptors, strings, and default values reside in Memory.
-// Default texture pointers are retained directly by their descriptors.
-struct PackedMaterialDefinitionData
-{
-    PackedMaterialDefinitionData(void* pData, IMemoryAllocator& Allocator) :
-        Memory{pData, STDDeleterRawMem<void>{Allocator}}
-    {}
+} // namespace
 
-    PackedMaterialDefinitionData(PackedMaterialDefinitionData&& Other) noexcept :
-        Memory{std::move(Other.Memory)},
-        Desc{Other.Desc}
-    {
-        Other.Desc = {};
-    }
-
-    PackedMaterialDefinitionData(const PackedMaterialDefinitionData&)            = delete;
-    PackedMaterialDefinitionData& operator=(const PackedMaterialDefinitionData&) = delete;
-    PackedMaterialDefinitionData& operator=(PackedMaterialDefinitionData&&)      = delete;
-
-    ~PackedMaterialDefinitionData()
-    {
-        for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
-        {
-            if (Desc.pParameters[Index].pDefaultTexture != nullptr)
-                Desc.pParameters[Index].pDefaultTexture->Release();
-        }
-    }
-
-    std::unique_ptr<void, STDDeleterRawMem<void>> Memory;
-    RadientMaterialDefinitionDesc                 Desc;
-};
-
-PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDefinitionDesc& Desc)
+RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackData(
+    const RadientMaterialDefinitionDesc& Desc)
 {
     const Char* const DefinitionName = Desc.Name != nullptr ? Desc.Name : "";
 
@@ -265,8 +226,8 @@ PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDef
     const size_t MemorySize = Allocator.GetReservedSize();
     void* const  pMemory    = Allocator.ReleaseOwnership();
 
-    PackedMaterialDefinitionData Data{pMemory, GetRawAllocator()};
-    FixedLinearAllocator         Writer{pMemory, MemorySize};
+    PackedData           Data{pMemory, GetRawAllocator()};
+    FixedLinearAllocator Writer{pMemory, MemorySize};
 
     RadientMaterialParameterDesc* const pParameters =
         Writer.ConstructArray<RadientMaterialParameterDesc>(Desc.ParameterCount);
@@ -306,6 +267,9 @@ PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDef
 
     return Data;
 }
+
+namespace
+{
 
 struct MaterialParameterValue
 {
@@ -495,108 +459,72 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
         VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
 }
 
-class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
+} // namespace
+
+RadientMaterialDefinitionImpl::RadientMaterialDefinitionImpl(
+    IReferenceCounters*                  pRefCounters,
+    const RadientMaterialDefinitionDesc& Desc) :
+    TBase{pRefCounters},
+    m_Data{PackData(Desc)},
+    m_ParameterIndices{},
+    m_DefinitionHandle{s_NextMaterialDefinitionHandle.fetch_add(1, std::memory_order_relaxed)}
 {
-public:
-    using TBase = ObjectBase<IRadientMaterialDefinition>;
-
-    RadientMaterialDefinitionImpl(IReferenceCounters*                  pRefCounters,
-                                  const RadientMaterialDefinitionDesc& Desc) :
-        TBase{pRefCounters},
-        m_Data{PackMaterialDefinitionData(Desc)},
-        m_ParameterIndices{},
-        m_DefinitionHandle{s_NextMaterialDefinitionHandle.fetch_add(1, std::memory_order_relaxed)}
+    m_ParameterIndices.reserve(m_Data.Desc.ParameterCount);
+    for (Uint32 Index = 0; Index < m_Data.Desc.ParameterCount; ++Index)
     {
-        m_ParameterIndices.reserve(m_Data.Desc.ParameterCount);
-        for (Uint32 Index = 0; Index < m_Data.Desc.ParameterCount; ++Index)
-        {
-            const bool Inserted =
-                m_ParameterIndices.emplace(m_Data.Desc.pParameters[Index].Name, Index).second;
-            VERIFY_EXPR(Inserted);
-        }
+        const bool Inserted =
+            m_ParameterIndices.emplace(m_Data.Desc.pParameters[Index].Name, Index).second;
+        VERIFY_EXPR(Inserted);
     }
+}
 
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinition, IID_RadientAsset, TBase)
-
-    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
+const RadientMaterialParameterDesc& DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::GetParameterDesc(Uint32 Index) const
+{
+    if (Index >= m_Data.Desc.ParameterCount)
     {
-        return m_Data.Desc.Reference;
+        UNEXPECTED("Material parameter index ", Index, " is out of range");
+        static constexpr RadientMaterialParameterDesc InvalidDesc{};
+        return InvalidDesc;
     }
+    return m_Data.Desc.pParameters[Index];
+}
 
-    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
-    {
-        return RADIENT_ASSET_TYPE_MATERIAL;
-    }
+RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::GetParameterHandle(
+    Uint32                          Index,
+    RadientMaterialParameterHandle* pHandle) const
+{
+    if (pHandle == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *pHandle = {};
 
-    virtual const RadientMaterialDefinitionDesc& DILIGENT_CALL_TYPE GetDesc() const override final
-    {
-        return m_Data.Desc;
-    }
+    if (Index >= m_Data.Desc.ParameterCount)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetStatus() const override final
-    {
-        return RADIENT_STATUS_OK;
-    }
+    pHandle->Definition = m_DefinitionHandle;
+    pHandle->Index      = Index;
+    return RADIENT_STATUS_OK;
+}
 
-    virtual Uint32 DILIGENT_CALL_TYPE GetParameterCount() const override final
-    {
-        return m_Data.Desc.ParameterCount;
-    }
+RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::FindParameter(
+    const Char*                     Name,
+    RadientMaterialParameterHandle* pHandle) const
+{
+    if (pHandle == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *pHandle = {};
 
-    virtual const RadientMaterialParameterDesc& DILIGENT_CALL_TYPE GetParameterDesc(Uint32 Index) const override final
-    {
-        if (Index >= m_Data.Desc.ParameterCount)
-        {
-            UNEXPECTED("Material parameter index ", Index, " is out of range");
-            static constexpr RadientMaterialParameterDesc InvalidDesc{};
-            return InvalidDesc;
-        }
-        return m_Data.Desc.pParameters[Index];
-    }
+    if (Name == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameterHandle(Uint32                          Index,
-                                                                 RadientMaterialParameterHandle* pHandle) const override final
-    {
-        if (pHandle == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        *pHandle = {};
+    const auto It = m_ParameterIndices.find(Name);
+    if (It == m_ParameterIndices.end())
+        return RADIENT_STATUS_NOT_FOUND;
 
-        if (Index >= m_Data.Desc.ParameterCount)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
+    return GetParameterHandle(It->second, pHandle);
+}
 
-        pHandle->Definition = m_DefinitionHandle;
-        pHandle->Index      = Index;
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE FindParameter(const Char*                     Name,
-                                                            RadientMaterialParameterHandle* pHandle) const override final
-    {
-        if (pHandle == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        *pHandle = {};
-
-        if (Name == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        const auto It = m_ParameterIndices.find(Name);
-        if (It == m_ParameterIndices.end())
-            return RADIENT_STATUS_NOT_FOUND;
-
-        return GetParameterHandle(It->second, pHandle);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateInstance(IRadientMaterialInstance** ppInstance) const override final;
-
-private:
-    using ParameterIndexMap = absl::flat_hash_map<const Char*, Uint32, CStringHash<Char>, CStringCompare<Char>>;
-
-    const PackedMaterialDefinitionData m_Data;
-    // Map keys reference parameter names packed in m_Data. Declaring the map
-    // after m_Data ensures that the keys are destroyed before their strings.
-    ParameterIndexMap   m_ParameterIndices;
-    const RadientHandle m_DefinitionHandle;
-};
+namespace
+{
 
 class RadientMaterialInstanceWriterImpl;
 
@@ -801,32 +729,6 @@ private:
     DynamicBitSet                              m_ChangedParameters;
 };
 
-RADIENT_STATUS RadientMaterialDefinitionImpl::CreateInstance(IRadientMaterialInstance** ppInstance) const
-{
-    if (ppInstance == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
-
-    const RADIENT_STATUS DefinitionStatus = GetStatus();
-    if (RADIENT_FAILED(DefinitionStatus))
-        return DefinitionStatus;
-
-    try
-    {
-        RefCntAutoPtr<RadientMaterialInstanceImpl> pInstance{
-            MakeNewRCObj<RadientMaterialInstanceImpl>()(
-                const_cast<RadientMaterialDefinitionImpl*>(this),
-                m_DefinitionHandle)};
-        *ppInstance = pInstance.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient material instance: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
-}
-
 RADIENT_STATUS RadientMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const
 {
     if (ppWriter == nullptr)
@@ -872,6 +774,33 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
 }
 
 } // namespace
+
+RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
+    IRadientMaterialInstance** ppInstance) const
+{
+    if (ppInstance == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppInstance = nullptr;
+
+    const RADIENT_STATUS DefinitionStatus = GetStatus();
+    if (RADIENT_FAILED(DefinitionStatus))
+        return DefinitionStatus;
+
+    try
+    {
+        RefCntAutoPtr<RadientMaterialInstanceImpl> pInstance{
+            MakeNewRCObj<RadientMaterialInstanceImpl>()(
+                const_cast<RadientMaterialDefinitionImpl*>(this),
+                m_DefinitionHandle)};
+        *ppInstance = pInstance.Detach();
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient material instance: ", Error.what());
+        return RADIENT_STATUS_FAILED;
+    }
+}
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
                                                              IRadientMaterialDefinition**         ppDefinition)
