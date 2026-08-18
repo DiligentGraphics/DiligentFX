@@ -29,6 +29,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 
 #include "DebugUtilities.hpp"
+#include "DynamicBitSet.hpp"
 #include "EngineMemory.h"
 #include "Errors.hpp"
 #include "FixedLinearAllocator.hpp"
@@ -53,7 +54,6 @@
 #include <exception>
 #include <limits>
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -528,7 +528,7 @@ PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDef
     FixedLinearAllocator         Writer{pMemory, MemorySize};
 
     RadientMaterialParameterDesc* const pParameters =
-        Writer.Allocate<RadientMaterialParameterDesc>(Desc.ParameterCount);
+        Writer.ConstructArray<RadientMaterialParameterDesc>(Desc.ParameterCount);
 
     Data.Desc               = Desc;
     Data.Desc.Name          = Writer.CopyString(DefinitionName);
@@ -568,21 +568,189 @@ PackedMaterialDefinitionData PackMaterialDefinitionData(const RadientMaterialDef
 
 struct MaterialParameterValue
 {
-    std::vector<Uint8>                               Data;
-    std::vector<RefCntAutoPtr<IRadientTextureAsset>> Textures;
+    // Size is the byte size for value parameters and the element count for textures.
+    RADIENT_MATERIAL_PARAMETER_TYPE Type  = RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN;
+    Uint32                          Size  = 0;
+    void*                           pData = nullptr;
 };
 
-bool operator==(const MaterialParameterValue& Lhs, const MaterialParameterValue& Rhs) noexcept
+// Value records, raw parameter data, and retained texture arrays share one allocation.
+class PackedMaterialInstanceData
 {
-    if (Lhs.Data != Rhs.Data || Lhs.Textures.size() != Rhs.Textures.size())
-        return false;
+public:
+    using TexturePtr = RefCntAutoPtr<IRadientTextureAsset>;
 
-    for (size_t Index = 0; Index < Lhs.Textures.size(); ++Index)
+    explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
+                                        const PackedMaterialInstanceData*    pSource = nullptr);
+
+    PackedMaterialInstanceData(const PackedMaterialInstanceData&)            = delete;
+    PackedMaterialInstanceData& operator=(const PackedMaterialInstanceData&) = delete;
+    PackedMaterialInstanceData(PackedMaterialInstanceData&&)                 = delete;
+    PackedMaterialInstanceData& operator=(PackedMaterialInstanceData&&)      = delete;
+
+    ~PackedMaterialInstanceData()
     {
-        if (Lhs.Textures[Index] != Rhs.Textures[Index])
-            return false;
+        for (Uint32 ValueIndex = 0; ValueIndex < m_ValueCount; ++ValueIndex)
+        {
+            const MaterialParameterValue& Value = m_pValues[ValueIndex];
+            if (!IsTextureParameter(Value.Type))
+                continue;
+
+            TexturePtr* const pTextures = static_cast<TexturePtr*>(Value.pData);
+            for (Uint32 TextureIndex = 0; TextureIndex < Value.Size; ++TextureIndex)
+                pTextures[TextureIndex].~TexturePtr();
+        }
     }
-    return true;
+
+    Uint32 GetValueCount() const noexcept
+    {
+        return m_ValueCount;
+    }
+
+    MaterialParameterValue& GetValue(Uint32 Index) noexcept
+    {
+        VERIFY_EXPR(Index < m_ValueCount);
+        return m_pValues[Index];
+    }
+
+    const MaterialParameterValue& GetValue(Uint32 Index) const noexcept
+    {
+        VERIFY_EXPR(Index < m_ValueCount);
+        return m_pValues[Index];
+    }
+
+    bool HasSameValue(Uint32 Index, const PackedMaterialInstanceData& Other) const noexcept
+    {
+        const MaterialParameterValue& Lhs = GetValue(Index);
+        const MaterialParameterValue& Rhs = Other.GetValue(Index);
+        VERIFY_EXPR(Lhs.Type == Rhs.Type && Lhs.Size == Rhs.Size);
+
+        if (IsTextureParameter(Lhs.Type))
+        {
+            const auto* const pLhsTextures = static_cast<const TexturePtr*>(Lhs.pData);
+            const auto* const pRhsTextures = static_cast<const TexturePtr*>(Rhs.pData);
+            for (Uint32 TextureIndex = 0; TextureIndex < Lhs.Size; ++TextureIndex)
+            {
+                if (pLhsTextures[TextureIndex] != pRhsTextures[TextureIndex])
+                    return false;
+            }
+            return true;
+        }
+
+        return std::memcmp(Lhs.pData, Rhs.pData, Lhs.Size) == 0;
+    }
+
+    void CopyValueFrom(Uint32 Index, const PackedMaterialInstanceData& Source) noexcept
+    {
+        MaterialParameterValue&       Dst = GetValue(Index);
+        const MaterialParameterValue& Src = Source.GetValue(Index);
+        VERIFY_EXPR(Dst.Type == Src.Type && Dst.Size == Src.Size);
+
+        if (IsTextureParameter(Dst.Type))
+        {
+            auto* const       pDstTextures = static_cast<TexturePtr*>(Dst.pData);
+            const auto* const pSrcTextures = static_cast<const TexturePtr*>(Src.pData);
+            for (Uint32 TextureIndex = 0; TextureIndex < Dst.Size; ++TextureIndex)
+                pDstTextures[TextureIndex] = pSrcTextures[TextureIndex];
+        }
+        else
+        {
+            std::memcpy(Dst.pData, Src.pData, Dst.Size);
+        }
+    }
+
+private:
+    std::unique_ptr<void, STDDeleterRawMem<void>> m_Memory;
+    MaterialParameterValue*                       m_pValues    = nullptr;
+    Uint32                                        m_ValueCount = 0;
+};
+
+PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
+                                                       const PackedMaterialInstanceData*    pSource)
+{
+    VERIFY_EXPR(pSource == nullptr || pSource->GetValueCount() == Desc.ParameterCount);
+
+    FixedLinearAllocator Allocator{GetRawAllocator()};
+    Allocator.AddSpace<MaterialParameterValue>(Desc.ParameterCount);
+    for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+    {
+        const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
+        Uint32                              DataSize;
+        const bool                          IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
+        VERIFY_EXPR(IsValidDataSize);
+        (void)IsValidDataSize;
+
+        if (IsTextureParameter(Parameter.Type))
+            Allocator.AddSpace<PackedMaterialInstanceData::TexturePtr>(Parameter.ArraySize);
+        else
+            Allocator.AddSpace(DataSize, alignof(Uint32));
+    }
+
+    Allocator.Reserve();
+    const size_t MemorySize = Allocator.GetReservedSize();
+    m_Memory                = decltype(m_Memory){Allocator.ReleaseOwnership(), STDDeleterRawMem<void>{GetRawAllocator()}};
+
+    FixedLinearAllocator Writer{m_Memory.get(), MemorySize};
+    m_pValues = Writer.ConstructArray<MaterialParameterValue>(Desc.ParameterCount);
+
+    for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+    {
+        const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
+        MaterialParameterValue&             Value     = m_pValues[Index];
+        Value.Type                                    = Parameter.Type;
+
+        Uint32     DataSize;
+        const bool IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
+        VERIFY_EXPR(IsValidDataSize);
+        (void)IsValidDataSize;
+
+        if (IsTextureParameter(Parameter.Type))
+        {
+            auto* const pTextures =
+                Writer.ConstructArray<PackedMaterialInstanceData::TexturePtr>(Parameter.ArraySize);
+            Value.pData = pTextures;
+            Value.Size  = Parameter.ArraySize;
+            ++m_ValueCount;
+
+            if (pSource != nullptr)
+            {
+                const MaterialParameterValue& SourceValue = pSource->GetValue(Index);
+                VERIFY_EXPR(SourceValue.Type == Value.Type && SourceValue.Size == Value.Size);
+                const auto* const pSourceTextures =
+                    static_cast<const PackedMaterialInstanceData::TexturePtr*>(SourceValue.pData);
+                for (Uint32 TextureIndex = 0; TextureIndex < Value.Size; ++TextureIndex)
+                    pTextures[TextureIndex] = pSourceTextures[TextureIndex];
+            }
+            else if (Parameter.ArraySize == 1)
+            {
+                pTextures[0] = Parameter.pDefaultTexture;
+            }
+        }
+        else
+        {
+            Value.pData = Writer.Allocate(DataSize, alignof(Uint32));
+            Value.Size  = DataSize;
+            ++m_ValueCount;
+
+            if (pSource != nullptr)
+            {
+                const MaterialParameterValue& SourceValue = pSource->GetValue(Index);
+                VERIFY_EXPR(SourceValue.Type == Value.Type && SourceValue.Size == Value.Size);
+                std::memcpy(Value.pData, SourceValue.pData, Value.Size);
+            }
+            else if (Parameter.pDefaultValue != nullptr)
+            {
+                std::memcpy(Value.pData, Parameter.pDefaultValue, Value.Size);
+            }
+            else
+            {
+                std::memset(Value.pData, 0, Value.Size);
+            }
+        }
+    }
+
+    VERIFY_EXPR(m_ValueCount == Desc.ParameterCount);
+    VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
 }
 
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
@@ -695,16 +863,14 @@ class RadientMaterialInstanceImpl final : public ObjectBase<IRadientMaterialInst
 public:
     using TBase = ObjectBase<IRadientMaterialInstance>;
 
-    RadientMaterialInstanceImpl(IReferenceCounters*                          pRefCounters,
-                                IRadientMaterialDefinition*                  pDefinition,
-                                std::vector<RadientMaterialParameterHandle>  Handles,
-                                std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> Types,
-                                std::vector<MaterialParameterValue>          Values) :
+    RadientMaterialInstanceImpl(IReferenceCounters*                     pRefCounters,
+                                IRadientMaterialDefinition*             pDefinition,
+                                RadientHandle                           DefinitionHandle,
+                                const PackedMaterialInstanceData* const pSource = nullptr) :
         TBase{pRefCounters},
         m_pDefinition{pDefinition},
-        m_Handles{std::move(Handles)},
-        m_Types{std::move(Types)},
-        m_Values{std::move(Values)}
+        m_DefinitionHandle{DefinitionHandle},
+        m_Data{pDefinition->GetDesc(), pSource}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstance, TBase)
@@ -725,14 +891,14 @@ public:
     {
         if (!IsValidHandle(Handle))
             return RADIENT_STATUS_INVALID_ARGUMENT;
-        if (IsTextureParameter(m_Types[Handle.Index]))
+        const MaterialParameterValue& Value = m_Data.GetValue(Handle.Index);
+        if (IsTextureParameter(Value.Type))
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const std::vector<Uint8>& Data = m_Values[Handle.Index].Data;
-        if (pData == nullptr || DataSize != static_cast<Uint32>(Data.size()))
+        if (pData == nullptr || DataSize != Value.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        std::memcpy(pData, Data.data(), Data.size());
+        std::memcpy(pData, Value.pData, Value.Size);
         return RADIENT_STATUS_OK;
     }
 
@@ -746,14 +912,16 @@ public:
 
         if (!IsValidHandle(Handle))
             return RADIENT_STATUS_INVALID_ARGUMENT;
-        if (!IsTextureParameter(m_Types[Handle.Index]))
+        const MaterialParameterValue& Value = m_Data.GetValue(Handle.Index);
+        if (!IsTextureParameter(Value.Type))
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const auto& Textures = m_Values[Handle.Index].Textures;
-        if (ArrayIndex >= Textures.size())
+        if (ArrayIndex >= Value.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        *ppTexture = Textures[ArrayIndex];
+        const auto* const pTextures =
+            static_cast<const PackedMaterialInstanceData::TexturePtr*>(Value.pData);
+        *ppTexture = pTextures[ArrayIndex];
         if (*ppTexture != nullptr)
             (*ppTexture)->AddRef();
         return RADIENT_STATUS_OK;
@@ -767,23 +935,23 @@ private:
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept
     {
-        return Handle.Index < m_Handles.size() && m_Handles[Handle.Index] == Handle;
+        return Handle.Definition == m_DefinitionHandle && Handle.Index < m_Data.GetValueCount();
     }
 
-    RADIENT_STATUS Commit(std::vector<std::optional<MaterialParameterValue>>& Changes) noexcept
+    RADIENT_STATUS Commit(const PackedMaterialInstanceData& ScratchData,
+                          const DynamicBitSet&              ChangedParameters) noexcept
     {
+        VERIFY_EXPR(m_Data.GetValueCount() == ScratchData.GetValueCount());
         bool StateChanged = false;
-        for (size_t Index = 0; Index < Changes.size(); ++Index)
-        {
-            if (Changes[Index].has_value() &&
-                !(m_Values[Index] == *Changes[Index]))
-            {
-                MaterialParameterValue& Change = *Changes[Index];
-                m_Values[Index].Data.swap(Change.Data);
-                m_Values[Index].Textures.swap(Change.Textures);
-                StateChanged = true;
-            }
-        }
+        ChangedParameters.ForEachSetBit(
+            [&](size_t ParameterIndex) {
+                const Uint32 Index = static_cast<Uint32>(ParameterIndex);
+                if (!m_Data.HasSameValue(Index, ScratchData))
+                {
+                    m_Data.CopyValueFrom(Index, ScratchData);
+                    StateChanged = true;
+                }
+            });
 
         if (!StateChanged)
             return RADIENT_STATUS_NO_CHANGE;
@@ -793,11 +961,10 @@ private:
     }
 
 private:
-    RefCntAutoPtr<IRadientMaterialDefinition>          m_pDefinition;
-    const std::vector<RadientMaterialParameterHandle>  m_Handles;
-    const std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> m_Types;
-    std::vector<MaterialParameterValue>                m_Values;
-    Uint64                                             m_Version = 1;
+    RefCntAutoPtr<IRadientMaterialDefinition> m_pDefinition;
+    const RadientHandle                       m_DefinitionHandle;
+    PackedMaterialInstanceData                m_Data;
+    Uint64                                    m_Version = 1;
 };
 
 class RadientMaterialInstanceWriterImpl final : public ObjectBase<IRadientMaterialInstanceWriter>
@@ -809,9 +976,9 @@ public:
                                       RadientMaterialInstanceImpl* pInstance) :
         TBase{pRefCounters},
         m_pInstance{pInstance},
-        m_Changes(m_pInstance->m_Values.size())
-    {
-    }
+        m_ScratchData{m_pInstance->m_pDefinition->GetDesc(), &m_pInstance->m_Data},
+        m_ChangedParameters{m_ScratchData.GetValueCount()}
+    {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstanceWriter, TBase)
 
@@ -820,25 +987,22 @@ public:
                                                            Uint32                         DataSize) override final
     {
         if (!m_pInstance->IsValidHandle(Handle) ||
-            IsTextureParameter(m_pInstance->m_Types[Handle.Index]))
+            IsTextureParameter(m_pInstance->m_Data.GetValue(Handle.Index).Type))
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        const MaterialParameterValue& CurrentValue = m_Changes[Handle.Index].has_value() ?
-            *m_Changes[Handle.Index] :
-            m_pInstance->m_Values[Handle.Index];
-        const std::vector<Uint8>&     Data         = CurrentValue.Data;
-        if (pData == nullptr || DataSize != static_cast<Uint32>(Data.size()))
+        const MaterialParameterValue& InstanceValue = m_pInstance->m_Data.GetValue(Handle.Index);
+        MaterialParameterValue&       ScratchValue  = m_ScratchData.GetValue(Handle.Index);
+        const MaterialParameterValue& CurrentValue  = m_ChangedParameters.Test(Handle.Index) ?
+            ScratchValue :
+            InstanceValue;
+        if (pData == nullptr || DataSize != InstanceValue.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        if (std::memcmp(Data.data(), pData, Data.size()) == 0)
+        if (std::memcmp(CurrentValue.pData, pData, InstanceValue.Size) == 0)
             return RADIENT_STATUS_OK;
 
-        MaterialParameterValue NewValue = CurrentValue;
-        std::memcpy(NewValue.Data.data(), pData, NewValue.Data.size());
-        if (NewValue == m_pInstance->m_Values[Handle.Index])
-            m_Changes[Handle.Index].reset();
-        else
-            m_Changes[Handle.Index] = std::move(NewValue);
+        std::memcpy(ScratchValue.pData, pData, ScratchValue.Size);
+        UpdateChangedParameter(Handle.Index);
         return RADIENT_STATUS_OK;
     }
 
@@ -847,84 +1011,51 @@ public:
                                                          IRadientTextureAsset*          pTexture) override final
     {
         if (!m_pInstance->IsValidHandle(Handle) ||
-            !IsTextureParameter(m_pInstance->m_Types[Handle.Index]))
+            !IsTextureParameter(m_pInstance->m_Data.GetValue(Handle.Index).Type))
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        const MaterialParameterValue& CurrentValue = m_Changes[Handle.Index].has_value() ?
-            *m_Changes[Handle.Index] :
-            m_pInstance->m_Values[Handle.Index];
-        const auto&                   Textures     = CurrentValue.Textures;
-        if (ArrayIndex >= Textures.size())
+        const MaterialParameterValue& InstanceValue = m_pInstance->m_Data.GetValue(Handle.Index);
+        MaterialParameterValue&       ScratchValue  = m_ScratchData.GetValue(Handle.Index);
+        if (ArrayIndex >= InstanceValue.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        if (Textures[ArrayIndex] == pTexture)
+        const bool        ParameterChanged = m_ChangedParameters.Test(Handle.Index);
+        const auto* const pInstanceTextures =
+            static_cast<const PackedMaterialInstanceData::TexturePtr*>(InstanceValue.pData);
+        auto* const pScratchTextures =
+            static_cast<PackedMaterialInstanceData::TexturePtr*>(ScratchValue.pData);
+        IRadientTextureAsset* const pCurrentTexture = ParameterChanged ?
+            pScratchTextures[ArrayIndex].RawPtr() :
+            pInstanceTextures[ArrayIndex].RawPtr();
+        if (pCurrentTexture == pTexture)
             return RADIENT_STATUS_OK;
 
-        MaterialParameterValue NewValue = CurrentValue;
-        NewValue.Textures[ArrayIndex]   = pTexture;
-        if (NewValue == m_pInstance->m_Values[Handle.Index])
-            m_Changes[Handle.Index].reset();
-        else
-            m_Changes[Handle.Index] = std::move(NewValue);
+        pScratchTextures[ArrayIndex] = pTexture;
+        UpdateChangedParameter(Handle.Index);
         return RADIENT_STATUS_OK;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
     {
-        const RADIENT_STATUS Status = m_pInstance->Commit(m_Changes);
+        const RADIENT_STATUS Status = m_pInstance->Commit(m_ScratchData, m_ChangedParameters);
         if (Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE)
-        {
-            for (auto& Change : m_Changes)
-                Change.reset();
-        }
+            m_ChangedParameters.ResetAll();
         return Status;
     }
 
 private:
-    RefCntAutoPtr<RadientMaterialInstanceImpl>         m_pInstance;
-    std::vector<std::optional<MaterialParameterValue>> m_Changes;
-};
-
-RADIENT_STATUS BuildInitialMaterialValues(IRadientMaterialDefinition*                   pDefinition,
-                                          std::vector<RadientMaterialParameterHandle>&  Handles,
-                                          std::vector<RADIENT_MATERIAL_PARAMETER_TYPE>& Types,
-                                          std::vector<MaterialParameterValue>&          Values)
-{
-    const Uint32 ParameterCount = pDefinition->GetParameterCount();
-    Handles.resize(ParameterCount);
-    Types.resize(ParameterCount);
-    Values.resize(ParameterCount);
-
-    for (Uint32 Index = 0; Index < ParameterCount; ++Index)
+    void UpdateChangedParameter(Uint32 ParameterIndex)
     {
-        const RadientMaterialParameterDesc& Desc = pDefinition->GetParameterDesc(Index);
-        Uint32                              DataSize;
-        if (pDefinition->GetParameterHandle(Index, &Handles[Index]) != RADIENT_STATUS_OK ||
-            !Handles[Index] || Handles[Index].Index != Index ||
-            Desc.Type <= RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN ||
-            Desc.Type >= RADIENT_MATERIAL_PARAMETER_TYPE_COUNT ||
-            !GetMaterialParameterDataSize(Desc, DataSize))
-        {
-            return RADIENT_STATUS_INVALID_DATA;
-        }
-
-        Types[Index] = Desc.Type;
-        if (IsTextureParameter(Desc.Type))
-        {
-            Values[Index].Textures.resize(Desc.ArraySize);
-            if (Desc.ArraySize == 1)
-                Values[Index].Textures[0] = Desc.pDefaultTexture;
-        }
-        else
-        {
-            Values[Index].Data.resize(DataSize, 0);
-            if (Desc.pDefaultValue != nullptr)
-                std::memcpy(Values[Index].Data.data(), Desc.pDefaultValue, DataSize);
-        }
+        m_ChangedParameters.Set(
+            ParameterIndex,
+            !m_pInstance->m_Data.HasSameValue(ParameterIndex, m_ScratchData));
     }
 
-    return RADIENT_STATUS_OK;
-}
+private:
+    RefCntAutoPtr<RadientMaterialInstanceImpl> m_pInstance;
+    PackedMaterialInstanceData                 m_ScratchData;
+    DynamicBitSet                              m_ChangedParameters;
+};
 
 RADIENT_STATUS RadientMaterialDefinitionImpl::CreateInstance(IRadientMaterialInstance** ppInstance) const
 {
@@ -938,20 +1069,10 @@ RADIENT_STATUS RadientMaterialDefinitionImpl::CreateInstance(IRadientMaterialIns
 
     try
     {
-        std::vector<RadientMaterialParameterHandle>  Handles;
-        std::vector<RADIENT_MATERIAL_PARAMETER_TYPE> Types;
-        std::vector<MaterialParameterValue>          Values;
-        const RADIENT_STATUS                         BuildStatus =
-            BuildInitialMaterialValues(const_cast<RadientMaterialDefinitionImpl*>(this), Handles, Types, Values);
-        if (BuildStatus != RADIENT_STATUS_OK)
-            return BuildStatus;
-
         RefCntAutoPtr<RadientMaterialInstanceImpl> pInstance{
             MakeNewRCObj<RadientMaterialInstanceImpl>()(
                 const_cast<RadientMaterialDefinitionImpl*>(this),
-                std::move(Handles),
-                std::move(Types),
-                std::move(Values))};
+                m_DefinitionHandle)};
         *ppInstance = pInstance.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -994,9 +1115,8 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
         RefCntAutoPtr<RadientMaterialInstanceImpl> pInstance{
             MakeNewRCObj<RadientMaterialInstanceImpl>()(
                 m_pDefinition,
-                m_Handles,
-                m_Types,
-                m_Values)};
+                m_DefinitionHandle,
+                &m_Data)};
         *ppInstance = pInstance.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -1016,12 +1136,12 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMateri
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppDefinition = nullptr;
 
-    const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionDesc(DefinitionDesc);
-    if (ValidationStatus != RADIENT_STATUS_OK)
-        return ValidationStatus;
-
     try
     {
+        const RADIENT_STATUS ValidationStatus = ValidateMaterialDefinitionDesc(DefinitionDesc);
+        if (ValidationStatus != RADIENT_STATUS_OK)
+            return ValidationStatus;
+
         RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{
             MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionDesc)};
         *ppDefinition = pDefinition.Detach();
@@ -1030,6 +1150,11 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMateri
     catch (const std::exception& Error)
     {
         LOG_ERROR_MESSAGE("Failed to create Radient material definition: ", Error.what());
+        return RADIENT_STATUS_FAILED;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient material definition: unknown exception");
         return RADIENT_STATUS_FAILED;
     }
 }

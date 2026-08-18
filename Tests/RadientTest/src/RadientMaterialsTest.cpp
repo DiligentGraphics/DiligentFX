@@ -271,6 +271,68 @@ TEST(RadientMaterialsTest, WriterUpdatesSharedInstance)
     EXPECT_FLOAT_EQ(SecondCommittedColor.w, SecondColor.w);
 }
 
+TEST(RadientMaterialsTest, InstanceSupportsValueAndTextureArrays)
+{
+    const std::array<Float32, 3> DefaultValues{0.25f, 0.5f, 0.75f};
+    const std::array<Float32, 3> UpdatedValues{1.f, 2.f, 3.f};
+
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name          = "Values";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[0].ArraySize     = static_cast<Uint32>(DefaultValues.size());
+    Parameters[0].pDefaultValue = DefaultValues.data();
+    Parameters[1].Name          = "Textures";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].ArraySize     = 2;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle ValuesHandle;
+    RadientMaterialParameterHandle TexturesHandle;
+    ASSERT_EQ(pDefinition->FindParameter("Values", &ValuesHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->FindParameter("Textures", &TexturesHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const std::array<Float32, 3> InitialValues =
+        GetParameter<std::array<Float32, 3>>(*pInstance, ValuesHandle);
+    EXPECT_EQ(InitialValues, DefaultValues);
+
+    for (Uint32 Index = 0; Index < Parameters[1].ArraySize; ++Index)
+    {
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        EXPECT_EQ(pInstance->GetTexture(TexturesHandle, Index, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        EXPECT_EQ(pTexture, nullptr);
+    }
+
+    RefCntAutoPtr<IRadientTextureAsset>           pTexture0 = MakeTestTextureAsset("texture://array-0");
+    RefCntAutoPtr<IRadientTextureAsset>           pTexture1 = MakeTestTextureAsset("texture://array-1");
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pFirstWriter;
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->SetParameter(ValuesHandle, UpdatedValues.data(), static_cast<Uint32>(sizeof(UpdatedValues))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->SetTexture(TexturesHandle, 0, pTexture0), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
+
+    // The second writer predates the first commit. Committing its texture array
+    // replaces the complete parameter value, including the unchanged element.
+    ASSERT_EQ(pSecondWriter->SetTexture(TexturesHandle, 1, pTexture1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
+
+    const std::array<Float32, 3> StoredValues =
+        GetParameter<std::array<Float32, 3>>(*pInstance, ValuesHandle);
+    EXPECT_EQ(StoredValues, UpdatedValues);
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture0;
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture1;
+    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 0, pStoredTexture0.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 1, pStoredTexture1.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture0, nullptr);
+    EXPECT_EQ(pStoredTexture1, pTexture1);
+}
+
 TEST(RadientMaterialsTest, UnchangedWriterDoesNotAdvanceVersion)
 {
     const Float32 DefaultRoughness = 0.5f;
@@ -294,6 +356,54 @@ TEST(RadientMaterialsTest, UnchangedWriterDoesNotAdvanceVersion)
 
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pInstance->GetVersion(), InitialVersion);
+}
+
+TEST(RadientMaterialsTest, WriterTracksChangesAcrossMaskWords)
+{
+    static constexpr Uint32 ParameterCount = 66;
+
+    const Float32                                            DefaultValue = 0.f;
+    std::array<std::string, ParameterCount>                  Names;
+    std::array<RadientMaterialParameterDesc, ParameterCount> Parameters{};
+    for (Uint32 Index = 0; Index < ParameterCount; ++Index)
+    {
+        Names[Index]                    = "Value" + std::to_string(Index);
+        Parameters[Index].Name          = Names[Index].c_str();
+        Parameters[Index].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+        Parameters[Index].pDefaultValue = &DefaultValue;
+    }
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        CreateDefinition(Parameters.data(), ParameterCount);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    const std::array<Uint32, 4> ChangedIndices{0, 63, 64, 65};
+    const Float32               UpdatedValue = 1.f;
+    for (Uint32 Index : ChangedIndices)
+    {
+        RadientMaterialParameterHandle Handle;
+        ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handle), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(Handle, &UpdatedValue, static_cast<Uint32>(sizeof(UpdatedValue))), RADIENT_STATUS_OK);
+    }
+
+    RadientMaterialParameterHandle RevertedHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(ChangedIndices.back(), &RevertedHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(RevertedHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    for (Uint32 Index : ChangedIndices)
+    {
+        RadientMaterialParameterHandle Handle;
+        ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handle), RADIENT_STATUS_OK);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, Handle),
+                        Index == ChangedIndices.back() ? DefaultValue : UpdatedValue);
+    }
 }
 
 TEST(RadientMaterialsTest, DefinitionSpecificHandlesAreRejected)

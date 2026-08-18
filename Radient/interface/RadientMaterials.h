@@ -545,8 +545,10 @@ DILIGENT_END_INTERFACE
 /// Reusable material instance writer.
 ///
 /// A writer records only parameters changed through SetParameter() and
-/// SetTexture(). The writer and its material instance are not thread-safe and
-/// must not be accessed concurrently with Commit().
+/// SetTexture(). Commit() publishes each changed parameter in full. If multiple
+/// writers modify the same parameter, the last commit replaces the complete
+/// parameter value. The writer and its material instance are not thread-safe
+/// and must not be accessed concurrently with Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
@@ -557,7 +559,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
                                                 const void*                    pData,
                                                 Uint32                         DataSize) PURE;
 
-    /// Replaces one texture array element identified by Handle and ArrayIndex.
+    /// Replaces one texture array element identified by Handle and ArrayIndex in
+    /// the writer's private value. Commit() publishes the complete texture array.
     /// The writer retains pTexture; null is a valid texture value. Non-texture
     /// parameters are not accepted.
     VIRTUAL RADIENT_STATUS METHOD(SetTexture)(THIS_
