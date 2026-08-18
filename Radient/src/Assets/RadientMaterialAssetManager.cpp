@@ -34,6 +34,7 @@
 #include "GLTFBuilder.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientStandardMaterialParameters.h"
 
 #include <algorithm>
 #include <atomic>
@@ -476,12 +477,12 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
                 Uint32      Size;
             };
             const ParameterValue Parameters[] = {
-                {"BaseColorFactor", &MaterialCI.BaseColorFactor, static_cast<Uint32>(sizeof(MaterialCI.BaseColorFactor))},
-                {"MetallicFactor", &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
-                {"RoughnessFactor", &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
-                {"EmissiveFactor", &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
-                {"AlphaCutoff", &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
-                {"DoubleSided", &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
+                {RadientStandardMaterialBaseColorFactorName, &MaterialCI.BaseColorFactor, static_cast<Uint32>(sizeof(MaterialCI.BaseColorFactor))},
+                {RadientStandardMaterialMetallicFactorName, &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
+                {RadientStandardMaterialRoughnessFactorName, &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
+                {RadientStandardMaterialEmissiveFactorName, &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
+                {RadientStandardMaterialAlphaCutoffName, &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
+                {RadientStandardMaterialDoubleSidedName, &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
             };
 
             for (const ParameterValue& Parameter : Parameters)
@@ -498,11 +499,11 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
                 IRadientTextureAsset* pTexture;
             };
             const TextureValue Textures[] = {
-                {"BaseColorTexture", MaterialCI.pBaseColorTexture},
-                {"MetallicRoughnessTexture", MaterialCI.pMetallicRoughnessTexture},
-                {"NormalTexture", MaterialCI.pNormalTexture},
-                {"OcclusionTexture", MaterialCI.pOcclusionTexture},
-                {"EmissiveTexture", MaterialCI.pEmissiveTexture},
+                {RadientStandardMaterialBaseColorTextureName, MaterialCI.pBaseColorTexture},
+                {RadientStandardMaterialMetallicRoughnessTextureName, MaterialCI.pMetallicRoughnessTexture},
+                {RadientStandardMaterialNormalTextureName, MaterialCI.pNormalTexture},
+                {RadientStandardMaterialOcclusionTextureName, MaterialCI.pOcclusionTexture},
+                {RadientStandardMaterialEmissiveTextureName, MaterialCI.pEmissiveTexture},
             };
 
             for (const TextureValue& Texture : Textures)

@@ -118,6 +118,7 @@ set(INTERFACE
     interface/RadientScene.h
     interface/RadientSceneImporter.h
     interface/RadientSceneWriter.h
+    interface/RadientStandardMaterialParameters.h
     interface/RadientTypes.h
     interface/RadientView.h
 )

@@ -28,6 +28,7 @@
 
 #include "GLTFLoader.hpp"
 #include "RadientMaterials.h"
+#include "RadientStandardMaterialParameters.h"
 
 #include <array>
 
@@ -50,38 +51,37 @@ struct StandardMaterialTextureSemantic
     const char*                             WrapVParameterName;
 };
 
+#define STANDARD_MATERIAL_TEXTURE_SEMANTIC(GLTFName, Name, TextureFlag, FeatureFlag) \
+    StandardMaterialTextureSemantic                                                  \
+    {                                                                                \
+        GLTF::Default##GLTFName##TextureAttribId, TextureFlag, FeatureFlag,          \
+            RadientStandardMaterial##Name##TextureName,                              \
+            RadientStandardMaterial##Name##TextureUVSelectorName,                    \
+            RadientStandardMaterial##Name##TextureUVScaleAndRotationName,            \
+            RadientStandardMaterial##Name##TextureUVBiasName,                        \
+            RadientStandardMaterial##Name##TextureWrapUName,                         \
+            RadientStandardMaterial##Name##TextureWrapVName                          \
+    }
+
 static constexpr std::array<StandardMaterialTextureSemantic, 15> StandardMaterialTextureSemantics{{
-    {GLTF::DefaultBaseColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
-     "BaseColorTexture", "BaseColorTextureUVSelector", "BaseColorTextureUVScaleAndRotation", "BaseColorTextureUVBias", "BaseColorTextureWrapU", "BaseColorTextureWrapV"},
-    {GLTF::DefaultMetallicRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
-     "MetallicRoughnessTexture", "MetallicRoughnessTextureUVSelector", "MetallicRoughnessTextureUVScaleAndRotation", "MetallicRoughnessTextureUVBias", "MetallicRoughnessTextureWrapU", "MetallicRoughnessTextureWrapV"},
-    {GLTF::DefaultNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
-     "NormalTexture", "NormalTextureUVSelector", "NormalTextureUVScaleAndRotation", "NormalTextureUVBias", "NormalTextureWrapU", "NormalTextureWrapV"},
-    {GLTF::DefaultOcclusionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
-     "OcclusionTexture", "OcclusionTextureUVSelector", "OcclusionTextureUVScaleAndRotation", "OcclusionTextureUVBias", "OcclusionTextureWrapU", "OcclusionTextureWrapV"},
-    {GLTF::DefaultEmissiveTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE,
-     "EmissiveTexture", "EmissiveTextureUVSelector", "EmissiveTextureUVScaleAndRotation", "EmissiveTextureUVBias", "EmissiveTextureWrapU", "EmissiveTextureWrapV"},
-    {GLTF::DefaultClearcoatTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
-     "ClearCoatTexture", "ClearCoatTextureUVSelector", "ClearCoatTextureUVScaleAndRotation", "ClearCoatTextureUVBias", "ClearCoatTextureWrapU", "ClearCoatTextureWrapV"},
-    {GLTF::DefaultClearcoatRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
-     "ClearCoatRoughnessTexture", "ClearCoatRoughnessTextureUVSelector", "ClearCoatRoughnessTextureUVScaleAndRotation", "ClearCoatRoughnessTextureUVBias", "ClearCoatRoughnessTextureWrapU", "ClearCoatRoughnessTextureWrapV"},
-    {GLTF::DefaultClearcoatNormalTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
-     "ClearCoatNormalTexture", "ClearCoatNormalTextureUVSelector", "ClearCoatNormalTextureUVScaleAndRotation", "ClearCoatNormalTextureUVBias", "ClearCoatNormalTextureWrapU", "ClearCoatNormalTextureWrapV"},
-    {GLTF::DefaultSheenColorTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN,
-     "SheenColorTexture", "SheenColorTextureUVSelector", "SheenColorTextureUVScaleAndRotation", "SheenColorTextureUVBias", "SheenColorTextureWrapU", "SheenColorTextureWrapV"},
-    {GLTF::DefaultSheenRoughnessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN,
-     "SheenRoughnessTexture", "SheenRoughnessTextureUVSelector", "SheenRoughnessTextureUVScaleAndRotation", "SheenRoughnessTextureUVBias", "SheenRoughnessTextureWrapU", "SheenRoughnessTextureWrapV"},
-    {GLTF::DefaultAnisotropyTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY,
-     "AnisotropyTexture", "AnisotropyTextureUVSelector", "AnisotropyTextureUVScaleAndRotation", "AnisotropyTextureUVBias", "AnisotropyTextureWrapU", "AnisotropyTextureWrapV"},
-    {GLTF::DefaultIridescenceTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE,
-     "IridescenceTexture", "IridescenceTextureUVSelector", "IridescenceTextureUVScaleAndRotation", "IridescenceTextureUVBias", "IridescenceTextureWrapU", "IridescenceTextureWrapV"},
-    {GLTF::DefaultIridescenceThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE,
-     "IridescenceThicknessTexture", "IridescenceThicknessTextureUVSelector", "IridescenceThicknessTextureUVScaleAndRotation", "IridescenceThicknessTextureUVBias", "IridescenceThicknessTextureWrapU", "IridescenceThicknessTextureWrapV"},
-    {GLTF::DefaultTransmissionTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION,
-     "TransmissionTexture", "TransmissionTextureUVSelector", "TransmissionTextureUVScaleAndRotation", "TransmissionTextureUVBias", "TransmissionTextureWrapU", "TransmissionTextureWrapV"},
-    {GLTF::DefaultThicknessTextureAttribId, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME,
-     "ThicknessTexture", "ThicknessTextureUVSelector", "ThicknessTextureUVScaleAndRotation", "ThicknessTextureUVBias", "ThicknessTextureWrapU", "ThicknessTextureWrapV"},
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(BaseColor, BaseColor, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(MetallicRoughness, MetallicRoughness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Normal, Normal, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Occlusion, Occlusion, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Emissive, Emissive, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Clearcoat, ClearCoat, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(ClearcoatRoughness, ClearCoatRoughness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(ClearcoatNormal, ClearCoatNormal, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(SheenColor, SheenColor, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(SheenRoughness, SheenRoughness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_ROUGHNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Anisotropy, Anisotropy, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Iridescence, Iridescence, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(IridescenceThickness, IridescenceThickness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Transmission, Transmission, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION),
+    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Thickness, Thickness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME),
 }};
+
+#undef STANDARD_MATERIAL_TEXTURE_SEMANTIC
 
 bool HasFeature(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features,
                 RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Feature) noexcept
@@ -266,10 +266,10 @@ RADIENT_STATUS PopulateMaterialInstance(
     const Uint32 AlphaMode   = static_cast<Uint32>(Material.Attribs.AlphaMode);
     const Bool   DoubleSided = Material.DoubleSided ? True : False;
 
-    SetMaterialParameter("BaseColorFactor", BaseColorFactor);
-    SetMaterialParameter("AlphaMode", AlphaMode);
-    SetMaterialParameter("AlphaCutoff", Material.Attribs.AlphaCutoff);
-    SetMaterialParameter("DoubleSided", DoubleSided);
+    SetMaterialParameter(RadientStandardMaterialBaseColorFactorName, BaseColorFactor);
+    SetMaterialParameter(RadientStandardMaterialAlphaModeName, AlphaMode);
+    SetMaterialParameter(RadientStandardMaterialAlphaCutoffName, Material.Attribs.AlphaCutoff);
+    SetMaterialParameter(RadientStandardMaterialDoubleSidedName, DoubleSided);
 
     if (DefinitionCI.Model == RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS)
     {
@@ -278,21 +278,21 @@ RADIENT_STATUS PopulateMaterialInstance(
             Material.Attribs.EmissiveFactor.y,
             Material.Attribs.EmissiveFactor.z,
         };
-        SetMaterialParameter("MetallicFactor", Material.Attribs.MetallicFactor);
-        SetMaterialParameter("RoughnessFactor", Material.Attribs.RoughnessFactor);
-        SetMaterialParameter("EmissiveFactor", EmissiveFactor);
+        SetMaterialParameter(RadientStandardMaterialMetallicFactorName, Material.Attribs.MetallicFactor);
+        SetMaterialParameter(RadientStandardMaterialRoughnessFactorName, Material.Attribs.RoughnessFactor);
+        SetMaterialParameter(RadientStandardMaterialEmissiveFactorName, EmissiveFactor);
 
         if (HasTexture(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL))
-            SetMaterialParameter("NormalScale", Material.Attribs.NormalScale);
+            SetMaterialParameter(RadientStandardMaterialNormalScaleName, Material.Attribs.NormalScale);
         if (HasTexture(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION))
-            SetMaterialParameter("OcclusionStrength", Material.Attribs.OcclusionFactor);
+            SetMaterialParameter(RadientStandardMaterialOcclusionStrengthName, Material.Attribs.OcclusionFactor);
 
         if (Material.HasClearcoat)
         {
-            SetMaterialParameter("ClearCoatFactor", Material.Attribs.ClearcoatFactor);
-            SetMaterialParameter("ClearCoatRoughnessFactor", Material.Attribs.ClearcoatRoughnessFactor);
+            SetMaterialParameter(RadientStandardMaterialClearCoatFactorName, Material.Attribs.ClearcoatFactor);
+            SetMaterialParameter(RadientStandardMaterialClearCoatRoughnessFactorName, Material.Attribs.ClearcoatRoughnessFactor);
             if (HasTexture(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL))
-                SetMaterialParameter("ClearCoatNormalScale", Material.Attribs.ClearcoatNormalScale);
+                SetMaterialParameter(RadientStandardMaterialClearCoatNormalScaleName, Material.Attribs.ClearcoatNormalScale);
         }
         if (Material.Sheen)
         {
@@ -301,25 +301,25 @@ RADIENT_STATUS PopulateMaterialInstance(
                 Material.Sheen->ColorFactor.y,
                 Material.Sheen->ColorFactor.z,
             };
-            SetMaterialParameter("SheenColorFactor", SheenColorFactor);
-            SetMaterialParameter("SheenRoughnessFactor", Material.Sheen->RoughnessFactor);
+            SetMaterialParameter(RadientStandardMaterialSheenColorFactorName, SheenColorFactor);
+            SetMaterialParameter(RadientStandardMaterialSheenRoughnessFactorName, Material.Sheen->RoughnessFactor);
         }
         if (Material.Anisotropy)
         {
-            SetMaterialParameter("AnisotropyStrength", Material.Anisotropy->Strength);
-            SetMaterialParameter("AnisotropyRotation", Material.Anisotropy->Rotation);
+            SetMaterialParameter(RadientStandardMaterialAnisotropyStrengthName, Material.Anisotropy->Strength);
+            SetMaterialParameter(RadientStandardMaterialAnisotropyRotationName, Material.Anisotropy->Rotation);
         }
         if (Material.Iridescence)
         {
-            SetMaterialParameter("IridescenceFactor", Material.Iridescence->Factor);
-            SetMaterialParameter("IridescenceIOR", Material.Iridescence->IOR);
-            SetMaterialParameter("IridescenceThicknessMinimum", Material.Iridescence->ThicknessMinimum);
-            SetMaterialParameter("IridescenceThicknessMaximum", Material.Iridescence->ThicknessMaximum);
+            SetMaterialParameter(RadientStandardMaterialIridescenceFactorName, Material.Iridescence->Factor);
+            SetMaterialParameter(RadientStandardMaterialIridescenceIORName, Material.Iridescence->IOR);
+            SetMaterialParameter(RadientStandardMaterialIridescenceThicknessMinimumName, Material.Iridescence->ThicknessMinimum);
+            SetMaterialParameter(RadientStandardMaterialIridescenceThicknessMaximumName, Material.Iridescence->ThicknessMaximum);
         }
         if (Material.Transmission)
         {
-            SetMaterialParameter("TransmissionFactor", Material.Transmission->Factor);
-            SetMaterialParameter("IOR", Material.Transmission->IOR);
+            SetMaterialParameter(RadientStandardMaterialTransmissionFactorName, Material.Transmission->Factor);
+            SetMaterialParameter(RadientStandardMaterialIORName, Material.Transmission->IOR);
         }
         if (Material.Volume)
         {
@@ -328,9 +328,9 @@ RADIENT_STATUS PopulateMaterialInstance(
                 Material.Volume->AttenuationColor.y,
                 Material.Volume->AttenuationColor.z,
             };
-            SetMaterialParameter("ThicknessFactor", Material.Volume->ThicknessFactor);
-            SetMaterialParameter("AttenuationColor", AttenuationColor);
-            SetMaterialParameter("AttenuationDistance", Material.Volume->AttenuationDistance);
+            SetMaterialParameter(RadientStandardMaterialThicknessFactorName, Material.Volume->ThicknessFactor);
+            SetMaterialParameter(RadientStandardMaterialAttenuationColorName, AttenuationColor);
+            SetMaterialParameter(RadientStandardMaterialAttenuationDistanceName, Material.Volume->AttenuationDistance);
         }
     }
 

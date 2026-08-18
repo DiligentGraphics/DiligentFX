@@ -361,6 +361,8 @@ typedef struct RadientMaterialDefinitionDesc RadientMaterialDefinitionDesc;
 ///
 /// Model, Features, and Textures define the immutable parameter schema.
 /// Compatible descriptions may resolve to the same cached definition.
+/// Canonical parameter names and their value semantics are declared in
+/// RadientStandardMaterialParameters.h.
 struct RadientStandardMaterialDefinitionCreateInfo
 {
     /// Standard shading model.

@@ -24,21 +24,10 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientStandardMaterialParameters.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+using namespace Diligent;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+static_assert(RadientStandardMaterialSchemaVersion > 0, "The standard material schema version must be positive");
+static_assert(RadientStandardMaterialBaseColorFactorName[0] == 'B', "Unexpected base-color factor parameter name");
+static_assert(RadientStandardMaterialBaseColorTextureName[0] == 'B', "Unexpected base-color texture parameter name");

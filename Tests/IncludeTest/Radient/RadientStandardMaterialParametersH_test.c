@@ -24,21 +24,17 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientStandardMaterialParameters.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientStandardMaterialParameters_C_UseConstants(void)
+{
+    Uint32      Version         = RadientStandardMaterialSchemaVersion;
+    const Char* pFactorName     = RadientStandardMaterialClearCoatFactorName;
+    const Char* pTextureName    = RadientStandardMaterialBaseColorTextureName;
+    const Char* pUVSelectorName = RadientStandardMaterialBaseColorTextureUVSelectorName;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    (void)Version;
+    (void)pFactorName;
+    (void)pTextureName;
+    (void)pUVSelectorName;
+}
