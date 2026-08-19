@@ -27,6 +27,7 @@
 #include "RadientMaterials.h"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -37,6 +38,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -113,6 +115,22 @@ bool GetMaterialParameterDataSize(const RadientMaterialParameterDesc& Desc, Uint
 
     DataSize = ElementSize * Desc.ArraySize;
     return true;
+}
+
+using ShaderTextureAttribs = GLTF::Material::TextureShaderAttribs;
+
+static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP) == static_cast<Uint32>(TEXTURE_ADDRESS_WRAP));
+static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP) == static_cast<Uint32>(TEXTURE_ADDRESS_CLAMP));
+static_assert(sizeof(ShaderTextureAttribs) <= std::numeric_limits<Uint32>::max());
+
+static constexpr Uint32 ShaderTexturePackedPropsOffset = static_cast<Uint32>(offsetof(ShaderTextureAttribs, PackedProps));
+static constexpr Uint32 ShaderTextureSliceOffset       = static_cast<Uint32>(offsetof(ShaderTextureAttribs, TextureSlice));
+static constexpr Uint32 ShaderTextureAtlasUVOffset     = static_cast<Uint32>(offsetof(ShaderTextureAttribs, AtlasUVScaleAndBias));
+static constexpr Uint32 ShaderTextureDataSize          = static_cast<Uint32>(sizeof(ShaderTextureAttribs));
+
+bool RangesOverlap(Uint32 LhsOffset, Uint32 LhsSize, Uint32 RhsOffset, Uint32 RhsSize) noexcept
+{
+    return LhsOffset < RhsOffset + RhsSize && RhsOffset < LhsOffset + LhsSize;
 }
 
 RADIENT_STATUS ValidateMaterialDefinitionDesc(const RadientMaterialDefinitionDesc& Desc)
@@ -208,6 +226,12 @@ RADIENT_STATUS ValidateMaterialShaderDataLayout(
                           " mappings, but pMappings is null");
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
+    if (ShaderDataLayout.TexturePackingCount != 0 && ShaderDataLayout.pTexturePackings == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Material shader data layout declares ", ShaderDataLayout.TexturePackingCount,
+                          " texture packings, but pTexturePackings is null");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
     {
@@ -264,6 +288,101 @@ RADIENT_STATUS ValidateMaterialShaderDataLayout(
         }
     }
 
+    for (Uint32 PackingIndex = 0; PackingIndex < ShaderDataLayout.TexturePackingCount; ++PackingIndex)
+    {
+        const RadientMaterialShaderTexturePacking& Packing = ShaderDataLayout.pTexturePackings[PackingIndex];
+
+        const auto GetParameter = [&](Uint32 ParameterIndex, const char* Role) -> const RadientMaterialParameterDesc* {
+            if (ParameterIndex >= DefinitionDesc.ParameterCount)
+            {
+                LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, " references ", Role,
+                                  " parameter index ", ParameterIndex, ", but the definition only has ",
+                                  DefinitionDesc.ParameterCount, " parameters");
+                return nullptr;
+            }
+            return &DefinitionDesc.pParameters[ParameterIndex];
+        };
+
+        const RadientMaterialParameterDesc* const pTexture = GetParameter(Packing.TextureParameterIndex, "texture");
+        if (pTexture == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        if (!IsTextureParameter(pTexture->Type) || pTexture->ArraySize != 1)
+        {
+            LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, " texture parameter '",
+                              pTexture->Name, "' must be a scalar texture");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        const auto ValidateScalarParameter = [&](Uint32                          ParameterIndex,
+                                                 const char*                     Role,
+                                                 RADIENT_MATERIAL_PARAMETER_TYPE ExpectedType) -> bool {
+            const RadientMaterialParameterDesc* const pParameter = GetParameter(ParameterIndex, Role);
+            if (pParameter == nullptr)
+                return false;
+            if (pParameter->Type != ExpectedType || pParameter->ArraySize != 1)
+            {
+                LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, ' ', Role, " parameter '",
+                                  pParameter->Name, "' has an incompatible type or array size");
+                return false;
+            }
+            return true;
+        };
+
+        if (!ValidateScalarParameter(Packing.UVSelectorParameterIndex, "UV selector", RADIENT_MATERIAL_PARAMETER_TYPE_INT) ||
+            !ValidateScalarParameter(Packing.WrapUParameterIndex, "wrap U", RADIENT_MATERIAL_PARAMETER_TYPE_UINT) ||
+            !ValidateScalarParameter(Packing.WrapVParameterIndex, "wrap V", RADIENT_MATERIAL_PARAMETER_TYPE_UINT))
+        {
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        if (Packing.Offset > ShaderDataLayout.Size ||
+            ShaderTextureDataSize > ShaderDataLayout.Size - Packing.Offset)
+        {
+            LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, " uses byte range [",
+                              Packing.Offset, ", ", Uint64{Packing.Offset} + ShaderTextureDataSize,
+                              "), which exceeds the shader data size ", ShaderDataLayout.Size);
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
+        {
+            const RadientMaterialShaderParameterPacking& Mapping           = ShaderDataLayout.pMappings[MappingIndex];
+            const RadientMaterialParameterDesc&          Parameter         = DefinitionDesc.pParameters[Mapping.ParameterIndex];
+            Uint32                                       ParameterDataSize = 0;
+            const bool                                   IsValidDataSize   = GetMaterialParameterDataSize(Parameter, ParameterDataSize);
+            VERIFY_EXPR(IsValidDataSize);
+            (void)IsValidDataSize;
+
+            const bool OverlapsPackedProperties =
+                RangesOverlap(Mapping.Offset, ParameterDataSize,
+                              Packing.Offset + ShaderTexturePackedPropsOffset,
+                              ShaderTextureSliceOffset + sizeof(Float32) - ShaderTexturePackedPropsOffset);
+            const bool OverlapsAtlasData =
+                RangesOverlap(Mapping.Offset, ParameterDataSize,
+                              Packing.Offset + ShaderTextureAtlasUVOffset,
+                              sizeof(RadientFloat4));
+            if (OverlapsPackedProperties || OverlapsAtlasData)
+            {
+                LOG_ERROR_MESSAGE("Material shader data mapping ", MappingIndex,
+                                  " overlaps data written by texture packing ", PackingIndex);
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+        }
+
+        for (Uint32 PreviousIndex = 0; PreviousIndex < PackingIndex; ++PreviousIndex)
+        {
+            const RadientMaterialShaderTexturePacking& PreviousPacking =
+                ShaderDataLayout.pTexturePackings[PreviousIndex];
+            if (RangesOverlap(Packing.Offset, ShaderTextureDataSize,
+                              PreviousPacking.Offset, ShaderTextureDataSize))
+            {
+                LOG_ERROR_MESSAGE("Material shader texture packings ", PreviousIndex, " and ", PackingIndex,
+                                  " overlap in the destination data block");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+        }
+    }
+
     return RADIENT_STATUS_OK;
 }
 
@@ -278,6 +397,7 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
     FixedLinearAllocator Allocator{GetRawAllocator()};
     Allocator.AddSpace<RadientMaterialParameterDesc>(Desc.ParameterCount);
     Allocator.AddSpace<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
+    Allocator.AddSpace<RadientMaterialShaderTexturePacking>(ShaderDataLayout.TexturePackingCount);
     Allocator.AddSpaceForString(DefinitionName);
     Allocator.AddSpaceForString(Desc.Reference.URI);
 
@@ -305,15 +425,19 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
         Writer.ConstructArray<RadientMaterialParameterDesc>(Desc.ParameterCount);
     ShaderDataCopyCommand* const pShaderDataCopyCommands =
         Writer.ConstructArray<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
+    RadientMaterialShaderTexturePacking* const pShaderDataTextureCommands =
+        Writer.ConstructArray<RadientMaterialShaderTexturePacking>(ShaderDataLayout.TexturePackingCount);
 
-    Data.Desc                         = Desc;
-    Data.Desc.Name                    = Writer.CopyString(DefinitionName);
-    Data.Desc.Reference               = Desc.Reference;
-    Data.Desc.Reference.URI           = Writer.CopyString(Desc.Reference.URI);
-    Data.Desc.pParameters             = pParameters;
-    Data.PackingPlan.Size             = ShaderDataLayout.Size;
-    Data.PackingPlan.CopyCommandCount = ShaderDataLayout.MappingCount;
-    Data.PackingPlan.pCopyCommands    = pShaderDataCopyCommands;
+    Data.Desc                            = Desc;
+    Data.Desc.Name                       = Writer.CopyString(DefinitionName);
+    Data.Desc.Reference                  = Desc.Reference;
+    Data.Desc.Reference.URI              = Writer.CopyString(Desc.Reference.URI);
+    Data.Desc.pParameters                = pParameters;
+    Data.PackingPlan.Size                = ShaderDataLayout.Size;
+    Data.PackingPlan.CopyCommandCount    = ShaderDataLayout.MappingCount;
+    Data.PackingPlan.pCopyCommands       = pShaderDataCopyCommands;
+    Data.PackingPlan.TextureCommandCount = ShaderDataLayout.TexturePackingCount;
+    Data.PackingPlan.pTextureCommands    = pShaderDataTextureCommands;
 
     for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
     {
@@ -331,6 +455,9 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
             ParameterDataSize,
         };
     }
+
+    for (Uint32 PackingIndex = 0; PackingIndex < ShaderDataLayout.TexturePackingCount; ++PackingIndex)
+        pShaderDataTextureCommands[PackingIndex] = ShaderDataLayout.pTexturePackings[PackingIndex];
 
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {
@@ -949,6 +1076,44 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         std::memcpy(pShaderData + Command.DestinationOffset,
                     InstanceImpl.m_Data.GetValueData(Command.ParameterIndex),
                     Command.Size);
+    }
+
+    for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.TextureCommandCount; ++CommandIndex)
+    {
+        const RadientMaterialShaderTexturePacking& Command =
+            m_Data.PackingPlan.pTextureCommands[CommandIndex];
+
+        const Int32 UVSelector =
+            *static_cast<const Int32*>(InstanceImpl.m_Data.GetValueData(Command.UVSelectorParameterIndex));
+        const Uint32 WrapU =
+            *static_cast<const Uint32*>(InstanceImpl.m_Data.GetValueData(Command.WrapUParameterIndex));
+        const Uint32 WrapV =
+            *static_cast<const Uint32*>(InstanceImpl.m_Data.GetValueData(Command.WrapVParameterIndex));
+        ShaderTextureAttribs TextureAttribs{};
+        TextureAttribs.SetUVSelector(UVSelector);
+        TextureAttribs.SetWrapUMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapU));
+        TextureAttribs.SetWrapVMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapV));
+        std::memcpy(pShaderData + Command.Offset + ShaderTexturePackedPropsOffset,
+                    &TextureAttribs.PackedProps,
+                    sizeof(TextureAttribs.PackedProps));
+
+        IRadientTextureAsset* const pTexture = InstanceImpl.m_Data.GetTexture(Command.TextureParameterIndex, 0);
+        if (pTexture != nullptr)
+        {
+            RadientTextureSamplingInfo SamplingInfo{};
+            const bool                 SamplingInfoAvailable =
+                RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo);
+            VERIFY_EXPR(SamplingInfoAvailable);
+            if (SamplingInfoAvailable)
+            {
+                std::memcpy(pShaderData + Command.Offset + ShaderTextureSliceOffset,
+                            &SamplingInfo.TextureSlice,
+                            sizeof(SamplingInfo.TextureSlice));
+                std::memcpy(pShaderData + Command.Offset + ShaderTextureAtlasUVOffset,
+                            &SamplingInfo.UVScaleBias,
+                            sizeof(SamplingInfo.UVScaleBias));
+            }
+        }
     }
 }
 

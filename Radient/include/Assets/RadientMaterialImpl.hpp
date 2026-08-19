@@ -56,6 +56,18 @@ struct RadientMaterialShaderParameterPacking
     Uint32 Offset         = 0;
 };
 
+/// Packs one texture parameter and its UV selector and address modes into a
+/// shader texture-attribute record. UV transform and bias parameters use
+/// ordinary RadientMaterialShaderParameterPacking mappings.
+struct RadientMaterialShaderTexturePacking
+{
+    Uint32 TextureParameterIndex    = 0;
+    Uint32 UVSelectorParameterIndex = 0;
+    Uint32 WrapUParameterIndex      = 0;
+    Uint32 WrapVParameterIndex      = 0;
+    Uint32 Offset                   = 0;
+};
+
 /// Describes the immutable shader-readable data layout owned by a material
 /// definition. The definition copies the mappings during creation.
 struct RadientMaterialShaderDataLayoutDesc
@@ -64,6 +76,9 @@ struct RadientMaterialShaderDataLayoutDesc
 
     const RadientMaterialShaderParameterPacking* pMappings    = nullptr;
     Uint32                                       MappingCount = 0;
+
+    const RadientMaterialShaderTexturePacking* pTexturePackings    = nullptr;
+    Uint32                                     TexturePackingCount = 0;
 };
 
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
@@ -119,7 +134,8 @@ public:
 
     /// Writes the complete shader-readable data block for Instance. Instance
     /// must have been created by this definition, and pData must reference at
-    /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to zero.
+    /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to
+    /// zero. Non-null texture parameters must have initialized sampling data.
     void WriteShaderData(const IRadientMaterialInstance& Instance,
                          void*                           pData) const noexcept;
 
@@ -133,12 +149,14 @@ private:
 
     struct ShaderDataPackingPlan
     {
-        Uint32                       Size             = 0;
-        Uint32                       CopyCommandCount = 0;
-        const ShaderDataCopyCommand* pCopyCommands    = nullptr;
+        Uint32                                     Size                = 0;
+        Uint32                                     CopyCommandCount    = 0;
+        const ShaderDataCopyCommand*               pCopyCommands       = nullptr;
+        Uint32                                     TextureCommandCount = 0;
+        const RadientMaterialShaderTexturePacking* pTextureCommands    = nullptr;
     };
 
-    // Parameter descriptors, strings, default values, and shader data copy
+    // Parameter descriptors, strings, default values, and shader data packing
     // commands reside in Memory. Default texture pointers are retained directly
     // by their descriptors.
     struct PackedData

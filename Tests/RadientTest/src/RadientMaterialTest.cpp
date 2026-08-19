@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -262,6 +263,109 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     EXPECT_EQ(ShaderData, Expected);
 }
 
+TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
+{
+    const Int32                                 DefaultUVSelector = 0;
+    const std::array<Float32, 4>                DefaultUVTransform{1.f, 0.f, 0.f, 1.f};
+    const RadientFloat2                         DefaultUVBias{0.25f, 0.5f};
+    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE DefaultWrap = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+
+    std::array<RadientMaterialParameterDesc, 6> Parameters{};
+    Parameters[0].Name          = "Texture";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name          = "UVSelector";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_INT;
+    Parameters[1].pDefaultValue = &DefaultUVSelector;
+    Parameters[2].Name          = "UVTransform";
+    Parameters[2].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2;
+    Parameters[2].pDefaultValue = DefaultUVTransform.data();
+    Parameters[3].Name          = "UVBias";
+    Parameters[3].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2;
+    Parameters[3].pDefaultValue = &DefaultUVBias;
+    Parameters[4].Name          = "WrapU";
+    Parameters[4].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[4].pDefaultValue = &DefaultWrap;
+    Parameters[5].Name          = "WrapV";
+    Parameters[5].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[5].pDefaultValue = &DefaultWrap;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Texture shader packing test";
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    static constexpr Uint32                                    TextureOffset = 16;
+    const std::array<RadientMaterialShaderParameterPacking, 2> Mappings{{
+        {2, TextureOffset + offsetof(GLTF::Material::TextureShaderAttribs, UVScaleAndRotation)},
+        {3, TextureOffset + offsetof(GLTF::Material::TextureShaderAttribs, UBias)},
+    }};
+    const RadientMaterialShaderTexturePacking                  TexturePacking{0, 1, 4, 5, TextureOffset};
+
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size =
+        TextureOffset + static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs)) + 16;
+    ShaderDataLayout.pMappings           = Mappings.data();
+    ShaderDataLayout.MappingCount        = static_cast<Uint32>(Mappings.size());
+    ShaderDataLayout.pTexturePackings    = &TexturePacking;
+    ShaderDataLayout.TexturePackingCount = 1;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    auto&              DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
+
+    GLTF::Material::TextureShaderAttribs Expected{};
+    Expected.SetUVSelector(DefaultUVSelector);
+    Expected.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
+    Expected.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
+    Expected.UBias = DefaultUVBias.x;
+    Expected.VBias = DefaultUVBias.y;
+    std::memcpy(&Expected.UVScaleAndRotation, DefaultUVTransform.data(), sizeof(Expected.UVScaleAndRotation));
+    Expected.AtlasUVScaleAndBias = float4{};
+
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
+
+    RadientMaterialParameterHandle UVSelectorHandle;
+    RadientMaterialParameterHandle WrapUHandle;
+    RadientMaterialParameterHandle WrapVHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &UVSelectorHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(4, &WrapUHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(5, &WrapVHandle), RADIENT_STATUS_OK);
+
+    const Int32                                   UpdatedUVSelector = 1;
+    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE   UpdatedWrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(UVSelectorHandle, &UpdatedUVSelector, static_cast<Uint32>(sizeof(UpdatedUVSelector))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, &UpdatedWrapU, static_cast<Uint32>(sizeof(UpdatedWrapU))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    Expected.SetUVSelector(UpdatedUVSelector);
+    Expected.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
+
+    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE RestoredWrapU = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE UpdatedWrapV  = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    pWriter.Release();
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, &RestoredWrapU, static_cast<Uint32>(sizeof(RestoredWrapU))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapVHandle, &UpdatedWrapV, static_cast<Uint32>(sizeof(UpdatedWrapV))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    Expected.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
+    Expected.SetWrapVMode(TEXTURE_ADDRESS_CLAMP);
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
+}
+
 TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
 {
     const ShaderParameterPackingTestParam& Param = GetParam();
@@ -371,6 +475,15 @@ TEST(RadientMaterialTest, RejectsMissingShaderDataMappings)
     ExpectInvalidShaderDataLayout(DefinitionDesc, {4, nullptr, 1}, "mappings, but pMappings is null");
 }
 
+TEST(RadientMaterialTest, RejectsMissingShaderTexturePackings)
+{
+    RadientMaterialDefinitionDesc       DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.TexturePackingCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "texture packings, but pTexturePackings is null");
+}
+
 TEST(RadientMaterialTest, RejectsInvalidShaderDataParameterIndex)
 {
     RadientMaterialDefinitionDesc               DefinitionDesc{};
@@ -390,6 +503,56 @@ TEST(RadientMaterialTest, RejectsTextureShaderDataMapping)
 
     const RadientMaterialShaderParameterPacking Mapping{0, 0};
     ExpectInvalidShaderDataLayout(DefinitionDesc, {4, &Mapping, 1}, "references texture parameter 'Texture'");
+}
+
+TEST(RadientMaterialTest, RejectsIncompatibleShaderTexturePackingParameters)
+{
+    std::array<RadientMaterialParameterDesc, 4> Parameters{};
+    Parameters[0].Name = "Texture";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name = "UVSelector";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[2].Name = "WrapU";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[3].Name = "WrapV";
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    const RadientMaterialShaderTexturePacking TexturePacking{0, 1, 2, 3, 0};
+    RadientMaterialShaderDataLayoutDesc       ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.pTexturePackings    = &TexturePacking;
+    ShaderDataLayout.TexturePackingCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "UV selector parameter 'UVSelector' has an incompatible type or array size");
+}
+
+TEST(RadientMaterialTest, RejectsOutOfBoundsShaderTexturePacking)
+{
+    std::array<RadientMaterialParameterDesc, 4> Parameters{};
+    Parameters[0].Name = "Texture";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name = "UVSelector";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_INT;
+    Parameters[2].Name = "WrapU";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[3].Name = "WrapV";
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    const RadientMaterialShaderTexturePacking TexturePacking{0, 1, 2, 3, 4};
+    RadientMaterialShaderDataLayoutDesc       ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.pTexturePackings    = &TexturePacking;
+    ShaderDataLayout.TexturePackingCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "exceeds the shader data size");
 }
 
 TEST(RadientMaterialTest, RejectsOutOfBoundsShaderDataMapping)
