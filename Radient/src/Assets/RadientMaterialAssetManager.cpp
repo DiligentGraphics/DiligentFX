@@ -489,7 +489,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
             {
                 const RADIENT_STATUS Status = SetMaterialInstanceParameter(
                     Definition, Writer, Parameter.Name, Parameter.pData, Parameter.Size);
-                if (Status != RADIENT_STATUS_OK)
+                if (RADIENT_FAILED(Status))
                     return Status;
             }
 
@@ -513,7 +513,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
 
                 const RADIENT_STATUS Status = SetMaterialInstanceTexture(
                     Definition, Writer, Texture.Name, Texture.pTexture);
-                if (Status != RADIENT_STATUS_OK)
+                if (RADIENT_FAILED(Status))
                     return Status;
             }
 

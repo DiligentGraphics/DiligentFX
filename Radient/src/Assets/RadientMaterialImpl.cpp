@@ -29,13 +29,13 @@
 #include "Assets/RadientMaterialImpl.hpp"
 
 #include "DebugUtilities.hpp"
-#include "DynamicBitSet.hpp"
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <exception>
@@ -44,6 +44,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -422,44 +423,32 @@ public:
         return m_pValues[Index].pData;
     }
 
-    bool HasSameValue(Uint32 Index, const PackedMaterialInstanceData& Other) const noexcept
+    bool HasSameValue(Uint32 Index, const void* pData) const noexcept
     {
-        const MaterialParameterValue& Lhs = GetValue(Index);
-        const MaterialParameterValue& Rhs = Other.GetValue(Index);
-        VERIFY_EXPR(Lhs.Type == Rhs.Type && Lhs.Size == Rhs.Size);
-
-        if (IsTextureParameter(Lhs.Type))
-        {
-            const auto* const pLhsTextures = static_cast<const TexturePtr*>(Lhs.pData);
-            const auto* const pRhsTextures = static_cast<const TexturePtr*>(Rhs.pData);
-            for (Uint32 TextureIndex = 0; TextureIndex < Lhs.Size; ++TextureIndex)
-            {
-                if (pLhsTextures[TextureIndex] != pRhsTextures[TextureIndex])
-                    return false;
-            }
-            return true;
-        }
-
-        return std::memcmp(Lhs.pData, Rhs.pData, Lhs.Size) == 0;
+        const MaterialParameterValue& Value = GetValue(Index);
+        VERIFY_EXPR(!IsTextureParameter(Value.Type));
+        return std::memcmp(Value.pData, pData, Value.Size) == 0;
     }
 
-    void CopyValueFrom(Uint32 Index, const PackedMaterialInstanceData& Source) noexcept
+    void CopyValue(Uint32 Index, const void* pData) noexcept
     {
-        MaterialParameterValue&       Dst = GetValue(Index);
-        const MaterialParameterValue& Src = Source.GetValue(Index);
-        VERIFY_EXPR(Dst.Type == Src.Type && Dst.Size == Src.Size);
+        MaterialParameterValue& Value = GetValue(Index);
+        VERIFY_EXPR(!IsTextureParameter(Value.Type));
+        std::memcpy(Value.pData, pData, Value.Size);
+    }
 
-        if (IsTextureParameter(Dst.Type))
-        {
-            auto* const       pDstTextures = static_cast<TexturePtr*>(Dst.pData);
-            const auto* const pSrcTextures = static_cast<const TexturePtr*>(Src.pData);
-            for (Uint32 TextureIndex = 0; TextureIndex < Dst.Size; ++TextureIndex)
-                pDstTextures[TextureIndex] = pSrcTextures[TextureIndex];
-        }
-        else
-        {
-            std::memcpy(Dst.pData, Src.pData, Dst.Size);
-        }
+    IRadientTextureAsset* GetTexture(Uint32 Index, Uint32 ArrayIndex) const noexcept
+    {
+        const MaterialParameterValue& Value = GetValue(Index);
+        VERIFY_EXPR(IsTextureParameter(Value.Type) && ArrayIndex < Value.Size);
+        return static_cast<const TexturePtr*>(Value.pData)[ArrayIndex];
+    }
+
+    void SetTexture(Uint32 Index, Uint32 ArrayIndex, IRadientTextureAsset* pTexture) noexcept
+    {
+        MaterialParameterValue& Value = GetValue(Index);
+        VERIFY_EXPR(IsTextureParameter(Value.Type) && ArrayIndex < Value.Size);
+        static_cast<TexturePtr*>(Value.pData)[ArrayIndex] = pTexture;
     }
 
 private:
@@ -710,28 +699,6 @@ private:
             Handle.Reserved == 0;
     }
 
-    RADIENT_STATUS Commit(const PackedMaterialInstanceData& ScratchData,
-                          const DynamicBitSet&              ChangedParameters) noexcept
-    {
-        VERIFY_EXPR(m_Data.GetValueCount() == ScratchData.GetValueCount());
-        bool StateChanged = false;
-        ChangedParameters.ForEachSetBit(
-            [&](size_t ParameterIndex) {
-                const Uint32 Index = static_cast<Uint32>(ParameterIndex);
-                if (!m_Data.HasSameValue(Index, ScratchData))
-                {
-                    m_Data.CopyValueFrom(Index, ScratchData);
-                    StateChanged = true;
-                }
-            });
-
-        if (!StateChanged)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        ++m_Version;
-        return RADIENT_STATUS_OK;
-    }
-
 private:
     RefCntAutoPtr<IRadientMaterialDefinition> m_pDefinition;
     const RadientHandle                       m_DefinitionHandle;
@@ -747,9 +714,7 @@ public:
     RadientMaterialInstanceWriterImpl(IReferenceCounters*          pRefCounters,
                                       RadientMaterialInstanceImpl* pInstance) :
         TBase{pRefCounters},
-        m_pInstance{pInstance},
-        m_ScratchData{m_pInstance->m_pDefinition->GetDesc(), &m_pInstance->m_Data},
-        m_ChangedParameters{m_ScratchData.GetValueCount()}
+        m_pInstance{pInstance}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstanceWriter, TBase)
@@ -763,18 +728,43 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         const MaterialParameterValue& InstanceValue = m_pInstance->m_Data.GetValue(Handle.Index);
-        MaterialParameterValue&       ScratchValue  = m_ScratchData.GetValue(Handle.Index);
-        const MaterialParameterValue& CurrentValue  = m_ChangedParameters.Test(Handle.Index) ?
-            ScratchValue :
-            InstanceValue;
         if (pData == nullptr || DataSize != InstanceValue.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        if (std::memcmp(CurrentValue.pData, pData, InstanceValue.Size) == 0)
-            return RADIENT_STATUS_OK;
+        ChangeIterator    ChangeIt     = FindChange(Handle.Index, ValueArrayIndex);
+        const bool        HasChange    = ChangeIt != m_Changes.end();
+        const void* const pCurrentData = HasChange ?
+            m_ValueData.data() + ChangeIt->DataOffset :
+            InstanceValue.pData;
+        if (std::memcmp(pCurrentData, pData, InstanceValue.Size) == 0)
+            return RADIENT_STATUS_NO_CHANGE;
 
-        std::memcpy(ScratchValue.pData, pData, ScratchValue.Size);
-        UpdateChangedParameter(Handle.Index);
+        if (HasChange)
+        {
+            std::memcpy(m_ValueData.data() + ChangeIt->DataOffset, pData, InstanceValue.Size);
+            return RADIENT_STATUS_OK;
+        }
+
+        if (m_ValueData.size() > std::numeric_limits<Uint32>::max() - InstanceValue.Size)
+        {
+            LOG_ERROR_MESSAGE("Material instance writer value storage exceeds the supported size");
+            return RADIENT_STATUS_FAILED;
+        }
+
+        try
+        {
+            const Uint32 DataOffset = static_cast<Uint32>(m_ValueData.size());
+            m_Changes.reserve(m_Changes.size() + 1);
+            m_ValueData.resize(m_ValueData.size() + InstanceValue.Size);
+            std::memcpy(m_ValueData.data() + DataOffset, pData, InstanceValue.Size);
+            m_Changes.push_back(ParameterChange{Handle.Index, ValueArrayIndex, DataOffset});
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to store a material instance parameter change: ", Error.what());
+            return RADIENT_STATUS_FAILED;
+        }
+
         return RADIENT_STATUS_OK;
     }
 
@@ -787,46 +777,113 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         const MaterialParameterValue& InstanceValue = m_pInstance->m_Data.GetValue(Handle.Index);
-        MaterialParameterValue&       ScratchValue  = m_ScratchData.GetValue(Handle.Index);
         if (ArrayIndex >= InstanceValue.Size)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        const bool        ParameterChanged = m_ChangedParameters.Test(Handle.Index);
-        const auto* const pInstanceTextures =
-            static_cast<const PackedMaterialInstanceData::TexturePtr*>(InstanceValue.pData);
-        auto* const pScratchTextures =
-            static_cast<PackedMaterialInstanceData::TexturePtr*>(ScratchValue.pData);
-        IRadientTextureAsset* const pCurrentTexture = ParameterChanged ?
-            pScratchTextures[ArrayIndex].RawPtr() :
-            pInstanceTextures[ArrayIndex].RawPtr();
+        ChangeIterator              ChangeIt        = FindChange(Handle.Index, ArrayIndex);
+        const bool                  HasChange       = ChangeIt != m_Changes.end();
+        IRadientTextureAsset* const pCurrentTexture = HasChange ?
+            m_TextureData[ChangeIt->DataOffset].RawPtr() :
+            m_pInstance->m_Data.GetTexture(Handle.Index, ArrayIndex);
         if (pCurrentTexture == pTexture)
-            return RADIENT_STATUS_OK;
+            return RADIENT_STATUS_NO_CHANGE;
 
-        pScratchTextures[ArrayIndex] = pTexture;
-        UpdateChangedParameter(Handle.Index);
+        if (HasChange)
+        {
+            m_TextureData[ChangeIt->DataOffset] = pTexture;
+            return RADIENT_STATUS_OK;
+        }
+
+        if (m_TextureData.size() >= std::numeric_limits<Uint32>::max())
+        {
+            LOG_ERROR_MESSAGE("Material instance writer texture storage exceeds the supported size");
+            return RADIENT_STATUS_FAILED;
+        }
+
+        try
+        {
+            const Uint32 DataOffset = static_cast<Uint32>(m_TextureData.size());
+            m_Changes.reserve(m_Changes.size() + 1);
+            m_TextureData.emplace_back(pTexture);
+            m_Changes.push_back(ParameterChange{Handle.Index, ArrayIndex, DataOffset});
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to store a material instance texture change: ", Error.what());
+            return RADIENT_STATUS_FAILED;
+        }
+
         return RADIENT_STATUS_OK;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
     {
-        const RADIENT_STATUS Status = m_pInstance->Commit(m_ScratchData, m_ChangedParameters);
-        if (Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE)
-            m_ChangedParameters.ResetAll();
-        return Status;
+        bool StateChanged = false;
+        for (const ParameterChange& Change : m_Changes)
+        {
+            const MaterialParameterValue& InstanceValue = m_pInstance->m_Data.GetValue(Change.ParameterIndex);
+            if (IsTextureParameter(InstanceValue.Type))
+            {
+                VERIFY_EXPR(Change.ArrayIndex != ValueArrayIndex);
+                IRadientTextureAsset* const pTexture = m_TextureData[Change.DataOffset];
+                if (m_pInstance->m_Data.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
+                {
+                    m_pInstance->m_Data.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
+                    StateChanged = true;
+                }
+            }
+            else
+            {
+                VERIFY_EXPR(Change.ArrayIndex == ValueArrayIndex);
+                const void* const pChangedData = m_ValueData.data() + Change.DataOffset;
+                if (!m_pInstance->m_Data.HasSameValue(Change.ParameterIndex, pChangedData))
+                {
+                    m_pInstance->m_Data.CopyValue(Change.ParameterIndex, pChangedData);
+                    StateChanged = true;
+                }
+            }
+        }
+
+        m_Changes.clear();
+        m_ValueData.clear();
+        m_TextureData.clear();
+
+        if (!StateChanged)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        ++m_pInstance->m_Version;
+        return RADIENT_STATUS_OK;
     }
 
 private:
-    void UpdateChangedParameter(Uint32 ParameterIndex)
+    static constexpr Uint32 ValueArrayIndex = ~Uint32{0};
+
+    // Each pending complete value or texture element has one record. Offsets
+    // remain valid when the backing value and texture arrays grow.
+    struct ParameterChange
     {
-        m_ChangedParameters.Set(
-            ParameterIndex,
-            !m_pInstance->m_Data.HasSameValue(ParameterIndex, m_ScratchData));
+        Uint32 ParameterIndex = 0;
+        Uint32 ArrayIndex     = ValueArrayIndex;
+        Uint32 DataOffset     = 0;
+    };
+
+    using ChangeList     = std::vector<ParameterChange>;
+    using ChangeIterator = ChangeList::iterator;
+
+    ChangeIterator FindChange(Uint32 ParameterIndex, Uint32 ArrayIndex) noexcept
+    {
+        return std::find_if(
+            m_Changes.begin(), m_Changes.end(),
+            [ParameterIndex, ArrayIndex](const ParameterChange& Change) {
+                return Change.ParameterIndex == ParameterIndex && Change.ArrayIndex == ArrayIndex;
+            });
     }
 
 private:
-    RefCntAutoPtr<RadientMaterialInstanceImpl> m_pInstance;
-    PackedMaterialInstanceData                 m_ScratchData;
-    DynamicBitSet                              m_ChangedParameters;
+    RefCntAutoPtr<RadientMaterialInstanceImpl>          m_pInstance;
+    ChangeList                                          m_Changes;
+    std::vector<Uint8>                                  m_ValueData;
+    std::vector<PackedMaterialInstanceData::TexturePtr> m_TextureData;
 };
 
 RADIENT_STATUS RadientMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const

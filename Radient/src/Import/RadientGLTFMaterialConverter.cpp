@@ -143,16 +143,16 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
 
     RADIENT_STATUS Status = SetParameter(Definition, Writer, Semantic.UVSelectorParameterName,
                                          &UVSelector, static_cast<Uint32>(sizeof(UVSelector)));
-    if (Status == RADIENT_STATUS_OK)
+    if (RADIENT_SUCCEEDED(Status))
         Status = SetParameter(Definition, Writer, Semantic.UVScaleAndRotationParameterName,
                               &TextureAttribs.UVScaleAndRotation, static_cast<Uint32>(sizeof(TextureAttribs.UVScaleAndRotation)));
-    if (Status == RADIENT_STATUS_OK)
+    if (RADIENT_SUCCEEDED(Status))
         Status = SetParameter(Definition, Writer, Semantic.UVBiasParameterName,
                               &UVBias, static_cast<Uint32>(sizeof(UVBias)));
-    if (Status == RADIENT_STATUS_OK)
+    if (RADIENT_SUCCEEDED(Status))
         Status = SetParameter(Definition, Writer, Semantic.WrapUParameterName,
                               &WrapU, static_cast<Uint32>(sizeof(WrapU)));
-    if (Status == RADIENT_STATUS_OK)
+    if (RADIENT_SUCCEEDED(Status))
         Status = SetParameter(Definition, Writer, Semantic.WrapVParameterName,
                               &WrapV, static_cast<Uint32>(sizeof(WrapV)));
     return Status;
@@ -253,7 +253,7 @@ RADIENT_STATUS PopulateMaterialInstance(
     auto SetMaterialParameter =
         [&](const char* Name, const auto& Value) //
     {
-        if (Status == RADIENT_STATUS_OK)
+        if (RADIENT_SUCCEEDED(Status))
             Status = SetParameter(Definition, Writer, Name, &Value, static_cast<Uint32>(sizeof(Value)));
     };
 
@@ -334,7 +334,7 @@ RADIENT_STATUS PopulateMaterialInstance(
         }
     }
 
-    if (Status != RADIENT_STATUS_OK)
+    if (RADIENT_FAILED(Status))
         return Status;
 
     for (const StandardMaterialTextureSemantic& Semantic : StandardMaterialTextureSemantics)
@@ -343,7 +343,7 @@ RADIENT_STATUS PopulateMaterialInstance(
             continue;
 
         Status = SetTextureBindingParameters(Material, Semantic, Definition, Writer);
-        if (Status != RADIENT_STATUS_OK)
+        if (RADIENT_FAILED(Status))
             return Status;
 
         IRadientTextureAsset* pTexture =
@@ -352,7 +352,7 @@ RADIENT_STATUS PopulateMaterialInstance(
             continue;
 
         Status = SetTexture(Definition, Writer, Semantic.TextureParameterName, pTexture);
-        if (Status != RADIENT_STATUS_OK)
+        if (RADIENT_FAILED(Status))
             return Status;
     }
 

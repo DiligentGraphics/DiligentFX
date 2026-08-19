@@ -610,11 +610,11 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetParameter(ValuesHandle, UpdatedValues.data(), static_cast<Uint32>(sizeof(UpdatedValues))), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetTexture(TexturesHandle, 0, pTexture0), RADIENT_STATUS_OK);
-    ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
-
-    // The second writer predates the first commit. Committing its texture array
-    // replaces the complete parameter value, including the unchanged element.
     ASSERT_EQ(pSecondWriter->SetTexture(TexturesHandle, 1, pTexture1), RADIENT_STATUS_OK);
+
+    // Texture elements are independent changes even when both writers prepare
+    // their updates before either commit.
+    ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
 
     const std::array<Float32, 3> StoredValues =
@@ -624,7 +624,7 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     RefCntAutoPtr<IRadientTextureAsset> pStoredTexture1;
     ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 0, pStoredTexture0.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 1, pStoredTexture1.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    EXPECT_EQ(pStoredTexture0, nullptr);
+    EXPECT_EQ(pStoredTexture0, pTexture0);
     EXPECT_EQ(pStoredTexture1, pTexture1);
 }
 
@@ -800,14 +800,14 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
-    EXPECT_EQ(pWriter->SetParameter(ValueHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(ValueHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, &UpdatedValue, static_cast<Uint32>(sizeof(UpdatedValue))), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
-    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture = MakeTestTextureAsset("texture://writer-reversion");
@@ -820,9 +820,68 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
     const Uint64 TextureVersion = pInstance->GetVersion();
 
-    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pInstance->GetVersion(), TextureVersion);
+}
+
+TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
+{
+    const Float32 DefaultValue = 0.f;
+    const Float32 FirstValue   = 1.f;
+    const Float32 SecondValue  = 2.f;
+    const Float32 FinalValue   = 3.f;
+
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name          = "Value";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[0].pDefaultValue = &DefaultValue;
+    Parameters[1].Name          = "Textures";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].ArraySize     = 2;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle ValueHandle;
+    RadientMaterialParameterHandle TexturesHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &TexturesHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pInstance->GetVersion();
+
+    RefCntAutoPtr<IRadientTextureAsset> pTextureA = MakeTestTextureAsset("texture://writer-overwritten");
+    RefCntAutoPtr<IRadientTextureAsset> pTextureB = MakeTestTextureAsset("texture://writer-final-0");
+    RefCntAutoPtr<IRadientTextureAsset> pTextureC = MakeTestTextureAsset("texture://writer-final-1");
+    RefCntWeakPtr<IRadientTextureAsset> WeakTextureA{pTextureA};
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FirstValue, static_cast<Uint32>(sizeof(FirstValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &SecondValue, static_cast<Uint32>(sizeof(SecondValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FinalValue, static_cast<Uint32>(sizeof(FinalValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FinalValue, static_cast<Uint32>(sizeof(FinalValue))), RADIENT_STATUS_NO_CHANGE);
+
+    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureA), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureB), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureC), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureC), RADIENT_STATUS_NO_CHANGE);
+    pTextureA.Release();
+    EXPECT_EQ(WeakTextureA.Lock(), nullptr);
+
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 1);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, ValueHandle), FinalValue);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pTextureB);
+    pStoredTexture.Release();
+    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 1, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pTextureC);
 }
 
 TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
@@ -879,7 +938,40 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
     EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, Handle), FourthValue);
 }
 
-TEST(RadientMaterialTest, WriterTracksChangesAcrossMaskWords)
+TEST(RadientMaterialTest, WritersResolveOverlappingTextureChangesAtCommit)
+{
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name = "Texture";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle Handle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientTextureAsset> pFirstTexture  = MakeTestTextureAsset("texture://writer-first");
+    RefCntAutoPtr<IRadientTextureAsset> pSecondTexture = MakeTestTextureAsset("texture://writer-second");
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pFirstWriter;
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->SetTexture(Handle, 0, pFirstTexture), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondWriter->SetTexture(Handle, 0, pSecondTexture), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    ASSERT_EQ(pInstance->GetTexture(Handle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pSecondTexture);
+}
+
+TEST(RadientMaterialTest, WriterUpdatesSparseParameters)
 {
     static constexpr Uint32 ParameterCount = 66;
 

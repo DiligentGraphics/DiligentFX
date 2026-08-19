@@ -546,25 +546,30 @@ DILIGENT_END_INTERFACE
 
 /// Reusable material instance writer.
 ///
-/// A writer records only parameters changed through SetParameter() and
-/// SetTexture(). Commit() publishes each changed parameter in full. If multiple
-/// writers modify the same parameter, the last commit replaces the complete
-/// parameter value. The writer and its material instance are not thread-safe
-/// and must not be accessed concurrently with Commit().
+/// A writer records only values changed through SetParameter() and SetTexture().
+/// Commit() publishes complete non-texture parameters and individual texture
+/// array elements. If multiple writers modify the same value, the last commit
+/// replaces that complete parameter or texture element. The writer and its
+/// material instance are not thread-safe and must not be accessed concurrently
+/// with Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
     /// is copied immediately and DataSize must exactly match the parameter's
-    /// native data size. Texture parameters are not accepted.
+    /// native data size. Texture parameters are not accepted. Returns
+    /// RADIENT_STATUS_NO_CHANGE if the writer's effective value already equals
+    /// the supplied value.
     VIRTUAL RADIENT_STATUS METHOD(SetParameter)(THIS_
                                                 RadientMaterialParameterHandle Handle,
                                                 const void*                    pData,
                                                 Uint32                         DataSize) PURE;
 
-    /// Replaces one texture array element identified by Handle and ArrayIndex in
-    /// the writer's private value. Commit() publishes the complete texture array.
-    /// The writer retains pTexture; null is a valid texture value. Non-texture
-    /// parameters are not accepted.
+    /// Replaces one texture array element identified by Handle and ArrayIndex.
+    /// Commit() publishes only modified texture elements, so independent element
+    /// updates from different writers are preserved. The writer retains pTexture;
+    /// null is a valid texture value. Non-texture parameters are not accepted.
+    /// Returns RADIENT_STATUS_NO_CHANGE if the writer's effective texture already
+    /// equals pTexture.
     VIRTUAL RADIENT_STATUS METHOD(SetTexture)(THIS_
                                               RadientMaterialParameterHandle Handle,
                                               Uint32                         ArrayIndex,
