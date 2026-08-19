@@ -121,6 +121,20 @@ DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_PARAMETER_TYPE, Uint8)
 };
 
 
+/// Texture coordinate address mode stored in a material parameter.
+///
+/// The supported numeric values match the corresponding Diligent
+/// TEXTURE_ADDRESS_MODE values.
+DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE, Uint32)
+{
+    /// Repeat the texture at every integer boundary.
+    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP = 1,
+
+    /// Clamp texture coordinates to the [0, 1] range.
+    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP = 3,
+};
+
+
 /// Built-in standard material model.
 DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_MODEL, Uint8)
 {
@@ -379,8 +393,8 @@ struct RadientStandardMaterialDefinitionCreateInfo
     /// Every declared SemanticTexture parameter is accompanied by mutable
     /// SemanticTextureUVSelector (INT), SemanticTextureUVScaleAndRotation
     /// (FLOAT2X2), SemanticTextureUVBias (FLOAT2), and SemanticTextureWrapU
-    /// and SemanticTextureWrapV (UINT) parameters. Wrap values use the
-    /// corresponding Diligent texture address mode value.
+    /// and SemanticTextureWrapV (UINT) parameters. Wrap values use
+    /// RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE.
     RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS Textures DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NONE);
 };
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;

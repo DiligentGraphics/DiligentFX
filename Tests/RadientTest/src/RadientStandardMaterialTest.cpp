@@ -266,8 +266,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         const RadientFloat2 UVBias = GetParameter<RadientFloat2>(*pInstance, FindHandle(Semantic.UVBias));
         EXPECT_FLOAT_EQ(UVBias.x, ExpectedUVBias.x);
         EXPECT_FLOAT_EQ(UVBias.y, ExpectedUVBias.y);
-        EXPECT_EQ(GetParameter<Uint32>(*pInstance, FindHandle(Semantic.WrapU)), static_cast<Uint32>(TEXTURE_ADDRESS_WRAP));
-        EXPECT_EQ(GetParameter<Uint32>(*pInstance, FindHandle(Semantic.WrapV)), static_cast<Uint32>(TEXTURE_ADDRESS_WRAP));
+        EXPECT_EQ(GetParameter<Uint32>(*pInstance, FindHandle(Semantic.WrapU)), static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP));
+        EXPECT_EQ(GetParameter<Uint32>(*pInstance, FindHandle(Semantic.WrapV)), static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP));
     }
 }
 

@@ -51,6 +51,9 @@ static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3X3 == 15, "Unexpected RADIEN
 static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4 == 16, "Unexpected RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4 value");
 static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE == 17, "Unexpected RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE value");
 
+static_assert(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP == 1, "Unexpected wrap texture address mode value");
+static_assert(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP == 3, "Unexpected clamp texture address mode value");
+
 void RadientMaterials_CPP_UseTypes()
 {
     RadientMaterialParameterHandle              Handle;

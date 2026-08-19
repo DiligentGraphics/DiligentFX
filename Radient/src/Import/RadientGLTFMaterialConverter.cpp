@@ -81,6 +81,9 @@ static constexpr std::array<StandardMaterialTextureSemantic, 15> StandardMateria
     STANDARD_MATERIAL_TEXTURE_SEMANTIC(Thickness, Thickness, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME),
 }};
 
+static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP) == static_cast<Uint32>(TEXTURE_ADDRESS_WRAP));
+static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP) == static_cast<Uint32>(TEXTURE_ADDRESS_CLAMP));
+
 #undef STANDARD_MATERIAL_TEXTURE_SEMANTIC
 
 bool HasFeature(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features,
@@ -138,8 +141,8 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
     const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
     const Int32                                 UVSelector     = TextureAttribs.GetUVSelector();
     const RadientFloat2                         UVBias{TextureAttribs.UBias, TextureAttribs.VBias};
-    const Uint32                                WrapU = static_cast<Uint32>(TextureAttribs.GetWrapUMode());
-    const Uint32                                WrapV = static_cast<Uint32>(TextureAttribs.GetWrapVMode());
+    const auto                                  WrapU = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapUMode());
+    const auto                                  WrapV = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapVMode());
 
     RADIENT_STATUS Status = SetParameter(Definition, Writer, Semantic.UVSelectorParameterName,
                                          &UVSelector, static_cast<Uint32>(sizeof(UVSelector)));

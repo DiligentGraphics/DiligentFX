@@ -163,8 +163,9 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialDoubleSidedName[] = "Doubl
 /// - `TextureUVSelector`: INT texture-coordinate set index, default 0.
 /// - `TextureUVScaleAndRotation`: FLOAT2X2 transform, default identity.
 /// - `TextureUVBias`: FLOAT2 translation applied after the transform, default zero.
-/// - `TextureWrapU` and `TextureWrapV`: UINT TEXTURE_ADDRESS_MODE values,
-///   default TEXTURE_ADDRESS_WRAP.
+/// - `TextureWrapU` and `TextureWrapV`: UINT
+///   RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE values, default
+///   RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP.
 
 /// Name of the base-color TEXTURE. RGB is interpreted as sRGB, alpha is linear,
 /// and all channels are expected in [0, 1].

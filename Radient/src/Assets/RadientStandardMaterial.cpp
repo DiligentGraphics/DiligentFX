@@ -181,10 +181,10 @@ void AddStandardMaterialTextureParameters(std::vector<RadientMaterialParameterDe
     Desc.Name                          = TextureName;
     Desc.Type                          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    static constexpr Int32         DefaultUVSelector           = 0;
-    static constexpr Float32       DefaultUVScaleAndRotation[] = {1.f, 0.f, 0.f, 1.f};
-    static constexpr RadientFloat2 DefaultUVBias{0.f, 0.f};
-    static constexpr Uint32        DefaultWrapMode = TEXTURE_ADDRESS_WRAP;
+    static constexpr Int32                                 DefaultUVSelector           = 0;
+    static constexpr Float32                               DefaultUVScaleAndRotation[] = {1.f, 0.f, 0.f, 1.f};
+    static constexpr RadientFloat2                         DefaultUVBias{0.f, 0.f};
+    static constexpr RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE DefaultWrapMode = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
 
     AddStandardMaterialValueParameter(Parameters, UVSelectorName, RADIENT_MATERIAL_PARAMETER_TYPE_INT, &DefaultUVSelector);
     AddStandardMaterialValueParameter(Parameters, UVScaleAndRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2, &DefaultUVScaleAndRotation);
