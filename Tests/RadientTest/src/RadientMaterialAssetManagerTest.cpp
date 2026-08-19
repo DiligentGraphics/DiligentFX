@@ -125,8 +125,12 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(GetInstanceParameter<Bool>(*pInstance, "DoubleSided"), MaterialCI.DoubleSided);
 
     RadientMaterialParameterHandle TextureHandle;
-    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &TextureHandle),
-              RADIENT_STATUS_NOT_FOUND);
+    ASSERT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &TextureHandle),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_EQ(pInstance->GetTexture(TextureHandle, 0, pTexture.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(pTexture, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
     ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, pSecondMaterial.GetAddressOfEmpty()),
@@ -136,7 +140,7 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(pSecondInstance->GetDefinition(), pInstance->GetDefinition());
 }
 
-TEST(RadientMaterialAssetManagerTest, CreateMaterialIncludesUsedTexturesInDefinition)
+TEST(RadientMaterialAssetManagerTest, CreateMaterialStoresUsedTexturesInInstance)
 {
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
@@ -164,8 +168,12 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialIncludesUsedTexturesInDefini
     EXPECT_EQ(pStoredTexture, pBaseColorTexture);
 
     RadientMaterialParameterHandle NormalTextureHandle;
-    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("NormalTexture", &NormalTextureHandle),
-              RADIENT_STATUS_NOT_FOUND);
+    ASSERT_EQ(pInstance->GetDefinition()->FindParameter("NormalTexture", &NormalTextureHandle),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset> pNormalTexture;
+    EXPECT_EQ(pInstance->GetTexture(NormalTextureHandle, 0, pNormalTexture.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(pNormalTexture, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterialWithoutTextures;
     ASSERT_EQ(pMaterialManager->CreateMaterial({}, pMaterialWithoutTextures.GetAddressOfEmpty()),
@@ -173,7 +181,7 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialIncludesUsedTexturesInDefini
     RefCntAutoPtr<IRadientMaterialInstance> pInstanceWithoutTextures =
         RadientMaterialAssetManager::GetInstance(pMaterialWithoutTextures);
     ASSERT_NE(pInstanceWithoutTextures, nullptr);
-    EXPECT_NE(pInstanceWithoutTextures->GetDefinition(), pInstance->GetDefinition());
+    EXPECT_EQ(pInstanceWithoutTextures->GetDefinition(), pInstance->GetDefinition());
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)

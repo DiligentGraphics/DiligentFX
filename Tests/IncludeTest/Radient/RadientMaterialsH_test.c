@@ -33,7 +33,6 @@ void RadientMaterials_C_UseTypes(void)
     RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE       AddressMode = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
     RADIENT_STANDARD_MATERIAL_MODEL             Model       = RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS;
     RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS     Features    = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
-    RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS     Textures    = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_ALL;
     RADIENT_STANDARD_MATERIAL_ALPHA_MODE        AlphaMode   = RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE;
     RadientMaterialParameterHandle              Handle      = {0};
     RadientMaterialDefinitionDesc               Desc        = {0};
@@ -48,7 +47,6 @@ void RadientMaterials_C_UseTypes(void)
     (void)AddressMode;
     (void)Model;
     (void)Features;
-    (void)Textures;
     (void)AlphaMode;
     (void)Handle;
     (void)Desc;

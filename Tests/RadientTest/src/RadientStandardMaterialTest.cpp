@@ -266,9 +266,6 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
         RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN;
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR |
-        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL |
-        RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pFirstDefinition;
     RefCntAutoPtr<IRadientMaterialDefinition> pSecondDefinition;
@@ -303,7 +300,7 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     EXPECT_EQ(pInstance->GetTexture(NormalTextureHandle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pTexture, nullptr);
 
-    DefinitionCI.Textures &= ~RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
+    DefinitionCI.Features &= ~RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN;
     RefCntAutoPtr<IRadientMaterialDefinition> pDifferentDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDifferentDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_NE(pFirstDefinition, pDifferentDefinition);
@@ -482,7 +479,6 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL;
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -551,9 +547,41 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialMetallicFactorName,
         RadientStandardMaterialRoughnessFactorName,
         RadientStandardMaterialEmissiveFactorName,
+        RadientStandardMaterialNormalScaleName,
+        RadientStandardMaterialOcclusionStrengthName,
         RadientStandardMaterialAlphaModeName,
         RadientStandardMaterialAlphaCutoffName,
         RadientStandardMaterialDoubleSidedName,
+        RadientStandardMaterialBaseColorTextureName,
+        RadientStandardMaterialBaseColorTextureUVSelectorName,
+        RadientStandardMaterialBaseColorTextureUVScaleAndRotationName,
+        RadientStandardMaterialBaseColorTextureUVBiasName,
+        RadientStandardMaterialBaseColorTextureWrapUName,
+        RadientStandardMaterialBaseColorTextureWrapVName,
+        RadientStandardMaterialMetallicRoughnessTextureName,
+        RadientStandardMaterialMetallicRoughnessTextureUVSelectorName,
+        RadientStandardMaterialMetallicRoughnessTextureUVScaleAndRotationName,
+        RadientStandardMaterialMetallicRoughnessTextureUVBiasName,
+        RadientStandardMaterialMetallicRoughnessTextureWrapUName,
+        RadientStandardMaterialMetallicRoughnessTextureWrapVName,
+        RadientStandardMaterialNormalTextureName,
+        RadientStandardMaterialNormalTextureUVSelectorName,
+        RadientStandardMaterialNormalTextureUVScaleAndRotationName,
+        RadientStandardMaterialNormalTextureUVBiasName,
+        RadientStandardMaterialNormalTextureWrapUName,
+        RadientStandardMaterialNormalTextureWrapVName,
+        RadientStandardMaterialOcclusionTextureName,
+        RadientStandardMaterialOcclusionTextureUVSelectorName,
+        RadientStandardMaterialOcclusionTextureUVScaleAndRotationName,
+        RadientStandardMaterialOcclusionTextureUVBiasName,
+        RadientStandardMaterialOcclusionTextureWrapUName,
+        RadientStandardMaterialOcclusionTextureWrapVName,
+        RadientStandardMaterialEmissiveTextureName,
+        RadientStandardMaterialEmissiveTextureUVSelectorName,
+        RadientStandardMaterialEmissiveTextureUVScaleAndRotationName,
+        RadientStandardMaterialEmissiveTextureUVBiasName,
+        RadientStandardMaterialEmissiveTextureWrapUName,
+        RadientStandardMaterialEmissiveTextureWrapVName,
     };
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
@@ -561,19 +589,23 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetDesc().Domain, RADIENT_MATERIAL_DOMAIN_SURFACE);
-    EXPECT_STREQ(pDefinition->GetDesc().Reference.URI, "standard-material:0:0:0");
+    EXPECT_STREQ(pDefinition->GetDesc().Reference.URI, "standard-material:0:0");
     EXPECT_EQ(pDefinition->GetDesc().Reference.Version, RadientStandardMaterialSchemaVersion);
     ExpectParameters(*pDefinition, MetallicRoughnessParameters);
 
     RadientMaterialParameterHandle Handle;
-    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialNormalScaleName, &Handle), RADIENT_STATUS_NOT_FOUND);
-    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialOcclusionStrengthName, &Handle), RADIENT_STATUS_NOT_FOUND);
 
     static constexpr std::array UnlitParameters{
         RadientStandardMaterialBaseColorFactorName,
         RadientStandardMaterialAlphaModeName,
         RadientStandardMaterialAlphaCutoffName,
         RadientStandardMaterialDoubleSidedName,
+        RadientStandardMaterialBaseColorTextureName,
+        RadientStandardMaterialBaseColorTextureUVSelectorName,
+        RadientStandardMaterialBaseColorTextureUVScaleAndRotationName,
+        RadientStandardMaterialBaseColorTextureUVBiasName,
+        RadientStandardMaterialBaseColorTextureWrapUName,
+        RadientStandardMaterialBaseColorTextureWrapVName,
     };
 
     DefinitionCI.Model = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
@@ -590,8 +622,7 @@ TEST(RadientStandardMaterialTest, UnlitMaterialHasOnlyApplicableSchema)
     ASSERT_NE(pAssetManager, nullptr);
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Model    = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR;
+    DefinitionCI.Model = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
 
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -648,18 +679,6 @@ TEST(RadientStandardMaterialTest, RejectsUnsupportedFeatureFlags)
                                     "Standard material feature flags contain unsupported bits");
 }
 
-TEST(RadientStandardMaterialTest, RejectsUnsupportedTextureFlags)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = static_cast<RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS>(
-        static_cast<Uint32>(RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL) + 1u);
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "Standard material texture flags contain unsupported bits");
-}
-
 TEST(RadientStandardMaterialTest, RejectsOptionalFeaturesForUnlitMaterial)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
@@ -670,84 +689,6 @@ TEST(RadientStandardMaterialTest, RejectsOptionalFeaturesForUnlitMaterial)
     DefinitionCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
     ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
                                     "Unlit standard materials do not support optional material features");
-}
-
-TEST(RadientStandardMaterialTest, RejectsNonBaseColorTextureForUnlitMaterial)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Model    = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "Unlit standard materials only support the base-color texture semantic");
-}
-
-TEST(RadientStandardMaterialTest, RejectsClearCoatTextureWithoutFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_CLEAR_COAT_NORMAL;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "Clear-coat texture semantics require the clear-coat material feature");
-}
-
-TEST(RadientStandardMaterialTest, RejectsSheenTextureWithoutFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_SHEEN_COLOR;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "Sheen texture semantics require the sheen material feature");
-}
-
-TEST(RadientStandardMaterialTest, RejectsAnisotropyTextureWithoutFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_ANISOTROPY;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "The anisotropy texture semantic requires the anisotropy material feature");
-}
-
-TEST(RadientStandardMaterialTest, RejectsIridescenceTextureWithoutFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_IRIDESCENCE_THICKNESS;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "Iridescence texture semantics require the iridescence material feature");
-}
-
-TEST(RadientStandardMaterialTest, RejectsTransmissionTextureWithoutFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_TRANSMISSION;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "The transmission texture semantic requires the transmission material feature");
-}
-
-TEST(RadientStandardMaterialTest, RejectsThicknessTextureWithoutVolumeFeature)
-{
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    DefinitionCI.Textures = RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_THICKNESS;
-    ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
-                                    "The thickness texture semantic requires the volume material feature");
 }
 
 TEST(RadientStandardMaterialTest, VolumeRequiresTransmission)

@@ -454,16 +454,6 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
     VERIFY_EXPR(ppInstance != nullptr && *ppInstance == nullptr);
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    if (MaterialCI.pBaseColorTexture != nullptr)
-        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR;
-    if (MaterialCI.pMetallicRoughnessTexture != nullptr)
-        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_METALLIC_ROUGHNESS;
-    if (MaterialCI.pNormalTexture != nullptr)
-        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_NORMAL;
-    if (MaterialCI.pOcclusionTexture != nullptr)
-        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_OCCLUSION;
-    if (MaterialCI.pEmissiveTexture != nullptr)
-        DefinitionCI.Textures |= RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_EMISSIVE;
 
     return CreateInitializedStandardMaterialInstance(
         *this,

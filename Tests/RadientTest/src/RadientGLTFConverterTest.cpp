@@ -660,7 +660,6 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
 
     EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS);
     EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL);
-    EXPECT_EQ(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAGS_ALL);
 
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").w, 0.4f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "MetallicFactor"), 0.35f);
@@ -691,6 +690,47 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
         EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), pTexture);
+}
+
+TEST(RadientGLTFConverterTest, DeclaresShaderRequiredTextureParameters)
+{
+    GLTF::Material Material;
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+        ConvertMaterial(Material, nullptr, 0, DefinitionCI);
+    ASSERT_NE(pInstance, nullptr);
+
+    for (size_t TextureIndex = 0; TextureIndex < StandardMaterialTextureTestInfos.size(); ++TextureIndex)
+    {
+        const StandardMaterialTextureTestInfo& TextureInfo = StandardMaterialTextureTestInfos[TextureIndex];
+        RadientMaterialParameterHandle         Handle;
+        const RADIENT_STATUS                   FindStatus =
+            pInstance->GetDefinition()->FindParameter(TextureInfo.ParameterName, &Handle);
+
+        if (TextureIndex < 5)
+        {
+            EXPECT_EQ(FindStatus, RADIENT_STATUS_OK);
+            EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), nullptr);
+        }
+        else
+        {
+            EXPECT_EQ(FindStatus, RADIENT_STATUS_NOT_FOUND);
+        }
+    }
+}
+
+TEST(RadientGLTFConverterTest, DeclaresShaderRequiredExtensionTextureParameters)
+{
+    const GLTF::Material Material = MakeExtendedGLTFMaterial(false);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+        ConvertMaterial(Material, nullptr, 0, DefinitionCI);
+    ASSERT_NE(pInstance, nullptr);
+
+    for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
+        EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), nullptr);
 }
 
 TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSemantics)
@@ -766,7 +806,6 @@ TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)
 
     EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_UNLIT);
     EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    EXPECT_EQ(DefinitionCI.Textures, RADIENT_STANDARD_MATERIAL_TEXTURE_FLAG_BASE_COLOR);
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").z, 0.6f);
     EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, "AlphaMode"),
               RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND);
