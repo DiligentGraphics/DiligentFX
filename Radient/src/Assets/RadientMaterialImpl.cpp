@@ -197,15 +197,86 @@ RADIENT_STATUS ValidateMaterialDefinitionDesc(const RadientMaterialDefinitionDes
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS ValidateMaterialShaderDataLayout(
+    const RadientMaterialDefinitionDesc&       DefinitionDesc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout)
+{
+    if (ShaderDataLayout.MappingCount != 0 && ShaderDataLayout.pMappings == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Material shader data layout declares ", ShaderDataLayout.MappingCount,
+                          " mappings, but pMappings is null");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
+    {
+        const RadientMaterialShaderParameterPacking& Mapping = ShaderDataLayout.pMappings[MappingIndex];
+        if (Mapping.ParameterIndex >= DefinitionDesc.ParameterCount)
+        {
+            LOG_ERROR_MESSAGE("Material shader data mapping ", MappingIndex, " references parameter index ",
+                              Mapping.ParameterIndex, ", but the definition only has ",
+                              DefinitionDesc.ParameterCount, " parameters");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        const RadientMaterialParameterDesc& Parameter = DefinitionDesc.pParameters[Mapping.ParameterIndex];
+        if (IsTextureParameter(Parameter.Type))
+        {
+            LOG_ERROR_MESSAGE("Material shader data mapping ", MappingIndex, " references texture parameter '",
+                              Parameter.Name, "'; texture parameters cannot be copied into shader data");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        Uint32     ParameterDataSize = 0;
+        const bool IsValidDataSize   = GetMaterialParameterDataSize(Parameter, ParameterDataSize);
+        VERIFY_EXPR(IsValidDataSize);
+        (void)IsValidDataSize;
+
+        if (Mapping.Offset > ShaderDataLayout.Size ||
+            ParameterDataSize > ShaderDataLayout.Size - Mapping.Offset)
+        {
+            LOG_ERROR_MESSAGE("Material shader data mapping ", MappingIndex, " for parameter '", Parameter.Name,
+                              "' uses byte range [", Mapping.Offset, ", ",
+                              Uint64{Mapping.Offset} + ParameterDataSize,
+                              "), which exceeds the shader data size ", ShaderDataLayout.Size);
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        const Uint32 MappingEnd = Mapping.Offset + ParameterDataSize;
+        for (Uint32 PreviousIndex = 0; PreviousIndex < MappingIndex; ++PreviousIndex)
+        {
+            const RadientMaterialShaderParameterPacking& PreviousMapping   = ShaderDataLayout.pMappings[PreviousIndex];
+            const RadientMaterialParameterDesc&          PreviousParameter = DefinitionDesc.pParameters[PreviousMapping.ParameterIndex];
+
+            Uint32     PreviousDataSize        = 0;
+            const bool IsValidPreviousDataSize = GetMaterialParameterDataSize(PreviousParameter, PreviousDataSize);
+            VERIFY_EXPR(IsValidPreviousDataSize);
+            (void)IsValidPreviousDataSize;
+
+            const Uint32 PreviousEnd = PreviousMapping.Offset + PreviousDataSize;
+            if (Mapping.Offset < PreviousEnd && PreviousMapping.Offset < MappingEnd)
+            {
+                LOG_ERROR_MESSAGE("Material shader data mappings ", PreviousIndex, " and ", MappingIndex,
+                                  " overlap in the destination data block");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+        }
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
 } // namespace
 
 RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackData(
-    const RadientMaterialDefinitionDesc& Desc)
+    const RadientMaterialDefinitionDesc&       Desc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout)
 {
     const Char* const DefinitionName = Desc.Name != nullptr ? Desc.Name : "";
 
     FixedLinearAllocator Allocator{GetRawAllocator()};
     Allocator.AddSpace<RadientMaterialParameterDesc>(Desc.ParameterCount);
+    Allocator.AddSpace<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
     Allocator.AddSpaceForString(DefinitionName);
     Allocator.AddSpaceForString(Desc.Reference.URI);
 
@@ -231,12 +302,34 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
 
     RadientMaterialParameterDesc* const pParameters =
         Writer.ConstructArray<RadientMaterialParameterDesc>(Desc.ParameterCount);
+    ShaderDataCopyCommand* const pShaderDataCopyCommands =
+        Writer.ConstructArray<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
 
-    Data.Desc               = Desc;
-    Data.Desc.Name          = Writer.CopyString(DefinitionName);
-    Data.Desc.Reference     = Desc.Reference;
-    Data.Desc.Reference.URI = Writer.CopyString(Desc.Reference.URI);
-    Data.Desc.pParameters   = pParameters;
+    Data.Desc                         = Desc;
+    Data.Desc.Name                    = Writer.CopyString(DefinitionName);
+    Data.Desc.Reference               = Desc.Reference;
+    Data.Desc.Reference.URI           = Writer.CopyString(Desc.Reference.URI);
+    Data.Desc.pParameters             = pParameters;
+    Data.PackingPlan.Size             = ShaderDataLayout.Size;
+    Data.PackingPlan.CopyCommandCount = ShaderDataLayout.MappingCount;
+    Data.PackingPlan.pCopyCommands    = pShaderDataCopyCommands;
+
+    for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
+    {
+        const RadientMaterialShaderParameterPacking& Mapping   = ShaderDataLayout.pMappings[MappingIndex];
+        const RadientMaterialParameterDesc&          Parameter = Desc.pParameters[Mapping.ParameterIndex];
+
+        Uint32     ParameterDataSize = 0;
+        const bool IsValidDataSize   = GetMaterialParameterDataSize(Parameter, ParameterDataSize);
+        VERIFY_EXPR(IsValidDataSize && ParameterDataSize != 0);
+        (void)IsValidDataSize;
+
+        pShaderDataCopyCommands[MappingIndex] = {
+            Mapping.ParameterIndex,
+            Mapping.Offset,
+            ParameterDataSize,
+        };
+    }
 
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {
@@ -322,6 +415,11 @@ public:
     {
         VERIFY_EXPR(Index < m_ValueCount);
         return m_pValues[Index];
+    }
+
+    const void* GetValueData(Uint32 Index) const noexcept
+    {
+        return m_pValues[Index].pData;
     }
 
     bool HasSameValue(Uint32 Index, const PackedMaterialInstanceData& Other) const noexcept
@@ -462,10 +560,11 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
 } // namespace
 
 RadientMaterialDefinitionImpl::RadientMaterialDefinitionImpl(
-    IReferenceCounters*                  pRefCounters,
-    const RadientMaterialDefinitionDesc& Desc) :
+    IReferenceCounters*                        pRefCounters,
+    const RadientMaterialDefinitionDesc&       Desc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout) :
     TBase{pRefCounters},
-    m_Data{PackData(Desc)},
+    m_Data{PackData(Desc, ShaderDataLayout)},
     m_ParameterIndices{},
     m_DefinitionHandle{s_NextMaterialDefinitionHandle.fetch_add(1, std::memory_order_relaxed)}
 {
@@ -601,6 +700,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final;
 
 private:
+    friend class ::Diligent::RadientMaterialDefinitionImpl;
     friend class RadientMaterialInstanceWriterImpl;
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept
@@ -775,6 +875,26 @@ RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppI
 
 } // namespace
 
+void RadientMaterialDefinitionImpl::WriteShaderData(
+    const IRadientMaterialInstance& Instance,
+    void*                           pData) const noexcept
+{
+    if (m_Data.PackingPlan.Size == 0)
+        return;
+
+    std::memset(pData, 0, m_Data.PackingPlan.Size);
+    Uint8* const pShaderData  = static_cast<Uint8*>(pData);
+    const auto&  InstanceImpl = static_cast<const RadientMaterialInstanceImpl&>(Instance);
+
+    for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.CopyCommandCount; ++CommandIndex)
+    {
+        const ShaderDataCopyCommand& Command = m_Data.PackingPlan.pCopyCommands[CommandIndex];
+        std::memcpy(pShaderData + Command.DestinationOffset,
+                    InstanceImpl.m_Data.GetValueData(Command.ParameterIndex),
+                    Command.Size);
+    }
+}
+
 RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
     IRadientMaterialInstance** ppInstance) const
 {
@@ -805,6 +925,14 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
 RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
                                                              IRadientMaterialDefinition**         ppDefinition)
 {
+    return CreateDefinition(DefinitionDesc, {}, ppDefinition);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(
+    const RadientMaterialDefinitionDesc&       DefinitionDesc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
+    IRadientMaterialDefinition**               ppDefinition)
+{
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppDefinition = nullptr;
@@ -815,8 +943,13 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMateri
         if (ValidationStatus != RADIENT_STATUS_OK)
             return ValidationStatus;
 
+        const RADIENT_STATUS LayoutValidationStatus =
+            ValidateMaterialShaderDataLayout(DefinitionDesc, ShaderDataLayout);
+        if (LayoutValidationStatus != RADIENT_STATUS_OK)
+            return LayoutValidationStatus;
+
         RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{
-            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionDesc)};
+            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionDesc, ShaderDataLayout)};
         *ppDefinition = pDefinition.Detach();
         return RADIENT_STATUS_OK;
     }

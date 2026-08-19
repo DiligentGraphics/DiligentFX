@@ -27,6 +27,7 @@
 #include "RadientMaterials.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMaterialImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "RefCntAutoPtr.hpp"
@@ -39,6 +40,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -69,6 +71,13 @@ RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionD
     return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ppDefinition);
 }
 
+RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc&       DefinitionDesc,
+                                const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
+                                IRadientMaterialDefinition**               ppDefinition)
+{
+    return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ShaderDataLayout, ppDefinition);
+}
+
 RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     const RadientMaterialParameterDesc* pParameters,
     Uint32                              ParameterCount,
@@ -94,6 +103,28 @@ void ExpectInvalidDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
 }
+
+void ExpectInvalidShaderDataLayout(const RadientMaterialDefinitionDesc&       DefinitionDesc,
+                                   const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
+                                   const char*                                ExpectedError)
+{
+    TestingEnvironment::ErrorScope            ExpectedErrors{ExpectedError};
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    EXPECT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pDefinition, nullptr);
+}
+
+struct ShaderParameterPackingTestParam
+{
+    RADIENT_MATERIAL_PARAMETER_TYPE Type;
+    Uint32                          Size;
+    const char*                     Name;
+};
+
+class RadientMaterialShaderParameterPackingTest :
+    public testing::TestWithParam<ShaderParameterPackingTestParam>
+{};
 
 TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
 {
@@ -158,6 +189,241 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_TRUE(ByIndex);
     EXPECT_EQ(pDefinition->FindParameter("Missing", &ByName), RADIENT_STATUS_NOT_FOUND);
     EXPECT_FALSE(ByName);
+}
+
+TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
+{
+    const RadientFloat4          DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};
+    const std::array<Float32, 2> DefaultWeights{0.5f, 0.75f};
+    const Uint32                 DefaultMode = 7;
+
+    std::array<RadientMaterialParameterDesc, 3> Parameters{};
+    Parameters[0].Name          = "Color";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+    Parameters[0].pDefaultValue = &DefaultColor;
+    Parameters[1].Name          = "Weights";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[1].ArraySize     = static_cast<Uint32>(DefaultWeights.size());
+    Parameters[1].pDefaultValue = DefaultWeights.data();
+    Parameters[2].Name          = "Mode";
+    Parameters[2].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[2].pDefaultValue = &DefaultMode;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Packed material definition";
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    std::array<RadientMaterialShaderParameterPacking, 3> Mappings{{
+        {1, 4},
+        {0, 16},
+        {2, 40},
+    }};
+    RadientMaterialShaderDataLayoutDesc                  ShaderDataLayout{};
+    ShaderDataLayout.Size         = 48;
+    ShaderDataLayout.pMappings    = Mappings.data();
+    ShaderDataLayout.MappingCount = static_cast<Uint32>(Mappings.size());
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    // The definition owns the mappings independently of their source array.
+    Mappings = {};
+
+    auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), ShaderDataLayout.Size);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    std::array<Uint8, 48> ShaderData;
+    ShaderData.fill(0xcd);
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+
+    std::array<Uint8, 48> Expected{};
+    std::memcpy(Expected.data() + 4, DefaultWeights.data(), sizeof(DefaultWeights));
+    std::memcpy(Expected.data() + 16, &DefaultColor, sizeof(DefaultColor));
+    std::memcpy(Expected.data() + 40, &DefaultMode, sizeof(DefaultMode));
+    EXPECT_EQ(ShaderData, Expected);
+
+    const RadientFloat4            UpdatedColor{0.9f, 0.8f, 0.7f, 0.6f};
+    RadientMaterialParameterHandle ColorHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ColorHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, &UpdatedColor, static_cast<Uint32>(sizeof(UpdatedColor))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    std::memcpy(Expected.data() + 16, &UpdatedColor, sizeof(UpdatedColor));
+    EXPECT_EQ(ShaderData, Expected);
+}
+
+TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
+{
+    const ShaderParameterPackingTestParam& Param = GetParam();
+
+    std::vector<Uint8> DefaultData(Param.Size, 0);
+    std::vector<Uint8> UpdatedData(Param.Size, 0);
+    if (Param.Type == RADIENT_MATERIAL_PARAMETER_TYPE_BOOL)
+    {
+        UpdatedData[0] = 1;
+    }
+    else
+    {
+        static constexpr Uint32 ComponentSize = static_cast<Uint32>(sizeof(Uint32));
+        ASSERT_EQ(Param.Size % ComponentSize, 0u);
+        for (Uint32 Component = 0; Component < Param.Size / ComponentSize; ++Component)
+        {
+            const Uint32 DefaultValue = 0x3e800000u + Component;
+            const Uint32 UpdatedValue = 0x3f000000u + Component;
+            std::memcpy(DefaultData.data() + Component * ComponentSize, &DefaultValue, sizeof(DefaultValue));
+            std::memcpy(UpdatedData.data() + Component * ComponentSize, &UpdatedValue, sizeof(UpdatedValue));
+        }
+    }
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = Param.Type;
+    Parameter.pDefaultValue = DefaultData.data();
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Parameter packing test";
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    static constexpr Uint32                     DestinationOffset = 4;
+    const RadientMaterialShaderParameterPacking Packing{0, DestinationOffset};
+    const RadientMaterialShaderDataLayoutDesc   ShaderDataLayout{DestinationOffset + Param.Size + 4, &Packing, 1};
+    RefCntAutoPtr<IRadientMaterialDefinition>   pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), ShaderDataLayout.Size);
+
+    std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
+    std::vector<Uint8> Expected(ShaderDataLayout.Size, 0);
+    std::memcpy(Expected.data() + DestinationOffset, DefaultData.data(), DefaultData.size());
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    EXPECT_EQ(ShaderData, Expected);
+
+    RadientMaterialParameterHandle Handle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(Handle, UpdatedData.data(), Param.Size), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    std::memcpy(Expected.data() + DestinationOffset, UpdatedData.data(), UpdatedData.size());
+    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    EXPECT_EQ(ShaderData, Expected);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ParameterTypes,
+    RadientMaterialShaderParameterPackingTest,
+    testing::Values(
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_BOOL, static_cast<Uint32>(sizeof(Bool)), "Bool"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_INT, static_cast<Uint32>(sizeof(Int32)), "Int"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_INT2, static_cast<Uint32>(sizeof(Int32) * 2), "Int2"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_INT3, static_cast<Uint32>(sizeof(Int32) * 3), "Int3"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_INT4, static_cast<Uint32>(sizeof(Int32) * 4), "Int4"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_UINT, static_cast<Uint32>(sizeof(Uint32)), "Uint"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_UINT2, static_cast<Uint32>(sizeof(Uint32) * 2), "Uint2"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_UINT3, static_cast<Uint32>(sizeof(Uint32) * 3), "Uint3"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_UINT4, static_cast<Uint32>(sizeof(Uint32) * 4), "Uint4"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, static_cast<Uint32>(sizeof(Float32)), "Float"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2, static_cast<Uint32>(sizeof(Float32) * 2), "Float2"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, static_cast<Uint32>(sizeof(Float32) * 3), "Float3"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, static_cast<Uint32>(sizeof(Float32) * 4), "Float4"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2, static_cast<Uint32>(sizeof(Float32) * 4), "Float2x2"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3X3, static_cast<Uint32>(sizeof(Float32) * 9), "Float3x3"},
+        ShaderParameterPackingTestParam{RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4, static_cast<Uint32>(sizeof(Float32) * 16), "Float4x4"}),
+    [](const testing::TestParamInfo<ShaderParameterPackingTestParam>& Info) {
+        return Info.param.Name;
+    });
+
+TEST(RadientMaterialTest, EmptyShaderDataLayoutWritesNoData)
+{
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(nullptr, 0);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), 0u);
+    DefinitionImpl.WriteShaderData(*pInstance, nullptr);
+}
+
+TEST(RadientMaterialTest, RejectsMissingShaderDataMappings)
+{
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, {4, nullptr, 1}, "mappings, but pMappings is null");
+}
+
+TEST(RadientMaterialTest, RejectsInvalidShaderDataParameterIndex)
+{
+    RadientMaterialDefinitionDesc               DefinitionDesc{};
+    const RadientMaterialShaderParameterPacking Mapping{0, 0};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, {4, &Mapping, 1}, "references parameter index 0");
+}
+
+TEST(RadientMaterialTest, RejectsTextureShaderDataMapping)
+{
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name = "Texture";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    const RadientMaterialShaderParameterPacking Mapping{0, 0};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, {4, &Mapping, 1}, "references texture parameter 'Texture'");
+}
+
+TEST(RadientMaterialTest, RejectsOutOfBoundsShaderDataMapping)
+{
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name = "Value";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    const RadientMaterialShaderParameterPacking Mapping{0, 4};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, {16, &Mapping, 1}, "exceeds the shader data size 16");
+}
+
+TEST(RadientMaterialTest, RejectsOverlappingShaderDataMappings)
+{
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name = "First";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+    Parameters[1].Name = "Second";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    const std::array<RadientMaterialShaderParameterPacking, 2> Mappings{{
+        {0, 0},
+        {1, 12},
+    }};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, {20, Mappings.data(), static_cast<Uint32>(Mappings.size())},
+                                  "mappings 0 and 1 overlap");
 }
 
 TEST(RadientMaterialTest, AssetManagerReportsDefinitionStatus)

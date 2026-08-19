@@ -39,6 +39,7 @@ namespace Diligent
 {
 
 class RadientMaterialAssetManager;
+struct RadientMaterialShaderDataLayoutDesc;
 
 using RadientMaterialAssetManagerSharedPtr = std::shared_ptr<RadientMaterialAssetManager>;
 
@@ -105,6 +106,10 @@ public:
 
     static RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
                                            IRadientMaterialDefinition**         ppDefinition);
+
+    static RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc&       DefinitionDesc,
+                                           const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
+                                           IRadientMaterialDefinition**               ppDefinition);
 
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                     IRadientMaterialDefinition**                       ppDefinition);

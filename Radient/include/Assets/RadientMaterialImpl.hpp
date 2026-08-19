@@ -48,13 +48,32 @@
 namespace Diligent
 {
 
+/// Maps one complete non-texture material parameter to its byte offset in the
+/// shader-readable material data block.
+struct RadientMaterialShaderParameterPacking
+{
+    Uint32 ParameterIndex = 0;
+    Uint32 Offset         = 0;
+};
+
+/// Describes the immutable shader-readable data layout owned by a material
+/// definition. The definition copies the mappings during creation.
+struct RadientMaterialShaderDataLayoutDesc
+{
+    Uint32 Size = 0;
+
+    const RadientMaterialShaderParameterPacking* pMappings    = nullptr;
+    Uint32                                       MappingCount = 0;
+};
+
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
 {
 public:
     using TBase = ObjectBase<IRadientMaterialDefinition>;
 
-    RadientMaterialDefinitionImpl(IReferenceCounters*                  pRefCounters,
-                                  const RadientMaterialDefinitionDesc& Desc);
+    RadientMaterialDefinitionImpl(IReferenceCounters*                        pRefCounters,
+                                  const RadientMaterialDefinitionDesc&       Desc,
+                                  const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout = {});
 
     IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinition, IID_RadientAsset, TBase)
 
@@ -93,9 +112,35 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateInstance(IRadientMaterialInstance** ppInstance) const override final;
 
+    Uint32 GetShaderDataSize() const noexcept
+    {
+        return m_Data.PackingPlan.Size;
+    }
+
+    /// Writes the complete shader-readable data block for Instance. Instance
+    /// must have been created by this definition, and pData must reference at
+    /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to zero.
+    void WriteShaderData(const IRadientMaterialInstance& Instance,
+                         void*                           pData) const noexcept;
+
 private:
-    // Parameter descriptors, strings, and default values reside in Memory.
-    // Default texture pointers are retained directly by their descriptors.
+    struct ShaderDataCopyCommand
+    {
+        Uint32 ParameterIndex    = 0;
+        Uint32 DestinationOffset = 0;
+        Uint32 Size              = 0;
+    };
+
+    struct ShaderDataPackingPlan
+    {
+        Uint32                       Size             = 0;
+        Uint32                       CopyCommandCount = 0;
+        const ShaderDataCopyCommand* pCopyCommands    = nullptr;
+    };
+
+    // Parameter descriptors, strings, default values, and shader data copy
+    // commands reside in Memory. Default texture pointers are retained directly
+    // by their descriptors.
     struct PackedData
     {
         PackedData(void* pData, IMemoryAllocator& Allocator) :
@@ -104,9 +149,11 @@ private:
 
         PackedData(PackedData&& Other) noexcept :
             Memory{std::move(Other.Memory)},
-            Desc{Other.Desc}
+            Desc{Other.Desc},
+            PackingPlan{Other.PackingPlan}
         {
-            Other.Desc = {};
+            Other.Desc        = {};
+            Other.PackingPlan = {};
         }
 
         PackedData(const PackedData&)            = delete;
@@ -124,9 +171,11 @@ private:
 
         std::unique_ptr<void, STDDeleterRawMem<void>> Memory;
         RadientMaterialDefinitionDesc                 Desc;
+        ShaderDataPackingPlan                         PackingPlan;
     };
 
-    static PackedData PackData(const RadientMaterialDefinitionDesc& Desc);
+    static PackedData PackData(const RadientMaterialDefinitionDesc&       Desc,
+                               const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout);
 
     using ParameterIndexMap = absl::flat_hash_map<const Char*, Uint32, CStringHash<Char>, CStringCompare<Char>>;
 
