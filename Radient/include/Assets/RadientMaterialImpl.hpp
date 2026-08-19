@@ -68,6 +68,16 @@ struct RadientMaterialShaderTexturePacking
     Uint32 Offset                   = 0;
 };
 
+/// Initializes a fixed byte range in the shader-readable material data block.
+/// Initializations are applied in declaration order before instance parameter
+/// and texture packing.
+struct RadientMaterialShaderDataInitialization
+{
+    const void* pData  = nullptr;
+    Uint32      Size   = 0;
+    Uint32      Offset = 0;
+};
+
 /// Describes the immutable shader-readable data layout owned by a material
 /// definition. The definition copies the mappings during creation.
 struct RadientMaterialShaderDataLayoutDesc
@@ -79,6 +89,9 @@ struct RadientMaterialShaderDataLayoutDesc
 
     const RadientMaterialShaderTexturePacking* pTexturePackings    = nullptr;
     Uint32                                     TexturePackingCount = 0;
+
+    const RadientMaterialShaderDataInitialization* pInitializations    = nullptr;
+    Uint32                                         InitializationCount = 0;
 };
 
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
@@ -135,7 +148,9 @@ public:
     /// Writes the complete shader-readable data block for Instance. Instance
     /// must have been created by this definition, and pData must reference at
     /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to
-    /// zero. Non-null texture parameters must have initialized sampling data.
+    /// zero. Definition-owned initializations are applied before instance
+    /// parameters. Non-null texture parameters must have initialized sampling
+    /// data.
     void WriteShaderData(const IRadientMaterialInstance& Instance,
                          void*                           pData) const noexcept;
 
@@ -149,11 +164,13 @@ private:
 
     struct ShaderDataPackingPlan
     {
-        Uint32                                     Size                = 0;
-        Uint32                                     CopyCommandCount    = 0;
-        const ShaderDataCopyCommand*               pCopyCommands       = nullptr;
-        Uint32                                     TextureCommandCount = 0;
-        const RadientMaterialShaderTexturePacking* pTextureCommands    = nullptr;
+        Uint32                                         Size                = 0;
+        Uint32                                         InitializationCount = 0;
+        const RadientMaterialShaderDataInitialization* pInitializations    = nullptr;
+        Uint32                                         CopyCommandCount    = 0;
+        const ShaderDataCopyCommand*                   pCopyCommands       = nullptr;
+        Uint32                                         TextureCommandCount = 0;
+        const RadientMaterialShaderTexturePacking*     pTextureCommands    = nullptr;
     };
 
     // Parameter descriptors, strings, default values, and shader data packing

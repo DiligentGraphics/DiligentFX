@@ -232,6 +232,39 @@ RADIENT_STATUS ValidateMaterialShaderDataLayout(
                           " texture packings, but pTexturePackings is null");
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
+    if (ShaderDataLayout.InitializationCount != 0 && ShaderDataLayout.pInitializations == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Material shader data layout declares ", ShaderDataLayout.InitializationCount,
+                          " initializations, but pInitializations is null");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
+    {
+        const RadientMaterialShaderDataInitialization& Initialization =
+            ShaderDataLayout.pInitializations[InitializationIndex];
+        if (Initialization.pData == nullptr)
+        {
+            LOG_ERROR_MESSAGE("Material shader data initialization ", InitializationIndex,
+                              " has null data");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (Initialization.Size == 0)
+        {
+            LOG_ERROR_MESSAGE("Material shader data initialization ", InitializationIndex,
+                              " has zero size");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (Initialization.Offset > ShaderDataLayout.Size ||
+            Initialization.Size > ShaderDataLayout.Size - Initialization.Offset)
+        {
+            LOG_ERROR_MESSAGE("Material shader data initialization ", InitializationIndex,
+                              " uses byte range [", Initialization.Offset, ", ",
+                              Uint64{Initialization.Offset} + Initialization.Size,
+                              "), which exceeds the shader data size ", ShaderDataLayout.Size);
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+    }
 
     for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
     {
@@ -396,8 +429,11 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
 
     FixedLinearAllocator Allocator{GetRawAllocator()};
     Allocator.AddSpace<RadientMaterialParameterDesc>(Desc.ParameterCount);
+    Allocator.AddSpace<RadientMaterialShaderDataInitialization>(ShaderDataLayout.InitializationCount);
     Allocator.AddSpace<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
     Allocator.AddSpace<RadientMaterialShaderTexturePacking>(ShaderDataLayout.TexturePackingCount);
+    for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
+        Allocator.AddSpace(ShaderDataLayout.pInitializations[InitializationIndex].Size, alignof(Uint32));
     Allocator.AddSpaceForString(DefinitionName);
     Allocator.AddSpaceForString(Desc.Reference.URI);
 
@@ -423,6 +459,8 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
 
     RadientMaterialParameterDesc* const pParameters =
         Writer.ConstructArray<RadientMaterialParameterDesc>(Desc.ParameterCount);
+    RadientMaterialShaderDataInitialization* const pShaderDataInitializations =
+        Writer.ConstructArray<RadientMaterialShaderDataInitialization>(ShaderDataLayout.InitializationCount);
     ShaderDataCopyCommand* const pShaderDataCopyCommands =
         Writer.ConstructArray<ShaderDataCopyCommand>(ShaderDataLayout.MappingCount);
     RadientMaterialShaderTexturePacking* const pShaderDataTextureCommands =
@@ -434,10 +472,24 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
     Data.Desc.Reference.URI              = Writer.CopyString(Desc.Reference.URI);
     Data.Desc.pParameters                = pParameters;
     Data.PackingPlan.Size                = ShaderDataLayout.Size;
+    Data.PackingPlan.InitializationCount = ShaderDataLayout.InitializationCount;
+    Data.PackingPlan.pInitializations    = pShaderDataInitializations;
     Data.PackingPlan.CopyCommandCount    = ShaderDataLayout.MappingCount;
     Data.PackingPlan.pCopyCommands       = pShaderDataCopyCommands;
     Data.PackingPlan.TextureCommandCount = ShaderDataLayout.TexturePackingCount;
     Data.PackingPlan.pTextureCommands    = pShaderDataTextureCommands;
+
+    for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
+    {
+        const RadientMaterialShaderDataInitialization& Src =
+            ShaderDataLayout.pInitializations[InitializationIndex];
+        RadientMaterialShaderDataInitialization& Dst =
+            pShaderDataInitializations[InitializationIndex];
+        void* const pInitializationData = Writer.Allocate(Src.Size, alignof(Uint32));
+        std::memcpy(pInitializationData, Src.pData, Src.Size);
+        Dst       = Src;
+        Dst.pData = pInitializationData;
+    }
 
     for (Uint32 MappingIndex = 0; MappingIndex < ShaderDataLayout.MappingCount; ++MappingIndex)
     {
@@ -1066,9 +1118,20 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
     if (m_Data.PackingPlan.Size == 0)
         return;
 
-    std::memset(pData, 0, m_Data.PackingPlan.Size);
     Uint8* const pShaderData  = static_cast<Uint8*>(pData);
     const auto&  InstanceImpl = static_cast<const RadientMaterialInstanceImpl&>(Instance);
+
+    std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
+    for (Uint32 InitializationIndex = 0;
+         InitializationIndex < m_Data.PackingPlan.InitializationCount;
+         ++InitializationIndex)
+    {
+        const RadientMaterialShaderDataInitialization& Initialization =
+            m_Data.PackingPlan.pInitializations[InitializationIndex];
+        std::memcpy(pShaderData + Initialization.Offset,
+                    Initialization.pData,
+                    Initialization.Size);
+    }
 
     for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.CopyCommandCount; ++CommandIndex)
     {

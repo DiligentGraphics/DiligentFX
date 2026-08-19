@@ -263,6 +263,64 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     EXPECT_EQ(ShaderData, Expected);
 }
 
+TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
+{
+    const Uint32 DefaultValue = 0x12345678u;
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameter.pDefaultValue = &DefaultValue;
+
+    RadientMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Shader data initialization test";
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    std::array<Uint8, 4>                                   FixedBytes{0x11, 0x22, 0x33, 0x44};
+    std::array<Uint8, 2>                                   OverlappingBytes{0xaa, 0xbb};
+    Uint32                                                 OverriddenValue = 0xffffffffu;
+    std::array<RadientMaterialShaderDataInitialization, 3> Initializations{{
+        {FixedBytes.data(), static_cast<Uint32>(FixedBytes.size()), 2},
+        {OverlappingBytes.data(), static_cast<Uint32>(OverlappingBytes.size()), 4},
+        {&OverriddenValue, static_cast<Uint32>(sizeof(OverriddenValue)), 8},
+    }};
+    const RadientMaterialShaderParameterPacking            Mapping{0, 8};
+
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = 16;
+    ShaderDataLayout.pMappings           = &Mapping;
+    ShaderDataLayout.MappingCount        = 1;
+    ShaderDataLayout.pInitializations    = Initializations.data();
+    ShaderDataLayout.InitializationCount = static_cast<Uint32>(Initializations.size());
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    // The definition owns initialization bytes independently of their sources.
+    FixedBytes.fill(0);
+    OverlappingBytes.fill(0);
+    OverriddenValue = 0;
+    Initializations = {};
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    std::array<Uint8, 16> ShaderData;
+    ShaderData.fill(0xcd);
+    static_cast<RadientMaterialDefinitionImpl&>(*pDefinition).WriteShaderData(*pInstance, ShaderData.data());
+
+    std::array<Uint8, 16> Expected{};
+    Expected[2] = 0x11;
+    Expected[3] = 0x22;
+    Expected[4] = 0xaa;
+    Expected[5] = 0xbb;
+    std::memcpy(Expected.data() + Mapping.Offset, &DefaultValue, sizeof(DefaultValue));
+    EXPECT_EQ(ShaderData, Expected);
+}
+
 TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
 {
     const Int32                                 DefaultUVSelector = 0;
@@ -528,6 +586,57 @@ TEST(RadientMaterialTest, RejectsIncompatibleShaderTexturePackingParameters)
     ShaderDataLayout.TexturePackingCount = 1;
     ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
                                   "UV selector parameter 'UVSelector' has an incompatible type or array size");
+}
+
+TEST(RadientMaterialTest, RejectsMissingShaderDataInitializations)
+{
+    RadientMaterialDefinitionDesc       DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = 4;
+    ShaderDataLayout.InitializationCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "initializations, but pInitializations is null");
+}
+
+TEST(RadientMaterialTest, RejectsNullShaderDataInitialization)
+{
+    const RadientMaterialShaderDataInitialization Initialization{nullptr, 4, 0};
+
+    RadientMaterialDefinitionDesc       DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = 4;
+    ShaderDataLayout.pInitializations    = &Initialization;
+    ShaderDataLayout.InitializationCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "initialization 0 has null data");
+}
+
+TEST(RadientMaterialTest, RejectsZeroSizeShaderDataInitialization)
+{
+    const Uint32                                  Value = 1;
+    const RadientMaterialShaderDataInitialization Initialization{&Value, 0, 0};
+
+    RadientMaterialDefinitionDesc       DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = 4;
+    ShaderDataLayout.pInitializations    = &Initialization;
+    ShaderDataLayout.InitializationCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "initialization 0 has zero size");
+}
+
+TEST(RadientMaterialTest, RejectsOutOfBoundsShaderDataInitialization)
+{
+    const Uint32                                  Value = 1;
+    const RadientMaterialShaderDataInitialization Initialization{&Value, 4, 2};
+
+    RadientMaterialDefinitionDesc       DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = 4;
+    ShaderDataLayout.pInitializations    = &Initialization;
+    ShaderDataLayout.InitializationCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "exceeds the shader data size 4");
 }
 
 TEST(RadientMaterialTest, RejectsOutOfBoundsShaderTexturePacking)
