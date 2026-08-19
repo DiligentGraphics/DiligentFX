@@ -26,14 +26,23 @@
 
 #include "RadientStandardMaterialParameters.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMaterialImpl.hpp"
 
+#include "GLTFBuilder.hpp"
+#include "GLTFLoader.hpp"
+#include "GLTF_PBR_Renderer.hpp"
+#include "Import/RadientGLTFConverter.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <array>
+#include <iterator>
+#include <memory>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -59,6 +68,194 @@ void ExpectInvalidStandardDefinition(RadientAssetManagerImpl&                   
     EXPECT_EQ(AssetManager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
+}
+
+static constexpr std::array<Uint32, 15> StandardMaterialTextureAttribIds{{
+    GLTF::DefaultBaseColorTextureAttribId,
+    GLTF::DefaultMetallicRoughnessTextureAttribId,
+    GLTF::DefaultNormalTextureAttribId,
+    GLTF::DefaultOcclusionTextureAttribId,
+    GLTF::DefaultEmissiveTextureAttribId,
+    GLTF::DefaultClearcoatTextureAttribId,
+    GLTF::DefaultClearcoatRoughnessTextureAttribId,
+    GLTF::DefaultClearcoatNormalTextureAttribId,
+    GLTF::DefaultSheenColorTextureAttribId,
+    GLTF::DefaultSheenRoughnessTextureAttribId,
+    GLTF::DefaultAnisotropyTextureAttribId,
+    GLTF::DefaultIridescenceTextureAttribId,
+    GLTF::DefaultIridescenceThicknessTextureAttribId,
+    GLTF::DefaultTransmissionTextureAttribId,
+    GLTF::DefaultThicknessTextureAttribId,
+}};
+
+GLTF::Material MakeExtendedPBRMaterial()
+{
+    GLTF::Material Material;
+    Material.Attribs.BaseColorFactor          = float4{0.1f, 0.2f, 0.3f, 0.4f};
+    Material.Attribs.EmissiveFactor           = float3{0.5f, 0.6f, 0.7f};
+    Material.Attribs.NormalScale              = 0.8f;
+    Material.Attribs.AlphaMode                = GLTF::Material::ALPHA_MODE_MASK;
+    Material.Attribs.AlphaCutoff              = 0.25f;
+    Material.Attribs.MetallicFactor           = 0.35f;
+    Material.Attribs.RoughnessFactor          = 0.45f;
+    Material.Attribs.OcclusionFactor          = 0.55f;
+    Material.Attribs.ClearcoatFactor          = 0.65f;
+    Material.Attribs.ClearcoatRoughnessFactor = 0.75f;
+    Material.Attribs.ClearcoatNormalScale     = 0.85f;
+    Material.HasClearcoat                     = true;
+
+    Material.Sheen                  = std::make_unique<GLTF::Material::SheenShaderAttribs>();
+    Material.Sheen->ColorFactor     = float3{0.15f, 0.25f, 0.35f};
+    Material.Sheen->RoughnessFactor = 0.46f;
+
+    Material.Anisotropy           = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
+    Material.Anisotropy->Strength = 0.56f;
+    Material.Anisotropy->Rotation = 0.66f;
+
+    Material.Iridescence                   = std::make_unique<GLTF::Material::IridescenceShaderAttribs>();
+    Material.Iridescence->Factor           = 0.76f;
+    Material.Iridescence->IOR              = 1.4f;
+    Material.Iridescence->ThicknessMinimum = 120.f;
+    Material.Iridescence->ThicknessMaximum = 360.f;
+
+    Material.Transmission         = std::make_unique<GLTF::Material::TransmissionShaderAttribs>();
+    Material.Transmission->Factor = 0.86f;
+    Material.Transmission->IOR    = 1.45f;
+
+    Material.Volume                      = std::make_unique<GLTF::Material::VolumeShaderAttribs>();
+    Material.Volume->ThicknessFactor     = 0.96f;
+    Material.Volume->AttenuationColor    = float3{0.2f, 0.4f, 0.6f};
+    Material.Volume->AttenuationDistance = 12.f;
+
+    GLTF::MaterialBuilder Builder{Material};
+    for (size_t TextureIndex = 0; TextureIndex < StandardMaterialTextureAttribIds.size(); ++TextureIndex)
+    {
+        const Uint32 TextureAttribId = StandardMaterialTextureAttribIds[TextureIndex];
+        Builder.SetTextureId(TextureAttribId, 0);
+
+        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
+        TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
+        TextureAttribs.UVScaleAndRotation = float2x2{
+            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
+            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
+        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_MIRROR : TEXTURE_ADDRESS_CLAMP);
+        TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
+    }
+    Builder.Finalize();
+    return Material;
+}
+
+const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& GetStandardMaterialTextureAttribIndices()
+{
+    static const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices = [] {
+        std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Result{};
+        Result.fill(-1);
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]            = GLTF::DefaultBaseColorTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]                = GLTF::DefaultNormalTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]             = GLTF::DefaultMetallicRoughnessTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]             = GLTF::DefaultOcclusionTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]              = GLTF::DefaultEmissiveTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT]            = GLTF::DefaultClearcoatTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = GLTF::DefaultClearcoatRoughnessTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = GLTF::DefaultClearcoatNormalTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = GLTF::DefaultSheenColorTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = GLTF::DefaultSheenRoughnessTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY]            = GLTF::DefaultAnisotropyTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE]           = GLTF::DefaultIridescenceTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
+        return Result;
+    }();
+    return Indices;
+}
+
+Uint32 GetGLTFMaterialShaderDataSize(PBR_Renderer::PSO_FLAGS Flags)
+{
+    Uint32 Size = static_cast<Uint32>(sizeof(GLTF::Material::ShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_SHEEN)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::SheenShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::AnisotropyShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::IridescenceShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::TransmissionShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_VOLUME)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::VolumeShaderAttribs));
+
+    PBR_Renderer::ProcessTexturAttribs(
+        Flags,
+        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID) {
+            Size += static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+        });
+    return Size;
+}
+
+RefCntAutoPtr<IRadientMaterialInstance> CreateStandardMaterialInstance(
+    RadientAssetManagerImpl& AssetManager,
+    const GLTF::Material&    Material)
+{
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RADIENT_STATUS                              Status = RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    Status = AssetManager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    Status = RadientGLTFConverter::PopulateMaterialInstance(Material, nullptr, 0, *pDefinition, *pWriter);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    Status = pWriter->Commit();
+    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE);
+    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+        return {};
+    return pInstance;
+}
+
+void ExpectShaderDataMatchesGLTF(const GLTF::Material&     Material,
+                                 IRadientMaterialInstance& Instance)
+{
+    const auto* const pDefinition = static_cast<const RadientMaterialDefinitionImpl*>(Instance.GetDefinition());
+    ASSERT_NE(pDefinition, nullptr);
+
+    const PBR_Renderer::PSO_FLAGS Flags        = GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
+    const Uint32                  ExpectedSize = GetGLTFMaterialShaderDataSize(Flags);
+    ASSERT_EQ(pDefinition->GetShaderDataSize(), ExpectedSize);
+
+    std::vector<Uint8> Actual(ExpectedSize, 0xCD);
+    std::vector<Uint8> Expected(ExpectedSize, 0xCD);
+    pDefinition->WriteShaderData(Instance, Actual.data());
+
+    void* const pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(
+        Expected.data(),
+        {Flags, GetStandardMaterialTextureAttribIndices(), Material});
+    ASSERT_EQ(pEnd, Expected.data() + Expected.size());
+
+    const auto Mismatch = std::mismatch(Actual.begin(), Actual.end(), Expected.begin());
+    EXPECT_EQ(Mismatch.first, Actual.end())
+        << "First shader data mismatch is at byte " << std::distance(Actual.begin(), Mismatch.first);
 }
 
 TEST(RadientStandardMaterialTest, DefinitionsAreCached)
@@ -110,6 +307,69 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     RefCntAutoPtr<IRadientMaterialDefinition> pDifferentDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDifferentDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_NE(pFirstDefinition, pDifferentDefinition);
+}
+
+TEST(RadientStandardMaterialTest, ExtendedPBRShaderDataMatchesGLTFPacking)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    const GLTF::Material                    Material = MakeExtendedPBRMaterial();
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        CreateStandardMaterialInstance(*pAssetManager, Material);
+    ASSERT_NE(pInstance, nullptr);
+
+    ExpectShaderDataMatchesGLTF(Material, *pInstance);
+}
+
+TEST(RadientStandardMaterialTest, DefaultPBRShaderDataMatchesGLTFPacking)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Material Material;
+    Material.Attribs.BaseColorFactor = float4{0.2f, 0.3f, 0.4f, 0.5f};
+    Material.Attribs.EmissiveFactor  = float3{0.6f, 0.7f, 0.8f};
+    Material.Attribs.AlphaMode       = GLTF::Material::ALPHA_MODE_MASK;
+    Material.Attribs.AlphaCutoff     = 0.35f;
+    Material.Attribs.MetallicFactor  = 0.45f;
+    Material.Attribs.RoughnessFactor = 0.55f;
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        CreateStandardMaterialInstance(*pAssetManager, Material);
+    ASSERT_NE(pInstance, nullptr);
+
+    ExpectShaderDataMatchesGLTF(Material, *pInstance);
+}
+
+TEST(RadientStandardMaterialTest, UnlitPBRShaderDataMatchesGLTFPacking)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Material Material;
+    Material.Attribs.Workflow        = GLTF::Material::PBR_WORKFLOW_UNLIT;
+    Material.Attribs.BaseColorFactor = float4{0.25f, 0.5f, 0.75f, 0.8f};
+    Material.Attribs.AlphaMode       = GLTF::Material::ALPHA_MODE_BLEND;
+    Material.Attribs.AlphaCutoff     = 0.2f;
+
+    GLTF::MaterialBuilder Builder{Material};
+    Builder.SetTextureId(GLTF::DefaultBaseColorTextureAttribId, 0);
+    GLTF::Material::TextureShaderAttribs& TextureAttribs =
+        Builder.GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
+    TextureAttribs.SetUVSelector(1);
+    TextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
+    TextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
+    TextureAttribs.UVScaleAndRotation = float2x2{2.f, 0.1f, 0.2f, 3.f};
+    TextureAttribs.UBias              = 0.15f;
+    TextureAttribs.VBias              = 0.25f;
+    Builder.Finalize();
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        CreateStandardMaterialInstance(*pAssetManager, Material);
+    ASSERT_NE(pInstance, nullptr);
+
+    ExpectShaderDataMatchesGLTF(Material, *pInstance);
 }
 
 TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
