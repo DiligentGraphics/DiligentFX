@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 
+#include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "gtest/gtest.h"
@@ -174,6 +175,9 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialStoresUsedTexturesInInstance
     EXPECT_EQ(pInstance->GetTexture(NormalTextureHandle, 0, pNormalTexture.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     EXPECT_EQ(pNormalTexture, nullptr);
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstance, RadientStandardMaterialNormalTextureUVSelectorName), -1);
+
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstance, RadientStandardMaterialBaseColorTextureUVSelectorName), 0);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterialWithoutTextures;
     ASSERT_EQ(pMaterialManager->CreateMaterial({}, pMaterialWithoutTextures.GetAddressOfEmpty()),
@@ -182,6 +186,11 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialStoresUsedTexturesInInstance
         RadientMaterialAssetManager::GetInstance(pMaterialWithoutTextures);
     ASSERT_NE(pInstanceWithoutTextures, nullptr);
     EXPECT_EQ(pInstanceWithoutTextures->GetDefinition(), pInstance->GetDefinition());
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstanceWithoutTextures, RadientStandardMaterialBaseColorTextureUVSelectorName), -1);
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstanceWithoutTextures, RadientStandardMaterialMetallicRoughnessTextureUVSelectorName), -1);
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstanceWithoutTextures, RadientStandardMaterialNormalTextureUVSelectorName), -1);
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstanceWithoutTextures, RadientStandardMaterialOcclusionTextureUVSelectorName), -1);
+    EXPECT_EQ(GetInstanceParameter<Int32>(*pInstanceWithoutTextures, RadientStandardMaterialEmissiveTextureUVSelectorName), -1);
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterialRejectsNullOutput)

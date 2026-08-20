@@ -173,7 +173,7 @@ StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     Desc.Name                          = TextureName;
     Desc.Type                          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    static constexpr Int32                                 DefaultUVSelector           = 0;
+    static constexpr Int32                                 DefaultUVSelector           = -1;
     static constexpr Float32                               DefaultUVScaleAndRotation[] = {1.f, 0.f, 0.f, 1.f};
     static constexpr RadientFloat2                         DefaultUVBias{0.f, 0.f};
     static constexpr RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE DefaultWrapMode = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;

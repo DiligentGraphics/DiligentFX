@@ -160,7 +160,9 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialDoubleSidedName[] = "Doubl
 /// Every declared texture semantic has the following six parameters:
 ///
 /// - `Texture`: TEXTURE, default null.
-/// - `TextureUVSelector`: INT texture-coordinate set index, default 0.
+/// - `TextureUVSelector`: INT texture-coordinate set index. Non-negative values
+///   enable sampling from the selected UV set; -1 disables sampling. The default
+///   is -1.
 /// - `TextureUVScaleAndRotation`: FLOAT2X2 transform, default identity.
 /// - `TextureUVBias`: FLOAT2 translation applied after the transform, default zero.
 /// - `TextureWrapU` and `TextureWrapV`: UINT

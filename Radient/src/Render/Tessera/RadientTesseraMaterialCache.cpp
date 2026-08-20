@@ -27,6 +27,7 @@
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
 #include "Assets/RadientAssetStatus.hpp"
+#include "Assets/RadientMaterialImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "ThreadPool.hpp"
 
@@ -268,24 +269,35 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         return;
     }
 
-    std::vector<Uint8> MaterialAttribs(pContext->MaterialBuffer.GetMaxMaterialAttribsSize());
-    void* const        pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(
-        MaterialAttribs.data(),
-        {
-            MaterialPSOFlags,
-            pContext->TextureAttribIndices,
-            *Data.m_MaterialData.pMaterial,
-        });
-    const size_t MaterialAttribsSize =
-        static_cast<Uint8*>(pEnd) - MaterialAttribs.data();
-    if (MaterialAttribsSize == 0 || MaterialAttribsSize > MaterialAttribs.size())
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        RadientMaterialAssetManager::GetInstance(Data.m_pMaterial);
+    if (!pInstance)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
         return;
     }
 
+    const auto* const pDefinition =
+        static_cast<const RadientMaterialDefinitionImpl*>(pInstance->GetDefinition());
+    if (pDefinition == nullptr)
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
+
+    const Uint32 MaterialAttribsSize = pDefinition->GetShaderDataSize();
+    if (MaterialAttribsSize == 0 ||
+        MaterialAttribsSize > pContext->MaterialBuffer.GetMaxMaterialAttribsSize())
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
+
+    std::vector<Uint8> MaterialAttribs(MaterialAttribsSize);
+    pDefinition->WriteShaderData(*pInstance, MaterialAttribs.data());
+
     RadientTesseraMaterialBufferAllocation MaterialBufferAllocation =
-        pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), static_cast<Uint32>(MaterialAttribsSize));
+        pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), MaterialAttribsSize);
     if (!MaterialBufferAllocation)
     {
         Data.PublishFailure(RADIENT_STATUS_FAILED);

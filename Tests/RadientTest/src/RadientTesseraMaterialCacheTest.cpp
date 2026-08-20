@@ -26,6 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
+#include "Assets/RadientMaterialImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
@@ -243,6 +244,16 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
     EXPECT_TRUE(Result.Data->GetMaterialSRB());
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedCoreMaterialPSOFlags);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+    const auto* const pDefinition =
+        static_cast<const RadientMaterialDefinitionImpl*>(pInstance->GetDefinition());
+    ASSERT_NE(pDefinition, nullptr);
+    EXPECT_EQ(Result.Data->GetMaterialBufferAllocation().GetSize(),
+              pDefinition->GetShaderDataSize());
+
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL], 1u);
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);

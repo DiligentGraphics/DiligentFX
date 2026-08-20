@@ -516,7 +516,7 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pInstance->GetTexture(FindHandle(Semantic.Texture), 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
         EXPECT_EQ(pTexture, nullptr);
-        EXPECT_EQ(GetParameter<Int32>(*pInstance, FindHandle(Semantic.UVSelector)), 0);
+        EXPECT_EQ(GetParameter<Int32>(*pInstance, FindHandle(Semantic.UVSelector)), -1);
         EXPECT_EQ((GetParameter<std::array<Float32, 4>>(*pInstance, FindHandle(Semantic.UVScaleAndRotation))), ExpectedUVScaleAndRotation);
 
         const RadientFloat2 UVBias = GetParameter<RadientFloat2>(*pInstance, FindHandle(Semantic.UVBias));

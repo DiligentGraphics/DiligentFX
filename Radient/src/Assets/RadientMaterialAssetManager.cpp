@@ -558,14 +558,15 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
             struct TextureValue
             {
                 const char*           Name;
+                const char*           UVSelectorName;
                 IRadientTextureAsset* pTexture;
             };
             const TextureValue Textures[] = {
-                {RadientStandardMaterialBaseColorTextureName, MaterialCI.pBaseColorTexture},
-                {RadientStandardMaterialMetallicRoughnessTextureName, MaterialCI.pMetallicRoughnessTexture},
-                {RadientStandardMaterialNormalTextureName, MaterialCI.pNormalTexture},
-                {RadientStandardMaterialOcclusionTextureName, MaterialCI.pOcclusionTexture},
-                {RadientStandardMaterialEmissiveTextureName, MaterialCI.pEmissiveTexture},
+                {RadientStandardMaterialBaseColorTextureName, RadientStandardMaterialBaseColorTextureUVSelectorName, MaterialCI.pBaseColorTexture},
+                {RadientStandardMaterialMetallicRoughnessTextureName, RadientStandardMaterialMetallicRoughnessTextureUVSelectorName, MaterialCI.pMetallicRoughnessTexture},
+                {RadientStandardMaterialNormalTextureName, RadientStandardMaterialNormalTextureUVSelectorName, MaterialCI.pNormalTexture},
+                {RadientStandardMaterialOcclusionTextureName, RadientStandardMaterialOcclusionTextureUVSelectorName, MaterialCI.pOcclusionTexture},
+                {RadientStandardMaterialEmissiveTextureName, RadientStandardMaterialEmissiveTextureUVSelectorName, MaterialCI.pEmissiveTexture},
             };
 
             for (const TextureValue& Texture : Textures)
@@ -577,6 +578,12 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
                     Definition, Writer, Texture.Name, Texture.pTexture);
                 if (RADIENT_FAILED(Status))
                     return Status;
+
+                static constexpr Int32 UVSelector       = 0;
+                const RADIENT_STATUS   UVSelectorStatus = SetMaterialInstanceParameter(
+                    Definition, Writer, Texture.UVSelectorName, &UVSelector, static_cast<Uint32>(sizeof(UVSelector)));
+                if (RADIENT_FAILED(UVSelectorStatus))
+                    return UVSelectorStatus;
             }
 
             return RADIENT_STATUS_OK;
