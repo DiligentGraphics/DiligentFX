@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "Import/RadientGLTFConverter.hpp"
 #include "Import/RadientImportedScene.hpp"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
@@ -302,6 +303,31 @@ void ExpectSpecularGlossinessTextureDefaults(const RadientMaterialRenderData&   
     EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultSpecularGlossinessTextureAttibId), DefaultTextures.pWhite);
 }
 
+void ExpectMaterialInstanceTextures(const IRadientMaterialInstance&  Instance,
+                                    const RadientMaterialRenderData& MaterialData)
+{
+    IRadientMaterialDefinition* const pDefinition = Instance.GetDefinition();
+    ASSERT_NE(pDefinition, nullptr);
+
+    for (Uint32 TextureAttribId = 0; TextureAttribId < MaterialData.TextureCount; ++TextureAttribId)
+    {
+        const char* const pParameterName =
+            RadientGLTFConverter::GetStandardMaterialTextureParameterName(TextureAttribId);
+
+        RadientMaterialParameterHandle Handle;
+        const RADIENT_STATUS           FindStatus = pDefinition->FindParameter(pParameterName, &Handle);
+        if (FindStatus == RADIENT_STATUS_NOT_FOUND)
+            continue;
+
+        ASSERT_EQ(FindStatus, RADIENT_STATUS_OK) << pParameterName;
+
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(Instance.GetTexture(Handle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK)
+            << pParameterName;
+        EXPECT_EQ(pTexture, MaterialData.GetTexture(TextureAttribId)) << pParameterName;
+    }
+}
+
 TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
@@ -517,6 +543,11 @@ TEST(RadientAssetManagerGPUTest, MapsDefaultsForAllSupportedMaterialTextures)
     const RadientMaterialRenderData MaterialData = RadientMaterialAssetManager::GetRenderData(pMaterial);
     ExpectMetallicRoughnessTextureDefaults(MaterialData, DefaultTextures);
 
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        RadientMaterialAssetManager::GetInstance(pMaterial);
+    ASSERT_NE(pInstance, nullptr);
+    ExpectMaterialInstanceTextures(*pInstance, MaterialData);
+
     GLTF::Material SpecGlossMaterial;
     SpecGlossMaterial.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
 
@@ -611,6 +642,11 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
 
     ExpectMetallicRoughnessTextureDefaults(MetallicRoughnessMaterialData, DefaultTextures);
     ExpectSpecularGlossinessTextureDefaults(SpecularGlossinessMaterialData, DefaultTextures);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pMetallicRoughnessInstance =
+        RadientMaterialAssetManager::GetInstance(pImportedScene->Materials[0]);
+    ASSERT_NE(pMetallicRoughnessInstance, nullptr);
+    ExpectMaterialInstanceTextures(*pMetallicRoughnessInstance, MetallicRoughnessMaterialData);
 
     for (Uint32 TextureAttribId = 0; TextureAttribId < MetallicRoughnessMaterialData.TextureCount; ++TextureAttribId)
     {

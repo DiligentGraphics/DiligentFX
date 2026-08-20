@@ -188,6 +188,7 @@ struct MaterialStorage
 
     GLTF::Material                          Material;
     RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    bool                                    TextureSelectionReady         = false;
     bool                                    TextureAttribsReady           = false;
     bool                                    TextureBindingIdentitiesReady = false;
     mutable std::atomic<RADIENT_STATUS>     LoadStatus{RADIENT_STATUS_OK};
@@ -291,6 +292,81 @@ RADIENT_STATUS SetMaterialInstanceTexture(IRadientMaterialDefinition&     Defini
         FindStatus;
 }
 
+// Requested and fallback textures are kept separately while asynchronous source
+// loads are pending because the final choice is not known yet. Once every selected
+// dependency has reached a terminal load state, freeze the requested-or-fallback
+// choice before exposing render data or scheduling renderer-specific processing.
+RADIENT_STATUS FinalizeTextureSelection(MaterialStorage& MaterialData)
+{
+    if (MaterialData.TextureSelectionReady)
+        return RADIENT_STATUS_OK;
+
+    const RADIENT_STATUS LoadStatus = MaterialData.GetLoadStatus();
+    if (LoadStatus != RADIENT_STATUS_OK)
+        return LoadStatus;
+
+    MaterialData.RenderTextures.resize(MaterialData.GetTextureCount());
+    for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.RenderTextures.size(); ++TextureAttribId)
+    {
+        RadientMaterialTextureRenderData& TextureData = MaterialData.RenderTextures[TextureAttribId];
+        TextureData.pTexture                          = MaterialData.GetRenderTexture(TextureAttribId);
+        TextureData.ViewType                          = GetMaterialTextureViewType(MaterialData.Material, static_cast<Uint32>(TextureAttribId));
+        TextureData.BindingIdentity                   = {};
+    }
+
+    if (MaterialData.pInstance != nullptr && !MaterialData.RenderTextures.empty())
+    {
+        IRadientMaterialDefinition* const pDefinition = MaterialData.pInstance->GetDefinition();
+        if (pDefinition == nullptr)
+        {
+            UNEXPECTED("Material instance has no definition");
+            return RADIENT_STATUS_FAILED;
+        }
+
+        // Keep definition-owned texture parameters consistent with RenderTextures.
+        // Commit all fallback substitutions together as one instance version update.
+        RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+        RADIENT_STATUS                                Status = RADIENT_STATUS_OK;
+        for (Uint32 TextureAttribId = 0; TextureAttribId < MaterialData.RenderTextures.size(); ++TextureAttribId)
+        {
+            IRadientTextureAsset* const pSelectedTexture = MaterialData.RenderTextures[TextureAttribId].pTexture;
+            if (pSelectedTexture == MaterialData.GetRequestedTexture(TextureAttribId))
+                continue;
+
+            const char* const pParameterName =
+                RadientGLTFConverter::GetStandardMaterialTextureParameterName(TextureAttribId);
+
+            RadientMaterialParameterHandle Handle;
+            Status = pDefinition->FindParameter(pParameterName, &Handle);
+            if (Status == RADIENT_STATUS_NOT_FOUND)
+                continue;
+            if (Status != RADIENT_STATUS_OK)
+                return Status;
+
+            if (!pWriter)
+            {
+                Status = MaterialData.pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+            }
+
+            Status = pWriter->SetTexture(Handle, 0, pSelectedTexture);
+            if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+                return Status;
+        }
+
+        if (pWriter)
+        {
+            Status = pWriter->Commit();
+            if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+                return Status;
+        }
+    }
+
+    MaterialData.TextureSelectionReady = true;
+    return RADIENT_STATUS_OK;
+}
+
 template <typename InitializeType>
 RADIENT_STATUS CreateInitializedStandardMaterialInstance(
     RadientMaterialAssetManager&                       Manager,
@@ -332,18 +408,14 @@ bool UpdateTextureAtlasAttribs(MaterialStorage& MaterialData)
     if (MaterialData.TextureAttribsReady)
         return true;
 
-    if (MaterialData.GetLoadStatus() != RADIENT_STATUS_OK)
+    if (!MaterialData.TextureSelectionReady)
         return false;
 
     GLTF::MaterialBuilder Builder{MaterialData.Material};
 
-    MaterialData.RenderTextures.resize(MaterialData.GetTextureCount());
     for (size_t TextureAttribId = 0; TextureAttribId < MaterialData.RenderTextures.size(); ++TextureAttribId)
     {
-        IRadientTextureAsset*             pTexture    = MaterialData.GetRenderTexture(TextureAttribId);
-        RadientMaterialTextureRenderData& TextureData = MaterialData.RenderTextures[TextureAttribId];
-        TextureData.pTexture                          = pTexture;
-        TextureData.ViewType                          = GetMaterialTextureViewType(MaterialData.Material, static_cast<Uint32>(TextureAttribId));
+        IRadientTextureAsset* pTexture = MaterialData.RenderTextures[TextureAttribId].pTexture;
         if (pTexture == nullptr)
             continue;
 
@@ -624,6 +696,9 @@ RadientMaterialRenderData RadientMaterialAssetManager::GetRenderData(IRadientMat
         return {};
 
     MaterialStorage& MaterialData = pImpl->GetStorage();
+    if (FinalizeTextureSelection(MaterialData) != RADIENT_STATUS_OK)
+        return {};
+
     if (!UpdateTextureAtlasAttribs(MaterialData))
         return {};
 

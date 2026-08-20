@@ -50,40 +50,59 @@ struct StandardMaterialTextureSemantic
     const char*                             WrapVParameterName;
 };
 
-#define STANDARD_MATERIAL_TEXTURE_SEMANTIC(GLTFName, Name, FeatureFlag)              \
-    StandardMaterialTextureSemantic                                                  \
-    {                                                                                \
-        GLTF::Default##GLTFName##TextureAttribId, FeatureFlag,                       \
-            RadientStandardMaterial##Name##TextureName,                              \
-            RadientStandardMaterial##Name##TextureUVSelectorName,                    \
-            RadientStandardMaterial##Name##TextureUVScaleAndRotationName,            \
-            RadientStandardMaterial##Name##TextureUVBiasName,                        \
-            RadientStandardMaterial##Name##TextureWrapUName,                         \
-            RadientStandardMaterial##Name##TextureWrapVName                          \
+#define SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, GLTFName, Name, FeatureFlag)    \
+    Semantics[GLTF::Default##GLTFName##TextureAttribId] = StandardMaterialTextureSemantic \
+    {                                                                                     \
+        GLTF::Default##GLTFName##TextureAttribId, FeatureFlag,                            \
+            RadientStandardMaterial##Name##TextureName,                                   \
+            RadientStandardMaterial##Name##TextureUVSelectorName,                         \
+            RadientStandardMaterial##Name##TextureUVScaleAndRotationName,                 \
+            RadientStandardMaterial##Name##TextureUVBiasName,                             \
+            RadientStandardMaterial##Name##TextureWrapUName,                              \
+            RadientStandardMaterial##Name##TextureWrapVName                               \
     }
 
-static constexpr std::array<StandardMaterialTextureSemantic, 15> StandardMaterialTextureSemantics{{
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(BaseColor, BaseColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(MetallicRoughness, MetallicRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Normal, Normal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Occlusion, Occlusion, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Emissive, Emissive, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Clearcoat, ClearCoat, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(ClearcoatRoughness, ClearCoatRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(ClearcoatNormal, ClearCoatNormal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(SheenColor, SheenColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(SheenRoughness, SheenRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Anisotropy, Anisotropy, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Iridescence, Iridescence, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(IridescenceThickness, IridescenceThickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Transmission, Transmission, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION),
-    STANDARD_MATERIAL_TEXTURE_SEMANTIC(Thickness, Thickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME),
-}};
+constexpr auto MakeStandardMaterialTextureSemantics() noexcept
+{
+    std::array<StandardMaterialTextureSemantic, GLTF::DefaultThicknessTextureAttribId + 1> Semantics{};
+
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, BaseColor, BaseColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, MetallicRoughness, MetallicRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Normal, Normal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Occlusion, Occlusion, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Emissive, Emissive, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Clearcoat, ClearCoat, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatRoughness, ClearCoatRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatNormal, ClearCoatNormal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenColor, SheenColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenRoughness, SheenRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Anisotropy, Anisotropy, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Iridescence, Iridescence, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, IridescenceThickness, IridescenceThickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Transmission, Transmission, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Thickness, Thickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME);
+
+    return Semantics;
+}
+#undef SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC
+
+static constexpr auto StandardMaterialTextureSemantics = MakeStandardMaterialTextureSemantics();
+
+constexpr bool IsStandardMaterialTextureSemanticTableComplete() noexcept
+{
+    for (const StandardMaterialTextureSemantic& Semantic : StandardMaterialTextureSemantics)
+    {
+        if (Semantic.TextureParameterName == nullptr)
+            return false;
+    }
+    return true;
+}
+
+static_assert(IsStandardMaterialTextureSemanticTableComplete());
 
 static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP) == static_cast<Uint32>(TEXTURE_ADDRESS_WRAP));
 static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP) == static_cast<Uint32>(TEXTURE_ADDRESS_CLAMP));
 
-#undef STANDARD_MATERIAL_TEXTURE_SEMANTIC
 
 bool HasFeature(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features,
                 RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Feature) noexcept
@@ -158,6 +177,11 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
 
 namespace RadientGLTFConverter
 {
+
+const char* GetStandardMaterialTextureParameterName(Uint32 TextureAttribId) noexcept
+{
+    return StandardMaterialTextureSemantics[TextureAttribId].TextureParameterName;
+}
 
 RADIENT_STATUS ConvertMaterialDefinition(
     const GLTF::Material&                        Material,

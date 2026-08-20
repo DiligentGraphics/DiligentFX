@@ -57,6 +57,12 @@ struct TinyGltfPrimitiveView;
 namespace RadientGLTFConverter
 {
 
+/// Returns the standard-material texture parameter name corresponding to a
+/// standard GLTF texture attribute. TextureAttribId must be in the range from
+/// GLTF::DefaultBaseColorTextureAttribId through
+/// GLTF::DefaultThicknessTextureAttribId.
+const char* GetStandardMaterialTextureParameterName(Uint32 TextureAttribId) noexcept;
+
 /// Infers the immutable standard-material schema required by a GLTF material.
 ///
 /// Deprecated specular-glossiness materials are not representable by the
