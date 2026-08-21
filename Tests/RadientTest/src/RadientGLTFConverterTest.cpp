@@ -658,8 +658,8 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
         ConvertMaterial(Material, Textures, 1, DefinitionCI);
     ASSERT_NE(pInstance, nullptr);
 
-    EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS);
-    EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL);
+    EXPECT_EQ(DefinitionCI.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS);
+    EXPECT_EQ(DefinitionCI.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL);
 
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").w, 0.4f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "MetallicFactor"), 0.35f);
@@ -683,10 +683,12 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ThicknessFactor"), 0.96f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "AttenuationColor").y, 0.4f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AttenuationDistance"), 12.f);
-    EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, "AlphaMode"),
-              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_MASK);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AlphaCutoff"), 0.25f);
-    EXPECT_EQ(GetMaterialParameter<Bool>(*pInstance, "DoubleSided"), True);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceInstance->IsDoubleSided());
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
         EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), pTexture);
@@ -804,11 +806,13 @@ TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)
         ConvertMaterial(Material, Textures, 1, DefinitionCI);
     ASSERT_NE(pInstance, nullptr);
 
-    EXPECT_EQ(DefinitionCI.Model, RADIENT_STANDARD_MATERIAL_MODEL_UNLIT);
-    EXPECT_EQ(DefinitionCI.Features, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    EXPECT_EQ(DefinitionCI.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_UNLIT);
+    EXPECT_EQ(DefinitionCI.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").z, 0.6f);
-    EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, "AlphaMode"),
-              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
     EXPECT_EQ(GetMaterialTexture(*pInstance, "BaseColorTexture"), pTexture);
 
     RadientMaterialParameterHandle Handle;

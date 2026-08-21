@@ -28,33 +28,43 @@
 
 void RadientMaterials_C_UseTypes(void)
 {
-    RADIENT_MATERIAL_DOMAIN                     Domain      = RADIENT_MATERIAL_DOMAIN_SURFACE;
-    RADIENT_MATERIAL_PARAMETER_TYPE             Type        = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
-    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE       AddressMode = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
-    RADIENT_STANDARD_MATERIAL_MODEL             Model       = RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS;
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS     Features    = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
-    RADIENT_STANDARD_MATERIAL_ALPHA_MODE        AlphaMode   = RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE;
-    RadientMaterialParameterHandle              Handle      = {0};
-    RadientMaterialDefinitionDesc               Desc        = {0};
-    RadientMaterialParameterDesc                Parameter   = {0};
-    RadientStandardMaterialDefinitionCreateInfo StandardCI  = {0};
-    IRadientMaterialDefinition*                 pDefinition = 0;
-    IRadientMaterialInstance*                   pInstance   = 0;
-    IRadientMaterialInstanceWriter*             pWriter     = 0;
+    RADIENT_MATERIAL_DEFINITION_TYPE            DefinitionType   = RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
+    RADIENT_MATERIAL_PARAMETER_TYPE             Type             = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE       AddressMode      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+    RADIENT_SURFACE_SHADING_MODEL               ShadingModel     = RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS;
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS      Features         = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+    RADIENT_MATERIAL_SURFACE_MODE               SurfaceMode      = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    RadientMaterialParameterHandle              Handle           = {0};
+    RadientMaterialDefinitionDesc               Desc             = {0};
+    RadientSurfaceMaterialDefinitionDesc        SurfaceDesc      = {0};
+    RadientPostProcessMaterialDefinitionDesc    PostProcessDesc  = {0};
+    RadientComputeMaterialDefinitionDesc        ComputeDesc      = {0};
+    RadientMaterialParameterDesc                Parameter        = {0};
+    RadientStandardMaterialDefinitionCreateInfo StandardCI       = {0};
+    IRadientMaterialDefinition*                 pDefinition      = 0;
+    IRadientMaterialInstance*                   pInstance        = 0;
+    IRadientSurfaceMaterialInstance*            pSurfaceInstance = 0;
+    IRadientMaterialInstanceWriter*             pWriter          = 0;
+    IRadientSurfaceMaterialInstanceWriter*      pSurfaceWriter   = 0;
 
-    (void)Domain;
+    (void)DefinitionType;
     (void)Type;
     (void)AddressMode;
-    (void)Model;
+    (void)ShadingModel;
     (void)Features;
-    (void)AlphaMode;
+    (void)SurfaceMode;
     (void)Handle;
     (void)Desc;
+    (void)SurfaceDesc;
+    (void)PostProcessDesc;
+    (void)ComputeDesc;
     (void)Parameter;
     (void)StandardCI;
     (void)pDefinition;
     (void)pInstance;
+    (void)pSurfaceInstance;
     (void)pWriter;
+    (void)pSurfaceWriter;
 }
 
 void RadientMaterials_C_TestDefinitionMacros(IRadientMaterialDefinition* pDefinition)
@@ -78,9 +88,11 @@ void RadientMaterials_C_TestDefinitionMacros(IRadientMaterialDefinition* pDefini
     (void)pInstance;
 }
 
-void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*       pInstance,
-                                           IRadientMaterialInstanceWriter* pWriter,
-                                           IRadientTextureAsset*           pTexture)
+void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*              pInstance,
+                                           IRadientSurfaceMaterialInstance*       pSurfaceInstance,
+                                           IRadientMaterialInstanceWriter*        pWriter,
+                                           IRadientSurfaceMaterialInstanceWriter* pSurfaceWriter,
+                                           IRadientTextureAsset*                  pTexture)
 {
     RadientMaterialParameterHandle Handle      = {0};
     IRadientMaterialDefinition*    pDefinition = IRadientMaterialInstance_GetDefinition(pInstance);
@@ -96,6 +108,14 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*       pInst
     Status = IRadientMaterialInstanceWriter_SetParameter(pWriter, Handle, &Value, (Uint32)sizeof(Value));
     Status = IRadientMaterialInstanceWriter_SetTexture(pWriter, Handle, 0, pTexture);
     Status = IRadientMaterialInstanceWriter_Commit(pWriter);
+    {
+        RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = IRadientSurfaceMaterialInstance_GetSurfaceMode(pSurfaceInstance);
+        Float32                       AlphaCutoff = IRadientSurfaceMaterialInstance_GetAlphaCutoff(pSurfaceInstance);
+        Bool                          DoubleSided = IRadientSurfaceMaterialInstance_IsDoubleSided(pSurfaceInstance);
+        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetSurfaceMode(pSurfaceWriter, SurfaceMode);
+        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetAlphaCutoff(pSurfaceWriter, AlphaCutoff);
+        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetDoubleSided(pSurfaceWriter, DoubleSided);
+    }
 
     (void)pDefinition;
     (void)Version;

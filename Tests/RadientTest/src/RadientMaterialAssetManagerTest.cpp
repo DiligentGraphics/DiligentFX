@@ -121,9 +121,12 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
                     MaterialCI.RoughnessFactor);
     EXPECT_FLOAT_EQ(GetInstanceParameter<RadientFloat3>(*pInstance, "EmissiveFactor").z,
                     MaterialCI.EmissiveFactor.z);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "AlphaCutoff"),
-                    MaterialCI.AlphaCutoff);
-    EXPECT_EQ(GetInstanceParameter<Bool>(*pInstance, "DoubleSided"), MaterialCI.DoubleSided);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), MaterialCI.AlphaCutoff);
+    EXPECT_EQ(pSurfaceInstance->IsDoubleSided(), MaterialCI.DoubleSided);
 
     RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &TextureHandle),
@@ -237,9 +240,11 @@ TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependenci
     EXPECT_FLOAT_EQ(StoredBaseColor.y, BaseColorFactor.y);
     EXPECT_FLOAT_EQ(StoredBaseColor.z, BaseColorFactor.z);
     EXPECT_FLOAT_EQ(StoredBaseColor.w, BaseColorFactor.w);
-    EXPECT_EQ(GetInstanceParameter<Uint32>(*pInstance, "AlphaMode"),
-              RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE);
-    EXPECT_EQ(GetInstanceParameter<Bool>(*pInstance, "DoubleSided"), True);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_TRUE(pSurfaceInstance->IsDoubleSided());
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialRejectsInvalidArguments)

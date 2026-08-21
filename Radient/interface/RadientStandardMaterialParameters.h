@@ -143,20 +143,6 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationColorName[] = "
 /// value, which represents no attenuation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationDistanceName[] = "AttenuationDistance";
 
-/// Name of the UINT alpha mode. The value must be a
-/// RADIENT_STANDARD_MATERIAL_ALPHA_MODE enumerator. The parameter is present in
-/// every standard material and defaults to RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialAlphaModeName[] = "AlphaMode";
-
-/// Name of the FLOAT alpha cutoff used by masked materials. The value is expected
-/// in [0, 1]. The parameter is present in every standard material and defaults to
-/// 0.5.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialAlphaCutoffName[] = "AlphaCutoff";
-
-/// Name of the BOOL controlling whether both sides of a surface are rendered.
-/// The parameter is present in every standard material and defaults to False.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialDoubleSidedName[] = "DoubleSided";
-
 /// Every declared texture semantic has the following six parameters:
 ///
 /// - `Texture`: TEXTURE, default null.

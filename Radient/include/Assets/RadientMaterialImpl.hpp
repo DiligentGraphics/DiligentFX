@@ -78,6 +78,17 @@ struct RadientMaterialShaderDataInitialization
     Uint32      Offset = 0;
 };
 
+/// Describes where specialized surface material instance parameters are packed
+/// in shader-readable data.
+struct RadientSurfaceMaterialShaderParameterPacking
+{
+    /// Optional byte offset at which the surface mode is written.
+    Uint32 SurfaceModeOffset = ~Uint32{0};
+
+    /// Optional byte offset at which the surface alpha cutoff is written.
+    Uint32 AlphaCutoffOffset = ~Uint32{0};
+};
+
 /// Describes the immutable shader-readable data layout owned by a material
 /// definition. The definition copies the mappings during creation.
 struct RadientMaterialShaderDataLayoutDesc
@@ -92,6 +103,10 @@ struct RadientMaterialShaderDataLayoutDesc
 
     const RadientMaterialShaderDataInitialization* pInitializations    = nullptr;
     Uint32                                         InitializationCount = 0;
+
+    /// Optional surface-material-specific parameter packing. The definition
+    /// copies the packing during creation.
+    const RadientSurfaceMaterialShaderParameterPacking* pSurfacePacking = nullptr;
 };
 
 class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
@@ -107,7 +122,7 @@ public:
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
-        return m_Data.Desc.Reference;
+        return m_Data.GetDesc().Reference;
     }
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
@@ -117,7 +132,7 @@ public:
 
     virtual const RadientMaterialDefinitionDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        return m_Data.Desc;
+        return m_Data.GetDesc();
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetStatus() const override final
@@ -127,7 +142,7 @@ public:
 
     virtual Uint32 DILIGENT_CALL_TYPE GetParameterCount() const override final
     {
-        return m_Data.Desc.ParameterCount;
+        return m_Data.GetDesc().ParameterCount;
     }
 
     virtual const RadientMaterialParameterDesc& DILIGENT_CALL_TYPE GetParameterDesc(Uint32 Index) const override final;
@@ -164,13 +179,14 @@ private:
 
     struct ShaderDataPackingPlan
     {
-        Uint32                                         Size                = 0;
-        Uint32                                         InitializationCount = 0;
-        const RadientMaterialShaderDataInitialization* pInitializations    = nullptr;
-        Uint32                                         CopyCommandCount    = 0;
-        const ShaderDataCopyCommand*                   pCopyCommands       = nullptr;
-        Uint32                                         TextureCommandCount = 0;
-        const RadientMaterialShaderTexturePacking*     pTextureCommands    = nullptr;
+        Uint32                                              Size                = 0;
+        Uint32                                              InitializationCount = 0;
+        const RadientMaterialShaderDataInitialization*      pInitializations    = nullptr;
+        Uint32                                              CopyCommandCount    = 0;
+        const ShaderDataCopyCommand*                        pCopyCommands       = nullptr;
+        Uint32                                              TextureCommandCount = 0;
+        const RadientMaterialShaderTexturePacking*          pTextureCommands    = nullptr;
+        const RadientSurfaceMaterialShaderParameterPacking* pSurfacePacking     = nullptr;
     };
 
     // Parameter descriptors, strings, default values, and shader data packing
@@ -184,10 +200,10 @@ private:
 
         PackedData(PackedData&& Other) noexcept :
             Memory{std::move(Other.Memory)},
-            Desc{Other.Desc},
+            pDesc{Other.pDesc},
             PackingPlan{Other.PackingPlan}
         {
-            Other.Desc        = {};
+            Other.pDesc       = nullptr;
             Other.PackingPlan = {};
         }
 
@@ -197,15 +213,24 @@ private:
 
         ~PackedData()
         {
-            for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
+            if (pDesc == nullptr)
+                return;
+
+            for (Uint32 Index = 0; Index < pDesc->ParameterCount; ++Index)
             {
-                if (Desc.pParameters[Index].pDefaultTexture != nullptr)
-                    Desc.pParameters[Index].pDefaultTexture->Release();
+                if (pDesc->pParameters[Index].pDefaultTexture != nullptr)
+                    pDesc->pParameters[Index].pDefaultTexture->Release();
             }
         }
 
+        const RadientMaterialDefinitionDesc& GetDesc() const noexcept
+        {
+            VERIFY_EXPR(pDesc != nullptr);
+            return *pDesc;
+        }
+
         std::unique_ptr<void, STDDeleterRawMem<void>> Memory;
-        RadientMaterialDefinitionDesc                 Desc;
+        const RadientMaterialDefinitionDesc*          pDesc = nullptr;
         ShaderDataPackingPlan                         PackingPlan;
     };
 

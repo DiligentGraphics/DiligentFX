@@ -532,6 +532,18 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
         DefinitionCI,
         [&](IRadientMaterialDefinition&     Definition,
             IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
+            RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+                &Writer, IID_RadientSurfaceMaterialInstanceWriter};
+            if (!pSurfaceWriter)
+                return RADIENT_STATUS_INVALID_OPERATION;
+
+            RADIENT_STATUS SurfaceStatus =
+                pSurfaceWriter->SetAlphaCutoff(MaterialCI.AlphaCutoff);
+            if (RADIENT_SUCCEEDED(SurfaceStatus))
+                SurfaceStatus = pSurfaceWriter->SetDoubleSided(MaterialCI.DoubleSided);
+            if (RADIENT_FAILED(SurfaceStatus))
+                return SurfaceStatus;
+
             struct ParameterValue
             {
                 const char* Name;
@@ -543,8 +555,6 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialInstance(
                 {RadientStandardMaterialMetallicFactorName, &MaterialCI.MetallicFactor, static_cast<Uint32>(sizeof(MaterialCI.MetallicFactor))},
                 {RadientStandardMaterialRoughnessFactorName, &MaterialCI.RoughnessFactor, static_cast<Uint32>(sizeof(MaterialCI.RoughnessFactor))},
                 {RadientStandardMaterialEmissiveFactorName, &MaterialCI.EmissiveFactor, static_cast<Uint32>(sizeof(MaterialCI.EmissiveFactor))},
-                {RadientStandardMaterialAlphaCutoffName, &MaterialCI.AlphaCutoff, static_cast<Uint32>(sizeof(MaterialCI.AlphaCutoff))},
-                {RadientStandardMaterialDoubleSidedName, &MaterialCI.DoubleSided, static_cast<Uint32>(sizeof(MaterialCI.DoubleSided))},
             };
 
             for (const ParameterValue& Parameter : Parameters)

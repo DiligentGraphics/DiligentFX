@@ -79,6 +79,17 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(bool EnableClearcoat = fa
     return pMaterial;
 }
 
+RefCntAutoPtr<IRadientMaterialAsset> MakeUnlitMaterialAsset()
+{
+    GLTF::Material Material;
+    Material.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_UNLIT;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    RadientMaterialAssetManager::Create()->CreateGLTFMaterial(
+        std::move(Material), nullptr, 0, pMaterial.GetAddressOfEmpty());
+    return pMaterial;
+}
+
 std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> MakeTextureAttribIndices()
 {
     std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices;
@@ -305,6 +316,21 @@ TEST(RadientTesseraMaterialCacheTest, DerivesPSOFlagsFromMaterial)
     ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
 
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedClearcoatMaterialPSOFlags);
+}
+
+TEST(RadientTesseraMaterialCacheTest, UnlitMaterialDoesNotUseUnshadedPSOFlag)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache =
+        MakeMaterialCache(MakeTextureAttribIndices(),
+                          PBR_Renderer::PSO_FLAG_UNSHADED);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeUnlitMaterialAsset();
+
+    const RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), PBR_Renderer::PSO_FLAG_NONE);
 }
 
 TEST(RadientTesseraMaterialCacheTest, RespectsDisabledRendererFeatures)

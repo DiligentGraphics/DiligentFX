@@ -36,26 +36,32 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientMaterialDefinition     IRadientMaterialDefinition;
-typedef struct IRadientMaterialInstance       IRadientMaterialInstance;
-typedef struct IRadientMaterialInstanceWriter IRadientMaterialInstanceWriter;
+typedef struct IRadientMaterialDefinition            IRadientMaterialDefinition;
+typedef struct IRadientMaterialInstance              IRadientMaterialInstance;
+typedef struct IRadientMaterialInstanceWriter        IRadientMaterialInstanceWriter;
+typedef struct IRadientSurfaceMaterialInstance       IRadientSurfaceMaterialInstance;
+typedef struct IRadientSurfaceMaterialInstanceWriter IRadientSurfaceMaterialInstanceWriter;
 
 // clang-format off
 
-/// Material execution domain.
-DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_DOMAIN, Uint8)
+/// Concrete material definition type.
+///
+/// The value identifies the complete description returned by
+/// IRadientMaterialDefinition::GetDesc(). After inspecting Type, the base
+/// description may be cast to the corresponding concrete description.
+DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_DEFINITION_TYPE, Uint8)
 {
     /// A material that shades a geometric surface.
-    RADIENT_MATERIAL_DOMAIN_SURFACE = 0,
+    RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE = 0,
 
     /// A full-screen post-processing material.
-    RADIENT_MATERIAL_DOMAIN_POST_PROCESS,
+    RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS,
 
     /// A compute material.
-    RADIENT_MATERIAL_DOMAIN_COMPUTE,
+    RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE,
 
-    /// Number of material domains. This value is not a valid domain.
-    RADIENT_MATERIAL_DOMAIN_COUNT
+    /// Number of material definition types. This value is not a valid type.
+    RADIENT_MATERIAL_DEFINITION_TYPE_COUNT
 };
 
 
@@ -135,65 +141,68 @@ DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE, Uint32)
 };
 
 
-/// Built-in standard material model.
-DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_MODEL, Uint8)
+/// Renderer-visible surface shading model.
+///
+/// The model identifies the lighting closure implemented by a surface
+/// definition. A renderer uses it to select compatible shader logic.
+DILIGENT_TYPED_ENUM(RADIENT_SURFACE_SHADING_MODEL, Uint8)
 {
     /// glTF metallic-roughness physically based material.
-    RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS = 0,
+    RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS = 0,
 
     /// Unlit material whose output is the base color.
-    RADIENT_STANDARD_MATERIAL_MODEL_UNLIT,
+    RADIENT_SURFACE_SHADING_MODEL_UNLIT,
 
-    /// Number of standard material models. This value is not a valid model.
-    RADIENT_STANDARD_MATERIAL_MODEL_COUNT
+    /// Number of surface shading models. This value is not a valid model.
+    RADIENT_SURFACE_SHADING_MODEL_COUNT
 };
 
 
-/// Optional features compiled into a standard metallic-roughness material definition.
-DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS, Uint32)
+/// Optional renderer-visible features provided by a surface material definition.
+DILIGENT_TYPED_ENUM(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS, Uint32)
 {
     /// No optional material features.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE = 0u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE = 0u,
 
     /// Layer a dielectric clear coat over the base material.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT = 1u << 0u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT = 1u << 0u,
 
     /// Enable the cloth-like sheen lobe.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN = 1u << 1u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN = 1u << 1u,
 
     /// Enable anisotropic specular reflection.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY = 1u << 2u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY = 1u << 2u,
 
     /// Enable thin-film iridescence.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE = 1u << 3u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE = 1u << 3u,
 
     /// Enable light transmission through the surface.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION = 1u << 4u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION = 1u << 4u,
 
     /// Enable volume thickness and attenuation. Transmission must also be enabled.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME = 1u << 5u,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME = 1u << 5u,
 
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_LAST = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME,
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS_ALL =
-        (RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_LAST << 1u) - 1u
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_LAST = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL =
+        (RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_LAST << 1u) - 1u
 };
-DEFINE_FLAG_ENUM_OPERATORS(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS)
+DEFINE_FLAG_ENUM_OPERATORS(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS)
 
 
-/// Alpha mode stored in a standard material instance.
-DILIGENT_TYPED_ENUM(RADIENT_STANDARD_MATERIAL_ALPHA_MODE, Uint32)
+/// Surface coverage and blending mode stored in a surface material instance.
+DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_SURFACE_MODE, Uint32)
 {
     /// The material is fully opaque.
-    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE = 0,
+    RADIENT_MATERIAL_SURFACE_MODE_OPAQUE = 0,
 
     /// Fragments below AlphaCutoff are discarded.
-    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_MASK,
+    RADIENT_MATERIAL_SURFACE_MODE_MASKED,
 
     /// The material uses alpha blending.
-    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND,
+    RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT,
 
-    /// Number of alpha modes. This value is not a valid mode.
-    RADIENT_STANDARD_MATERIAL_ALPHA_MODE_COUNT
+    /// Number of surface modes. This value is not a valid mode.
+    RADIENT_MATERIAL_SURFACE_MODE_COUNT
 };
 
 
@@ -274,42 +283,96 @@ typedef struct RadientMaterialParameterDesc RadientMaterialParameterDesc;
 /// the definition.
 struct RadientMaterialDefinitionDesc
 {
+    /// Concrete definition type. The value determines the complete description
+    /// type returned by IRadientMaterialDefinition::GetDesc().
+    RADIENT_MATERIAL_DEFINITION_TYPE Type DEFAULT_INITIALIZER(RADIENT_MATERIAL_DEFINITION_TYPE_COUNT);
+
     /// Definition name used for diagnostics.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Material execution domain.
-    RADIENT_MATERIAL_DOMAIN Domain DEFAULT_INITIALIZER(RADIENT_MATERIAL_DOMAIN_SURFACE);
-
     /// Optional persistent asset identity. The definition copies the URI.
     RadientAssetReference Reference DEFAULT_INITIALIZER({});
+
+    /// Number of elements in pParameters. May be zero.
+    Uint32 ParameterCount DEFAULT_INITIALIZER(0);
 
     /// Array of ParameterCount parameter descriptions. Parameter names must be
     /// unique within the definition. The definition copies all metadata and
     /// default values and retains default textures during creation.
     const RadientMaterialParameterDesc* pParameters DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of elements in pParameters. May be zero.
-    Uint32 ParameterCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientMaterialDefinitionDesc RadientMaterialDefinitionDesc;
 
 
+// clang-format off
+
+/// Surface material definition description.
+///
+/// ShadingModel and Features describe the surface closure exposed to every
+/// renderer. Built-in and future programmable surface definitions use the same
+/// contract even when they produce its inputs differently.
+struct RadientSurfaceMaterialDefinitionDesc DILIGENT_DERIVE(RadientMaterialDefinitionDesc)
+
+    /// Surface shading model.
+    RADIENT_SURFACE_SHADING_MODEL ShadingModel DEFAULT_INITIALIZER(RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS);
+
+    /// Optional surface features provided by the definition.
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features DEFAULT_INITIALIZER(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr RadientSurfaceMaterialDefinitionDesc() noexcept
+    {
+        Type = RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
+    }
+#endif
+};
+typedef struct RadientSurfaceMaterialDefinitionDesc RadientSurfaceMaterialDefinitionDesc;
+
+
+/// Post-processing material definition description.
+struct RadientPostProcessMaterialDefinitionDesc DILIGENT_DERIVE(RadientMaterialDefinitionDesc)
+#if DILIGENT_CPP_INTERFACE
+    constexpr RadientPostProcessMaterialDefinitionDesc() noexcept
+    {
+        Type = RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS;
+    }
+#endif
+};
+typedef struct RadientPostProcessMaterialDefinitionDesc RadientPostProcessMaterialDefinitionDesc;
+
+
+/// Compute material definition description.
+struct RadientComputeMaterialDefinitionDesc DILIGENT_DERIVE(RadientMaterialDefinitionDesc)
+#if DILIGENT_CPP_INTERFACE
+    constexpr RadientComputeMaterialDefinitionDesc() noexcept
+    {
+        Type = RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE;
+    }
+#endif
+};
+typedef struct RadientComputeMaterialDefinitionDesc RadientComputeMaterialDefinitionDesc;
+
+// clang-format on
+
+
 /// Built-in standard material definition creation attributes.
 ///
-/// Model and Features define the immutable parameter schema, including its
+/// ShadingModel and Features define the immutable parameter schema, including its
 /// texture parameters. Every standard material declares the texture semantics
 /// required by its model and enabled features.
+/// The resulting definition exposes the generalized
+/// RadientSurfaceMaterialDefinitionDesc renderer contract.
 /// Compatible descriptions may resolve to the same cached definition.
 /// Canonical parameter names and their value semantics are declared in
 /// RadientStandardMaterialParameters.h.
 struct RadientStandardMaterialDefinitionCreateInfo
 {
-    /// Standard shading model.
-    RADIENT_STANDARD_MATERIAL_MODEL Model DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS);
+    /// Surface shading model implemented by the built-in definition.
+    RADIENT_SURFACE_SHADING_MODEL ShadingModel DEFAULT_INITIALIZER(RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS);
 
     /// Optional features present in the definition. Unlit materials do not
     /// support optional metallic-roughness features.
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features DEFAULT_INITIALIZER(RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features DEFAULT_INITIALIZER(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
 
     /// Every SemanticTexture parameter supplied by the model and its features
     /// is accompanied by mutable SemanticTextureUVSelector (INT),
@@ -334,6 +397,14 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialInstance =
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialInstanceWriter =
     {0xfaed9615, 0x107d, 0x4c29, {0x90, 0x15, 0xe8, 0xff, 0x78, 0xe3, 0x4f, 0x94}};
 
+// {510EFCE2-880F-4ABE-B46D-7E1176C7BE67}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialInstance =
+    {0x510efce2, 0x880f, 0x4abe, {0xb4, 0x6d, 0x7e, 0x11, 0x76, 0xc7, 0xbe, 0x67}};
+
+// {92B17A4B-8404-4838-B0BC-4B1772767281}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialInstanceWriter =
+    {0x92b17a4b, 0x8404, 0x4838, {0xb0, 0xbc, 0x4b, 0x17, 0x72, 0x76, 0x72, 0x81}};
+
 
 #define DILIGENT_INTERFACE_NAME IRadientMaterialDefinition
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
@@ -348,7 +419,8 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialInstanceWriter =
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialDefinition, IRadientAsset)
 {
     /// Returns the immutable definition description. The reference remains valid
-    /// for the lifetime of the definition.
+    /// for the lifetime of the definition. Its Type identifies the concrete
+    /// description type to which the returned reference may be cast.
     VIRTUAL const RadientMaterialDefinitionDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Returns the definition loading status. Generic definitions created from
@@ -420,8 +492,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
     /// Returns a borrowed pointer to the definition retained by this instance.
     VIRTUAL IRadientMaterialDefinition* METHOD(GetDefinition)(THIS) CONST PURE;
 
-    /// Returns a monotonically increasing version of the parameter state. The
-    /// version changes after every commit that modifies at least one parameter.
+    /// Returns a monotonically increasing version of the complete instance
+    /// state. The version changes after every commit that modifies at least one
+    /// parameter or specialized instance property such as surface mode.
     VIRTUAL Uint64 METHOD(GetVersion)(THIS) CONST PURE;
 
     /// Copies the complete scalar, vector, matrix, or value array identified by
@@ -445,8 +518,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
     VIRTUAL RADIENT_STATUS METHOD(CreateWriter)(THIS_
                                                 IRadientMaterialInstanceWriter** ppWriter) CONST PURE;
 
-    /// Creates an independent material instance initialized with the current
-    /// parameter state. Subsequent updates to either instance do not affect the
+    /// Creates an independent material instance initialized with the complete
+    /// current state. Subsequent updates to either instance do not affect the
     /// other. On success, ppInstance receives a strong reference to the clone.
     VIRTUAL RADIENT_STATUS METHOD(Clone)(THIS_
                                          IRadientMaterialInstance** ppInstance) CONST PURE;
@@ -469,6 +542,42 @@ DILIGENT_END_INTERFACE
 // clang-format on
 
 
+#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialInstance
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientSurfaceMaterialInstanceInclusiveMethods \
+    IRadientMaterialInstanceInclusiveMethods;           \
+    IRadientSurfaceMaterialInstanceMethods RadientSurfaceMaterialInstance
+
+// clang-format off
+
+/// Material instance that shades a geometric surface.
+DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialInstance, IRadientMaterialInstance)
+{
+    /// Returns the surface coverage and blending mode.
+    VIRTUAL RADIENT_MATERIAL_SURFACE_MODE METHOD(GetSurfaceMode)(THIS) CONST PURE;
+
+    /// Returns the alpha cutoff used by masked surfaces. The default is 0.5.
+    VIRTUAL Float32 METHOD(GetAlphaCutoff)(THIS) CONST PURE;
+
+    /// Returns True when both sides of the surface are rendered.
+    VIRTUAL Bool METHOD(IsDoubleSided)(THIS) CONST PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientSurfaceMaterialInstance_GetSurfaceMode(This)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, GetSurfaceMode,  This)
+#    define IRadientSurfaceMaterialInstance_GetAlphaCutoff(This)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, GetAlphaCutoff,  This)
+#    define IRadientSurfaceMaterialInstance_IsDoubleSided(This)   CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, IsDoubleSided,   This)
+
+#endif
+
+// clang-format on
+
+
 #define DILIGENT_INTERFACE_NAME IRadientMaterialInstanceWriter
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
@@ -480,12 +589,12 @@ DILIGENT_END_INTERFACE
 
 /// Reusable material instance writer.
 ///
-/// A writer records only values changed through SetParameter() and SetTexture().
-/// Commit() publishes complete non-texture parameters and individual texture
-/// array elements. If multiple writers modify the same value, the last commit
-/// replaces that complete parameter or texture element. The writer and its
-/// material instance are not thread-safe and must not be accessed concurrently
-/// with Commit().
+/// A writer records only values changed through its setter methods. Commit()
+/// publishes complete non-texture parameters, individual texture array elements,
+/// and any specialized instance properties exposed by a derived writer. If
+/// multiple writers modify the same value, the last commit replaces that complete
+/// value. The writer and its material instance are not thread-safe and must not be
+/// accessed concurrently with Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
@@ -524,6 +633,51 @@ DILIGENT_END_INTERFACE
 #    define IRadientMaterialInstanceWriter_SetParameter(This, ...) CALL_IFACE_METHOD(RadientMaterialInstanceWriter, SetParameter, This, __VA_ARGS__)
 #    define IRadientMaterialInstanceWriter_SetTexture(This, ...)   CALL_IFACE_METHOD(RadientMaterialInstanceWriter, SetTexture,   This, __VA_ARGS__)
 #    define IRadientMaterialInstanceWriter_Commit(This)            CALL_IFACE_METHOD(RadientMaterialInstanceWriter, Commit,       This)
+
+#endif
+
+// clang-format on
+
+
+#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialInstanceWriter
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientSurfaceMaterialInstanceWriterInclusiveMethods \
+    IRadientMaterialInstanceWriterInclusiveMethods;           \
+    IRadientSurfaceMaterialInstanceWriterMethods RadientSurfaceMaterialInstanceWriter
+
+// clang-format off
+
+/// Writer for mutable surface-material state.
+DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialInstanceWriter, IRadientMaterialInstanceWriter)
+{
+    /// Sets the surface coverage and blending mode. Returns
+    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
+    /// SurfaceMode.
+    VIRTUAL RADIENT_STATUS METHOD(SetSurfaceMode)(THIS_
+                                                  RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) PURE;
+
+    /// Sets the alpha cutoff used by masked surfaces. Returns
+    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
+    /// AlphaCutoff.
+    VIRTUAL RADIENT_STATUS METHOD(SetAlphaCutoff)(THIS_
+                                                  Float32 AlphaCutoff) PURE;
+
+    /// Controls whether both sides of the surface are rendered. Returns
+    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
+    /// DoubleSided.
+    VIRTUAL RADIENT_STATUS METHOD(SetDoubleSided)(THIS_
+                                                  Bool DoubleSided) PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientSurfaceMaterialInstanceWriter_SetSurfaceMode(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetSurfaceMode,  This, __VA_ARGS__)
+#    define IRadientSurfaceMaterialInstanceWriter_SetAlphaCutoff(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetAlphaCutoff,  This, __VA_ARGS__)
+#    define IRadientSurfaceMaterialInstanceWriter_SetDoubleSided(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetDoubleSided,  This, __VA_ARGS__)
 
 #endif
 

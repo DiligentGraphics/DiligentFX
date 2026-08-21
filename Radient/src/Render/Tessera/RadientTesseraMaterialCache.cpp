@@ -28,7 +28,6 @@
 
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientMaterialImpl.hpp"
-#include "GLTF_PBR_Renderer.hpp"
 #include "ThreadPool.hpp"
 
 #include <exception>
@@ -42,6 +41,32 @@ namespace
 {
 
 std::atomic<UniqueIdentifier> s_NextUniqueID{0};
+
+PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialDefinitionDesc& Desc) noexcept
+{
+    const auto HasFeature = [&Desc](RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Feature) {
+        return (Desc.Features & Feature) != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
+    };
+
+    // The unlit shading model is encoded in the material shader data workflow.
+    // PSO_FLAG_UNSHADED bypasses material evaluation entirely and is reserved
+    // for renderer overrides such as wireframe rendering.
+    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES;
+
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_SHEEN;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_IRIDESCENCE;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_TRANSMISSION;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_VOLUME;
+    return Flags;
+}
 
 } // namespace
 
@@ -88,6 +113,8 @@ bool RadientTesseraMaterialData::TryScheduleProcessing() noexcept
 
 void RadientTesseraMaterialData::PublishSuccess(
     PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
+    RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
+    Bool                                          IsDoubleSided,
     RadientMaterialSRBLease                       MaterialSRB,
     RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept
@@ -95,6 +122,8 @@ void RadientTesseraMaterialData::PublishSuccess(
     VERIFY_EXPR(MaterialSRB);
     VERIFY_EXPR(MaterialBufferAllocation);
     m_MaterialPSOFlags         = MaterialPSOFlags;
+    m_SurfaceMode              = SurfaceMode;
+    m_IsDoubleSided            = IsDoubleSided;
     m_MaterialSRB              = std::move(MaterialSRB);
     m_MaterialBufferAllocation = std::move(MaterialBufferAllocation);
     m_ShaderTextureIds         = std::move(ShaderTextureIds);
@@ -246,9 +275,32 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     const std::shared_ptr<ProcessingContext>& pContext,
     RadientTesseraMaterialData&               Data)
 {
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(Data.m_pMaterial);
+    if (!pInstance)
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
+
+    IRadientMaterialDefinition* const pDefinitionInterface = pInstance->GetDefinition();
+    if (pDefinitionInterface == nullptr ||
+        pDefinitionInterface->GetDesc().Type != RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE)
+    {
+        Data.PublishFailure(RADIENT_STATUS_UNSUPPORTED);
+        return;
+    }
+
+    const auto& SurfaceDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(pDefinitionInterface->GetDesc());
     const PBR_Renderer::PSO_FLAGS MaterialPSOFlags =
-        GLTF_PBR_Renderer::GetMaterialPSOFlags(*Data.m_MaterialData.pMaterial) &
-        pContext->EnabledMaterialPSOFlags;
+        GetSurfaceMaterialPSOFlags(SurfaceDesc) & pContext->EnabledMaterialPSOFlags;
+
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{pInstance, IID_RadientSurfaceMaterialInstance};
+    if (!pSurfaceInstance)
+    {
+        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+        return;
+    }
 
     RadientMaterialSRBLease                       MaterialSRB;
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
@@ -269,16 +321,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         return;
     }
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
-        RadientMaterialAssetManager::GetInstance(Data.m_pMaterial);
-    if (!pInstance)
-    {
-        Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
-        return;
-    }
-
     const auto* const pDefinition =
-        static_cast<const RadientMaterialDefinitionImpl*>(pInstance->GetDefinition());
+        static_cast<const RadientMaterialDefinitionImpl*>(pDefinitionInterface);
     if (pDefinition == nullptr)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
@@ -305,6 +349,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     }
 
     Data.PublishSuccess(MaterialPSOFlags,
+                        pSurfaceInstance->GetSurfaceMode(),
+                        pSurfaceInstance->IsDoubleSided(),
                         std::move(MaterialSRB),
                         std::move(MaterialBufferAllocation),
                         std::move(ShaderTextureIds));

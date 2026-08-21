@@ -89,10 +89,22 @@ public:
         return m_MaterialPSOFlags;
     }
 
+    RADIENT_MATERIAL_SURFACE_MODE GetSurfaceMode() const noexcept
+    {
+        return m_SurfaceMode;
+    }
+
+    Bool IsDoubleSided() const noexcept
+    {
+        return m_IsDoubleSided;
+    }
+
 private:
     bool TryScheduleProcessing() noexcept;
 
     void PublishSuccess(PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
+                        RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
+                        Bool                                          IsDoubleSided,
                         RadientMaterialSRBLease                       MaterialSRB,
                         RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
                         PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept;
@@ -107,6 +119,8 @@ private:
     const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};
     PBR_Renderer::PSO_FLAGS                       m_MaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+    RADIENT_MATERIAL_SURFACE_MODE                 m_SurfaceMode      = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Bool                                          m_IsDoubleSided    = False;
 
     std::atomic<RADIENT_STATUS> m_Status{RADIENT_STATUS_PENDING};
     std::atomic_bool            m_ProcessingScheduled{false};

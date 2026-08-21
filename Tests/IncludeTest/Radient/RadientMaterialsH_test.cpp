@@ -28,9 +28,9 @@
 
 using namespace Diligent;
 
-static_assert(RADIENT_MATERIAL_DOMAIN_SURFACE == 0, "Unexpected RADIENT_MATERIAL_DOMAIN_SURFACE value");
-static_assert(RADIENT_MATERIAL_DOMAIN_POST_PROCESS == 1, "Unexpected RADIENT_MATERIAL_DOMAIN_POST_PROCESS value");
-static_assert(RADIENT_MATERIAL_DOMAIN_COMPUTE == 2, "Unexpected RADIENT_MATERIAL_DOMAIN_COMPUTE value");
+static_assert(RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE == 0, "Unexpected surface material definition type value");
+static_assert(RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS == 1, "Unexpected post-process material definition type value");
+static_assert(RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE == 2, "Unexpected compute material definition type value");
 
 static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN == 0, "Unexpected RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN value");
 static_assert(RADIENT_MATERIAL_PARAMETER_TYPE_BOOL == 1, "Unexpected RADIENT_MATERIAL_PARAMETER_TYPE_BOOL value");
@@ -58,31 +58,39 @@ void RadientMaterials_CPP_UseTypes()
 {
     RadientMaterialParameterHandle              Handle;
     RadientMaterialDefinitionDesc               Desc;
+    RadientSurfaceMaterialDefinitionDesc        SurfaceDesc;
+    RadientPostProcessMaterialDefinitionDesc    PostProcessDesc;
+    RadientComputeMaterialDefinitionDesc        ComputeDesc;
     RadientMaterialParameterDesc                Parameter;
     RadientStandardMaterialDefinitionCreateInfo StandardCI;
 
     Desc.pParameters    = &Parameter;
     Desc.ParameterCount = 1;
 
-    StandardCI.Features = RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
-        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN |
-        RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE;
+    StandardCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE;
 
     const bool IsValid = static_cast<bool>(Handle);
     const bool IsEqual = Handle == RadientMaterialParameterHandle{};
 
     (void)Desc;
+    (void)SurfaceDesc;
+    (void)PostProcessDesc;
+    (void)ComputeDesc;
     (void)Parameter;
     (void)StandardCI;
     (void)IsValid;
     (void)IsEqual;
 }
 
-void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetManager,
-                                         IRadientMaterialDefinition*     pDefinition,
-                                         IRadientMaterialInstance*       pInstance,
-                                         IRadientMaterialInstanceWriter* pWriter,
-                                         IRadientTextureAsset*           pTexture)
+void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*                  pAssetManager,
+                                         IRadientMaterialDefinition*            pDefinition,
+                                         IRadientMaterialInstance*              pInstance,
+                                         IRadientSurfaceMaterialInstance*       pSurfaceInstance,
+                                         IRadientMaterialInstanceWriter*        pWriter,
+                                         IRadientSurfaceMaterialInstanceWriter* pSurfaceWriter,
+                                         IRadientTextureAsset*                  pTexture)
 {
     const RadientMaterialDefinitionDesc& Desc       = pDefinition->GetDesc();
     RADIENT_STATUS                       Status     = pDefinition->GetStatus();
@@ -92,18 +100,24 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetM
     IRadientMaterialInstance*            pClone = nullptr;
     float                                Value  = 0;
 
-    Status               = pDefinition->GetParameterHandle(0, &Handle);
-    Status               = pDefinition->FindParameter("Parameter", &Handle);
-    Status               = pDefinition->CreateInstance(&pInstance);
-    pDefinition          = pInstance->GetDefinition();
-    const Uint64 Version = pInstance->GetVersion();
-    Status               = pInstance->GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
-    Status               = pInstance->GetTexture(Handle, 0, &pTexture);
-    Status               = pInstance->CreateWriter(&pWriter);
-    Status               = pInstance->Clone(&pClone);
-    Status               = pWriter->SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
-    Status               = pWriter->SetTexture(Handle, 0, pTexture);
-    Status               = pWriter->Commit();
+    Status                                          = pDefinition->GetParameterHandle(0, &Handle);
+    Status                                          = pDefinition->FindParameter("Parameter", &Handle);
+    Status                                          = pDefinition->CreateInstance(&pInstance);
+    pDefinition                                     = pInstance->GetDefinition();
+    const Uint64 Version                            = pInstance->GetVersion();
+    Status                                          = pInstance->GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+    Status                                          = pInstance->GetTexture(Handle, 0, &pTexture);
+    Status                                          = pInstance->CreateWriter(&pWriter);
+    Status                                          = pInstance->Clone(&pClone);
+    Status                                          = pWriter->SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+    Status                                          = pWriter->SetTexture(Handle, 0, pTexture);
+    Status                                          = pWriter->Commit();
+    const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = pSurfaceInstance->GetSurfaceMode();
+    const Float32                       AlphaCutoff = pSurfaceInstance->GetAlphaCutoff();
+    const Bool                          DoubleSided = pSurfaceInstance->IsDoubleSided();
+    Status                                          = pSurfaceWriter->SetSurfaceMode(SurfaceMode);
+    Status                                          = pSurfaceWriter->SetAlphaCutoff(AlphaCutoff);
+    Status                                          = pSurfaceWriter->SetDoubleSided(DoubleSided);
 
     RadientStandardMaterialDefinitionCreateInfo StandardCI;
     IRadientMaterialDefinition*                 pStandardDefinition = nullptr;
@@ -116,4 +130,5 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*           pAssetM
     (void)pStandardDefinition;
     (void)pClone;
     (void)Version;
+    (void)SurfaceMode;
 }

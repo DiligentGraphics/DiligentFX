@@ -84,7 +84,7 @@ RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     Uint32                              ParameterCount,
     const char*                         Name = "Test material definition")
 {
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = Name;
     DefinitionDesc.Reference      = {"material-definition://test", 7};
     DefinitionDesc.pParameters    = pParameters;
@@ -139,9 +139,8 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
     Parameter.pDefaultValue = &DefaultColor;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = DefinitionName;
-    DefinitionDesc.Domain         = RADIENT_MATERIAL_DOMAIN_SURFACE;
     DefinitionDesc.Reference      = {ReferenceURI, 11};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
@@ -157,7 +156,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
 
     const RadientMaterialDefinitionDesc& StoredDesc = pDefinition->GetDesc();
     EXPECT_STREQ(StoredDesc.Name, "Copied definition");
-    EXPECT_EQ(StoredDesc.Domain, RADIENT_MATERIAL_DOMAIN_SURFACE);
+    EXPECT_EQ(StoredDesc.Type, RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE);
     EXPECT_STREQ(StoredDesc.Reference.URI, "material-definition://copied");
     EXPECT_EQ(StoredDesc.Reference.Version, 11u);
     ASSERT_EQ(StoredDesc.ParameterCount, 1u);
@@ -192,6 +191,118 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_FALSE(ByName);
 }
 
+TEST(RadientMaterialTest, DefinitionPreservesConcreteSurfaceDescription)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name         = "Surface definition";
+    DefinitionDesc.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+    DefinitionDesc.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    const RadientMaterialDefinitionDesc& StoredBaseDesc = pDefinition->GetDesc();
+    ASSERT_EQ(StoredBaseDesc.Type, RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE);
+    const auto& StoredSurfaceDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(StoredBaseDesc);
+    EXPECT_EQ(StoredSurfaceDesc.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_UNLIT);
+    EXPECT_EQ(StoredSurfaceDesc.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+}
+
+TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
+{
+    struct ShaderSurfaceState
+    {
+        Uint32  SurfaceMode = ~Uint32{0};
+        Float32 AlphaCutoff = -1.f;
+    };
+
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name = "Surface state definition";
+
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = offsetof(ShaderSurfaceState, SurfaceMode);
+    SurfacePacking.AlphaCutoffOffset = offsetof(ShaderSurfaceState, AlphaCutoff);
+
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = sizeof(ShaderSurfaceState);
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.5f);
+    EXPECT_FALSE(pSurfaceInstance->IsDoubleSided());
+
+    const Uint64                                  InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+
+    EXPECT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_COUNT),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT),
+              RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    EXPECT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_NO_CHANGE);
+    ASSERT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 1);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceInstance->IsDoubleSided());
+
+    ShaderSurfaceState ShaderState;
+    static_cast<RadientMaterialDefinitionImpl&>(*pDefinition)
+        .WriteShaderData(*pInstance, &ShaderState);
+    EXPECT_EQ(ShaderState.SurfaceMode, static_cast<Uint32>(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT));
+    EXPECT_FLOAT_EQ(ShaderState.AlphaCutoff, 0.25f);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pClone;
+    ASSERT_EQ(pInstance->Clone(pClone.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceClone{
+        pClone, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceClone, nullptr);
+    EXPECT_EQ(pSurfaceClone->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_FLOAT_EQ(pSurfaceClone->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceClone->IsDoubleSided());
+}
+
+TEST(RadientMaterialTest, NonSurfaceInstancesDoNotExposeSurfaceInterfaces)
+{
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(nullptr, 0);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    EXPECT_EQ(pSurfaceInstance, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    EXPECT_EQ(pSurfaceWriter, nullptr);
+}
+
 TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
 {
     const RadientFloat4          DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};
@@ -210,7 +321,7 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     Parameters[2].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
     Parameters[2].pDefaultValue = &DefaultMode;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = "Packed material definition";
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
@@ -272,7 +383,7 @@ TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
     Parameter.pDefaultValue = &DefaultValue;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = "Shader data initialization test";
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
@@ -347,7 +458,7 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     Parameters[5].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
     Parameters[5].pDefaultValue = &DefaultWrap;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = "Texture shader packing test";
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
@@ -452,7 +563,7 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     Parameter.Type          = Param.Type;
     Parameter.pDefaultValue = DefaultData.data();
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = "Parameter packing test";
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
@@ -529,14 +640,14 @@ TEST(RadientMaterialTest, EmptyShaderDataLayoutWritesNoData)
 
 TEST(RadientMaterialTest, RejectsMissingShaderDataMappings)
 {
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     ExpectInvalidShaderDataLayout(DefinitionDesc, {4, nullptr, 1}, "mappings, but pMappings is null");
 }
 
 TEST(RadientMaterialTest, RejectsMissingShaderTexturePackings)
 {
-    RadientMaterialDefinitionDesc       DefinitionDesc{};
-    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc  ShaderDataLayout{};
     ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
     ShaderDataLayout.TexturePackingCount = 1;
     ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "texture packings, but pTexturePackings is null");
@@ -544,7 +655,7 @@ TEST(RadientMaterialTest, RejectsMissingShaderTexturePackings)
 
 TEST(RadientMaterialTest, RejectsInvalidShaderDataParameterIndex)
 {
-    RadientMaterialDefinitionDesc               DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc        DefinitionDesc{};
     const RadientMaterialShaderParameterPacking Mapping{0, 0};
     ExpectInvalidShaderDataLayout(DefinitionDesc, {4, &Mapping, 1}, "references parameter index 0");
 }
@@ -555,7 +666,7 @@ TEST(RadientMaterialTest, RejectsTextureShaderDataMapping)
     Parameter.Name = "Texture";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
@@ -575,7 +686,7 @@ TEST(RadientMaterialTest, RejectsIncompatibleShaderTexturePackingParameters)
     Parameters[3].Name = "WrapV";
     Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
 
@@ -590,8 +701,8 @@ TEST(RadientMaterialTest, RejectsIncompatibleShaderTexturePackingParameters)
 
 TEST(RadientMaterialTest, RejectsMissingShaderDataInitializations)
 {
-    RadientMaterialDefinitionDesc       DefinitionDesc{};
-    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc  ShaderDataLayout{};
     ShaderDataLayout.Size                = 4;
     ShaderDataLayout.InitializationCount = 1;
     ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
@@ -602,8 +713,8 @@ TEST(RadientMaterialTest, RejectsNullShaderDataInitialization)
 {
     const RadientMaterialShaderDataInitialization Initialization{nullptr, 4, 0};
 
-    RadientMaterialDefinitionDesc       DefinitionDesc{};
-    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc  ShaderDataLayout{};
     ShaderDataLayout.Size                = 4;
     ShaderDataLayout.pInitializations    = &Initialization;
     ShaderDataLayout.InitializationCount = 1;
@@ -616,8 +727,8 @@ TEST(RadientMaterialTest, RejectsZeroSizeShaderDataInitialization)
     const Uint32                                  Value = 1;
     const RadientMaterialShaderDataInitialization Initialization{&Value, 0, 0};
 
-    RadientMaterialDefinitionDesc       DefinitionDesc{};
-    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc  ShaderDataLayout{};
     ShaderDataLayout.Size                = 4;
     ShaderDataLayout.pInitializations    = &Initialization;
     ShaderDataLayout.InitializationCount = 1;
@@ -630,8 +741,8 @@ TEST(RadientMaterialTest, RejectsOutOfBoundsShaderDataInitialization)
     const Uint32                                  Value = 1;
     const RadientMaterialShaderDataInitialization Initialization{&Value, 4, 2};
 
-    RadientMaterialDefinitionDesc       DefinitionDesc{};
-    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    RadientMaterialShaderDataLayoutDesc  ShaderDataLayout{};
     ShaderDataLayout.Size                = 4;
     ShaderDataLayout.pInitializations    = &Initialization;
     ShaderDataLayout.InitializationCount = 1;
@@ -651,7 +762,7 @@ TEST(RadientMaterialTest, RejectsOutOfBoundsShaderTexturePacking)
     Parameters[3].Name = "WrapV";
     Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
 
@@ -670,7 +781,7 @@ TEST(RadientMaterialTest, RejectsOutOfBoundsShaderDataMapping)
     Parameter.Name = "Value";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
@@ -686,7 +797,7 @@ TEST(RadientMaterialTest, RejectsOverlappingShaderDataMappings)
     Parameters[1].Name = "Second";
     Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
 
@@ -695,7 +806,73 @@ TEST(RadientMaterialTest, RejectsOverlappingShaderDataMappings)
         {1, 12},
     }};
     ExpectInvalidShaderDataLayout(DefinitionDesc, {20, Mappings.data(), static_cast<Uint32>(Mappings.size())},
-                                  "mappings 0 and 1 overlap");
+                                  "parameter 'First' and parameter 'Second' overlap");
+}
+
+TEST(RadientMaterialTest, RejectsShaderParameterOverlappingTextureAtlasData)
+{
+    std::array<RadientMaterialParameterDesc, 5> Parameters{};
+    Parameters[0].Name = "Texture";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name = "UVSelector";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_INT;
+    Parameters[2].Name = "WrapU";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[3].Name = "WrapV";
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[4].Name = "Value";
+    Parameters[4].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    const RadientMaterialShaderParameterPacking Mapping{
+        4,
+        static_cast<Uint32>(offsetof(GLTF::Material::TextureShaderAttribs, AtlasUVScaleAndBias))};
+    const RadientMaterialShaderTexturePacking TexturePacking{0, 1, 2, 3, 0};
+
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.pMappings           = &Mapping;
+    ShaderDataLayout.MappingCount        = 1;
+    ShaderDataLayout.pTexturePackings    = &TexturePacking;
+    ShaderDataLayout.TexturePackingCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "parameter 'Value' and texture parameter 'Texture' atlas data overlap");
+}
+
+TEST(RadientMaterialTest, RejectsOverlappingShaderTexturePackings)
+{
+    std::array<RadientMaterialParameterDesc, 5> Parameters{};
+    Parameters[0].Name = "TextureA";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name = "TextureB";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[2].Name = "UVSelector";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_INT;
+    Parameters[3].Name = "WrapU";
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[4].Name = "WrapV";
+    Parameters[4].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    const std::array<RadientMaterialShaderTexturePacking, 2> TexturePackings{{
+        {0, 2, 3, 4, 0},
+        {1, 2, 3, 4, 0},
+    }};
+
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.pTexturePackings    = TexturePackings.data();
+    ShaderDataLayout.TexturePackingCount = static_cast<Uint32>(TexturePackings.size());
+    ExpectInvalidShaderDataLayout(
+        DefinitionDesc,
+        ShaderDataLayout,
+        "texture parameter 'TextureA' packed properties and texture parameter 'TextureB' packed properties overlap");
 }
 
 TEST(RadientMaterialTest, AssetManagerReportsDefinitionStatus)
@@ -703,7 +880,7 @@ TEST(RadientMaterialTest, AssetManagerReportsDefinitionStatus)
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientMaterialDefinitionDesc             DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc      DefinitionDesc{};
     RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
@@ -1464,11 +1641,11 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
 
     EXPECT_EQ(CreateDefinition(pDefinition->GetDesc(), nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    RadientMaterialDefinitionDesc InvalidDefinitionDesc{};
-    InvalidDefinitionDesc.Domain                  = RADIENT_MATERIAL_DOMAIN_COUNT;
+    RadientComputeMaterialDefinitionDesc InvalidDefinitionDesc{};
+    InvalidDefinitionDesc.Type                    = RADIENT_MATERIAL_DEFINITION_TYPE_COUNT;
     IRadientMaterialDefinition* pDefinitionOutput = pDefinition;
     {
-        TestingEnvironment::ErrorScope ExpectedErrors{"Invalid material definition domain"};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Invalid material definition type"};
         EXPECT_EQ(CreateDefinition(InvalidDefinitionDesc, &pDefinitionOutput), RADIENT_STATUS_INVALID_ARGUMENT);
     }
     EXPECT_EQ(pDefinitionOutput, nullptr);
@@ -1677,16 +1854,159 @@ TEST(RadientMaterialTest, WriterRetainsUncommittedTexture)
     EXPECT_EQ(WeakTexture.Lock(), nullptr);
 }
 
-TEST(RadientMaterialTest, RejectsInvalidDefinitionDomain)
+TEST(RadientMaterialTest, RejectsInvalidDefinitionType)
 {
-    RadientMaterialDefinitionDesc DefinitionDesc{};
-    DefinitionDesc.Domain = RADIENT_MATERIAL_DOMAIN_COUNT;
-    ExpectInvalidDefinition(DefinitionDesc, "Invalid material definition domain");
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Type = RADIENT_MATERIAL_DEFINITION_TYPE_COUNT;
+    ExpectInvalidDefinition(DefinitionDesc, "Invalid material definition type");
+}
+
+TEST(RadientMaterialTest, RejectsInvalidSurfaceShadingModel)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_COUNT;
+    ExpectInvalidDefinition(DefinitionDesc, "Invalid surface shading model");
+}
+
+TEST(RadientMaterialTest, RejectsUnsupportedSurfaceFeatures)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Features = static_cast<RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS>(
+        static_cast<Uint32>(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL) + 1u);
+    ExpectInvalidDefinition(DefinitionDesc, "Surface material feature flags contain unsupported bits");
+}
+
+TEST(RadientMaterialTest, RejectsFeaturesForUnlitSurface)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+    DefinitionDesc.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+    ExpectInvalidDefinition(DefinitionDesc,
+                            "Unlit surface materials do not support optional material features");
+}
+
+TEST(RadientMaterialTest, RejectsVolumeSurfaceWithoutTransmission)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME;
+    ExpectInvalidDefinition(DefinitionDesc,
+                            "The volume surface feature requires the transmission surface feature");
+}
+
+TEST(RadientMaterialTest, RejectsSurfaceModePackingForNonSurfaceDefinition)
+{
+    RadientComputeMaterialDefinitionDesc         DefinitionDesc{};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Uint32));
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "Only surface material definitions may pack a surface mode");
+}
+
+TEST(RadientMaterialTest, RejectsOutOfBoundsSurfaceModePacking)
+{
+    RadientSurfaceMaterialDefinitionDesc         DefinitionDesc{};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Uint32) - 1);
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "surface mode byte range exceeds the shader data size");
+}
+
+TEST(RadientMaterialTest, RejectsAlphaCutoffPackingForNonSurfaceDefinition)
+{
+    RadientComputeMaterialDefinitionDesc         DefinitionDesc{};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.AlphaCutoffOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Float32));
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "Only surface material definitions may pack an alpha cutoff");
+}
+
+TEST(RadientMaterialTest, RejectsOutOfBoundsAlphaCutoffPacking)
+{
+    RadientSurfaceMaterialDefinitionDesc         DefinitionDesc{};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.AlphaCutoffOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Float32) - 1);
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "alpha cutoff byte range exceeds the shader data size");
+}
+
+TEST(RadientMaterialTest, RejectsOverlappingSurfaceStatePacking)
+{
+    RadientSurfaceMaterialDefinitionDesc         DefinitionDesc{};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = 0;
+    SurfacePacking.AlphaCutoffOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Uint32));
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "surface mode and alpha cutoff overlap");
+}
+
+TEST(RadientMaterialTest, RejectsShaderParameterOverlappingSurfaceMode)
+{
+    const Float32 DefaultValue = 1.f;
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.pDefaultValue = &DefaultValue;
+
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    const RadientMaterialShaderParameterPacking  Mapping{0, 0};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Uint32));
+    ShaderDataLayout.pMappings       = &Mapping;
+    ShaderDataLayout.MappingCount    = 1;
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "surface mode and parameter 'Value' overlap");
+}
+
+TEST(RadientMaterialTest, RejectsShaderParameterOverlappingAlphaCutoff)
+{
+    const Float32 DefaultValue = 1.f;
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.pDefaultValue = &DefaultValue;
+
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    const RadientMaterialShaderParameterPacking  Mapping{0, 0};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.AlphaCutoffOffset = 0;
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = static_cast<Uint32>(sizeof(Float32));
+    ShaderDataLayout.pMappings       = &Mapping;
+    ShaderDataLayout.MappingCount    = 1;
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "alpha cutoff and parameter 'Value' overlap");
 }
 
 TEST(RadientMaterialTest, RejectsMissingDefinitionParameterArray)
 {
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "parameters, but pParameters is null");
 }
@@ -1696,7 +2016,7 @@ TEST(RadientMaterialTest, RejectsNullMaterialParameterName)
     RadientMaterialParameterDesc Parameter{};
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Material parameter 0 name must not be null");
@@ -1708,7 +2028,7 @@ TEST(RadientMaterialTest, RejectsEmptyMaterialParameterName)
     Parameter.Name = "";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Material parameter 0 name must not be empty");
@@ -1719,7 +2039,7 @@ TEST(RadientMaterialTest, RejectsInvalidMaterialParameterType)
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name = "InvalidType";
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
@@ -1737,7 +2057,7 @@ TEST(RadientMaterialTest, RejectsZeroMaterialParameterArraySize)
     Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.ArraySize = 0;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'ZeroArraySize' array size must not be zero");
@@ -1750,7 +2070,7 @@ TEST(RadientMaterialTest, RejectsMaterialParameterDataSizeOverflow)
     Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4;
     Parameter.ArraySize = std::numeric_limits<Uint32>::max();
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Material parameter 'OversizedArray' data size exceeds the supported limit");
@@ -1765,7 +2085,7 @@ TEST(RadientMaterialTest, RejectsTextureMaterialParameterDefaultValue)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameter.pDefaultValue = &DefaultValue;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Texture material parameter 'Texture' must use pDefaultTexture instead of pDefaultValue");
@@ -1781,7 +2101,7 @@ TEST(RadientMaterialTest, RejectsTextureArrayDefaultTexture)
     Parameter.ArraySize       = 2;
     Parameter.pDefaultTexture = pTexture;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Texture array material parameter 'TextureArray' must not specify pDefaultTexture");
@@ -1796,7 +2116,7 @@ TEST(RadientMaterialTest, RejectsNonTextureMaterialParameterDefaultTexture)
     Parameter.Type            = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultTexture = pTexture;
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
     ExpectInvalidDefinition(DefinitionDesc, "Non-texture material parameter 'Value' must not specify pDefaultTexture");
@@ -1809,7 +2129,7 @@ TEST(RadientMaterialTest, RejectsDuplicateMaterialParameterNames)
     Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[1]      = Parameters[0];
 
-    RadientMaterialDefinitionDesc DefinitionDesc{};
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
     ExpectInvalidDefinition(DefinitionDesc, "Material parameter 1 name 'Duplicate' duplicates parameter 0");

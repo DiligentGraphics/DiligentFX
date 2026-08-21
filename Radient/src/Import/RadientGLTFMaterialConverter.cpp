@@ -40,14 +40,14 @@ namespace
 
 struct StandardMaterialTextureSemantic
 {
-    Uint32                                  TextureAttribId;
-    RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS RequiredFeature;
-    const char*                             TextureParameterName;
-    const char*                             UVSelectorParameterName;
-    const char*                             UVScaleAndRotationParameterName;
-    const char*                             UVBiasParameterName;
-    const char*                             WrapUParameterName;
-    const char*                             WrapVParameterName;
+    Uint32                                 TextureAttribId;
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS RequiredFeature;
+    const char*                            TextureParameterName;
+    const char*                            UVSelectorParameterName;
+    const char*                            UVScaleAndRotationParameterName;
+    const char*                            UVBiasParameterName;
+    const char*                            WrapUParameterName;
+    const char*                            WrapVParameterName;
 };
 
 #define SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, GLTFName, Name, FeatureFlag)    \
@@ -66,21 +66,21 @@ constexpr auto MakeStandardMaterialTextureSemantics() noexcept
 {
     std::array<StandardMaterialTextureSemantic, GLTF::DefaultThicknessTextureAttribId + 1> Semantics{};
 
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, BaseColor, BaseColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, MetallicRoughness, MetallicRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Normal, Normal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Occlusion, Occlusion, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Emissive, Emissive, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Clearcoat, ClearCoat, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatRoughness, ClearCoatRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatNormal, ClearCoatNormal, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenColor, SheenColor, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenRoughness, SheenRoughness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Anisotropy, Anisotropy, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Iridescence, Iridescence, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, IridescenceThickness, IridescenceThickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Transmission, Transmission, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION);
-    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Thickness, Thickness, RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, BaseColor, BaseColor, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, MetallicRoughness, MetallicRoughness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Normal, Normal, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Occlusion, Occlusion, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Emissive, Emissive, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Clearcoat, ClearCoat, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatRoughness, ClearCoatRoughness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatNormal, ClearCoatNormal, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenColor, SheenColor, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenRoughness, SheenRoughness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Anisotropy, Anisotropy, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Iridescence, Iridescence, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, IridescenceThickness, IridescenceThickness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Transmission, Transmission, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Thickness, Thickness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME);
 
     return Semantics;
 }
@@ -104,11 +104,11 @@ static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP) ==
 static_assert(static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP) == static_cast<Uint32>(TEXTURE_ADDRESS_CLAMP));
 
 
-bool HasFeature(RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Features,
-                RADIENT_STANDARD_MATERIAL_FEATURE_FLAGS Feature) noexcept
+bool HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features,
+                RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Feature) noexcept
 {
-    return Feature == RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_NONE ||
-        (static_cast<Uint32>(Features) & static_cast<Uint32>(Feature)) != 0;
+    return Feature == RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE ||
+        (Features & Feature) != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
 }
 
 RADIENT_STATUS SetParameter(IRadientMaterialDefinition&     Definition,
@@ -192,11 +192,11 @@ RADIENT_STATUS ConvertMaterialDefinition(
     switch (Material.Attribs.Workflow)
     {
         case GLTF::Material::PBR_WORKFLOW_METALL_ROUGH:
-            DefinitionCI.Model = RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS;
+            DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS;
             break;
 
         case GLTF::Material::PBR_WORKFLOW_UNLIT:
-            DefinitionCI.Model = RADIENT_STANDARD_MATERIAL_MODEL_UNLIT;
+            DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
             break;
 
         case GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS:
@@ -206,24 +206,24 @@ RADIENT_STATUS ConvertMaterialDefinition(
             return RADIENT_STATUS_INVALID_DATA;
     }
 
-    if (DefinitionCI.Model == RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS)
+    if (DefinitionCI.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
     {
         if (Material.HasClearcoat)
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
         if (Material.Sheen)
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_SHEEN;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN;
         if (Material.Anisotropy)
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_ANISOTROPY;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY;
         if (Material.Iridescence)
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_IRIDESCENCE;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE;
         if (Material.Transmission)
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION;
         if (Material.Volume)
         {
             // Volume is defined on transmitted light, so its schema includes
             // transmission even if malformed source data omitted that extension.
-            DefinitionCI.Features |= RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_TRANSMISSION |
-                RADIENT_STANDARD_MATERIAL_FEATURE_FLAG_VOLUME;
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION |
+                RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME;
         }
     }
 
@@ -251,9 +251,23 @@ RADIENT_STATUS PopulateMaterialInstance(
         return RADIENT_STATUS_INVALID_DATA;
     }
 
-    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_OPAQUE) == RADIENT_STANDARD_MATERIAL_ALPHA_MODE_OPAQUE);
-    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_MASK) == RADIENT_STANDARD_MATERIAL_ALPHA_MODE_MASK);
-    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_BLEND) == RADIENT_STANDARD_MATERIAL_ALPHA_MODE_BLEND);
+    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_OPAQUE) == RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_MASK) == RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_BLEND) == RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+        &Writer, IID_RadientSurfaceMaterialInstanceWriter};
+    if (!pSurfaceWriter)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    Status = pSurfaceWriter->SetSurfaceMode(
+        static_cast<RADIENT_MATERIAL_SURFACE_MODE>(Material.Attribs.AlphaMode));
+    if (RADIENT_SUCCEEDED(Status))
+        Status = pSurfaceWriter->SetAlphaCutoff(Material.Attribs.AlphaCutoff);
+    if (RADIENT_SUCCEEDED(Status))
+        Status = pSurfaceWriter->SetDoubleSided(Material.DoubleSided ? True : False);
+    if (RADIENT_FAILED(Status))
+        return Status;
 
     auto SetMaterialParameter =
         [&](const char* Name, const auto& Value) //
@@ -268,15 +282,9 @@ RADIENT_STATUS PopulateMaterialInstance(
         Material.Attribs.BaseColorFactor.z,
         Material.Attribs.BaseColorFactor.w,
     };
-    const Uint32 AlphaMode   = static_cast<Uint32>(Material.Attribs.AlphaMode);
-    const Bool   DoubleSided = Material.DoubleSided ? True : False;
-
     SetMaterialParameter(RadientStandardMaterialBaseColorFactorName, BaseColorFactor);
-    SetMaterialParameter(RadientStandardMaterialAlphaModeName, AlphaMode);
-    SetMaterialParameter(RadientStandardMaterialAlphaCutoffName, Material.Attribs.AlphaCutoff);
-    SetMaterialParameter(RadientStandardMaterialDoubleSidedName, DoubleSided);
 
-    if (DefinitionCI.Model == RADIENT_STANDARD_MATERIAL_MODEL_METALLIC_ROUGHNESS)
+    if (DefinitionCI.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
     {
         const RadientFloat3 EmissiveFactor{
             Material.Attribs.EmissiveFactor.x,
@@ -341,7 +349,7 @@ RADIENT_STATUS PopulateMaterialInstance(
 
     for (const StandardMaterialTextureSemantic& Semantic : StandardMaterialTextureSemantics)
     {
-        if (DefinitionCI.Model == RADIENT_STANDARD_MATERIAL_MODEL_UNLIT &&
+        if (DefinitionCI.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT &&
             Semantic.TextureAttribId != GLTF::DefaultBaseColorTextureAttribId)
         {
             continue;

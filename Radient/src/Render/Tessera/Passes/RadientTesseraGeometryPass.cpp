@@ -88,12 +88,12 @@ RADIENT_STATUS GetPipelineStatus(IPipelineState* pPSO)
     }
 }
 
-PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
+PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMode)
 {
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_OPAQUE) == PBR_Renderer::ALPHA_MODE_OPAQUE, "GLTF opaque alpha mode must match PBR alpha mode");
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_MASK) == PBR_Renderer::ALPHA_MODE_MASK, "GLTF mask alpha mode must match PBR alpha mode");
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_BLEND) == PBR_Renderer::ALPHA_MODE_BLEND, "GLTF blend alpha mode must match PBR alpha mode");
-    return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE) == PBR_Renderer::ALPHA_MODE_OPAQUE, "Radient opaque surface mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(RADIENT_MATERIAL_SURFACE_MODE_MASKED) == PBR_Renderer::ALPHA_MODE_MASK, "Radient masked surface mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT) == PBR_Renderer::ALPHA_MODE_BLEND, "Radient transparent surface mode must match PBR alpha mode");
+    return static_cast<PBR_Renderer::ALPHA_MODE>(SurfaceMode);
 }
 
 void BindVertexPool(IVertexPool&    VertexPool,
@@ -637,13 +637,14 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         return;
     }
 
-    const GLTF::Material&            Material  = *MaterialData.pMaterial;
-    const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
-    if (AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+    const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = TesseraMaterialData.GetSurfaceMode();
+    if (SurfaceMode >= RADIENT_MATERIAL_SURFACE_MODE_COUNT)
     {
-        UNEXPECTED("Material has an invalid alpha mode");
+        UNEXPECTED("Material has an invalid surface mode");
         return;
     }
+    const GLTF::Material::ALPHA_MODE AlphaMode =
+        static_cast<GLTF::Material::ALPHA_MODE>(SurfaceMode);
 
     PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
     PSOFlags |=
@@ -671,8 +672,8 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     const PBR_Renderer::PSOKey PsoKey{
         PBR_Renderer::RenderPassType::Main,
         PSOFlags,
-        ToPBRAlphaMode(AlphaMode),
-        Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
+        ToPBRAlphaMode(SurfaceMode),
+        TesseraMaterialData.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK,
         m_DebugView,
         PBR_Renderer::LoadingAnimationMode::None,
         0,
