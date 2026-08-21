@@ -33,6 +33,7 @@
 #include "GLTF_PBR_Renderer.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
@@ -304,6 +305,70 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     RefCntAutoPtr<IRadientMaterialDefinition> pDifferentDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDifferentDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_NE(pFirstDefinition, pDifferentDefinition);
+}
+
+TEST(RadientStandardMaterialTest, InstancesUseDefinitionTextureDefaults)
+{
+    RefCntAutoPtr<IRadientTextureAsset> pWhite        = MakeTestTextureAsset("texture://white");
+    RefCntAutoPtr<IRadientTextureAsset> pBlack        = MakeTestTextureAsset("texture://black");
+    RefCntAutoPtr<IRadientTextureAsset> pNormal       = MakeTestTextureAsset("texture://normal");
+    RefCntAutoPtr<IRadientTextureAsset> pPhysicalDesc = MakeTestTextureAsset("texture://physical-desc");
+
+    RadientMaterialAssetManager::CreateInfo ManagerCI;
+    ManagerCI.DefaultTextures.pWhite        = pWhite;
+    ManagerCI.DefaultTextures.pBlack        = pBlack;
+    ManagerCI.DefaultTextures.pNormal       = pNormal;
+    ManagerCI.DefaultTextures.pPhysicalDesc = pPhysicalDesc;
+
+    const RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create(ManagerCI);
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    struct ExpectedTextureDefault
+    {
+        const char*           Name;
+        IRadientTextureAsset* pTexture;
+    };
+
+    const std::array<ExpectedTextureDefault, 15> ExpectedDefaults{{
+        {RadientStandardMaterialBaseColorTextureName, pWhite},
+        {RadientStandardMaterialMetallicRoughnessTextureName, pPhysicalDesc},
+        {RadientStandardMaterialNormalTextureName, pNormal},
+        {RadientStandardMaterialOcclusionTextureName, pWhite},
+        {RadientStandardMaterialEmissiveTextureName, pBlack},
+        {RadientStandardMaterialClearCoatTextureName, pWhite},
+        {RadientStandardMaterialClearCoatRoughnessTextureName, pWhite},
+        {RadientStandardMaterialClearCoatNormalTextureName, pNormal},
+        {RadientStandardMaterialSheenColorTextureName, pWhite},
+        {RadientStandardMaterialSheenRoughnessTextureName, pWhite},
+        {RadientStandardMaterialAnisotropyTextureName, pWhite},
+        {RadientStandardMaterialIridescenceTextureName, pWhite},
+        {RadientStandardMaterialIridescenceThicknessTextureName, pWhite},
+        {RadientStandardMaterialTransmissionTextureName, pWhite},
+        {RadientStandardMaterialThicknessTextureName, pWhite},
+    }};
+
+    for (const ExpectedTextureDefault& Expected : ExpectedDefaults)
+    {
+        RadientMaterialParameterHandle Handle;
+        ASSERT_EQ(pDefinition->FindParameter(Expected.Name, &Handle), RADIENT_STATUS_OK) << Expected.Name;
+        EXPECT_EQ(pDefinition->GetParameterDesc(Handle.Index).pDefaultTexture, Expected.pTexture) << Expected.Name;
+
+        RefCntAutoPtr<IRadientTextureAsset> pInstanceTexture;
+        ASSERT_EQ(pInstance->GetTexture(Handle, 0, pInstanceTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK) << Expected.Name;
+        EXPECT_EQ(pInstanceTexture, Expected.pTexture) << Expected.Name;
+    }
 }
 
 TEST(RadientStandardMaterialTest, ExtendedPBRShaderDataMatchesGLTFPacking)

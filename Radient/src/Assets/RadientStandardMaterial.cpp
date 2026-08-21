@@ -158,6 +158,7 @@ Uint32 AddStandardMaterialValueParameter(std::vector<RadientMaterialParameterDes
 
 StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     std::vector<RadientMaterialParameterDesc>& Parameters,
+    IRadientTextureAsset*                      pDefaultTexture,
     const Char*                                TextureName,
     const Char*                                UVSelectorName,
     const Char*                                UVScaleAndRotationName,
@@ -170,6 +171,7 @@ StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     RadientMaterialParameterDesc& Desc = Parameters.emplace_back();
     Desc.Name                          = TextureName;
     Desc.Type                          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Desc.pDefaultTexture               = pDefaultTexture;
 
     static constexpr Int32                                 DefaultUVSelector           = -1;
     static constexpr Float32                               DefaultUVScaleAndRotation[] = {1.f, 0.f, 0.f, 1.f};
@@ -189,7 +191,8 @@ StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     return Indices;
 }
 
-StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandardMaterialDefinitionCreateInfo& CreateInfo)
+StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandardMaterialDefinitionCreateInfo& CreateInfo,
+                                                           const RadientMaterialDefaultTextures&              DefaultTextures)
 {
     static constexpr RadientFloat4 DefaultBaseColor{1.f, 1.f, 1.f, 1.f};
     static constexpr RadientFloat3 DefaultEmissive{0.f, 0.f, 0.f};
@@ -258,9 +261,10 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
         }
     }
 
-#define ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PBRName, Name)                                            \
+#define ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PBRName, Name, DefaultTexture)                            \
     Result.TextureIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_##PBRName] =                                     \
         AddStandardMaterialTextureParameters(Parameters,                                                   \
+                                             DefaultTextures.DefaultTexture,                               \
                                              RadientStandardMaterial##Name##TextureName,                   \
                                              RadientStandardMaterial##Name##TextureUVSelectorName,         \
                                              RadientStandardMaterial##Name##TextureUVScaleAndRotationName, \
@@ -268,36 +272,36 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
                                              RadientStandardMaterial##Name##TextureWrapUName,              \
                                              RadientStandardMaterial##Name##TextureWrapVName)
 
-    ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, BaseColor);
+    ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, BaseColor, pWhite);
     if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
     {
-        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PHYS_DESC, MetallicRoughness);
-        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(NORMAL, Normal);
-        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(OCCLUSION, Occlusion);
-        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(EMISSIVE, Emissive);
+        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PHYS_DESC, MetallicRoughness, pPhysicalDesc);
+        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(NORMAL, Normal, pNormal);
+        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(OCCLUSION, Occlusion, pWhite);
+        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(EMISSIVE, Emissive, pBlack);
 
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
         {
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT, ClearCoat);
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT_ROUGHNESS, ClearCoatRoughness);
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT_NORMAL, ClearCoatNormal);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT, ClearCoat, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT_ROUGHNESS, ClearCoatRoughness, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT_NORMAL, ClearCoatNormal, pNormal);
         }
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN))
         {
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_COLOR, SheenColor);
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_ROUGHNESS, SheenRoughness);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_COLOR, SheenColor, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_ROUGHNESS, SheenRoughness, pWhite);
         }
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(ANISOTROPY, Anisotropy);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(ANISOTROPY, Anisotropy, pWhite);
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
         {
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(IRIDESCENCE, Iridescence);
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(IRIDESCENCE_THICKNESS, IridescenceThickness);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(IRIDESCENCE, Iridescence, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(IRIDESCENCE_THICKNESS, IridescenceThickness, pWhite);
         }
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION))
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(TRANSMISSION, Transmission);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(TRANSMISSION, Transmission, pWhite);
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME))
-            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(THICKNESS, Thickness);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(THICKNESS, Thickness, pWhite);
     }
 
 #undef ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS
@@ -521,7 +525,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(con
                                              CacheKey.c_str(),
                                              [&]() -> RefCntAutoPtr<IRadientMaterialDefinition> {
                                                  const StandardMaterialParameters ParameterData =
-                                                     BuildStandardMaterialParameters(DefinitionCI);
+                                                     BuildStandardMaterialParameters(DefinitionCI, m_DefaultTextures);
                                                  const StandardMaterialShaderDataLayout ShaderDataLayout =
                                                      BuildStandardMaterialShaderDataLayout(DefinitionCI, ParameterData);
                                                  const std::string DefinitionName = "Radient " + CacheKey;
