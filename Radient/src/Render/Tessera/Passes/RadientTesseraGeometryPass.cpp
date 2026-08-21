@@ -190,7 +190,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                                                    IRenderDevice*                     pDevice,
                                                    IDeviceContext*                    pContext,
                                                    IShaderResourceBinding*            pFrameSRB,
-                                                   GLTF::Material::ALPHA_MODE         AlphaMode,
+                                                   PBR_Renderer::ALPHA_MODE           AlphaMode,
                                                    const RadientTesseraDrawableCache& DrawableCache,
                                                    const RadientFrameRenderTargets&   Targets,
                                                    RadientTesseraFrameHistory&        FrameHistory)
@@ -198,7 +198,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    if (AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+    if (AlphaMode >= PBR_Renderer::ALPHA_MODE_NUM_MODES)
     {
         UNEXPECTED("Invalid material alpha mode");
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -575,14 +575,14 @@ void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRend
             Batches.clear();
         m_DrawablePassData.clear();
 
-        const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
+        const std::array<PBR_Renderer::ALPHA_MODE, 3> AlphaModes =
             {
-                GLTF::Material::ALPHA_MODE_OPAQUE,
-                GLTF::Material::ALPHA_MODE_MASK,
-                GLTF::Material::ALPHA_MODE_BLEND,
+                PBR_Renderer::ALPHA_MODE_OPAQUE,
+                PBR_Renderer::ALPHA_MODE_MASK,
+                PBR_Renderer::ALPHA_MODE_BLEND,
             };
 
-        for (const GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+        for (const PBR_Renderer::ALPHA_MODE AlphaMode : AlphaModes)
         {
             for (const RadientDrawItem& DrawItem : DrawableCache.GetDrawList(AlphaMode).GetItems())
             {
@@ -643,8 +643,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         UNEXPECTED("Material has an invalid surface mode");
         return;
     }
-    const GLTF::Material::ALPHA_MODE AlphaMode =
-        static_cast<GLTF::Material::ALPHA_MODE>(SurfaceMode);
+    const PBR_Renderer::ALPHA_MODE AlphaMode = ToPBRAlphaMode(SurfaceMode);
 
     PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
     PSOFlags |=
@@ -672,7 +671,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     const PBR_Renderer::PSOKey PsoKey{
         PBR_Renderer::RenderPassType::Main,
         PSOFlags,
-        ToPBRAlphaMode(SurfaceMode),
+        AlphaMode,
         TesseraMaterialData.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK,
         m_DebugView,
         PBR_Renderer::LoadingAnimationMode::None,
@@ -753,8 +752,8 @@ void RadientTesseraGeometryPass::InvalidateDrawablePassData(RadientDrawableID Dr
         DrawablePassData& PassData = m_DrawablePassData[DrawableID];
         if (PassData.BatchItemIndex != InvalidBatchItemIndex)
         {
-            VERIFY(PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES, "Drawable has an invalid alpha mode");
-            if (PassData.AlphaMode < GLTF::Material::ALPHA_MODE_NUM_MODES)
+            VERIFY(PassData.AlphaMode < PBR_Renderer::ALPHA_MODE_NUM_MODES, "Drawable has an invalid alpha mode");
+            if (PassData.AlphaMode < PBR_Renderer::ALPHA_MODE_NUM_MODES)
             {
                 OrderedDrawableBatchMap& Batches = m_DrawableBatches[PassData.AlphaMode];
                 const auto               It      = Batches.find(PassData.BatchKey);

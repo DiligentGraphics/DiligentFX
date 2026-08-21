@@ -75,9 +75,9 @@ struct RadientDrawableSlot
 
     RadientEntityID Entity = InvalidRadientEntityID;
 
-    Uint32 Generation = 0;
-    bool   IsIndexed  = false;
-    Uint8  AlphaMode  = GLTF::Material::ALPHA_MODE_OPAQUE;
+    Uint32                   Generation = 0;
+    bool                     IsIndexed  = false;
+    PBR_Renderer::ALPHA_MODE AlphaMode  = PBR_Renderer::ALPHA_MODE_OPAQUE;
 
     const RadientMeshRendererComponent* pRenderer         = nullptr;
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
@@ -198,7 +198,7 @@ public:
         return m_DrawLists;
     }
 
-    const RadientDrawList& GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
+    const RadientDrawList& GetDrawList(PBR_Renderer::ALPHA_MODE AlphaMode) const
     {
         return m_DrawLists.GetDrawList(AlphaMode);
     }

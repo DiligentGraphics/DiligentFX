@@ -368,7 +368,7 @@ bool DrawableSlotMatchesPrimitive(const RadientDrawableSlot& Slot,
         Slot.IsValid() &&
         Slot.IsInDrawList() &&
         Slot.IsIndexed == IsIndexed &&
-        Slot.AlphaMode == static_cast<Uint8>(AlphaMode) &&
+        Slot.AlphaMode == static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode) &&
         Slot.pMaterial == &Material &&
         Slot.VertexAttribFlags == VertexAttribFlags &&
         Slot.FirstIndexLocation == FirstIndexLocation &&
@@ -385,7 +385,8 @@ void ExpectDrawListMatchesPrimitives(const RadientTesseraDrawableCache&  Cache,
                                      Uint32                              FirstIndexLocation = 7,
                                      Uint32                              BaseVertex         = 3)
 {
-    const RadientDrawList::ItemListType& Items = Cache.GetDrawList(AlphaMode).GetItems();
+    const RadientDrawList::ItemListType& Items =
+        Cache.GetDrawList(static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode)).GetItems();
 
     struct ExpectedDrawable
     {
@@ -449,7 +450,8 @@ void ExpectDrawListsForEntities(const RadientTesseraDrawableCache&  Cache,
 
 const RadientDrawableSlot* GetFirstDrawableSlot(const RadientTesseraDrawableCache& Cache)
 {
-    const RadientDrawList::ItemListType& Items = Cache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();
+    const RadientDrawList::ItemListType& Items =
+        Cache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItems();
     EXPECT_FALSE(Items.empty());
     if (Items.empty())
         return nullptr;
@@ -461,7 +463,8 @@ const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientTesseraDr
                                                           GLTF::Material::ALPHA_MODE         AlphaMode,
                                                           Uint32                             FirstElement)
 {
-    const RadientDrawList::ItemListType& Items = Cache.GetDrawList(AlphaMode).GetItems();
+    const RadientDrawList::ItemListType& Items =
+        Cache.GetDrawList(static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode)).GetItems();
     for (const RadientDrawItem& Item : Items)
     {
         const RadientDrawableSlot* pSlot = Cache.GetDrawableSlot(Item.DrawableID);
@@ -552,9 +555,9 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
     // The drawable cache should remain completely empty.
     EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
     EXPECT_TRUE(DrawableCache.GetLightList().IsEmpty());
 
     // The cache revision marker should match the empty scene.
@@ -586,9 +589,9 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
     EXPECT_EQ(DrawableCache.GetDrawableChanges().size(), 6u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 2u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 2u);
     EXPECT_FALSE(DrawableCache.GetDrawLists().IsEmpty());
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity}, GLTF::Material::ALPHA_MODE_OPAQUE);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity}, GLTF::Material::ALPHA_MODE_MASK);
@@ -612,9 +615,9 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.GetDrawableChanges().size(), 6u);
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
 
     for (const RadientDrawableChange& Change : DrawableCache.GetDrawableChanges())
         EXPECT_EQ(Change.Type, RadientDrawableChangeType::Removed);
@@ -713,17 +716,17 @@ TEST(RadientTesseraDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
 
-    const RadientDrawList::ItemListType& OpaqueItems = DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();
+    const RadientDrawList::ItemListType& OpaqueItems = DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItems();
     ASSERT_EQ(OpaqueItems.size(), 2u);
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
 
     for (const RadientDrawItem& Item : OpaqueItems)
     {
         const RadientDrawableSlot* pSlot = DrawableCache.GetDrawableSlot(Item.DrawableID);
         ASSERT_NE(pSlot, nullptr);
         EXPECT_EQ(pSlot->Entity, Entity);
-        EXPECT_EQ(pSlot->AlphaMode, GLTF::Material::ALPHA_MODE_OPAQUE);
+        EXPECT_EQ(pSlot->AlphaMode, PBR_Renderer::ALPHA_MODE_OPAQUE);
     }
 }
 
@@ -778,7 +781,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
 
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
-    ASSERT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
+    ASSERT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
 
     const RadientDrawableSlot* pGeometry0Slot =
         FindDrawableSlotByFirstElement(DrawableCache, GLTF::Material::ALPHA_MODE_OPAQUE, 0);
@@ -836,9 +839,9 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanFail)
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
     EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
 
     // Failed mesh resolution is not retried without a new scene-side change.
     MeshProvider.NumCalls = 0;
@@ -952,7 +955,7 @@ TEST(RadientTesseraDrawableCacheTest, MaterialProcessingDefersAndSharesDrawables
     EXPECT_FALSE(DrawableCache.HasPendingRenderables());
 
     const RadientDrawList::ItemListType& Items =
-        DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();
+        DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItems();
     ASSERT_EQ(Items.size(), 2u);
 
     const RadientDrawableSlot* pSlot0 = DrawableCache.GetDrawableSlot(Items[0].DrawableID);
@@ -1159,9 +1162,9 @@ TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntitie
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 2u);
     EXPECT_EQ(DrawableCache.GetDrawableChanges().size(), 12u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 4u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 4u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 4u);
 
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity0, Entity1}, GLTF::Material::ALPHA_MODE_OPAQUE);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity0, Entity1}, GLTF::Material::ALPHA_MODE_MASK);
@@ -1179,9 +1182,9 @@ TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntitie
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 0u);
     EXPECT_EQ(DrawableCache.GetDrawableChanges().size(), 6u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 2u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 2u);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity1}, GLTF::Material::ALPHA_MODE_OPAQUE);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity1}, GLTF::Material::ALPHA_MODE_MASK);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity1}, GLTF::Material::ALPHA_MODE_BLEND);
@@ -1200,9 +1203,9 @@ TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntitie
     EXPECT_EQ(MeshProvider.NumCalls, 0u);
     EXPECT_EQ(DrawableCache.GetDrawableChanges().size(), 6u);
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
 
     for (const RadientDrawableChange& Change : DrawableCache.GetDrawableChanges())
         EXPECT_EQ(Change.Type, RadientDrawableChangeType::Removed);
@@ -1364,9 +1367,9 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshO
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
     EXPECT_EQ(MeshProvider.pLastMesh, pMesh1);
     ExpectDrawableChangeCounts(DrawableCache, 4u, 0u, 0u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 1u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 2u);
     ExpectDrawListsForEntities(DrawableCache, AlternateModel, {Entity}, NewVertexAttribFlags, NewFirstIndexLocation, NewBaseVertex);
 }
 
@@ -1416,9 +1419,9 @@ TEST(RadientTesseraDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
     EXPECT_EQ(MeshProvider.pLastMesh, pMesh1);
     ExpectDrawableChangeCounts(DrawableCache, 4u, 6u, 0u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 1u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 2u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 2u);
     ExpectDrawListsForEntities(DrawableCache, AlternateModel, {Entity}, NewVertexAttribFlags, NewFirstIndexLocation, NewBaseVertex);
 }
 
@@ -1447,9 +1450,9 @@ TEST(RadientTesseraDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 1u);
     ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 1u);
-    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 1u);
+    EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
 }
 
@@ -1524,9 +1527,9 @@ TEST(RadientTesseraDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListInd
     EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(MeshProvider.NumCalls, 0u);
     ExpectDrawableChangeCounts(DrawableCache, 0u, 6u, 0u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItemCount(), 4u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).GetItemCount(), 4u);
-    EXPECT_EQ(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_OPAQUE).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 4u);
+    EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 4u);
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity0, Entity2});
 }
 

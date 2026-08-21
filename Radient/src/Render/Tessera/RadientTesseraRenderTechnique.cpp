@@ -262,7 +262,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
     const bool             HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
     RADIENT_STATUS         FrameStatus  = RADIENT_STATUS_OK;
 
-    const auto ExecuteGeometryPass = [&](GLTF::Material::ALPHA_MODE AlphaMode) {
+    const auto ExecuteGeometryPass = [&](PBR_Renderer::ALPHA_MODE AlphaMode) {
         const RADIENT_STATUS Status = SceneState.GeometryPass.Execute(
             m_GeometryRenderer,
             Context.pDevice,
@@ -280,8 +280,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
     {
         if (HasDrawables)
         {
-            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_OPAQUE);
-            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_MASK);
+            ExecuteGeometryPass(PBR_Renderer::ALPHA_MODE_OPAQUE);
+            ExecuteGeometryPass(PBR_Renderer::ALPHA_MODE_MASK);
         }
 
         if (HasSkybox)
@@ -337,7 +337,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
         }
 
         if (HasDrawables)
-            ExecuteGeometryPass(GLTF::Material::ALPHA_MODE_BLEND);
+            ExecuteGeometryPass(PBR_Renderer::ALPHA_MODE_BLEND);
     }
 
     const RADIENT_STATUS PostProcessStatus = ViewState.PostProcessPipeline.Execute(

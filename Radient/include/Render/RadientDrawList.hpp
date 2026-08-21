@@ -28,7 +28,7 @@
 
 #include "RadientScene.h"
 
-#include "GLTFLoader.hpp"
+#include "PBR_Renderer.hpp"
 
 #include <array>
 #include <vector>
@@ -110,27 +110,27 @@ class RadientDrawLists
 public:
     void Clear();
 
-    size_t Add(GLTF::Material::ALPHA_MODE AlphaMode,
-               RadientDrawableID          DrawableID)
+    size_t Add(PBR_Renderer::ALPHA_MODE AlphaMode,
+               RadientDrawableID        DrawableID)
     {
         return m_DrawLists[AlphaMode].Add(DrawableID);
     }
 
-    RadientDrawableID RemoveAt(GLTF::Material::ALPHA_MODE AlphaMode,
-                               size_t                     Index)
+    RadientDrawableID RemoveAt(PBR_Renderer::ALPHA_MODE AlphaMode,
+                               size_t                   Index)
     {
         return m_DrawLists[AlphaMode].RemoveAt(Index);
     }
 
     bool IsEmpty() const;
 
-    const RadientDrawList& GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
+    const RadientDrawList& GetDrawList(PBR_Renderer::ALPHA_MODE AlphaMode) const
     {
         return m_DrawLists[AlphaMode];
     }
 
 private:
-    std::array<RadientDrawList, GLTF::Material::ALPHA_MODE_NUM_MODES> m_DrawLists;
+    std::array<RadientDrawList, PBR_Renderer::ALPHA_MODE_NUM_MODES> m_DrawLists;
 };
 
 } // namespace Diligent

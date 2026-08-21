@@ -31,7 +31,6 @@
 #include "Render/RadientPBRRenderer.hpp"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 
-#include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "UniqueIdentifier.hpp"
 
@@ -71,7 +70,7 @@ public:
                            IRenderDevice*                     pDevice,
                            IDeviceContext*                    pContext,
                            IShaderResourceBinding*            pFrameSRB,
-                           GLTF::Material::ALPHA_MODE         AlphaMode,
+                           PBR_Renderer::ALPHA_MODE           AlphaMode,
                            const RadientTesseraDrawableCache& DrawableCache,
                            const RadientFrameRenderTargets&   Targets,
                            RadientTesseraFrameHistory&        FrameHistory);
@@ -129,9 +128,9 @@ private:
 
     struct DrawablePassData
     {
-        GLTF::Material::ALPHA_MODE AlphaMode = GLTF::Material::ALPHA_MODE_NUM_MODES;
-        DrawableBatchKey           BatchKey;
-        Uint32                     BatchItemIndex = InvalidBatchItemIndex;
+        PBR_Renderer::ALPHA_MODE AlphaMode = PBR_Renderer::ALPHA_MODE_NUM_MODES;
+        DrawableBatchKey         BatchKey;
+        Uint32                   BatchItemIndex = InvalidBatchItemIndex;
     };
 
     struct PendingDraw
@@ -176,10 +175,10 @@ private:
 
     // Incremental drawable changes only move affected records between batches.
     // Execute traverses each compact drawable vector without sorting every frame.
-    std::array<OrderedDrawableBatchMap, GLTF::Material::ALPHA_MODE_NUM_MODES> m_DrawableBatches;
-    std::vector<PendingDraw>                                                  m_PendingDraws;
-    std::vector<MultiDrawItem>                                                m_MultiDrawItems;
-    std::vector<MultiDrawIndexedItem>                                         m_MultiDrawIndexedItems;
+    std::array<OrderedDrawableBatchMap, PBR_Renderer::ALPHA_MODE_NUM_MODES> m_DrawableBatches;
+    std::vector<PendingDraw>                                                m_PendingDraws;
+    std::vector<MultiDrawItem>                                              m_MultiDrawItems;
+    std::vector<MultiDrawIndexedItem>                                       m_MultiDrawIndexedItems;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

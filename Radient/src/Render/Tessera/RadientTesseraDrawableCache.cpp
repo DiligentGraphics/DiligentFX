@@ -41,12 +41,16 @@ namespace Diligent
 namespace
 {
 
-Uint8 CorrectMaterialAlphaMode(int AlphaMode)
+PBR_Renderer::ALPHA_MODE CorrectMaterialAlphaMode(int AlphaMode)
 {
-    if (AlphaMode < GLTF::Material::ALPHA_MODE_OPAQUE || AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
-        AlphaMode = GLTF::Material::ALPHA_MODE_OPAQUE;
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_OPAQUE) == PBR_Renderer::ALPHA_MODE_OPAQUE, "GLTF opaque alpha mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_MASK) == PBR_Renderer::ALPHA_MODE_MASK, "GLTF masked alpha mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_BLEND) == PBR_Renderer::ALPHA_MODE_BLEND, "GLTF blended alpha mode must match PBR alpha mode");
 
-    return static_cast<Uint8>(AlphaMode);
+    if (AlphaMode < GLTF::Material::ALPHA_MODE_OPAQUE || AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+        return PBR_Renderer::ALPHA_MODE_OPAQUE;
+
+    return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
 }
 
 class RadientAssetDrawableMeshProvider final : public IRadientDrawableMeshProvider
@@ -395,7 +399,7 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         Slot.ElementCount       = Primitive.ElementCount;
         Slot.AlphaMode          = CorrectMaterialAlphaMode(Primitive.pMaterial->Attribs.AlphaMode);
 
-        Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
+        Slot.DrawListIndex = m_DrawLists.Add(Slot.AlphaMode, DrawableID);
         Record.DrawableIDs.push_back(DrawableID);
         RecordDrawableChange(DrawableID, RadientDrawableChangeType::Added);
     }
@@ -438,7 +442,7 @@ void RadientTesseraDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
     VERIFY(Slot.IsInDrawList(), "Trying to free a drawable slot that is not in a draw list");
 
     // Remove the drawable from its draw list.
-    const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), Slot.DrawListIndex);
+    const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(Slot.AlphaMode, Slot.DrawListIndex);
     if (MovedDrawableID != InvalidRadientDrawableID && MovedDrawableID != DrawableID)
     {
         VERIFY(MovedDrawableID < m_DrawableSlots.size(), "Draw list returned invalid moved drawable ID");
