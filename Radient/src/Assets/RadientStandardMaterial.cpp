@@ -484,7 +484,11 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                 AddParameterPacking(Layout, TextureIndices.UVBias,
                                     Offset + offsetof(Material::TextureShaderAttribs, UBias));
                 Layout.TexturePackings.push_back(
-                    {TextureIndices.Texture, TextureIndices.UVSelector, TextureIndices.WrapU, TextureIndices.WrapV, Offset});
+                    {TextureIndices.Texture,
+                     TextureIndices.UVSelector,
+                     TextureIndices.WrapU,
+                     TextureIndices.WrapV,
+                     Offset});
             }
 
             Offset += sizeof(Material::TextureShaderAttribs);

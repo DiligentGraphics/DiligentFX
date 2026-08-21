@@ -629,15 +629,8 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         return;
     }
 
-    const RadientTesseraMaterialData& TesseraMaterialData = *Drawable.MaterialData;
-    const RadientMaterialRenderData&  MaterialData        = TesseraMaterialData.GetMaterialRenderData();
-    if (!MaterialData)
-    {
-        PassData = {};
-        return;
-    }
-
-    const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = TesseraMaterialData.GetSurfaceMode();
+    const RadientTesseraMaterialData&   TesseraMaterialData = *Drawable.MaterialData;
+    const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode         = TesseraMaterialData.GetSurfaceMode();
     if (SurfaceMode >= RADIENT_MATERIAL_SURFACE_MODE_COUNT)
     {
         UNEXPECTED("Material has an invalid surface mode");
