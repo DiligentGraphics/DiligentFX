@@ -28,7 +28,6 @@
 
 #include "RadientTypes.h"
 
-#include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
 
 #include <vector>
@@ -40,7 +39,6 @@ struct IRadientMaterialAsset;
 
 struct RadientDrawableMeshPrimitive
 {
-    const GLTF::Material*  pMaterial      = nullptr;
     IRadientMaterialAsset* pMaterialAsset = nullptr;
 
     Uint32 GeometryIndex = 0;

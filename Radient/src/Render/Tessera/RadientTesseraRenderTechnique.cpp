@@ -109,7 +109,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Sce
         *m_pThreadPool,
         m_GeometryRenderer.GetMaterialCache(),
     };
-    const RADIENT_STATUS Status = SceneState.DrawableCache.SyncScene(Scene, &MaterialResolveContext);
+    const RADIENT_STATUS Status = SceneState.DrawableCache.SyncScene(Scene, MaterialResolveContext);
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -332,6 +332,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
                                                                    SphereMapRow0IsNegativeY,
                                                                    Yaw,
                                                                    ViewState.FrameTargets);
+
                 FrameStatus = CombineDependencyStatus(FrameStatus, Status);
             }
         }

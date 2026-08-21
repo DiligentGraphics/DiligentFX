@@ -1232,8 +1232,6 @@ TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive
     ASSERT_NE(DrawableMesh.pMesh, nullptr);
     ASSERT_EQ(DrawableMesh.pMesh->Primitives.size(), 1u);
     EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].pMaterialAsset, pDefaultMaterial.RawPtr());
-    EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].pMaterial,
-              RadientMaterialAssetManager::GetRenderData(pDefaultMaterial).pMaterial);
 
     pThreadPool->StopThreads();
 }

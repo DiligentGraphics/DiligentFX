@@ -61,17 +61,14 @@ RADIENT_STATUS ConvertGLTFDrawableMeshPrimitives(const std::vector<GLTF::Primiti
 
     for (const GLTF::Primitive& Primitive : Primitives)
     {
+        if (Primitive.MaterialId >= Materials.size())
+            continue;
+
         const bool   IsIndexed    = Primitive.HasIndices();
         const Uint32 FirstElement = IsIndexed ? Primitive.FirstIndex : Primitive.FirstVertex;
         const Uint32 ElementCount = IsIndexed ? Primitive.IndexCount : Primitive.VertexCount;
 
-        const GLTF::Material* pMaterial =
-            Primitive.MaterialId < Materials.size() ?
-            &Materials[Primitive.MaterialId] :
-            nullptr;
-
         DrawablePrimitives.push_back(RadientDrawableMeshPrimitive{
-            pMaterial,
             nullptr,
             0,
             IsIndexed,

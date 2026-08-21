@@ -33,7 +33,6 @@
 #include "RadientScene.h"
 #include "Scene/RadientSceneState.hpp"
 
-#include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #ifdef _MSC_VER
@@ -85,7 +84,6 @@ struct RadientDrawableSlot
 
     // RenderableRecord::pMesh keeps the mesh payload alive. MaterialData keeps
     // the renderer-specific material state and its material asset alive.
-    const GLTF::Material*                      pMaterial = nullptr;
     RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
     IVertexPool* pVertexPool = nullptr;
@@ -191,7 +189,7 @@ public:
 
     RADIENT_STATUS SyncScene(
         const IRadientScene&                        Scene,
-        const RadientTesseraMaterialResolveContext* pMaterialResolveContext = nullptr);
+        const RadientTesseraMaterialResolveContext& MaterialResolveContext);
 
     const RadientDrawLists& GetDrawLists() const
     {
@@ -272,10 +270,10 @@ private:
 
     void ProcessRenderableMeshAddedOrUpdated(
         const RadientSceneState::RenderableMesh&    Mesh,
-        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
+        const RadientTesseraMaterialResolveContext& MaterialResolveContext);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
     void ResolvePendingRenderableMeshes(
-        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
+        const RadientTesseraMaterialResolveContext& MaterialResolveContext);
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
@@ -283,7 +281,7 @@ private:
     bool TryExpandRenderable(
         RadientEntityID                             Entity,
         RenderableRecord&                           Record,
-        const RadientTesseraMaterialResolveContext* pMaterialResolveContext);
+        const RadientTesseraMaterialResolveContext& MaterialResolveContext);
 
     RadientDrawableID AllocateDrawableID();
 

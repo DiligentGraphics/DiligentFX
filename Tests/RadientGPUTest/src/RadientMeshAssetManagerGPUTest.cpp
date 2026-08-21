@@ -207,7 +207,7 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pMesh, nullptr);
     ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
-    EXPECT_NE(Result.pMesh->Primitives[0].pMaterial, nullptr);
+    EXPECT_EQ(Result.pMesh->Primitives[0].pMaterialAsset, pMaterial);
 
     pThreadPool->StopThreads();
     StopThreadPool.pThreadPool = nullptr;

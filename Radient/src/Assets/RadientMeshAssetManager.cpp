@@ -399,9 +399,6 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
 
         Materials.emplace_back(pMaterialAsset);
         DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
-            // MeshStorage is constructed on a worker thread. Material render
-            // data must be resolved later by GetDrawableMesh() on the render thread.
-            nullptr,
             pMaterialAsset,
             GeometryIndex,
             true,
@@ -1400,24 +1397,6 @@ RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh)
     RADIENT_STATUS Status = GetMeshMaterialStatus(Mesh);
     if (Status != RADIENT_STATUS_OK)
         return Status;
-
-    // Once all material dependencies report OK, attach the final GLTF material
-    // pointers to the drawable primitives.
-    for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Materials.size(); ++PrimitiveIndex)
-    {
-        if (Mesh.DrawableMesh.Primitives[PrimitiveIndex].pMaterial != nullptr)
-            continue;
-
-        IRadientMaterialAsset* pMaterialAsset = Mesh.Materials[PrimitiveIndex];
-        if (pMaterialAsset == nullptr)
-            continue;
-
-        const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetRenderData(pMaterialAsset).pMaterial;
-        if (pMaterial == nullptr)
-            return RADIENT_STATUS_PENDING;
-
-        Mesh.DrawableMesh.Primitives[PrimitiveIndex].pMaterial = pMaterial;
-    }
 
     Mesh.MaterialsResolved.store(true, std::memory_order_release);
     return RADIENT_STATUS_OK;

@@ -611,7 +611,6 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 
         ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
         const RadientDrawableMeshPrimitive& ResolvedPrimitive = Result.pMesh->Primitives[0];
-        EXPECT_NE(ResolvedPrimitive.pMaterial, nullptr);
         EXPECT_NE(ResolvedPrimitive.pMaterialAsset, nullptr);
         EXPECT_EQ(ResolvedPrimitive.GeometryIndex, 0u);
         EXPECT_EQ(ResolvedPrimitive.IsIndexed, true);
