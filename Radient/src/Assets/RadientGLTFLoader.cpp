@@ -689,7 +689,7 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     Status = MaterialManager.CreateStandardMaterialDefinition(
         DefinitionCI, pDefinition.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)

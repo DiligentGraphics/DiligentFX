@@ -80,9 +80,9 @@ void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference
 template <typename ValueType>
 ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
 {
-    ValueType                         Value{};
-    RadientMaterialParameterHandle    Handle;
-    IRadientMaterialDefinition* const pDefinition = Instance.GetDefinition();
+    ValueType                              Value{};
+    RadientMaterialParameterHandle         Handle;
+    IRadientMaterialDefinitionAsset* const pDefinition = Instance.GetDefinition();
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr &&
         pDefinition->FindParameter(Name, &Handle) == RADIENT_STATUS_OK)

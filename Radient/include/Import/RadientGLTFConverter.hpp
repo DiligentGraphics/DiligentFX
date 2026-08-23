@@ -36,7 +36,7 @@ namespace Diligent
 {
 
 struct IRadientSceneWriter;
-struct IRadientMaterialDefinition;
+struct IRadientMaterialDefinitionAsset;
 struct IRadientMaterialInstanceWriter;
 struct IRadientTextureAsset;
 struct RadientStandardMaterialDefinitionCreateInfo;
@@ -70,11 +70,11 @@ RADIENT_STATUS ConvertMaterialDefinition(
 /// \p Definition must describe the schema returned by ConvertMaterialDefinition().
 /// The function does not commit \p Writer.
 RADIENT_STATUS PopulateMaterialInstance(
-    const GLTF::Material&           Material,
-    IRadientTextureAsset* const*    ppTextures,
-    Uint32                          TextureCount,
-    IRadientMaterialDefinition&     Definition,
-    IRadientMaterialInstanceWriter& Writer);
+    const GLTF::Material&            Material,
+    IRadientTextureAsset* const*     ppTextures,
+    Uint32                           TextureCount,
+    IRadientMaterialDefinitionAsset& Definition,
+    IRadientMaterialInstanceWriter&  Writer);
 
 struct MeshVertexSourceResult
 {

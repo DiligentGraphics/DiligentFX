@@ -68,19 +68,19 @@ void ExpectInvalidHandle(const RadientMaterialParameterHandle& Handle)
 }
 
 RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
-                                IRadientMaterialDefinition**         ppDefinition)
+                                IRadientMaterialDefinitionAsset**    ppDefinition)
 {
     return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ppDefinition);
 }
 
 RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc&       DefinitionDesc,
                                 const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
-                                IRadientMaterialDefinition**               ppDefinition)
+                                IRadientMaterialDefinitionAsset**          ppDefinition)
 {
     return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ShaderDataLayout, ppDefinition);
 }
 
-RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
+RefCntAutoPtr<IRadientMaterialDefinitionAsset> CreateDefinition(
     const RadientMaterialParameterDesc* pParameters,
     Uint32                              ParameterCount,
     const char*                         Name = "Test material definition")
@@ -91,7 +91,7 @@ RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
     DefinitionDesc.pParameters    = pParameters;
     DefinitionDesc.ParameterCount = ParameterCount;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     EXPECT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     return pDefinition;
 }
@@ -99,8 +99,8 @@ RefCntAutoPtr<IRadientMaterialDefinition> CreateDefinition(
 void ExpectInvalidDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
                              const char*                          ExpectedError)
 {
-    TestingEnvironment::ErrorScope            ExpectedErrors{ExpectedError};
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    TestingEnvironment::ErrorScope                 ExpectedErrors{ExpectedError};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     EXPECT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
@@ -110,8 +110,8 @@ void ExpectInvalidShaderDataLayout(const RadientMaterialDefinitionDesc&       De
                                    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
                                    const char*                                ExpectedError)
 {
-    TestingEnvironment::ErrorScope            ExpectedErrors{ExpectedError};
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    TestingEnvironment::ErrorScope                 ExpectedErrors{ExpectedError};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     EXPECT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
@@ -146,7 +146,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -164,7 +164,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     ASSERT_NE(StoredDesc.pParameters, nullptr);
     EXPECT_STREQ(pDefinition->GetReference().URI, "material-definition://copied");
     EXPECT_EQ(pDefinition->GetReference().Version, 11u);
-    EXPECT_EQ(pDefinition->GetType(), RADIENT_ASSET_TYPE_MATERIAL);
+    EXPECT_EQ(pDefinition->GetType(), RADIENT_ASSET_TYPE_MATERIAL_DEFINITION);
     EXPECT_EQ(pDefinition->GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->GetParameterCount(), 1u);
 
@@ -199,7 +199,7 @@ TEST(RadientMaterialTest, DefinitionPreservesConcreteSurfaceDescription)
     DefinitionDesc.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
     DefinitionDesc.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -230,7 +230,7 @@ TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
     ShaderDataLayout.Size            = sizeof(ShaderSurfaceState);
     ShaderDataLayout.pSurfacePacking = &SurfacePacking;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -287,7 +287,7 @@ TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
 
 TEST(RadientMaterialTest, NonSurfaceInstancesDoNotExposeSurfaceInterfaces)
 {
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(nullptr, 0);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
 
     RefCntAutoPtr<IRadientMaterialInstance> pInstance;
@@ -337,7 +337,7 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     ShaderDataLayout.pMappings    = Mappings.data();
     ShaderDataLayout.MappingCount = static_cast<Uint32>(Mappings.size());
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -406,7 +406,7 @@ TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
     ShaderDataLayout.pInitializations    = Initializations.data();
     ShaderDataLayout.InitializationCount = static_cast<Uint32>(Initializations.size());
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -479,7 +479,7 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     ShaderDataLayout.pTexturePackings    = &TexturePacking;
     ShaderDataLayout.TexturePackingCount = 1;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -569,10 +569,10 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
-    static constexpr Uint32                     DestinationOffset = 4;
-    const RadientMaterialShaderParameterPacking Packing{0, DestinationOffset};
-    const RadientMaterialShaderDataLayoutDesc   ShaderDataLayout{DestinationOffset + Param.Size + 4, &Packing, 1};
-    RefCntAutoPtr<IRadientMaterialDefinition>   pDefinition;
+    static constexpr Uint32                        DestinationOffset = 4;
+    const RadientMaterialShaderParameterPacking    Packing{0, DestinationOffset};
+    const RadientMaterialShaderDataLayoutDesc      ShaderDataLayout{DestinationOffset + Param.Size + 4, &Packing, 1};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -628,7 +628,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(RadientMaterialTest, EmptyShaderDataLayoutWritesNoData)
 {
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(nullptr, 0);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
 
     RefCntAutoPtr<IRadientMaterialInstance> pInstance;
@@ -876,13 +876,13 @@ TEST(RadientMaterialTest, RejectsOverlappingShaderTexturePackings)
         "texture parameter 'TextureA' packed properties and texture parameter 'TextureB' packed properties overlap");
 }
 
-TEST(RadientMaterialTest, AssetManagerReportsDefinitionStatus)
+TEST(RadientMaterialTest, AssetManagerReportsDefinitionAssetStatus)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientComputeMaterialDefinitionDesc      DefinitionDesc{};
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RadientComputeMaterialDefinitionDesc           DefinitionDesc{};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
@@ -890,7 +890,7 @@ TEST(RadientMaterialTest, AssetManagerReportsDefinitionStatus)
 
 TEST(RadientMaterialTest, EmptyDefinitionSupportsInstanceLifecycle)
 {
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(nullptr, 0);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetParameterCount(), 0u);
 
@@ -926,7 +926,7 @@ TEST(RadientMaterialTest, FindsParametersByNameRegardlessOfDeclarationOrder)
     Parameters[2].Name = "Middle";
     Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -956,7 +956,7 @@ TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
     Parameters[1].Type            = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].pDefaultTexture = pDefaultTexture;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1031,7 +1031,7 @@ TEST(RadientMaterialTest, WriterSetParameterInfersValueSize)
     Parameters[3].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[3].ArraySize = 3;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1079,7 +1079,7 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize     = 2;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1177,7 +1177,7 @@ TEST(RadientMaterialTest, SupportsEveryValueParameterType)
         Parameters[TypeIndex].pDefaultValue = DefaultData[TypeIndex].data();
     }
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1229,7 +1229,7 @@ TEST(RadientMaterialTest, NullValueDefaultIsZeroInitialized)
     Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3X3;
     Parameter.ArraySize = 2;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle Handle;
@@ -1254,7 +1254,7 @@ TEST(RadientMaterialTest, UnchangedWriterDoesNotAdvanceVersion)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultRoughness;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RefCntAutoPtr<IRadientMaterialInstance> pInstance;
@@ -1282,7 +1282,7 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     Parameters[1].Name          = "Texture";
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1339,7 +1339,7 @@ TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize     = 2;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1396,7 +1396,7 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultValue;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle Handle;
@@ -1443,7 +1443,7 @@ TEST(RadientMaterialTest, WritersResolveOverlappingTextureChangesAtCommit)
     Parameter.Name = "Texture";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle Handle;
@@ -1485,7 +1485,7 @@ TEST(RadientMaterialTest, WriterUpdatesSparseParameters)
         Parameters[Index].pDefaultValue = &DefaultValue;
     }
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), ParameterCount);
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1527,8 +1527,8 @@ TEST(RadientMaterialTest, DefinitionSpecificHandlesAreRejected)
     Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameter.pDefaultValue = &DefaultValue;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition0 = CreateDefinition(&Parameter, 1, "Definition 0");
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition1 = CreateDefinition(&Parameter, 1, "Definition 1");
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition0 = CreateDefinition(&Parameter, 1, "Definition 0");
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition1 = CreateDefinition(&Parameter, 1, "Definition 1");
     ASSERT_NE(pDefinition0, nullptr);
     ASSERT_NE(pDefinition1, nullptr);
 
@@ -1558,7 +1558,7 @@ TEST(RadientMaterialTest, RejectsNonZeroReservedHandles)
     Parameters[1].Name          = "Texture";
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1603,9 +1603,9 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize     = 2;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()), "Definition 0");
-    RefCntAutoPtr<IRadientMaterialDefinition> pForeignDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pForeignDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()), "Definition 1");
     ASSERT_NE(pDefinition, nullptr);
     ASSERT_NE(pForeignDefinition, nullptr);
@@ -1692,8 +1692,8 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     EXPECT_EQ(CreateDefinition(pDefinition->GetDesc(), nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 
     RadientComputeMaterialDefinitionDesc InvalidDefinitionDesc{};
-    InvalidDefinitionDesc.Type                    = RADIENT_MATERIAL_DEFINITION_TYPE_COUNT;
-    IRadientMaterialDefinition* pDefinitionOutput = pDefinition;
+    InvalidDefinitionDesc.Type                         = RADIENT_MATERIAL_DEFINITION_TYPE_COUNT;
+    IRadientMaterialDefinitionAsset* pDefinitionOutput = pDefinition;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Invalid material definition type"};
         EXPECT_EQ(CreateDefinition(InvalidDefinitionDesc, &pDefinitionOutput), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -1717,7 +1717,7 @@ TEST(RadientMaterialTest, CloneCopiesCommittedStateAndRemainsIndependent)
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameters[1].ArraySize     = 2;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1796,7 +1796,7 @@ TEST(RadientMaterialTest, WritersApplyIndependentChanges)
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[1].pDefaultValue = &DefaultValue;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
@@ -1834,7 +1834,7 @@ TEST(RadientMaterialTest, DefinitionRetainsDefaultTexture)
     Parameter.Type            = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Parameter.pDefaultTexture = pTexture;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     pTexture.Release();
@@ -1850,7 +1850,7 @@ TEST(RadientMaterialTest, InstanceRetainsAssignedTexture)
     Parameter.Name = "Texture";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle TextureHandle;
@@ -1881,7 +1881,7 @@ TEST(RadientMaterialTest, WriterRetainsUncommittedTexture)
     Parameter.Name = "Texture";
     Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition = CreateDefinition(&Parameter, 1);
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle TextureHandle;

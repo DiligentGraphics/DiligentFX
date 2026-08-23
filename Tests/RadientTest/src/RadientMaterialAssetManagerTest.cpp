@@ -42,9 +42,9 @@ namespace
 template <typename ValueType>
 ValueType GetInstanceParameter(IRadientMaterialInstance& Instance, const char* Name)
 {
-    ValueType                      Value{};
-    IRadientMaterialDefinition*    pDefinition = Instance.GetDefinition();
-    RadientMaterialParameterHandle Handle;
+    ValueType                        Value{};
+    IRadientMaterialDefinitionAsset* pDefinition = Instance.GetDefinition();
+    RadientMaterialParameterHandle   Handle;
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr)
     {
@@ -87,10 +87,10 @@ TestMaterialValues MakeTestMaterialValues()
 }
 
 template <typename ValueType>
-RADIENT_STATUS SetInstanceParameter(IRadientMaterialDefinition&     Definition,
-                                    IRadientMaterialInstanceWriter& Writer,
-                                    const char*                     Name,
-                                    const ValueType&                Value)
+RADIENT_STATUS SetInstanceParameter(IRadientMaterialDefinitionAsset& Definition,
+                                    IRadientMaterialInstanceWriter&  Writer,
+                                    const char*                      Name,
+                                    const ValueType&                 Value)
 {
     RadientMaterialParameterHandle Handle;
     const RADIENT_STATUS           Status = Definition.FindParameter(Name, &Handle);
@@ -107,8 +107,8 @@ RefCntAutoPtr<IRadientMaterialInstance> CreateTestMaterialInstance(
     const RADIENT_STATUS                    Status = Testing::CreateStandardMaterialInstance(
         MaterialManager,
         {},
-        [&Values](IRadientMaterialDefinition&     Definition,
-                  IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
+        [&Values](IRadientMaterialDefinitionAsset& Definition,
+                  IRadientMaterialInstanceWriter&  Writer) -> RADIENT_STATUS {
             RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
                 &Writer, IID_RadientSurfaceMaterialInstanceWriter};
             EXPECT_NE(pSurfaceWriter, nullptr);
@@ -187,7 +187,7 @@ void VerifyTestMaterialInstance(IRadientMaterialInstance* pInstance,
     EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), Values.AlphaCutoff);
     EXPECT_EQ(pSurfaceInstance->IsDoubleSided(), Values.DoubleSided);
 
-    IRadientMaterialDefinition* const pDefinition = pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinition = pInstance->GetDefinition();
     ASSERT_NE(pDefinition, nullptr);
     const auto VerifyTexture = [&](const Char*           TextureName,
                                    const Char*           UVSelectorName,
@@ -304,7 +304,7 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterialPreservesGenericTextureLayou
     DefinitionDesc.pParameters    = Parameters.data();
     DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(RadientMaterialAssetManager::CreateDefinition(
                   DefinitionDesc, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);

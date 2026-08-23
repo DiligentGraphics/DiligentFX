@@ -70,10 +70,10 @@ struct StandardMaterialValues
 };
 
 template <typename ValueType>
-RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinition&     Definition,
-                                    IRadientMaterialInstanceWriter& Writer,
-                                    const char*                     Name,
-                                    const ValueType&                Value)
+RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinitionAsset& Definition,
+                                    IRadientMaterialInstanceWriter&  Writer,
+                                    const char*                      Name,
+                                    const ValueType&                 Value)
 {
     RadientMaterialParameterHandle Handle;
     RADIENT_STATUS                 Status = Definition.FindParameter(Name, &Handle);
@@ -90,8 +90,8 @@ RADIENT_STATUS CreateStandardMaterialAsset(IRadientAssetManager&         AssetMa
     return Diligent::Testing::CreateStandardMaterialAsset(
         AssetManager,
         {},
-        [&Values](IRadientMaterialDefinition&     Definition,
-                  IRadientMaterialInstanceWriter& Writer) {
+        [&Values](IRadientMaterialDefinitionAsset& Definition,
+                  IRadientMaterialInstanceWriter&  Writer) {
             const auto SetParameter = [&](const char* Name, const auto& Value) {
                 return SetMaterialParameter(Definition, Writer, Name, Value);
             };

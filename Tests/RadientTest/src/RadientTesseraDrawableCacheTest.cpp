@@ -65,7 +65,7 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
     const RADIENT_STATUS                 Status = CreateStandardMaterialAsset(
         MaterialManager,
         {},
-        [SurfaceMode, AlphaCutoff, DoubleSided](IRadientMaterialDefinition&,
+        [SurfaceMode, AlphaCutoff, DoubleSided](IRadientMaterialDefinitionAsset&,
                                                 IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
             RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
                 &Writer, IID_RadientSurfaceMaterialInstanceWriter};

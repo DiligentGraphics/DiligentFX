@@ -35,9 +35,9 @@ static_assert(RadientStandardMaterialBaseColorTextureParameterNames.Texture[0] =
 static_assert(RadientStandardMaterialThicknessTextureParameterNames.Texture[0] == 'T', "Unexpected thickness texture descriptor");
 
 void RadientStandardMaterialParameters_CPP_TestHelpers(
-    const IRadientMaterialDefinition* pDefinition,
-    IRadientMaterialInstanceWriter*   pWriter,
-    IRadientTextureAsset*             pTexture)
+    const IRadientMaterialDefinitionAsset* pDefinition,
+    IRadientMaterialInstanceWriter*        pWriter,
+    IRadientTextureAsset*                  pTexture)
 {
     RadientStandardMaterialTextureParameters Parameters{pTexture};
     Parameters.UVSelector         = 1;

@@ -27,7 +27,7 @@
 #pragma once
 
 /// \file
-/// Defines programmable material definitions and instances.
+/// Defines programmable material definition assets and instances.
 
 #include "RadientAssets.h"
 
@@ -40,7 +40,7 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientMaterialDefinition            IRadientMaterialDefinition;
+typedef struct IRadientMaterialDefinitionAsset       IRadientMaterialDefinitionAsset;
 typedef struct IRadientMaterialInstance              IRadientMaterialInstance;
 typedef struct IRadientMaterialInstanceWriter        IRadientMaterialInstanceWriter;
 typedef struct IRadientSurfaceMaterialInstance       IRadientSurfaceMaterialInstance;
@@ -51,7 +51,7 @@ typedef struct IRadientSurfaceMaterialInstanceWriter IRadientSurfaceMaterialInst
 /// Concrete material definition type.
 ///
 /// The value identifies the complete description returned by
-/// IRadientMaterialDefinition::GetDesc(). After inspecting Type, the base
+/// IRadientMaterialDefinitionAsset::GetDesc(). After inspecting Type, the base
 /// description may be cast to the corresponding concrete description.
 DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_DEFINITION_TYPE, Uint8)
 {
@@ -283,12 +283,12 @@ typedef struct RadientMaterialParameterDesc RadientMaterialParameterDesc;
 ///
 /// Material definitions copy the description, parameter metadata, default
 /// values, and asset reference when they are created. The description returned
-/// by IRadientMaterialDefinition::GetDesc() remains valid for the lifetime of
+/// by IRadientMaterialDefinitionAsset::GetDesc() remains valid for the lifetime of
 /// the definition.
 struct RadientMaterialDefinitionDesc
 {
     /// Concrete definition type. The value determines the complete description
-    /// type returned by IRadientMaterialDefinition::GetDesc().
+    /// type returned by IRadientMaterialDefinitionAsset::GetDesc().
     RADIENT_MATERIAL_DEFINITION_TYPE Type DEFAULT_INITIALIZER(RADIENT_MATERIAL_DEFINITION_TYPE_COUNT);
 
     /// Definition name used for diagnostics.
@@ -388,7 +388,7 @@ typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMateri
 
 
 // {0C0DCA2D-FB29-445A-87D6-2BF9EFD5E9FD}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialDefinition =
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialDefinitionAsset =
     {0xc0dca2d, 0xfb29, 0x445a, {0x87, 0xd6, 0x2b, 0xf9, 0xef, 0xd5, 0xe9, 0xfd}};
 
 
@@ -410,17 +410,17 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialInstanceWriter 
     {0x92b17a4b, 0x8404, 0x4838, {0xb0, 0xbc, 0x4b, 0x17, 0x72, 0x76, 0x72, 0x81}};
 
 
-#define DILIGENT_INTERFACE_NAME IRadientMaterialDefinition
+#define DILIGENT_INTERFACE_NAME IRadientMaterialDefinitionAsset
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-#define IRadientMaterialDefinitionInclusiveMethods \
-    IRadientAssetInclusiveMethods;                 \
-    IRadientMaterialDefinitionMethods RadientMaterialDefinition
+#define IRadientMaterialDefinitionAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;                      \
+    IRadientMaterialDefinitionAssetMethods RadientMaterialDefinitionAsset
 
 // clang-format off
 
-/// Immutable material definition and parameter schema.
-DILIGENT_BEGIN_INTERFACE(IRadientMaterialDefinition, IRadientAsset)
+/// Immutable material definition asset and parameter schema.
+DILIGENT_BEGIN_INTERFACE(IRadientMaterialDefinitionAsset, IRadientAsset)
 {
     /// Returns the immutable definition description. The reference remains valid
     /// for the lifetime of the definition. Its Type identifies the concrete
@@ -463,13 +463,13 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientMaterialDefinition_GetDesc(This)                 CALL_IFACE_METHOD(RadientMaterialDefinition, GetDesc,           This)
-#    define IRadientMaterialDefinition_GetStatus(This)               CALL_IFACE_METHOD(RadientMaterialDefinition, GetStatus,         This)
-#    define IRadientMaterialDefinition_GetParameterCount(This)       CALL_IFACE_METHOD(RadientMaterialDefinition, GetParameterCount, This)
-#    define IRadientMaterialDefinition_GetParameterDesc(This, ...)   CALL_IFACE_METHOD(RadientMaterialDefinition, GetParameterDesc,  This, __VA_ARGS__)
-#    define IRadientMaterialDefinition_GetParameterHandle(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinition, GetParameterHandle, This, __VA_ARGS__)
-#    define IRadientMaterialDefinition_FindParameter(This, ...)      CALL_IFACE_METHOD(RadientMaterialDefinition, FindParameter,      This, __VA_ARGS__)
-#    define IRadientMaterialDefinition_CreateInstance(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinition, CreateInstance, This, __VA_ARGS__)
+#    define IRadientMaterialDefinitionAsset_GetDesc(This)                 CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetDesc,           This)
+#    define IRadientMaterialDefinitionAsset_GetStatus(This)               CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetStatus,         This)
+#    define IRadientMaterialDefinitionAsset_GetParameterCount(This)       CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetParameterCount, This)
+#    define IRadientMaterialDefinitionAsset_GetParameterDesc(This, ...)   CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetParameterDesc,  This, __VA_ARGS__)
+#    define IRadientMaterialDefinitionAsset_GetParameterHandle(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetParameterHandle, This, __VA_ARGS__)
+#    define IRadientMaterialDefinitionAsset_FindParameter(This, ...)      CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, FindParameter,      This, __VA_ARGS__)
+#    define IRadientMaterialDefinitionAsset_CreateInstance(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, CreateInstance, This, __VA_ARGS__)
 
 #endif
 
@@ -494,7 +494,7 @@ DILIGENT_END_INTERFACE
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
 {
     /// Returns a borrowed pointer to the definition retained by this instance.
-    VIRTUAL IRadientMaterialDefinition* METHOD(GetDefinition)(THIS) CONST PURE;
+    VIRTUAL IRadientMaterialDefinitionAsset* METHOD(GetDefinition)(THIS) CONST PURE;
 
     /// Returns a monotonically increasing version of the complete instance
     /// state. The version changes after every commit that modifies at least one

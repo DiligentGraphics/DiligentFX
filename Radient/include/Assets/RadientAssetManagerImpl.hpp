@@ -89,7 +89,7 @@ public:
                                                          IRadientMeshAsset**          ppMesh) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-                                                                               IRadientMaterialDefinition**                       ppDefinition) override final;
+                                                                               IRadientMaterialDefinitionAsset**                  ppDefinition) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(IRadientMaterialInstance* pInstance,
                                                              IRadientMaterialAsset**   ppMaterial) override final;

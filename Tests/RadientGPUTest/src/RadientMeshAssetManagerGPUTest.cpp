@@ -140,8 +140,8 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_EQ(CreateStandardMaterialAsset(
                   *pMaterialManager,
                   {},
-                  [&](IRadientMaterialDefinition&     Definition,
-                      IRadientMaterialInstanceWriter& Writer) {
+                  [&](IRadientMaterialDefinitionAsset& Definition,
+                      IRadientMaterialInstanceWriter&  Writer) {
                       return SetStandardMaterialTextureParameters(
                           Definition,
                           Writer,

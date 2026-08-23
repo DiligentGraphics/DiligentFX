@@ -102,10 +102,10 @@ bool HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features,
 }
 
 template <typename ValueType>
-RADIENT_STATUS SetParameter(IRadientMaterialDefinition&     Definition,
-                            IRadientMaterialInstanceWriter& Writer,
-                            const char*                     Name,
-                            const ValueType&                Value)
+RADIENT_STATUS SetParameter(IRadientMaterialDefinitionAsset& Definition,
+                            IRadientMaterialInstanceWriter&  Writer,
+                            const char*                      Name,
+                            const ValueType&                 Value)
 {
     RadientMaterialParameterHandle Handle;
     const RADIENT_STATUS           FindStatus = Definition.FindParameter(Name, &Handle);
@@ -126,7 +126,7 @@ IRadientTextureAsset* GetTexture(const GLTF::Material&        Material,
 RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                  Material,
                                            const StandardMaterialTextureSemantic& Semantic,
                                            IRadientTextureAsset*                  pTexture,
-                                           IRadientMaterialDefinition&            Definition,
+                                           IRadientMaterialDefinitionAsset&       Definition,
                                            IRadientMaterialInstanceWriter&        Writer)
 {
     // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
@@ -201,11 +201,11 @@ RADIENT_STATUS ConvertMaterialDefinition(
 }
 
 RADIENT_STATUS PopulateMaterialInstance(
-    const GLTF::Material&           Material,
-    IRadientTextureAsset* const*    ppTextures,
-    Uint32                          TextureCount,
-    IRadientMaterialDefinition&     Definition,
-    IRadientMaterialInstanceWriter& Writer)
+    const GLTF::Material&            Material,
+    IRadientTextureAsset* const*     ppTextures,
+    Uint32                           TextureCount,
+    IRadientMaterialDefinitionAsset& Definition,
+    IRadientMaterialInstanceWriter&  Writer)
 {
     if (ppTextures == nullptr && TextureCount != 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;

@@ -36,14 +36,14 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientAsset              IRadientAsset;
-typedef struct IRadientMeshAsset          IRadientMeshAsset;
-typedef struct IRadientMaterialAsset      IRadientMaterialAsset;
-typedef struct IRadientMaterialDefinition IRadientMaterialDefinition;
-typedef struct IRadientMaterialInstance   IRadientMaterialInstance;
-typedef struct IRadientTextureAsset       IRadientTextureAsset;
-typedef struct IRadientSceneAsset         IRadientSceneAsset;
-typedef struct IDeviceContext             IDeviceContext;
+typedef struct IRadientAsset                   IRadientAsset;
+typedef struct IRadientMeshAsset               IRadientMeshAsset;
+typedef struct IRadientMaterialAsset           IRadientMaterialAsset;
+typedef struct IRadientMaterialDefinitionAsset IRadientMaterialDefinitionAsset;
+typedef struct IRadientMaterialInstance        IRadientMaterialInstance;
+typedef struct IRadientTextureAsset            IRadientTextureAsset;
+typedef struct IRadientSceneAsset              IRadientSceneAsset;
+typedef struct IDeviceContext                  IDeviceContext;
 
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 
@@ -62,7 +62,10 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_TEXTURE,
 
     /// Imported scene/model asset.
-    RADIENT_ASSET_TYPE_SCENE
+    RADIENT_ASSET_TYPE_SCENE,
+
+    /// Material definition asset.
+    RADIENT_ASSET_TYPE_MATERIAL_DEFINITION
 };
 
 /// Authored scene/model source format.
@@ -467,13 +470,13 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               const RadientMeshCreateInfo REF MeshCI,
                                               IRadientMeshAsset**             ppMesh) PURE;
 
-    /// Creates or retrieves a cached built-in standard material definition.
-    /// Compatible descriptions may return the same immutable definition. Use
-    /// IRadientMaterialDefinition::CreateInstance() to create mutable material
+    /// Creates or retrieves a cached built-in standard material definition asset.
+    /// Compatible descriptions may return the same immutable asset. Use
+    /// IRadientMaterialDefinitionAsset::CreateInstance() to create mutable material
     /// parameters. On success, ppDefinition receives a strong reference.
     VIRTUAL RADIENT_STATUS METHOD(CreateStandardMaterialDefinition)(THIS_
                                                                     const RadientStandardMaterialDefinitionCreateInfo REF DefinitionCI,
-                                                                    IRadientMaterialDefinition**                          ppDefinition) PURE;
+                                                                    IRadientMaterialDefinitionAsset**                          ppDefinition) PURE;
 
     /// Creates a material asset from a fully initialized material instance. The
     /// asset retains the exact instance. Until material-instance modification is

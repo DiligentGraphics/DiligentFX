@@ -72,9 +72,9 @@ struct ImportedSceneStorage
     {
     }
 
-    ImportedSceneStorage& operator=(ImportedSceneStorage&& Rhs)  = delete;
-    ImportedSceneStorage(ImportedSceneStorage&& Rhs)             = delete;
-    ImportedSceneStorage(const ImportedSceneStorage&)            = delete;
+    ImportedSceneStorage& operator=(ImportedSceneStorage&& Rhs) = delete;
+    ImportedSceneStorage(ImportedSceneStorage&& Rhs)            = delete;
+    ImportedSceneStorage(const ImportedSceneStorage&)           = delete;
     ImportedSceneStorage& operator=(const ImportedSceneStorage&) = delete;
 
     void SetScene(RadientImport::ImportedDocument ImportedScene,
@@ -368,8 +368,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     RADIENT_STATUS DefaultMaterialStatus = RADIENT_STATUS_INVALID_OPERATION;
     if (m_pMaterialManager != nullptr)
     {
-        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-        RefCntAutoPtr<IRadientMaterialDefinition>   pDefinition;
+        RadientStandardMaterialDefinitionCreateInfo    DefinitionCI{};
+        RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
         DefaultMaterialStatus = m_pMaterialManager->CreateStandardMaterialDefinition(
             DefinitionCI, pDefinition.GetAddressOfEmpty());
 
@@ -416,7 +416,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-                                                                         IRadientMaterialDefinition**                       ppDefinition)
+                                                                         IRadientMaterialDefinitionAsset**                  ppDefinition)
 {
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -723,11 +723,12 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
             return RadientTextureAssetManager::GetLoadStatus(pAsset);
 
         case RADIENT_ASSET_TYPE_MATERIAL:
-        {
-            RefCntAutoPtr<IRadientMaterialDefinition> pDefinition{pAsset, IID_RadientMaterialDefinition};
-            if (pDefinition != nullptr)
-                return pDefinition->GetStatus();
             return RadientMaterialAssetManager::GetLoadStatus(pAsset);
+
+        case RADIENT_ASSET_TYPE_MATERIAL_DEFINITION:
+        {
+            RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition{pAsset, IID_RadientMaterialDefinitionAsset};
+            return pDefinition != nullptr ? pDefinition->GetStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         default:

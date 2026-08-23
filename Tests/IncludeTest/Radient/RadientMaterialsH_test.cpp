@@ -85,7 +85,7 @@ void RadientMaterials_CPP_UseTypes()
 }
 
 void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*                  pAssetManager,
-                                         IRadientMaterialDefinition*            pDefinition,
+                                         IRadientMaterialDefinitionAsset*       pDefinition,
                                          IRadientMaterialInstance*              pInstance,
                                          IRadientSurfaceMaterialInstance*       pSurfaceInstance,
                                          IRadientMaterialInstanceWriter*        pWriter,
@@ -125,7 +125,7 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*                  
     Status                                          = pSurfaceWriter->SetDoubleSided(DoubleSided);
 
     RadientStandardMaterialDefinitionCreateInfo StandardCI;
-    IRadientMaterialDefinition*                 pStandardDefinition = nullptr;
+    IRadientMaterialDefinitionAsset*            pStandardDefinition = nullptr;
     Status                                                          = pAssetManager->CreateStandardMaterialDefinition(StandardCI, &pStandardDefinition);
 
     (void)Desc;

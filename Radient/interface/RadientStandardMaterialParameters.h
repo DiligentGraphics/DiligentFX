@@ -447,7 +447,7 @@ RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Thickness);
 /// fallback. If a writer setter fails, earlier changes remain pending; retry the
 /// operation with the same writer or discard that writer without committing it.
 inline RADIENT_STATUS SetStandardMaterialTextureParameters(
-    const IRadientMaterialDefinition&                   Definition,
+    const IRadientMaterialDefinitionAsset&              Definition,
     IRadientMaterialInstanceWriter&                     Writer,
     const RadientStandardMaterialTextureParameterNames& Names,
     const RadientStandardMaterialTextureParameters&     Parameters)

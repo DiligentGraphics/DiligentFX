@@ -109,7 +109,7 @@ RADIENT_STATUS MaterialStorage::Initialize(IRadientMaterialInstance* pInstance)
 
     m_pInstance = pInstance;
 
-    IRadientMaterialDefinition* const pDefinition = m_pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinition = m_pInstance->GetDefinition();
     if (pDefinition == nullptr)
     {
         UNEXPECTED("Material instance has no definition");

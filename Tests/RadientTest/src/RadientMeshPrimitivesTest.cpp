@@ -114,7 +114,7 @@ public:
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo&,
-                                                                               IRadientMaterialDefinition**) override final
+                                                                               IRadientMaterialDefinitionAsset**) override final
     {
         return RADIENT_STATUS_INVALID_OPERATION;
     }

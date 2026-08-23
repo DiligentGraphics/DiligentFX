@@ -958,7 +958,7 @@ public:
     using TBase = ObjectBase<InterfaceType>;
 
     RadientMaterialInstanceBase(IReferenceCounters*               pRefCounters,
-                                IRadientMaterialDefinition*       pDefinition,
+                                IRadientMaterialDefinitionAsset*  pDefinition,
                                 RadientHandle                     DefinitionHandle,
                                 const PackedMaterialInstanceData* pSourceData = nullptr) :
         TBase{pRefCounters},
@@ -967,7 +967,7 @@ public:
         m_Data{pDefinition->GetDesc(), pSourceData}
     {}
 
-    virtual IRadientMaterialDefinition* DILIGENT_CALL_TYPE GetDefinition() const override final
+    virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
         return m_pDefinition;
     }
@@ -1036,10 +1036,10 @@ protected:
     }
 
 protected:
-    RefCntAutoPtr<IRadientMaterialDefinition> m_pDefinition;
-    const RadientHandle                       m_DefinitionHandle;
-    PackedMaterialInstanceData                m_Data;
-    Uint64                                    m_Version = 1;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> m_pDefinition;
+    const RadientHandle                            m_DefinitionHandle;
+    PackedMaterialInstanceData                     m_Data;
+    Uint64                                         m_Version = 1;
 };
 
 class RadientMaterialInstanceImpl final : public RadientMaterialInstanceBase<IRadientMaterialInstance>
@@ -1048,7 +1048,7 @@ public:
     using TBase = RadientMaterialInstanceBase<IRadientMaterialInstance>;
 
     RadientMaterialInstanceImpl(IReferenceCounters*                pRefCounters,
-                                IRadientMaterialDefinition*        pDefinition,
+                                IRadientMaterialDefinitionAsset*   pDefinition,
                                 RadientHandle                      DefinitionHandle,
                                 const RadientMaterialInstanceImpl* pSource = nullptr) :
         TBase{pRefCounters,
@@ -1069,7 +1069,7 @@ public:
     using TBase = RadientMaterialInstanceBase<IRadientSurfaceMaterialInstance>;
 
     RadientSurfaceMaterialInstanceImpl(IReferenceCounters*                       pRefCounters,
-                                       IRadientMaterialDefinition*               pDefinition,
+                                       IRadientMaterialDefinitionAsset*          pDefinition,
                                        RadientHandle                             DefinitionHandle,
                                        const RadientSurfaceMaterialInstanceImpl* pSource = nullptr) :
         TBase{pRefCounters,
@@ -1648,7 +1648,7 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
-                                                             IRadientMaterialDefinition**         ppDefinition)
+                                                             IRadientMaterialDefinitionAsset**    ppDefinition)
 {
     return CreateDefinition(DefinitionDesc, {}, ppDefinition);
 }
@@ -1656,7 +1656,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMateri
 RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(
     const RadientMaterialDefinitionDesc&       DefinitionDesc,
     const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
-    IRadientMaterialDefinition**               ppDefinition)
+    IRadientMaterialDefinitionAsset**          ppDefinition)
 {
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;

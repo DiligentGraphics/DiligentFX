@@ -41,7 +41,7 @@ void RadientMaterials_C_UseTypes(void)
     RadientComputeMaterialDefinitionDesc        ComputeDesc      = {0};
     RadientMaterialParameterDesc                Parameter        = {0};
     RadientStandardMaterialDefinitionCreateInfo StandardCI       = {0};
-    IRadientMaterialDefinition*                 pDefinition      = 0;
+    IRadientMaterialDefinitionAsset*            pDefinition      = 0;
     IRadientMaterialInstance*                   pInstance        = 0;
     IRadientSurfaceMaterialInstance*            pSurfaceInstance = 0;
     IRadientMaterialInstanceWriter*             pWriter          = 0;
@@ -67,18 +67,18 @@ void RadientMaterials_C_UseTypes(void)
     (void)pSurfaceWriter;
 }
 
-void RadientMaterials_C_TestDefinitionMacros(IRadientMaterialDefinition* pDefinition)
+void RadientMaterials_C_TestDefinitionMacros(IRadientMaterialDefinitionAsset* pDefinition)
 {
-    const RadientMaterialDefinitionDesc* pDesc      = IRadientMaterialDefinition_GetDesc(pDefinition);
-    RADIENT_STATUS                       Status     = IRadientMaterialDefinition_GetStatus(pDefinition);
-    Uint32                               ParamCount = IRadientMaterialDefinition_GetParameterCount(pDefinition);
-    const RadientMaterialParameterDesc*  pParamDesc = IRadientMaterialDefinition_GetParameterDesc(pDefinition, 0);
+    const RadientMaterialDefinitionDesc* pDesc      = IRadientMaterialDefinitionAsset_GetDesc(pDefinition);
+    RADIENT_STATUS                       Status     = IRadientMaterialDefinitionAsset_GetStatus(pDefinition);
+    Uint32                               ParamCount = IRadientMaterialDefinitionAsset_GetParameterCount(pDefinition);
+    const RadientMaterialParameterDesc*  pParamDesc = IRadientMaterialDefinitionAsset_GetParameterDesc(pDefinition, 0);
     RadientMaterialParameterHandle       Handle     = {0};
     IRadientMaterialInstance*            pInstance  = 0;
 
-    Status = IRadientMaterialDefinition_GetParameterHandle(pDefinition, 0, &Handle);
-    Status = IRadientMaterialDefinition_FindParameter(pDefinition, "Parameter", &Handle);
-    Status = IRadientMaterialDefinition_CreateInstance(pDefinition, &pInstance);
+    Status = IRadientMaterialDefinitionAsset_GetParameterHandle(pDefinition, 0, &Handle);
+    Status = IRadientMaterialDefinitionAsset_FindParameter(pDefinition, "Parameter", &Handle);
+    Status = IRadientMaterialDefinitionAsset_CreateInstance(pDefinition, &pInstance);
 
     (void)pDesc;
     (void)Status;
@@ -94,12 +94,12 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*            
                                            IRadientSurfaceMaterialInstanceWriter* pSurfaceWriter,
                                            IRadientTextureAsset*                  pTexture)
 {
-    RadientMaterialParameterHandle Handle      = {0};
-    IRadientMaterialDefinition*    pDefinition = IRadientMaterialInstance_GetDefinition(pInstance);
-    Uint64                         Version     = IRadientMaterialInstance_GetVersion(pInstance);
-    float                          Value       = 0;
-    IRadientMaterialInstance*      pClone      = 0;
-    RADIENT_STATUS                 Status      = RADIENT_STATUS_OK;
+    RadientMaterialParameterHandle   Handle      = {0};
+    IRadientMaterialDefinitionAsset* pDefinition = IRadientMaterialInstance_GetDefinition(pInstance);
+    Uint64                           Version     = IRadientMaterialInstance_GetVersion(pInstance);
+    float                            Value       = 0;
+    IRadientMaterialInstance*        pClone      = 0;
+    RADIENT_STATUS                   Status      = RADIENT_STATUS_OK;
 
     Status = IRadientMaterialInstance_GetParameter(pInstance, Handle, &Value, (Uint32)sizeof(Value));
     Status = IRadientMaterialInstance_GetTexture(pInstance, Handle, 0, &pTexture);
@@ -126,7 +126,7 @@ void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*            
 void RadientMaterials_C_TestAssetManagerMacros(IRadientAssetManager* pAssetManager)
 {
     RadientStandardMaterialDefinitionCreateInfo StandardCI          = {0};
-    IRadientMaterialDefinition*                 pStandardDefinition = 0;
+    IRadientMaterialDefinitionAsset*            pStandardDefinition = 0;
     RADIENT_STATUS                              Status              = IRadientAssetManager_CreateStandardMaterialDefinition(pAssetManager, &StandardCI, &pStandardDefinition);
 
     (void)pStandardDefinition;

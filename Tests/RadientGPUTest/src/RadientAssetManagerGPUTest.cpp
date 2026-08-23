@@ -273,7 +273,7 @@ RadientMaterialParameterHandle FindMaterialParameter(const RadientMaterialAssetV
         return Handle;
     }
 
-    IRadientMaterialDefinition* const pDefinition = MaterialData.pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinition = MaterialData.pInstance->GetDefinition();
     if (pDefinition == nullptr)
     {
         ADD_FAILURE() << "Material instance has no definition";
@@ -317,7 +317,7 @@ void ExpectMetallicRoughnessTextureDefaults(const RadientMaterialAssetView&     
 void ExpectMaterialInstanceTextures(const IRadientMaterialInstance& Instance,
                                     const RadientMaterialAssetView& MaterialData)
 {
-    IRadientMaterialDefinition* const pDefinition = Instance.GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinition = Instance.GetDefinition();
     ASSERT_NE(pDefinition, nullptr);
 
     ASSERT_TRUE(MaterialData);

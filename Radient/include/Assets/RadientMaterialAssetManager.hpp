@@ -157,14 +157,14 @@ public:
     static RadientMaterialAssetManagerSharedPtr Create(const CreateInfo& CI = {});
 
     static RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
-                                           IRadientMaterialDefinition**         ppDefinition);
+                                           IRadientMaterialDefinitionAsset**    ppDefinition);
 
     static RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc&       DefinitionDesc,
                                            const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
-                                           IRadientMaterialDefinition**               ppDefinition);
+                                           IRadientMaterialDefinitionAsset**          ppDefinition);
 
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-                                                    IRadientMaterialDefinition**                       ppDefinition);
+                                                    IRadientMaterialDefinitionAsset**                  ppDefinition);
 
     RADIENT_STATUS CreateMaterial(IRadientMaterialInstance* pInstance,
                                   IRadientMaterialAsset**   ppMaterial);
@@ -195,8 +195,8 @@ public:
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
 
-    RadientMaterialDefaultTextures              m_DefaultTextures;
-    WeakObjectCache<IRadientMaterialDefinition> m_StandardMaterialDefinitions;
+    RadientMaterialDefaultTextures                   m_DefaultTextures;
+    WeakObjectCache<IRadientMaterialDefinitionAsset> m_StandardMaterialDefinitions;
 };
 
 } // namespace Diligent

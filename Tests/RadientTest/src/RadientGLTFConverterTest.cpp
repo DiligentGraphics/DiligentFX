@@ -88,9 +88,9 @@ static constexpr std::array<StandardMaterialTextureTestInfo, 15> StandardMateria
 template <typename ValueType>
 ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
 {
-    ValueType                      Value{};
-    IRadientMaterialDefinition*    pDefinition = Instance.GetDefinition();
-    RadientMaterialParameterHandle Handle;
+    ValueType                        Value{};
+    IRadientMaterialDefinitionAsset* pDefinition = Instance.GetDefinition();
+    RadientMaterialParameterHandle   Handle;
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr)
     {
@@ -108,7 +108,7 @@ RefCntAutoPtr<IRadientTextureAsset> GetMaterialTexture(IRadientMaterialInstance&
                                                        const char*               Name)
 {
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    IRadientMaterialDefinition*         pDefinition = Instance.GetDefinition();
+    IRadientMaterialDefinitionAsset*    pDefinition = Instance.GetDefinition();
     RadientMaterialParameterHandle      Handle;
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr)
@@ -186,8 +186,8 @@ RefCntAutoPtr<IRadientMaterialInstance> ConvertMaterial(
     if (Status != RADIENT_STATUS_OK)
         return {};
 
-    RadientMaterialAssetManagerSharedPtr      pManager = RadientMaterialAssetManager::Create();
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RadientMaterialAssetManagerSharedPtr           pManager = RadientMaterialAssetManager::Create();
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     Status = pManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     if (Status != RADIENT_STATUS_OK)

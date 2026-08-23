@@ -45,7 +45,7 @@ template <typename ManagerType>
 RADIENT_STATUS CreateStandardMaterialDefinitionAndInstance(
     ManagerType&                                       Manager,
     const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-    RefCntAutoPtr<IRadientMaterialDefinition>&         pDefinition,
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset>&    pDefinition,
     RefCntAutoPtr<IRadientMaterialInstance>&           pInstance)
 {
     RADIENT_STATUS Status =
@@ -68,9 +68,9 @@ RADIENT_STATUS CreateStandardMaterialInstance(
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppInstance = nullptr;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    RefCntAutoPtr<IRadientMaterialInstance>   pInstance;
-    const RADIENT_STATUS                      Status = Detail::CreateStandardMaterialDefinitionAndInstance(
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    RefCntAutoPtr<IRadientMaterialInstance>        pInstance;
+    const RADIENT_STATUS                           Status = Detail::CreateStandardMaterialDefinitionAndInstance(
         Manager, DefinitionCI, pDefinition, pInstance);
     if (Status != RADIENT_STATUS_OK)
         return Status;
@@ -94,9 +94,9 @@ RADIENT_STATUS CreateStandardMaterialInstance(
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppInstance = nullptr;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
-    RefCntAutoPtr<IRadientMaterialInstance>   pInstance;
-    RADIENT_STATUS                            Status = Detail::CreateStandardMaterialDefinitionAndInstance(
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    RefCntAutoPtr<IRadientMaterialInstance>        pInstance;
+    RADIENT_STATUS                                 Status = Detail::CreateStandardMaterialDefinitionAndInstance(
         Manager, DefinitionCI, pDefinition, pInstance);
     if (Status != RADIENT_STATUS_OK)
         return Status;

@@ -109,16 +109,16 @@ struct RadientMaterialShaderDataLayoutDesc
     const RadientSurfaceMaterialShaderParameterPacking* pSurfacePacking = nullptr;
 };
 
-class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinition>
+class RadientMaterialDefinitionImpl final : public ObjectBase<IRadientMaterialDefinitionAsset>
 {
 public:
-    using TBase = ObjectBase<IRadientMaterialDefinition>;
+    using TBase = ObjectBase<IRadientMaterialDefinitionAsset>;
 
     RadientMaterialDefinitionImpl(IReferenceCounters*                        pRefCounters,
                                   const RadientMaterialDefinitionDesc&       Desc,
                                   const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout = {});
 
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinition, IID_RadientAsset, TBase)
+    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinitionAsset, IID_RadientAsset, TBase)
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
@@ -127,7 +127,7 @@ public:
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
     {
-        return RADIENT_ASSET_TYPE_MATERIAL;
+        return RADIENT_ASSET_TYPE_MATERIAL_DEFINITION;
     }
 
     virtual const RadientMaterialDefinitionDesc& DILIGENT_CALL_TYPE GetDesc() const override final
@@ -207,9 +207,9 @@ private:
             Other.PackingPlan = {};
         }
 
-        PackedData(const PackedData&)            = delete;
+        PackedData(const PackedData&) = delete;
         PackedData& operator=(const PackedData&) = delete;
-        PackedData& operator=(PackedData&&)      = delete;
+        PackedData& operator=(PackedData&&) = delete;
 
         ~PackedData()
         {

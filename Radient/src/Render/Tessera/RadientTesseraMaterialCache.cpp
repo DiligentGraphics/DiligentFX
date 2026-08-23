@@ -99,10 +99,10 @@ const char* GetStandardTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID Text
 }
 
 RADIENT_STATUS BuildMaterialTextureSRBSlots(
-    const IRadientMaterialDefinition&   Definition,
-    const RadientMaterialAssetView&     MaterialView,
-    PBR_Renderer::PSO_FLAGS             PSOFlags,
-    RadientMaterialTextureSRBSlotArray& TextureSlots)
+    const IRadientMaterialDefinitionAsset& Definition,
+    const RadientMaterialAssetView&        MaterialView,
+    PBR_Renderer::PSO_FLAGS                PSOFlags,
+    RadientMaterialTextureSRBSlotArray&    TextureSlots)
 {
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     PBR_Renderer::ProcessTexturAttribs(
@@ -375,7 +375,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         return;
     }
 
-    IRadientMaterialDefinition* const pDefinitionInterface = pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinitionInterface = pInstance->GetDefinition();
     if (pDefinitionInterface == nullptr ||
         pDefinitionInterface->GetDesc().Type != RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE)
     {

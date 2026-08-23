@@ -508,7 +508,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
 } // namespace
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-                                                                             IRadientMaterialDefinition**                       ppDefinition)
+                                                                             IRadientMaterialDefinitionAsset**                  ppDefinition)
 {
     if (ppDefinition == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -523,10 +523,10 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(con
         const std::string CacheKey         = GetStandardMaterialDefinitionKey(DefinitionCI);
         RADIENT_STATUS    DefinitionStatus = RADIENT_STATUS_OK;
 
-        RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
             m_StandardMaterialDefinitions.GetOrCreate(
                                              CacheKey.c_str(),
-                                             [&]() -> RefCntAutoPtr<IRadientMaterialDefinition> {
+                                             [&]() -> RefCntAutoPtr<IRadientMaterialDefinitionAsset> {
                                                  const StandardMaterialParameters ParameterData =
                                                      BuildStandardMaterialParameters(DefinitionCI, m_DefaultTextures);
                                                  const StandardMaterialShaderDataLayout ShaderDataLayout =
@@ -541,7 +541,7 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(con
                                                  DefinitionDesc.ShadingModel   = DefinitionCI.ShadingModel;
                                                  DefinitionDesc.Features       = DefinitionCI.Features;
 
-                                                 RefCntAutoPtr<IRadientMaterialDefinition> pNewDefinition;
+                                                 RefCntAutoPtr<IRadientMaterialDefinitionAsset> pNewDefinition;
                                                  DefinitionStatus = CreateDefinition(DefinitionDesc, ShaderDataLayout.GetDesc(),
                                                                                      pNewDefinition.GetAddressOfEmpty());
                                                  return pNewDefinition;

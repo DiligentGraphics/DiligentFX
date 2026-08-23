@@ -64,8 +64,8 @@ void ExpectInvalidStandardDefinition(RadientAssetManagerImpl&                   
                                      const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                      const char*                                        ExpectedError)
 {
-    TestingEnvironment::ErrorScope            ExpectedErrors{ExpectedError};
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    TestingEnvironment::ErrorScope                 ExpectedErrors{ExpectedError};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     EXPECT_EQ(AssetManager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pDefinition, nullptr);
@@ -205,7 +205,7 @@ RefCntAutoPtr<IRadientMaterialInstance> CreateStandardMaterialInstance(
     if (Status != RADIENT_STATUS_OK)
         return {};
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     Status = AssetManager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     if (Status != RADIENT_STATUS_OK)
@@ -271,8 +271,8 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
         RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pFirstDefinition;
-    RefCntAutoPtr<IRadientMaterialDefinition> pSecondDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pFirstDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pSecondDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pFirstDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pSecondDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pFirstDefinition, nullptr);
@@ -305,7 +305,7 @@ TEST(RadientStandardMaterialTest, DefinitionsAreCached)
     EXPECT_EQ(pTexture, nullptr);
 
     DefinitionCI.Features &= ~RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN;
-    RefCntAutoPtr<IRadientMaterialDefinition> pDifferentDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDifferentDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDifferentDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_NE(pFirstDefinition, pDifferentDefinition);
 }
@@ -329,7 +329,7 @@ TEST(RadientStandardMaterialTest, InstancesUseDefinitionTextureDefaults)
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
@@ -400,7 +400,7 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
@@ -707,7 +707,7 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetDesc().Reference.Version, RadientStandardMaterialSchemaVersion);
@@ -759,8 +759,8 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
 
-    const auto ExpectParameters = [](IRadientMaterialDefinition& pDefinition,
-                                     const auto&                 ExpectedNames) {
+    const auto ExpectParameters = [](IRadientMaterialDefinitionAsset& pDefinition,
+                                     const auto&                      ExpectedNames) {
         ASSERT_EQ(pDefinition.GetParameterCount(), static_cast<Uint32>(ExpectedNames.size()));
         for (const Char* Name : ExpectedNames)
         {
@@ -808,8 +808,8 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialEmissiveTextureWrapVName,
     };
 
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialDefinition>   pDefinition;
+    RadientStandardMaterialDefinitionCreateInfo    DefinitionCI{};
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetDesc().Type, RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE);
@@ -849,7 +849,7 @@ TEST(RadientStandardMaterialTest, UnlitMaterialHasOnlyApplicableSchema)
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
 
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetParameterCount(), 7u);
@@ -926,7 +926,7 @@ TEST(RadientStandardMaterialTest, VolumeRequiresTransmission)
 
     DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME |
         RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION;
-    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     EXPECT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
 }
