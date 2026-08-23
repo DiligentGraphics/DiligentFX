@@ -10,6 +10,7 @@ set(SOURCE
     src/Assets/RadientFilesystemAssetResolver.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
+    src/Assets/RadientMaterialDefinitionImpl.cpp
     src/Assets/RadientMaterialImpl.cpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
@@ -63,7 +64,7 @@ set(INCLUDE
     include/Assets/RadientFilesystemAssetResolver.hpp
     include/Assets/RadientGLTFLoader.hpp
     include/Assets/RadientMaterialAssetManager.hpp
-    include/Assets/RadientMaterialImpl.hpp
+    include/Assets/RadientMaterialDefinitionImpl.hpp
     include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshVertexSource.hpp

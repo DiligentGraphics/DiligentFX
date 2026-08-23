@@ -27,7 +27,7 @@
 #include "RadientMaterials.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
-#include "Assets/RadientMaterialImpl.hpp"
+#include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "GLTFLoader.hpp"

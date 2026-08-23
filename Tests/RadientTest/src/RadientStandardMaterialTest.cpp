@@ -26,7 +26,7 @@
 
 #include "RadientStandardMaterialParameters.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
-#include "Assets/RadientMaterialImpl.hpp"
+#include "Assets/RadientMaterialDefinitionImpl.hpp"
 
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"

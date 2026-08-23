@@ -48,6 +48,24 @@
 namespace Diligent
 {
 
+struct RadientMaterialShaderDataLayoutDesc;
+
+namespace RadientMaterialDetail
+{
+
+bool IsTextureParameter(RADIENT_MATERIAL_PARAMETER_TYPE Type) noexcept;
+
+bool GetMaterialParameterDataSize(const RadientMaterialParameterDesc& Desc,
+                                  Uint32&                             DataSize) noexcept;
+
+RADIENT_STATUS ValidateMaterialDefinitionDesc(const RadientMaterialDefinitionDesc& Desc);
+
+RADIENT_STATUS ValidateMaterialShaderDataLayout(
+    const RadientMaterialDefinitionDesc&       DefinitionDesc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout);
+
+} // namespace RadientMaterialDetail
+
 /// Maps one complete non-texture material parameter to its byte offset in the
 /// shader-readable material data block.
 struct RadientMaterialShaderParameterPacking

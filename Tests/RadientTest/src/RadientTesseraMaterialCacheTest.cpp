@@ -26,7 +26,7 @@
 
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
-#include "Assets/RadientMaterialImpl.hpp"
+#include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"

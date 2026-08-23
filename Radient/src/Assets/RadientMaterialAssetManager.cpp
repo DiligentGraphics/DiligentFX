@@ -29,10 +29,12 @@
 #include "Assets/RadientAssetImpl.hpp"
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetURI.hpp"
+#include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 
 #include <atomic>
+#include <exception>
 #include <vector>
 
 namespace Diligent
@@ -330,6 +332,50 @@ RadientMaterialAssetManager::RadientMaterialAssetManager(const CreateInfo& CI) :
 RadientMaterialAssetManagerSharedPtr RadientMaterialAssetManager::Create(const CreateInfo& CI)
 {
     return RadientMaterialAssetManagerSharedPtr{new RadientMaterialAssetManager{CI}};
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(const RadientMaterialDefinitionDesc& DefinitionDesc,
+                                                             IRadientMaterialDefinitionAsset**    ppDefinition)
+{
+    return CreateDefinition(DefinitionDesc, {}, ppDefinition);
+}
+
+RADIENT_STATUS RadientMaterialAssetManager::CreateDefinition(
+    const RadientMaterialDefinitionDesc&       DefinitionDesc,
+    const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout,
+    IRadientMaterialDefinitionAsset**          ppDefinition)
+{
+    if (ppDefinition == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppDefinition = nullptr;
+
+    try
+    {
+        const RADIENT_STATUS ValidationStatus =
+            RadientMaterialDetail::ValidateMaterialDefinitionDesc(DefinitionDesc);
+        if (ValidationStatus != RADIENT_STATUS_OK)
+            return ValidationStatus;
+
+        const RADIENT_STATUS LayoutValidationStatus =
+            RadientMaterialDetail::ValidateMaterialShaderDataLayout(DefinitionDesc, ShaderDataLayout);
+        if (LayoutValidationStatus != RADIENT_STATUS_OK)
+            return LayoutValidationStatus;
+
+        RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{
+            MakeNewRCObj<RadientMaterialDefinitionImpl>()(DefinitionDesc, ShaderDataLayout)};
+        *ppDefinition = pDefinition.Detach();
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient material definition: ", Error.what());
+        return RADIENT_STATUS_FAILED;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient material definition: unknown exception");
+        return RADIENT_STATUS_FAILED;
+    }
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(

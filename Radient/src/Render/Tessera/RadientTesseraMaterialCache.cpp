@@ -27,7 +27,7 @@
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 
 #include "Assets/RadientAssetStatus.hpp"
-#include "Assets/RadientMaterialImpl.hpp"
+#include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "ThreadPool.hpp"
 
