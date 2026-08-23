@@ -67,7 +67,7 @@ set(INCLUDE
     include/Assets/RadientGLTFLoader.hpp
     include/Assets/RadientMaterialAssetManager.hpp
     include/Assets/RadientMaterialDefinitionImpl.hpp
-    include/Assets/RadientMaterialInstanceImpl.hpp
+    include/Assets/RadientMaterialInstanceState.hpp
     include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshVertexSource.hpp

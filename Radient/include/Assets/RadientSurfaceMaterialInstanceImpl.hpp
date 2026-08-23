@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "Assets/RadientMaterialInstanceImpl.hpp"
+#include "Assets/RadientMaterialInstanceState.hpp"
 
 namespace Diligent
 {

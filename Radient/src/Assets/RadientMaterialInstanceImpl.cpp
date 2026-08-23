@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Assets/RadientMaterialInstanceImpl.hpp"
+#include "Assets/RadientMaterialInstanceState.hpp"
 
 #include "RadientMaterialInstanceImplBase.hpp"
 

@@ -29,7 +29,7 @@
 #include "Assets/RadientAssetImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
-#include "Assets/RadientMaterialInstanceImpl.hpp"
+#include "Assets/RadientMaterialInstanceState.hpp"
 #include "DebugUtilities.hpp"
 
 #include <exception>

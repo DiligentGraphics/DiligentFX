@@ -26,7 +26,7 @@
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 
-#include "Assets/RadientMaterialInstanceImpl.hpp"
+#include "Assets/RadientMaterialInstanceState.hpp"
 #include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 
