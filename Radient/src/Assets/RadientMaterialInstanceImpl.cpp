@@ -45,10 +45,10 @@ namespace RadientMaterialDetail
 
 struct PackedMaterialInstanceData::MaterialParameterValue
 {
+    RADIENT_MATERIAL_PARAMETER_TYPE Type = RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN;
     // Size is the byte size for value parameters and the element count for textures.
-    RADIENT_MATERIAL_PARAMETER_TYPE Type  = RADIENT_MATERIAL_PARAMETER_TYPE_UNKNOWN;
-    Uint32                          Size  = 0;
-    void*                           pData = nullptr;
+    Uint32 Size  = 0;
+    void*  pData = nullptr;
 };
 
 PackedMaterialInstanceData::~PackedMaterialInstanceData()
@@ -137,8 +137,9 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {
         const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
-        Uint32                              DataSize;
-        const bool                          IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
+
+        Uint32     DataSize;
+        const bool IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
         VERIFY_EXPR(IsValidDataSize);
         (void)IsValidDataSize;
 
@@ -158,8 +159,9 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {
         const RadientMaterialParameterDesc& Parameter = Desc.pParameters[Index];
-        MaterialParameterValue&             Value     = m_pValues[Index];
-        Value.Type                                    = Parameter.Type;
+
+        MaterialParameterValue& Value = m_pValues[Index];
+        Value.Type                    = Parameter.Type;
 
         Uint32     DataSize;
         const bool IsValidDataSize = GetMaterialParameterDataSize(Parameter, DataSize);
@@ -287,21 +289,21 @@ bool MaterialInstanceState::IsValidHandle(RadientMaterialParameterHandle Handle)
         Handle.Reserved == 0;
 }
 
-MaterialInstanceWriterState::MaterialInstanceWriterState(IRadientMaterialInstance* pOwner,
-                                                         MaterialInstanceState&    Instance) noexcept :
-    m_pOwner{pOwner},
-    m_Instance{Instance}
+MaterialInstanceWriterState::MaterialInstanceWriterState(IRadientMaterialInstance* pInstance,
+                                                         MaterialInstanceState&    InstanceState) noexcept :
+    m_pInstance{pInstance},
+    m_InstanceState{InstanceState}
 {}
 
 RADIENT_STATUS MaterialInstanceWriterState::SetParameter(RadientMaterialParameterHandle Handle,
                                                          const void*                    pData,
                                                          Uint32                         DataSize)
 {
-    if (!m_Instance.IsValidHandle(Handle) ||
-        IsTextureParameter(m_Instance.m_Data.GetValueType(Handle.Index)))
+    if (!m_InstanceState.IsValidHandle(Handle) ||
+        IsTextureParameter(m_InstanceState.m_Data.GetValueType(Handle.Index)))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const Uint32 InstanceValueSize = m_Instance.m_Data.GetValueSize(Handle.Index);
+    const Uint32 InstanceValueSize = m_InstanceState.m_Data.GetValueSize(Handle.Index);
     if (pData == nullptr || DataSize != InstanceValueSize)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -309,7 +311,7 @@ RADIENT_STATUS MaterialInstanceWriterState::SetParameter(RadientMaterialParamete
     const bool        HasChange    = ChangeIt != m_Changes.end();
     const void* const pCurrentData = HasChange ?
         m_ValueData.data() + ChangeIt->DataOffset :
-        m_Instance.m_Data.GetValueData(Handle.Index);
+        m_InstanceState.m_Data.GetValueData(Handle.Index);
     if (std::memcmp(pCurrentData, pData, InstanceValueSize) == 0)
         return RADIENT_STATUS_NO_CHANGE;
 
@@ -346,18 +348,18 @@ RADIENT_STATUS MaterialInstanceWriterState::SetTexture(RadientMaterialParameterH
                                                        Uint32                         ArrayIndex,
                                                        IRadientTextureAsset*          pTexture)
 {
-    if (!m_Instance.IsValidHandle(Handle) ||
-        !IsTextureParameter(m_Instance.m_Data.GetValueType(Handle.Index)))
+    if (!m_InstanceState.IsValidHandle(Handle) ||
+        !IsTextureParameter(m_InstanceState.m_Data.GetValueType(Handle.Index)))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (ArrayIndex >= m_Instance.m_Data.GetValueSize(Handle.Index))
+    if (ArrayIndex >= m_InstanceState.m_Data.GetValueSize(Handle.Index))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     ChangeIterator              ChangeIt        = FindChange(Handle.Index, ArrayIndex);
     const bool                  HasChange       = ChangeIt != m_Changes.end();
     IRadientTextureAsset* const pCurrentTexture = HasChange ?
         m_TextureData[ChangeIt->DataOffset].RawPtr() :
-        m_Instance.m_Data.GetTexture(Handle.Index, ArrayIndex);
+        m_InstanceState.m_Data.GetTexture(Handle.Index, ArrayIndex);
     if (pCurrentTexture == pTexture)
         return RADIENT_STATUS_NO_CHANGE;
 
@@ -394,13 +396,13 @@ bool MaterialInstanceWriterState::ApplyParameterChanges()
     bool StateChanged = false;
     for (const ParameterChange& Change : m_Changes)
     {
-        if (IsTextureParameter(m_Instance.m_Data.GetValueType(Change.ParameterIndex)))
+        if (IsTextureParameter(m_InstanceState.m_Data.GetValueType(Change.ParameterIndex)))
         {
             VERIFY_EXPR(Change.ArrayIndex != ValueArrayIndex);
             IRadientTextureAsset* const pTexture = m_TextureData[Change.DataOffset];
-            if (m_Instance.m_Data.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
+            if (m_InstanceState.m_Data.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
             {
-                m_Instance.m_Data.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
+                m_InstanceState.m_Data.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
                 StateChanged = true;
             }
         }
@@ -408,9 +410,9 @@ bool MaterialInstanceWriterState::ApplyParameterChanges()
         {
             VERIFY_EXPR(Change.ArrayIndex == ValueArrayIndex);
             const void* const pChangedData = m_ValueData.data() + Change.DataOffset;
-            if (!m_Instance.m_Data.HasSameValue(Change.ParameterIndex, pChangedData))
+            if (!m_InstanceState.m_Data.HasSameValue(Change.ParameterIndex, pChangedData))
             {
-                m_Instance.m_Data.CopyValue(Change.ParameterIndex, pChangedData);
+                m_InstanceState.m_Data.CopyValue(Change.ParameterIndex, pChangedData);
                 StateChanged = true;
             }
         }
@@ -427,7 +429,7 @@ RADIENT_STATUS MaterialInstanceWriterState::FinishCommit(bool StateChanged)
     if (!StateChanged)
         return RADIENT_STATUS_NO_CHANGE;
 
-    ++m_Instance.m_Version;
+    ++m_InstanceState.m_Version;
     return RADIENT_STATUS_OK;
 }
 
@@ -549,8 +551,7 @@ RADIENT_STATUS RadientMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanc
     try
     {
         RefCntAutoPtr<RadientMaterialInstanceWriterImpl> pWriter{
-            MakeNewRCObj<RadientMaterialInstanceWriterImpl>()(
-                const_cast<RadientMaterialInstanceImpl*>(this))};
+            MakeNewRCObj<RadientMaterialInstanceWriterImpl>()(const_cast<RadientMaterialInstanceImpl*>(this))};
         *ppWriter = pWriter.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -590,8 +591,7 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInsta
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle)
 {
-    return RefCntAutoPtr<RadientMaterialInstanceImpl>{
-        MakeNewRCObj<RadientMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
+    return RefCntAutoPtr<RadientMaterialInstanceImpl>{MakeNewRCObj<RadientMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
 }
 
 const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetMaterialInstanceData(

@@ -49,10 +49,12 @@ public:
     explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
                                         const PackedMaterialInstanceData*    pSource = nullptr);
 
-    PackedMaterialInstanceData(const PackedMaterialInstanceData&)            = delete;
+    // clang-format off
+    PackedMaterialInstanceData           (const PackedMaterialInstanceData&) = delete;
     PackedMaterialInstanceData& operator=(const PackedMaterialInstanceData&) = delete;
-    PackedMaterialInstanceData(PackedMaterialInstanceData&&)                 = delete;
+    PackedMaterialInstanceData           (PackedMaterialInstanceData&&)      = delete;
     PackedMaterialInstanceData& operator=(PackedMaterialInstanceData&&)      = delete;
+    // clang-format on
 
     ~PackedMaterialInstanceData();
 
@@ -88,10 +90,12 @@ public:
                           RadientHandle                    DefinitionHandle,
                           const MaterialInstanceState*     pSource = nullptr);
 
-    MaterialInstanceState(const MaterialInstanceState&)            = delete;
+    // clang-format off
+    MaterialInstanceState           (const MaterialInstanceState&) = delete;
     MaterialInstanceState& operator=(const MaterialInstanceState&) = delete;
-    MaterialInstanceState(MaterialInstanceState&&)                 = delete;
+    MaterialInstanceState           (MaterialInstanceState&&)      = delete;
     MaterialInstanceState& operator=(MaterialInstanceState&&)      = delete;
+    // clang-format on
 
     IRadientMaterialDefinitionAsset* GetDefinition() const noexcept;
     RadientHandle                    GetDefinitionHandle() const noexcept;
@@ -121,13 +125,15 @@ private:
 class MaterialInstanceWriterState final
 {
 public:
-    MaterialInstanceWriterState(IRadientMaterialInstance* pOwner,
-                                MaterialInstanceState&    Instance) noexcept;
+    MaterialInstanceWriterState(IRadientMaterialInstance* pInstance,
+                                MaterialInstanceState&    InstanceState) noexcept;
 
-    MaterialInstanceWriterState(const MaterialInstanceWriterState&)            = delete;
+    // clang-format off
+    MaterialInstanceWriterState           (const MaterialInstanceWriterState&) = delete;
     MaterialInstanceWriterState& operator=(const MaterialInstanceWriterState&) = delete;
-    MaterialInstanceWriterState(MaterialInstanceWriterState&&)                 = delete;
+    MaterialInstanceWriterState           (MaterialInstanceWriterState&&)      = delete;
     MaterialInstanceWriterState& operator=(MaterialInstanceWriterState&&)      = delete;
+    // clang-format on
 
     RADIENT_STATUS SetParameter(RadientMaterialParameterHandle Handle,
                                 const void*                    pData,
@@ -155,8 +161,11 @@ private:
 
     ChangeIterator FindChange(Uint32 ParameterIndex, Uint32 ArrayIndex) noexcept;
 
-    RefCntAutoPtr<IRadientMaterialInstance>             m_pOwner;
-    MaterialInstanceState&                              m_Instance;
+    // Both members refer to the same material instance. m_pInstance keeps the
+    // instance, and therefore m_InstanceState, alive for the writer's lifetime.
+    RefCntAutoPtr<IRadientMaterialInstance> m_pInstance;
+    MaterialInstanceState&                  m_InstanceState;
+
     ChangeList                                          m_Changes;
     std::vector<Uint8>                                  m_ValueData;
     std::vector<PackedMaterialInstanceData::TexturePtr> m_TextureData;
@@ -166,8 +175,7 @@ RefCntAutoPtr<IRadientMaterialInstance> MakeMaterialInstance(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
-const PackedMaterialInstanceData& GetMaterialInstanceData(
-    const IRadientMaterialInstance& Instance) noexcept;
+const PackedMaterialInstanceData& GetMaterialInstanceData(const IRadientMaterialInstance& Instance) noexcept;
 
 } // namespace RadientMaterialDetail
 
