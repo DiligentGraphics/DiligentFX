@@ -58,9 +58,6 @@ namespace RadientGLTFConverter
 {
 
 /// Infers the immutable standard-material schema required by a GLTF material.
-///
-/// Deprecated specular-glossiness materials are not representable by the
-/// standard material model and return RADIENT_STATUS_UNSUPPORTED.
 RADIENT_STATUS ConvertMaterialDefinition(
     const GLTF::Material&                        Material,
     RadientStandardMaterialDefinitionCreateInfo& DefinitionCI);

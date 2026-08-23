@@ -153,6 +153,9 @@ DILIGENT_TYPED_ENUM(RADIENT_SURFACE_SHADING_MODEL, Uint8)
     /// Metallic-roughness physically based material.
     RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS = 0,
 
+    /// Specular-glossiness physically based material.
+    RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS,
+
     /// Unlit material whose output is the base color.
     RADIENT_SURFACE_SHADING_MODEL_UNLIT,
 
@@ -373,8 +376,8 @@ struct RadientStandardMaterialDefinitionCreateInfo
     /// Surface shading model implemented by the built-in definition.
     RADIENT_SURFACE_SHADING_MODEL ShadingModel DEFAULT_INITIALIZER(RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS);
 
-    /// Optional features present in the definition. Unlit materials do not
-    /// support optional metallic-roughness features.
+    /// Optional features present in the definition. Built-in optional features
+    /// are only supported by metallic-roughness materials.
     RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features DEFAULT_INITIALIZER(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
 
     /// Every SemanticTexture parameter supplied by the model and its features

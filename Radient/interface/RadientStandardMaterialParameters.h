@@ -51,9 +51,14 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 static DILIGENT_CONSTEXPR Uint32 RadientStandardMaterialSchemaVersion = 1;
 
 /// Name of the FLOAT4 linear RGBA base-color multiplier. Components are expected
-/// in [0, 1]. The parameter is present in every standard material and defaults to
-/// (1, 1, 1, 1).
+/// in [0, 1]. The parameter is present in metallic-roughness and unlit materials
+/// and defaults to (1, 1, 1, 1).
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorFactorName[] = "BaseColorFactor";
+
+/// Name of the FLOAT4 linear RGBA diffuse multiplier. Components are expected
+/// in [0, 1]. The parameter is present in specular-glossiness materials and
+/// defaults to (1, 1, 1, 1).
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseFactorName[] = "DiffuseFactor";
 
 /// Name of the FLOAT metallic multiplier. The value is expected in [0, 1]. The
 /// parameter is present in metallic-roughness materials and defaults to 1.
@@ -64,9 +69,18 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicFactorName[] = "Me
 /// to 1.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialRoughnessFactorName[] = "RoughnessFactor";
 
+/// Name of the FLOAT3 linear RGB specular-reflectance multiplier. Components
+/// are expected in [0, 1]. The parameter is present in specular-glossiness
+/// materials and defaults to (1, 1, 1).
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularFactorName[] = "SpecularFactor";
+
+/// Name of the FLOAT glossiness multiplier. The value is expected in [0, 1].
+/// The parameter is present in specular-glossiness materials and defaults to 1.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialGlossinessFactorName[] = "GlossinessFactor";
+
 /// Name of the FLOAT3 linear RGB emissive multiplier. Values are expected to be
 /// non-negative and may exceed 1 for HDR emission. The parameter is present in
-/// metallic-roughness materials and defaults to (0, 0, 0).
+/// lit materials and defaults to (0, 0, 0).
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveFactorName[] = "EmissiveFactor";
 
 /// Name of the FLOAT multiplier applied to the X and Y components decoded from
@@ -176,6 +190,20 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureWrapUName[
 /// Name of the base-color texture UINT V address mode.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureWrapVName[] = "BaseColorTextureWrapV";
 
+/// Name of the diffuse TEXTURE. RGB is interpreted as sRGB, alpha is linear,
+/// and all channels are expected in [0, 1].
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureName[] = "DiffuseTexture";
+/// Name of the diffuse texture INT UV-set selector.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVSelectorName[] = "DiffuseTextureUVSelector";
+/// Name of the diffuse texture FLOAT2X2 UV scale-and-rotation transform.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVScaleAndRotationName[] = "DiffuseTextureUVScaleAndRotation";
+/// Name of the diffuse texture FLOAT2 UV translation.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVBiasName[] = "DiffuseTextureUVBias";
+/// Name of the diffuse texture UINT U address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureWrapUName[] = "DiffuseTextureWrapU";
+/// Name of the diffuse texture UINT V address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureWrapVName[] = "DiffuseTextureWrapV";
+
 /// Name of the metallic-roughness TEXTURE. It is sampled linearly; G stores
 /// perceptual roughness and B stores metallic, both in [0, 1].
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureName[] = "MetallicRoughnessTexture";
@@ -189,6 +217,21 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUV
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureWrapUName[] = "MetallicRoughnessTextureWrapU";
 /// Name of the metallic-roughness texture UINT V address mode.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureWrapVName[] = "MetallicRoughnessTextureWrapV";
+
+/// Name of the specular-glossiness TEXTURE. RGB is interpreted as sRGB and
+/// stores specular reflectance; linear A stores glossiness. All channels are
+/// expected in [0, 1].
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureName[] = "SpecularGlossinessTexture";
+/// Name of the specular-glossiness texture INT UV-set selector.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVSelectorName[] = "SpecularGlossinessTextureUVSelector";
+/// Name of the specular-glossiness texture FLOAT2X2 UV scale-and-rotation transform.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVScaleAndRotationName[] = "SpecularGlossinessTextureUVScaleAndRotation";
+/// Name of the specular-glossiness texture FLOAT2 UV translation.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVBiasName[] = "SpecularGlossinessTextureUVBias";
+/// Name of the specular-glossiness texture UINT U address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureWrapUName[] = "SpecularGlossinessTextureWrapU";
+/// Name of the specular-glossiness texture UINT V address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureWrapVName[] = "SpecularGlossinessTextureWrapV";
 
 /// Name of the normal TEXTURE. Linear RGB values in [0, 1] encode a tangent-space
 /// normal that is remapped to [-1, 1].
@@ -422,7 +465,9 @@ struct RadientStandardMaterialTextureParameters
         }
 
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(BaseColor);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Diffuse);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(MetallicRoughness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SpecularGlossiness);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Normal);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Occlusion);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Emissive);

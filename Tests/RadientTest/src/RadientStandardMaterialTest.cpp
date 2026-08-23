@@ -148,6 +148,48 @@ GLTF::Material MakeExtendedPBRMaterial()
     return Material;
 }
 
+GLTF::Material MakeSpecularGlossinessMaterial()
+{
+    GLTF::Material Material;
+    Material.Attribs.Workflow        = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+    Material.Attribs.BaseColorFactor = float4{0.15f, 0.25f, 0.35f, 0.45f};
+    Material.Attribs.SpecularFactor  = float3{0.55f, 0.65f, 0.75f};
+    Material.Attribs.RoughnessFactor = 0.85f; // Carries glossiness for this workflow.
+    Material.Attribs.EmissiveFactor  = float3{0.12f, 0.23f, 0.34f};
+    Material.Attribs.NormalScale     = 0.46f;
+    Material.Attribs.OcclusionFactor = 0.57f;
+    Material.Attribs.AlphaMode       = GLTF::Material::ALPHA_MODE_MASK;
+    Material.Attribs.AlphaCutoff     = 0.68f;
+
+    static constexpr std::array TextureAttribIds{
+        GLTF::DefaultDiffuseTextureAttribId,
+        GLTF::DefaultSpecularGlossinessTextureAttibId,
+        GLTF::DefaultNormalTextureAttribId,
+        GLTF::DefaultOcclusionTextureAttribId,
+        GLTF::DefaultEmissiveTextureAttribId,
+    };
+
+    GLTF::MaterialBuilder Builder{Material};
+    for (size_t TextureIndex = 0; TextureIndex < TextureAttribIds.size(); ++TextureIndex)
+    {
+        const Uint32 TextureAttribId = TextureAttribIds[TextureIndex];
+        Builder.SetTextureId(TextureAttribId, 0);
+
+        GLTF::Material::TextureShaderAttribs& TextureAttribs =
+            Builder.GetTextureAttrib(TextureAttribId);
+        TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
+        TextureAttribs.UVScaleAndRotation = float2x2{
+            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
+            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
+        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
+        TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_WRAP : TEXTURE_ADDRESS_CLAMP);
+        TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
+    }
+    Builder.Finalize();
+    return Material;
+}
+
 const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& GetStandardMaterialTextureAttribIndices()
 {
     static const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices = [] {
@@ -372,6 +414,36 @@ TEST(RadientStandardMaterialTest, MaterialsUseDefinitionTextureDefaults)
         ASSERT_EQ(pMaterial->GetTexture(Handle, 0, pMaterialTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK) << Expected.Name;
         EXPECT_EQ(pMaterialTexture, Expected.pTexture) << Expected.Name;
     }
+
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS;
+    DefinitionCI.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
+    pDefinition.Release();
+    ASSERT_EQ(pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    pMaterial.Release();
+    ASSERT_EQ(pMaterialManager->CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    const std::array<ExpectedTextureDefault, 5> SpecularGlossinessDefaults{{
+        {RadientStandardMaterialDiffuseTextureName, pWhite},
+        {RadientStandardMaterialSpecularGlossinessTextureName, pWhite},
+        {RadientStandardMaterialNormalTextureName, pNormal},
+        {RadientStandardMaterialOcclusionTextureName, pWhite},
+        {RadientStandardMaterialEmissiveTextureName, pBlack},
+    }};
+
+    for (const ExpectedTextureDefault& Expected : SpecularGlossinessDefaults)
+    {
+        RadientMaterialParameterHandle Handle;
+        ASSERT_EQ(pDefinition->FindParameter(Expected.Name, &Handle), RADIENT_STATUS_OK) << Expected.Name;
+        EXPECT_EQ(pDefinition->GetParameterDesc(Handle.Index).pDefaultTexture, Expected.pTexture) << Expected.Name;
+
+        RefCntAutoPtr<IRadientTextureAsset> pMaterialTexture;
+        ASSERT_EQ(pMaterial->GetTexture(Handle, 0, pMaterialTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK) << Expected.Name;
+        EXPECT_EQ(pMaterialTexture, Expected.pTexture) << Expected.Name;
+    }
 }
 
 TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
@@ -562,6 +634,19 @@ TEST(RadientStandardMaterialTest, DefaultPBRShaderDataMatchesGLTFPacking)
     Material.Attribs.MetallicFactor  = 0.45f;
     Material.Attribs.RoughnessFactor = 0.55f;
 
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial =
+        CreateStandardMaterialAsset(*pAssetManager, Material);
+    ASSERT_NE(pMaterial, nullptr);
+
+    ExpectShaderDataMatchesGLTF(Material, *pMaterial);
+}
+
+TEST(RadientStandardMaterialTest, SpecularGlossinessShaderDataMatchesGLTFPacking)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    const GLTF::Material                 Material = MakeSpecularGlossinessMaterial();
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial =
         CreateStandardMaterialAsset(*pAssetManager, Material);
     ASSERT_NE(pMaterial, nullptr);
@@ -762,10 +847,14 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
     const auto ExpectParameters = [](IRadientMaterialDefinitionAsset& pDefinition,
                                      const auto&                      ExpectedNames) {
         ASSERT_EQ(pDefinition.GetParameterCount(), static_cast<Uint32>(ExpectedNames.size()));
-        for (const Char* Name : ExpectedNames)
+        for (size_t Index = 0; Index < ExpectedNames.size(); ++Index)
         {
+            const Char* const Name = ExpectedNames[Index];
+            EXPECT_STREQ(pDefinition.GetParameterDesc(static_cast<Uint32>(Index)).Name, Name);
+
             RadientMaterialParameterHandle Handle;
             EXPECT_EQ(pDefinition.FindParameter(Name, &Handle), RADIENT_STATUS_OK) << Name;
+            EXPECT_EQ(Handle.Index, Index) << Name;
         }
     };
 
@@ -808,6 +897,85 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialEmissiveTextureWrapVName,
     };
 
+    static constexpr std::array SpecularGlossinessParameters{
+        RadientStandardMaterialDiffuseFactorName,
+        RadientStandardMaterialSpecularFactorName,
+        RadientStandardMaterialGlossinessFactorName,
+        RadientStandardMaterialEmissiveFactorName,
+        RadientStandardMaterialNormalScaleName,
+        RadientStandardMaterialOcclusionStrengthName,
+        RadientStandardMaterialDiffuseTextureName,
+        RadientStandardMaterialDiffuseTextureUVSelectorName,
+        RadientStandardMaterialDiffuseTextureUVScaleAndRotationName,
+        RadientStandardMaterialDiffuseTextureUVBiasName,
+        RadientStandardMaterialDiffuseTextureWrapUName,
+        RadientStandardMaterialDiffuseTextureWrapVName,
+        RadientStandardMaterialSpecularGlossinessTextureName,
+        RadientStandardMaterialSpecularGlossinessTextureUVSelectorName,
+        RadientStandardMaterialSpecularGlossinessTextureUVScaleAndRotationName,
+        RadientStandardMaterialSpecularGlossinessTextureUVBiasName,
+        RadientStandardMaterialSpecularGlossinessTextureWrapUName,
+        RadientStandardMaterialSpecularGlossinessTextureWrapVName,
+        RadientStandardMaterialNormalTextureName,
+        RadientStandardMaterialNormalTextureUVSelectorName,
+        RadientStandardMaterialNormalTextureUVScaleAndRotationName,
+        RadientStandardMaterialNormalTextureUVBiasName,
+        RadientStandardMaterialNormalTextureWrapUName,
+        RadientStandardMaterialNormalTextureWrapVName,
+        RadientStandardMaterialOcclusionTextureName,
+        RadientStandardMaterialOcclusionTextureUVSelectorName,
+        RadientStandardMaterialOcclusionTextureUVScaleAndRotationName,
+        RadientStandardMaterialOcclusionTextureUVBiasName,
+        RadientStandardMaterialOcclusionTextureWrapUName,
+        RadientStandardMaterialOcclusionTextureWrapVName,
+        RadientStandardMaterialEmissiveTextureName,
+        RadientStandardMaterialEmissiveTextureUVSelectorName,
+        RadientStandardMaterialEmissiveTextureUVScaleAndRotationName,
+        RadientStandardMaterialEmissiveTextureUVBiasName,
+        RadientStandardMaterialEmissiveTextureWrapUName,
+        RadientStandardMaterialEmissiveTextureWrapVName,
+    };
+
+    static constexpr std::array SpecularGlossinessParameterTypes{
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
+        RADIENT_MATERIAL_PARAMETER_TYPE_INT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
+        RADIENT_MATERIAL_PARAMETER_TYPE_INT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
+        RADIENT_MATERIAL_PARAMETER_TYPE_INT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
+        RADIENT_MATERIAL_PARAMETER_TYPE_INT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
+        RADIENT_MATERIAL_PARAMETER_TYPE_INT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+        RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
+    };
+    static_assert(SpecularGlossinessParameters.size() == SpecularGlossinessParameterTypes.size());
+
     RadientStandardMaterialDefinitionCreateInfo    DefinitionCI{};
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -822,6 +990,76 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
     ExpectParameters(*pDefinition, MetallicRoughnessParameters);
 
     RadientMaterialParameterHandle Handle;
+
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS;
+    pDefinition.Release();
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+    const auto& SpecularGlossinessSurfaceDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(pDefinition->GetDesc());
+    EXPECT_EQ(SpecularGlossinessSurfaceDesc.ShadingModel,
+              RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS);
+    EXPECT_EQ(SpecularGlossinessSurfaceDesc.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+    EXPECT_STREQ(pDefinition->GetDesc().Reference.URI, "standard-material:1:0");
+    EXPECT_EQ(pDefinition->GetDesc().Reference.Version, RadientStandardMaterialSchemaVersion);
+    ExpectParameters(*pDefinition, SpecularGlossinessParameters);
+    for (size_t Index = 0; Index < SpecularGlossinessParameterTypes.size(); ++Index)
+    {
+        const RadientMaterialParameterDesc& Parameter =
+            pDefinition->GetParameterDesc(static_cast<Uint32>(Index));
+        EXPECT_EQ(Parameter.Type, SpecularGlossinessParameterTypes[Index]) << Parameter.Name;
+        EXPECT_EQ(Parameter.ArraySize, 1u) << Parameter.Name;
+    }
+    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialBaseColorFactorName, &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialMetallicFactorName, &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialRoughnessFactorName, &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialBaseColorTextureName, &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pDefinition->FindParameter(RadientStandardMaterialMetallicRoughnessTextureName, &Handle), RADIENT_STATUS_NOT_FOUND);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pSpecularGlossinessMaterial;
+    ASSERT_EQ(pAssetManager->CreateMaterial(pDefinition, pSpecularGlossinessMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pSpecularGlossinessMaterial, nullptr);
+
+    const auto FindSpecularGlossinessHandle = [&](const Char* Name) {
+        RadientMaterialParameterHandle Parameter;
+        EXPECT_EQ(pDefinition->FindParameter(Name, &Parameter), RADIENT_STATUS_OK) << Name;
+        return Parameter;
+    };
+
+    const RadientFloat4 DiffuseFactor = GetParameter<RadientFloat4>(
+        *pSpecularGlossinessMaterial,
+        FindSpecularGlossinessHandle(RadientStandardMaterialDiffuseFactorName));
+    EXPECT_FLOAT_EQ(DiffuseFactor.x, 1.f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.y, 1.f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.z, 1.f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.w, 1.f);
+
+    const RadientFloat3 SpecularFactor = GetParameter<RadientFloat3>(
+        *pSpecularGlossinessMaterial,
+        FindSpecularGlossinessHandle(RadientStandardMaterialSpecularFactorName));
+    EXPECT_FLOAT_EQ(SpecularFactor.x, 1.f);
+    EXPECT_FLOAT_EQ(SpecularFactor.y, 1.f);
+    EXPECT_FLOAT_EQ(SpecularFactor.z, 1.f);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(
+                        *pSpecularGlossinessMaterial,
+                        FindSpecularGlossinessHandle(RadientStandardMaterialGlossinessFactorName)),
+                    1.f);
+
+    for (const RadientStandardMaterialTextureParameterNames* pNames : {
+             &RadientStandardMaterialDiffuseTextureParameterNames,
+             &RadientStandardMaterialSpecularGlossinessTextureParameterNames,
+         })
+    {
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pSpecularGlossinessMaterial->GetTexture(
+                      FindSpecularGlossinessHandle(pNames->Texture), 0, pTexture.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        EXPECT_EQ(pTexture, nullptr);
+        EXPECT_EQ(GetParameter<Int32>(*pSpecularGlossinessMaterial,
+                                      FindSpecularGlossinessHandle(pNames->UVSelector)),
+                  -1);
+    }
 
     static constexpr std::array UnlitParameters{
         RadientStandardMaterialBaseColorFactorName,
@@ -912,6 +1150,20 @@ TEST(RadientStandardMaterialTest, RejectsOptionalFeaturesForUnlitMaterial)
     DefinitionCI.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
     ExpectInvalidStandardDefinition(*pAssetManager, DefinitionCI,
                                     "Unlit standard materials do not support optional material features");
+}
+
+TEST(RadientStandardMaterialTest, RejectsOptionalFeaturesForSpecularGlossinessMaterial)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS;
+    DefinitionCI.Features     = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
+    ExpectInvalidStandardDefinition(
+        *pAssetManager,
+        DefinitionCI,
+        "Specular-glossiness standard materials do not support optional material features");
 }
 
 TEST(RadientStandardMaterialTest, VolumeRequiresTransmission)

@@ -34,6 +34,7 @@
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 
 #define TINYGLTF_NO_STB_IMAGE
@@ -47,6 +48,7 @@
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -820,14 +822,125 @@ TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)
     EXPECT_EQ(pMaterial->GetDefinition()->FindParameter("NormalTexture", &Handle), RADIENT_STATUS_NOT_FOUND);
 }
 
-TEST(RadientGLTFConverterTest, RejectsDeprecatedSpecularGlossinessMaterial)
+TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndValues)
 {
     GLTF::Material Material;
-    Material.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+    Material.Attribs.Workflow        = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+    Material.Attribs.BaseColorFactor = float4{0.15f, 0.25f, 0.35f, 0.45f};
+    Material.Attribs.SpecularFactor  = float3{0.55f, 0.65f, 0.75f};
+    Material.Attribs.RoughnessFactor = 0.85f; // Carries glossiness for this workflow.
+    Material.Attribs.EmissiveFactor  = float3{0.12f, 0.23f, 0.34f};
+    Material.Attribs.NormalScale     = 0.46f;
+    Material.Attribs.OcclusionFactor = 0.57f;
+    Material.Attribs.AlphaMode       = GLTF::Material::ALPHA_MODE_BLEND;
+    Material.Attribs.AlphaCutoff     = 0.68f;
+    Material.DoubleSided             = true;
+
+    GLTF::MaterialBuilder Builder{Material};
+    Builder.SetTextureId(GLTF::DefaultDiffuseTextureAttribId, 0);
+    Builder.SetTextureId(GLTF::DefaultSpecularGlossinessTextureAttibId, 1);
+
+    GLTF::Material::TextureShaderAttribs& DiffuseTextureAttribs =
+        Builder.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId);
+    DiffuseTextureAttribs.SetUVSelector(1);
+    DiffuseTextureAttribs.UVScaleAndRotation = float2x2{2.f, 0.1f, 0.2f, 3.f};
+    DiffuseTextureAttribs.UBias              = 0.11f;
+    DiffuseTextureAttribs.VBias              = 0.22f;
+    DiffuseTextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
+    DiffuseTextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
+
+    GLTF::Material::TextureShaderAttribs& SpecularGlossinessTextureAttribs =
+        Builder.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId);
+    SpecularGlossinessTextureAttribs.SetUVSelector(0);
+    SpecularGlossinessTextureAttribs.UVScaleAndRotation = float2x2{4.f, 0.3f, 0.4f, 5.f};
+    SpecularGlossinessTextureAttribs.UBias              = 0.33f;
+    SpecularGlossinessTextureAttribs.VBias              = 0.44f;
+    SpecularGlossinessTextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
+    SpecularGlossinessTextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_CLAMP);
+    Builder.Finalize();
+
+    RefCntAutoPtr<IRadientTextureAsset> pDiffuseTexture =
+        MakeTestTextureAsset("texture://gltf-spec-gloss-diffuse");
+    RefCntAutoPtr<IRadientTextureAsset> pSpecularGlossinessTexture =
+        MakeTestTextureAsset("texture://gltf-spec-gloss-physical-description");
+    IRadientTextureAsset* const Textures[] = {pDiffuseTexture, pSpecularGlossinessTexture};
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    EXPECT_EQ(RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI),
-              RADIENT_STATUS_UNSUPPORTED);
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
+        ConvertMaterial(Material, Textures, static_cast<Uint32>(std::size(Textures)), DefinitionCI);
+    ASSERT_NE(pMaterial, nullptr);
+
+    EXPECT_EQ(DefinitionCI.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS);
+    EXPECT_EQ(DefinitionCI.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+
+    const RadientFloat4 DiffuseFactor =
+        GetMaterialParameter<RadientFloat4>(*pMaterial, RadientStandardMaterialDiffuseFactorName);
+    EXPECT_FLOAT_EQ(DiffuseFactor.x, Material.Attribs.BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(DiffuseFactor.y, Material.Attribs.BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(DiffuseFactor.z, Material.Attribs.BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(DiffuseFactor.w, Material.Attribs.BaseColorFactor.w);
+
+    const RadientFloat3 SpecularFactor =
+        GetMaterialParameter<RadientFloat3>(*pMaterial, RadientStandardMaterialSpecularFactorName);
+    EXPECT_FLOAT_EQ(SpecularFactor.x, Material.Attribs.SpecularFactor.x);
+    EXPECT_FLOAT_EQ(SpecularFactor.y, Material.Attribs.SpecularFactor.y);
+    EXPECT_FLOAT_EQ(SpecularFactor.z, Material.Attribs.SpecularFactor.z);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialGlossinessFactorName),
+                    Material.Attribs.RoughnessFactor);
+
+    const RadientFloat3 EmissiveFactor =
+        GetMaterialParameter<RadientFloat3>(*pMaterial, RadientStandardMaterialEmissiveFactorName);
+    EXPECT_FLOAT_EQ(EmissiveFactor.x, Material.Attribs.EmissiveFactor.x);
+    EXPECT_FLOAT_EQ(EmissiveFactor.y, Material.Attribs.EmissiveFactor.y);
+    EXPECT_FLOAT_EQ(EmissiveFactor.z, Material.Attribs.EmissiveFactor.z);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialNormalScaleName),
+                    Material.Attribs.NormalScale);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialOcclusionStrengthName),
+                    Material.Attribs.OcclusionFactor);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), Material.Attribs.AlphaCutoff);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
+
+    EXPECT_EQ(GetMaterialTexture(*pMaterial, RadientStandardMaterialDiffuseTextureName),
+              pDiffuseTexture);
+    EXPECT_EQ(GetMaterialTexture(*pMaterial, RadientStandardMaterialSpecularGlossinessTextureName),
+              pSpecularGlossinessTexture);
+
+    const auto ExpectTextureBinding = [&](const RadientStandardMaterialTextureParameterNames& Names,
+                                          const GLTF::Material::TextureShaderAttribs&         Expected) {
+        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, Names.UVSelector), Expected.GetUVSelector());
+
+        const float2x2 UVScaleAndRotation =
+            GetMaterialParameter<float2x2>(*pMaterial, Names.UVScaleAndRotation);
+        EXPECT_FLOAT_EQ(UVScaleAndRotation._11, Expected.UVScaleAndRotation._11);
+        EXPECT_FLOAT_EQ(UVScaleAndRotation._12, Expected.UVScaleAndRotation._12);
+        EXPECT_FLOAT_EQ(UVScaleAndRotation._21, Expected.UVScaleAndRotation._21);
+        EXPECT_FLOAT_EQ(UVScaleAndRotation._22, Expected.UVScaleAndRotation._22);
+
+        const RadientFloat2 UVBias =
+            GetMaterialParameter<RadientFloat2>(*pMaterial, Names.UVBias);
+        EXPECT_FLOAT_EQ(UVBias.x, Expected.UBias);
+        EXPECT_FLOAT_EQ(UVBias.y, Expected.VBias);
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, Names.WrapU),
+                  static_cast<Uint32>(Expected.GetWrapUMode()));
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, Names.WrapV),
+                  static_cast<Uint32>(Expected.GetWrapVMode()));
+    };
+
+    ExpectTextureBinding(RadientStandardMaterialDiffuseTextureParameterNames,
+                         Material.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId));
+    ExpectTextureBinding(RadientStandardMaterialSpecularGlossinessTextureParameterNames,
+                         Material.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId));
+
+    RadientMaterialParameterHandle Handle;
+    EXPECT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &Handle),
+              RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialMetallicRoughnessTextureName, &Handle),
+              RADIENT_STATUS_NOT_FOUND);
 }
 
 TEST(RadientGLTFConverterTest, CreateMeshVertexSourceRejectsInvalidArguments)

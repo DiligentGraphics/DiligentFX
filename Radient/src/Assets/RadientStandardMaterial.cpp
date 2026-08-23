@@ -69,15 +69,18 @@ RADIENT_STATUS ValidateStandardMaterialDefinitionCreateInfo(const RadientStandar
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT)
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT &&
+        CreateInfo.Features != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE)
     {
-        if (CreateInfo.Features != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE)
-        {
-            LOG_ERROR_MESSAGE("Unlit standard materials do not support optional material features");
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
+        LOG_ERROR_MESSAGE("Unlit standard materials do not support optional material features");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
-        return RADIENT_STATUS_OK;
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS &&
+        CreateInfo.Features != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE)
+    {
+        LOG_ERROR_MESSAGE("Specular-glossiness standard materials do not support optional material features");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME) &&
@@ -114,8 +117,11 @@ struct StandardMaterialParameters
     struct ShaderParameterIndices
     {
         Uint32 BaseColorFactor             = InvalidParameterIndex;
+        Uint32 DiffuseFactor               = InvalidParameterIndex;
         Uint32 MetallicFactor              = InvalidParameterIndex;
         Uint32 RoughnessFactor             = InvalidParameterIndex;
+        Uint32 SpecularFactor              = InvalidParameterIndex;
+        Uint32 GlossinessFactor            = InvalidParameterIndex;
         Uint32 EmissiveFactor              = InvalidParameterIndex;
         Uint32 NormalScale                 = InvalidParameterIndex;
         Uint32 OcclusionStrength           = InvalidParameterIndex;
@@ -194,6 +200,8 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
                                                            const RadientMaterialDefaultTextures&              DefaultTextures)
 {
     static constexpr RadientFloat4 DefaultBaseColor{1.f, 1.f, 1.f, 1.f};
+    static constexpr RadientFloat4 DefaultDiffuse{1.f, 1.f, 1.f, 1.f};
+    static constexpr RadientFloat3 DefaultSpecular{1.f, 1.f, 1.f};
     static constexpr RadientFloat3 DefaultEmissive{0.f, 0.f, 0.f};
     static constexpr RadientFloat3 DefaultSheenColor{0.f, 0.f, 0.f};
     static constexpr RadientFloat3 DefaultAttenuationColor{1.f, 1.f, 1.f};
@@ -209,21 +217,47 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
     std::vector<RadientMaterialParameterDesc>& Parameters = Result.Parameters;
     Parameters.reserve(32 + 6 * 15);
 
-    Result.ShaderIndices.BaseColorFactor =
-        AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialBaseColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, &DefaultBaseColor);
-
-    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    switch (CreateInfo.ShadingModel)
     {
-        Result.ShaderIndices.MetallicFactor =
-            AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialMetallicFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
-        Result.ShaderIndices.RoughnessFactor =
-            AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialRoughnessFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+        case RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS:
+            Result.ShaderIndices.BaseColorFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialBaseColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, &DefaultBaseColor);
+            Result.ShaderIndices.MetallicFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialMetallicFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+            Result.ShaderIndices.RoughnessFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialRoughnessFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+            break;
+
+        case RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS:
+            Result.ShaderIndices.DiffuseFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialDiffuseFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, &DefaultDiffuse);
+            Result.ShaderIndices.SpecularFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialSpecularFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, &DefaultSpecular);
+            Result.ShaderIndices.GlossinessFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialGlossinessFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+            break;
+
+        case RADIENT_SURFACE_SHADING_MODEL_UNLIT:
+            Result.ShaderIndices.BaseColorFactor =
+                AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialBaseColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, &DefaultBaseColor);
+            break;
+
+        default:
+            UNEXPECTED("Unexpected standard material shading model");
+            break;
+    }
+
+    if (CreateInfo.ShadingModel != RADIENT_SURFACE_SHADING_MODEL_UNLIT)
+    {
         Result.ShaderIndices.EmissiveFactor =
             AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialEmissiveFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, &DefaultEmissive);
 
         Result.ShaderIndices.NormalScale       = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialNormalScaleName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
         Result.ShaderIndices.OcclusionStrength = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialOcclusionStrengthName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+    }
 
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    {
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
         {
             Result.ShaderIndices.ClearCoatFactor          = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialClearCoatFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultZero);
@@ -271,14 +305,36 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
                                              RadientStandardMaterial##Name##TextureWrapUName,              \
                                              RadientStandardMaterial##Name##TextureWrapVName)
 
-    ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, BaseColor, pWhite);
-    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    switch (CreateInfo.ShadingModel)
     {
-        ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PHYS_DESC, MetallicRoughness, pPhysicalDesc);
+        case RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS:
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, BaseColor, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PHYS_DESC, MetallicRoughness, pPhysicalDesc);
+            break;
+
+        case RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS:
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, Diffuse, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PHYS_DESC, SpecularGlossiness, pWhite);
+            break;
+
+        case RADIENT_SURFACE_SHADING_MODEL_UNLIT:
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(BASE_COLOR, BaseColor, pWhite);
+            break;
+
+        default:
+            UNEXPECTED("Unexpected standard material shading model");
+            break;
+    }
+
+    if (CreateInfo.ShadingModel != RADIENT_SURFACE_SHADING_MODEL_UNLIT)
+    {
         ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(NORMAL, Normal, pNormal);
         ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(OCCLUSION, Occlusion, pWhite);
         ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(EMISSIVE, Emissive, pBlack);
+    }
 
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    {
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
         {
             ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(CLEAR_COAT, ClearCoat, pWhite);
@@ -369,6 +425,29 @@ PBR_Renderer::PSO_FLAGS GetStandardMaterialPSOFlags(const RadientStandardMateria
     return Flags;
 }
 
+const Int32& GetStandardMaterialWorkflow(RADIENT_SURFACE_SHADING_MODEL ShadingModel) noexcept
+{
+    static const Int32 MetallicRoughnessWorkflow  = GLTF::Material::PBR_WORKFLOW_METALL_ROUGH;
+    static const Int32 UnlitWorkflow              = GLTF::Material::PBR_WORKFLOW_UNLIT;
+    static const Int32 SpecularGlossinessWorkflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+
+    switch (ShadingModel)
+    {
+        case RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS:
+            return MetallicRoughnessWorkflow;
+
+        case RADIENT_SURFACE_SHADING_MODEL_UNLIT:
+            return UnlitWorkflow;
+
+        case RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS:
+            return SpecularGlossinessWorkflow;
+
+        default:
+            UNEXPECTED("Unexpected standard material shading model");
+            return MetallicRoughnessWorkflow;
+    }
+}
+
 StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
     const RadientStandardMaterialDefinitionCreateInfo& CreateInfo,
     const StandardMaterialParameters&                  MaterialParameters)
@@ -379,7 +458,6 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
 
     static const Material::ShaderAttribs        DefaultBasicAttribs{};
     static const Material::TextureShaderAttribs DefaultTextureAttribs{};
-    static const Int32                          UnlitWorkflow = Material::PBR_WORKFLOW_UNLIT;
 
     StandardMaterialShaderDataLayout Layout;
     Layout.ParameterPackings.reserve(32 + PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT * 2);
@@ -389,31 +467,41 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
     AddInitialization(Layout, DefaultBasicAttribs.NormalScale, offsetof(Material::ShaderAttribs, NormalScale));
     AddInitialization(Layout, DefaultBasicAttribs.SpecularFactor, offsetof(Material::ShaderAttribs, SpecularFactor));
     AddInitialization(Layout, DefaultBasicAttribs.ClearcoatNormalScale, offsetof(Material::ShaderAttribs, ClearcoatNormalScale));
-    AddInitialization(Layout,
-                      CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT ? UnlitWorkflow : DefaultBasicAttribs.Workflow,
+    AddInitialization(Layout, GetStandardMaterialWorkflow(CreateInfo.ShadingModel),
                       offsetof(Material::ShaderAttribs, Workflow));
     AddInitialization(Layout, DefaultBasicAttribs.MetallicFactor, offsetof(Material::ShaderAttribs, MetallicFactor));
     AddInitialization(Layout, DefaultBasicAttribs.RoughnessFactor, offsetof(Material::ShaderAttribs, RoughnessFactor));
     AddInitialization(Layout, DefaultBasicAttribs.OcclusionFactor, offsetof(Material::ShaderAttribs, OcclusionFactor));
 
-    AddParameterPacking(Layout, Indices.BaseColorFactor,
-                        offsetof(Material::ShaderAttribs, BaseColorFactor));
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS)
+    {
+        AddParameterPacking(Layout, Indices.DiffuseFactor,
+                            offsetof(Material::ShaderAttribs, BaseColorFactor));
+    }
+    else
+    {
+        AddParameterPacking(Layout, Indices.BaseColorFactor,
+                            offsetof(Material::ShaderAttribs, BaseColorFactor));
+    }
     Layout.SurfacePacking.SurfaceModeOffset = offsetof(Material::ShaderAttribs, AlphaMode);
     Layout.SurfacePacking.AlphaCutoffOffset = offsetof(Material::ShaderAttribs, AlphaCutoff);
 
-    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    if (CreateInfo.ShadingModel != RADIENT_SURFACE_SHADING_MODEL_UNLIT)
     {
         AddParameterPacking(Layout, Indices.EmissiveFactor,
                             offsetof(Material::ShaderAttribs, EmissiveFactor));
-        AddParameterPacking(Layout, Indices.MetallicFactor,
-                            offsetof(Material::ShaderAttribs, MetallicFactor));
-        AddParameterPacking(Layout, Indices.RoughnessFactor,
-                            offsetof(Material::ShaderAttribs, RoughnessFactor));
-
         AddParameterPacking(Layout, Indices.NormalScale,
                             offsetof(Material::ShaderAttribs, NormalScale));
         AddParameterPacking(Layout, Indices.OcclusionStrength,
                             offsetof(Material::ShaderAttribs, OcclusionFactor));
+    }
+
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    {
+        AddParameterPacking(Layout, Indices.MetallicFactor,
+                            offsetof(Material::ShaderAttribs, MetallicFactor));
+        AddParameterPacking(Layout, Indices.RoughnessFactor,
+                            offsetof(Material::ShaderAttribs, RoughnessFactor));
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
         {
             AddParameterPacking(Layout, Indices.ClearCoatFactor,
@@ -423,6 +511,13 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
             AddParameterPacking(Layout, Indices.ClearCoatNormalScale,
                                 offsetof(Material::ShaderAttribs, ClearcoatNormalScale));
         }
+    }
+    else if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS)
+    {
+        AddParameterPacking(Layout, Indices.SpecularFactor,
+                            offsetof(Material::ShaderAttribs, SpecularFactor));
+        AddParameterPacking(Layout, Indices.GlossinessFactor,
+                            offsetof(Material::ShaderAttribs, RoughnessFactor));
     }
 
     Uint32 Offset = sizeof(Material::ShaderAttribs);

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -222,7 +222,10 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
     };
 
     SetTexture(TEXTURE_ATTRIB_ID_BASE_COLOR, m_pWhiteTexSRV);
-    SetTexture(TEXTURE_ATTRIB_ID_PHYS_DESC, m_pDefaultPhysDescSRV);
+    SetTexture(TEXTURE_ATTRIB_ID_PHYS_DESC,
+               Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS ?
+                   m_pWhiteTexSRV :
+                   m_pDefaultPhysDescSRV);
     SetTexture(TEXTURE_ATTRIB_ID_NORMAL, m_pDefaultNormalMapSRV);
 
     if (m_Settings.EnableAO)

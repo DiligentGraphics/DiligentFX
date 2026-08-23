@@ -31,7 +31,6 @@
 #include "RadientStandardMaterialParameters.h"
 #include "ThreadPool.hpp"
 
-#include <array>
 #include <exception>
 #include <utility>
 #include <vector>
@@ -73,36 +72,97 @@ PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialD
     return Flags;
 }
 
-const char* GetStandardTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+const char* GetSharedLitTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
 {
-    static constexpr auto Names = [] {
-        std::array<const char*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Result{};
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]            = RadientStandardMaterialBaseColorTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]                = RadientStandardMaterialNormalTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]             = RadientStandardMaterialMetallicRoughnessTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]             = RadientStandardMaterialOcclusionTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]              = RadientStandardMaterialEmissiveTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT]            = RadientStandardMaterialClearCoatTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = RadientStandardMaterialClearCoatRoughnessTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = RadientStandardMaterialClearCoatNormalTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = RadientStandardMaterialSheenColorTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = RadientStandardMaterialSheenRoughnessTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY]            = RadientStandardMaterialAnisotropyTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE]           = RadientStandardMaterialIridescenceTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = RadientStandardMaterialIridescenceThicknessTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = RadientStandardMaterialTransmissionTextureName;
-        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = RadientStandardMaterialThicknessTextureName;
-        return Result;
-    }();
+    switch (TextureAttribId)
+    {
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL:
+            return RadientStandardMaterialNormalTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION:
+            return RadientStandardMaterialOcclusionTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE:
+            return RadientStandardMaterialEmissiveTextureName;
+        default:
+            return nullptr;
+    }
+}
 
-    return TextureAttribId < Names.size() ? Names[TextureAttribId] : nullptr;
+const char* GetMetallicRoughnessTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+{
+    switch (TextureAttribId)
+    {
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR:
+            return RadientStandardMaterialBaseColorTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC:
+            return RadientStandardMaterialMetallicRoughnessTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT:
+            return RadientStandardMaterialClearCoatTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS:
+            return RadientStandardMaterialClearCoatRoughnessTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL:
+            return RadientStandardMaterialClearCoatNormalTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR:
+            return RadientStandardMaterialSheenColorTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS:
+            return RadientStandardMaterialSheenRoughnessTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY:
+            return RadientStandardMaterialAnisotropyTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE:
+            return RadientStandardMaterialIridescenceTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS:
+            return RadientStandardMaterialIridescenceThicknessTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION:
+            return RadientStandardMaterialTransmissionTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS:
+            return RadientStandardMaterialThicknessTextureName;
+        default:
+            return GetSharedLitTextureParameterName(TextureAttribId);
+    }
+}
+
+const char* GetSpecularGlossinessTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+{
+    switch (TextureAttribId)
+    {
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR:
+            return RadientStandardMaterialDiffuseTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC:
+            return RadientStandardMaterialSpecularGlossinessTextureName;
+        default:
+            return GetSharedLitTextureParameterName(TextureAttribId);
+    }
+}
+
+const char* GetUnlitTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+{
+    return TextureAttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ?
+        RadientStandardMaterialBaseColorTextureName :
+        nullptr;
+}
+
+const char* GetStandardTextureParameterName(
+    RADIENT_SURFACE_SHADING_MODEL   ShadingModel,
+    PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+{
+    switch (ShadingModel)
+    {
+        case RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS:
+            return GetMetallicRoughnessTextureParameterName(TextureAttribId);
+        case RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS:
+            return GetSpecularGlossinessTextureParameterName(TextureAttribId);
+        case RADIENT_SURFACE_SHADING_MODEL_UNLIT:
+            return GetUnlitTextureParameterName(TextureAttribId);
+        default:
+            return nullptr;
+    }
 }
 
 RADIENT_STATUS BuildMaterialTextureSRBSlots(
-    const IRadientMaterialDefinitionAsset& Definition,
-    const RadientMaterialAssetView&        MaterialView,
-    PBR_Renderer::PSO_FLAGS                PSOFlags,
-    RadientMaterialTextureSRBSlotArray&    TextureSlots)
+    const IRadientMaterialDefinitionAsset&      Definition,
+    const RadientSurfaceMaterialDefinitionDesc& SurfaceDesc,
+    const RadientMaterialAssetView&             MaterialView,
+    PBR_Renderer::PSO_FLAGS                     PSOFlags,
+    RadientMaterialTextureSRBSlotArray&         TextureSlots)
 {
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     PBR_Renderer::ProcessTexturAttribs(
@@ -111,7 +171,8 @@ RADIENT_STATUS BuildMaterialTextureSRBSlots(
             if (Status != RADIENT_STATUS_OK)
                 return;
 
-            const char* const pParameterName = GetStandardTextureParameterName(TextureAttribId);
+            const char* const pParameterName =
+                GetStandardTextureParameterName(SurfaceDesc.ShadingModel, TextureAttribId);
             if (pParameterName == nullptr)
             {
                 UNEXPECTED("PBR texture attribute ", Uint32{TextureAttribId},
@@ -401,6 +462,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
 
     RADIENT_STATUS Status = BuildMaterialTextureSRBSlots(
         *pDefinitionInterface,
+        SurfaceDesc,
         Data.m_MaterialView,
         MaterialPSOFlags,
         TextureSlots);

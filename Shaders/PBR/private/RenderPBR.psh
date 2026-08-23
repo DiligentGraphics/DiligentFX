@@ -160,8 +160,8 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
         PhysicalDesc.g *= BasicAttribs.SpecularFactorG;
         PhysicalDesc.b *= BasicAttribs.SpecularFactorB;
 
-        const float u_GlossinessFactor = 1.0;
-        PhysicalDesc.a *= u_GlossinessFactor;
+        // RoughnessFactor stores glossiness factor for this workflow.
+        PhysicalDesc.a *= BasicAttribs.RoughnessFactor;
     }
     else if (BasicAttribs.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {

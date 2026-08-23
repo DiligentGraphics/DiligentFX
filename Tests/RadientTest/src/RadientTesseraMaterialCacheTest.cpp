@@ -104,6 +104,23 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeUnlitMaterialAsset()
     return pMaterial;
 }
 
+RefCntAutoPtr<IRadientMaterialAsset> MakeSpecularGlossinessMaterialAsset()
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    EXPECT_NE(pMaterialManager, nullptr);
+    if (!pMaterialManager)
+        return {};
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    const RADIENT_STATUS                 Status = Testing::CreateStandardMaterialAsset(
+        *pMaterialManager, DefinitionCI, pMaterial.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    return pMaterial;
+}
+
 std::unique_ptr<RadientTesseraMaterialCache> MakeMaterialCache(
     PBR_Renderer::PSO_FLAGS EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE)
 {
@@ -332,6 +349,22 @@ TEST(RadientTesseraMaterialCacheTest, UnlitMaterialDoesNotUseUnshadedPSOFlag)
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), PBR_Renderer::PSO_FLAG_NONE);
 }
 
+TEST(RadientTesseraMaterialCacheTest, ProcessesSpecularGlossinessMaterialWithoutEnabledTextures)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial   = MakeSpecularGlossinessMaterialAsset();
+
+    const RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedCoreMaterialPSOFlags);
+    EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR], 0u);
+    EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL], 1u);
+    EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);
+}
+
 TEST(RadientTesseraMaterialCacheTest, RespectsDisabledRendererFeatures)
 {
     RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
@@ -438,23 +471,67 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)
               Result1.Data->GetMaterialBufferAllocation().GetOffset());
 }
 
-TEST(RadientTesseraMaterialCacheTest, MissingRequiredTextureIsTerminal)
+TEST(RadientTesseraMaterialCacheTest, MissingRequiredWorkflowTextureIsTerminal)
 {
-    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
-    std::unique_ptr<RadientTesseraMaterialCache> pCache =
-        MakeMaterialCache(PBR_Renderer::PSO_FLAG_USE_COLOR_MAP);
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeMaterialAsset();
+    struct TestCase
+    {
+        RADIENT_SURFACE_SHADING_MODEL ShadingModel;
+        PBR_Renderer::PSO_FLAGS       PSOFlags;
+        const char*                   ExpectedError;
+    };
 
-    RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+    static constexpr TestCase TestCases[] = {
+        {RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS,
+         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP,
+         "BaseColorTexture' is not initialized"},
+        {RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS,
+         PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP,
+         "MetallicRoughnessTexture' is not initialized"},
+        {RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS,
+         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP,
+         "DiffuseTexture' is not initialized"},
+        {RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS,
+         PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP,
+         "SpecularGlossinessTexture' is not initialized"},
+        {RADIENT_SURFACE_SHADING_MODEL_UNLIT,
+         PBR_Renderer::PSO_FLAG_USE_COLOR_MAP,
+         "BaseColorTexture' is not initialized"},
+    };
 
-    Testing::TestingEnvironment::ErrorScope ExpectedErrors{"BaseColorTexture' is not initialized"};
-    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
-    EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    for (const TestCase& Case : TestCases)
+    {
+        SCOPED_TRACE(Case.ExpectedError);
 
-    const RadientTesseraMaterialResolveResult Retry = pCache->Resolve(*pThreadPool, pMaterial);
-    EXPECT_EQ(Retry.Data.Get(), Result.Data.Get());
-    EXPECT_EQ(Retry.Status, RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+        RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+        std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache(Case.PSOFlags);
+        RefCntAutoPtr<IRadientMaterialAsset>         pMaterial;
+        switch (Case.ShadingModel)
+        {
+            case RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS:
+                pMaterial = MakeMaterialAsset();
+                break;
+            case RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS:
+                pMaterial = MakeSpecularGlossinessMaterialAsset();
+                break;
+            case RADIENT_SURFACE_SHADING_MODEL_UNLIT:
+                pMaterial = MakeUnlitMaterialAsset();
+                break;
+            default:
+                FAIL() << "Unexpected shading model";
+        }
+
+        ASSERT_NE(pMaterial, nullptr);
+        RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{Case.ExpectedError};
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
+
+        const RadientTesseraMaterialResolveResult Retry = pCache->Resolve(*pThreadPool, pMaterial);
+        EXPECT_EQ(Retry.Data.Get(), Result.Data.Get());
+        EXPECT_EQ(Retry.Status, RADIENT_STATUS_INVALID_OPERATION);
+        EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    }
 }
 
 TEST(RadientTesseraMaterialCacheTest, RejectedEnqueueIsTerminal)

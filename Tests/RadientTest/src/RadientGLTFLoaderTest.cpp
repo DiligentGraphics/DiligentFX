@@ -662,6 +662,26 @@ std::string WriteGLTFMaterialWithoutTexturesFile(const TempDirectory& TempDir)
 })GLTF");
 }
 
+std::string WriteGLTFSpecularGlossinessMaterialFile(const TempDirectory& TempDir)
+{
+    return WriteGLTFFile(TempDir, "specular_glossiness_material.gltf",
+                         R"GLTF({
+    "asset": {"version": "2.0"},
+    "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness"],
+    "materials": [{
+        "name": "SpecularGlossinessMaterial",
+        "doubleSided": true,
+        "extensions": {
+            "KHR_materials_pbrSpecularGlossiness": {
+                "diffuseFactor": [0.15, 0.25, 0.35, 0.45],
+                "specularFactor": [0.55, 0.65, 0.75],
+                "glossinessFactor": 0.85
+            }
+        }
+    }]
+})GLTF");
+}
+
 std::string WriteGLTFMaterialWithTextureDependencyFile(const TempDirectory& TempDir)
 {
     const std::string ImagePath = TempDir.Get() + "/external.png";
@@ -693,8 +713,10 @@ std::string WriteGLTFTextureColorSpaceUsageFile(const TempDirectory& TempDir)
     return WriteGLTFFile(TempDir, "texture_color_space_usage.gltf",
                          R"GLTF({
     "asset": {"version": "2.0"},
+    "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness"],
     "images": [{"uri": "color_space.png"}],
     "textures": [
+        {"source": 0},
         {"source": 0},
         {"source": 0},
         {"source": 0}
@@ -705,6 +727,13 @@ std::string WriteGLTFTextureColorSpaceUsageFile(const TempDirectory& TempDir)
         {
             "pbrMetallicRoughness": {"baseColorTexture": {"index": 2}},
             "normalTexture": {"index": 2}
+        },
+        {
+            "extensions": {
+                "KHR_materials_pbrSpecularGlossiness": {
+                    "specularGlossinessTexture": {"index": 3}
+                }
+            }
         }
     ]
 })GLTF");
@@ -897,24 +926,30 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesMaterialTextureColorSpace)
     const std::string GLTFPath = WriteGLTFTextureColorSpaceUsageFile(TempDir);
 
     RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
-    ASSERT_EQ(Textures.size(), 3u);
+    ASSERT_EQ(Textures.size(), 4u);
     ASSERT_NE(Textures[0], nullptr);
     ASSERT_NE(Textures[1], nullptr);
     ASSERT_NE(Textures[2], nullptr);
+    ASSERT_NE(Textures[3], nullptr);
 
     ProcessQueuedTasks(*pThreadPool);
 
     const TexturePayloadImpl* pSRGBPayload   = RadientTextureAssetManager::GetTexturePayload(Textures[0]);
     const TexturePayloadImpl* pLinearPayload = RadientTextureAssetManager::GetTexturePayload(Textures[1]);
     const TexturePayloadImpl* pMixedPayload  = RadientTextureAssetManager::GetTexturePayload(Textures[2]);
+    const TexturePayloadImpl* pSpecularGlossinessPayload =
+        RadientTextureAssetManager::GetTexturePayload(Textures[3]);
     ASSERT_NE(pSRGBPayload, nullptr);
     ASSERT_NE(pLinearPayload, nullptr);
     ASSERT_NE(pMixedPayload, nullptr);
+    ASSERT_NE(pSpecularGlossinessPayload, nullptr);
 
     // sRGB affects mip generation and therefore forms a distinct texture payload.
     EXPECT_NE(pSRGBPayload, pLinearPayload);
     // A texture used by both color spaces is deliberately loaded as linear.
     EXPECT_EQ(pMixedPayload, pLinearPayload);
+    // Specular RGB is sRGB even though glossiness alpha is sampled linearly.
+    EXPECT_EQ(pSpecularGlossinessPayload, pSRGBPayload);
     pThreadPool->StopThreads();
 }
 
@@ -1203,6 +1238,53 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsCreatesMaterialAssetWithoutTextures)
     EXPECT_FLOAT_EQ(BaseColor.w, 1.0f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialMetallicFactorName), 0.125f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialRoughnessFactorName), 0.875f);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
+}
+
+TEST(RadientGLTFLoaderTest, LoadMaterialsPreservesSpecularGlossinessFactors)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath  = WriteGLTFSpecularGlossinessMaterialFile(TempDir);
+    auto              pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    RadientImport::MaterialAssetList Materials = LoadMaterials(*pMaterialManager, pDocument, {});
+
+    ASSERT_EQ(Materials.size(), 1u);
+    ASSERT_NE(Materials[0], nullptr);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(Materials[0]), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = Materials[0];
+    ASSERT_NE(pMaterial, nullptr);
+    IRadientMaterialDefinitionAsset* const pDefinition = pMaterial->GetDefinition();
+    ASSERT_NE(pDefinition, nullptr);
+    ASSERT_EQ(pDefinition->GetDesc().Type, RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE);
+    const auto& SurfaceDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(pDefinition->GetDesc());
+    EXPECT_EQ(SurfaceDesc.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_SPECULAR_GLOSSINESS);
+    EXPECT_EQ(SurfaceDesc.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
+
+    const RadientFloat4 DiffuseFactor =
+        GetMaterialParameter<RadientFloat4>(*pMaterial, RadientStandardMaterialDiffuseFactorName);
+    EXPECT_FLOAT_EQ(DiffuseFactor.x, 0.15f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.y, 0.25f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.z, 0.35f);
+    EXPECT_FLOAT_EQ(DiffuseFactor.w, 0.45f);
+
+    const RadientFloat3 SpecularFactor =
+        GetMaterialParameter<RadientFloat3>(*pMaterial, RadientStandardMaterialSpecularFactorName);
+    EXPECT_FLOAT_EQ(SpecularFactor.x, 0.55f);
+    EXPECT_FLOAT_EQ(SpecularFactor.y, 0.65f);
+    EXPECT_FLOAT_EQ(SpecularFactor.z, 0.75f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(
+                        *pMaterial, RadientStandardMaterialGlossinessFactorName),
+                    0.85f);
 
     RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
         pMaterial, IID_RadientSurfaceMaterialAsset};
