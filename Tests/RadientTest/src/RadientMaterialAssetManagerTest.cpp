@@ -70,30 +70,74 @@ RadientMaterialCreateInfo MakeTestMaterialCreateInfo()
     return MaterialCI;
 }
 
-void VerifyTestMaterial(const GLTF::Material&            GLTFMaterial,
-                        const RadientMaterialCreateInfo& MaterialCI)
+void VerifyTestMaterialInstance(IRadientMaterialInstance*        pInstance,
+                                const RadientMaterialCreateInfo& MaterialCI)
 {
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.x, MaterialCI.BaseColorFactor.x);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.y, MaterialCI.BaseColorFactor.y);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.z, MaterialCI.BaseColorFactor.z);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.BaseColorFactor.w, MaterialCI.BaseColorFactor.w);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.MetallicFactor, MaterialCI.MetallicFactor);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.RoughnessFactor, MaterialCI.RoughnessFactor);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.x, MaterialCI.EmissiveFactor.x);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.y, MaterialCI.EmissiveFactor.y);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.EmissiveFactor.z, MaterialCI.EmissiveFactor.z);
-    EXPECT_FLOAT_EQ(GLTFMaterial.Attribs.AlphaCutoff, MaterialCI.AlphaCutoff);
-    EXPECT_TRUE(GLTFMaterial.DoubleSided);
+    ASSERT_NE(pInstance, nullptr);
 
-    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultBaseColorTextureAttribId), -1);
-    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultNormalTextureAttribId), -1);
-    EXPECT_EQ(GLTFMaterial.GetTextureId(GLTF::DefaultMetallicRoughnessTextureAttribId), -1);
+    const RadientFloat4 BaseColorFactor =
+        GetInstanceParameter<RadientFloat4>(*pInstance, RadientStandardMaterialBaseColorFactorName);
+    EXPECT_FLOAT_EQ(BaseColorFactor.x, MaterialCI.BaseColorFactor.x);
+    EXPECT_FLOAT_EQ(BaseColorFactor.y, MaterialCI.BaseColorFactor.y);
+    EXPECT_FLOAT_EQ(BaseColorFactor.z, MaterialCI.BaseColorFactor.z);
+    EXPECT_FLOAT_EQ(BaseColorFactor.w, MaterialCI.BaseColorFactor.w);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, RadientStandardMaterialMetallicFactorName),
+                    MaterialCI.MetallicFactor);
+    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, RadientStandardMaterialRoughnessFactorName),
+                    MaterialCI.RoughnessFactor);
+
+    const RadientFloat3 EmissiveFactor =
+        GetInstanceParameter<RadientFloat3>(*pInstance, RadientStandardMaterialEmissiveFactorName);
+    EXPECT_FLOAT_EQ(EmissiveFactor.x, MaterialCI.EmissiveFactor.x);
+    EXPECT_FLOAT_EQ(EmissiveFactor.y, MaterialCI.EmissiveFactor.y);
+    EXPECT_FLOAT_EQ(EmissiveFactor.z, MaterialCI.EmissiveFactor.z);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
+        pInstance, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceInstance, nullptr);
+    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), MaterialCI.AlphaCutoff);
+    EXPECT_EQ(pSurfaceInstance->IsDoubleSided(), MaterialCI.DoubleSided);
+
+    IRadientMaterialDefinition* const pDefinition = pInstance->GetDefinition();
+    ASSERT_NE(pDefinition, nullptr);
+    const auto VerifyTexture = [&](const Char*           TextureName,
+                                   const Char*           UVSelectorName,
+                                   IRadientTextureAsset* pExpectedTexture) {
+        RadientMaterialParameterHandle TextureHandle;
+        ASSERT_EQ(pDefinition->FindParameter(TextureName, &TextureHandle), RADIENT_STATUS_OK)
+            << TextureName;
+
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK)
+            << TextureName;
+        EXPECT_EQ(pTexture.RawPtr(), pExpectedTexture) << TextureName;
+        EXPECT_EQ(GetInstanceParameter<Int32>(*pInstance, UVSelectorName),
+                  pExpectedTexture != nullptr ? 0 : -1)
+            << UVSelectorName;
+    };
+
+    VerifyTexture(RadientStandardMaterialBaseColorTextureName,
+                  RadientStandardMaterialBaseColorTextureUVSelectorName,
+                  MaterialCI.pBaseColorTexture);
+    VerifyTexture(RadientStandardMaterialMetallicRoughnessTextureName,
+                  RadientStandardMaterialMetallicRoughnessTextureUVSelectorName,
+                  MaterialCI.pMetallicRoughnessTexture);
+    VerifyTexture(RadientStandardMaterialNormalTextureName,
+                  RadientStandardMaterialNormalTextureUVSelectorName,
+                  MaterialCI.pNormalTexture);
+    VerifyTexture(RadientStandardMaterialOcclusionTextureName,
+                  RadientStandardMaterialOcclusionTextureUVSelectorName,
+                  MaterialCI.pOcclusionTexture);
+    VerifyTexture(RadientStandardMaterialEmissiveTextureName,
+                  RadientStandardMaterialEmissiveTextureUVSelectorName,
+                  MaterialCI.pEmissiveTexture);
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterial)
 {
-    // Creating a material should allocate a stable asset reference and build the
-    // internal GLTF material representation used by the renderer.
+    // Creating a material should allocate a stable asset reference and retain
+    // the definition-backed instance used by renderers.
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
@@ -105,28 +149,13 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_NE(pMaterial->GetReference().URI, nullptr);
     EXPECT_NE(pMaterial->GetReference().Version, 0u);
 
-    const RadientMaterialRenderData RenderData = RadientMaterialAssetManager::GetRenderData(pMaterial);
-    ASSERT_TRUE(RenderData);
-    EXPECT_EQ(RenderData.TextureCount, 0u);
-
-    VerifyTestMaterial(*RenderData.pMaterial, MaterialCI);
-
     RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
     ASSERT_NE(pInstance, nullptr);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<RadientFloat4>(*pInstance, "BaseColorFactor").x,
-                    MaterialCI.BaseColorFactor.x);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "MetallicFactor"),
-                    MaterialCI.MetallicFactor);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "RoughnessFactor"),
-                    MaterialCI.RoughnessFactor);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<RadientFloat3>(*pInstance, "EmissiveFactor").z,
-                    MaterialCI.EmissiveFactor.z);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
-        pInstance, IID_RadientSurfaceMaterialInstance};
-    ASSERT_NE(pSurfaceInstance, nullptr);
-    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
-    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), MaterialCI.AlphaCutoff);
-    EXPECT_EQ(pSurfaceInstance->IsDoubleSided(), MaterialCI.DoubleSided);
+
+    const RadientMaterialAssetView MaterialView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialView);
+    EXPECT_EQ(MaterialView.pInstance, pInstance);
+    VerifyTestMaterialInstance(pInstance, MaterialCI);
 
     RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorTexture", &TextureHandle),
@@ -135,6 +164,23 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(pInstance->GetTexture(TextureHandle, 0, pTexture.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     EXPECT_EQ(pTexture, nullptr);
+    const RadientMaterialTextureEntry* pTextureEntry = MaterialView.GetTexture(TextureHandle.Index);
+    ASSERT_NE(pTextureEntry, nullptr);
+    ASSERT_NE(MaterialView.pTextureIndexByParameter, nullptr);
+    EXPECT_EQ(MaterialView.ParameterCount, pInstance->GetDefinition()->GetParameterCount());
+    ASSERT_NE(MaterialView.pTextureIndexByParameter[TextureHandle.Index],
+              RadientMaterialAssetView::InvalidTextureIndex);
+    EXPECT_EQ(&MaterialView.pTextures[MaterialView.pTextureIndexByParameter[TextureHandle.Index]],
+              pTextureEntry);
+    EXPECT_EQ(pTextureEntry->ParameterIndex, TextureHandle.Index);
+    EXPECT_EQ(pTextureEntry->ArrayIndex, 0u);
+    EXPECT_EQ(pTextureEntry->pTexture, nullptr);
+
+    RadientMaterialParameterHandle BaseColorFactorHandle;
+    ASSERT_EQ(pInstance->GetDefinition()->FindParameter("BaseColorFactor", &BaseColorFactorHandle),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(MaterialView.pTextureIndexByParameter[BaseColorFactorHandle.Index],
+              RadientMaterialAssetView::InvalidTextureIndex);
 
     RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
     ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, pSecondMaterial.GetAddressOfEmpty()),
@@ -224,17 +270,11 @@ TEST(RadientMaterialAssetManagerTest, CreateGLTFMaterialWithoutTextureDependenci
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    EXPECT_EQ(pGLTFMaterial->GetNumActiveTextureAttribs(), 0u);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.x, BaseColorFactor.x);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.y, BaseColorFactor.y);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.z, BaseColorFactor.z);
-    EXPECT_FLOAT_EQ(pGLTFMaterial->Attribs.BaseColorFactor.w, BaseColorFactor.w);
-    EXPECT_TRUE(pGLTFMaterial->DoubleSided);
-
     RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
     ASSERT_NE(pInstance, nullptr);
+    const RadientMaterialAssetView MaterialView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialView);
+    EXPECT_EQ(MaterialView.pInstance, pInstance);
     const RadientFloat4 StoredBaseColor = GetInstanceParameter<RadientFloat4>(*pInstance, "BaseColorFactor");
     EXPECT_FLOAT_EQ(StoredBaseColor.x, BaseColorFactor.x);
     EXPECT_FLOAT_EQ(StoredBaseColor.y, BaseColorFactor.y);
@@ -281,12 +321,11 @@ TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
 
     RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(pMaterial);
     ASSERT_NE(pInstance, nullptr);
-    EXPECT_FLOAT_EQ(GetInstanceParameter<Float32>(*pInstance, "RoughnessFactor"),
-                    MaterialCI.RoughnessFactor);
+    VerifyTestMaterialInstance(pInstance, MaterialCI);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    VerifyTestMaterial(*pGLTFMaterial, MaterialCI);
+    const RadientMaterialAssetView MaterialView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialView);
+    EXPECT_EQ(MaterialView.pInstance, pInstance);
 }
 
 } // namespace

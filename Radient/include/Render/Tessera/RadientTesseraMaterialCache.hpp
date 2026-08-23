@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Render/RadientMaterialSRBTable.hpp"
 #include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
 #include "UniqueIdentifier.hpp"
@@ -41,13 +42,13 @@ namespace Diligent
 struct IThreadPool;
 
 /// Immutable Tessera-specific material data produced by a worker task. The
-/// retained material asset keeps the borrowed RadientMaterialRenderData view
+/// retained material asset keeps the borrowed RadientMaterialAssetView
 /// alive. The logical SRB lease is stable even while its GPU SRB is pending.
 class RadientTesseraMaterialData final
 {
 public:
-    RadientTesseraMaterialData(IRadientMaterialAsset*           pMaterial,
-                               const RadientMaterialRenderData& MaterialData);
+    RadientTesseraMaterialData(IRadientMaterialAsset*          pMaterial,
+                               const RadientMaterialAssetView& MaterialView);
 
     RADIENT_STATUS GetStatus() const noexcept
     {
@@ -64,9 +65,9 @@ public:
     /// prepared for the logical lease. This method is render-thread-only.
     RADIENT_STATUS GetGPUResourceStatus() const noexcept;
 
-    const RadientMaterialRenderData& GetMaterialRenderData() const noexcept
+    const RadientMaterialAssetView& GetMaterialView() const noexcept
     {
-        return m_MaterialData;
+        return m_MaterialView;
     }
 
     const RadientMaterialSRBLease& GetMaterialSRB() const noexcept
@@ -112,7 +113,7 @@ private:
     void PublishFailure(RADIENT_STATUS Status) noexcept;
 
     RefCntAutoPtr<IRadientMaterialAsset>   m_pMaterial;
-    RadientMaterialRenderData              m_MaterialData;
+    RadientMaterialAssetView               m_MaterialView;
     RadientMaterialSRBLease                m_MaterialSRB;
     RadientTesseraMaterialBufferAllocation m_MaterialBufferAllocation;
 
@@ -151,10 +152,9 @@ public:
 
     struct CreateInfo
     {
-        std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices{};
-        Uint32                                                 MaterialTextureSlotCount = 0;
+        Uint32 MaterialTextureSlotCount = 0;
         /// Material and texture flags enabled by the renderer configuration.
-        /// Resolve() further restricts extension groups using the GLTF material.
+        /// Resolve() further restricts optional groups using the surface definition.
         PBR_Renderer::PSO_FLAGS               EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES;
         RadientMaterialDefaultTextureBindings DefaultTextures;
         Uint32                                ConstantBufferOffsetAlignment = 0;
@@ -164,10 +164,10 @@ public:
     explicit RadientTesseraMaterialCache(const CreateInfo& CI);
     ~RadientTesseraMaterialCache();
 
-    RadientTesseraMaterialCache(const RadientTesseraMaterialCache&)            = delete;
+    RadientTesseraMaterialCache(const RadientTesseraMaterialCache&) = delete;
     RadientTesseraMaterialCache& operator=(const RadientTesseraMaterialCache&) = delete;
     RadientTesseraMaterialCache(RadientTesseraMaterialCache&&)                 = delete;
-    RadientTesseraMaterialCache& operator=(RadientTesseraMaterialCache&&)      = delete;
+    RadientTesseraMaterialCache& operator=(RadientTesseraMaterialCache&&) = delete;
 
     /// Returns or schedules Tessera data for the material. This method obtains
     /// the immutable render data from the asset and must be called from the

@@ -351,6 +351,9 @@ void AddInitialization(StandardMaterialShaderDataLayout& Layout,
 
 PBR_Renderer::PSO_FLAGS GetStandardMaterialPSOFlags(const RadientStandardMaterialDefinitionCreateInfo& CreateInfo) noexcept
 {
+    if (CreateInfo.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT)
+        return PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
+
     PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES;
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
         Flags |= PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT;

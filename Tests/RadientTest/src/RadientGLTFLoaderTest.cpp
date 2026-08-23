@@ -33,6 +33,7 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
@@ -73,6 +74,22 @@ void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference
     EXPECT_NEAR(Value.x, Reference.x, EPSILON);
     EXPECT_NEAR(Value.y, Reference.y, EPSILON);
     EXPECT_NEAR(Value.z, Reference.z, EPSILON);
+}
+
+template <typename ValueType>
+ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
+{
+    ValueType                         Value{};
+    RadientMaterialParameterHandle    Handle;
+    IRadientMaterialDefinition* const pDefinition = Instance.GetDefinition();
+    EXPECT_NE(pDefinition, nullptr);
+    if (pDefinition != nullptr &&
+        pDefinition->FindParameter(Name, &Handle) == RADIENT_STATUS_OK)
+    {
+        EXPECT_EQ(Instance.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+                  RADIENT_STATUS_OK);
+    }
+    return Value;
 }
 
 void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
@@ -1175,17 +1192,22 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsCreatesMaterialAssetWithoutTextures)
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(Materials[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(Materials[0]), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetRenderData(Materials[0]).pMaterial;
+    RefCntAutoPtr<IRadientMaterialInstance> pMaterial =
+        RadientMaterialAssetManager::GetInstance(Materials[0]);
     ASSERT_NE(pMaterial, nullptr);
-    EXPECT_TRUE(pMaterial->DoubleSided);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.x, 0.25f);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.y, 0.5f);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.z, 0.75f);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.BaseColorFactor.w, 1.0f);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.MetallicFactor, 0.125f);
-    EXPECT_FLOAT_EQ(pMaterial->Attribs.RoughnessFactor, 0.875f);
+    const RadientFloat4 BaseColor =
+        GetMaterialParameter<RadientFloat4>(*pMaterial, RadientStandardMaterialBaseColorFactorName);
+    EXPECT_FLOAT_EQ(BaseColor.x, 0.25f);
+    EXPECT_FLOAT_EQ(BaseColor.y, 0.5f);
+    EXPECT_FLOAT_EQ(BaseColor.z, 0.75f);
+    EXPECT_FLOAT_EQ(BaseColor.w, 1.0f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialMetallicFactorName), 0.125f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, RadientStandardMaterialRoughnessFactorName), 0.875f);
 
-    EXPECT_NE(RadientMaterialAssetManager::GetInstance(Materials[0]), nullptr);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialInstance};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
 }
 
 TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive)
@@ -1275,7 +1297,10 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsTracksTextureDependencies)
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(Materials[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(Materials[0]), RADIENT_STATUS_NO_GPU_DATA);
-    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(Materials[0]).pMaterial, nullptr);
+    const RadientMaterialAssetView MaterialView =
+        RadientMaterialAssetManager::GetMaterialView(Materials[0]);
+    EXPECT_TRUE(MaterialView);
+    EXPECT_NE(MaterialView.pInstance, nullptr);
     pThreadPool->StopThreads();
 }
 
@@ -1728,8 +1753,10 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAssetWithMaterial)
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(Scene.Meshes[0]), RADIENT_STATUS_NO_GPU_DATA);
 
-    const GLTF::Material* pMaterial = RadientMaterialAssetManager::GetRenderData(Materials[0]).pMaterial;
-    ASSERT_NE(pMaterial, nullptr);
+    const RadientMaterialAssetView MaterialView =
+        RadientMaterialAssetManager::GetMaterialView(Materials[0]);
+    ASSERT_TRUE(MaterialView);
+    EXPECT_NE(MaterialView.pInstance, nullptr);
 
     const RadientDrawableMeshResolveResult DrawableMesh =
         RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);

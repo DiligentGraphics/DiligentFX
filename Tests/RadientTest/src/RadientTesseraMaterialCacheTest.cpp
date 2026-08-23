@@ -45,12 +45,12 @@ namespace Diligent
 namespace
 {
 
-RadientMaterialTextureRenderData MakeTextureBinding(
+RadientMaterialTextureSRBSlot MakeTextureBinding(
     Int32                  ResourceId,
     TEXTURE_FORMAT         ViewFormat = TEX_FORMAT_RGBA8_UNORM,
     RadientTextureViewType ViewType   = RadientTextureViewType::Linear)
 {
-    RadientMaterialTextureRenderData Binding;
+    RadientMaterialTextureSRBSlot Binding;
     Binding.pTexture        = Testing::MakeTestTextureAsset();
     Binding.ViewType        = ViewType;
     Binding.BindingIdentity = {ResourceId, ViewFormat};
@@ -90,20 +90,10 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeUnlitMaterialAsset()
     return pMaterial;
 }
 
-std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> MakeTextureAttribIndices()
-{
-    std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices;
-    for (size_t TextureAttribId = 0; TextureAttribId < Indices.size(); ++TextureAttribId)
-        Indices[TextureAttribId] = static_cast<int>(TextureAttribId);
-    return Indices;
-}
-
 std::unique_ptr<RadientTesseraMaterialCache> MakeMaterialCache(
-    const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices    = MakeTextureAttribIndices(),
-    PBR_Renderer::PSO_FLAGS                                       EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE)
+    PBR_Renderer::PSO_FLAGS EnabledMaterialPSOFlags = PBR_Renderer::PSO_FLAG_NONE)
 {
     RadientTesseraMaterialCache::CreateInfo CI;
-    CI.TextureAttribIndices          = TextureAttribIndices;
     CI.MaterialTextureSlotCount      = 8;
     CI.EnabledMaterialPSOFlags       = EnabledMaterialPSOFlags;
     CI.DefaultTextures               = MakeDefaultTextureBindings();
@@ -113,7 +103,7 @@ std::unique_ptr<RadientTesseraMaterialCache> MakeMaterialCache(
 }
 
 RadientMaterialTextureSRVResolveResult ResolveTestTextureSRV(
-    const RadientMaterialTextureRenderData& Binding)
+    const RadientMaterialTextureSRBSlot& Binding)
 {
     return {
         RADIENT_STATUS_OK,
@@ -307,8 +297,7 @@ TEST(RadientTesseraMaterialCacheTest, DerivesPSOFlagsFromMaterial)
 {
     RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pCache =
-        MakeMaterialCache(MakeTextureAttribIndices(),
-                          ExpectedClearcoatMaterialPSOFlags);
+        MakeMaterialCache(ExpectedClearcoatMaterialPSOFlags);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeMaterialAsset(true);
 
     const RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
@@ -322,8 +311,7 @@ TEST(RadientTesseraMaterialCacheTest, UnlitMaterialDoesNotUseUnshadedPSOFlag)
 {
     RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pCache =
-        MakeMaterialCache(MakeTextureAttribIndices(),
-                          PBR_Renderer::PSO_FLAG_UNSHADED);
+        MakeMaterialCache(PBR_Renderer::PSO_FLAG_UNSHADED);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeUnlitMaterialAsset();
 
     const RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
@@ -439,19 +427,16 @@ TEST(RadientTesseraMaterialCacheTest, DifferentMaterialsWithSameRecipeShareSRB)
               Result1.Data->GetMaterialBufferAllocation().GetOffset());
 }
 
-TEST(RadientTesseraMaterialCacheTest, ProcessingFailureIsTerminal)
+TEST(RadientTesseraMaterialCacheTest, MissingRequiredTextureIsTerminal)
 {
-    RefCntAutoPtr<IThreadPool> pThreadPool                           = CreateThreadPool(ThreadPoolCreateInfo{0});
-    auto                       TextureAttribIndices                  = MakeTextureAttribIndices();
-    TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = -1;
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pCache =
-        MakeMaterialCache(TextureAttribIndices,
-                          PBR_Renderer::PSO_FLAG_USE_COLOR_MAP);
+        MakeMaterialCache(PBR_Renderer::PSO_FLAG_USE_COLOR_MAP);
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeMaterialAsset();
 
     RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
 
-    Testing::TestingEnvironment::ErrorScope ExpectedErrors{"does not have a material texture mapping"};
+    Testing::TestingEnvironment::ErrorScope ExpectedErrors{"BaseColorTexture' is not initialized"};
     ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
     EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
 
@@ -507,7 +492,6 @@ TEST(RadientTesseraMaterialCacheTest, MaterialDataRetainsOnlySRBRecipeTextures)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
 
     RadientTesseraMaterialCache::CreateInfo CI;
-    CI.TextureAttribIndices          = MakeTextureAttribIndices();
     CI.MaterialTextureSlotCount      = 1;
     CI.EnabledMaterialPSOFlags       = PBR_Renderer::PSO_FLAG_NONE;
     CI.DefaultTextures               = MakeDefaultTextureBindings();

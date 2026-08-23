@@ -49,13 +49,13 @@ RefCntAutoPtr<IShaderResourceBinding> MakeTestSRB()
 }
 
 using TestMaterialTextureArray =
-    std::array<RadientMaterialTextureRenderData, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
+    RadientMaterialTextureSRBSlotArray;
 
-RadientMaterialTextureRenderData MakeBinding(size_t                 ResourceId,
-                                             TEXTURE_FORMAT         ViewFormat = TEX_FORMAT_RGBA8_UNORM,
-                                             RadientTextureViewType ViewType   = RadientTextureViewType::Linear)
+RadientMaterialTextureSRBSlot MakeBinding(size_t                 ResourceId,
+                                          TEXTURE_FORMAT         ViewFormat = TEX_FORMAT_RGBA8_UNORM,
+                                          RadientTextureViewType ViewType   = RadientTextureViewType::Linear)
 {
-    RadientMaterialTextureRenderData Binding;
+    RadientMaterialTextureSRBSlot Binding;
     Binding.pTexture        = Testing::MakeTestTextureAsset();
     Binding.ViewType        = ViewType;
     Binding.BindingIdentity = {
@@ -85,21 +85,7 @@ RADIENT_STATUS AcquireTestMaterialSRB(
     RadientMaterialSRBLease&                       Lease,
     PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds)
 {
-    static const GLTF::Material                                         Material;
-    static const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices = [] {
-        std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Indices;
-        for (size_t Attrib = 0; Attrib < Indices.size(); ++Attrib)
-            Indices[Attrib] = static_cast<int>(Attrib);
-        return Indices;
-    }();
-
-    const RadientMaterialRenderData MaterialData{
-        &Material,
-        Textures.data(),
-        static_cast<Uint32>(Textures.size()),
-    };
-    return Table.Acquire(MaterialData,
-                         TextureAttribIndices,
+    return Table.Acquire(Textures,
                          PSOFlags,
                          MaxTextureSlots,
                          DefaultTextures,
@@ -117,7 +103,7 @@ public:
             Slots.push_back(MakeBinding(ResourceId));
 
         SlotSources.reserve(Slots.size());
-        for (const RadientMaterialTextureRenderData& Slot : Slots)
+        for (const RadientMaterialTextureSRBSlot& Slot : Slots)
             SlotSources.push_back(&Slot);
     }
 
@@ -132,11 +118,11 @@ public:
         Slots.clear();
     }
 
-    std::vector<RadientMaterialTextureRenderData>        Slots;
-    std::vector<const RadientMaterialTextureRenderData*> SlotSources;
+    std::vector<RadientMaterialTextureSRBSlot>        Slots;
+    std::vector<const RadientMaterialTextureSRBSlot*> SlotSources;
 };
 
-RadientMaterialTextureSRVResolveResult ResolveTestSRV(const RadientMaterialTextureRenderData& Binding)
+RadientMaterialTextureSRVResolveResult ResolveTestSRV(const RadientMaterialTextureSRBSlot& Binding)
 {
     return {
         RADIENT_STATUS_OK,
@@ -317,7 +303,7 @@ TEST(RadientMaterialSRBTableTest, MaterialBufferRefreshKeepsPreviousSRBUntilRepl
                   2,
                   1,
                   20,
-                  [](const RadientMaterialTextureRenderData&) {
+                  [](const RadientMaterialTextureSRBSlot&) {
                       return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_PENDING, nullptr};
                   },
                   [](ITextureView* const*, Uint32) { return MakeTestSRB(); }),
@@ -347,7 +333,7 @@ TEST(RadientMaterialSRBTableTest, RetriesPendingTextureResolution)
     Uint32         CreateCount   = 0;
 
     auto ResolveTextureSRV =
-        [&TextureStatus](const RadientMaterialTextureRenderData& Binding) {
+        [&TextureStatus](const RadientMaterialTextureSRBSlot& Binding) {
             return TextureStatus == RADIENT_STATUS_OK ?
                 ResolveTestSRV(Binding) :
                 RadientMaterialTextureSRVResolveResult{TextureStatus, nullptr};
@@ -399,7 +385,7 @@ TEST(RadientMaterialSRBTableTest, UnresolvedEntryDoesNotBlockReadyEntry)
         Uint32            CreateCount         = 0;
 
         auto ResolveTextureSRV =
-            [&](const RadientMaterialTextureRenderData& Binding) {
+            [&](const RadientMaterialTextureSRBSlot& Binding) {
                 const size_t EntryIndex =
                     static_cast<size_t>(Binding.BindingIdentity.StandaloneResourceId - 1);
                 const bool IsResolved     = (ResolveCallCount % 2) != 0;
@@ -490,9 +476,9 @@ TEST(RadientMaterialSRBTableTest, RemovesReleasedEntryDuringPrepare)
 
 TEST(RadientMaterialSRBTableTest, RejectsInvalidRecipe)
 {
-    RadientMaterialSRBTable                 Table;
-    RadientMaterialTextureRenderData        InvalidSlot;
-    const RadientMaterialTextureRenderData* pInvalidSlot = &InvalidSlot;
+    RadientMaterialSRBTable              Table;
+    RadientMaterialTextureSRBSlot        InvalidSlot;
+    const RadientMaterialTextureSRBSlot* pInvalidSlot = &InvalidSlot;
 
     EXPECT_FALSE(Table.Acquire(&pInvalidSlot, 1));
     EXPECT_EQ(Table.GetSize(), 0u);
@@ -561,8 +547,8 @@ TEST(RadientMaterialSRBTableTest, DefaultMappingProducesCanonicalCompleteRecipes
 
 TEST(RadientMaterialSRBTableTest, DefaultMappingKeepsDistinctSemanticSlots)
 {
-    TestMaterialTextureArray               Textures;
-    const RadientMaterialTextureRenderData SharedTexture = MakeBinding(1);
+    TestMaterialTextureArray            Textures;
+    const RadientMaterialTextureSRBSlot SharedTexture    = MakeBinding(1);
     Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = SharedTexture;
     Textures[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = SharedTexture;
 
@@ -610,7 +596,7 @@ TEST(RadientMaterialSRBTableTest, CompactMappingGroupsMatchingLogicalViews)
 
 TEST(RadientMaterialSRBTableTest, ShaderMappingDoesNotAffectSRBIdentity)
 {
-    const RadientMaterialTextureRenderData SharedTexture = MakeBinding(1);
+    const RadientMaterialTextureSRBSlot SharedTexture = MakeBinding(1);
 
     TestMaterialTextureArray BaseColorTextures;
     BaseColorTextures[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = SharedTexture;
@@ -668,7 +654,7 @@ TEST(RadientMaterialSRBTableTest, RejectsMissingActiveTexture)
     RadientMaterialSRBTable                       Table;
     RadientMaterialSRBLease                       Lease;
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
-    Testing::TestingEnvironment::ErrorScope       ExpectedErrors{"Material texture 1 used by PBR texture attribute 1 is not initialized"};
+    Testing::TestingEnvironment::ErrorScope       ExpectedErrors{"Material texture used by PBR texture attribute 1 is not initialized"};
     EXPECT_EQ(AcquireTestMaterialSRB(Table,
                                      PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP,
                                      8, {}, MakeDefaultBindings(), Lease, ShaderTextureIds),

@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "GPUTestingEnvironment.hpp"
 #include "GLTFBuilder.hpp"
 #include "RadientGPUTestHelpers.hpp"
@@ -44,14 +45,47 @@ using namespace Diligent::Testing::RadientGPUTest;
 namespace
 {
 
-void ExpectTextureAttribsEqual(const GLTF::Material::TextureShaderAttribs& ActualAttribs,
-                               const GLTF::Material::TextureShaderAttribs& ExpectedAttribs)
+RadientMaterialParameterHandle FindMaterialParameter(const RadientMaterialAssetView& MaterialData,
+                                                     const char*                     Name)
 {
-    EXPECT_FLOAT_EQ(ActualAttribs.TextureSlice, ExpectedAttribs.TextureSlice);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.x, ExpectedAttribs.AtlasUVScaleAndBias.x);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.y, ExpectedAttribs.AtlasUVScaleAndBias.y);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.z, ExpectedAttribs.AtlasUVScaleAndBias.z);
-    EXPECT_FLOAT_EQ(ActualAttribs.AtlasUVScaleAndBias.w, ExpectedAttribs.AtlasUVScaleAndBias.w);
+    RadientMaterialParameterHandle Handle;
+    if (MaterialData.pInstance == nullptr)
+    {
+        ADD_FAILURE() << "Material render data has no instance";
+        return Handle;
+    }
+
+    IRadientMaterialDefinition* const pDefinition = MaterialData.pInstance->GetDefinition();
+    if (pDefinition == nullptr)
+    {
+        ADD_FAILURE() << "Material instance has no definition";
+        return Handle;
+    }
+
+    EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK) << Name;
+    return Handle;
+}
+
+IRadientTextureAsset* GetMaterialTexture(const RadientMaterialAssetView& MaterialData,
+                                         const char*                     ParameterName)
+{
+    const RadientMaterialParameterHandle Handle = FindMaterialParameter(MaterialData, ParameterName);
+    return Handle ? MaterialData.GetTextureAsset(Handle.Index) : nullptr;
+}
+
+template <typename ValueType>
+ValueType GetMaterialParameter(const RadientMaterialAssetView& MaterialData,
+                               const char*                     ParameterName)
+{
+    ValueType                            Value{};
+    const RadientMaterialParameterHandle Handle = FindMaterialParameter(MaterialData, ParameterName);
+    if (Handle)
+    {
+        EXPECT_EQ(MaterialData.pInstance->GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+                  RADIENT_STATUS_OK)
+            << ParameterName;
+    }
+    return Value;
 }
 
 struct MaterialWithTextureManagers
@@ -184,7 +218,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     // The texture worker is blocked, so the material must not expose texture
     // attributes that depend on texture storage placement.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
+    EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 
     ReleaseWorker.Trigger();
 
@@ -192,17 +226,13 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
+    const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialData);
+    EXPECT_EQ(GetMaterialTexture(MaterialData, RadientStandardMaterialBaseColorTextureName), pTexture);
+    EXPECT_EQ(GetMaterialParameter<Int32>(MaterialData, RadientStandardMaterialBaseColorTextureUVSelectorName), 0);
 
-    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
-    ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
-
-    const GLTF::Material::TextureShaderAttribs& ActualAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
-    EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
-    ExpectTextureAttribsEqual(ActualAttribs, ExpectedAttribs);
+    RadientTextureSamplingInfo SamplingInfo;
+    EXPECT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo));
 
     pThreadPool->StopThreads();
 }
@@ -255,7 +285,7 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     // but it must still wait for referenced texture assets before exposing
     // atlas-dependent texture attributes.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
+    EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 
     ReleaseWorker.Trigger();
 
@@ -263,33 +293,17 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const RadientMaterialRenderData MaterialData  = RadientMaterialAssetManager::GetRenderData(pMaterial);
-    const GLTF::Material*           pGLTFMaterial = MaterialData.pMaterial;
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultNormalTextureAttribId), 0);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultClearcoatTextureAttribId), 0);
-    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultBaseColorTextureAttribId), pTexture);
-    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultNormalTextureAttribId), pTexture);
-    EXPECT_EQ(MaterialData.GetTexture(GLTF::DefaultClearcoatTextureAttribId), pTexture);
+    const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialData);
+    EXPECT_EQ(GetMaterialTexture(MaterialData, RadientStandardMaterialBaseColorTextureName), pTexture);
+    EXPECT_EQ(GetMaterialTexture(MaterialData, RadientStandardMaterialNormalTextureName), pTexture);
+    EXPECT_EQ(GetMaterialTexture(MaterialData, RadientStandardMaterialClearCoatTextureName), pTexture);
+    EXPECT_EQ(GetMaterialParameter<Int32>(MaterialData, RadientStandardMaterialBaseColorTextureUVSelectorName), 0);
+    EXPECT_EQ(GetMaterialParameter<Int32>(MaterialData, RadientStandardMaterialNormalTextureUVSelectorName), 1);
+    EXPECT_EQ(GetMaterialParameter<Int32>(MaterialData, RadientStandardMaterialClearCoatTextureUVSelectorName), 2);
 
-    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
-    ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
-
-    const GLTF::Material::TextureShaderAttribs& BaseColorAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
-    EXPECT_EQ(BaseColorAttribs.GetUVSelector(), 0);
-    ExpectTextureAttribsEqual(BaseColorAttribs, ExpectedAttribs);
-
-    const GLTF::Material::TextureShaderAttribs& NormalAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultNormalTextureAttribId);
-    EXPECT_EQ(NormalAttribs.GetUVSelector(), 1);
-    ExpectTextureAttribsEqual(NormalAttribs, ExpectedAttribs);
-
-    const GLTF::Material::TextureShaderAttribs& ClearcoatAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultClearcoatTextureAttribId);
-    EXPECT_EQ(ClearcoatAttribs.GetUVSelector(), 2);
-    ExpectTextureAttribsEqual(ClearcoatAttribs, ExpectedAttribs);
+    RadientTextureSamplingInfo SamplingInfo;
+    EXPECT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo));
 
     pThreadPool->StopThreads();
 }
@@ -311,7 +325,6 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
     const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    GLTF::Material::TextureShaderAttribs ExpectedAttribs;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;
     {
         MaterialWithTextureManagers Managers;
@@ -322,7 +335,6 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
         EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
         ProcessUploads(*Managers.pUploadManager, *pContext, *pTexture);
-        ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(pTexture, ExpectedAttribs));
 
         // Drop the explicit texture handle. The material payload keeps the
         // texture dependency alive after all managers leave this scope.
@@ -333,14 +345,15 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
-    const GLTF::Material* pGLTFMaterial = RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial;
-    ASSERT_NE(pGLTFMaterial, nullptr);
-    EXPECT_EQ(pGLTFMaterial->GetTextureId(GLTF::DefaultBaseColorTextureAttribId), 0);
+    const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialData);
+    IRadientTextureAsset* const pRetainedTexture =
+        GetMaterialTexture(MaterialData, RadientStandardMaterialBaseColorTextureName);
+    ASSERT_NE(pRetainedTexture, nullptr);
+    EXPECT_EQ(GetMaterialParameter<Int32>(MaterialData, RadientStandardMaterialBaseColorTextureUVSelectorName), 0);
 
-    const GLTF::Material::TextureShaderAttribs& ActualAttribs =
-        pGLTFMaterial->GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
-    EXPECT_EQ(ActualAttribs.GetUVSelector(), 0);
-    ExpectTextureAttribsEqual(ActualAttribs, ExpectedAttribs);
+    RadientTextureSamplingInfo SamplingInfo;
+    EXPECT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pRetainedTexture, SamplingInfo));
 }
 
 TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeTextureUpload)
@@ -371,7 +384,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
         EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
-        EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
+        EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 
         // Drop the explicit texture handle before managers are destroyed. The
         // material payload must keep the pending texture dependency alive.
@@ -386,7 +399,9 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_CANCELLED);
-    EXPECT_EQ(RadientMaterialAssetManager::GetRenderData(pMaterial).pMaterial, nullptr);
+    const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(MaterialData);
+    EXPECT_NE(GetMaterialTexture(MaterialData, RadientStandardMaterialBaseColorTextureName), nullptr);
 }
 
 } // namespace

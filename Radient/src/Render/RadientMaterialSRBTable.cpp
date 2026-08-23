@@ -47,7 +47,7 @@
 namespace Diligent
 {
 
-const RadientMaterialTextureRenderData* RadientMaterialDefaultTextureBindings::Get(
+const RadientMaterialTextureSRBSlot* RadientMaterialDefaultTextureBindings::Get(
     PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) const noexcept
 {
     if (TextureAttribId >= PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT)
@@ -108,7 +108,7 @@ struct RadientMaterialSRBIdentity
 class RadientMaterialSRBState
 {
 public:
-    absl::InlinedVector<RadientMaterialTextureRenderData, 8> Slots;
+    absl::InlinedVector<RadientMaterialTextureSRBSlot, 8> Slots;
 
     // Accessed exclusively from the render thread.
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
@@ -168,13 +168,12 @@ RadientMaterialSRBTable::RadientMaterialSRBTable() :
 RadientMaterialSRBTable::~RadientMaterialSRBTable() = default;
 
 RADIENT_STATUS RadientMaterialSRBTable::Acquire(
-    const RadientMaterialRenderData&                              MaterialData,
-    const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-    PBR_Renderer::PSO_FLAGS                                       PSOFlags,
-    Uint32                                                        MaxTextureSlots,
-    const RadientMaterialDefaultTextureBindings&                  DefaultTextures,
-    RadientMaterialSRBLease&                                      Lease,
-    PBR_Renderer::StaticShaderTextureIdsArrayType&                ShaderTextureIds)
+    const RadientMaterialTextureSRBSlotArray&      MaterialTextures,
+    PBR_Renderer::PSO_FLAGS                        PSOFlags,
+    Uint32                                         MaxTextureSlots,
+    const RadientMaterialDefaultTextureBindings&   DefaultTextures,
+    RadientMaterialSRBLease&                       Lease,
+    PBR_Renderer::StaticShaderTextureIdsArrayType& ShaderTextureIds)
 {
     Lease = {};
     ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
@@ -207,11 +206,11 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
                 CanUseDefaultMapping = false;
         });
 
-    std::array<const RadientMaterialTextureRenderData*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> SlotSources{};
+    std::array<const RadientMaterialTextureSRBSlot*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> SlotSources{};
     for (Uint32 Slot = 0; Slot < MaxTextureSlots; ++Slot)
     {
-        const auto                              TextureAttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(Slot);
-        const RadientMaterialTextureRenderData* pDefaultTexture = DefaultTextures.Get(TextureAttribId);
+        const auto                           TextureAttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(Slot);
+        const RadientMaterialTextureSRBSlot* pDefaultTexture = DefaultTextures.Get(TextureAttribId);
         VERIFY(pDefaultTexture != nullptr && *pDefaultTexture,
                "Default material texture for PBR texture attribute ", Slot,
                " is not initialized. This cannot happen since we have already verified that DefaultTextures is valid.");
@@ -232,19 +231,10 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
             if (Status != RADIENT_STATUS_OK)
                 return;
 
-            const int TextureId = TextureAttribIndices[AttribId];
-            if (TextureId < 0)
+            const RadientMaterialTextureSRBSlot& Texture = MaterialTextures[AttribId];
+            if (!Texture)
             {
-                UNEXPECTED("PBR texture attribute ", Uint32{AttribId}, " does not have a material texture mapping");
-                Status = RADIENT_STATUS_INVALID_OPERATION;
-                return;
-            }
-
-            const RadientMaterialTextureRenderData* pTexture =
-                MaterialData.GetTextureData(static_cast<Uint32>(TextureId));
-            if (pTexture == nullptr || !*pTexture)
-            {
-                LOG_ERROR_MESSAGE("Material texture ", TextureId, " used by PBR texture attribute ",
+                LOG_ERROR_MESSAGE("Material texture used by PBR texture attribute ",
                                   Uint32{AttribId}, " is not initialized");
                 Status = RADIENT_STATUS_INVALID_OPERATION;
                 return;
@@ -255,7 +245,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
             {
                 SlotIndex = 0;
                 while (SlotIndex < NextTextureSlot &&
-                       SlotSources[SlotIndex]->BindingIdentity != pTexture->BindingIdentity)
+                       SlotSources[SlotIndex]->BindingIdentity != Texture.BindingIdentity)
                     ++SlotIndex;
 
                 if (SlotIndex == NextTextureSlot)
@@ -270,7 +260,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
                 }
             }
 
-            SlotSources[SlotIndex]     = pTexture;
+            SlotSources[SlotIndex]     = &Texture;
             ShaderTextureIds[AttribId] = static_cast<Uint16>(SlotIndex);
         });
 
@@ -291,8 +281,8 @@ RADIENT_STATUS RadientMaterialSRBTable::Acquire(
 }
 
 RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(
-    const RadientMaterialTextureRenderData* const* ppSlots,
-    Uint32                                         SlotCount)
+    const RadientMaterialTextureSRBSlot* const* ppSlots,
+    Uint32                                      SlotCount)
 {
     if (ppSlots == nullptr || SlotCount == 0)
         return {};
@@ -370,7 +360,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         absl::InlinedVector<ITextureView*, 8> TextureSRVs;
         TextureSRVs.reserve(pState->Slots.size());
         RADIENT_STATUS EntryStatus = RADIENT_STATUS_OK;
-        for (const RadientMaterialTextureRenderData& Slot : pState->Slots)
+        for (const RadientMaterialTextureSRBSlot& Slot : pState->Slots)
         {
             const RadientMaterialTextureSRVResolveResult ResolveResult = ResolveTextureSRV(Slot);
             RADIENT_STATUS                               TextureStatus = ResolveResult.Status;

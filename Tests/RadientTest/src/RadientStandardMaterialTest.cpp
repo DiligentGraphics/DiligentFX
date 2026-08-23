@@ -241,8 +241,11 @@ void ExpectShaderDataMatchesGLTF(const GLTF::Material&     Material,
     const auto* const pDefinition = static_cast<const RadientMaterialDefinitionImpl*>(Instance.GetDefinition());
     ASSERT_NE(pDefinition, nullptr);
 
-    const PBR_Renderer::PSO_FLAGS Flags        = GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
-    const Uint32                  ExpectedSize = GetGLTFMaterialShaderDataSize(Flags);
+    const PBR_Renderer::PSO_FLAGS Flags =
+        Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_UNLIT ?
+        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP :
+        GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
+    const Uint32 ExpectedSize = GetGLTFMaterialShaderDataSize(Flags);
     ASSERT_EQ(pDefinition->GetShaderDataSize(), ExpectedSize);
 
     std::vector<Uint8> Actual(ExpectedSize, 0xCD);

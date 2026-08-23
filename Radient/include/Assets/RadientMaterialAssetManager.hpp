@@ -29,6 +29,7 @@
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
 #include "RadientTextureAssetManager.hpp"
+#include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "WeakObjectCache.hpp"
@@ -51,44 +52,97 @@ struct RadientMaterialDefaultTextures
     RefCntAutoPtr<IRadientTextureAsset> pPhysicalDesc;
 };
 
-struct RadientMaterialTextureRenderData
+/// Texture entry for one material parameter array element.
+/// pTexture is either the requested texture or the definition-provided fallback.
+struct RadientMaterialTextureEntry
 {
+    // Parameter index in material definition
+    Uint32 ParameterIndex = ~Uint32{0};
+    Uint32 ArrayIndex     = 0;
+
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    RadientTextureViewType              ViewType        = RadientTextureViewType::Linear;
-    RadientTextureBindingIdentity       BindingIdentity = {};
 
     explicit operator bool() const noexcept
     {
-        return pTexture != nullptr && static_cast<bool>(BindingIdentity);
+        return pTexture != nullptr;
     }
 };
 
-RadientTextureViewType GetMaterialTextureViewType(const GLTF::Material& Material,
-                                                  Uint32                TextureAttribId) noexcept;
-
-/// Immutable renderer-facing view of a resolved material and its texture dependencies.
+/// Immutable renderer-neutral view of a material asset and its selected texture dependencies.
+/// Texture entries are ordered by ParameterIndex and ArrayIndex. ParameterIndex
+/// refers to the material definition retained by pInstance. pTextureIndexByParameter
+/// maps every definition parameter to its first texture entry; non-texture
+/// parameters map to InvalidTextureIndex.
 /// The view remains valid while the material asset is retained.
-struct RadientMaterialRenderData
+struct RadientMaterialAssetView
 {
-    const GLTF::Material*                   pMaterial    = nullptr;
-    const RadientMaterialTextureRenderData* pTextures    = nullptr;
-    Uint32                                  TextureCount = 0;
+    static constexpr Uint32 InvalidTextureIndex = ~Uint32{0};
 
-    IRadientTextureAsset* GetTexture(Uint32 TextureId) const noexcept
+    IRadientMaterialInstance*          pInstance                = nullptr;
+    const RadientMaterialTextureEntry* pTextures                = nullptr;
+    Uint32                             TextureCount             = 0;
+    const Uint32*                      pTextureIndexByParameter = nullptr;
+    Uint32                             ParameterCount           = 0;
+
+    const RadientMaterialTextureEntry* GetTexture(Uint32 ParameterIndex,
+                                                  Uint32 ArrayIndex = 0) const noexcept
     {
-        return pTextures != nullptr && TextureId < TextureCount ? pTextures[TextureId].pTexture.RawPtr() : nullptr;
+        if (pTextures == nullptr)
+        {
+            UNEXPECTED("Material texture entries are not initialized");
+            return nullptr;
+        }
+        if (pTextureIndexByParameter == nullptr)
+        {
+            UNEXPECTED("Material texture parameter index mapping is not initialized");
+            return nullptr;
+        }
+        if (ParameterIndex >= ParameterCount)
+        {
+            UNEXPECTED("Material parameter index ", ParameterIndex, " exceeds the parameter count ", ParameterCount);
+            return nullptr;
+        }
+
+        const Uint32 FirstTextureIndex = pTextureIndexByParameter[ParameterIndex];
+        if (FirstTextureIndex == InvalidTextureIndex)
+        {
+            UNEXPECTED("Material parameter ", ParameterIndex, " is not a texture parameter");
+            return nullptr;
+        }
+        if (FirstTextureIndex >= TextureCount)
+        {
+            UNEXPECTED("Texture index ", FirstTextureIndex, " mapped from material parameter ",
+                       ParameterIndex, " exceeds the texture count ", TextureCount);
+            return nullptr;
+        }
+        if (ArrayIndex >= TextureCount - FirstTextureIndex)
+        {
+            UNEXPECTED("Texture array index ", ArrayIndex, " for material parameter ",
+                       ParameterIndex, " exceeds the material texture data");
+            return nullptr;
+        }
+
+        const RadientMaterialTextureEntry& Texture = pTextures[FirstTextureIndex + ArrayIndex];
+        if (Texture.ParameterIndex != ParameterIndex || Texture.ArrayIndex != ArrayIndex)
+        {
+            UNEXPECTED("Material texture mapping is inconsistent for parameter ", ParameterIndex, ", array index ", ArrayIndex);
+            return nullptr;
+        }
+        return &Texture;
     }
 
-    const RadientMaterialTextureRenderData* GetTextureData(Uint32 TextureId) const noexcept
+    IRadientTextureAsset* GetTextureAsset(Uint32 ParameterIndex,
+                                          Uint32 ArrayIndex = 0) const noexcept
     {
-        return pTextures != nullptr && TextureId < TextureCount ?
-            &pTextures[TextureId] :
-            nullptr;
+        const RadientMaterialTextureEntry* pTexture = GetTexture(ParameterIndex, ArrayIndex);
+        return pTexture != nullptr ? pTexture->pTexture.RawPtr() : nullptr;
     }
 
     explicit operator bool() const noexcept
     {
-        return pMaterial != nullptr && (pTextures != nullptr || TextureCount == 0);
+        return pInstance != nullptr &&
+            (pTextures != nullptr || TextureCount == 0) &&
+            (pTextureIndexByParameter != nullptr || ParameterCount == 0);
     }
 };
 
@@ -138,12 +192,12 @@ public:
     // or null when the asset has no definition-backed instance.
     static RefCntAutoPtr<IRadientMaterialInstance> GetInstance(IRadientMaterialAsset* pMaterial);
 
-    // Returns the resolved material and its immutable render textures,
+    // Returns an immutable view of the material asset and its selected textures,
     // including semantic defaults selected for failed requested textures.
-    // This method lazily updates texture atlas attributes in the stored material
-    // and must be called from the render thread. It is not thread-safe and must
-    // not race with another GetRenderData() call for the same material asset.
-    static RadientMaterialRenderData GetRenderData(IRadientMaterialAsset* pMaterial);
+    // This method finalizes texture selection and must be called from the render
+    // thread. It is not thread-safe and must not race with another
+    // GetMaterialView() call for the same material asset.
+    static RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
@@ -156,11 +210,8 @@ private:
                                               Uint32                       TextureCount,
                                               IRadientMaterialInstance**   ppInstance);
 
-    RADIENT_STATUS CreateMaterialAsset(GLTF::Material               Material,
-                                       IRadientTextureAsset* const* ppTextures,
-                                       Uint32                       TextureCount,
-                                       IRadientMaterialInstance*    pInstance,
-                                       IRadientMaterialAsset**      ppMaterial);
+    RADIENT_STATUS CreateMaterialAsset(IRadientMaterialInstance* pInstance,
+                                       IRadientMaterialAsset**   ppMaterial);
 
     RadientMaterialDefaultTextures              m_DefaultTextures;
     WeakObjectCache<IRadientMaterialDefinition> m_StandardMaterialDefinitions;

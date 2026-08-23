@@ -356,7 +356,7 @@ void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
 
 bool InitializeMaterialTextureBinding(IRadientTextureAsset*             pTexture,
                                       RadientTextureViewType            ViewType,
-                                      RadientMaterialTextureRenderData& TextureData)
+                                      RadientMaterialTextureSRBSlot&    TextureData)
 {
     if (pTexture == nullptr)
         return false;
@@ -389,7 +389,7 @@ void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
     // subsequent frames only retry the entries that are not ready yet.
     auto Initialize = [](IRadientTextureAsset*             pTexture,
                          RadientTextureViewType            ViewType,
-                         RadientMaterialTextureRenderData& TextureData) {
+                         RadientMaterialTextureSRBSlot&    TextureData) {
         return TextureData || InitializeMaterialTextureBinding(pTexture, ViewType, TextureData);
     };
 
@@ -414,7 +414,6 @@ void RadientTesseraGeometryRenderer::CreateMaterialCache(IRenderDevice* pDevice)
     const PBR_Renderer::CreateInfo& Settings = m_pRenderer->GetSettings();
 
     RadientTesseraMaterialCache::CreateInfo CacheCI;
-    CacheCI.TextureAttribIndices          = Settings.TextureAttribIndices;
     CacheCI.MaterialTextureSlotCount      = Settings.MaterialTexturesArraySize;
     CacheCI.EnabledMaterialPSOFlags       = PBR_Renderer::GetEnabledPSOFlags(Settings);
     CacheCI.DefaultTextures               = m_DefaultMaterialTextureBindings;
@@ -442,7 +441,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
 
     return m_pMaterialCache->Prepare(
         TextureVersion,
-        [](const RadientMaterialTextureRenderData& Binding) {
+        [](const RadientMaterialTextureSRBSlot& Binding) {
             const RADIENT_STATUS TextureStatus = RadientTextureAssetManager::GetGPUResourceStatus(Binding.pTexture);
             if (TextureStatus != RADIENT_STATUS_OK)
                 return RadientMaterialTextureSRVResolveResult{TextureStatus, nullptr};

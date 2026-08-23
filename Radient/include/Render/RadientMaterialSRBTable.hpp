@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "ShaderResourceBinding.h"
@@ -38,18 +38,36 @@
 namespace Diligent
 {
 
+/// Tessera-ready texture binding retained by an SRB recipe. The material asset
+/// manager only exposes parameter-indexed texture assets; the renderer selects
+/// the typed view and resolves its stable GPU binding identity.
+struct RadientMaterialTextureSRBSlot
+{
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    RadientTextureViewType              ViewType        = RadientTextureViewType::Linear;
+    RadientTextureBindingIdentity       BindingIdentity = {};
+
+    explicit operator bool() const noexcept
+    {
+        return pTexture != nullptr && static_cast<bool>(BindingIdentity);
+    }
+};
+
+using RadientMaterialTextureSRBSlotArray =
+    std::array<RadientMaterialTextureSRBSlot, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>;
+
 /// Resolved default material texture bindings used to initialize SRB slots.
 /// White has separate linear and sRGB entries so default-filled slots use the
 /// same typed views as real textures with the corresponding semantics.
 struct RadientMaterialDefaultTextureBindings
 {
-    RadientMaterialTextureRenderData WhiteLinear;
-    RadientMaterialTextureRenderData WhiteSRGB;
-    RadientMaterialTextureRenderData BlackSRGB;
-    RadientMaterialTextureRenderData Normal;
-    RadientMaterialTextureRenderData PhysicalDesc;
+    RadientMaterialTextureSRBSlot WhiteLinear;
+    RadientMaterialTextureSRBSlot WhiteSRGB;
+    RadientMaterialTextureSRBSlot BlackSRGB;
+    RadientMaterialTextureSRBSlot Normal;
+    RadientMaterialTextureSRBSlot PhysicalDesc;
 
-    const RadientMaterialTextureRenderData* Get(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) const noexcept;
+    const RadientMaterialTextureSRBSlot* Get(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) const noexcept;
 
     explicit operator bool() const noexcept
     {
@@ -107,7 +125,7 @@ class RadientMaterialSRBTable final
 {
 public:
     using ResolveTextureSRVCallbackType =
-        std::function<RadientMaterialTextureSRVResolveResult(const RadientMaterialTextureRenderData&)>;
+        std::function<RadientMaterialTextureSRVResolveResult(const RadientMaterialTextureSRBSlot&)>;
     using CreateSRBCallbackType =
         std::function<RefCntAutoPtr<IShaderResourceBinding>(ITextureView* const*, Uint32)>;
 
@@ -124,19 +142,18 @@ public:
     /// the matching SRB entry without creating GPU objects. Slot texture
     /// references are only retained when a new entry is inserted.
     RADIENT_STATUS Acquire(
-        const RadientMaterialRenderData&                              MaterialData,
-        const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-        PBR_Renderer::PSO_FLAGS                                       PSOFlags,
-        Uint32                                                        MaxTextureSlots,
-        const RadientMaterialDefaultTextureBindings&                  DefaultTextures,
-        RadientMaterialSRBLease&                                      Lease,
-        PBR_Renderer::StaticShaderTextureIdsArrayType&                ShaderTextureIds);
+        const RadientMaterialTextureSRBSlotArray&       MaterialTextures,
+        PBR_Renderer::PSO_FLAGS                         PSOFlags,
+        Uint32                                          MaxTextureSlots,
+        const RadientMaterialDefaultTextureBindings&    DefaultTextures,
+        RadientMaterialSRBLease&                        Lease,
+        PBR_Renderer::StaticShaderTextureIdsArrayType&  ShaderTextureIds);
 
     /// Thread-safely reuses or reserves an entry for a complete ordered slot
     /// recipe without retaining the supplied texture references on a cache hit.
     RadientMaterialSRBLease Acquire(
-        const RadientMaterialTextureRenderData* const* ppSlots,
-        Uint32                                         SlotCount);
+        const RadientMaterialTextureSRBSlot* const* ppSlots,
+        Uint32                                     SlotCount);
 
     /// Creates new SRBs and recreates existing SRBs when the texture resources
     /// or shared material buffer change. Pending texture resolutions are

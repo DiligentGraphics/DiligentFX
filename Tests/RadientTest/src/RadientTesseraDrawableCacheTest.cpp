@@ -552,12 +552,12 @@ const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientTesseraDr
     return nullptr;
 }
 
-RadientMaterialTextureRenderData MakeMaterialTextureBinding(
+RadientMaterialTextureSRBSlot MakeMaterialTextureBinding(
     Int32                  ResourceId,
     TEXTURE_FORMAT         ViewFormat = TEX_FORMAT_RGBA8_UNORM,
     RadientTextureViewType ViewType   = RadientTextureViewType::Linear)
 {
-    RadientMaterialTextureRenderData Binding;
+    RadientMaterialTextureSRBSlot Binding;
     Binding.pTexture        = Testing::MakeTestTextureAsset();
     Binding.ViewType        = ViewType;
     Binding.BindingIdentity = {ResourceId, ViewFormat};
@@ -578,8 +578,6 @@ RadientMaterialDefaultTextureBindings MakeMaterialDefaultTextureBindings()
 std::unique_ptr<RadientTesseraMaterialCache> MakeDrawableMaterialCache()
 {
     RadientTesseraMaterialCache::CreateInfo CI;
-    for (size_t TextureId = 0; TextureId < CI.TextureAttribIndices.size(); ++TextureId)
-        CI.TextureAttribIndices[TextureId] = static_cast<int>(TextureId);
     CI.MaterialTextureSlotCount      = 8;
     CI.EnabledMaterialPSOFlags       = PBR_Renderer::PSO_FLAG_NONE;
     CI.DefaultTextures               = MakeMaterialDefaultTextureBindings();
@@ -603,7 +601,7 @@ RADIENT_STATUS PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache)
         1,
         0,
         ~Uint64{0},
-        [](const RadientMaterialTextureRenderData& Binding) {
+        [](const RadientMaterialTextureSRBSlot& Binding) {
             return RadientMaterialTextureSRVResolveResult{
                 RADIENT_STATUS_OK,
                 reinterpret_cast<ITextureView*>(static_cast<uintptr_t>(Binding.BindingIdentity.StandaloneResourceId)),
@@ -1097,8 +1095,8 @@ TEST(RadientTesseraDrawableCacheTest, MeshMayChangeWhileMaterialProcessingIsPend
     const RadientDrawableSlot* pSlot = GetFirstDrawableSlot(DrawableCache);
     ASSERT_NE(pSlot, nullptr);
     ASSERT_TRUE(pSlot->MaterialData);
-    EXPECT_EQ(pSlot->MaterialData->GetMaterialRenderData().pMaterial,
-              RadientMaterialAssetManager::GetRenderData(pMaterial1).pMaterial);
+    EXPECT_EQ(pSlot->MaterialData->GetMaterialView().pInstance,
+              RadientMaterialAssetManager::GetMaterialView(pMaterial1).pInstance);
     EXPECT_EQ(pSlot->FirstElement, 12u);
 }
 

@@ -28,8 +28,10 @@
 
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientMaterialImpl.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "ThreadPool.hpp"
 
+#include <array>
 #include <exception>
 #include <utility>
 #include <vector>
@@ -44,6 +46,9 @@ std::atomic<UniqueIdentifier> s_NextUniqueID{0};
 
 PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialDefinitionDesc& Desc) noexcept
 {
+    if (Desc.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT)
+        return PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
+
     const auto HasFeature = [&Desc](RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Feature) {
         return (Desc.Features & Feature) != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
     };
@@ -68,12 +73,101 @@ PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialD
     return Flags;
 }
 
+const char* GetStandardTextureParameterName(PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) noexcept
+{
+    static constexpr auto Names = [] {
+        std::array<const char*, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> Result{};
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]            = RadientStandardMaterialBaseColorTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]                = RadientStandardMaterialNormalTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]             = RadientStandardMaterialMetallicRoughnessTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]             = RadientStandardMaterialOcclusionTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]              = RadientStandardMaterialEmissiveTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT]            = RadientStandardMaterialClearCoatTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = RadientStandardMaterialClearCoatRoughnessTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = RadientStandardMaterialClearCoatNormalTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = RadientStandardMaterialSheenColorTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = RadientStandardMaterialSheenRoughnessTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY]            = RadientStandardMaterialAnisotropyTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE]           = RadientStandardMaterialIridescenceTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = RadientStandardMaterialIridescenceThicknessTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = RadientStandardMaterialTransmissionTextureName;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = RadientStandardMaterialThicknessTextureName;
+        return Result;
+    }();
+
+    return TextureAttribId < Names.size() ? Names[TextureAttribId] : nullptr;
+}
+
+RADIENT_STATUS BuildMaterialTextureSRBSlots(
+    const IRadientMaterialDefinition&   Definition,
+    const RadientMaterialAssetView&     MaterialView,
+    PBR_Renderer::PSO_FLAGS             PSOFlags,
+    RadientMaterialTextureSRBSlotArray& TextureSlots)
+{
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    PBR_Renderer::ProcessTexturAttribs(
+        PSOFlags,
+        [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId) {
+            if (Status != RADIENT_STATUS_OK)
+                return;
+
+            const char* const pParameterName = GetStandardTextureParameterName(TextureAttribId);
+            if (pParameterName == nullptr)
+            {
+                UNEXPECTED("PBR texture attribute ", Uint32{TextureAttribId},
+                           " has no standard material parameter mapping");
+                Status = RADIENT_STATUS_UNSUPPORTED;
+                return;
+            }
+
+            RadientMaterialParameterHandle Parameter;
+            Status = Definition.FindParameter(pParameterName, &Parameter);
+            if (Status != RADIENT_STATUS_OK)
+            {
+                LOG_ERROR_MESSAGE("Surface material definition does not contain required texture parameter '",
+                                  pParameterName, "'");
+                Status = Status == RADIENT_STATUS_NOT_FOUND ? RADIENT_STATUS_UNSUPPORTED : Status;
+                return;
+            }
+
+            const RadientMaterialTextureEntry* const pTexture =
+                MaterialView.GetTexture(Parameter.Index);
+            if (pTexture == nullptr || pTexture->pTexture == nullptr)
+            {
+                LOG_ERROR_MESSAGE("Material texture parameter '", pParameterName, "' is not initialized");
+                Status = RADIENT_STATUS_INVALID_OPERATION;
+                return;
+            }
+
+            const RadientTextureViewType ViewType =
+                PBR_Renderer::IsSRGBTextureAttribute(TextureAttribId) ?
+                RadientTextureViewType::SRGB :
+                RadientTextureViewType::Linear;
+            const RadientTextureBindingIdentity BindingIdentity =
+                RadientTextureAssetManager::GetTextureBindingIdentity(pTexture->pTexture, ViewType);
+            if (!BindingIdentity)
+            {
+                const RADIENT_STATUS TextureStatus =
+                    RadientTextureAssetManager::GetGPUResourceStatus(pTexture->pTexture);
+                Status = TextureStatus == RADIENT_STATUS_OK ? RADIENT_STATUS_FAILED : TextureStatus;
+                return;
+            }
+
+            RadientMaterialTextureSRBSlot& TextureSlot = TextureSlots[TextureAttribId];
+            TextureSlot.pTexture                       = pTexture->pTexture;
+            TextureSlot.ViewType                       = ViewType;
+            TextureSlot.BindingIdentity                = BindingIdentity;
+        });
+
+    return Status;
+}
+
 } // namespace
 
-RadientTesseraMaterialData::RadientTesseraMaterialData(IRadientMaterialAsset*           pMaterial,
-                                                       const RadientMaterialRenderData& MaterialData) :
+RadientTesseraMaterialData::RadientTesseraMaterialData(IRadientMaterialAsset*          pMaterial,
+                                                       const RadientMaterialAssetView& MaterialView) :
     m_pMaterial{pMaterial},
-    m_MaterialData{MaterialData},
+    m_MaterialView{MaterialView},
     m_UniqueID{s_NextUniqueID.fetch_add(1, std::memory_order_relaxed) + 1}
 {
     m_ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
@@ -83,7 +177,7 @@ RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
 {
     RADIENT_STATUS Status = GetStatus();
     // The material aggregate covers the texture assets exposed through
-    // m_MaterialData; renderer defaults that are not in this recipe are irrelevant.
+    // m_MaterialView; renderer defaults that are not in this recipe are irrelevant.
     Status = CombineDependencyStatus(
         Status,
         RadientMaterialAssetManager::GetGPUResourceStatus(m_pMaterial));
@@ -139,12 +233,11 @@ void RadientTesseraMaterialData::PublishFailure(RADIENT_STATUS Status) noexcept
 
 struct RadientTesseraMaterialCache::ProcessingContext
 {
-    std::shared_ptr<RadientMaterialSRBTable>               pMaterialSRBTable;
-    std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices{};
-    Uint32                                                 MaterialTextureSlotCount = 0;
-    PBR_Renderer::PSO_FLAGS                                EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
-    RadientMaterialDefaultTextureBindings                  DefaultTextures;
-    RadientTesseraMaterialBuffer                           MaterialBuffer;
+    std::shared_ptr<RadientMaterialSRBTable> pMaterialSRBTable;
+    Uint32                                   MaterialTextureSlotCount = 0;
+    PBR_Renderer::PSO_FLAGS                  EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
+    RadientMaterialDefaultTextureBindings    DefaultTextures;
+    RadientTesseraMaterialBuffer             MaterialBuffer;
 
     ProcessingContext(Uint32 ConstantBufferOffsetAlignment,
                       Uint32 MaxMaterialAttribsSize) :
@@ -166,7 +259,6 @@ RadientTesseraMaterialCache::RadientTesseraMaterialCache(const CreateInfo& CI) :
         LOG_ERROR_AND_THROW("Radient Tessera default material texture bindings must be initialized");
 
     m_pProcessingContext->pMaterialSRBTable        = std::make_shared<RadientMaterialSRBTable>();
-    m_pProcessingContext->TextureAttribIndices     = CI.TextureAttribIndices;
     m_pProcessingContext->MaterialTextureSlotCount = CI.MaterialTextureSlotCount;
     m_pProcessingContext->EnabledMaterialPSOFlags  = CI.EnabledMaterialPSOFlags;
     m_pProcessingContext->DefaultTextures          = CI.DefaultTextures;
@@ -183,11 +275,12 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
     RadientTesseraMaterialDataMap::ValueHandle Data = m_MaterialData.Get(pMaterial);
     if (!Data)
     {
-        const RadientMaterialRenderData MaterialData = RadientMaterialAssetManager::GetRenderData(pMaterial);
-        if (!MaterialData)
+        const RadientMaterialAssetView MaterialView =
+            RadientMaterialAssetManager::GetMaterialView(pMaterial);
+        if (!MaterialView)
             return {};
 
-        Data = m_MaterialData.GetOrInsert(pMaterial, pMaterial, MaterialData);
+        Data = m_MaterialData.GetOrInsert(pMaterial, pMaterial, MaterialView);
     }
     if (!Data)
         return {};
@@ -275,8 +368,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     const std::shared_ptr<ProcessingContext>& pContext,
     RadientTesseraMaterialData&               Data)
 {
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance = RadientMaterialAssetManager::GetInstance(Data.m_pMaterial);
-    if (!pInstance)
+    IRadientMaterialInstance* const pInstance = Data.m_MaterialView.pInstance;
+    if (pInstance == nullptr)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
         return;
@@ -304,11 +397,22 @@ void RadientTesseraMaterialCache::ProcessMaterial(
 
     RadientMaterialSRBLease                       MaterialSRB;
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds;
+    RadientMaterialTextureSRBSlotArray            TextureSlots;
 
-    const RADIENT_STATUS Status =
+    RADIENT_STATUS Status = BuildMaterialTextureSRBSlots(
+        *pDefinitionInterface,
+        Data.m_MaterialView,
+        MaterialPSOFlags,
+        TextureSlots);
+    if (Status != RADIENT_STATUS_OK)
+    {
+        Data.PublishFailure(Status);
+        return;
+    }
+
+    Status =
         pContext->pMaterialSRBTable->Acquire(
-            Data.m_MaterialData,
-            pContext->TextureAttribIndices,
+            TextureSlots,
             MaterialPSOFlags,
             pContext->MaterialTextureSlotCount,
             pContext->DefaultTextures,
