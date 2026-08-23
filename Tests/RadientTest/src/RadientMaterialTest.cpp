@@ -51,11 +51,11 @@ namespace
 {
 
 template <typename ValueType>
-ValueType GetParameter(IRadientMaterialInstance&      Instance,
+ValueType GetParameter(IRadientMaterialAsset&         Material,
                        RadientMaterialParameterHandle Handle)
 {
     ValueType Value{};
-    EXPECT_EQ(Instance.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_OK);
+    EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_OK);
     return Value;
 }
 
@@ -78,6 +78,14 @@ RADIENT_STATUS CreateDefinition(const RadientMaterialDefinitionDesc&       Defin
                                 IRadientMaterialDefinitionAsset**          ppDefinition)
 {
     return RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, ShaderDataLayout, ppDefinition);
+}
+
+RADIENT_STATUS CreateMaterial(IRadientMaterialDefinitionAsset* pDefinition,
+                              IRadientMaterialAsset**          ppMaterial)
+{
+    static const RadientMaterialAssetManagerSharedPtr pMaterialManager =
+        RadientMaterialAssetManager::Create();
+    return pMaterialManager->CreateMaterial(pDefinition, ppMaterial);
 }
 
 RefCntAutoPtr<IRadientMaterialDefinitionAsset> CreateDefinition(
@@ -211,7 +219,7 @@ TEST(RadientMaterialTest, DefinitionPreservesConcreteSurfaceDescription)
     EXPECT_EQ(StoredSurfaceDesc.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
 }
 
-TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
+TEST(RadientMaterialTest, SurfaceStateIsMutableAndPacked)
 {
     struct ShaderSurfaceState
     {
@@ -234,22 +242,22 @@ TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
-        pInstance, IID_RadientSurfaceMaterialInstance};
-    ASSERT_NE(pSurfaceInstance, nullptr);
-    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
-    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.5f);
-    EXPECT_FALSE(pSurfaceInstance->IsDoubleSided());
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.5f);
+    EXPECT_FALSE(pSurfaceMaterial->IsDoubleSided());
 
-    const Uint64                                  InitialVersion = pInstance->GetVersion();
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
-        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    const Uint64                          InitialVersion = pMaterial->GetVersion();
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
     ASSERT_NE(pSurfaceWriter, nullptr);
 
     EXPECT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_COUNT),
@@ -264,47 +272,72 @@ TEST(RadientMaterialTest, SurfaceStateIsMutableClonedAndPacked)
     EXPECT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_NO_CHANGE);
     ASSERT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
 
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 1);
-    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
-    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.25f);
-    EXPECT_TRUE(pSurfaceInstance->IsDoubleSided());
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 1);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
 
     ShaderSurfaceState ShaderState;
     static_cast<RadientMaterialDefinitionImpl&>(*pDefinition)
-        .WriteShaderData(*pInstance, &ShaderState);
+        .WriteShaderData(*pMaterial, &ShaderState);
     EXPECT_EQ(ShaderState.SurfaceMode, static_cast<Uint32>(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT));
     EXPECT_FLOAT_EQ(ShaderState.AlphaCutoff, 0.25f);
-
-    RefCntAutoPtr<IRadientMaterialInstance> pClone;
-    ASSERT_EQ(pInstance->Clone(pClone.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceClone{
-        pClone, IID_RadientSurfaceMaterialInstance};
-    ASSERT_NE(pSurfaceClone, nullptr);
-    EXPECT_EQ(pSurfaceClone->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
-    EXPECT_FLOAT_EQ(pSurfaceClone->GetAlphaCutoff(), 0.25f);
-    EXPECT_TRUE(pSurfaceClone->IsDoubleSided());
 }
 
-TEST(RadientMaterialTest, NonSurfaceInstancesDoNotExposeSurfaceInterfaces)
+TEST(RadientMaterialTest, MaterialAndSurfaceInterfacesShareObjectIdentity)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name = "Surface material identity definition";
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+
+    RefCntAutoPtr<IObject> pMaterialUnknown{pMaterial, IID_Unknown};
+    RefCntAutoPtr<IObject> pSurfaceUnknown{pSurfaceMaterial, IID_Unknown};
+    ASSERT_NE(pMaterialUnknown, nullptr);
+    ASSERT_NE(pSurfaceUnknown, nullptr);
+    EXPECT_EQ(pMaterialUnknown, pSurfaceUnknown);
+    EXPECT_EQ(pMaterialUnknown->GetReferenceCounters(),
+              pSurfaceUnknown->GetReferenceCounters());
+
+    RefCntAutoPtr<IRadientAsset> pAssetFromMaterial{pMaterial, IID_RadientAsset};
+    RefCntAutoPtr<IRadientAsset> pAssetFromSurface{pSurfaceMaterial, IID_RadientAsset};
+    ASSERT_NE(pAssetFromMaterial, nullptr);
+    ASSERT_NE(pAssetFromSurface, nullptr);
+    EXPECT_EQ(pAssetFromMaterial, pAssetFromSurface);
+    EXPECT_EQ(pAssetFromMaterial->GetReferenceCounters(),
+              pAssetFromSurface->GetReferenceCounters());
+    EXPECT_EQ(pAssetFromMaterial->GetReferenceCounters(),
+              pMaterialUnknown->GetReferenceCounters());
+}
+
+TEST(RadientMaterialTest, NonSurfaceMaterialsDoNotExposeSurfaceInterfaces)
 {
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
-        pInstance, IID_RadientSurfaceMaterialInstance};
-    EXPECT_EQ(pSurfaceInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    EXPECT_EQ(pSurfaceMaterial, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
-        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
     EXPECT_EQ(pSurfaceWriter, nullptr);
 }
 
-TEST(RadientMaterialTest, GenericWriterRetainsItsInstance)
+TEST(RadientMaterialTest, GenericWriterRetainsItsMaterial)
 {
     const Float32 DefaultValue = 0.f;
     const Float32 UpdatedValue = 1.f;
@@ -320,54 +353,54 @@ TEST(RadientMaterialTest, GenericWriterRetainsItsInstance)
     RadientMaterialParameterHandle Handle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    RefCntWeakPtr<IRadientMaterialInstance> WeakInstance{pInstance};
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    RefCntWeakPtr<IRadientMaterialAsset> WeakMaterial{pMaterial};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
-    pInstance.Release();
-    EXPECT_NE(WeakInstance.Lock(), nullptr);
+    pMaterial.Release();
+    EXPECT_NE(WeakMaterial.Lock(), nullptr);
 
     ASSERT_EQ(pWriter->SetParameter(Handle, UpdatedValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     {
-        RefCntAutoPtr<IRadientMaterialInstance> pRetainedInstance = WeakInstance.Lock();
-        ASSERT_NE(pRetainedInstance, nullptr);
-        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pRetainedInstance, Handle), UpdatedValue);
+        RefCntAutoPtr<IRadientMaterialAsset> pRetainedMaterial = WeakMaterial.Lock();
+        ASSERT_NE(pRetainedMaterial, nullptr);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pRetainedMaterial, Handle), UpdatedValue);
     }
 
     pWriter.Release();
-    EXPECT_EQ(WeakInstance.Lock(), nullptr);
+    EXPECT_EQ(WeakMaterial.Lock(), nullptr);
 }
 
-TEST(RadientMaterialTest, SurfaceWriterRetainsItsInstance)
+TEST(RadientMaterialTest, SurfaceWriterRetainsItsMaterial)
 {
     RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
-    DefinitionDesc.Name = "Retained surface instance definition";
+    DefinitionDesc.Name = "Retained surface material definition";
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    RefCntWeakPtr<IRadientMaterialInstance> WeakInstance{pInstance};
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    RefCntWeakPtr<IRadientMaterialAsset> WeakMaterial{pMaterial};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
-        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
     ASSERT_NE(pSurfaceWriter, nullptr);
     pWriter.Release();
 
-    pInstance.Release();
-    EXPECT_NE(WeakInstance.Lock(), nullptr);
+    pMaterial.Release();
+    EXPECT_NE(WeakMaterial.Lock(), nullptr);
 
     ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
     ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
@@ -375,21 +408,21 @@ TEST(RadientMaterialTest, SurfaceWriterRetainsItsInstance)
     ASSERT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
 
     {
-        RefCntAutoPtr<IRadientMaterialInstance> pRetainedInstance = WeakInstance.Lock();
-        ASSERT_NE(pRetainedInstance, nullptr);
-        RefCntAutoPtr<IRadientSurfaceMaterialInstance> pRetainedSurfaceInstance{
-            pRetainedInstance, IID_RadientSurfaceMaterialInstance};
-        ASSERT_NE(pRetainedSurfaceInstance, nullptr);
-        EXPECT_EQ(pRetainedSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
-        EXPECT_FLOAT_EQ(pRetainedSurfaceInstance->GetAlphaCutoff(), 0.25f);
-        EXPECT_TRUE(pRetainedSurfaceInstance->IsDoubleSided());
+        RefCntAutoPtr<IRadientMaterialAsset> pRetainedMaterial = WeakMaterial.Lock();
+        ASSERT_NE(pRetainedMaterial, nullptr);
+        RefCntAutoPtr<IRadientSurfaceMaterialAsset> pRetainedSurfaceMaterial{
+            pRetainedMaterial, IID_RadientSurfaceMaterialAsset};
+        ASSERT_NE(pRetainedSurfaceMaterial, nullptr);
+        EXPECT_EQ(pRetainedSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+        EXPECT_FLOAT_EQ(pRetainedSurfaceMaterial->GetAlphaCutoff(), 0.25f);
+        EXPECT_TRUE(pRetainedSurfaceMaterial->IsDoubleSided());
     }
 
     pSurfaceWriter.Release();
-    EXPECT_EQ(WeakInstance.Lock(), nullptr);
+    EXPECT_EQ(WeakMaterial.Lock(), nullptr);
 }
 
-TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
+TEST(RadientMaterialTest, DefinitionPacksMaterialShaderData)
 {
     const RadientFloat4          DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};
     const std::array<Float32, 2> DefaultWeights{0.5f, 0.75f};
@@ -432,13 +465,13 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
     EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), ShaderDataLayout.Size);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
     std::array<Uint8, 48> ShaderData;
     ShaderData.fill(0xcd);
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
 
     std::array<Uint8, 48> Expected{};
     std::memcpy(Expected.data() + 4, DefaultWeights.data(), sizeof(DefaultWeights));
@@ -450,12 +483,12 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
     RadientMaterialParameterHandle ColorHandle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &ColorHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     std::memcpy(Expected.data() + 16, &UpdatedColor, sizeof(UpdatedColor));
     EXPECT_EQ(ShaderData, Expected);
 }
@@ -501,13 +534,13 @@ TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
     OverriddenValue = 0;
     Initializations = {};
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
     std::array<Uint8, 16> ShaderData;
     ShaderData.fill(0xcd);
-    static_cast<RadientMaterialDefinitionImpl&>(*pDefinition).WriteShaderData(*pInstance, ShaderData.data());
+    static_cast<RadientMaterialDefinitionImpl&>(*pDefinition).WriteShaderData(*pMaterial, ShaderData.data());
 
     std::array<Uint8, 16> Expected{};
     Expected[2] = 0x11;
@@ -568,9 +601,9 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
     auto&              DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
     std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
@@ -584,7 +617,7 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     std::memcpy(&Expected.UVScaleAndRotation, DefaultUVTransform.data(), sizeof(Expected.UVScaleAndRotation));
     Expected.AtlasUVScaleAndBias = float4{};
 
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
 
     RadientMaterialParameterHandle UVSelectorHandle;
@@ -594,30 +627,30 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     ASSERT_EQ(pDefinition->GetParameterHandle(4, &WrapUHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->GetParameterHandle(5, &WrapVHandle), RADIENT_STATUS_OK);
 
-    const Int32                                   UpdatedUVSelector = 1;
-    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE   UpdatedWrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Int32                                 UpdatedUVSelector = 1;
+    const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE UpdatedWrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    RefCntAutoPtr<IRadientMaterialWriter>       pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(UVSelectorHandle, UpdatedUVSelector), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(WrapUHandle, UpdatedWrapU), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     Expected.SetUVSelector(UpdatedUVSelector);
     Expected.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
 
     const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE RestoredWrapU = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
     const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE UpdatedWrapV  = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
     pWriter.Release();
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(WrapUHandle, RestoredWrapU), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(WrapVHandle, UpdatedWrapV), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     Expected.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
     Expected.SetWrapVMode(TEXTURE_ADDRESS_CLAMP);
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
 }
 
@@ -661,9 +694,9 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
     auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
     EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), ShaderDataLayout.Size);
@@ -671,19 +704,19 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
     std::vector<Uint8> Expected(ShaderDataLayout.Size, 0);
     std::memcpy(Expected.data() + DestinationOffset, DefaultData.data(), DefaultData.size());
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(ShaderData, Expected);
 
     RadientMaterialParameterHandle Handle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(Handle, UpdatedData.data(), Param.Size), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     std::memcpy(Expected.data() + DestinationOffset, UpdatedData.data(), UpdatedData.size());
-    DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
+    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(ShaderData, Expected);
 }
 
@@ -716,12 +749,12 @@ TEST(RadientMaterialTest, EmptyShaderDataLayoutWritesNoData)
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     auto& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
     EXPECT_EQ(DefinitionImpl.GetShaderDataSize(), 0u);
-    DefinitionImpl.WriteShaderData(*pInstance, nullptr);
+    DefinitionImpl.WriteShaderData(*pMaterial, nullptr);
 }
 
 TEST(RadientMaterialTest, RejectsMissingShaderDataMappings)
@@ -973,30 +1006,31 @@ TEST(RadientMaterialTest, AssetManagerReportsDefinitionAssetStatus)
     EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
 }
 
-TEST(RadientMaterialTest, EmptyDefinitionSupportsInstanceLifecycle)
+TEST(RadientMaterialTest, EmptyDefinitionSupportsMaterialLifecycleAndIdentity)
 {
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(nullptr, 0);
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(pDefinition->GetParameterCount(), 0u);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    EXPECT_GT(pInstance->GetVersion(), 0u);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    EXPECT_GT(pMaterial->GetVersion(), 0u);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pClone;
-    ASSERT_EQ(pInstance->Clone(pClone.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pClone, nullptr);
-    EXPECT_EQ(pClone->GetDefinition(), pDefinition);
-    EXPECT_GT(pClone->GetVersion(), 0u);
+    RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pSecondMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pSecondMaterial, nullptr);
+    EXPECT_NE(pSecondMaterial, pMaterial);
+    EXPECT_EQ(pSecondMaterial->GetDefinition(), pDefinition);
+    EXPECT_GT(pSecondMaterial->GetVersion(), 0u);
 
     pWriter.Release();
-    ASSERT_EQ(pClone->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 }
@@ -1027,7 +1061,7 @@ TEST(RadientMaterialTest, FindsParametersByNameRegardlessOfDeclarationOrder)
     EXPECT_FALSE(MissingHandle);
 }
 
-TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
+TEST(RadientMaterialTest, WriterUpdatesSharedMaterial)
 {
     const RadientFloat4                 DefaultColor{1.f, 1.f, 1.f, 1.f};
     RefCntAutoPtr<IRadientTextureAsset> pDefaultTexture = MakeTestTextureAsset("texture://default");
@@ -1050,51 +1084,51 @@ TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
     ASSERT_EQ(pDefinition->FindParameter("BaseColor", &ColorHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->FindParameter("BaseColorTexture", &TextureHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    EXPECT_EQ(pInstance->GetDefinition(), pDefinition);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    EXPECT_EQ(pMaterial->GetDefinition(), pDefinition);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pSharedInstance = pInstance;
-    const Uint64                            InitialVersion  = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pSharedMaterial = pMaterial;
+    const Uint64                         InitialVersion  = pMaterial->GetVersion();
 
-    const RadientFloat4 InitialColor = GetParameter<RadientFloat4>(*pInstance, ColorHandle);
+    const RadientFloat4 InitialColor = GetParameter<RadientFloat4>(*pMaterial, ColorHandle);
     EXPECT_FLOAT_EQ(InitialColor.x, 1.f);
     EXPECT_FLOAT_EQ(InitialColor.y, 1.f);
     EXPECT_FLOAT_EQ(InitialColor.z, 1.f);
     EXPECT_FLOAT_EQ(InitialColor.w, 1.f);
 
-    RefCntAutoPtr<IRadientTextureAsset> pDefaultInstanceTexture;
-    ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pDefaultInstanceTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    EXPECT_EQ(pDefaultInstanceTexture, pDefaultTexture);
+    RefCntAutoPtr<IRadientTextureAsset> pDefaultMaterialTexture;
+    ASSERT_EQ(pMaterial->GetTexture(TextureHandle, 0, pDefaultMaterialTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pDefaultMaterialTexture, pDefaultTexture);
 
-    const RadientFloat4                           UpdatedColor{0.25f, 0.5f, 0.75f, 1.f};
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientFloat4                   UpdatedColor{0.25f, 0.5f, 0.75f, 1.f};
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pUpdatedTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
-    EXPECT_GT(pInstance->GetVersion(), InitialVersion);
-    EXPECT_EQ(pSharedInstance->GetVersion(), pInstance->GetVersion());
+    EXPECT_GT(pMaterial->GetVersion(), InitialVersion);
+    EXPECT_EQ(pSharedMaterial->GetVersion(), pMaterial->GetVersion());
 
-    const RadientFloat4 CommittedColor = GetParameter<RadientFloat4>(*pSharedInstance, ColorHandle);
+    const RadientFloat4 CommittedColor = GetParameter<RadientFloat4>(*pSharedMaterial, ColorHandle);
     EXPECT_FLOAT_EQ(CommittedColor.x, UpdatedColor.x);
     EXPECT_FLOAT_EQ(CommittedColor.y, UpdatedColor.y);
     EXPECT_FLOAT_EQ(CommittedColor.z, UpdatedColor.z);
     EXPECT_FLOAT_EQ(CommittedColor.w, UpdatedColor.w);
-    RefCntAutoPtr<IRadientTextureAsset> pUpdatedInstanceTexture;
-    ASSERT_EQ(pSharedInstance->GetTexture(TextureHandle, 0, pUpdatedInstanceTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    EXPECT_EQ(pUpdatedInstanceTexture, pUpdatedTexture);
+    RefCntAutoPtr<IRadientTextureAsset> pUpdatedMaterialTexture;
+    ASSERT_EQ(pSharedMaterial->GetTexture(TextureHandle, 0, pUpdatedMaterialTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pUpdatedMaterialTexture, pUpdatedTexture);
 
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     const RadientFloat4 SecondColor{0.75f, 0.5f, 0.25f, 1.f};
     ASSERT_EQ(pWriter->SetParameter(ColorHandle, SecondColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 2);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 2);
 
-    const RadientFloat4 SecondCommittedColor = GetParameter<RadientFloat4>(*pSharedInstance, ColorHandle);
+    const RadientFloat4 SecondCommittedColor = GetParameter<RadientFloat4>(*pSharedMaterial, ColorHandle);
     EXPECT_FLOAT_EQ(SecondCommittedColor.x, SecondColor.x);
     EXPECT_FLOAT_EQ(SecondCommittedColor.y, SecondColor.y);
     EXPECT_FLOAT_EQ(SecondCommittedColor.z, SecondColor.z);
@@ -1124,11 +1158,11 @@ TEST(RadientMaterialTest, WriterSetParameterInfersValueSize)
     for (Uint32 Index = 0; Index < static_cast<Uint32>(Handles.size()); ++Index)
         ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handles[Index]), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     const Bool                   UpdatedEnabled = True;
     const RadientFloat3          UpdatedDirection{1.f, 2.f, 3.f};
@@ -1141,16 +1175,16 @@ TEST(RadientMaterialTest, WriterSetParameterInfersValueSize)
     EXPECT_EQ(pWriter->SetParameter(Handles[3], UpdatedWeights), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
-    EXPECT_EQ(GetParameter<Bool>(*pInstance, Handles[0]), UpdatedEnabled);
-    EXPECT_EQ(GetParameter<RadientFloat3>(*pInstance, Handles[1]), UpdatedDirection);
+    EXPECT_EQ(GetParameter<Bool>(*pMaterial, Handles[0]), UpdatedEnabled);
+    EXPECT_EQ(GetParameter<RadientFloat3>(*pMaterial, Handles[1]), UpdatedDirection);
 
     const std::array<Float32, 4> StoredTransform =
-        GetParameter<std::array<Float32, 4>>(*pInstance, Handles[2]);
+        GetParameter<std::array<Float32, 4>>(*pMaterial, Handles[2]);
     EXPECT_TRUE(std::equal(StoredTransform.begin(), StoredTransform.end(), UpdatedTransform));
-    EXPECT_EQ((GetParameter<std::array<Float32, 3>>(*pInstance, Handles[3])), UpdatedWeights);
+    EXPECT_EQ((GetParameter<std::array<Float32, 3>>(*pMaterial, Handles[3])), UpdatedWeights);
 }
 
-TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
+TEST(RadientMaterialTest, MaterialSupportsValueAndTextureArrays)
 {
     const std::array<Float32, 3> DefaultValues{0.25f, 0.5f, 0.75f};
     const std::array<Float32, 3> UpdatedValues{1.f, 2.f, 3.f};
@@ -1173,25 +1207,25 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     ASSERT_EQ(pDefinition->FindParameter("Values", &ValuesHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->FindParameter("Textures", &TexturesHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     const std::array<Float32, 3> InitialValues =
-        GetParameter<std::array<Float32, 3>>(*pInstance, ValuesHandle);
+        GetParameter<std::array<Float32, 3>>(*pMaterial, ValuesHandle);
     EXPECT_EQ(InitialValues, DefaultValues);
 
     for (Uint32 Index = 0; Index < Parameters[1].ArraySize; ++Index)
     {
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
-        EXPECT_EQ(pInstance->GetTexture(TexturesHandle, Index, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        EXPECT_EQ(pMaterial->GetTexture(TexturesHandle, Index, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
         EXPECT_EQ(pTexture, nullptr);
     }
 
-    RefCntAutoPtr<IRadientTextureAsset>           pTexture0 = MakeTestTextureAsset("texture://array-0");
-    RefCntAutoPtr<IRadientTextureAsset>           pTexture1 = MakeTestTextureAsset("texture://array-1");
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pFirstWriter;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset>   pTexture0 = MakeTestTextureAsset("texture://array-0");
+    RefCntAutoPtr<IRadientTextureAsset>   pTexture1 = MakeTestTextureAsset("texture://array-1");
+    RefCntAutoPtr<IRadientMaterialWriter> pFirstWriter;
+    RefCntAutoPtr<IRadientMaterialWriter> pSecondWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetParameter(ValuesHandle, UpdatedValues), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetTexture(TexturesHandle, 0, pTexture0), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->SetTexture(TexturesHandle, 1, pTexture1), RADIENT_STATUS_OK);
@@ -1202,12 +1236,12 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
 
     const std::array<Float32, 3> StoredValues =
-        GetParameter<std::array<Float32, 3>>(*pInstance, ValuesHandle);
+        GetParameter<std::array<Float32, 3>>(*pMaterial, ValuesHandle);
     EXPECT_EQ(StoredValues, UpdatedValues);
     RefCntAutoPtr<IRadientTextureAsset> pStoredTexture0;
     RefCntAutoPtr<IRadientTextureAsset> pStoredTexture1;
-    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 0, pStoredTexture0.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 1, pStoredTexture1.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetTexture(TexturesHandle, 0, pStoredTexture0.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetTexture(TexturesHandle, 1, pStoredTexture1.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture0, pTexture0);
     EXPECT_EQ(pStoredTexture1, pTexture1);
 }
@@ -1266,12 +1300,12 @@ TEST(RadientMaterialTest, SupportsEveryValueParameterType)
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
     std::array<Uint8, MaxDataSize + 1> ReadData{};
@@ -1286,10 +1320,10 @@ TEST(RadientMaterialTest, SupportsEveryValueParameterType)
 
         RadientMaterialParameterHandle Handle;
         ASSERT_EQ(pDefinition->GetParameterHandle(TypeIndex, &Handle), RADIENT_STATUS_OK);
-        ASSERT_EQ(pInstance->GetParameter(Handle, ReadData.data(), DataSize), RADIENT_STATUS_OK);
+        ASSERT_EQ(pMaterial->GetParameter(Handle, ReadData.data(), DataSize), RADIENT_STATUS_OK);
         EXPECT_EQ(std::memcmp(ReadData.data(), DefaultData[TypeIndex].data(), DataSize), 0);
-        EXPECT_EQ(pInstance->GetParameter(Handle, ReadData.data(), DataSize - 1), RADIENT_STATUS_INVALID_ARGUMENT);
-        EXPECT_EQ(pInstance->GetParameter(Handle, ReadData.data(), DataSize + 1), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pMaterial->GetParameter(Handle, ReadData.data(), DataSize - 1), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pMaterial->GetParameter(Handle, ReadData.data(), DataSize + 1), RADIENT_STATUS_INVALID_ARGUMENT);
 
         EXPECT_EQ(pWriter->SetParameter(Handle, UpdatedData[TypeIndex].data(), DataSize - 1), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(pWriter->SetParameter(Handle, UpdatedData[TypeIndex].data(), DataSize + 1), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -1302,7 +1336,7 @@ TEST(RadientMaterialTest, SupportsEveryValueParameterType)
         const Uint32                   DataSize = TypeInfos[TypeIndex].ElementSize * ArraySize;
         RadientMaterialParameterHandle Handle;
         ASSERT_EQ(pDefinition->GetParameterHandle(TypeIndex, &Handle), RADIENT_STATUS_OK);
-        ASSERT_EQ(pInstance->GetParameter(Handle, ReadData.data(), DataSize), RADIENT_STATUS_OK);
+        ASSERT_EQ(pMaterial->GetParameter(Handle, ReadData.data(), DataSize), RADIENT_STATUS_OK);
         EXPECT_EQ(std::memcmp(ReadData.data(), UpdatedData[TypeIndex].data(), DataSize), 0);
     }
 }
@@ -1320,13 +1354,13 @@ TEST(RadientMaterialTest, NullValueDefaultIsZeroInitialized)
     RadientMaterialParameterHandle Handle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
     std::array<Uint8, sizeof(Float32) * 9 * 2> Data;
     Data.fill(0xFFu);
-    ASSERT_EQ(pInstance->GetParameter(Handle, Data.data(), static_cast<Uint32>(Data.size())), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetParameter(Handle, Data.data(), static_cast<Uint32>(Data.size())), RADIENT_STATUS_OK);
     EXPECT_TRUE(std::all_of(Data.begin(), Data.end(), [](Uint8 Byte) { return Byte == 0; }));
 }
 
@@ -1342,17 +1376,17 @@ TEST(RadientMaterialTest, UnchangedWriterDoesNotAdvanceVersion)
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    const Uint64 InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pMaterial->GetVersion();
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion);
 
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion);
 }
 
 TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
@@ -1376,12 +1410,12 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->GetParameterHandle(1, &TextureHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    const Uint64 InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pMaterial->GetVersion();
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_NO_CHANGE);
@@ -1398,15 +1432,15 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion);
 
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-    const Uint64 TextureVersion = pInstance->GetVersion();
+    const Uint64 TextureVersion = pMaterial->GetVersion();
 
     EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pInstance->GetVersion(), TextureVersion);
+    EXPECT_EQ(pMaterial->GetVersion(), TextureVersion);
 }
 
 TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
@@ -1433,17 +1467,17 @@ TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->GetParameterHandle(1, &TexturesHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    const Uint64 InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pMaterial->GetVersion();
 
     RefCntAutoPtr<IRadientTextureAsset> pTextureA = MakeTestTextureAsset("texture://writer-overwritten");
     RefCntAutoPtr<IRadientTextureAsset> pTextureB = MakeTestTextureAsset("texture://writer-final-0");
     RefCntAutoPtr<IRadientTextureAsset> pTextureC = MakeTestTextureAsset("texture://writer-final-1");
     RefCntWeakPtr<IRadientTextureAsset> WeakTextureA{pTextureA};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(ValueHandle, FirstValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(ValueHandle, SecondValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetParameter(ValueHandle, FinalValue), RADIENT_STATUS_OK);
@@ -1457,14 +1491,14 @@ TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
     EXPECT_EQ(WeakTextureA.Lock(), nullptr);
 
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 1);
-    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, ValueHandle), FinalValue);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 1);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), FinalValue);
 
     RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
-    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetTexture(TexturesHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture, pTextureB);
     pStoredTexture.Release();
-    ASSERT_EQ(pInstance->GetTexture(TexturesHandle, 1, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetTexture(TexturesHandle, 1, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture, pTextureC);
 }
 
@@ -1487,39 +1521,39 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
     RadientMaterialParameterHandle Handle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    const Uint64 InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pMaterial->GetVersion();
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterA;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterB;
-    ASSERT_EQ(pInstance->CreateWriter(pWriterA.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->CreateWriter(pWriterB.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriterA;
+    RefCntAutoPtr<IRadientMaterialWriter> pWriterB;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriterA.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pWriterB.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterA->SetParameter(Handle, FirstValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterB->SetParameter(Handle, FirstValue), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterA->Commit(), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriterB->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 1);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 1);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterC;
-    ASSERT_EQ(pInstance->CreateWriter(pWriterC.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriterC;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriterC.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterC->SetParameter(Handle, SecondValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterC->Commit(), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterB->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, Handle), SecondValue);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, Handle), SecondValue);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterD;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterE;
-    ASSERT_EQ(pInstance->CreateWriter(pWriterD.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->CreateWriter(pWriterE.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriterD;
+    RefCntAutoPtr<IRadientMaterialWriter> pWriterE;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriterD.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pWriterE.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterD->SetParameter(Handle, ThirdValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterE->SetParameter(Handle, FourthValue), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterD->Commit(), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriterE->Commit(), RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, Handle), FourthValue);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, Handle), FourthValue);
 }
 
 TEST(RadientMaterialTest, WritersResolveOverlappingTextureChangesAtCommit)
@@ -1534,16 +1568,16 @@ TEST(RadientMaterialTest, WritersResolveOverlappingTextureChangesAtCommit)
     RadientMaterialParameterHandle Handle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientTextureAsset> pFirstTexture  = MakeTestTextureAsset("texture://writer-first");
     RefCntAutoPtr<IRadientTextureAsset> pSecondTexture = MakeTestTextureAsset("texture://writer-second");
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pFirstWriter;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pFirstWriter;
+    RefCntAutoPtr<IRadientMaterialWriter> pSecondWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetTexture(Handle, 0, pFirstTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->SetTexture(Handle, 0, pSecondTexture), RADIENT_STATUS_OK);
 
@@ -1551,7 +1585,7 @@ TEST(RadientMaterialTest, WritersResolveOverlappingTextureChangesAtCommit)
     ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
-    ASSERT_EQ(pInstance->GetTexture(Handle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->GetTexture(Handle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture, pSecondTexture);
 }
 
@@ -1574,11 +1608,11 @@ TEST(RadientMaterialTest, WriterUpdatesSparseParameters)
         CreateDefinition(Parameters.data(), ParameterCount);
     ASSERT_NE(pDefinition, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     const std::array<Uint32, 4> ChangedIndices{0, 63, 64, 65};
     const Float32               UpdatedValue = 1.f;
@@ -1598,7 +1632,7 @@ TEST(RadientMaterialTest, WriterUpdatesSparseParameters)
     {
         RadientMaterialParameterHandle Handle;
         ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handle), RADIENT_STATUS_OK);
-        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, Handle),
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, Handle),
                         Index == ChangedIndices.back() ? DefaultValue : UpdatedValue);
     }
 }
@@ -1623,11 +1657,11 @@ TEST(RadientMaterialTest, DefinitionSpecificHandlesAreRejected)
     ASSERT_EQ(pDefinition1->GetParameterHandle(0, &Handle1), RADIENT_STATUS_OK);
     EXPECT_NE(Handle0, Handle1);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition0->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition0, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->SetParameter(Handle1, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))),
               RADIENT_STATUS_INVALID_ARGUMENT);
 }
@@ -1654,22 +1688,22 @@ TEST(RadientMaterialTest, RejectsNonZeroReservedHandles)
     EXPECT_EQ(ValueHandle.Reserved, 0u);
     EXPECT_EQ(TextureHandle.Reserved, 0u);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
     ValueHandle.Reserved   = 1;
     TextureHandle.Reserved = 1;
 
     Float32 Value = 0.f;
-    EXPECT_EQ(pInstance->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    EXPECT_EQ(pInstance->GetTexture(TextureHandle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pTexture, nullptr);
 
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -1719,12 +1753,11 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     EXPECT_EQ(pDefinition->FindParameter("value", &ResetHandle), RADIENT_STATUS_NOT_FOUND);
     ExpectInvalidHandle(ResetHandle);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pInstance, nullptr);
-    EXPECT_EQ(pDefinition->CreateInstance(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->CreateWriter(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->Clone(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    EXPECT_EQ(CreateMaterial(pDefinition, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->CreateWriter(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 
     RadientMaterialParameterHandle OutOfRangeValueHandle   = ValueHandle;
     OutOfRangeValueHandle.Index                            = 2;
@@ -1732,22 +1765,22 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     OutOfRangeTextureHandle.Index                          = 2;
 
     Float32 Value = 0.f;
-    EXPECT_EQ(pInstance->GetParameter({}, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->GetParameter(ForeignValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->GetParameter(OutOfRangeValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->GetParameter(TextureHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_EQ(pInstance->GetParameter(ValueHandle, nullptr, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value) - 1)), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pInstance->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value) + 1)), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter({}, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(ForeignValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(OutOfRangeValueHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(TextureHandle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMaterial->GetParameter(ValueHandle, nullptr, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value) - 1)), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetParameter(ValueHandle, &Value, static_cast<Uint32>(sizeof(Value) + 1)), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    EXPECT_EQ(pInstance->GetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
     RefCntAutoPtr<IRadientTextureAsset> pSentinelTexture = MakeTestTextureAsset("texture://sentinel");
     ASSERT_NE(pSentinelTexture, nullptr);
     const auto ExpectGetTextureFailure = [&](RadientMaterialParameterHandle Handle,
                                              Uint32                         ArrayIndex,
                                              RADIENT_STATUS                 ExpectedStatus) {
         IRadientTextureAsset* pOutput = pSentinelTexture;
-        EXPECT_EQ(pInstance->GetTexture(Handle, ArrayIndex, &pOutput), ExpectedStatus);
+        EXPECT_EQ(pMaterial->GetTexture(Handle, ArrayIndex, &pOutput), ExpectedStatus);
         EXPECT_EQ(pOutput, nullptr);
     };
     ExpectGetTextureFailure({}, 0, RADIENT_STATUS_INVALID_ARGUMENT);
@@ -1756,8 +1789,8 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     ExpectGetTextureFailure(ValueHandle, 0, RADIENT_STATUS_INVALID_OPERATION);
     ExpectGetTextureFailure(TextureHandle, 2, RADIENT_STATUS_INVALID_ARGUMENT);
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
     EXPECT_EQ(pWriter->SetParameter({}, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -1786,85 +1819,68 @@ TEST(RadientMaterialTest, PublicAPIRejectsInvalidArgumentsAndClearsOutputs)
     EXPECT_EQ(pDefinitionOutput, nullptr);
 }
 
-TEST(RadientMaterialTest, CloneCopiesCommittedStateAndRemainsIndependent)
+TEST(RadientMaterialTest, MaterialsFromOneDefinitionHaveIndependentStateAndIdentity)
 {
     const std::array<Float32, 2> DefaultValues{1.f, 2.f};
-    const std::array<Float32, 2> ClonedValues{3.f, 4.f};
-    const std::array<Float32, 2> SourceValues{5.f, 6.f};
-    const std::array<Float32, 2> UpdatedCloneValues{7.f, 8.f};
+    const std::array<Float32, 2> FirstValues{3.f, 4.f};
+    const std::array<Float32, 2> SecondValues{5.f, 6.f};
 
     std::array<RadientMaterialParameterDesc, 2> Parameters{};
     Parameters[0].Name          = "Values";
     Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
     Parameters[0].ArraySize     = static_cast<Uint32>(DefaultValues.size());
     Parameters[0].pDefaultValue = DefaultValues.data();
-    Parameters[1].Name          = "Textures";
+    Parameters[1].Name          = "Texture";
     Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
-    Parameters[1].ArraySize     = 2;
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition =
         CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
     ASSERT_NE(pDefinition, nullptr);
 
     RadientMaterialParameterHandle ValuesHandle;
-    RadientMaterialParameterHandle TexturesHandle;
+    RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValuesHandle), RADIENT_STATUS_OK);
-    ASSERT_EQ(pDefinition->GetParameterHandle(1, &TexturesHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &TextureHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientTextureAsset> pTextureA = MakeTestTextureAsset("texture://clone-a");
-    RefCntAutoPtr<IRadientTextureAsset> pTextureB = MakeTestTextureAsset("texture://clone-b");
-    RefCntAutoPtr<IRadientTextureAsset> pTextureC = MakeTestTextureAsset("texture://clone-c");
-    RefCntAutoPtr<IRadientTextureAsset> pTextureD = MakeTestTextureAsset("texture://clone-d");
+    RefCntAutoPtr<IRadientMaterialAsset> pFirstMaterial;
+    RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pFirstMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateMaterial(pDefinition, pSecondMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pFirstMaterial, nullptr);
+    ASSERT_NE(pSecondMaterial, nullptr);
+    EXPECT_NE(pFirstMaterial, pSecondMaterial);
+    EXPECT_EQ(pFirstMaterial->GetDefinition(), pDefinition);
+    EXPECT_EQ(pSecondMaterial->GetDefinition(), pDefinition);
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pFirstMaterial, ValuesHandle)), DefaultValues);
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pSecondMaterial, ValuesHandle)), DefaultValues);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset> pFirstTexture  = MakeTestTextureAsset("texture://first");
+    RefCntAutoPtr<IRadientTextureAsset> pSecondTexture = MakeTestTextureAsset("texture://second");
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, ClonedValues), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureA), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureB), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pFirstMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, FirstValues), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pFirstTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pFirstMaterial, ValuesHandle)), FirstValues);
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pSecondMaterial, ValuesHandle)), DefaultValues);
+
     pWriter.Release();
-
-    RefCntAutoPtr<IRadientMaterialInstance> pClone;
-    ASSERT_EQ(pInstance->Clone(pClone.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pClone, pInstance);
-    EXPECT_EQ(pClone->GetDefinition(), pDefinition);
-    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pClone, ValuesHandle)), ClonedValues);
-
-    const auto GetTexture = [&](IRadientMaterialInstance& Instance, Uint32 Index) {
-        RefCntAutoPtr<IRadientTextureAsset> pTexture;
-        EXPECT_EQ(Instance.GetTexture(TexturesHandle, Index, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-        return pTexture;
-    };
-    EXPECT_EQ(GetTexture(*pClone, 0), pTextureA);
-    EXPECT_EQ(GetTexture(*pClone, 1), pTextureB);
-
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, SourceValues), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureC), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-    pWriter.Release();
-
-    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pInstance, ValuesHandle)), SourceValues);
-    EXPECT_EQ(GetTexture(*pInstance, 0), pTextureC);
-    EXPECT_EQ(GetTexture(*pInstance, 1), pTextureB);
-    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pClone, ValuesHandle)), ClonedValues);
-    EXPECT_EQ(GetTexture(*pClone, 0), pTextureA);
-    EXPECT_EQ(GetTexture(*pClone, 1), pTextureB);
-
-    ASSERT_EQ(pClone->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, UpdatedCloneValues), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureD), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, SecondValues), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pSecondTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
-    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pInstance, ValuesHandle)), SourceValues);
-    EXPECT_EQ(GetTexture(*pInstance, 0), pTextureC);
-    EXPECT_EQ(GetTexture(*pInstance, 1), pTextureB);
-    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pClone, ValuesHandle)), UpdatedCloneValues);
-    EXPECT_EQ(GetTexture(*pClone, 0), pTextureA);
-    EXPECT_EQ(GetTexture(*pClone, 1), pTextureD);
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pFirstMaterial, ValuesHandle)), FirstValues);
+    EXPECT_EQ((GetParameter<std::array<Float32, 2>>(*pSecondMaterial, ValuesHandle)), SecondValues);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    ASSERT_EQ(pFirstMaterial->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pFirstTexture);
+    pStoredTexture.Release();
+    ASSERT_EQ(pSecondMaterial->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pSecondTexture);
 }
 
 TEST(RadientMaterialTest, WritersApplyIndependentChanges)
@@ -1890,23 +1906,23 @@ TEST(RadientMaterialTest, WritersApplyIndependentChanges)
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &FirstHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(pDefinition->GetParameterHandle(1, &SecondHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    const Uint64 InitialVersion = pInstance->GetVersion();
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const Uint64 InitialVersion = pMaterial->GetVersion();
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pFirstWriter;
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pFirstWriter;
+    RefCntAutoPtr<IRadientMaterialWriter> pSecondWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterial->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetParameter(FirstHandle, FirstValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->SetParameter(SecondHandle, SecondValue), RADIENT_STATUS_OK);
 
     ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);
 
-    EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 2);
-    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, FirstHandle), FirstValue);
-    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pInstance, SecondHandle), SecondValue);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 2);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, FirstHandle), FirstValue);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, SecondHandle), SecondValue);
 }
 
 TEST(RadientMaterialTest, DefinitionRetainsDefaultTexture)
@@ -1929,7 +1945,7 @@ TEST(RadientMaterialTest, DefinitionRetainsDefaultTexture)
     EXPECT_EQ(WeakTexture.Lock(), nullptr);
 }
 
-TEST(RadientMaterialTest, InstanceRetainsAssignedTexture)
+TEST(RadientMaterialTest, MaterialRetainsAssignedTexture)
 {
     RadientMaterialParameterDesc Parameter{};
     Parameter.Name = "Texture";
@@ -1941,14 +1957,14 @@ TEST(RadientMaterialTest, InstanceRetainsAssignedTexture)
     RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &TextureHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientTextureAsset> pTexture = MakeTestTextureAsset("texture://instance-assigned");
+    RefCntAutoPtr<IRadientTextureAsset> pTexture = MakeTestTextureAsset("texture://material-assigned");
     RefCntWeakPtr<IRadientTextureAsset> WeakTexture{pTexture};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
@@ -1956,7 +1972,7 @@ TEST(RadientMaterialTest, InstanceRetainsAssignedTexture)
     pWriter.Release();
     EXPECT_NE(WeakTexture.Lock(), nullptr);
 
-    pInstance.Release();
+    pMaterial.Release();
     EXPECT_EQ(WeakTexture.Lock(), nullptr);
 }
 
@@ -1972,14 +1988,14 @@ TEST(RadientMaterialTest, WriterRetainsUncommittedTexture)
     RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(pDefinition->GetParameterHandle(0, &TextureHandle), RADIENT_STATUS_OK);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture = MakeTestTextureAsset("texture://writer-uncommitted");
     RefCntWeakPtr<IRadientTextureAsset> WeakTexture{pTexture};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
 
     pTexture.Release();

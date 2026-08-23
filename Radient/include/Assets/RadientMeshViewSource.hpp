@@ -28,6 +28,7 @@
 
 #include "DebugUtilities.hpp"
 #include "RadientAssets.h"
+#include "RadientMaterials.h"
 #include "RefCntAutoPtr.hpp"
 
 #include <string>

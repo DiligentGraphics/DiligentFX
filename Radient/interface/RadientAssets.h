@@ -40,7 +40,6 @@ typedef struct IRadientAsset                   IRadientAsset;
 typedef struct IRadientMeshAsset               IRadientMeshAsset;
 typedef struct IRadientMaterialAsset           IRadientMaterialAsset;
 typedef struct IRadientMaterialDefinitionAsset IRadientMaterialDefinitionAsset;
-typedef struct IRadientMaterialInstance        IRadientMaterialInstance;
 typedef struct IRadientTextureAsset            IRadientTextureAsset;
 typedef struct IRadientSceneAsset              IRadientSceneAsset;
 typedef struct IDeviceContext                  IDeviceContext;
@@ -383,10 +382,6 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAsset =
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMeshAsset =
     {0xdadf2017, 0x67fe, 0x485a, {0x80, 0x2d, 0x98, 0xc6, 0x7, 0x83, 0x15, 0x9}};
 
-// {D73346B3-A9F9-4FBB-9803-8B60C6D60E4A}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialAsset =
-    {0xd73346b3, 0xa9f9, 0x4fbb, {0x98, 0x3, 0x8b, 0x60, 0xc6, 0xd6, 0xe, 0x4a}};
-
 // {A24C6739-3521-4517-9D5E-0A0D2C8F4BC3}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientTextureAsset =
     {0xa24c6739, 0x3521, 0x4517, {0x9d, 0x5e, 0xa, 0xd, 0x2c, 0x8f, 0x4b, 0xc3}};
@@ -429,11 +424,6 @@ struct IRadientMeshAsset : public IRadientAsset
 {
 };
 
-/// Material asset.
-struct IRadientMaterialAsset : public IRadientAsset
-{
-};
-
 /// Texture asset.
 struct IRadientTextureAsset : public IRadientAsset
 {
@@ -471,20 +461,18 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               IRadientMeshAsset**             ppMesh) PURE;
 
     /// Creates or retrieves a cached built-in standard material definition asset.
-    /// Compatible descriptions may return the same immutable asset. Use
-    /// IRadientMaterialDefinitionAsset::CreateInstance() to create mutable material
-    /// parameters. On success, ppDefinition receives a strong reference.
+    /// Compatible descriptions may return the same immutable asset. On success,
+    /// ppDefinition receives a strong reference.
     VIRTUAL RADIENT_STATUS METHOD(CreateStandardMaterialDefinition)(THIS_
                                                                     const RadientStandardMaterialDefinitionCreateInfo REF DefinitionCI,
                                                                     IRadientMaterialDefinitionAsset**                          ppDefinition) PURE;
 
-    /// Creates a material asset from a fully initialized material instance created
-    /// by a material definition produced by Radient. The asset retains the exact
-    /// instance. Until material-instance modification is supported by material
-    /// assets, the caller must not modify the instance after this method succeeds.
+    /// Creates a mutable material asset initialized with Definition's default
+    /// parameter values. Definition must be a compatible Radient material
+    /// definition asset. On success, ppMaterial receives a strong reference.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
-                                                  IRadientMaterialInstance* pInstance,
-                                                  IRadientMaterialAsset**   ppMaterial) PURE;
+                                                  IRadientMaterialDefinitionAsset* pDefinition,
+                                                  IRadientMaterialAsset**          ppMaterial) PURE;
 
     /// Starts loading a texture asset from a URI or texture data.
     ///

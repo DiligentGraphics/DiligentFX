@@ -27,7 +27,7 @@
 #pragma once
 
 /// \file
-/// Defines programmable material definition assets and instances.
+/// Defines programmable material definition and material assets.
 
 #include "RadientAssets.h"
 
@@ -40,11 +40,10 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientMaterialDefinitionAsset       IRadientMaterialDefinitionAsset;
-typedef struct IRadientMaterialInstance              IRadientMaterialInstance;
-typedef struct IRadientMaterialInstanceWriter        IRadientMaterialInstanceWriter;
-typedef struct IRadientSurfaceMaterialInstance       IRadientSurfaceMaterialInstance;
-typedef struct IRadientSurfaceMaterialInstanceWriter IRadientSurfaceMaterialInstanceWriter;
+typedef struct IRadientMaterialDefinitionAsset IRadientMaterialDefinitionAsset;
+typedef struct IRadientMaterialWriter          IRadientMaterialWriter;
+typedef struct IRadientSurfaceMaterialAsset    IRadientSurfaceMaterialAsset;
+typedef struct IRadientSurfaceMaterialWriter   IRadientSurfaceMaterialWriter;
 
 // clang-format off
 
@@ -193,7 +192,7 @@ DILIGENT_TYPED_ENUM(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS, Uint32)
 DEFINE_FLAG_ENUM_OPERATORS(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS)
 
 
-/// Surface coverage and blending mode stored in a surface material instance.
+/// Surface coverage and blending mode stored in a surface material asset.
 DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_SURFACE_MODE, Uint32)
 {
     /// The material is fully opaque.
@@ -387,27 +386,26 @@ struct RadientStandardMaterialDefinitionCreateInfo
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 
 
-// {0C0DCA2D-FB29-445A-87D6-2BF9EFD5E9FD}
+// {FD30372C-A009-425B-A649-1AE74E33EA46}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialDefinitionAsset =
-    {0xc0dca2d, 0xfb29, 0x445a, {0x87, 0xd6, 0x2b, 0xf9, 0xef, 0xd5, 0xe9, 0xfd}};
+    {0xfd30372c, 0xa009, 0x425b, {0xa6, 0x49, 0x1a, 0xe7, 0x4e, 0x33, 0xea, 0x46}};
+
+// {7999AEDF-3DDA-4A5F-BB0C-ADF73AEDA6F2}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialAsset =
+    {0x7999aedf, 0x3dda, 0x4a5f, {0xbb, 0xc, 0xad, 0xf7, 0x3a, 0xed, 0xa6, 0xf2}};
 
 
-// {37A5308E-825D-4D55-A5BC-B05A93A6A540}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialInstance =
-    {0x37a5308e, 0x825d, 0x4d55, {0xa5, 0xbc, 0xb0, 0x5a, 0x93, 0xa6, 0xa5, 0x40}};
+// {829FEEEE-46E6-4BDB-9ED4-AAEF34C522C4}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialAsset =
+    {0x829feeee, 0x46e6, 0x4bdb, {0x9e, 0xd4, 0xaa, 0xef, 0x34, 0xc5, 0x22, 0xc4}};
 
+// {39C207AF-A516-4BAB-85BE-715E325E58D3}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialWriter =
+    {0x39c207af, 0xa516, 0x4bab, {0x85, 0xbe, 0x71, 0x5e, 0x32, 0x5e, 0x58, 0xd3}};
 
-// {FAED9615-107D-4C29-9015-E8FF78E34F94}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialInstanceWriter =
-    {0xfaed9615, 0x107d, 0x4c29, {0x90, 0x15, 0xe8, 0xff, 0x78, 0xe3, 0x4f, 0x94}};
-
-// {510EFCE2-880F-4ABE-B46D-7E1176C7BE67}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialInstance =
-    {0x510efce2, 0x880f, 0x4abe, {0xb4, 0x6d, 0x7e, 0x11, 0x76, 0xc7, 0xbe, 0x67}};
-
-// {92B17A4B-8404-4838-B0BC-4B1772767281}
-static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialInstanceWriter =
-    {0x92b17a4b, 0x8404, 0x4838, {0xb0, 0xbc, 0x4b, 0x17, 0x72, 0x76, 0x72, 0x81}};
+// {D0D1D20B-8C59-4CEE-8DD7-8FE8151CA89F}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSurfaceMaterialWriter =
+    {0xd0d1d20b, 0x8c59, 0x4cee, {0x8d, 0xd7, 0x8f, 0xe8, 0x15, 0x1c, 0xa8, 0x9f}};
 
 
 #define DILIGENT_INTERFACE_NAME IRadientMaterialDefinitionAsset
@@ -451,11 +449,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialDefinitionAsset, IRadientAsset)
     VIRTUAL RADIENT_STATUS METHOD(FindParameter)(THIS_
                                                  const Char*                     Name,
                                                  RadientMaterialParameterHandle* pHandle) CONST PURE;
-
-    /// Creates a material instance initialized with the definition's default
-    /// values. On success, ppInstance receives a strong reference to the instance.
-    VIRTUAL RADIENT_STATUS METHOD(CreateInstance)(THIS_
-                                                  IRadientMaterialInstance** ppInstance) CONST PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -469,36 +462,35 @@ DILIGENT_END_INTERFACE
 #    define IRadientMaterialDefinitionAsset_GetParameterDesc(This, ...)   CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetParameterDesc,  This, __VA_ARGS__)
 #    define IRadientMaterialDefinitionAsset_GetParameterHandle(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, GetParameterHandle, This, __VA_ARGS__)
 #    define IRadientMaterialDefinitionAsset_FindParameter(This, ...)      CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, FindParameter,      This, __VA_ARGS__)
-#    define IRadientMaterialDefinitionAsset_CreateInstance(This, ...) CALL_IFACE_METHOD(RadientMaterialDefinitionAsset, CreateInstance, This, __VA_ARGS__)
-
 #endif
 
 // clang-format on
 
 
-#define DILIGENT_INTERFACE_NAME IRadientMaterialInstance
+#define DILIGENT_INTERFACE_NAME IRadientMaterialAsset
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-#define IRadientMaterialInstanceInclusiveMethods \
-    IObjectInclusiveMethods;                     \
-    IRadientMaterialInstanceMethods RadientMaterialInstance
+#define IRadientMaterialAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;            \
+    IRadientMaterialAssetMethods RadientMaterialAsset
 
 // clang-format off
 
-/// Mutable material instance.
+/// Definition-backed material asset with writable initialization state.
 ///
-/// Every object that shares an instance observes changes committed through one
-/// of its writers. Material instances and their writers are not thread-safe. The
-/// caller is responsible for synchronizing all access to them and must ensure
-/// that an instance is not accessed concurrently with a writer commit.
-DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
+/// Writers may be used to initialize the asset before its load status, GPU
+/// resource status, or render view is first queried. Runtime mutation after one
+/// of those queries is not currently supported. This restriction is not
+/// enforced by the API. Material assets and their writers are not thread-safe.
+/// The caller is responsible for synchronizing all access to them.
+DILIGENT_BEGIN_INTERFACE(IRadientMaterialAsset, IRadientAsset)
 {
-    /// Returns a borrowed pointer to the definition retained by this instance.
+    /// Returns a borrowed pointer to the definition retained by this asset.
     VIRTUAL IRadientMaterialDefinitionAsset* METHOD(GetDefinition)(THIS) CONST PURE;
 
-    /// Returns a monotonically increasing version of the complete instance
+    /// Returns a monotonically increasing version of the complete material
     /// state. The version changes after every commit that modifies at least one
-    /// parameter or specialized instance property such as surface mode.
+    /// parameter or specialized material property such as surface mode.
     VIRTUAL Uint64 METHOD(GetVersion)(THIS) CONST PURE;
 
     /// Copies the complete scalar, vector, matrix, or value array identified by
@@ -520,13 +512,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstance, IObject)
     /// Creates a reusable writer with no pending changes. On success, ppWriter
     /// receives a strong reference to the writer.
     VIRTUAL RADIENT_STATUS METHOD(CreateWriter)(THIS_
-                                                IRadientMaterialInstanceWriter** ppWriter) CONST PURE;
-
-    /// Creates an independent material instance initialized with the complete
-    /// current state. Subsequent updates to either instance do not affect the
-    /// other. On success, ppInstance receives a strong reference to the clone.
-    VIRTUAL RADIENT_STATUS METHOD(Clone)(THIS_
-                                         IRadientMaterialInstance** ppInstance) CONST PURE;
+                                                IRadientMaterialWriter** ppWriter) CONST PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -534,29 +520,28 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientMaterialInstance_GetDefinition(This)     CALL_IFACE_METHOD(RadientMaterialInstance, GetDefinition, This)
-#    define IRadientMaterialInstance_GetVersion(This)        CALL_IFACE_METHOD(RadientMaterialInstance, GetVersion,    This)
-#    define IRadientMaterialInstance_GetParameter(This, ...) CALL_IFACE_METHOD(RadientMaterialInstance, GetParameter,  This, __VA_ARGS__)
-#    define IRadientMaterialInstance_GetTexture(This, ...)   CALL_IFACE_METHOD(RadientMaterialInstance, GetTexture,    This, __VA_ARGS__)
-#    define IRadientMaterialInstance_CreateWriter(This, ...) CALL_IFACE_METHOD(RadientMaterialInstance, CreateWriter,  This, __VA_ARGS__)
-#    define IRadientMaterialInstance_Clone(This, ...)        CALL_IFACE_METHOD(RadientMaterialInstance, Clone,         This, __VA_ARGS__)
+#    define IRadientMaterialAsset_GetDefinition(This)     CALL_IFACE_METHOD(RadientMaterialAsset, GetDefinition, This)
+#    define IRadientMaterialAsset_GetVersion(This)        CALL_IFACE_METHOD(RadientMaterialAsset, GetVersion,    This)
+#    define IRadientMaterialAsset_GetParameter(This, ...) CALL_IFACE_METHOD(RadientMaterialAsset, GetParameter,  This, __VA_ARGS__)
+#    define IRadientMaterialAsset_GetTexture(This, ...)   CALL_IFACE_METHOD(RadientMaterialAsset, GetTexture,    This, __VA_ARGS__)
+#    define IRadientMaterialAsset_CreateWriter(This, ...) CALL_IFACE_METHOD(RadientMaterialAsset, CreateWriter,  This, __VA_ARGS__)
 
 #endif
 
 // clang-format on
 
 
-#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialInstance
+#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialAsset
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-#define IRadientSurfaceMaterialInstanceInclusiveMethods \
-    IRadientMaterialInstanceInclusiveMethods;           \
-    IRadientSurfaceMaterialInstanceMethods RadientSurfaceMaterialInstance
+#define IRadientSurfaceMaterialAssetInclusiveMethods \
+    IRadientMaterialAssetInclusiveMethods;           \
+    IRadientSurfaceMaterialAssetMethods RadientSurfaceMaterialAsset
 
 // clang-format off
 
-/// Material instance that shades a geometric surface.
-DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialInstance, IRadientMaterialInstance)
+/// Material asset that shades a geometric surface.
+DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialAsset, IRadientMaterialAsset)
 {
     /// Returns the surface coverage and blending mode.
     VIRTUAL RADIENT_MATERIAL_SURFACE_MODE METHOD(GetSurfaceMode)(THIS) CONST PURE;
@@ -573,33 +558,34 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientSurfaceMaterialInstance_GetSurfaceMode(This)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, GetSurfaceMode,  This)
-#    define IRadientSurfaceMaterialInstance_GetAlphaCutoff(This)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, GetAlphaCutoff,  This)
-#    define IRadientSurfaceMaterialInstance_IsDoubleSided(This)   CALL_IFACE_METHOD(RadientSurfaceMaterialInstance, IsDoubleSided,   This)
+#    define IRadientSurfaceMaterialAsset_GetSurfaceMode(This) CALL_IFACE_METHOD(RadientSurfaceMaterialAsset, GetSurfaceMode, This)
+#    define IRadientSurfaceMaterialAsset_GetAlphaCutoff(This) CALL_IFACE_METHOD(RadientSurfaceMaterialAsset, GetAlphaCutoff, This)
+#    define IRadientSurfaceMaterialAsset_IsDoubleSided(This)  CALL_IFACE_METHOD(RadientSurfaceMaterialAsset, IsDoubleSided,  This)
 
 #endif
 
 // clang-format on
 
 
-#define DILIGENT_INTERFACE_NAME IRadientMaterialInstanceWriter
+#define DILIGENT_INTERFACE_NAME IRadientMaterialWriter
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-#define IRadientMaterialInstanceWriterInclusiveMethods \
-    IObjectInclusiveMethods;                           \
-    IRadientMaterialInstanceWriterMethods RadientMaterialInstanceWriter
+#define IRadientMaterialWriterInclusiveMethods \
+    IObjectInclusiveMethods;                   \
+    IRadientMaterialWriterMethods RadientMaterialWriter
 
 // clang-format off
 
-/// Reusable material instance writer.
+/// Reusable material initialization writer.
 ///
 /// A writer records only values changed through its setter methods. Commit()
 /// publishes complete non-texture parameters, individual texture array elements,
-/// and any specialized instance properties exposed by a derived writer. If
+/// and any specialized material properties exposed by a derived writer. If
 /// multiple writers modify the same value, the last commit replaces that complete
-/// value. The writer and its material instance are not thread-safe and must not be
-/// accessed concurrently with Commit().
-DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
+/// value. Commits must complete before the asset's load status, GPU resource
+/// status, or render view is first queried. The writer and its material asset are
+/// not thread-safe and must not be accessed concurrently with Commit().
+DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
     /// is copied immediately and DataSize must exactly match the parameter's
@@ -637,7 +623,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
                                               Uint32                         ArrayIndex,
                                               IRadientTextureAsset*          pTexture) PURE;
 
-    /// Applies the writer's pending changes to its material instance as one logical
+    /// Applies the writer's pending changes to its material asset as one logical
     /// update. The writer remains valid after the call. On success or
     /// RADIENT_STATUS_NO_CHANGE, pending changes are cleared. On failure, pending
     /// changes are retained so the operation can be retried.
@@ -649,26 +635,26 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientMaterialInstanceWriter_SetParameter(This, ...) CALL_IFACE_METHOD(RadientMaterialInstanceWriter, SetParameter, This, __VA_ARGS__)
-#    define IRadientMaterialInstanceWriter_SetTexture(This, ...)   CALL_IFACE_METHOD(RadientMaterialInstanceWriter, SetTexture,   This, __VA_ARGS__)
-#    define IRadientMaterialInstanceWriter_Commit(This)            CALL_IFACE_METHOD(RadientMaterialInstanceWriter, Commit,       This)
+#    define IRadientMaterialWriter_SetParameter(This, ...) CALL_IFACE_METHOD(RadientMaterialWriter, SetParameter, This, __VA_ARGS__)
+#    define IRadientMaterialWriter_SetTexture(This, ...)   CALL_IFACE_METHOD(RadientMaterialWriter, SetTexture,   This, __VA_ARGS__)
+#    define IRadientMaterialWriter_Commit(This)            CALL_IFACE_METHOD(RadientMaterialWriter, Commit,       This)
 
 #endif
 
 // clang-format on
 
 
-#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialInstanceWriter
+#define DILIGENT_INTERFACE_NAME IRadientSurfaceMaterialWriter
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-#define IRadientSurfaceMaterialInstanceWriterInclusiveMethods \
-    IRadientMaterialInstanceWriterInclusiveMethods;           \
-    IRadientSurfaceMaterialInstanceWriterMethods RadientSurfaceMaterialInstanceWriter
+#define IRadientSurfaceMaterialWriterInclusiveMethods \
+    IRadientMaterialWriterInclusiveMethods;           \
+    IRadientSurfaceMaterialWriterMethods RadientSurfaceMaterialWriter
 
 // clang-format off
 
 /// Writer for mutable surface-material state.
-DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialInstanceWriter, IRadientMaterialInstanceWriter)
+DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialWriter, IRadientMaterialWriter)
 {
     /// Sets the surface coverage and blending mode. Returns
     /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
@@ -694,9 +680,9 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientSurfaceMaterialInstanceWriter_SetSurfaceMode(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetSurfaceMode,  This, __VA_ARGS__)
-#    define IRadientSurfaceMaterialInstanceWriter_SetAlphaCutoff(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetAlphaCutoff,  This, __VA_ARGS__)
-#    define IRadientSurfaceMaterialInstanceWriter_SetDoubleSided(This, ...)  CALL_IFACE_METHOD(RadientSurfaceMaterialInstanceWriter, SetDoubleSided,  This, __VA_ARGS__)
+#    define IRadientSurfaceMaterialWriter_SetSurfaceMode(This, ...) CALL_IFACE_METHOD(RadientSurfaceMaterialWriter, SetSurfaceMode, This, __VA_ARGS__)
+#    define IRadientSurfaceMaterialWriter_SetAlphaCutoff(This, ...) CALL_IFACE_METHOD(RadientSurfaceMaterialWriter, SetAlphaCutoff, This, __VA_ARGS__)
+#    define IRadientSurfaceMaterialWriter_SetDoubleSided(This, ...) CALL_IFACE_METHOD(RadientSurfaceMaterialWriter, SetDoubleSided, This, __VA_ARGS__)
 
 #endif
 

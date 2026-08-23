@@ -34,7 +34,7 @@ namespace Diligent
 namespace RadientMaterialDetail
 {
 
-RefCntAutoPtr<IRadientMaterialInstance> MakeSurfaceMaterialInstance(
+RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 

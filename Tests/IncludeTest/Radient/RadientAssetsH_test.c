@@ -28,18 +28,18 @@
 
 void RadientAssets_C_UseTypes(void)
 {
-    RadientAssetManagerDesc        AssetManagerDesc  = {0};
-    RadientAssetManagerCreateInfo  AssetManagerCI    = {0};
-    RadientMeshPrimitiveCreateInfo Primitive         = {0};
-    RadientMeshCreateInfo          MeshCI            = {0};
-    RadientTextureLoadInfo         TextureLoadInfo   = {0};
-    RadientSceneLoadInfo           SceneLoadInfo     = {0};
-    RadientAssetReference          Asset             = {0};
-    IRadientMeshAsset*             pMesh             = 0;
-    IRadientMaterialInstance*      pMaterialInstance = 0;
-    IRadientMaterialAsset*         pMaterial         = 0;
-    IRadientTextureAsset*          pTexture          = 0;
-    IRadientSceneAsset*            pScene            = 0;
+    RadientAssetManagerDesc          AssetManagerDesc    = {0};
+    RadientAssetManagerCreateInfo    AssetManagerCI      = {0};
+    RadientMeshPrimitiveCreateInfo   Primitive           = {0};
+    RadientMeshCreateInfo            MeshCI              = {0};
+    RadientTextureLoadInfo           TextureLoadInfo     = {0};
+    RadientSceneLoadInfo             SceneLoadInfo       = {0};
+    RadientAssetReference            Asset               = {0};
+    IRadientMeshAsset*               pMesh               = 0;
+    IRadientMaterialDefinitionAsset* pMaterialDefinition = 0;
+    IRadientMaterialAsset*           pMaterial           = 0;
+    IRadientTextureAsset*            pTexture            = 0;
+    IRadientSceneAsset*              pScene              = 0;
 
     (void)AssetManagerDesc;
     (void)AssetManagerCI;
@@ -49,7 +49,7 @@ void RadientAssets_C_UseTypes(void)
     (void)SceneLoadInfo;
     (void)Asset;
     (void)pMesh;
-    (void)pMaterialInstance;
+    (void)pMaterialDefinition;
     (void)pMaterial;
     (void)pTexture;
     (void)pScene;
@@ -57,19 +57,19 @@ void RadientAssets_C_UseTypes(void)
 
 void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
 {
-    const RadientAssetManagerDesc* pDesc             = IRadientAssetManager_GetDesc(pAssetManager);
-    RadientMeshCreateInfo          MeshCI            = {0};
-    RadientTextureLoadInfo         TextureInfo       = {0};
-    RadientSceneLoadInfo           SceneLoadInfo     = {0};
-    IRadientMeshAsset*             pMesh             = 0;
-    IRadientMaterialInstance*      pMaterialInstance = 0;
-    IRadientMaterialAsset*         pMaterial         = 0;
-    IRadientTextureAsset*          pTexture          = 0;
-    IRadientSceneAsset*            pScene            = 0;
-    RADIENT_STATUS                 Status            = RADIENT_STATUS_OK;
+    const RadientAssetManagerDesc*   pDesc               = IRadientAssetManager_GetDesc(pAssetManager);
+    RadientMeshCreateInfo            MeshCI              = {0};
+    RadientTextureLoadInfo           TextureInfo         = {0};
+    RadientSceneLoadInfo             SceneLoadInfo       = {0};
+    IRadientMeshAsset*               pMesh               = 0;
+    IRadientMaterialDefinitionAsset* pMaterialDefinition = 0;
+    IRadientMaterialAsset*           pMaterial           = 0;
+    IRadientTextureAsset*            pTexture            = 0;
+    IRadientSceneAsset*              pScene              = 0;
+    RADIENT_STATUS                   Status              = RADIENT_STATUS_OK;
 
     Status = IRadientAssetManager_CreateMesh(pAssetManager, &MeshCI, &pMesh);
-    Status = IRadientAssetManager_CreateMaterial(pAssetManager, pMaterialInstance, &pMaterial);
+    Status = IRadientAssetManager_CreateMaterial(pAssetManager, pMaterialDefinition, &pMaterial);
     Status = IRadientAssetManager_LoadTexture(pAssetManager, &TextureInfo, &pTexture);
     Status = IRadientAssetManager_LoadScene(pAssetManager, &SceneLoadInfo, &pScene);
     Status = IRadientAssetManager_WaitForAssetLoad(pAssetManager, (IRadientAsset*)pScene);

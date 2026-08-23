@@ -135,11 +135,8 @@ const PackedMaterialInstanceData::MaterialParameterValue& PackedMaterialInstance
     return m_pValues[Index];
 }
 
-PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
-                                                       const PackedMaterialInstanceData*    pSource)
+PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc)
 {
-    VERIFY_EXPR(pSource == nullptr || pSource->GetValueCount() == Desc.ParameterCount);
-
     FixedLinearAllocator Allocator{GetRawAllocator()};
     Allocator.AddSpace<MaterialParameterValue>(Desc.ParameterCount);
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
@@ -183,15 +180,7 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
             Value.Size            = Parameter.ArraySize;
             ++m_ValueCount;
 
-            if (pSource != nullptr)
-            {
-                const MaterialParameterValue& SourceValue = pSource->GetValue(Index);
-                VERIFY_EXPR(SourceValue.Type == Value.Type && SourceValue.Size == Value.Size);
-                const auto* const pSourceTextures = static_cast<const TexturePtr*>(SourceValue.pData);
-                for (Uint32 TextureIndex = 0; TextureIndex < Value.Size; ++TextureIndex)
-                    pTextures[TextureIndex] = pSourceTextures[TextureIndex];
-            }
-            else if (Parameter.ArraySize == 1)
+            if (Parameter.ArraySize == 1)
             {
                 pTextures[0] = Parameter.pDefaultTexture;
             }
@@ -202,13 +191,7 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
             Value.Size  = DataSize;
             ++m_ValueCount;
 
-            if (pSource != nullptr)
-            {
-                const MaterialParameterValue& SourceValue = pSource->GetValue(Index);
-                VERIFY_EXPR(SourceValue.Type == Value.Type && SourceValue.Size == Value.Size);
-                std::memcpy(Value.pData, SourceValue.pData, Value.Size);
-            }
-            else if (Parameter.pDefaultValue != nullptr)
+            if (Parameter.pDefaultValue != nullptr)
             {
                 std::memcpy(Value.pData, Parameter.pDefaultValue, Value.Size);
             }
@@ -272,8 +255,8 @@ struct MaterialTextureSource
 struct MaterialInstanceState::TextureState
 {
     // Terminal statuses and the finalized view are intentionally not invalidated.
-    // The material-asset contract currently prohibits modifying an instance after
-    // it has been passed to CreateMaterial().
+    // The material-asset contract currently requires all writer commits to finish
+    // before the first status or view query.
     using TextureSourceArray = std::vector<MaterialTextureSource>;
     using TextureEntryArray  = std::vector<RadientMaterialTextureEntry>;
     using TextureIndexArray  = std::vector<Uint32>;
@@ -416,11 +399,10 @@ struct MaterialInstanceState::TextureState
 };
 
 MaterialInstanceState::MaterialInstanceState(IRadientMaterialDefinitionAsset* pDefinition,
-                                             RadientHandle                    DefinitionHandle,
-                                             const MaterialInstanceState*     pSource) :
+                                             RadientHandle                    DefinitionHandle) :
     m_pDefinition{pDefinition},
     m_DefinitionHandle{DefinitionHandle},
-    m_Data{pDefinition->GetDesc(), pSource != nullptr ? &pSource->m_Data : nullptr},
+    m_Data{pDefinition->GetDesc()},
     m_pTextureState{std::make_unique<TextureState>(*this)}
 {}
 
@@ -489,13 +471,13 @@ RADIENT_STATUS MaterialInstanceState::GetGPUResourceStatus() const noexcept
     return m_pTextureState->GetGPUResourceStatus();
 }
 
-RadientMaterialAssetView MaterialInstanceState::GetMaterialView(IRadientMaterialInstance* pInstance)
+RadientMaterialAssetView MaterialInstanceState::GetMaterialView(IRadientMaterialAsset* pMaterial)
 {
-    if (pInstance == nullptr || m_pTextureState->FinalizeTextureSelection() != RADIENT_STATUS_OK)
+    if (pMaterial == nullptr || m_pTextureState->FinalizeTextureSelection() != RADIENT_STATUS_OK)
         return {};
 
     return {
-        pInstance,
+        pMaterial,
         m_pTextureState->TextureEntries.data(),
         static_cast<Uint32>(m_pTextureState->TextureEntries.size()),
         m_pTextureState->TextureIndexByParameter.data(),
@@ -515,9 +497,9 @@ bool MaterialInstanceState::IsValidHandle(RadientMaterialParameterHandle Handle)
         Handle.Reserved == 0;
 }
 
-MaterialInstanceWriterState::MaterialInstanceWriterState(IRadientMaterialInstance* pInstance,
-                                                         MaterialInstanceState&    InstanceState) noexcept :
-    m_pInstance{pInstance},
+MaterialInstanceWriterState::MaterialInstanceWriterState(IRadientMaterialAsset* pMaterial,
+                                                         MaterialInstanceState& InstanceState) noexcept :
+    m_pMaterial{pMaterial},
     m_InstanceState{InstanceState}
 {}
 
@@ -549,7 +531,7 @@ RADIENT_STATUS MaterialInstanceWriterState::SetParameter(RadientMaterialParamete
 
     if (m_ValueData.size() > std::numeric_limits<Uint32>::max() - InstanceValueSize)
     {
-        LOG_ERROR_MESSAGE("Material instance writer value storage exceeds the supported size");
+        LOG_ERROR_MESSAGE("Material writer value storage exceeds the supported size");
         return RADIENT_STATUS_FAILED;
     }
 
@@ -563,7 +545,7 @@ RADIENT_STATUS MaterialInstanceWriterState::SetParameter(RadientMaterialParamete
     }
     catch (const std::exception& Error)
     {
-        LOG_ERROR_MESSAGE("Failed to store a material instance parameter change: ", Error.what());
+        LOG_ERROR_MESSAGE("Failed to store a material parameter change: ", Error.what());
         return RADIENT_STATUS_FAILED;
     }
 
@@ -597,7 +579,7 @@ RADIENT_STATUS MaterialInstanceWriterState::SetTexture(RadientMaterialParameterH
 
     if (m_TextureData.size() >= std::numeric_limits<Uint32>::max())
     {
-        LOG_ERROR_MESSAGE("Material instance writer texture storage exceeds the supported size");
+        LOG_ERROR_MESSAGE("Material writer texture storage exceeds the supported size");
         return RADIENT_STATUS_FAILED;
     }
 
@@ -610,7 +592,7 @@ RADIENT_STATUS MaterialInstanceWriterState::SetTexture(RadientMaterialParameterH
     }
     catch (const std::exception& Error)
     {
-        LOG_ERROR_MESSAGE("Failed to store a material instance texture change: ", Error.what());
+        LOG_ERROR_MESSAGE("Failed to store a material texture change: ", Error.what());
         return RADIENT_STATUS_FAILED;
     }
 
@@ -682,8 +664,8 @@ class RadientMaterialInstanceWriterImpl;
 
 using RadientMaterialInstanceImplBase =
     MaterialInstanceImplBase<RadientMaterialInstanceImpl,
-                             IRadientMaterialInstance,
-                             IID_RadientMaterialInstance>;
+                             IRadientMaterialAsset,
+                             IID_RadientMaterialAsset>;
 
 class RadientMaterialInstanceImpl final : public RadientMaterialInstanceImplBase
 {
@@ -692,13 +674,12 @@ public:
     using TBase::TBase;
 
     RefCntAutoPtr<RadientMaterialInstanceWriterImpl> MakeWriter() const;
-    RefCntAutoPtr<RadientMaterialInstanceImpl>       MakeClone() const;
 };
 
 using RadientMaterialInstanceWriterImplBase =
     MaterialInstanceWriterImplBase<RadientMaterialInstanceWriterImpl,
-                                   IRadientMaterialInstanceWriter,
-                                   IID_RadientMaterialInstanceWriter,
+                                   IRadientMaterialWriter,
+                                   IID_RadientMaterialWriter,
                                    RadientMaterialInstanceImpl>;
 
 class RadientMaterialInstanceWriterImpl final : public RadientMaterialInstanceWriterImplBase
@@ -715,18 +696,9 @@ RefCntAutoPtr<RadientMaterialInstanceWriterImpl> RadientMaterialInstanceImpl::Ma
             const_cast<RadientMaterialInstanceImpl*>(this))};
 }
 
-RefCntAutoPtr<RadientMaterialInstanceImpl> RadientMaterialInstanceImpl::MakeClone() const
-{
-    return RefCntAutoPtr<RadientMaterialInstanceImpl>{
-        MakeNewRCObj<RadientMaterialInstanceImpl>()(
-            GetState().GetDefinition(),
-            GetState().GetDefinitionHandle(),
-            &GetState())};
-}
-
 } // namespace
 
-RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInstance(
+RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle)
 {
@@ -734,16 +706,16 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInsta
 }
 
 RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
-    IRadientMaterialInstance* pInstance) noexcept
+    IRadientMaterialAsset* pMaterial) noexcept
 {
-    RefCntAutoPtr<IMaterialInstanceStateProvider> pStateProvider{pInstance, IID_MaterialInstanceStateProvider};
+    RefCntAutoPtr<IMaterialInstanceStateProvider> pStateProvider{pMaterial, IID_MaterialInstanceStateProvider};
     return pStateProvider != nullptr ? &pStateProvider->GetState() : nullptr;
 }
 
 const RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
-    const IRadientMaterialInstance* pInstance) noexcept
+    const IRadientMaterialAsset* pMaterial) noexcept
 {
-    return TryGetMaterialInstanceState(const_cast<IRadientMaterialInstance*>(pInstance));
+    return TryGetMaterialInstanceState(const_cast<IRadientMaterialAsset*>(pMaterial));
 }
 
 } // namespace Diligent

@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "RadientMaterials.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "ShaderResourceBinding.h"
@@ -91,10 +92,91 @@ private:
     RadientAssetReference m_Ref{};
 };
 
-using TestMeshAsset     = TestRadientAsset<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
-using TestMaterialAsset = TestRadientAsset<IRadientMaterialAsset, IID_RadientMaterialAsset, RADIENT_ASSET_TYPE_MATERIAL>;
-using TestTextureAsset  = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
-using TestSceneAsset    = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+using TestMeshAsset    = TestRadientAsset<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
+using TestTextureAsset = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
+using TestSceneAsset   = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+
+class TestMaterialAsset final : public ObjectBase<IRadientMaterialAsset>
+{
+public:
+    using TBase = ObjectBase<IRadientMaterialAsset>;
+
+    TestMaterialAsset(IReferenceCounters* pRefCounters, const char* URI, Uint64 Version) :
+        TBase{pRefCounters},
+        m_URI{URI != nullptr ? URI : ""},
+        m_Version{Version}
+    {
+        m_Ref.URI     = m_URI.empty() ? nullptr : m_URI.c_str();
+        m_Ref.Version = Version;
+    }
+
+    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
+    {
+        return m_Ref;
+    }
+
+    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
+    {
+        return RADIENT_ASSET_TYPE_MATERIAL;
+    }
+
+    virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
+    {
+        return nullptr;
+    }
+
+    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
+    {
+        return m_Version;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle,
+                                                           void*,
+                                                           Uint32) const override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle,
+                                                         Uint32,
+                                                         IRadientTextureAsset** ppTexture) const override final
+    {
+        if (ppTexture == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppTexture = nullptr;
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) const override final
+    {
+        if (ppWriter == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        *ppWriter = nullptr;
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
+    {
+        if (ppInterface == nullptr)
+            return;
+
+        if (IID == IID_RadientMaterialAsset || IID == IID_RadientAsset)
+        {
+            *ppInterface = this;
+            (*ppInterface)->AddRef();
+        }
+        else
+        {
+            TBase::QueryInterface(IID, ppInterface);
+        }
+    }
+    using IObject::QueryInterface;
+
+private:
+    std::string           m_URI;
+    RadientAssetReference m_Ref{};
+    Uint64                m_Version = 0;
+};
 
 class TestShaderResourceVariable final : public ObjectBase<IShaderResourceVariable>
 {

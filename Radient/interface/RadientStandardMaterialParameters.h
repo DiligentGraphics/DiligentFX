@@ -30,7 +30,7 @@
 /// Defines the canonical parameter names used by Radient standard materials.
 ///
 /// The documented ranges describe values accepted by the standard shading
-/// model. Material instance writers store values verbatim and do not clamp or
+/// model. Material writers store values verbatim and do not clamp or
 /// otherwise validate these semantic constraints.
 
 #include "../../../DiligentCore/Primitives/interface/BasicTypes.h"
@@ -448,7 +448,7 @@ RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Thickness);
 /// operation with the same writer or discard that writer without committing it.
 inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     const IRadientMaterialDefinitionAsset&              Definition,
-    IRadientMaterialInstanceWriter&                     Writer,
+    IRadientMaterialWriter&                             Writer,
     const RadientStandardMaterialTextureParameterNames& Names,
     const RadientStandardMaterialTextureParameters&     Parameters)
 {

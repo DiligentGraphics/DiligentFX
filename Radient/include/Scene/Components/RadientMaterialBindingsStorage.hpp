@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientScene.h"
+#include "RadientMaterials.h"
 #include "RefCntAutoPtr.hpp"
 
 #include <vector>
@@ -42,7 +43,7 @@ struct MaterialBindingsStorage
 
     MaterialBindingsStorage();
 
-    MaterialBindingsStorage(const MaterialBindingsStorage& Rhs)        = delete;
+    MaterialBindingsStorage(const MaterialBindingsStorage& Rhs) = delete;
     MaterialBindingsStorage& operator=(const MaterialBindingsStorage&) = delete;
 
     MaterialBindingsStorage(MaterialBindingsStorage&& Rhs) noexcept;

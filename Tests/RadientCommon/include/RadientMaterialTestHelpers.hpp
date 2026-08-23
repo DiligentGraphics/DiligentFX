@@ -42,67 +42,67 @@ namespace Detail
 {
 
 template <typename ManagerType>
-RADIENT_STATUS CreateStandardMaterialDefinitionAndInstance(
+RADIENT_STATUS CreateStandardMaterialDefinitionAndAsset(
     ManagerType&                                       Manager,
     const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
     RefCntAutoPtr<IRadientMaterialDefinitionAsset>&    pDefinition,
-    RefCntAutoPtr<IRadientMaterialInstance>&           pInstance)
+    RefCntAutoPtr<IRadientMaterialAsset>&              pMaterial)
 {
     RADIENT_STATUS Status =
         Manager.CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    return pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    return Manager.CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty());
 }
 
 } // namespace Detail
 
 template <typename ManagerType>
-RADIENT_STATUS CreateStandardMaterialInstance(
+RADIENT_STATUS CreateStandardMaterialAsset(
     ManagerType&                                       Manager,
     const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-    IRadientMaterialInstance**                         ppInstance)
+    IRadientMaterialAsset**                            ppMaterial)
 {
-    if (ppInstance == nullptr)
+    if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
+    *ppMaterial = nullptr;
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
-    RefCntAutoPtr<IRadientMaterialInstance>        pInstance;
-    const RADIENT_STATUS                           Status = Detail::CreateStandardMaterialDefinitionAndInstance(
-        Manager, DefinitionCI, pDefinition, pInstance);
+    RefCntAutoPtr<IRadientMaterialAsset>           pMaterial;
+    const RADIENT_STATUS                           Status = Detail::CreateStandardMaterialDefinitionAndAsset(
+        Manager, DefinitionCI, pDefinition, pMaterial);
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    *ppInstance = pInstance.Detach();
+    *ppMaterial = pMaterial.Detach();
     return RADIENT_STATUS_OK;
 }
 
-// Creates a standard instance, invokes Initialize with its definition and a
-// writer, and commits the writer before returning the instance. Initialize may
+// Creates a standard material asset, invokes Initialize with its definition and
+// a writer, and commits the writer before returning the asset. Initialize may
 // return RADIENT_STATUS_NO_CHANGE; every other non-OK status aborts the
 // operation.
 template <typename ManagerType, typename InitializeType>
-RADIENT_STATUS CreateStandardMaterialInstance(
+RADIENT_STATUS CreateStandardMaterialAsset(
     ManagerType&                                       Manager,
     const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
     InitializeType&&                                   Initialize,
-    IRadientMaterialInstance**                         ppInstance)
+    IRadientMaterialAsset**                            ppMaterial)
 {
-    if (ppInstance == nullptr)
+    if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
+    *ppMaterial = nullptr;
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
-    RefCntAutoPtr<IRadientMaterialInstance>        pInstance;
-    RADIENT_STATUS                                 Status = Detail::CreateStandardMaterialDefinitionAndInstance(
-        Manager, DefinitionCI, pDefinition, pInstance);
+    RefCntAutoPtr<IRadientMaterialAsset>           pMaterial;
+    RADIENT_STATUS                                 Status = Detail::CreateStandardMaterialDefinitionAndAsset(
+        Manager, DefinitionCI, pDefinition, pMaterial);
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    Status = pMaterial->CreateWriter(pWriter.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
@@ -114,52 +114,8 @@ RADIENT_STATUS CreateStandardMaterialInstance(
     if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
         return Status;
 
-    *ppInstance = pInstance.Detach();
+    *ppMaterial = pMaterial.Detach();
     return RADIENT_STATUS_OK;
-}
-
-// Creates an asset that retains a default-initialized standard instance.
-template <typename ManagerType>
-RADIENT_STATUS CreateStandardMaterialAsset(
-    ManagerType&                                       Manager,
-    const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-    IRadientMaterialAsset**                            ppMaterial)
-{
-    if (ppMaterial == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppMaterial = nullptr;
-
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    const RADIENT_STATUS                    Status = CreateStandardMaterialInstance(
-        Manager, DefinitionCI, pInstance.GetAddressOfEmpty());
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
-
-    return Manager.CreateMaterial(pInstance, ppMaterial);
-}
-
-// Creates and initializes a standard instance, then registers it as an asset.
-template <typename ManagerType, typename InitializeType>
-RADIENT_STATUS CreateStandardMaterialAsset(
-    ManagerType&                                       Manager,
-    const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
-    InitializeType&&                                   Initialize,
-    IRadientMaterialAsset**                            ppMaterial)
-{
-    if (ppMaterial == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppMaterial = nullptr;
-
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    const RADIENT_STATUS                    Status = CreateStandardMaterialInstance(
-        Manager,
-        DefinitionCI,
-        std::forward<InitializeType>(Initialize),
-        pInstance.GetAddressOfEmpty());
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
-
-    return Manager.CreateMaterial(pInstance, ppMaterial);
 }
 
 } // namespace Testing

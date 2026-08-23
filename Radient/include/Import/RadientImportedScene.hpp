@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "RadientMaterials.h"
 #include "RadientScene.h"
 #include "RefCntAutoPtr.hpp"
 

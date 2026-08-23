@@ -68,7 +68,7 @@ struct RadientMaterialTextureEntry
 
 /// Immutable renderer-neutral view of a material asset and its selected texture dependencies.
 /// Texture entries are ordered by ParameterIndex and ArrayIndex. ParameterIndex
-/// refers to the material definition retained by pInstance. pTextureIndexByParameter
+/// refers to the material definition retained by pMaterial. pTextureIndexByParameter
 /// maps every definition parameter to its first texture entry; non-texture
 /// parameters map to InvalidTextureIndex.
 /// The view remains valid while the material asset is retained.
@@ -76,7 +76,7 @@ struct RadientMaterialAssetView
 {
     static constexpr Uint32 InvalidTextureIndex = ~Uint32{0};
 
-    IRadientMaterialInstance*          pInstance                = nullptr;
+    IRadientMaterialAsset*             pMaterial                = nullptr;
     const RadientMaterialTextureEntry* pTextures                = nullptr;
     Uint32                             TextureCount             = 0;
     const Uint32*                      pTextureIndexByParameter = nullptr;
@@ -138,7 +138,7 @@ struct RadientMaterialAssetView
 
     explicit operator bool() const noexcept
     {
-        return pInstance != nullptr &&
+        return pMaterial != nullptr &&
             (pTextures != nullptr || TextureCount == 0) &&
             (pTextureIndexByParameter != nullptr || ParameterCount == 0);
     }
@@ -166,10 +166,9 @@ public:
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                     IRadientMaterialDefinitionAsset**                  ppDefinition);
 
-    // pInstance must have been created by a material definition produced by
-    // Radient.
-    RADIENT_STATUS CreateMaterial(IRadientMaterialInstance* pInstance,
-                                  IRadientMaterialAsset**   ppMaterial);
+    // pDefinition must have been created by Radient.
+    RADIENT_STATUS CreateMaterial(IRadientMaterialDefinitionAsset* pDefinition,
+                                  IRadientMaterialAsset**          ppMaterial);
 
     // Reports material source/dependency status. A failed requested texture is
     // replaced by its semantic default when one is available. OK means every
@@ -183,15 +182,11 @@ public:
     // sources loaded without a GPU backend.
     static RADIENT_STATUS GetGPUResourceStatus(IRadientAsset* pMaterial);
 
-    // Returns the definition-backed instance retained by the material asset,
-    // or null when the asset has no definition-backed instance.
-    static RefCntAutoPtr<IRadientMaterialInstance> GetInstance(IRadientMaterialAsset* pMaterial);
-
     // Returns an immutable view of the material asset and its selected textures,
     // including semantic defaults selected for failed requested textures.
     // This method finalizes texture selection and must be called from the render
     // thread. It is not thread-safe and must not race with another
-    // GetMaterialView() call for a material asset that retains the same instance.
+    // GetMaterialView() call for a material asset that retains the same state.
     static RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
 private:

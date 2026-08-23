@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientMaterialInstanceState.hpp"
 
 #include "DebugUtilities.hpp"
@@ -65,11 +66,14 @@ public:
 
     MaterialInstanceImplBase(IReferenceCounters*              pRefCounters,
                              IRadientMaterialDefinitionAsset* pDefinition,
-                             RadientHandle                    DefinitionHandle,
-                             const MaterialInstanceState*     pSource = nullptr) :
+                             RadientHandle                    DefinitionHandle) :
         TBase{pRefCounters},
-        m_State{pDefinition, DefinitionHandle, pSource}
-    {}
+        m_URI{MakeRadientAssetURI("material")},
+        m_State{pDefinition, DefinitionHandle}
+    {
+        m_Reference.URI     = m_URI.c_str();
+        m_Reference.Version = 1;
+    }
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
@@ -85,13 +89,25 @@ public:
         {
             *ppInterface = static_cast<InterfaceType*>(this);
         }
-        else if (IID == IID_RadientMaterialInstance || IID == IID_Unknown)
+        else if (IID == IID_RadientMaterialAsset ||
+                 IID == IID_RadientAsset ||
+                 IID == IID_Unknown)
         {
-            *ppInterface = static_cast<IRadientMaterialInstance*>(static_cast<InterfaceType*>(this));
+            *ppInterface = static_cast<IRadientMaterialAsset*>(static_cast<InterfaceType*>(this));
         }
 
         if (*ppInterface != nullptr)
             (*ppInterface)->AddRef();
+    }
+
+    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
+    {
+        return m_Reference;
+    }
+
+    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
+    {
+        return RADIENT_ASSET_TYPE_MATERIAL;
     }
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
@@ -118,7 +134,7 @@ public:
         return m_State.GetTexture(Handle, ArrayIndex, ppTexture);
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) const override final
     {
         if (ppWriter == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -133,27 +149,7 @@ public:
         }
         catch (const std::exception& Error)
         {
-            LOG_ERROR_MESSAGE("Failed to create Radient material instance writer: ", Error.what());
-            return RADIENT_STATUS_FAILED;
-        }
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final
-    {
-        if (ppInstance == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        *ppInstance = nullptr;
-
-        try
-        {
-            auto pInstance = static_cast<const DerivedType*>(this)->MakeClone();
-            VERIFY_EXPR(pInstance != nullptr);
-            *ppInstance = pInstance.Detach();
-            return RADIENT_STATUS_OK;
-        }
-        catch (const std::exception& Error)
-        {
-            LOG_ERROR_MESSAGE("Failed to clone Radient material instance: ", Error.what());
+            LOG_ERROR_MESSAGE("Failed to create Radient material writer: ", Error.what());
             return RADIENT_STATUS_FAILED;
         }
     }
@@ -169,25 +165,27 @@ public:
     }
 
 private:
+    const std::string     m_URI;
+    RadientAssetReference m_Reference;
     MaterialInstanceState m_State;
 };
 
 template <typename DerivedType,
           typename InterfaceType,
           const INTERFACE_ID& InterfaceID,
-          typename InstanceType>
+          typename MaterialType>
 class MaterialInstanceWriterImplBase : public ObjectBase<InterfaceType>
 {
 public:
     using TBase = ObjectBase<InterfaceType>;
 
     MaterialInstanceWriterImplBase(IReferenceCounters* pRefCounters,
-                                   InstanceType*       pInstance) :
+                                   MaterialType*       pMaterial) :
         TBase{pRefCounters},
-        m_pInstance{pInstance},
-        m_Parameters{pInstance, pInstance->GetState()}
+        m_pMaterial{pMaterial},
+        m_Parameters{pMaterial, pMaterial->GetState()}
     {
-        VERIFY_EXPR(m_pInstance != nullptr);
+        VERIFY_EXPR(m_pMaterial != nullptr);
     }
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
@@ -195,7 +193,7 @@ public:
         if (ppInterface == nullptr)
             return;
 
-        if (IID == InterfaceID || IID == IID_RadientMaterialInstanceWriter)
+        if (IID == InterfaceID || IID == IID_RadientMaterialWriter)
         {
             *ppInterface = static_cast<DerivedType*>(this);
             (*ppInterface)->AddRef();
@@ -229,9 +227,9 @@ public:
     }
 
 protected:
-    InstanceType& GetInstance() const noexcept
+    MaterialType& GetMaterial() const noexcept
     {
-        return *m_pInstance;
+        return *m_pMaterial;
     }
 
     bool ApplySpecializedChanges() noexcept
@@ -240,9 +238,9 @@ protected:
     }
 
 private:
-    // m_pInstance is borrowed. m_Parameters retains the same instance strongly
-    // and therefore keeps the typed pointer valid for the writer's lifetime.
-    InstanceType*               m_pInstance = nullptr;
+    // m_pMaterial is borrowed. m_Parameters retains the same asset strongly and
+    // therefore keeps the typed pointer valid for the writer's lifetime.
+    MaterialType*               m_pMaterial = nullptr;
     MaterialInstanceWriterState m_Parameters;
 };
 

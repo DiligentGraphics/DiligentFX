@@ -50,16 +50,16 @@ RadientMaterialParameterHandle FindMaterialParameter(const RadientMaterialAssetV
                                                      const char*                     Name)
 {
     RadientMaterialParameterHandle Handle;
-    if (MaterialData.pInstance == nullptr)
+    if (MaterialData.pMaterial == nullptr)
     {
-        ADD_FAILURE() << "Material render data has no instance";
+        ADD_FAILURE() << "Material render data has no material";
         return Handle;
     }
 
-    IRadientMaterialDefinitionAsset* const pDefinition = MaterialData.pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinition = MaterialData.pMaterial->GetDefinition();
     if (pDefinition == nullptr)
     {
-        ADD_FAILURE() << "Material instance has no definition";
+        ADD_FAILURE() << "Material has no definition";
         return Handle;
     }
 
@@ -82,7 +82,7 @@ ValueType GetMaterialParameter(const RadientMaterialAssetView& MaterialData,
     const RadientMaterialParameterHandle Handle = FindMaterialParameter(MaterialData, ParameterName);
     if (Handle)
     {
-        EXPECT_EQ(MaterialData.pInstance->GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+        EXPECT_EQ(MaterialData.pMaterial->GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
                   RADIENT_STATUS_OK)
             << ParameterName;
     }
@@ -125,7 +125,7 @@ RADIENT_STATUS CreateStandardMaterial(
         MaterialManager,
         DefinitionCI,
         [TextureBindings](IRadientMaterialDefinitionAsset& Definition,
-                          IRadientMaterialInstanceWriter&  Writer) {
+                          IRadientMaterialWriter&          Writer) {
             for (const StandardMaterialTextureBinding& Binding : TextureBindings)
             {
                 const RADIENT_STATUS Status = SetStandardMaterialTextureParameters(

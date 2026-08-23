@@ -373,11 +373,8 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
         DefaultMaterialStatus = m_pMaterialManager->CreateStandardMaterialDefinition(
             DefinitionCI, pDefinition.GetAddressOfEmpty());
 
-        RefCntAutoPtr<IRadientMaterialInstance> pInstance;
         if (DefaultMaterialStatus == RADIENT_STATUS_OK)
-            DefaultMaterialStatus = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
-        if (DefaultMaterialStatus == RADIENT_STATUS_OK)
-            DefaultMaterialStatus = m_pMaterialManager->CreateMaterial(pInstance, m_pDefaultMaterial.GetAddressOfEmpty());
+            DefaultMaterialStatus = m_pMaterialManager->CreateMaterial(pDefinition, m_pDefaultMaterial.GetAddressOfEmpty());
     }
     if (RADIENT_FAILED(DefaultMaterialStatus) || m_pDefaultMaterial == nullptr)
         LOG_ERROR_AND_THROW("Failed to create the default Radient material");
@@ -429,8 +426,8 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateStandardMaterialDefinition(const R
     return m_pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, ppDefinition);
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(IRadientMaterialInstance* pInstance,
-                                                       IRadientMaterialAsset**   ppMaterial)
+RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(IRadientMaterialDefinitionAsset* pDefinition,
+                                                       IRadientMaterialAsset**          ppMaterial)
 {
     if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -440,7 +437,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(IRadientMaterialInstance*
     if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return m_pMaterialManager->CreateMaterial(pInstance, ppMaterial);
+    return m_pMaterialManager->CreateMaterial(pDefinition, ppMaterial);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,

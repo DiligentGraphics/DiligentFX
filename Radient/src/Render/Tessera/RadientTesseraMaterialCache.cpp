@@ -368,14 +368,14 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     const std::shared_ptr<ProcessingContext>& pContext,
     RadientTesseraMaterialData&               Data)
 {
-    IRadientMaterialInstance* const pInstance = Data.m_MaterialView.pInstance;
-    if (pInstance == nullptr)
+    IRadientMaterialAsset* const pMaterial = Data.m_MaterialView.pMaterial;
+    if (pMaterial == nullptr)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
         return;
     }
 
-    IRadientMaterialDefinitionAsset* const pDefinitionInterface = pInstance->GetDefinition();
+    IRadientMaterialDefinitionAsset* const pDefinitionInterface = pMaterial->GetDefinition();
     if (pDefinitionInterface == nullptr ||
         pDefinitionInterface->GetDesc().Type != RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE)
     {
@@ -388,8 +388,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     const PBR_Renderer::PSO_FLAGS MaterialPSOFlags =
         GetSurfaceMaterialPSOFlags(SurfaceDesc) & pContext->EnabledMaterialPSOFlags;
 
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{pInstance, IID_RadientSurfaceMaterialInstance};
-    if (!pSurfaceInstance)
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{pMaterial, IID_RadientSurfaceMaterialAsset};
+    if (!pSurfaceMaterial)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
         return;
@@ -442,7 +442,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     }
 
     std::vector<Uint8> MaterialAttribs(MaterialAttribsSize);
-    pDefinition->WriteShaderData(*pInstance, MaterialAttribs.data());
+    pDefinition->WriteShaderData(*pMaterial, MaterialAttribs.data());
 
     RadientTesseraMaterialBufferAllocation MaterialBufferAllocation =
         pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), MaterialAttribsSize);
@@ -453,8 +453,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     }
 
     Data.PublishSuccess(MaterialPSOFlags,
-                        pSurfaceInstance->GetSurfaceMode(),
-                        pSurfaceInstance->IsDoubleSided(),
+                        pSurfaceMaterial->GetSurfaceMode(),
+                        pSurfaceMaterial->IsDoubleSided(),
                         std::move(MaterialSRB),
                         std::move(MaterialBufferAllocation),
                         std::move(ShaderTextureIds));

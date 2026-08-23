@@ -42,10 +42,10 @@ void RadientMaterials_C_UseTypes(void)
     RadientMaterialParameterDesc                Parameter        = {0};
     RadientStandardMaterialDefinitionCreateInfo StandardCI       = {0};
     IRadientMaterialDefinitionAsset*            pDefinition      = 0;
-    IRadientMaterialInstance*                   pInstance        = 0;
-    IRadientSurfaceMaterialInstance*            pSurfaceInstance = 0;
-    IRadientMaterialInstanceWriter*             pWriter          = 0;
-    IRadientSurfaceMaterialInstanceWriter*      pSurfaceWriter   = 0;
+    IRadientMaterialAsset*                      pMaterial        = 0;
+    IRadientSurfaceMaterialAsset*               pSurfaceMaterial = 0;
+    IRadientMaterialWriter*                     pWriter          = 0;
+    IRadientSurfaceMaterialWriter*              pSurfaceWriter   = 0;
 
     (void)DefinitionType;
     (void)Type;
@@ -61,8 +61,8 @@ void RadientMaterials_C_UseTypes(void)
     (void)Parameter;
     (void)StandardCI;
     (void)pDefinition;
-    (void)pInstance;
-    (void)pSurfaceInstance;
+    (void)pMaterial;
+    (void)pSurfaceMaterial;
     (void)pWriter;
     (void)pSurfaceWriter;
 }
@@ -74,52 +74,46 @@ void RadientMaterials_C_TestDefinitionMacros(IRadientMaterialDefinitionAsset* pD
     Uint32                               ParamCount = IRadientMaterialDefinitionAsset_GetParameterCount(pDefinition);
     const RadientMaterialParameterDesc*  pParamDesc = IRadientMaterialDefinitionAsset_GetParameterDesc(pDefinition, 0);
     RadientMaterialParameterHandle       Handle     = {0};
-    IRadientMaterialInstance*            pInstance  = 0;
 
     Status = IRadientMaterialDefinitionAsset_GetParameterHandle(pDefinition, 0, &Handle);
     Status = IRadientMaterialDefinitionAsset_FindParameter(pDefinition, "Parameter", &Handle);
-    Status = IRadientMaterialDefinitionAsset_CreateInstance(pDefinition, &pInstance);
 
     (void)pDesc;
     (void)Status;
     (void)ParamCount;
     (void)pParamDesc;
     (void)Handle;
-    (void)pInstance;
 }
 
-void RadientMaterials_C_TestInstanceMacros(IRadientMaterialInstance*              pInstance,
-                                           IRadientSurfaceMaterialInstance*       pSurfaceInstance,
-                                           IRadientMaterialInstanceWriter*        pWriter,
-                                           IRadientSurfaceMaterialInstanceWriter* pSurfaceWriter,
-                                           IRadientTextureAsset*                  pTexture)
+void RadientMaterials_C_TestMaterialMacros(IRadientMaterialAsset*         pMaterial,
+                                           IRadientSurfaceMaterialAsset*  pSurfaceMaterial,
+                                           IRadientMaterialWriter*        pWriter,
+                                           IRadientSurfaceMaterialWriter* pSurfaceWriter,
+                                           IRadientTextureAsset*          pTexture)
 {
     RadientMaterialParameterHandle   Handle      = {0};
-    IRadientMaterialDefinitionAsset* pDefinition = IRadientMaterialInstance_GetDefinition(pInstance);
-    Uint64                           Version     = IRadientMaterialInstance_GetVersion(pInstance);
+    IRadientMaterialDefinitionAsset* pDefinition = IRadientMaterialAsset_GetDefinition(pMaterial);
+    Uint64                           Version     = IRadientMaterialAsset_GetVersion(pMaterial);
     float                            Value       = 0;
-    IRadientMaterialInstance*        pClone      = 0;
     RADIENT_STATUS                   Status      = RADIENT_STATUS_OK;
 
-    Status = IRadientMaterialInstance_GetParameter(pInstance, Handle, &Value, (Uint32)sizeof(Value));
-    Status = IRadientMaterialInstance_GetTexture(pInstance, Handle, 0, &pTexture);
-    Status = IRadientMaterialInstance_CreateWriter(pInstance, &pWriter);
-    Status = IRadientMaterialInstance_Clone(pInstance, &pClone);
-    Status = IRadientMaterialInstanceWriter_SetParameter(pWriter, Handle, &Value, (Uint32)sizeof(Value));
-    Status = IRadientMaterialInstanceWriter_SetTexture(pWriter, Handle, 0, pTexture);
-    Status = IRadientMaterialInstanceWriter_Commit(pWriter);
+    Status = IRadientMaterialAsset_GetParameter(pMaterial, Handle, &Value, (Uint32)sizeof(Value));
+    Status = IRadientMaterialAsset_GetTexture(pMaterial, Handle, 0, &pTexture);
+    Status = IRadientMaterialAsset_CreateWriter(pMaterial, &pWriter);
+    Status = IRadientMaterialWriter_SetParameter(pWriter, Handle, &Value, (Uint32)sizeof(Value));
+    Status = IRadientMaterialWriter_SetTexture(pWriter, Handle, 0, pTexture);
+    Status = IRadientMaterialWriter_Commit(pWriter);
     {
-        RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = IRadientSurfaceMaterialInstance_GetSurfaceMode(pSurfaceInstance);
-        Float32                       AlphaCutoff = IRadientSurfaceMaterialInstance_GetAlphaCutoff(pSurfaceInstance);
-        Bool                          DoubleSided = IRadientSurfaceMaterialInstance_IsDoubleSided(pSurfaceInstance);
-        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetSurfaceMode(pSurfaceWriter, SurfaceMode);
-        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetAlphaCutoff(pSurfaceWriter, AlphaCutoff);
-        Status                                    = IRadientSurfaceMaterialInstanceWriter_SetDoubleSided(pSurfaceWriter, DoubleSided);
+        RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = IRadientSurfaceMaterialAsset_GetSurfaceMode(pSurfaceMaterial);
+        Float32                       AlphaCutoff = IRadientSurfaceMaterialAsset_GetAlphaCutoff(pSurfaceMaterial);
+        Bool                          DoubleSided = IRadientSurfaceMaterialAsset_IsDoubleSided(pSurfaceMaterial);
+        Status                                    = IRadientSurfaceMaterialWriter_SetSurfaceMode(pSurfaceWriter, SurfaceMode);
+        Status                                    = IRadientSurfaceMaterialWriter_SetAlphaCutoff(pSurfaceWriter, AlphaCutoff);
+        Status                                    = IRadientSurfaceMaterialWriter_SetDoubleSided(pSurfaceWriter, DoubleSided);
     }
 
     (void)pDefinition;
     (void)Version;
-    (void)pClone;
     (void)Status;
 }
 

@@ -683,6 +683,11 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
                                       Uint32                       TextureCount,
                                       IRadientMaterialAsset**      ppMaterial)
 {
+    if (ppMaterial == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    *ppMaterial = nullptr;
+
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
     RADIENT_STATUS                              Status =
         RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI);
@@ -695,17 +700,17 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    Status = MaterialManager.CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    Status = pMaterial->CreateWriter(pWriter.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    Status = RadientGLTFConverter::PopulateMaterialInstance(
+    Status = RadientGLTFConverter::PopulateMaterial(
         Material, ppTextures, TextureCount, *pDefinition, *pWriter);
     if (Status != RADIENT_STATUS_OK)
         return Status;
@@ -714,7 +719,8 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
     if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
         return Status;
 
-    return MaterialManager.CreateMaterial(pInstance, ppMaterial);
+    *ppMaterial = pMaterial.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,

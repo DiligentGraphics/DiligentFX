@@ -141,7 +141,7 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
                   *pMaterialManager,
                   {},
                   [&](IRadientMaterialDefinitionAsset& Definition,
-                      IRadientMaterialInstanceWriter&  Writer) {
+                      IRadientMaterialWriter&          Writer) {
                       return SetStandardMaterialTextureParameters(
                           Definition,
                           Writer,

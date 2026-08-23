@@ -48,8 +48,7 @@ class PackedMaterialInstanceData final
 public:
     using TexturePtr = RefCntAutoPtr<IRadientTextureAsset>;
 
-    explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
-                                        const PackedMaterialInstanceData*    pSource = nullptr);
+    explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc);
 
     // clang-format off
     PackedMaterialInstanceData           (const PackedMaterialInstanceData&) = delete;
@@ -89,8 +88,7 @@ class MaterialInstanceState final
 {
 public:
     MaterialInstanceState(IRadientMaterialDefinitionAsset* pDefinition,
-                          RadientHandle                    DefinitionHandle,
-                          const MaterialInstanceState*     pSource = nullptr);
+                          RadientHandle                    DefinitionHandle);
 
     ~MaterialInstanceState();
 
@@ -115,7 +113,7 @@ public:
 
     RADIENT_STATUS           GetLoadStatus() const noexcept;
     RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
-    RadientMaterialAssetView GetMaterialView(IRadientMaterialInstance* pInstance);
+    RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
     const PackedMaterialInstanceData& GetPackedData() const noexcept;
 
@@ -136,8 +134,8 @@ private:
 class MaterialInstanceWriterState final
 {
 public:
-    MaterialInstanceWriterState(IRadientMaterialInstance* pInstance,
-                                MaterialInstanceState&    InstanceState) noexcept;
+    MaterialInstanceWriterState(IRadientMaterialAsset* pMaterial,
+                                MaterialInstanceState& InstanceState) noexcept;
 
     // clang-format off
     MaterialInstanceWriterState           (const MaterialInstanceWriterState&) = delete;
@@ -172,22 +170,22 @@ private:
 
     ChangeIterator FindChange(Uint32 ParameterIndex, Uint32 ArrayIndex) noexcept;
 
-    // Both members refer to the same material instance. m_pInstance keeps the
-    // instance, and therefore m_InstanceState, alive for the writer's lifetime.
-    RefCntAutoPtr<IRadientMaterialInstance> m_pInstance;
-    MaterialInstanceState&                  m_InstanceState;
+    // Both members refer to the same material asset. m_pMaterial keeps the
+    // asset, and therefore m_InstanceState, alive for the writer's lifetime.
+    RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
+    MaterialInstanceState&               m_InstanceState;
 
     ChangeList                                          m_Changes;
     std::vector<Uint8>                                  m_ValueData;
     std::vector<PackedMaterialInstanceData::TexturePtr> m_TextureData;
 };
 
-RefCntAutoPtr<IRadientMaterialInstance> MakeMaterialInstance(
+RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
-MaterialInstanceState*       TryGetMaterialInstanceState(IRadientMaterialInstance* pInstance) noexcept;
-const MaterialInstanceState* TryGetMaterialInstanceState(const IRadientMaterialInstance* pInstance) noexcept;
+MaterialInstanceState*       TryGetMaterialInstanceState(IRadientMaterialAsset* pMaterial) noexcept;
+const MaterialInstanceState* TryGetMaterialInstanceState(const IRadientMaterialAsset* pMaterial) noexcept;
 
 } // namespace RadientMaterialDetail
 

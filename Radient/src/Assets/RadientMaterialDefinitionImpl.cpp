@@ -27,7 +27,6 @@
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 
 #include "Assets/RadientMaterialInstanceState.hpp"
-#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 
 #include "DebugUtilities.hpp"
@@ -394,7 +393,7 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
         return SurfacePackingStatus;
 
     // Initializations establish defaults and may intentionally overlap each
-    // other and ranges subsequently written from instance parameters.
+    // other and ranges subsequently written from material parameters.
     for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
     {
         const RadientMaterialShaderDataInitialization& Initialization =
@@ -772,18 +771,18 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::FindParameter(
 }
 
 void RadientMaterialDefinitionImpl::WriteShaderData(
-    const IRadientMaterialInstance& Instance,
-    void*                           pData) const noexcept
+    const IRadientMaterialAsset& Material,
+    void*                        pData) const noexcept
 {
     if (m_Data.PackingPlan.Size == 0)
         return;
 
-    Uint8* const                                 pShaderData = static_cast<Uint8*>(pData);
-    const bool                                   IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
-    const IRadientSurfaceMaterialInstance* const pSurfaceInstance =
-        IsSurface ? &static_cast<const IRadientSurfaceMaterialInstance&>(Instance) : nullptr;
+    Uint8* const                              pShaderData = static_cast<Uint8*>(pData);
+    const bool                                IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
+    const IRadientSurfaceMaterialAsset* const pSurfaceMaterial =
+        IsSurface ? &static_cast<const IRadientSurfaceMaterialAsset&>(Material) : nullptr;
     const RadientMaterialDetail::MaterialInstanceState* const pInstanceState =
-        RadientMaterialDetail::TryGetMaterialInstanceState(&Instance);
+        RadientMaterialDetail::TryGetMaterialInstanceState(&Material);
     VERIFY_EXPR(pInstanceState != nullptr);
     if (pInstanceState == nullptr)
         return;
@@ -806,16 +805,16 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         m_Data.PackingPlan.pSurfacePacking;
     if (pSurfacePacking != nullptr && pSurfacePacking->SurfaceModeOffset != ~Uint32{0})
     {
-        VERIFY_EXPR(pSurfaceInstance != nullptr);
-        const Uint32 SurfaceMode = static_cast<Uint32>(pSurfaceInstance->GetSurfaceMode());
+        VERIFY_EXPR(pSurfaceMaterial != nullptr);
+        const Uint32 SurfaceMode = static_cast<Uint32>(pSurfaceMaterial->GetSurfaceMode());
         std::memcpy(pShaderData + pSurfacePacking->SurfaceModeOffset,
                     &SurfaceMode,
                     sizeof(SurfaceMode));
     }
     if (pSurfacePacking != nullptr && pSurfacePacking->AlphaCutoffOffset != ~Uint32{0})
     {
-        VERIFY_EXPR(pSurfaceInstance != nullptr);
-        const Float32 AlphaCutoff = pSurfaceInstance->GetAlphaCutoff();
+        VERIFY_EXPR(pSurfaceMaterial != nullptr);
+        const Float32 AlphaCutoff = pSurfaceMaterial->GetAlphaCutoff();
         std::memcpy(pShaderData + pSurfacePacking->AlphaCutoffOffset,
                     &AlphaCutoff,
                     sizeof(AlphaCutoff));
@@ -865,50 +864,6 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
                             sizeof(SamplingInfo.UVScaleBias));
             }
         }
-    }
-}
-
-RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
-    IRadientMaterialInstance** ppInstance) const
-{
-    if (ppInstance == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
-
-    const RADIENT_STATUS DefinitionStatus = GetStatus();
-    if (RADIENT_FAILED(DefinitionStatus))
-        return DefinitionStatus;
-
-    try
-    {
-        RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-        switch (m_Data.GetDesc().Type)
-        {
-            case RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE:
-                pInstance = RadientMaterialDetail::MakeSurfaceMaterialInstance(
-                    const_cast<RadientMaterialDefinitionImpl*>(this),
-                    m_DefinitionHandle);
-                break;
-
-            case RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS:
-            case RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE:
-                pInstance = RadientMaterialDetail::MakeMaterialInstance(
-                    const_cast<RadientMaterialDefinitionImpl*>(this),
-                    m_DefinitionHandle);
-                break;
-
-            default:
-                UNEXPECTED("Unexpected material definition type");
-                return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        *ppInstance = pInstance.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient material instance: ", Error.what());
-        return RADIENT_STATUS_FAILED;
     }
 }
 

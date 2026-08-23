@@ -260,11 +260,8 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_TRUE(Result.Data->GetMaterialSRB());
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedCoreMaterialPSOFlags);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
-        RadientMaterialAssetManager::GetInstance(pMaterial);
-    ASSERT_NE(pInstance, nullptr);
     const auto* const pDefinition =
-        static_cast<const RadientMaterialDefinitionImpl*>(pInstance->GetDefinition());
+        static_cast<const RadientMaterialDefinitionImpl*>(pMaterial->GetDefinition());
     ASSERT_NE(pDefinition, nullptr);
     EXPECT_EQ(Result.Data->GetMaterialBufferAllocation().GetSize(),
               pDefinition->GetShaderDataSize());

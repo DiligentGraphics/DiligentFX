@@ -103,7 +103,7 @@ bool HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features,
 
 template <typename ValueType>
 RADIENT_STATUS SetParameter(IRadientMaterialDefinitionAsset& Definition,
-                            IRadientMaterialInstanceWriter&  Writer,
+                            IRadientMaterialWriter&          Writer,
                             const char*                      Name,
                             const ValueType&                 Value)
 {
@@ -127,10 +127,10 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
                                            const StandardMaterialTextureSemantic& Semantic,
                                            IRadientTextureAsset*                  pTexture,
                                            IRadientMaterialDefinitionAsset&       Definition,
-                                           IRadientMaterialInstanceWriter&        Writer)
+                                           IRadientMaterialWriter&                Writer)
 {
     // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
-    // are intentionally not part of the imported material instance.
+    // are intentionally not part of the imported material asset.
     const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
     RadientStandardMaterialTextureParameters    Parameters{pTexture};
     Parameters.UVSelector         = TextureAttribs.GetUVSelector();
@@ -200,12 +200,12 @@ RADIENT_STATUS ConvertMaterialDefinition(
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS PopulateMaterialInstance(
+RADIENT_STATUS PopulateMaterial(
     const GLTF::Material&            Material,
     IRadientTextureAsset* const*     ppTextures,
     Uint32                           TextureCount,
     IRadientMaterialDefinitionAsset& Definition,
-    IRadientMaterialInstanceWriter&  Writer)
+    IRadientMaterialWriter&          Writer)
 {
     if (ppTextures == nullptr && TextureCount != 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -225,8 +225,8 @@ RADIENT_STATUS PopulateMaterialInstance(
     static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_MASK) == RADIENT_MATERIAL_SURFACE_MODE_MASKED);
     static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_BLEND) == RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
 
-    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
-        &Writer, IID_RadientSurfaceMaterialInstanceWriter};
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        &Writer, IID_RadientSurfaceMaterialWriter};
     if (!pSurfaceWriter)
         return RADIENT_STATUS_INVALID_OPERATION;
 

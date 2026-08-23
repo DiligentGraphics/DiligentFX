@@ -119,7 +119,7 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(IRadientMaterialInstance*,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(IRadientMaterialDefinitionAsset*,
                                                              IRadientMaterialAsset**) override final
     {
         return RADIENT_STATUS_INVALID_OPERATION;

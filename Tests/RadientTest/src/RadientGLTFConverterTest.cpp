@@ -86,10 +86,10 @@ static constexpr std::array<StandardMaterialTextureTestInfo, 15> StandardMateria
 }};
 
 template <typename ValueType>
-ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* Name)
+ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name)
 {
     ValueType                        Value{};
-    IRadientMaterialDefinitionAsset* pDefinition = Instance.GetDefinition();
+    IRadientMaterialDefinitionAsset* pDefinition = Material.GetDefinition();
     RadientMaterialParameterHandle   Handle;
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr)
@@ -97,25 +97,25 @@ ValueType GetMaterialParameter(IRadientMaterialInstance& Instance, const char* N
         EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
         if (Handle)
         {
-            EXPECT_EQ(Instance.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+            EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
                       RADIENT_STATUS_OK);
         }
     }
     return Value;
 }
 
-RefCntAutoPtr<IRadientTextureAsset> GetMaterialTexture(IRadientMaterialInstance& Instance,
-                                                       const char*               Name)
+RefCntAutoPtr<IRadientTextureAsset> GetMaterialTexture(IRadientMaterialAsset& Material,
+                                                       const char*            Name)
 {
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    IRadientMaterialDefinitionAsset*    pDefinition = Instance.GetDefinition();
+    IRadientMaterialDefinitionAsset*    pDefinition = Material.GetDefinition();
     RadientMaterialParameterHandle      Handle;
     EXPECT_NE(pDefinition, nullptr);
     if (pDefinition != nullptr)
     {
         EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
         if (Handle)
-            EXPECT_EQ(Instance.GetTexture(Handle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+            EXPECT_EQ(Material.GetTexture(Handle, 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     }
     return pTexture;
 }
@@ -175,7 +175,7 @@ GLTF::Material MakeExtendedGLTFMaterial(bool AddTextures)
     return Material;
 }
 
-RefCntAutoPtr<IRadientMaterialInstance> ConvertMaterial(
+RefCntAutoPtr<IRadientMaterialAsset> ConvertMaterial(
     const GLTF::Material&                        Material,
     IRadientTextureAsset* const*                 ppTextures,
     Uint32                                       TextureCount,
@@ -193,19 +193,19 @@ RefCntAutoPtr<IRadientMaterialInstance> ConvertMaterial(
     if (Status != RADIENT_STATUS_OK)
         return {};
 
-    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
-    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    Status = pManager->CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty());
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     if (Status != RADIENT_STATUS_OK)
         return {};
 
-    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
-    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    Status = pMaterial->CreateWriter(pWriter.GetAddressOfEmpty());
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     if (Status != RADIENT_STATUS_OK)
         return {};
 
-    Status = RadientGLTFConverter::PopulateMaterialInstance(
+    Status = RadientGLTFConverter::PopulateMaterial(
         Material, ppTextures, TextureCount, *pDefinition, *pWriter);
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     if (Status != RADIENT_STATUS_OK)
@@ -215,7 +215,7 @@ RefCntAutoPtr<IRadientMaterialInstance> ConvertMaterial(
     EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE);
     if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
         return {};
-    return pInstance;
+    return pMaterial;
 }
 
 const std::array<float, 9> TestPositions{
@@ -654,44 +654,44 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
     IRadientTextureAsset* const Textures[] = {pTexture};
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
         ConvertMaterial(Material, Textures, 1, DefinitionCI);
-    ASSERT_NE(pInstance, nullptr);
+    ASSERT_NE(pMaterial, nullptr);
 
     EXPECT_EQ(DefinitionCI.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS);
     EXPECT_EQ(DefinitionCI.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL);
 
-    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").w, 0.4f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "MetallicFactor"), 0.35f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "RoughnessFactor"), 0.45f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "EmissiveFactor").z, 0.7f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "NormalScale"), 0.8f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "OcclusionStrength"), 0.55f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatFactor"), 0.65f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatRoughnessFactor"), 0.75f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ClearCoatNormalScale"), 0.85f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "SheenColorFactor").y, 0.25f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "SheenRoughnessFactor"), 0.46f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AnisotropyStrength"), 0.56f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AnisotropyRotation"), 0.66f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceFactor"), 0.76f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceIOR"), 1.4f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceThicknessMinimum"), 120.f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IridescenceThicknessMaximum"), 360.f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "TransmissionFactor"), 0.86f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "IOR"), 1.45f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "ThicknessFactor"), 0.96f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pInstance, "AttenuationColor").y, 0.4f);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pInstance, "AttenuationDistance"), 12.f);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
-        pInstance, IID_RadientSurfaceMaterialInstance};
-    ASSERT_NE(pSurfaceInstance, nullptr);
-    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
-    EXPECT_FLOAT_EQ(pSurfaceInstance->GetAlphaCutoff(), 0.25f);
-    EXPECT_TRUE(pSurfaceInstance->IsDoubleSided());
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pMaterial, "BaseColorFactor").w, 0.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "MetallicFactor"), 0.35f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "RoughnessFactor"), 0.45f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pMaterial, "EmissiveFactor").z, 0.7f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "NormalScale"), 0.8f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "OcclusionStrength"), 0.55f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "ClearCoatFactor"), 0.65f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "ClearCoatRoughnessFactor"), 0.75f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "ClearCoatNormalScale"), 0.85f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pMaterial, "SheenColorFactor").y, 0.25f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "SheenRoughnessFactor"), 0.46f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "AnisotropyStrength"), 0.56f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "AnisotropyRotation"), 0.66f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IridescenceFactor"), 0.76f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IridescenceIOR"), 1.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IridescenceThicknessMinimum"), 120.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IridescenceThicknessMaximum"), 360.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "TransmissionFactor"), 0.86f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IOR"), 1.45f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "ThicknessFactor"), 0.96f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pMaterial, "AttenuationColor").y, 0.4f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "AttenuationDistance"), 12.f);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
-        EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), pTexture);
+        EXPECT_EQ(GetMaterialTexture(*pMaterial, TextureInfo.ParameterName), pTexture);
 }
 
 TEST(RadientGLTFConverterTest, DeclaresShaderRequiredTextureParameters)
@@ -699,21 +699,21 @@ TEST(RadientGLTFConverterTest, DeclaresShaderRequiredTextureParameters)
     GLTF::Material Material;
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
         ConvertMaterial(Material, nullptr, 0, DefinitionCI);
-    ASSERT_NE(pInstance, nullptr);
+    ASSERT_NE(pMaterial, nullptr);
 
     for (size_t TextureIndex = 0; TextureIndex < StandardMaterialTextureTestInfos.size(); ++TextureIndex)
     {
         const StandardMaterialTextureTestInfo& TextureInfo = StandardMaterialTextureTestInfos[TextureIndex];
         RadientMaterialParameterHandle         Handle;
         const RADIENT_STATUS                   FindStatus =
-            pInstance->GetDefinition()->FindParameter(TextureInfo.ParameterName, &Handle);
+            pMaterial->GetDefinition()->FindParameter(TextureInfo.ParameterName, &Handle);
 
         if (TextureIndex < 5)
         {
             EXPECT_EQ(FindStatus, RADIENT_STATUS_OK);
-            EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), nullptr);
+            EXPECT_EQ(GetMaterialTexture(*pMaterial, TextureInfo.ParameterName), nullptr);
         }
         else
         {
@@ -727,12 +727,12 @@ TEST(RadientGLTFConverterTest, DeclaresShaderRequiredExtensionTextureParameters)
     const GLTF::Material Material = MakeExtendedGLTFMaterial(false);
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
         ConvertMaterial(Material, nullptr, 0, DefinitionCI);
-    ASSERT_NE(pInstance, nullptr);
+    ASSERT_NE(pMaterial, nullptr);
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
-        EXPECT_EQ(GetMaterialTexture(*pInstance, TextureInfo.ParameterName), nullptr);
+        EXPECT_EQ(GetMaterialTexture(*pMaterial, TextureInfo.ParameterName), nullptr);
 }
 
 TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSemantics)
@@ -757,33 +757,33 @@ TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSe
     Builder.Finalize();
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
         ConvertMaterial(Material, nullptr, 0, DefinitionCI);
-    ASSERT_NE(pInstance, nullptr);
+    ASSERT_NE(pMaterial, nullptr);
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
     {
         const GLTF::Material::TextureShaderAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId);
         const std::string                           Name{TextureInfo.ParameterName};
 
-        EXPECT_EQ(GetMaterialParameter<Int32>(*pInstance, (Name + "UVSelector").c_str()), Expected.GetUVSelector());
+        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, (Name + "UVSelector").c_str()), Expected.GetUVSelector());
 
         const float2x2 ActualUVScaleAndRotation =
-            GetMaterialParameter<float2x2>(*pInstance, (Name + "UVScaleAndRotation").c_str());
+            GetMaterialParameter<float2x2>(*pMaterial, (Name + "UVScaleAndRotation").c_str());
         EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._11, Expected.UVScaleAndRotation._11);
         EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._12, Expected.UVScaleAndRotation._12);
         EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._21, Expected.UVScaleAndRotation._21);
         EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._22, Expected.UVScaleAndRotation._22);
 
         const RadientFloat2 ActualUVBias =
-            GetMaterialParameter<RadientFloat2>(*pInstance, (Name + "UVBias").c_str());
+            GetMaterialParameter<RadientFloat2>(*pMaterial, (Name + "UVBias").c_str());
         EXPECT_FLOAT_EQ(ActualUVBias.x, Expected.UBias);
         EXPECT_FLOAT_EQ(ActualUVBias.y, Expected.VBias);
-        EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, (Name + "WrapU").c_str()),
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, (Name + "WrapU").c_str()),
                   static_cast<Uint32>(Expected.GetWrapUMode()));
-        EXPECT_EQ(GetMaterialParameter<Uint32>(*pInstance, (Name + "WrapV").c_str()),
+        EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, (Name + "WrapV").c_str()),
                   static_cast<Uint32>(Expected.GetWrapVMode()));
-        EXPECT_EQ(GetMaterialTexture(*pInstance, Name.c_str()), nullptr);
+        EXPECT_EQ(GetMaterialTexture(*pMaterial, Name.c_str()), nullptr);
     }
 }
 
@@ -802,22 +802,22 @@ TEST(RadientGLTFConverterTest, ConvertsUnlitMaterialDefinitionAndValues)
     Builder.Finalize();
 
     RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RefCntAutoPtr<IRadientMaterialInstance>     pInstance =
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial =
         ConvertMaterial(Material, Textures, 1, DefinitionCI);
-    ASSERT_NE(pInstance, nullptr);
+    ASSERT_NE(pMaterial, nullptr);
 
     EXPECT_EQ(DefinitionCI.ShadingModel, RADIENT_SURFACE_SHADING_MODEL_UNLIT);
     EXPECT_EQ(DefinitionCI.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
-    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pInstance, "BaseColorFactor").z, 0.6f);
-    RefCntAutoPtr<IRadientSurfaceMaterialInstance> pSurfaceInstance{
-        pInstance, IID_RadientSurfaceMaterialInstance};
-    ASSERT_NE(pSurfaceInstance, nullptr);
-    EXPECT_EQ(pSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
-    EXPECT_EQ(GetMaterialTexture(*pInstance, "BaseColorTexture"), pTexture);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat4>(*pMaterial, "BaseColorFactor").z, 0.6f);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_EQ(GetMaterialTexture(*pMaterial, "BaseColorTexture"), pTexture);
 
     RadientMaterialParameterHandle Handle;
-    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("MetallicFactor", &Handle), RADIENT_STATUS_NOT_FOUND);
-    EXPECT_EQ(pInstance->GetDefinition()->FindParameter("NormalTexture", &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pMaterial->GetDefinition()->FindParameter("MetallicFactor", &Handle), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pMaterial->GetDefinition()->FindParameter("NormalTexture", &Handle), RADIENT_STATUS_NOT_FOUND);
 }
 
 TEST(RadientGLTFConverterTest, RejectsDeprecatedSpecularGlossinessMaterial)

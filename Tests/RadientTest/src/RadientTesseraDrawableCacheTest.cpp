@@ -66,9 +66,9 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
         MaterialManager,
         {},
         [SurfaceMode, AlphaCutoff, DoubleSided](IRadientMaterialDefinitionAsset&,
-                                                IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
-            RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
-                &Writer, IID_RadientSurfaceMaterialInstanceWriter};
+                                                IRadientMaterialWriter& Writer) -> RADIENT_STATUS {
+            RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+                &Writer, IID_RadientSurfaceMaterialWriter};
             EXPECT_NE(pSurfaceWriter, nullptr);
             if (!pSurfaceWriter)
                 return RADIENT_STATUS_INVALID_OPERATION;
@@ -1153,8 +1153,8 @@ TEST(RadientTesseraDrawableCacheTest, MeshMayChangeWhileMaterialProcessingIsPend
     const RadientDrawableSlot* pSlot = GetFirstDrawableSlot(DrawableCache);
     ASSERT_NE(pSlot, nullptr);
     ASSERT_TRUE(pSlot->MaterialData);
-    EXPECT_EQ(pSlot->MaterialData->GetMaterialView().pInstance,
-              RadientMaterialAssetManager::GetMaterialView(pMaterial1).pInstance);
+    EXPECT_EQ(pSlot->MaterialData->GetMaterialView().pMaterial,
+              RadientMaterialAssetManager::GetMaterialView(pMaterial1).pMaterial);
     EXPECT_EQ(pSlot->FirstElement, 12u);
 }
 

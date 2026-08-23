@@ -43,22 +43,18 @@ class RadientSurfaceMaterialInstanceWriterImpl;
 
 using RadientSurfaceMaterialInstanceImplBase =
     MaterialInstanceImplBase<RadientSurfaceMaterialInstanceImpl,
-                             IRadientSurfaceMaterialInstance,
-                             IID_RadientSurfaceMaterialInstance>;
+                             IRadientSurfaceMaterialAsset,
+                             IID_RadientSurfaceMaterialAsset>;
 
 class RadientSurfaceMaterialInstanceImpl final : public RadientSurfaceMaterialInstanceImplBase
 {
 public:
     using TBase = RadientSurfaceMaterialInstanceImplBase;
 
-    RadientSurfaceMaterialInstanceImpl(IReferenceCounters*                       pRefCounters,
-                                       IRadientMaterialDefinitionAsset*          pDefinition,
-                                       RadientHandle                             DefinitionHandle,
-                                       const RadientSurfaceMaterialInstanceImpl* pSource = nullptr) :
-        TBase{pRefCounters, pDefinition, DefinitionHandle, pSource != nullptr ? &pSource->GetState() : nullptr},
-        m_SurfaceMode{pSource != nullptr ? pSource->m_SurfaceMode : RADIENT_MATERIAL_SURFACE_MODE_OPAQUE},
-        m_AlphaCutoff{pSource != nullptr ? pSource->m_AlphaCutoff : 0.5f},
-        m_IsDoubleSided{pSource != nullptr ? pSource->m_IsDoubleSided : False}
+    RadientSurfaceMaterialInstanceImpl(IReferenceCounters*              pRefCounters,
+                                       IRadientMaterialDefinitionAsset* pDefinition,
+                                       RadientHandle                    DefinitionHandle) :
+        TBase{pRefCounters, pDefinition, DefinitionHandle}
     {}
 
     virtual RADIENT_MATERIAL_SURFACE_MODE DILIGENT_CALL_TYPE GetSurfaceMode() const override final
@@ -77,7 +73,6 @@ public:
     }
 
     RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> MakeWriter() const;
-    RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>       MakeClone() const;
 
 private:
     friend class RadientSurfaceMaterialInstanceWriterImpl;
@@ -89,8 +84,8 @@ private:
 
 using RadientSurfaceMaterialInstanceWriterImplBase =
     MaterialInstanceWriterImplBase<RadientSurfaceMaterialInstanceWriterImpl,
-                                   IRadientSurfaceMaterialInstanceWriter,
-                                   IID_RadientSurfaceMaterialInstanceWriter,
+                                   IRadientSurfaceMaterialWriter,
+                                   IID_RadientSurfaceMaterialWriter,
                                    RadientSurfaceMaterialInstanceImpl>;
 
 class RadientSurfaceMaterialInstanceWriterImpl final : public RadientSurfaceMaterialInstanceWriterImplBase
@@ -105,7 +100,7 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         const RADIENT_MATERIAL_SURFACE_MODE CurrentMode =
-            m_SurfaceModeChanged ? m_SurfaceMode : GetInstance().m_SurfaceMode;
+            m_SurfaceModeChanged ? m_SurfaceMode : GetMaterial().m_SurfaceMode;
         if (CurrentMode == SurfaceMode)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -117,7 +112,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetAlphaCutoff(Float32 AlphaCutoff) override final
     {
         const Float32 CurrentValue =
-            m_AlphaCutoffChanged ? m_AlphaCutoff : GetInstance().m_AlphaCutoff;
+            m_AlphaCutoffChanged ? m_AlphaCutoff : GetMaterial().m_AlphaCutoff;
         if (CurrentValue == AlphaCutoff)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -129,7 +124,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDoubleSided(Bool DoubleSided) override final
     {
         DoubleSided             = DoubleSided != False ? True : False;
-        const Bool CurrentValue = m_DoubleSidedChanged ? m_IsDoubleSided : GetInstance().m_IsDoubleSided;
+        const Bool CurrentValue = m_DoubleSidedChanged ? m_IsDoubleSided : GetMaterial().m_IsDoubleSided;
         if (CurrentValue == DoubleSided)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -142,19 +137,19 @@ public:
     {
         bool StateChanged = false;
 
-        if (m_SurfaceModeChanged && GetInstance().m_SurfaceMode != m_SurfaceMode)
+        if (m_SurfaceModeChanged && GetMaterial().m_SurfaceMode != m_SurfaceMode)
         {
-            GetInstance().m_SurfaceMode = m_SurfaceMode;
+            GetMaterial().m_SurfaceMode = m_SurfaceMode;
             StateChanged                = true;
         }
-        if (m_AlphaCutoffChanged && GetInstance().m_AlphaCutoff != m_AlphaCutoff)
+        if (m_AlphaCutoffChanged && GetMaterial().m_AlphaCutoff != m_AlphaCutoff)
         {
-            GetInstance().m_AlphaCutoff = m_AlphaCutoff;
+            GetMaterial().m_AlphaCutoff = m_AlphaCutoff;
             StateChanged                = true;
         }
-        if (m_DoubleSidedChanged && GetInstance().m_IsDoubleSided != m_IsDoubleSided)
+        if (m_DoubleSidedChanged && GetMaterial().m_IsDoubleSided != m_IsDoubleSided)
         {
-            GetInstance().m_IsDoubleSided = m_IsDoubleSided;
+            GetMaterial().m_IsDoubleSided = m_IsDoubleSided;
             StateChanged                  = true;
         }
 
@@ -180,18 +175,9 @@ RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> RadientSurfaceMaterialIn
             const_cast<RadientSurfaceMaterialInstanceImpl*>(this))};
 }
 
-RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl> RadientSurfaceMaterialInstanceImpl::MakeClone() const
-{
-    return RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>{
-        MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(
-            GetState().GetDefinition(),
-            GetState().GetDefinitionHandle(),
-            this)};
-}
-
 } // namespace
 
-RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeSurfaceMaterialInstance(
+RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeSurfaceMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle)
 {

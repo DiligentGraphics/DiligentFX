@@ -71,7 +71,7 @@ struct StandardMaterialValues
 
 template <typename ValueType>
 RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinitionAsset& Definition,
-                                    IRadientMaterialInstanceWriter&  Writer,
+                                    IRadientMaterialWriter&          Writer,
                                     const char*                      Name,
                                     const ValueType&                 Value)
 {
@@ -91,7 +91,7 @@ RADIENT_STATUS CreateStandardMaterialAsset(IRadientAssetManager&         AssetMa
         AssetManager,
         {},
         [&Values](IRadientMaterialDefinitionAsset& Definition,
-                  IRadientMaterialInstanceWriter&  Writer) {
+                  IRadientMaterialWriter&          Writer) {
             const auto SetParameter = [&](const char* Name, const auto& Value) {
                 return SetMaterialParameter(Definition, Writer, Name, Value);
             };

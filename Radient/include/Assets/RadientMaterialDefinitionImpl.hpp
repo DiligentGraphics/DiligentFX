@@ -48,6 +48,11 @@
 namespace Diligent
 {
 
+// Internal implementation identity used by the material asset manager.
+// {CD2E807C-E8F5-411B-B7F1-F4E741F2AB58}
+static constexpr INTERFACE_ID IID_MaterialDefinitionImpl =
+    {0xcd2e807c, 0xe8f5, 0x411b, {0xb7, 0xf1, 0xf4, 0xe7, 0x41, 0xf2, 0xab, 0x58}};
+
 struct RadientMaterialShaderDataLayoutDesc;
 
 namespace RadientMaterialDetail
@@ -87,7 +92,7 @@ struct RadientMaterialShaderTexturePacking
 };
 
 /// Initializes a fixed byte range in the shader-readable material data block.
-/// Initializations are applied in declaration order before instance parameter
+/// Initializations are applied in declaration order before material parameter
 /// and texture packing.
 struct RadientMaterialShaderDataInitialization
 {
@@ -96,7 +101,7 @@ struct RadientMaterialShaderDataInitialization
     Uint32      Offset = 0;
 };
 
-/// Describes where specialized surface material instance parameters are packed
+/// Describes where specialized surface material properties are packed
 /// in shader-readable data.
 struct RadientSurfaceMaterialShaderParameterPacking
 {
@@ -136,7 +141,24 @@ public:
                                   const RadientMaterialDefinitionDesc&       Desc,
                                   const RadientMaterialShaderDataLayoutDesc& ShaderDataLayout = {});
 
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialDefinitionAsset, IID_RadientAsset, TBase)
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
+    {
+        if (ppInterface == nullptr)
+            return;
+
+        if (IID == IID_RadientMaterialDefinitionAsset ||
+            IID == IID_RadientAsset ||
+            IID == IID_MaterialDefinitionImpl)
+        {
+            *ppInterface = this;
+            (*ppInterface)->AddRef();
+        }
+        else
+        {
+            TBase::QueryInterface(IID, ppInterface);
+        }
+    }
+    using IObject::QueryInterface;
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
@@ -171,21 +193,24 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE FindParameter(const Char*                     Name,
                                                             RadientMaterialParameterHandle* pHandle) const override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateInstance(IRadientMaterialInstance** ppInstance) const override final;
-
     Uint32 GetShaderDataSize() const noexcept
     {
         return m_Data.PackingPlan.Size;
     }
 
-    /// Writes the complete shader-readable data block for Instance. Instance
+    /// Writes the complete shader-readable data block for Material. Material
     /// must have been created by this definition, and pData must reference at
     /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to
-    /// zero. Definition-owned initializations are applied before instance
+    /// zero. Definition-owned initializations are applied before material
     /// parameters. Non-null texture parameters must have initialized sampling
     /// data.
-    void WriteShaderData(const IRadientMaterialInstance& Instance,
-                         void*                           pData) const noexcept;
+    void WriteShaderData(const IRadientMaterialAsset& Material,
+                         void*                        pData) const noexcept;
+
+    RadientHandle GetDefinitionHandle() const noexcept
+    {
+        return m_DefinitionHandle;
+    }
 
 private:
     struct ShaderDataCopyCommand
@@ -225,9 +250,9 @@ private:
             Other.PackingPlan = {};
         }
 
-        PackedData(const PackedData&) = delete;
+        PackedData(const PackedData&)            = delete;
         PackedData& operator=(const PackedData&) = delete;
-        PackedData& operator=(PackedData&&) = delete;
+        PackedData& operator=(PackedData&&)      = delete;
 
         ~PackedData()
         {

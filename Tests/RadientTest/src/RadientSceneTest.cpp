@@ -129,7 +129,7 @@ RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& As
             AssetManager,
             {},
             [](IRadientMaterialDefinitionAsset& Definition,
-               IRadientMaterialInstanceWriter&  Writer) {
+               IRadientMaterialWriter&          Writer) {
                 RadientMaterialParameterHandle BaseColorHandle;
                 RADIENT_STATUS                 Status = Definition.FindParameter(RadientStandardMaterialBaseColorFactorName,
                                                                  &BaseColorHandle);
@@ -539,12 +539,11 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pMaterialInstance;
-    ASSERT_EQ(CreateStandardMaterialInstance(*pAssetManager,
-                                             {},
-                                             pMaterialInstance.GetAddressOfEmpty()),
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pSourceMaterialDefinition;
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(
+                  {}, pSourceMaterialDefinition.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
-    ASSERT_NE(pMaterialInstance, nullptr);
+    ASSERT_NE(pSourceMaterialDefinition, nullptr);
 
     EXPECT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
     RefCntAutoPtr<IRadientMeshAsset>               pMesh;
@@ -557,7 +556,7 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
               RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMaterialDefinition, nullptr);
 
-    EXPECT_EQ(pAssetManager->CreateMaterial(pMaterialInstance, pMaterial.GetAddressOfEmpty()),
+    EXPECT_EQ(pAssetManager->CreateMaterial(pSourceMaterialDefinition, pMaterial.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMaterial, nullptr);
 
