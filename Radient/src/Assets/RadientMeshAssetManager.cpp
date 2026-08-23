@@ -32,7 +32,6 @@
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientCacheKeyBuilder.hpp"
-#include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"

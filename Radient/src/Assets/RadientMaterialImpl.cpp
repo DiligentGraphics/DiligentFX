@@ -32,6 +32,7 @@
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
+#include "GLTFLoader.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
@@ -710,10 +711,10 @@ public:
     explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc,
                                         const PackedMaterialInstanceData*    pSource = nullptr);
 
-    PackedMaterialInstanceData(const PackedMaterialInstanceData&)            = delete;
+    PackedMaterialInstanceData(const PackedMaterialInstanceData&) = delete;
     PackedMaterialInstanceData& operator=(const PackedMaterialInstanceData&) = delete;
     PackedMaterialInstanceData(PackedMaterialInstanceData&&)                 = delete;
-    PackedMaterialInstanceData& operator=(PackedMaterialInstanceData&&)      = delete;
+    PackedMaterialInstanceData& operator=(PackedMaterialInstanceData&&) = delete;
 
     ~PackedMaterialInstanceData()
     {

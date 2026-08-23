@@ -27,11 +27,11 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
-#include "Assets/RadientDrawableMeshConverter.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
+#include "GLTFLoader.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
@@ -85,6 +85,35 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
     return Status == RADIENT_STATUS_OK ? pMaterial : RefCntAutoPtr<IRadientMaterialAsset>{};
 }
 
+RADIENT_STATUS BuildTestDrawableMeshPrimitives(
+    const GLTF::Model&                         Model,
+    std::vector<RadientDrawableMeshPrimitive>& DrawablePrimitives)
+{
+    DrawablePrimitives.clear();
+    if (Model.Meshes.empty())
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const std::vector<GLTF::Primitive>& Primitives = Model.Meshes[0].Primitives;
+    DrawablePrimitives.reserve(Primitives.size());
+    for (const GLTF::Primitive& Primitive : Primitives)
+    {
+        if (Primitive.MaterialId >= Model.Materials.size())
+            continue;
+
+        const bool   IsIndexed    = Primitive.HasIndices();
+        const Uint32 FirstElement = IsIndexed ? Primitive.FirstIndex : Primitive.FirstVertex;
+        const Uint32 ElementCount = IsIndexed ? Primitive.IndexCount : Primitive.VertexCount;
+        DrawablePrimitives.push_back(RadientDrawableMeshPrimitive{
+            nullptr,
+            0,
+            IsIndexed,
+            FirstElement,
+            ElementCount});
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
 class TestDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
 public:
@@ -118,11 +147,7 @@ public:
             BaseVertex});
 
         const RADIENT_STATUS ConvertStatus =
-            !Model.Meshes.empty() ?
-            ConvertGLTFDrawableMeshPrimitives(Model.Meshes[0].Primitives,
-                                              Model.Materials,
-                                              Data.Mesh.Primitives) :
-            RADIENT_STATUS_INVALID_ARGUMENT;
+            BuildTestDrawableMeshPrimitives(Model, Data.Mesh.Primitives);
         if (RADIENT_FAILED(ConvertStatus))
         {
             ADD_FAILURE() << "Registered mesh data must reference a valid model";

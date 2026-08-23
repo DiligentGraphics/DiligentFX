@@ -7,7 +7,6 @@ set(SOURCE
     src/Assets/RadientAssetResolver.cpp
     src/Assets/RadientAssetValidation.cpp
     src/Assets/RadientCacheKeyBuilder.cpp
-    src/Assets/RadientDrawableMeshConverter.cpp
     src/Assets/RadientFilesystemAssetResolver.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
@@ -61,7 +60,6 @@ set(INCLUDE
     include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientCacheKeyBuilder.hpp
-    include/Assets/RadientDrawableMeshConverter.hpp
     include/Assets/RadientFilesystemAssetResolver.hpp
     include/Assets/RadientGLTFLoader.hpp
     include/Assets/RadientMaterialAssetManager.hpp

@@ -178,11 +178,6 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
 namespace RadientGLTFConverter
 {
 
-const char* GetStandardMaterialTextureParameterName(Uint32 TextureAttribId) noexcept
-{
-    return StandardMaterialTextureSemantics[TextureAttribId].TextureParameterName;
-}
-
 RADIENT_STATUS ConvertMaterialDefinition(
     const GLTF::Material&                        Material,
     RadientStandardMaterialDefinitionCreateInfo& DefinitionCI)

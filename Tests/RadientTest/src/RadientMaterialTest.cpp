@@ -30,6 +30,7 @@
 #include "Assets/RadientMaterialImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
+#include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"

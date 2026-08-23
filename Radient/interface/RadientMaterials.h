@@ -147,7 +147,7 @@ DILIGENT_TYPED_ENUM(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE, Uint32)
 /// definition. A renderer uses it to select compatible shader logic.
 DILIGENT_TYPED_ENUM(RADIENT_SURFACE_SHADING_MODEL, Uint8)
 {
-    /// glTF metallic-roughness physically based material.
+    /// Metallic-roughness physically based material.
     RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS = 0,
 
     /// Unlit material whose output is the base color.

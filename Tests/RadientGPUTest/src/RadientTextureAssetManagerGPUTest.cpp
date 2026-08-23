@@ -64,13 +64,8 @@ void VerifyUploadedTextureData(IDeviceContext&           Context,
     ITexture* pUploadedTexture = pTextureSRV->GetTexture();
     ASSERT_NE(pUploadedTexture, nullptr);
 
-    GLTF::Material::TextureShaderAttribs TextureAttribs;
-    ASSERT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(&Texture, TextureAttribs));
-
     RadientTextureSamplingInfo SamplingInfo;
     ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(&Texture, SamplingInfo));
-    EXPECT_EQ(SamplingInfo.UVScaleBias, TextureAttribs.AtlasUVScaleAndBias);
-    EXPECT_EQ(SamplingInfo.TextureSlice, TextureAttribs.TextureSlice);
     EXPECT_EQ(SamplingInfo.Width, ExpectedData.Width);
     EXPECT_EQ(SamplingInfo.Height, ExpectedData.Height);
 
@@ -106,9 +101,9 @@ void VerifyUploadedTextureData(IDeviceContext&           Context,
     EXPECT_EQ(SamplingInfo.MipLevels,
               std::min(UploadedDesc.MipLevels,
                        ComputeMipLevelsCount(ExpectedData.Width, ExpectedData.Height)));
-    const Uint32 SrcX     = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.z * static_cast<float>(UploadedDesc.Width) + 0.5f);
-    const Uint32 SrcY     = static_cast<Uint32>(TextureAttribs.AtlasUVScaleAndBias.w * static_cast<float>(UploadedDesc.Height) + 0.5f);
-    const Uint32 SrcSlice = static_cast<Uint32>(TextureAttribs.TextureSlice + 0.5f);
+    const Uint32 SrcX     = static_cast<Uint32>(SamplingInfo.UVScaleBias.z * static_cast<float>(UploadedDesc.Width) + 0.5f);
+    const Uint32 SrcY     = static_cast<Uint32>(SamplingInfo.UVScaleBias.w * static_cast<float>(UploadedDesc.Height) + 0.5f);
+    const Uint32 SrcSlice = static_cast<Uint32>(SamplingInfo.TextureSlice + 0.5f);
 
     ASSERT_GE(UploadedDesc.Width, SrcX + ExpectedData.Width);
     ASSERT_GE(UploadedDesc.Height, SrcY + ExpectedData.Height);
@@ -143,18 +138,13 @@ void VerifyUploadedStandaloneTextureData(IDeviceContext&           Context,
     ITexture* pUploadedTexture = pTextureSRV->GetTexture();
     ASSERT_NE(pUploadedTexture, nullptr);
 
-    GLTF::Material::TextureShaderAttribs TextureAttribs;
-    EXPECT_TRUE(RadientTextureAssetManager::ApplyTextureAtlasAttribs(&Texture, TextureAttribs));
-    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.x, 1.f);
-    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.y, 1.f);
-    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.z, 0.f);
-    EXPECT_FLOAT_EQ(TextureAttribs.AtlasUVScaleAndBias.w, 0.f);
-    EXPECT_FLOAT_EQ(TextureAttribs.TextureSlice, 0.f);
-
     RadientTextureSamplingInfo SamplingInfo;
     ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(&Texture, SamplingInfo));
-    EXPECT_EQ(SamplingInfo.UVScaleBias, TextureAttribs.AtlasUVScaleAndBias);
-    EXPECT_EQ(SamplingInfo.TextureSlice, TextureAttribs.TextureSlice);
+    EXPECT_FLOAT_EQ(SamplingInfo.UVScaleBias.x, 1.f);
+    EXPECT_FLOAT_EQ(SamplingInfo.UVScaleBias.y, 1.f);
+    EXPECT_FLOAT_EQ(SamplingInfo.UVScaleBias.z, 0.f);
+    EXPECT_FLOAT_EQ(SamplingInfo.UVScaleBias.w, 0.f);
+    EXPECT_FLOAT_EQ(SamplingInfo.TextureSlice, 0.f);
     EXPECT_EQ(SamplingInfo.Width, ExpectedData.Width);
     EXPECT_EQ(SamplingInfo.Height, ExpectedData.Height);
 

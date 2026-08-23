@@ -27,7 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
-#include "GLTFLoader.hpp"
+#include "BasicMath.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "RadientAssetCache.hpp"
 
@@ -182,12 +182,6 @@ public:
     static RADIENT_STATUS GetGPUResourceStatus(IRadientAsset* pTextureAsset);
 
     static const TexturePayloadImpl* GetTexturePayload(IRadientTextureAsset* pTextureAsset);
-
-    // Sets atlas texture coordinates. Returns true when the texture storage
-    // placement is known and the values were set, or false if storage has not
-    // been created yet. This does not imply that texture data has been uploaded.
-    static bool ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
-                                         GLTF::Material::TextureShaderAttribs& Attribs);
 
 private:
     explicit RadientTextureAssetManager(const CreateInfo& CI) noexcept;

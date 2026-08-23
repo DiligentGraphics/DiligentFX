@@ -27,6 +27,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientGPUTestHelpers.hpp"
 #include "RadientMaterialTestHelpers.hpp"

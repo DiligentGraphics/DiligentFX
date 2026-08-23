@@ -268,25 +268,6 @@ public:
         return true;
     }
 
-    bool GetTextureAtlasAttribs(GLTF::Material::TextureShaderAttribs& Attribs) const noexcept
-    {
-        if (!m_TextureAttribsInitialized.load(std::memory_order_acquire))
-        {
-            Attribs.AtlasUVScaleAndBias = float4{};
-            Attribs.TextureSlice        = 0;
-            return false;
-        }
-
-        Attribs.AtlasUVScaleAndBias = float4{
-            m_AtlasUVScaleX.load(std::memory_order_relaxed),
-            m_AtlasUVScaleY.load(std::memory_order_relaxed),
-            m_AtlasUVBiasX.load(std::memory_order_relaxed),
-            m_AtlasUVBiasY.load(std::memory_order_relaxed),
-        };
-        Attribs.TextureSlice = m_TextureSlice.load(std::memory_order_relaxed);
-        return true;
-    }
-
     void BeginSubresourceUploads(Uint32 SubresourceUploadCount) noexcept
     {
         m_PendingSubresourceUploads.store(SubresourceUploadCount, std::memory_order_release);
@@ -852,15 +833,6 @@ const TexturePayloadImpl* RadientTextureAssetManager::GetTexturePayload(IRadient
 {
     RefCntAutoPtr<TextureAssetImpl> pImpl = TextureAssetImpl::ResolveAsset(pTextureAsset);
     return pImpl ? pImpl->GetPayload().RawPtr() : nullptr;
-}
-
-bool RadientTextureAssetManager::ApplyTextureAtlasAttribs(IRadientTextureAsset*                 pTexture,
-                                                          GLTF::Material::TextureShaderAttribs& Attribs)
-{
-    if (RefCntAutoPtr<TextureAssetImpl> pImpl = TextureAssetImpl::ResolveAsset(pTexture))
-        return pImpl->GetStorage().GetTextureAtlasAttribs(Attribs);
-
-    return false;
 }
 
 RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::ResourceManager& ResourceManager,
