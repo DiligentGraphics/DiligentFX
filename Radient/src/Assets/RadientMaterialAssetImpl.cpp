@@ -702,16 +702,16 @@ RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeGenericMaterialA
 }
 
 RadientMaterialDetail::MaterialStorage* RadientMaterialDetail::TryGetMaterialStorage(
-    IRadientMaterialAsset* pMaterial) noexcept
+    IRadientAsset* pAsset) noexcept
 {
-    RefCntAutoPtr<IMaterialStorageProvider> pStorageProvider{pMaterial, IID_MaterialStorageProvider};
+    RefCntAutoPtr<IMaterialStorageProvider> pStorageProvider{pAsset, IID_MaterialStorageProvider};
     return pStorageProvider != nullptr ? &pStorageProvider->GetStorage() : nullptr;
 }
 
 const RadientMaterialDetail::MaterialStorage* RadientMaterialDetail::TryGetMaterialStorage(
-    const IRadientMaterialAsset* pMaterial) noexcept
+    const IRadientAsset* pAsset) noexcept
 {
-    return TryGetMaterialStorage(const_cast<IRadientMaterialAsset*>(pMaterial));
+    return TryGetMaterialStorage(const_cast<IRadientAsset*>(pAsset));
 }
 
 } // namespace Diligent

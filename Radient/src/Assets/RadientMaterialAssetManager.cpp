@@ -132,17 +132,15 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)
 {
-    RefCntAutoPtr<IRadientMaterialAsset>                pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
     const RadientMaterialDetail::MaterialStorage* const pStorage =
-        RadientMaterialDetail::TryGetMaterialStorage(pMaterialAsset);
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterial);
     return pStorage != nullptr ? pStorage->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetGPUResourceStatus(IRadientAsset* pMaterial)
 {
-    RefCntAutoPtr<IRadientMaterialAsset>                pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
     const RadientMaterialDetail::MaterialStorage* const pStorage =
-        RadientMaterialDetail::TryGetMaterialStorage(pMaterialAsset);
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterial);
     return pStorage != nullptr ? pStorage->GetGPUResourceStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 

@@ -179,8 +179,8 @@ private:
     std::vector<PackedMaterialData::TexturePtr> m_TextureData;
 };
 
-MaterialStorage*       TryGetMaterialStorage(IRadientMaterialAsset* pMaterial) noexcept;
-const MaterialStorage* TryGetMaterialStorage(const IRadientMaterialAsset* pMaterial) noexcept;
+MaterialStorage*       TryGetMaterialStorage(IRadientAsset* pAsset) noexcept;
+const MaterialStorage* TryGetMaterialStorage(const IRadientAsset* pAsset) noexcept;
 
 } // namespace RadientMaterialDetail
 
