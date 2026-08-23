@@ -374,6 +374,168 @@ TEST(RadientStandardMaterialTest, InstancesUseDefinitionTextureDefaults)
     }
 }
 
+TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
+{
+    RefCntAutoPtr<IRadientTextureAsset> pDefaultTexture = MakeTestTextureAsset("texture://default");
+    RefCntAutoPtr<IRadientTextureAsset> pUpdatedTexture = MakeTestTextureAsset("texture://updated");
+
+    const RadientStandardMaterialTextureParameters NoTextureParameters;
+    EXPECT_EQ(NoTextureParameters.pTexture, nullptr);
+    EXPECT_EQ(NoTextureParameters.UVSelector, -1);
+
+    const RadientStandardMaterialTextureParameters TextureParameters{pUpdatedTexture};
+    EXPECT_EQ(TextureParameters.pTexture, pUpdatedTexture);
+    EXPECT_EQ(TextureParameters.UVSelector, 0);
+
+    const RadientStandardMaterialTextureParameters NullTextureParameters{nullptr};
+    EXPECT_EQ(NullTextureParameters.pTexture, nullptr);
+    EXPECT_EQ(NullTextureParameters.UVSelector, -1);
+
+    RadientMaterialAssetManager::CreateInfo ManagerCI;
+    ManagerCI.DefaultTextures.pWhite = pDefaultTexture;
+
+    const RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create(ManagerCI);
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    ASSERT_EQ(pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    static constexpr std::array<const RadientStandardMaterialTextureParameterNames*, 15> TextureSemantics{{
+        &RadientStandardMaterialBaseColorTextureParameterNames,
+        &RadientStandardMaterialMetallicRoughnessTextureParameterNames,
+        &RadientStandardMaterialNormalTextureParameterNames,
+        &RadientStandardMaterialOcclusionTextureParameterNames,
+        &RadientStandardMaterialEmissiveTextureParameterNames,
+        &RadientStandardMaterialClearCoatTextureParameterNames,
+        &RadientStandardMaterialClearCoatRoughnessTextureParameterNames,
+        &RadientStandardMaterialClearCoatNormalTextureParameterNames,
+        &RadientStandardMaterialSheenColorTextureParameterNames,
+        &RadientStandardMaterialSheenRoughnessTextureParameterNames,
+        &RadientStandardMaterialAnisotropyTextureParameterNames,
+        &RadientStandardMaterialIridescenceTextureParameterNames,
+        &RadientStandardMaterialIridescenceThicknessTextureParameterNames,
+        &RadientStandardMaterialTransmissionTextureParameterNames,
+        &RadientStandardMaterialThicknessTextureParameterNames,
+    }};
+
+    for (const RadientStandardMaterialTextureParameterNames* pNames : TextureSemantics)
+    {
+        const Char* ParameterNames[] = {
+            pNames->Texture,
+            pNames->UVSelector,
+            pNames->UVScaleAndRotation,
+            pNames->UVBias,
+            pNames->WrapU,
+            pNames->WrapV,
+        };
+        for (const Char* Name : ParameterNames)
+        {
+            RadientMaterialParameterHandle Handle;
+            EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK) << Name;
+        }
+    }
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientStandardMaterialTextureParameters Parameters{pUpdatedTexture};
+    Parameters.UVSelector         = 3;
+    Parameters.UVScaleAndRotation = {{2.f, 0.1f, 0.2f, 3.f}};
+    Parameters.UVBias             = {0.25f, 0.5f};
+    Parameters.WrapU              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    Parameters.WrapV              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+
+    EXPECT_EQ(SetStandardMaterialTextureParameters(
+                  *pDefinition,
+                  *pWriter,
+                  RadientStandardMaterialBaseColorTextureParameterNames,
+                  Parameters),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(SetStandardMaterialTextureParameters(
+                  *pDefinition,
+                  *pWriter,
+                  RadientStandardMaterialBaseColorTextureParameterNames,
+                  Parameters),
+              RADIENT_STATUS_NO_CHANGE);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    const auto FindHandle = [&](const Char* Name) {
+        RadientMaterialParameterHandle Handle;
+        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK) << Name;
+        return Handle;
+    };
+
+    const RadientStandardMaterialTextureParameterNames& Names =
+        RadientStandardMaterialBaseColorTextureParameterNames;
+    const RadientMaterialParameterHandle TextureHandle = FindHandle(Names.Texture);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pUpdatedTexture);
+    EXPECT_EQ(GetParameter<Int32>(*pInstance, FindHandle(Names.UVSelector)), Parameters.UVSelector);
+    EXPECT_EQ((GetParameter<std::array<Float32, 4>>(*pInstance, FindHandle(Names.UVScaleAndRotation))),
+              Parameters.UVScaleAndRotation);
+
+    const RadientFloat2 UVBias = GetParameter<RadientFloat2>(*pInstance, FindHandle(Names.UVBias));
+    EXPECT_FLOAT_EQ(UVBias.x, Parameters.UVBias.x);
+    EXPECT_FLOAT_EQ(UVBias.y, Parameters.UVBias.y);
+    EXPECT_EQ(GetParameter<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(*pInstance, FindHandle(Names.WrapU)),
+              Parameters.WrapU);
+    EXPECT_EQ(GetParameter<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(*pInstance, FindHandle(Names.WrapV)),
+              Parameters.WrapV);
+
+    EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, Names, Parameters),
+              RADIENT_STATUS_NO_CHANGE);
+
+    Parameters.pTexture = nullptr;
+    EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, Names, Parameters),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    pStoredTexture.Release();
+    ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pDefaultTexture);
+
+    const Uint64                                 VersionBeforeInvalidUpdate = pInstance->GetVersion();
+    RadientStandardMaterialTextureParameterNames InvalidNames               = Names;
+    InvalidNames.WrapV                                                      = "MissingTextureWrapV";
+    Parameters.pTexture                                                     = pUpdatedTexture;
+    Parameters.UVSelector                                                   = 7;
+    EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, InvalidNames, Parameters),
+              RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pInstance->GetVersion(), VersionBeforeInvalidUpdate);
+
+    EXPECT_EQ(GetParameter<Int32>(*pInstance, FindHandle(Names.UVSelector)), 3);
+    pStoredTexture.Release();
+    ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pDefaultTexture);
+
+    RadientStandardMaterialTextureParameterNames InvalidTypes = Names;
+    InvalidTypes.WrapV                                        = RadientStandardMaterialBaseColorFactorName;
+    EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, InvalidTypes, Parameters),
+              RADIENT_STATUS_INVALID_DATA);
+    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pInstance->GetVersion(), VersionBeforeInvalidUpdate);
+
+    EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, Names, NoTextureParameters),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetParameter<Int32>(*pInstance, FindHandle(Names.UVSelector)), -1);
+    pStoredTexture.Release();
+    ASSERT_EQ(pInstance->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, pDefaultTexture);
+}
+
 TEST(RadientStandardMaterialTest, ExtendedPBRShaderDataMatchesGLTFPacking)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});

@@ -80,7 +80,7 @@ RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinition&     Definition,
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
-    return Writer.SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+    return Writer.SetParameter(Handle, Value);
 }
 
 RADIENT_STATUS CreateStandardMaterialAsset(IRadientAssetManager&         AssetManager,
@@ -108,17 +108,11 @@ RADIENT_STATUS CreateStandardMaterialAsset(IRadientAssetManager&         AssetMa
 
             if (Values.pBaseColorTexture != nullptr)
             {
-                RadientMaterialParameterHandle TextureHandle;
-                Status = Definition.FindParameter(RadientStandardMaterialBaseColorTextureName, &TextureHandle);
-                if (Status != RADIENT_STATUS_OK)
-                    return Status;
-
-                Status = Writer.SetTexture(TextureHandle, 0, Values.pBaseColorTexture);
-                if (RADIENT_FAILED(Status))
-                    return Status;
-
-                static constexpr Int32 UVSelector = 0;
-                Status                            = SetParameter(RadientStandardMaterialBaseColorTextureUVSelectorName, UVSelector);
+                Status = SetStandardMaterialTextureParameters(
+                    Definition,
+                    Writer,
+                    RadientStandardMaterialBaseColorTextureParameterNames,
+                    RadientStandardMaterialTextureParameters{Values.pBaseColorTexture});
             }
 
             return Status;

@@ -138,9 +138,7 @@ RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& As
                     return Status;
 
                 const RadientFloat4 BaseColorFactor{1.f, 0.f, 0.f, 1.f};
-                Status = Writer.SetParameter(BaseColorHandle,
-                                             &BaseColorFactor,
-                                             static_cast<Uint32>(sizeof(BaseColorFactor)));
+                Status = Writer.SetParameter(BaseColorHandle, BaseColorFactor);
                 EXPECT_EQ(Status, RADIENT_STATUS_OK);
                 return Status;
             },

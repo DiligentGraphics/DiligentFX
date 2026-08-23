@@ -35,6 +35,12 @@
 
 #include "../../../DiligentCore/Primitives/interface/BasicTypes.h"
 
+#if DILIGENT_CPP_INTERFACE
+#    include "RadientMaterials.h"
+
+#    include <array>
+#endif
+
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 /// Revision of the generated standard-material schema.
@@ -145,7 +151,8 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationDistanceName[] 
 
 /// Every declared texture semantic has the following six parameters:
 ///
-/// - `Texture`: TEXTURE, default null.
+/// - `Texture`: TEXTURE, with a definition-provided semantic fallback that may
+///   be null.
 /// - `TextureUVSelector`: INT texture-coordinate set index. Non-negative values
 ///   enable sampling from the selected UV set; -1 disables sampling. The default
 ///   is -1.
@@ -365,5 +372,165 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVBiasName
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureWrapUName[] = "ThicknessTextureWrapU";
 /// Name of the thickness texture UINT V address mode.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureWrapVName[] = "ThicknessTextureWrapV";
+
+#if DILIGENT_CPP_INTERFACE
+
+/// Canonical names of the six parameters that define one standard-material
+/// texture semantic.
+struct RadientStandardMaterialTextureParameterNames
+{
+    const Char* Texture            = nullptr;
+    const Char* UVSelector         = nullptr;
+    const Char* UVScaleAndRotation = nullptr;
+    const Char* UVBias             = nullptr;
+    const Char* WrapU              = nullptr;
+    const Char* WrapV              = nullptr;
+};
+
+/// Values of the six parameters that define one standard-material texture
+/// semantic. Constructing the values with a texture selects UV set 0 by default;
+/// constructing them without a texture disables sampling by setting UVSelector
+/// to -1. SetStandardMaterialTextureParameters uses the definition-provided
+/// fallback texture when pTexture is null.
+struct RadientStandardMaterialTextureParameters
+{
+    RadientStandardMaterialTextureParameters() noexcept = default;
+
+    explicit RadientStandardMaterialTextureParameters(IRadientTextureAsset* pTexture_) noexcept :
+        pTexture{pTexture_},
+        UVSelector{pTexture_ != nullptr ? 0 : -1}
+    {}
+
+    IRadientTextureAsset*                 pTexture   = nullptr;
+    Int32                                 UVSelector = -1;
+    std::array<Float32, 4>                UVScaleAndRotation{{1.f, 0.f, 0.f, 1.f}};
+    RadientFloat2                         UVBias{};
+    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE WrapU = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+    RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE WrapV = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+};
+
+#    define RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Name)            \
+        static DILIGENT_CONSTEXPR RadientStandardMaterialTextureParameterNames \
+            RadientStandardMaterial##Name##TextureParameterNames               \
+        {                                                                      \
+            RadientStandardMaterial##Name##TextureName,                        \
+                RadientStandardMaterial##Name##TextureUVSelectorName,          \
+                RadientStandardMaterial##Name##TextureUVScaleAndRotationName,  \
+                RadientStandardMaterial##Name##TextureUVBiasName,              \
+                RadientStandardMaterial##Name##TextureWrapUName,               \
+                RadientStandardMaterial##Name##TextureWrapVName                \
+        }
+
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(BaseColor);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(MetallicRoughness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Normal);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Occlusion);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Emissive);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(ClearCoat);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(ClearCoatRoughness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(ClearCoatNormal);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SheenColor);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SheenRoughness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Anisotropy);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Iridescence);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(IridescenceThickness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Transmission);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Thickness);
+
+#    undef RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES
+
+/// Sets all six parameters of one standard-material texture semantic on Writer.
+/// The function resolves every parameter before recording any change. It returns
+/// RADIENT_STATUS_OK when at least one value changed and
+/// RADIENT_STATUS_NO_CHANGE when every value was already equal. When
+/// Parameters.pTexture is null, the texture is reset to the definition-provided
+/// fallback. If a writer setter fails, earlier changes remain pending; retry the
+/// operation with the same writer or discard that writer without committing it.
+inline RADIENT_STATUS SetStandardMaterialTextureParameters(
+    const IRadientMaterialDefinition&                   Definition,
+    IRadientMaterialInstanceWriter&                     Writer,
+    const RadientStandardMaterialTextureParameterNames& Names,
+    const RadientStandardMaterialTextureParameters&     Parameters)
+{
+    RadientMaterialParameterHandle Texture;
+    RadientMaterialParameterHandle UVSelector;
+    RadientMaterialParameterHandle UVScaleAndRotation;
+    RadientMaterialParameterHandle UVBias;
+    RadientMaterialParameterHandle WrapU;
+    RadientMaterialParameterHandle WrapV;
+
+    RADIENT_STATUS Status = Definition.FindParameter(Names.Texture, &Texture);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVSelector, &UVSelector);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVScaleAndRotation, &UVScaleAndRotation);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVBias, &UVBias);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.WrapU, &WrapU);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.WrapV, &WrapV);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    const auto HasExpectedType = [&](RadientMaterialParameterHandle  Handle,
+                                     RADIENT_MATERIAL_PARAMETER_TYPE Type) {
+        const RadientMaterialParameterDesc& Desc = Definition.GetParameterDesc(Handle.Index);
+        return Desc.Type == Type && Desc.ArraySize == 1;
+    };
+    if (!HasExpectedType(Texture, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE) ||
+        !HasExpectedType(UVSelector, RADIENT_MATERIAL_PARAMETER_TYPE_INT) ||
+        !HasExpectedType(UVScaleAndRotation, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2) ||
+        !HasExpectedType(UVBias, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
+        !HasExpectedType(WrapU, RADIENT_MATERIAL_PARAMETER_TYPE_UINT) ||
+        !HasExpectedType(WrapV, RADIENT_MATERIAL_PARAMETER_TYPE_UINT))
+    {
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    bool Changed = false;
+
+    IRadientTextureAsset* const pTexture = Parameters.pTexture != nullptr ?
+        Parameters.pTexture :
+        Definition.GetParameterDesc(Texture.Index).pDefaultTexture;
+    Status = Writer.SetTexture(Texture, 0, pTexture);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVSelector, Parameters.UVSelector);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVScaleAndRotation, Parameters.UVScaleAndRotation);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVBias, Parameters.UVBias);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(WrapU, Parameters.WrapU);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(WrapV, Parameters.WrapV);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
+}
+
+#endif // DILIGENT_CPP_INTERFACE
 
 DILIGENT_END_NAMESPACE // Diligent

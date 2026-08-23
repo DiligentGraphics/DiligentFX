@@ -40,26 +40,16 @@ namespace
 
 struct StandardMaterialTextureSemantic
 {
-    Uint32                                 TextureAttribId;
-    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS RequiredFeature;
-    const char*                            TextureParameterName;
-    const char*                            UVSelectorParameterName;
-    const char*                            UVScaleAndRotationParameterName;
-    const char*                            UVBiasParameterName;
-    const char*                            WrapUParameterName;
-    const char*                            WrapVParameterName;
+    Uint32                                              TextureAttribId;
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS              RequiredFeature;
+    const RadientStandardMaterialTextureParameterNames* pParameterNames;
 };
 
 #define SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, GLTFName, Name, FeatureFlag)    \
     Semantics[GLTF::Default##GLTFName##TextureAttribId] = StandardMaterialTextureSemantic \
     {                                                                                     \
         GLTF::Default##GLTFName##TextureAttribId, FeatureFlag,                            \
-            RadientStandardMaterial##Name##TextureName,                                   \
-            RadientStandardMaterial##Name##TextureUVSelectorName,                         \
-            RadientStandardMaterial##Name##TextureUVScaleAndRotationName,                 \
-            RadientStandardMaterial##Name##TextureUVBiasName,                             \
-            RadientStandardMaterial##Name##TextureWrapUName,                              \
-            RadientStandardMaterial##Name##TextureWrapVName                               \
+            &RadientStandardMaterial##Name##TextureParameterNames                         \
     }
 
 constexpr auto MakeStandardMaterialTextureSemantics() noexcept
@@ -92,7 +82,7 @@ constexpr bool IsStandardMaterialTextureSemanticTableComplete() noexcept
 {
     for (const StandardMaterialTextureSemantic& Semantic : StandardMaterialTextureSemantics)
     {
-        if (Semantic.TextureParameterName == nullptr)
+        if (Semantic.pParameterNames == nullptr)
             return false;
     }
     return true;
@@ -111,25 +101,15 @@ bool HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features,
         (Features & Feature) != RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
 }
 
+template <typename ValueType>
 RADIENT_STATUS SetParameter(IRadientMaterialDefinition&     Definition,
                             IRadientMaterialInstanceWriter& Writer,
                             const char*                     Name,
-                            const void*                     pData,
-                            Uint32                          Size)
+                            const ValueType&                Value)
 {
     RadientMaterialParameterHandle Handle;
     const RADIENT_STATUS           FindStatus = Definition.FindParameter(Name, &Handle);
-    return FindStatus == RADIENT_STATUS_OK ? Writer.SetParameter(Handle, pData, Size) : FindStatus;
-}
-
-RADIENT_STATUS SetTexture(IRadientMaterialDefinition&     Definition,
-                          IRadientMaterialInstanceWriter& Writer,
-                          const char*                     Name,
-                          IRadientTextureAsset*           pTexture)
-{
-    RadientMaterialParameterHandle Handle;
-    const RADIENT_STATUS           FindStatus = Definition.FindParameter(Name, &Handle);
-    return FindStatus == RADIENT_STATUS_OK ? Writer.SetTexture(Handle, 0, pTexture) : FindStatus;
+    return FindStatus == RADIENT_STATUS_OK ? Writer.SetParameter(Handle, Value) : FindStatus;
 }
 
 IRadientTextureAsset* GetTexture(const GLTF::Material&        Material,
@@ -145,32 +125,27 @@ IRadientTextureAsset* GetTexture(const GLTF::Material&        Material,
 
 RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                  Material,
                                            const StandardMaterialTextureSemantic& Semantic,
+                                           IRadientTextureAsset*                  pTexture,
                                            IRadientMaterialDefinition&            Definition,
                                            IRadientMaterialInstanceWriter&        Writer)
 {
     // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
     // are intentionally not part of the imported material instance.
     const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
-    const Int32                                 UVSelector     = TextureAttribs.GetUVSelector();
-    const RadientFloat2                         UVBias{TextureAttribs.UBias, TextureAttribs.VBias};
-    const auto                                  WrapU = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapUMode());
-    const auto                                  WrapV = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapVMode());
+    RadientStandardMaterialTextureParameters    Parameters{pTexture};
+    Parameters.UVSelector         = TextureAttribs.GetUVSelector();
+    Parameters.UVScaleAndRotation = {{
+        TextureAttribs.UVScaleAndRotation._11,
+        TextureAttribs.UVScaleAndRotation._12,
+        TextureAttribs.UVScaleAndRotation._21,
+        TextureAttribs.UVScaleAndRotation._22,
+    }};
+    Parameters.UVBias             = {TextureAttribs.UBias, TextureAttribs.VBias};
+    Parameters.WrapU              = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapUMode());
+    Parameters.WrapV              = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapVMode());
 
-    RADIENT_STATUS Status = SetParameter(Definition, Writer, Semantic.UVSelectorParameterName,
-                                         &UVSelector, static_cast<Uint32>(sizeof(UVSelector)));
-    if (RADIENT_SUCCEEDED(Status))
-        Status = SetParameter(Definition, Writer, Semantic.UVScaleAndRotationParameterName,
-                              &TextureAttribs.UVScaleAndRotation, static_cast<Uint32>(sizeof(TextureAttribs.UVScaleAndRotation)));
-    if (RADIENT_SUCCEEDED(Status))
-        Status = SetParameter(Definition, Writer, Semantic.UVBiasParameterName,
-                              &UVBias, static_cast<Uint32>(sizeof(UVBias)));
-    if (RADIENT_SUCCEEDED(Status))
-        Status = SetParameter(Definition, Writer, Semantic.WrapUParameterName,
-                              &WrapU, static_cast<Uint32>(sizeof(WrapU)));
-    if (RADIENT_SUCCEEDED(Status))
-        Status = SetParameter(Definition, Writer, Semantic.WrapVParameterName,
-                              &WrapV, static_cast<Uint32>(sizeof(WrapV)));
-    return Status;
+    return SetStandardMaterialTextureParameters(
+        Definition, Writer, *Semantic.pParameterNames, Parameters);
 }
 
 } // namespace
@@ -268,7 +243,7 @@ RADIENT_STATUS PopulateMaterialInstance(
         [&](const char* Name, const auto& Value) //
     {
         if (RADIENT_SUCCEEDED(Status))
-            Status = SetParameter(Definition, Writer, Name, &Value, static_cast<Uint32>(sizeof(Value)));
+            Status = SetParameter(Definition, Writer, Name, Value);
     };
 
     const RadientFloat4 BaseColorFactor{
@@ -352,16 +327,9 @@ RADIENT_STATUS PopulateMaterialInstance(
         if (!HasFeature(DefinitionCI.Features, Semantic.RequiredFeature))
             continue;
 
-        Status = SetTextureBindingParameters(Material, Semantic, Definition, Writer);
-        if (RADIENT_FAILED(Status))
-            return Status;
-
         IRadientTextureAsset* pTexture =
             GetTexture(Material, Semantic.TextureAttribId, ppTextures, TextureCount);
-        if (pTexture == nullptr)
-            continue;
-
-        Status = SetTexture(Definition, Writer, Semantic.TextureParameterName, pTexture);
+        Status = SetTextureBindingParameters(Material, Semantic, pTexture, Definition, Writer);
         if (RADIENT_FAILED(Status))
             return Status;
     }

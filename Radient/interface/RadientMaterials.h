@@ -34,6 +34,10 @@
 #include "../../../DiligentCore/Primitives/interface/FlagEnum.h"
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
+#if DILIGENT_CPP_INTERFACE
+#    include <type_traits>
+#endif
+
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 typedef struct IRadientMaterialDefinition            IRadientMaterialDefinition;
@@ -606,6 +610,21 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialInstanceWriter, IObject)
                                                 RadientMaterialParameterHandle Handle,
                                                 const void*                    pData,
                                                 Uint32                         DataSize) PURE;
+
+#if DILIGENT_CPP_INTERFACE
+    /// Replaces the complete value or value array identified by Handle, inferring
+    /// the native data size from Value.
+    template <typename ValueType>
+    RADIENT_STATUS SetParameter(RadientMaterialParameterHandle Handle,
+                                const ValueType&                Value)
+    {
+        static_assert(std::is_trivially_copyable<ValueType>::value,
+                      "Material parameter values must be trivially copyable");
+        static_assert(!std::is_pointer<ValueType>::value,
+                      "Pass the material parameter value itself, not a pointer");
+        return SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+    }
+#endif
 
     /// Replaces one texture array element identified by Handle and ArrayIndex.
     /// Commit() publishes only modified texture elements, so independent element

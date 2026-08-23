@@ -31,3 +31,25 @@ using namespace Diligent;
 static_assert(RadientStandardMaterialSchemaVersion > 0, "The standard material schema version must be positive");
 static_assert(RadientStandardMaterialBaseColorFactorName[0] == 'B', "Unexpected base-color factor parameter name");
 static_assert(RadientStandardMaterialBaseColorTextureName[0] == 'B', "Unexpected base-color texture parameter name");
+static_assert(RadientStandardMaterialBaseColorTextureParameterNames.Texture[0] == 'B', "Unexpected base-color texture descriptor");
+static_assert(RadientStandardMaterialThicknessTextureParameterNames.Texture[0] == 'T', "Unexpected thickness texture descriptor");
+
+void RadientStandardMaterialParameters_CPP_TestHelpers(
+    const IRadientMaterialDefinition* pDefinition,
+    IRadientMaterialInstanceWriter*   pWriter,
+    IRadientTextureAsset*             pTexture)
+{
+    RadientStandardMaterialTextureParameters Parameters{pTexture};
+    Parameters.UVSelector         = 1;
+    Parameters.UVScaleAndRotation = {{2.f, 0.f, 0.f, 2.f}};
+    Parameters.UVBias             = {0.25f, 0.5f};
+    Parameters.WrapU              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    Parameters.WrapV              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+
+    const RADIENT_STATUS Status = SetStandardMaterialTextureParameters(
+        *pDefinition,
+        *pWriter,
+        RadientStandardMaterialBaseColorTextureParameterNames,
+        Parameters);
+    (void)Status;
+}

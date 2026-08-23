@@ -95,7 +95,7 @@ RADIENT_STATUS SetInstanceParameter(IRadientMaterialDefinition&     Definition,
     RadientMaterialParameterHandle Handle;
     const RADIENT_STATUS           Status = Definition.FindParameter(Name, &Handle);
     return Status == RADIENT_STATUS_OK ?
-        Writer.SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))) :
+        Writer.SetParameter(Handle, Value) :
         Status;
 }
 
@@ -118,56 +118,37 @@ RefCntAutoPtr<IRadientMaterialInstance> CreateTestMaterialInstance(
             RADIENT_STATUS InitializeStatus = pSurfaceWriter->SetAlphaCutoff(Values.AlphaCutoff);
             if (RADIENT_SUCCEEDED(InitializeStatus))
                 InitializeStatus = pSurfaceWriter->SetDoubleSided(Values.DoubleSided);
-
-            struct ParameterValue
-            {
-                const char* Name;
-                const void* pData;
-                Uint32      Size;
-            };
-            const ParameterValue Parameters[] = {
-                {RadientStandardMaterialBaseColorFactorName, &Values.BaseColorFactor, static_cast<Uint32>(sizeof(Values.BaseColorFactor))},
-                {RadientStandardMaterialMetallicFactorName, &Values.MetallicFactor, static_cast<Uint32>(sizeof(Values.MetallicFactor))},
-                {RadientStandardMaterialRoughnessFactorName, &Values.RoughnessFactor, static_cast<Uint32>(sizeof(Values.RoughnessFactor))},
-                {RadientStandardMaterialEmissiveFactorName, &Values.EmissiveFactor, static_cast<Uint32>(sizeof(Values.EmissiveFactor))},
-            };
-            for (const ParameterValue& Parameter : Parameters)
-            {
-                if (RADIENT_FAILED(InitializeStatus))
-                    break;
-
-                RadientMaterialParameterHandle Handle;
-                InitializeStatus = Definition.FindParameter(Parameter.Name, &Handle);
-                if (InitializeStatus == RADIENT_STATUS_OK)
-                    InitializeStatus = Writer.SetParameter(Handle, Parameter.pData, Parameter.Size);
-            }
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = SetInstanceParameter(Definition, Writer, RadientStandardMaterialBaseColorFactorName, Values.BaseColorFactor);
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = SetInstanceParameter(Definition, Writer, RadientStandardMaterialMetallicFactorName, Values.MetallicFactor);
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = SetInstanceParameter(Definition, Writer, RadientStandardMaterialRoughnessFactorName, Values.RoughnessFactor);
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = SetInstanceParameter(Definition, Writer, RadientStandardMaterialEmissiveFactorName, Values.EmissiveFactor);
 
             struct TextureValue
             {
-                const char*           Name;
-                const char*           UVSelectorName;
-                IRadientTextureAsset* pTexture;
+                const RadientStandardMaterialTextureParameterNames* pNames;
+                IRadientTextureAsset*                               pTexture;
             };
             const TextureValue Textures[] = {
-                {RadientStandardMaterialBaseColorTextureName, RadientStandardMaterialBaseColorTextureUVSelectorName, Values.pBaseColorTexture},
-                {RadientStandardMaterialMetallicRoughnessTextureName, RadientStandardMaterialMetallicRoughnessTextureUVSelectorName, Values.pMetallicRoughnessTexture},
-                {RadientStandardMaterialNormalTextureName, RadientStandardMaterialNormalTextureUVSelectorName, Values.pNormalTexture},
-                {RadientStandardMaterialOcclusionTextureName, RadientStandardMaterialOcclusionTextureUVSelectorName, Values.pOcclusionTexture},
-                {RadientStandardMaterialEmissiveTextureName, RadientStandardMaterialEmissiveTextureUVSelectorName, Values.pEmissiveTexture},
+                {&RadientStandardMaterialBaseColorTextureParameterNames, Values.pBaseColorTexture},
+                {&RadientStandardMaterialMetallicRoughnessTextureParameterNames, Values.pMetallicRoughnessTexture},
+                {&RadientStandardMaterialNormalTextureParameterNames, Values.pNormalTexture},
+                {&RadientStandardMaterialOcclusionTextureParameterNames, Values.pOcclusionTexture},
+                {&RadientStandardMaterialEmissiveTextureParameterNames, Values.pEmissiveTexture},
             };
             for (const TextureValue& Texture : Textures)
             {
                 if (RADIENT_FAILED(InitializeStatus) || Texture.pTexture == nullptr)
                     continue;
 
-                RadientMaterialParameterHandle TextureHandle;
-                InitializeStatus = Definition.FindParameter(Texture.Name, &TextureHandle);
-                if (InitializeStatus == RADIENT_STATUS_OK)
-                    InitializeStatus = Writer.SetTexture(TextureHandle, 0, Texture.pTexture);
-
-                static constexpr Int32 UVSelector = 0;
-                if (RADIENT_SUCCEEDED(InitializeStatus))
-                    InitializeStatus = SetInstanceParameter(Definition, Writer, Texture.UVSelectorName, UVSelector);
+                InitializeStatus = SetStandardMaterialTextureParameters(
+                    Definition,
+                    Writer,
+                    *Texture.pNames,
+                    RadientStandardMaterialTextureParameters{Texture.pTexture});
             }
 
             return InitializeStatus;

@@ -367,7 +367,7 @@ TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
 
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ColorHandle, &UpdatedColor, static_cast<Uint32>(sizeof(UpdatedColor))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     DefinitionImpl.WriteShaderData(*pInstance, ShaderData.data());
@@ -513,8 +513,8 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE   UpdatedWrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(UVSelectorHandle, &UpdatedUVSelector, static_cast<Uint32>(sizeof(UpdatedUVSelector))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, &UpdatedWrapU, static_cast<Uint32>(sizeof(UpdatedWrapU))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(UVSelectorHandle, UpdatedUVSelector), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, UpdatedWrapU), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     Expected.SetUVSelector(UpdatedUVSelector);
@@ -526,8 +526,8 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE UpdatedWrapV  = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
     pWriter.Release();
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, &RestoredWrapU, static_cast<Uint32>(sizeof(RestoredWrapU))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(WrapVHandle, &UpdatedWrapV, static_cast<Uint32>(sizeof(UpdatedWrapV))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapUHandle, RestoredWrapU), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(WrapVHandle, UpdatedWrapV), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     Expected.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
@@ -986,7 +986,7 @@ TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
     const RadientFloat4                           UpdatedColor{0.25f, 0.5f, 0.75f, 1.f};
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ColorHandle, &UpdatedColor, static_cast<Uint32>(sizeof(UpdatedColor))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pUpdatedTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
@@ -1005,7 +1005,7 @@ TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     const RadientFloat4 SecondColor{0.75f, 0.5f, 0.25f, 1.f};
-    ASSERT_EQ(pWriter->SetParameter(ColorHandle, &SecondColor, static_cast<Uint32>(sizeof(SecondColor))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, SecondColor), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
     EXPECT_EQ(pInstance->GetVersion(), InitialVersion + 2);
 
@@ -1014,6 +1014,55 @@ TEST(RadientMaterialTest, WriterUpdatesSharedInstance)
     EXPECT_FLOAT_EQ(SecondCommittedColor.y, SecondColor.y);
     EXPECT_FLOAT_EQ(SecondCommittedColor.z, SecondColor.z);
     EXPECT_FLOAT_EQ(SecondCommittedColor.w, SecondColor.w);
+}
+
+TEST(RadientMaterialTest, WriterSetParameterInfersValueSize)
+{
+    static constexpr Uint32 ParameterCount = 4;
+
+    std::array<RadientMaterialParameterDesc, ParameterCount> Parameters{};
+    Parameters[0].Name      = "Enabled";
+    Parameters[0].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_BOOL;
+    Parameters[1].Name      = "Direction";
+    Parameters[1].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3;
+    Parameters[2].Name      = "Transform";
+    Parameters[2].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2;
+    Parameters[3].Name      = "Weights";
+    Parameters[3].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[3].ArraySize = 3;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition =
+        CreateDefinition(Parameters.data(), static_cast<Uint32>(Parameters.size()));
+    ASSERT_NE(pDefinition, nullptr);
+
+    std::array<RadientMaterialParameterHandle, ParameterCount> Handles{};
+    for (Uint32 Index = 0; Index < static_cast<Uint32>(Handles.size()); ++Index)
+        ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handles[Index]), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    const Bool                   UpdatedEnabled = True;
+    const RadientFloat3          UpdatedDirection{1.f, 2.f, 3.f};
+    const Float32                UpdatedTransform[4]{1.f, 2.f, 3.f, 4.f};
+    const std::array<Float32, 3> UpdatedWeights{0.25f, 0.5f, 0.75f};
+
+    EXPECT_EQ(pWriter->SetParameter(Handles[0], UpdatedEnabled), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(Handles[1], UpdatedDirection), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(Handles[2], UpdatedTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(Handles[3], UpdatedWeights), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(GetParameter<Bool>(*pInstance, Handles[0]), UpdatedEnabled);
+    EXPECT_EQ(GetParameter<RadientFloat3>(*pInstance, Handles[1]), UpdatedDirection);
+
+    const std::array<Float32, 4> StoredTransform =
+        GetParameter<std::array<Float32, 4>>(*pInstance, Handles[2]);
+    EXPECT_TRUE(std::equal(StoredTransform.begin(), StoredTransform.end(), UpdatedTransform));
+    EXPECT_EQ((GetParameter<std::array<Float32, 3>>(*pInstance, Handles[3])), UpdatedWeights);
 }
 
 TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
@@ -1058,7 +1107,7 @@ TEST(RadientMaterialTest, InstanceSupportsValueAndTextureArrays)
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
     ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pFirstWriter->SetParameter(ValuesHandle, UpdatedValues.data(), static_cast<Uint32>(sizeof(UpdatedValues))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->SetParameter(ValuesHandle, UpdatedValues), RADIENT_STATUS_OK);
     ASSERT_EQ(pFirstWriter->SetTexture(TexturesHandle, 0, pTexture0), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->SetTexture(TexturesHandle, 1, pTexture1), RADIENT_STATUS_OK);
 
@@ -1250,11 +1299,11 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
-    EXPECT_EQ(pWriter->SetParameter(ValueHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
-    EXPECT_EQ(pWriter->SetParameter(ValueHandle, &UpdatedValue, static_cast<Uint32>(sizeof(UpdatedValue))), RADIENT_STATUS_OK);
-    EXPECT_EQ(pWriter->SetParameter(ValueHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(ValueHandle, UpdatedValue), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
@@ -1310,10 +1359,10 @@ TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)
 
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FirstValue, static_cast<Uint32>(sizeof(FirstValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &SecondValue, static_cast<Uint32>(sizeof(SecondValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FinalValue, static_cast<Uint32>(sizeof(FinalValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValueHandle, &FinalValue, static_cast<Uint32>(sizeof(FinalValue))), RADIENT_STATUS_NO_CHANGE);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, FirstValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, SecondValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, FinalValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, FinalValue), RADIENT_STATUS_NO_CHANGE);
 
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureA), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureB), RADIENT_STATUS_OK);
@@ -1361,8 +1410,8 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterB;
     ASSERT_EQ(pInstance->CreateWriter(pWriterA.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pInstance->CreateWriter(pWriterB.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriterA->SetParameter(Handle, &FirstValue, static_cast<Uint32>(sizeof(FirstValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriterB->SetParameter(Handle, &FirstValue, static_cast<Uint32>(sizeof(FirstValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriterA->SetParameter(Handle, FirstValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriterB->SetParameter(Handle, FirstValue), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterA->Commit(), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriterB->Commit(), RADIENT_STATUS_NO_CHANGE);
@@ -1370,7 +1419,7 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
 
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterC;
     ASSERT_EQ(pInstance->CreateWriter(pWriterC.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriterC->SetParameter(Handle, &SecondValue, static_cast<Uint32>(sizeof(SecondValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriterC->SetParameter(Handle, SecondValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriterC->Commit(), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterB->Commit(), RADIENT_STATUS_NO_CHANGE);
@@ -1380,8 +1429,8 @@ TEST(RadientMaterialTest, WritersResolveOverlappingChangesAtCommit)
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriterE;
     ASSERT_EQ(pInstance->CreateWriter(pWriterD.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pInstance->CreateWriter(pWriterE.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriterD->SetParameter(Handle, &ThirdValue, static_cast<Uint32>(sizeof(ThirdValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriterE->SetParameter(Handle, &FourthValue, static_cast<Uint32>(sizeof(FourthValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriterD->SetParameter(Handle, ThirdValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriterE->SetParameter(Handle, FourthValue), RADIENT_STATUS_OK);
 
     EXPECT_EQ(pWriterD->Commit(), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriterE->Commit(), RADIENT_STATUS_OK);
@@ -1452,12 +1501,12 @@ TEST(RadientMaterialTest, WriterUpdatesSparseParameters)
     {
         RadientMaterialParameterHandle Handle;
         ASSERT_EQ(pDefinition->GetParameterHandle(Index, &Handle), RADIENT_STATUS_OK);
-        ASSERT_EQ(pWriter->SetParameter(Handle, &UpdatedValue, static_cast<Uint32>(sizeof(UpdatedValue))), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(Handle, UpdatedValue), RADIENT_STATUS_OK);
     }
 
     RadientMaterialParameterHandle RevertedHandle;
     ASSERT_EQ(pDefinition->GetParameterHandle(ChangedIndices.back(), &RevertedHandle), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(RevertedHandle, &DefaultValue, static_cast<Uint32>(sizeof(DefaultValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(RevertedHandle, DefaultValue), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     for (Uint32 Index : ChangedIndices)
@@ -1687,7 +1736,7 @@ TEST(RadientMaterialTest, CloneCopiesCommittedStateAndRemainsIndependent)
 
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, ClonedValues.data(), static_cast<Uint32>(sizeof(ClonedValues))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, ClonedValues), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureA), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureB), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
@@ -1708,7 +1757,7 @@ TEST(RadientMaterialTest, CloneCopiesCommittedStateAndRemainsIndependent)
     EXPECT_EQ(GetTexture(*pClone, 1), pTextureB);
 
     ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, SourceValues.data(), static_cast<Uint32>(sizeof(SourceValues))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, SourceValues), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 0, pTextureC), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
     pWriter.Release();
@@ -1721,7 +1770,7 @@ TEST(RadientMaterialTest, CloneCopiesCommittedStateAndRemainsIndependent)
     EXPECT_EQ(GetTexture(*pClone, 1), pTextureB);
 
     ASSERT_EQ(pClone->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, UpdatedCloneValues.data(), static_cast<Uint32>(sizeof(UpdatedCloneValues))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ValuesHandle, UpdatedCloneValues), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->SetTexture(TexturesHandle, 1, pTextureD), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
@@ -1764,8 +1813,8 @@ TEST(RadientMaterialTest, WritersApplyIndependentChanges)
     RefCntAutoPtr<IRadientMaterialInstanceWriter> pSecondWriter;
     ASSERT_EQ(pInstance->CreateWriter(pFirstWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pInstance->CreateWriter(pSecondWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pFirstWriter->SetParameter(FirstHandle, &FirstValue, static_cast<Uint32>(sizeof(FirstValue))), RADIENT_STATUS_OK);
-    ASSERT_EQ(pSecondWriter->SetParameter(SecondHandle, &SecondValue, static_cast<Uint32>(sizeof(SecondValue))), RADIENT_STATUS_OK);
+    ASSERT_EQ(pFirstWriter->SetParameter(FirstHandle, FirstValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondWriter->SetParameter(SecondHandle, SecondValue), RADIENT_STATUS_OK);
 
     ASSERT_EQ(pFirstWriter->Commit(), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondWriter->Commit(), RADIENT_STATUS_OK);

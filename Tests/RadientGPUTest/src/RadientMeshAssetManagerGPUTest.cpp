@@ -142,29 +142,11 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
                   {},
                   [&](IRadientMaterialDefinition&     Definition,
                       IRadientMaterialInstanceWriter& Writer) {
-                      RadientMaterialParameterHandle BaseColorTextureHandle;
-                      RADIENT_STATUS                 Status = Definition.FindParameter(
-                          RadientStandardMaterialBaseColorTextureName,
-                          &BaseColorTextureHandle);
-                      if (Status != RADIENT_STATUS_OK)
-                          return Status;
-
-                      Status = Writer.SetTexture(BaseColorTextureHandle, 0, pTexture);
-                      if (RADIENT_FAILED(Status))
-                          return Status;
-
-                      RadientMaterialParameterHandle BaseColorUVSelectorHandle;
-                      Status = Definition.FindParameter(
-                          RadientStandardMaterialBaseColorTextureUVSelectorName,
-                          &BaseColorUVSelectorHandle);
-                      if (Status != RADIENT_STATUS_OK)
-                          return Status;
-
-                      static constexpr Int32 BaseColorUVSelector = 0;
-                      return Writer.SetParameter(
-                          BaseColorUVSelectorHandle,
-                          &BaseColorUVSelector,
-                          static_cast<Uint32>(sizeof(BaseColorUVSelector)));
+                      return SetStandardMaterialTextureParameters(
+                          Definition,
+                          Writer,
+                          RadientStandardMaterialBaseColorTextureParameterNames,
+                          RadientStandardMaterialTextureParameters{pTexture});
                   },
                   &pMaterial),
               RADIENT_STATUS_OK);

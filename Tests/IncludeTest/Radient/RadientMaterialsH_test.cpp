@@ -99,6 +99,8 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*                  
     RadientMaterialParameterHandle       Handle;
     IRadientMaterialInstance*            pClone = nullptr;
     float                                Value  = 0;
+    const RadientFloat4                  VectorValue{};
+    const Float32                        ArrayValue[2]{};
 
     Status                                          = pDefinition->GetParameterHandle(0, &Handle);
     Status                                          = pDefinition->FindParameter("Parameter", &Handle);
@@ -110,6 +112,9 @@ void RadientMaterials_CPP_TestInterfaces(IRadientAssetManager*                  
     Status                                          = pInstance->CreateWriter(&pWriter);
     Status                                          = pInstance->Clone(&pClone);
     Status                                          = pWriter->SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+    Status                                          = pWriter->SetParameter(Handle, Value);
+    Status                                          = pWriter->SetParameter(Handle, ArrayValue);
+    Status                                          = pSurfaceWriter->SetParameter(Handle, VectorValue);
     Status                                          = pWriter->SetTexture(Handle, 0, pTexture);
     Status                                          = pWriter->Commit();
     const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = pSurfaceInstance->GetSurfaceMode();

@@ -99,10 +99,17 @@ struct MaterialWithTextureManagers
 
 struct StandardMaterialTextureBinding
 {
-    const char*           TextureName;
-    const char*           UVSelectorName;
-    IRadientTextureAsset* pTexture;
-    Int32                 UVSelector;
+    StandardMaterialTextureBinding(const RadientStandardMaterialTextureParameterNames& Names_,
+                                   IRadientTextureAsset*                               pTexture,
+                                   Int32                                               UVSelector) :
+        Names{Names_},
+        Parameters{pTexture}
+    {
+        Parameters.UVSelector = UVSelector;
+    }
+
+    RadientStandardMaterialTextureParameterNames Names;
+    RadientStandardMaterialTextureParameters     Parameters;
 };
 
 RADIENT_STATUS CreateStandardMaterial(
@@ -121,24 +128,11 @@ RADIENT_STATUS CreateStandardMaterial(
                           IRadientMaterialInstanceWriter& Writer) {
             for (const StandardMaterialTextureBinding& Binding : TextureBindings)
             {
-                RadientMaterialParameterHandle TextureHandle;
-                RADIENT_STATUS                 Status = Definition.FindParameter(Binding.TextureName, &TextureHandle);
-                if (Status != RADIENT_STATUS_OK)
-                    return Status;
-
-                Status = Writer.SetTexture(TextureHandle, 0, Binding.pTexture);
-                if (RADIENT_FAILED(Status))
-                    return Status;
-
-                RadientMaterialParameterHandle UVSelectorHandle;
-                Status = Definition.FindParameter(Binding.UVSelectorName, &UVSelectorHandle);
-                if (Status != RADIENT_STATUS_OK)
-                    return Status;
-
-                Status = Writer.SetParameter(
-                    UVSelectorHandle,
-                    &Binding.UVSelector,
-                    static_cast<Uint32>(sizeof(Binding.UVSelector)));
+                const RADIENT_STATUS Status = SetStandardMaterialTextureParameters(
+                    Definition,
+                    Writer,
+                    Binding.Names,
+                    Binding.Parameters);
                 if (RADIENT_FAILED(Status))
                     return Status;
             }
@@ -195,8 +189,7 @@ bool CreateMaterialWithBaseColorTexture(IRenderDevice*                        pD
     const RADIENT_STATUS MaterialStatus = CreateStandardMaterial(
         *Managers.pMaterialManager,
         RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE,
-        {{RadientStandardMaterialBaseColorTextureName,
-          RadientStandardMaterialBaseColorTextureUVSelectorName,
+        {{RadientStandardMaterialBaseColorTextureParameterNames,
           pTexture,
           0}},
         &pMaterial);
@@ -249,8 +242,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     ASSERT_EQ(CreateStandardMaterial(
                   *pMaterialManager,
                   RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE,
-                  {{RadientStandardMaterialBaseColorTextureName,
-                    RadientStandardMaterialBaseColorTextureUVSelectorName,
+                  {{RadientStandardMaterialBaseColorTextureParameterNames,
                     pTexture,
                     0}},
                   &pMaterial),
@@ -320,16 +312,13 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
                   *pMaterialManager,
                   RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
                   {
-                      {RadientStandardMaterialBaseColorTextureName,
-                       RadientStandardMaterialBaseColorTextureUVSelectorName,
+                      {RadientStandardMaterialBaseColorTextureParameterNames,
                        pTexture,
                        0},
-                      {RadientStandardMaterialNormalTextureName,
-                       RadientStandardMaterialNormalTextureUVSelectorName,
+                      {RadientStandardMaterialNormalTextureParameterNames,
                        pTexture,
                        1},
-                      {RadientStandardMaterialClearCoatTextureName,
-                       RadientStandardMaterialClearCoatTextureUVSelectorName,
+                      {RadientStandardMaterialClearCoatTextureParameterNames,
                        pTexture,
                        2},
                   },
