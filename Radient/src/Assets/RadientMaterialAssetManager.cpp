@@ -27,8 +27,8 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
-#include "Assets/RadientMaterialInstanceState.hpp"
-#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
+#include "Assets/RadientSurfaceMaterialAssetImpl.hpp"
 #include "DebugUtilities.hpp"
 
 #include <exception>
@@ -149,25 +149,25 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)
 {
-    RefCntAutoPtr<IRadientMaterialAsset>                      pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
-    const RadientMaterialDetail::MaterialInstanceState* const pState =
-        RadientMaterialDetail::TryGetMaterialInstanceState(pMaterialAsset);
-    return pState != nullptr ? pState->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
+    RefCntAutoPtr<IRadientMaterialAsset>                pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterialAsset);
+    return pStorage != nullptr ? pStorage->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetGPUResourceStatus(IRadientAsset* pMaterial)
 {
-    RefCntAutoPtr<IRadientMaterialAsset>                      pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
-    const RadientMaterialDetail::MaterialInstanceState* const pState =
-        RadientMaterialDetail::TryGetMaterialInstanceState(pMaterialAsset);
-    return pState != nullptr ? pState->GetGPUResourceStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
+    RefCntAutoPtr<IRadientMaterialAsset>                pMaterialAsset{pMaterial, IID_RadientMaterialAsset};
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterialAsset);
+    return pStorage != nullptr ? pStorage->GetGPUResourceStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
 RadientMaterialAssetView RadientMaterialAssetManager::GetMaterialView(IRadientMaterialAsset* pMaterial)
 {
-    RadientMaterialDetail::MaterialInstanceState* const pState =
-        RadientMaterialDetail::TryGetMaterialInstanceState(pMaterial);
-    return pState != nullptr ? pState->GetMaterialView(pMaterial) : RadientMaterialAssetView{};
+    RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterial);
+    return pStorage != nullptr ? pStorage->GetMaterialView(pMaterial) : RadientMaterialAssetView{};
 }
 
 } // namespace Diligent

@@ -26,7 +26,7 @@
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 
-#include "Assets/RadientMaterialInstanceState.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 
 #include "DebugUtilities.hpp"
@@ -781,13 +781,13 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
     const bool                                IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
     const IRadientSurfaceMaterialAsset* const pSurfaceMaterial =
         IsSurface ? &static_cast<const IRadientSurfaceMaterialAsset&>(Material) : nullptr;
-    const RadientMaterialDetail::MaterialInstanceState* const pInstanceState =
-        RadientMaterialDetail::TryGetMaterialInstanceState(&Material);
-    VERIFY_EXPR(pInstanceState != nullptr);
-    if (pInstanceState == nullptr)
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(&Material);
+    VERIFY_EXPR(pStorage != nullptr);
+    if (pStorage == nullptr)
         return;
-    const RadientMaterialDetail::PackedMaterialInstanceData& InstanceData =
-        pInstanceState->GetPackedData();
+    const RadientMaterialDetail::PackedMaterialData& MaterialData =
+        pStorage->GetPackedData();
 
     std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
     for (Uint32 InitializationIndex = 0;
@@ -824,7 +824,7 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
     {
         const ShaderDataCopyCommand& Command = m_Data.PackingPlan.pCopyCommands[CommandIndex];
         std::memcpy(pShaderData + Command.DestinationOffset,
-                    InstanceData.GetValueData(Command.ParameterIndex),
+                    MaterialData.GetValueData(Command.ParameterIndex),
                     Command.Size);
     }
 
@@ -834,11 +834,11 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
             m_Data.PackingPlan.pTextureCommands[CommandIndex];
 
         const Int32 UVSelector =
-            *static_cast<const Int32*>(InstanceData.GetValueData(Command.UVSelectorParameterIndex));
+            *static_cast<const Int32*>(MaterialData.GetValueData(Command.UVSelectorParameterIndex));
         const Uint32 WrapU =
-            *static_cast<const Uint32*>(InstanceData.GetValueData(Command.WrapUParameterIndex));
+            *static_cast<const Uint32*>(MaterialData.GetValueData(Command.WrapUParameterIndex));
         const Uint32 WrapV =
-            *static_cast<const Uint32*>(InstanceData.GetValueData(Command.WrapVParameterIndex));
+            *static_cast<const Uint32*>(MaterialData.GetValueData(Command.WrapVParameterIndex));
         ShaderTextureAttribs TextureAttribs{};
         TextureAttribs.SetUVSelector(UVSelector);
         TextureAttribs.SetWrapUMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapU));
@@ -847,7 +847,7 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
                     &TextureAttribs.PackedProps,
                     sizeof(TextureAttribs.PackedProps));
 
-        IRadientTextureAsset* const pTexture = InstanceData.GetTexture(Command.TextureParameterIndex, 0);
+        IRadientTextureAsset* const pTexture = MaterialData.GetTexture(Command.TextureParameterIndex, 0);
         if (pTexture != nullptr)
         {
             RadientTextureSamplingInfo SamplingInfo{};

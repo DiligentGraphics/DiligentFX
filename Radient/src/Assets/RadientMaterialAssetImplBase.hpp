@@ -27,7 +27,7 @@
 #pragma once
 
 #include "Assets/RadientAssetURI.hpp"
-#include "Assets/RadientMaterialInstanceState.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 
 #include "DebugUtilities.hpp"
 #include "ObjectBase.hpp"
@@ -41,35 +41,35 @@ namespace RadientMaterialDetail
 {
 
 // {484A2342-30BE-447A-AC3C-B7472D3FB6AF}
-static constexpr INTERFACE_ID IID_MaterialInstanceStateProvider =
+static constexpr INTERFACE_ID IID_MaterialStorageProvider =
     {0x484a2342, 0x30be, 0x447a, {0xac, 0x3c, 0xb7, 0x47, 0x2d, 0x3f, 0xb6, 0xaf}};
 
 
-struct IMaterialInstanceStateProvider : IObject
+struct IMaterialStorageProvider : IObject
 {
-    virtual MaterialInstanceState& DILIGENT_CALL_TYPE GetState() noexcept = 0;
+    virtual MaterialStorage& DILIGENT_CALL_TYPE GetStorage() noexcept = 0;
 };
 
 template <typename InterfaceType>
-struct MaterialInstanceCombinedInterface :
+struct MaterialAssetCombinedInterface :
     InterfaceType,
-    IMaterialInstanceStateProvider
+    IMaterialStorageProvider
 {};
 
 template <typename DerivedType,
           typename InterfaceType,
           const INTERFACE_ID& InterfaceID>
-class MaterialInstanceImplBase : public RefCountedObject<MaterialInstanceCombinedInterface<InterfaceType>>
+class MaterialAssetImplBase : public RefCountedObject<MaterialAssetCombinedInterface<InterfaceType>>
 {
 public:
-    using TBase = RefCountedObject<MaterialInstanceCombinedInterface<InterfaceType>>;
+    using TBase = RefCountedObject<MaterialAssetCombinedInterface<InterfaceType>>;
 
-    MaterialInstanceImplBase(IReferenceCounters*              pRefCounters,
-                             IRadientMaterialDefinitionAsset* pDefinition,
-                             RadientHandle                    DefinitionHandle) :
+    MaterialAssetImplBase(IReferenceCounters*              pRefCounters,
+                          IRadientMaterialDefinitionAsset* pDefinition,
+                          RadientHandle                    DefinitionHandle) :
         TBase{pRefCounters},
         m_URI{MakeRadientAssetURI("material")},
-        m_State{pDefinition, DefinitionHandle}
+        m_Storage{pDefinition, DefinitionHandle}
     {
         m_Reference.URI     = m_URI.c_str();
         m_Reference.Version = 1;
@@ -81,9 +81,9 @@ public:
             return;
 
         *ppInterface = nullptr;
-        if (IID == IID_MaterialInstanceStateProvider)
+        if (IID == IID_MaterialStorageProvider)
         {
-            *ppInterface = static_cast<IMaterialInstanceStateProvider*>(this);
+            *ppInterface = static_cast<IMaterialStorageProvider*>(this);
         }
         else if (IID == InterfaceID)
         {
@@ -112,26 +112,26 @@ public:
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
-        return m_State.GetDefinition();
+        return m_Storage.GetDefinition();
     }
 
     virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
     {
-        return m_State.GetVersion();
+        return m_Storage.GetVersion();
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
                                                            void*                          pData,
                                                            Uint32                         DataSize) const override final
     {
-        return m_State.GetParameter(Handle, pData, DataSize);
+        return m_Storage.GetParameter(Handle, pData, DataSize);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
                                                          Uint32                         ArrayIndex,
                                                          IRadientTextureAsset**         ppTexture) const override final
     {
-        return m_State.GetTexture(Handle, ArrayIndex, ppTexture);
+        return m_Storage.GetTexture(Handle, ArrayIndex, ppTexture);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) const override final
@@ -154,36 +154,36 @@ public:
         }
     }
 
-    const MaterialInstanceState& GetState() const noexcept
+    const MaterialStorage& GetStorage() const noexcept
     {
-        return m_State;
+        return m_Storage;
     }
 
-    virtual MaterialInstanceState& DILIGENT_CALL_TYPE GetState() noexcept override final
+    virtual MaterialStorage& DILIGENT_CALL_TYPE GetStorage() noexcept override final
     {
-        return m_State;
+        return m_Storage;
     }
 
 private:
     const std::string     m_URI;
     RadientAssetReference m_Reference;
-    MaterialInstanceState m_State;
+    MaterialStorage       m_Storage;
 };
 
 template <typename DerivedType,
           typename InterfaceType,
           const INTERFACE_ID& InterfaceID,
           typename MaterialType>
-class MaterialInstanceWriterImplBase : public ObjectBase<InterfaceType>
+class MaterialWriterImplBase : public ObjectBase<InterfaceType>
 {
 public:
     using TBase = ObjectBase<InterfaceType>;
 
-    MaterialInstanceWriterImplBase(IReferenceCounters* pRefCounters,
-                                   MaterialType*       pMaterial) :
+    MaterialWriterImplBase(IReferenceCounters* pRefCounters,
+                           MaterialType*       pMaterial) :
         TBase{pRefCounters},
         m_pMaterial{pMaterial},
-        m_Parameters{pMaterial, pMaterial->GetState()}
+        m_Parameters{pMaterial, pMaterial->GetStorage()}
     {
         VERIFY_EXPR(m_pMaterial != nullptr);
     }
@@ -240,8 +240,8 @@ protected:
 private:
     // m_pMaterial is borrowed. m_Parameters retains the same asset strongly and
     // therefore keeps the typed pointer valid for the writer's lifetime.
-    MaterialType*               m_pMaterial = nullptr;
-    MaterialInstanceWriterState m_Parameters;
+    MaterialType*       m_pMaterial = nullptr;
+    MaterialWriterState m_Parameters;
 };
 
 } // namespace RadientMaterialDetail

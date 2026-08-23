@@ -43,21 +43,21 @@ namespace RadientMaterialDetail
 {
 
 // Value records, raw parameter data, and retained texture arrays share one allocation.
-class PackedMaterialInstanceData final
+class PackedMaterialData final
 {
 public:
     using TexturePtr = RefCntAutoPtr<IRadientTextureAsset>;
 
-    explicit PackedMaterialInstanceData(const RadientMaterialDefinitionDesc& Desc);
+    explicit PackedMaterialData(const RadientMaterialDefinitionDesc& Desc);
 
     // clang-format off
-    PackedMaterialInstanceData           (const PackedMaterialInstanceData&) = delete;
-    PackedMaterialInstanceData& operator=(const PackedMaterialInstanceData&) = delete;
-    PackedMaterialInstanceData           (PackedMaterialInstanceData&&)      = delete;
-    PackedMaterialInstanceData& operator=(PackedMaterialInstanceData&&)      = delete;
+    PackedMaterialData           (const PackedMaterialData&) = delete;
+    PackedMaterialData& operator=(const PackedMaterialData&) = delete;
+    PackedMaterialData           (PackedMaterialData&&)      = delete;
+    PackedMaterialData& operator=(PackedMaterialData&&)      = delete;
     // clang-format on
 
-    ~PackedMaterialInstanceData();
+    ~PackedMaterialData();
 
     Uint32 GetValueCount() const noexcept;
 
@@ -82,21 +82,21 @@ private:
     Uint32                                        m_ValueCount = 0;
 };
 
-class MaterialInstanceWriterState;
+class MaterialWriterState;
 
-class MaterialInstanceState final
+class MaterialStorage final
 {
 public:
-    MaterialInstanceState(IRadientMaterialDefinitionAsset* pDefinition,
-                          RadientHandle                    DefinitionHandle);
+    MaterialStorage(IRadientMaterialDefinitionAsset* pDefinition,
+                    RadientHandle                    DefinitionHandle);
 
-    ~MaterialInstanceState();
+    ~MaterialStorage();
 
     // clang-format off
-    MaterialInstanceState           (const MaterialInstanceState&) = delete;
-    MaterialInstanceState& operator=(const MaterialInstanceState&) = delete;
-    MaterialInstanceState           (MaterialInstanceState&&)      = delete;
-    MaterialInstanceState& operator=(MaterialInstanceState&&)      = delete;
+    MaterialStorage           (const MaterialStorage&) = delete;
+    MaterialStorage& operator=(const MaterialStorage&) = delete;
+    MaterialStorage           (MaterialStorage&&)      = delete;
+    MaterialStorage& operator=(MaterialStorage&&)      = delete;
     // clang-format on
 
     IRadientMaterialDefinitionAsset* GetDefinition() const noexcept;
@@ -115,10 +115,10 @@ public:
     RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
     RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
-    const PackedMaterialInstanceData& GetPackedData() const noexcept;
+    const PackedMaterialData& GetPackedData() const noexcept;
 
 private:
-    friend class MaterialInstanceWriterState;
+    friend class MaterialWriterState;
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept;
 
@@ -126,22 +126,22 @@ private:
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> m_pDefinition;
     const RadientHandle                            m_DefinitionHandle;
-    PackedMaterialInstanceData                     m_Data;
+    PackedMaterialData                             m_Data;
     Uint64                                         m_Version = 1;
     std::unique_ptr<TextureState>                  m_pTextureState;
 };
 
-class MaterialInstanceWriterState final
+class MaterialWriterState final
 {
 public:
-    MaterialInstanceWriterState(IRadientMaterialAsset* pMaterial,
-                                MaterialInstanceState& InstanceState) noexcept;
+    MaterialWriterState(IRadientMaterialAsset* pMaterial,
+                        MaterialStorage&       Storage) noexcept;
 
     // clang-format off
-    MaterialInstanceWriterState           (const MaterialInstanceWriterState&) = delete;
-    MaterialInstanceWriterState& operator=(const MaterialInstanceWriterState&) = delete;
-    MaterialInstanceWriterState           (MaterialInstanceWriterState&&)      = delete;
-    MaterialInstanceWriterState& operator=(MaterialInstanceWriterState&&)      = delete;
+    MaterialWriterState           (const MaterialWriterState&) = delete;
+    MaterialWriterState& operator=(const MaterialWriterState&) = delete;
+    MaterialWriterState           (MaterialWriterState&&)      = delete;
+    MaterialWriterState& operator=(MaterialWriterState&&)      = delete;
     // clang-format on
 
     RADIENT_STATUS SetParameter(RadientMaterialParameterHandle Handle,
@@ -171,21 +171,21 @@ private:
     ChangeIterator FindChange(Uint32 ParameterIndex, Uint32 ArrayIndex) noexcept;
 
     // Both members refer to the same material asset. m_pMaterial keeps the
-    // asset, and therefore m_InstanceState, alive for the writer's lifetime.
+    // asset, and therefore m_Storage, alive for the writer's lifetime.
     RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
-    MaterialInstanceState&               m_InstanceState;
+    MaterialStorage&                     m_Storage;
 
-    ChangeList                                          m_Changes;
-    std::vector<Uint8>                                  m_ValueData;
-    std::vector<PackedMaterialInstanceData::TexturePtr> m_TextureData;
+    ChangeList                                  m_Changes;
+    std::vector<Uint8>                          m_ValueData;
+    std::vector<PackedMaterialData::TexturePtr> m_TextureData;
 };
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
-MaterialInstanceState*       TryGetMaterialInstanceState(IRadientMaterialAsset* pMaterial) noexcept;
-const MaterialInstanceState* TryGetMaterialInstanceState(const IRadientMaterialAsset* pMaterial) noexcept;
+MaterialStorage*       TryGetMaterialStorage(IRadientMaterialAsset* pMaterial) noexcept;
+const MaterialStorage* TryGetMaterialStorage(const IRadientMaterialAsset* pMaterial) noexcept;
 
 } // namespace RadientMaterialDetail
 

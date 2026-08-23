@@ -24,9 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
+#include "Assets/RadientSurfaceMaterialAssetImpl.hpp"
 
-#include "RadientMaterialInstanceImplBase.hpp"
+#include "RadientMaterialAssetImplBase.hpp"
 
 #include "DebugUtilities.hpp"
 
@@ -38,22 +38,22 @@ namespace
 
 using namespace RadientMaterialDetail;
 
-class RadientSurfaceMaterialInstanceImpl;
-class RadientSurfaceMaterialInstanceWriterImpl;
+class RadientSurfaceMaterialAssetImpl;
+class RadientSurfaceMaterialWriterImpl;
 
-using RadientSurfaceMaterialInstanceImplBase =
-    MaterialInstanceImplBase<RadientSurfaceMaterialInstanceImpl,
-                             IRadientSurfaceMaterialAsset,
-                             IID_RadientSurfaceMaterialAsset>;
+using RadientSurfaceMaterialAssetImplBase =
+    MaterialAssetImplBase<RadientSurfaceMaterialAssetImpl,
+                          IRadientSurfaceMaterialAsset,
+                          IID_RadientSurfaceMaterialAsset>;
 
-class RadientSurfaceMaterialInstanceImpl final : public RadientSurfaceMaterialInstanceImplBase
+class RadientSurfaceMaterialAssetImpl final : public RadientSurfaceMaterialAssetImplBase
 {
 public:
-    using TBase = RadientSurfaceMaterialInstanceImplBase;
+    using TBase = RadientSurfaceMaterialAssetImplBase;
 
-    RadientSurfaceMaterialInstanceImpl(IReferenceCounters*              pRefCounters,
-                                       IRadientMaterialDefinitionAsset* pDefinition,
-                                       RadientHandle                    DefinitionHandle) :
+    RadientSurfaceMaterialAssetImpl(IReferenceCounters*              pRefCounters,
+                                    IRadientMaterialDefinitionAsset* pDefinition,
+                                    RadientHandle                    DefinitionHandle) :
         TBase{pRefCounters, pDefinition, DefinitionHandle}
     {}
 
@@ -72,26 +72,26 @@ public:
         return m_IsDoubleSided;
     }
 
-    RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> MakeWriter() const;
+    RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> MakeWriter() const;
 
 private:
-    friend class RadientSurfaceMaterialInstanceWriterImpl;
+    friend class RadientSurfaceMaterialWriterImpl;
 
     RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode   = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
     Float32                       m_AlphaCutoff   = 0.5f;
     Bool                          m_IsDoubleSided = False;
 };
 
-using RadientSurfaceMaterialInstanceWriterImplBase =
-    MaterialInstanceWriterImplBase<RadientSurfaceMaterialInstanceWriterImpl,
-                                   IRadientSurfaceMaterialWriter,
-                                   IID_RadientSurfaceMaterialWriter,
-                                   RadientSurfaceMaterialInstanceImpl>;
+using RadientSurfaceMaterialWriterImplBase =
+    MaterialWriterImplBase<RadientSurfaceMaterialWriterImpl,
+                           IRadientSurfaceMaterialWriter,
+                           IID_RadientSurfaceMaterialWriter,
+                           RadientSurfaceMaterialAssetImpl>;
 
-class RadientSurfaceMaterialInstanceWriterImpl final : public RadientSurfaceMaterialInstanceWriterImplBase
+class RadientSurfaceMaterialWriterImpl final : public RadientSurfaceMaterialWriterImplBase
 {
 public:
-    using TBase = RadientSurfaceMaterialInstanceWriterImplBase;
+    using TBase = RadientSurfaceMaterialWriterImplBase;
     using TBase::TBase;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) override final
@@ -168,11 +168,11 @@ private:
     bool                          m_DoubleSidedChanged = false;
 };
 
-RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> RadientSurfaceMaterialInstanceImpl::MakeWriter() const
+RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> RadientSurfaceMaterialAssetImpl::MakeWriter() const
 {
-    return RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl>{
-        MakeNewRCObj<RadientSurfaceMaterialInstanceWriterImpl>()(
-            const_cast<RadientSurfaceMaterialInstanceImpl*>(this))};
+    return RefCntAutoPtr<RadientSurfaceMaterialWriterImpl>{
+        MakeNewRCObj<RadientSurfaceMaterialWriterImpl>()(
+            const_cast<RadientSurfaceMaterialAssetImpl*>(this))};
 }
 
 } // namespace
@@ -181,8 +181,8 @@ RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeSurfaceMaterialA
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle)
 {
-    return RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>{
-        MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
+    return RefCntAutoPtr<RadientSurfaceMaterialAssetImpl>{
+        MakeNewRCObj<RadientSurfaceMaterialAssetImpl>()(pDefinition, DefinitionHandle)};
 }
 
 } // namespace Diligent
