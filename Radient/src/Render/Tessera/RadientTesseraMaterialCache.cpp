@@ -336,10 +336,20 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
     RadientTesseraMaterialDataMap::ValueHandle Data = m_MaterialData.Get(pMaterial);
     if (!Data)
     {
+        // The drawable path resolves only materials whose selected textures are
+        // GPU-ready. Preserve the actual status if another caller violates this
+        // precondition in a non-development build.
+        const RADIENT_STATUS MaterialStatus =
+            RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial);
+        VERIFY(MaterialStatus == RADIENT_STATUS_OK, "Tessera material resolution requires GPU-ready material dependencies");
+        if (MaterialStatus != RADIENT_STATUS_OK)
+            return {{}, MaterialStatus};
+
         const RadientMaterialAssetView MaterialView =
             RadientMaterialAssetManager::GetMaterialView(pMaterial);
+        VERIFY(MaterialView, "GPU-ready material asset did not provide a material view");
         if (!MaterialView)
-            return {};
+            return {{}, RADIENT_STATUS_INVALID_OPERATION};
 
         Data = m_MaterialData.GetOrInsert(pMaterial, pMaterial, MaterialView);
     }

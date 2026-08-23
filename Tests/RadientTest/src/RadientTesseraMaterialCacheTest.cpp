@@ -29,6 +29,7 @@
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "ThreadPool.hpp"
@@ -319,6 +320,74 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialOnWorkerThread)
     ASSERT_TRUE(Result.Data);
     EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();
+}
+
+TEST(RadientTesseraMaterialCacheTest, RequiresGPUReadyMaterialDependencies)
+{
+    RefCntAutoPtr<IThreadPool> pTextureThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pTextureThreadPool, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pTextureManager = RadientTextureAssetManager::Create({});
+    ASSERT_NE(pTextureManager, nullptr);
+
+    const std::array<Uint8, 4> Pixels{};
+    RadientTextureData         TextureData{};
+    TextureData.Width  = 1;
+    TextureData.Height = 1;
+    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pData  = Pixels.data();
+
+    RadientTextureLoadInfo TextureLoadInfo{};
+    TextureLoadInfo.pTextureData = &TextureData;
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    ASSERT_EQ(pTextureManager->LoadTexture(
+                  *pTextureThreadPool, TextureLoadInfo, pTexture.GetAddressOfEmpty()),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture),
+              RADIENT_STATUS_PENDING);
+
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(
+        Testing::CreateStandardMaterialAsset(
+            *pMaterialManager,
+            {},
+            [&pTexture](IRadientMaterialDefinitionAsset& Definition,
+                        IRadientMaterialWriter&          Writer) {
+                return SetStandardMaterialTextureParameters(
+                    Definition,
+                    Writer,
+                    RadientStandardMaterialBaseColorTextureParameterNames,
+                    RadientStandardMaterialTextureParameters{pTexture});
+            },
+            pMaterial.GetAddressOfEmpty()),
+        RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial),
+              RADIENT_STATUS_PENDING);
+
+    RefCntAutoPtr<IThreadPool>                   pMaterialThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache              = MakeMaterialCache();
+
+    RadientTesseraMaterialResolveResult Result;
+    Testing::TestingEnvironment::SetErrorAllowance(1);
+    Testing::TestingEnvironment::PushExpectedErrorSubstring(
+        "Tessera material resolution requires GPU-ready material dependencies");
+    Result = pCache->Resolve(*pMaterialThreadPool, pMaterial);
+    Testing::TestingEnvironment::SetErrorAllowance(0);
+
+    EXPECT_EQ(Result.Status, RADIENT_STATUS_PENDING);
+    EXPECT_FALSE(Result.Data);
+    EXPECT_EQ(pMaterialThreadPool->GetQueueSize(), 0u);
+    EXPECT_EQ(pTextureThreadPool->GetQueueSize(), 1u);
+
+    EXPECT_TRUE(pTextureThreadPool->ProcessTask(0, false));
+    pMaterialThreadPool->StopThreads();
+    pTextureThreadPool->StopThreads();
 }
 
 TEST(RadientTesseraMaterialCacheTest, DerivesPSOFlagsFromMaterial)

@@ -134,8 +134,8 @@ using RadientTesseraMaterialDataMap =
 
 struct RadientTesseraMaterialResolveResult
 {
-    // Pending results retain their state so processing is not repeated before
-    // the renderer checks the status again.
+    // Once processing is scheduled, pending results retain their state so it
+    // is not repeated before the renderer checks the status again.
     RadientTesseraMaterialDataMap::ValueHandle Data;
     RADIENT_STATUS                             Status = RADIENT_STATUS_INVALID_ARGUMENT;
 };
@@ -169,9 +169,11 @@ public:
     RadientTesseraMaterialCache(RadientTesseraMaterialCache&&)                 = delete;
     RadientTesseraMaterialCache& operator=(RadientTesseraMaterialCache&&) = delete;
 
-    /// Returns or schedules Tessera data for the material. This method obtains
-    /// the immutable render data from the asset and must be called from the
-    /// render thread. Material PSO flags are derived by the worker task.
+    /// Returns or schedules Tessera data for the material. On the first call,
+    /// the material and its selected texture GPU resources must report OK.
+    /// This method obtains the immutable render data from the asset and must be
+    /// called from the render thread. Material PSO flags are derived by the
+    /// worker task.
     RadientTesseraMaterialResolveResult Resolve(IThreadPool&           ThreadPool,
                                                 IRadientMaterialAsset* pMaterial);
 
