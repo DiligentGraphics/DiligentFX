@@ -425,8 +425,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         return;
     }
 
-    const auto* const pDefinition =
-        static_cast<const RadientMaterialDefinitionImpl*>(pDefinitionInterface);
+    RefCntAutoPtr<RadientMaterialDefinitionImpl> pDefinition{pDefinitionInterface, IID_MaterialDefinitionImpl};
     if (pDefinition == nullptr)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);

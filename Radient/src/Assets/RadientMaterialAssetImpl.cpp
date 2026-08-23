@@ -213,13 +213,13 @@ namespace
 
 struct MaterialTextureSource
 {
-    RadientMaterialParameterHandle      Parameter;
-    Uint32                              ArrayIndex = 0;
+    Uint32                              ParameterIndex = ~Uint32{0};
+    Uint32                              ArrayIndex     = 0;
     RefCntAutoPtr<IRadientTextureAsset> pFallbackTexture;
 
     IRadientTextureAsset* GetRequestedTexture(const PackedMaterialData& Data) const noexcept
     {
-        return Data.GetTexture(Parameter.Index, ArrayIndex);
+        return Data.GetTexture(ParameterIndex, ArrayIndex);
     }
 
     IRadientTextureAsset* GetRenderTexture(const PackedMaterialData& Data) const noexcept
@@ -279,10 +279,9 @@ struct MaterialStorage::TextureState
             for (Uint32 ArrayIndex = 0; ArrayIndex < ParameterDesc.ArraySize; ++ArrayIndex)
             {
                 MaterialTextureSource Source;
-                Source.Parameter.Definition = Storage.m_DefinitionHandle;
-                Source.Parameter.Index      = ParameterIndex;
-                Source.ArrayIndex           = ArrayIndex;
-                Source.pFallbackTexture     = ParameterDesc.pDefaultTexture;
+                Source.ParameterIndex   = ParameterIndex;
+                Source.ArrayIndex       = ArrayIndex;
+                Source.pFallbackTexture = ParameterDesc.pDefaultTexture;
                 TextureSources.push_back(std::move(Source));
             }
         }
@@ -362,14 +361,14 @@ struct MaterialStorage::TextureState
                     Source.GetRenderTexture(Storage.m_Data);
 
                 RadientMaterialTextureEntry& Texture = NewTextureEntries.emplace_back();
-                Texture.ParameterIndex               = Source.Parameter.Index;
+                Texture.ParameterIndex               = Source.ParameterIndex;
                 Texture.ArrayIndex                   = Source.ArrayIndex;
                 Texture.pTexture                     = pSelectedTexture;
 
                 if (pSelectedTexture != pRequestedTexture)
                 {
                     Storage.m_Data.SetTexture(
-                        Source.Parameter.Index,
+                        Source.ParameterIndex,
                         Source.ArrayIndex,
                         pSelectedTexture);
                     StateChanged = true;
@@ -669,7 +668,7 @@ public:
     using TBase = RadientMaterialAssetImplBase;
     using TBase::TBase;
 
-    RefCntAutoPtr<RadientMaterialWriterImpl> MakeWriter() const;
+    RefCntAutoPtr<RadientMaterialWriterImpl> MakeWriter();
 };
 
 using RadientMaterialWriterImplBase =
@@ -685,11 +684,10 @@ public:
     using TBase::TBase;
 };
 
-RefCntAutoPtr<RadientMaterialWriterImpl> RadientMaterialAssetImpl::MakeWriter() const
+RefCntAutoPtr<RadientMaterialWriterImpl> RadientMaterialAssetImpl::MakeWriter()
 {
     return RefCntAutoPtr<RadientMaterialWriterImpl>{
-        MakeNewRCObj<RadientMaterialWriterImpl>()(
-            const_cast<RadientMaterialAssetImpl*>(this))};
+        MakeNewRCObj<RadientMaterialWriterImpl>()(this)};
 }
 
 } // namespace

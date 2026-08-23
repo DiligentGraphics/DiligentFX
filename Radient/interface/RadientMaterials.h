@@ -512,7 +512,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialAsset, IRadientAsset)
     /// Creates a reusable writer with no pending changes. On success, ppWriter
     /// receives a strong reference to the writer.
     VIRTUAL RADIENT_STATUS METHOD(CreateWriter)(THIS_
-                                                IRadientMaterialWriter** ppWriter) CONST PURE;
+                                                IRadientMaterialWriter** ppWriter) PURE;
 };
 DILIGENT_END_INTERFACE
 

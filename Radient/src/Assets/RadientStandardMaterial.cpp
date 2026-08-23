@@ -36,7 +36,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstring>
 #include <exception>
 #include <limits>
 #include <string>

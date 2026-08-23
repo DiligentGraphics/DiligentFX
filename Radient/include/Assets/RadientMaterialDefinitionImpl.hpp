@@ -49,7 +49,7 @@
 namespace Diligent
 {
 
-// Internal implementation identity used by the material asset manager.
+// Internal implementation identity used by material-system components.
 // {CD2E807C-E8F5-411B-B7F1-F4E741F2AB58}
 static constexpr INTERFACE_ID IID_MaterialDefinitionImpl =
     {0xcd2e807c, 0xe8f5, 0x411b, {0xb7, 0xf1, 0xf4, 0xe7, 0x41, 0xf2, 0xab, 0x58}};

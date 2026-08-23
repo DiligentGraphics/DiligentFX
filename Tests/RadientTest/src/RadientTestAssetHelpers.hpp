@@ -147,7 +147,7 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) const override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) override final
     {
         if (ppWriter == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;

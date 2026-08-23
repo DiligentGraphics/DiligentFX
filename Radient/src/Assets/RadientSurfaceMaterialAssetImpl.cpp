@@ -28,8 +28,6 @@
 
 #include "RadientMaterialAssetImplBase.hpp"
 
-#include "DebugUtilities.hpp"
-
 namespace Diligent
 {
 
@@ -72,7 +70,7 @@ public:
         return m_IsDoubleSided;
     }
 
-    RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> MakeWriter() const;
+    RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> MakeWriter();
 
 private:
     friend class RadientSurfaceMaterialWriterImpl;
@@ -168,11 +166,10 @@ private:
     bool                          m_DoubleSidedChanged = false;
 };
 
-RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> RadientSurfaceMaterialAssetImpl::MakeWriter() const
+RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> RadientSurfaceMaterialAssetImpl::MakeWriter()
 {
     return RefCntAutoPtr<RadientSurfaceMaterialWriterImpl>{
-        MakeNewRCObj<RadientSurfaceMaterialWriterImpl>()(
-            const_cast<RadientSurfaceMaterialAssetImpl*>(this))};
+        MakeNewRCObj<RadientSurfaceMaterialWriterImpl>()(this)};
 }
 
 } // namespace

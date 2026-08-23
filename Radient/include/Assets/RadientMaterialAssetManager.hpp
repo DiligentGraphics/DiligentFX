@@ -59,11 +59,6 @@ struct RadientMaterialTextureEntry
     Uint32 ArrayIndex     = 0;
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-
-    explicit operator bool() const noexcept
-    {
-        return pTexture != nullptr;
-    }
 };
 
 /// Immutable renderer-neutral view of a material asset and its selected texture dependencies.
@@ -144,7 +139,7 @@ struct RadientMaterialAssetView
     }
 };
 
-class RadientMaterialAssetManager final : public std::enable_shared_from_this<RadientMaterialAssetManager>
+class RadientMaterialAssetManager final
 {
 public:
     struct CreateInfo

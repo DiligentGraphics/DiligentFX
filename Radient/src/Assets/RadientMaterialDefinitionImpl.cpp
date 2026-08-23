@@ -34,13 +34,11 @@
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
 #include "GLTFLoader.hpp"
-#include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <atomic>
 #include <cstddef>
 #include <cstring>
-#include <exception>
 #include <limits>
 #include <map>
 #include <string>

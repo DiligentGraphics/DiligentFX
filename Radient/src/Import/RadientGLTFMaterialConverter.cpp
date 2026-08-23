@@ -210,10 +210,34 @@ RADIENT_STATUS PopulateMaterial(
     if (ppTextures == nullptr && TextureCount != 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
-    RADIENT_STATUS                              Status = ConvertMaterialDefinition(Material, DefinitionCI);
-    if (Status != RADIENT_STATUS_OK)
-        return Status;
+    RADIENT_SURFACE_SHADING_MODEL ExpectedShadingModel;
+    switch (Material.Attribs.Workflow)
+    {
+        case GLTF::Material::PBR_WORKFLOW_METALL_ROUGH:
+            ExpectedShadingModel = RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS;
+            break;
+
+        case GLTF::Material::PBR_WORKFLOW_UNLIT:
+            ExpectedShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+            break;
+
+        case GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS:
+            return RADIENT_STATUS_UNSUPPORTED;
+
+        default:
+            return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    const RadientMaterialDefinitionDesc& DefinitionDesc = Definition.GetDesc();
+    if (DefinitionDesc.Type != RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    const auto& SurfaceDefinitionDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(DefinitionDesc);
+    if (SurfaceDefinitionDesc.ShadingModel != ExpectedShadingModel)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
     if (Material.Attribs.AlphaMode < GLTF::Material::ALPHA_MODE_OPAQUE ||
         Material.Attribs.AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
@@ -254,7 +278,7 @@ RADIENT_STATUS PopulateMaterial(
     };
     SetMaterialParameter(RadientStandardMaterialBaseColorFactorName, BaseColorFactor);
 
-    if (DefinitionCI.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+    if (SurfaceDefinitionDesc.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
     {
         const RadientFloat3 EmissiveFactor{
             Material.Attribs.EmissiveFactor.x,
@@ -319,12 +343,12 @@ RADIENT_STATUS PopulateMaterial(
 
     for (const StandardMaterialTextureSemantic& Semantic : StandardMaterialTextureSemantics)
     {
-        if (DefinitionCI.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT &&
+        if (SurfaceDefinitionDesc.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT &&
             Semantic.TextureAttribId != GLTF::DefaultBaseColorTextureAttribId)
         {
             continue;
         }
-        if (!HasFeature(DefinitionCI.Features, Semantic.RequiredFeature))
+        if (!HasFeature(SurfaceDefinitionDesc.Features, Semantic.RequiredFeature))
             continue;
 
         IRadientTextureAsset* pTexture =

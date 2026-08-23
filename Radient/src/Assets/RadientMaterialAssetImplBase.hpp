@@ -134,7 +134,7 @@ public:
         return m_Storage.GetTexture(Handle, ArrayIndex, ppTexture);
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) const override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) override final
     {
         if (ppWriter == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -142,7 +142,7 @@ public:
 
         try
         {
-            auto pWriter = static_cast<const DerivedType*>(this)->MakeWriter();
+            auto pWriter = static_cast<DerivedType*>(this)->MakeWriter();
             VERIFY_EXPR(pWriter != nullptr);
             *ppWriter = pWriter.Detach();
             return RADIENT_STATUS_OK;
@@ -152,11 +152,6 @@ public:
             LOG_ERROR_MESSAGE("Failed to create Radient material writer: ", Error.what());
             return RADIENT_STATUS_FAILED;
         }
-    }
-
-    const MaterialStorage& GetStorage() const noexcept
-    {
-        return m_Storage;
     }
 
     virtual MaterialStorage& DILIGENT_CALL_TYPE GetStorage() noexcept override final
