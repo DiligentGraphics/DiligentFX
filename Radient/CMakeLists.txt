@@ -11,7 +11,7 @@ set(SOURCE
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
     src/Assets/RadientMaterialDefinitionImpl.cpp
-    src/Assets/RadientMaterialImpl.cpp
+    src/Assets/RadientMaterialInstanceImpl.cpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp
@@ -19,6 +19,7 @@ set(SOURCE
     src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
     src/Assets/RadientMeshViewSource.cpp
     src/Assets/RadientStandardMaterial.cpp
+    src/Assets/RadientSurfaceMaterialInstanceImpl.cpp
     src/Assets/RadientTextureAssetManager.cpp
     src/Assets/RadientTextureSource.cpp
     src/Core/RadientBackendImpl.cpp
@@ -65,9 +66,11 @@ set(INCLUDE
     include/Assets/RadientGLTFLoader.hpp
     include/Assets/RadientMaterialAssetManager.hpp
     include/Assets/RadientMaterialDefinitionImpl.hpp
+    include/Assets/RadientMaterialInstanceImpl.hpp
     include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshVertexSource.hpp
+    include/Assets/RadientSurfaceMaterialInstanceImpl.hpp
     include/Assets/RadientMeshViewSource.hpp
     include/Assets/RadientTextureAssetManager.hpp
     include/Assets/RadientTextureFormat.hpp

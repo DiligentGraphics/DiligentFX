@@ -304,6 +304,91 @@ TEST(RadientMaterialTest, NonSurfaceInstancesDoNotExposeSurfaceInterfaces)
     EXPECT_EQ(pSurfaceWriter, nullptr);
 }
 
+TEST(RadientMaterialTest, GenericWriterRetainsItsInstance)
+{
+    const Float32 DefaultValue = 0.f;
+    const Float32 UpdatedValue = 1.f;
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.pDefaultValue = &DefaultValue;
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition = CreateDefinition(&Parameter, 1);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle Handle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &Handle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+    RefCntWeakPtr<IRadientMaterialInstance> WeakInstance{pInstance};
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pWriter, nullptr);
+
+    pInstance.Release();
+    EXPECT_NE(WeakInstance.Lock(), nullptr);
+
+    ASSERT_EQ(pWriter->SetParameter(Handle, UpdatedValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    {
+        RefCntAutoPtr<IRadientMaterialInstance> pRetainedInstance = WeakInstance.Lock();
+        ASSERT_NE(pRetainedInstance, nullptr);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pRetainedInstance, Handle), UpdatedValue);
+    }
+
+    pWriter.Release();
+    EXPECT_EQ(WeakInstance.Lock(), nullptr);
+}
+
+TEST(RadientMaterialTest, SurfaceWriterRetainsItsInstance)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name = "Retained surface instance definition";
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    ASSERT_EQ(pDefinition->CreateInstance(pInstance.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pInstance, nullptr);
+    RefCntWeakPtr<IRadientMaterialInstance> WeakInstance{pInstance};
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    ASSERT_EQ(pInstance->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialInstanceWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    pWriter.Release();
+
+    pInstance.Release();
+    EXPECT_NE(WeakInstance.Lock(), nullptr);
+
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+
+    {
+        RefCntAutoPtr<IRadientMaterialInstance> pRetainedInstance = WeakInstance.Lock();
+        ASSERT_NE(pRetainedInstance, nullptr);
+        RefCntAutoPtr<IRadientSurfaceMaterialInstance> pRetainedSurfaceInstance{
+            pRetainedInstance, IID_RadientSurfaceMaterialInstance};
+        ASSERT_NE(pRetainedSurfaceInstance, nullptr);
+        EXPECT_EQ(pRetainedSurfaceInstance->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+        EXPECT_FLOAT_EQ(pRetainedSurfaceInstance->GetAlphaCutoff(), 0.25f);
+        EXPECT_TRUE(pRetainedSurfaceInstance->IsDoubleSided());
+    }
+
+    pSurfaceWriter.Release();
+    EXPECT_EQ(WeakInstance.Lock(), nullptr);
+}
+
 TEST(RadientMaterialTest, DefinitionPacksInstanceShaderData)
 {
     const RadientFloat4          DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};

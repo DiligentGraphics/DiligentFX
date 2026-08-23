@@ -26,15 +26,21 @@
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 
+#include "Assets/RadientMaterialInstanceImpl.hpp"
+#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
+
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
 #include "GLTFLoader.hpp"
 #include "ObjectBase.hpp"
+#include "RefCntAutoPtr.hpp"
 
 #include <atomic>
 #include <cstddef>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <map>
 #include <string>
@@ -763,6 +769,144 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::FindParameter(
         return RADIENT_STATUS_NOT_FOUND;
 
     return GetParameterHandle(It->second, pHandle);
+}
+
+void RadientMaterialDefinitionImpl::WriteShaderData(
+    const IRadientMaterialInstance& Instance,
+    void*                           pData) const noexcept
+{
+    if (m_Data.PackingPlan.Size == 0)
+        return;
+
+    Uint8* const                                 pShaderData = static_cast<Uint8*>(pData);
+    const bool                                   IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
+    const IRadientSurfaceMaterialInstance* const pSurfaceInstance =
+        IsSurface ? &static_cast<const IRadientSurfaceMaterialInstance&>(Instance) : nullptr;
+    const RadientMaterialDetail::PackedMaterialInstanceData& InstanceData =
+        IsSurface ?
+        RadientMaterialDetail::GetSurfaceMaterialInstanceData(*pSurfaceInstance) :
+        RadientMaterialDetail::GetMaterialInstanceData(Instance);
+
+    std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
+    for (Uint32 InitializationIndex = 0;
+         InitializationIndex < m_Data.PackingPlan.InitializationCount;
+         ++InitializationIndex)
+    {
+        const RadientMaterialShaderDataInitialization& Initialization =
+            m_Data.PackingPlan.pInitializations[InitializationIndex];
+        std::memcpy(pShaderData + Initialization.Offset,
+                    Initialization.pData,
+                    Initialization.Size);
+    }
+
+    const RadientSurfaceMaterialShaderParameterPacking* const pSurfacePacking =
+        m_Data.PackingPlan.pSurfacePacking;
+    if (pSurfacePacking != nullptr && pSurfacePacking->SurfaceModeOffset != ~Uint32{0})
+    {
+        VERIFY_EXPR(pSurfaceInstance != nullptr);
+        const Uint32 SurfaceMode = static_cast<Uint32>(pSurfaceInstance->GetSurfaceMode());
+        std::memcpy(pShaderData + pSurfacePacking->SurfaceModeOffset,
+                    &SurfaceMode,
+                    sizeof(SurfaceMode));
+    }
+    if (pSurfacePacking != nullptr && pSurfacePacking->AlphaCutoffOffset != ~Uint32{0})
+    {
+        VERIFY_EXPR(pSurfaceInstance != nullptr);
+        const Float32 AlphaCutoff = pSurfaceInstance->GetAlphaCutoff();
+        std::memcpy(pShaderData + pSurfacePacking->AlphaCutoffOffset,
+                    &AlphaCutoff,
+                    sizeof(AlphaCutoff));
+    }
+
+    for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.CopyCommandCount; ++CommandIndex)
+    {
+        const ShaderDataCopyCommand& Command = m_Data.PackingPlan.pCopyCommands[CommandIndex];
+        std::memcpy(pShaderData + Command.DestinationOffset,
+                    InstanceData.GetValueData(Command.ParameterIndex),
+                    Command.Size);
+    }
+
+    for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.TextureCommandCount; ++CommandIndex)
+    {
+        const RadientMaterialShaderTexturePacking& Command =
+            m_Data.PackingPlan.pTextureCommands[CommandIndex];
+
+        const Int32 UVSelector =
+            *static_cast<const Int32*>(InstanceData.GetValueData(Command.UVSelectorParameterIndex));
+        const Uint32 WrapU =
+            *static_cast<const Uint32*>(InstanceData.GetValueData(Command.WrapUParameterIndex));
+        const Uint32 WrapV =
+            *static_cast<const Uint32*>(InstanceData.GetValueData(Command.WrapVParameterIndex));
+        ShaderTextureAttribs TextureAttribs{};
+        TextureAttribs.SetUVSelector(UVSelector);
+        TextureAttribs.SetWrapUMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapU));
+        TextureAttribs.SetWrapVMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapV));
+        std::memcpy(pShaderData + Command.Offset + ShaderTexturePackedPropsOffset,
+                    &TextureAttribs.PackedProps,
+                    sizeof(TextureAttribs.PackedProps));
+
+        IRadientTextureAsset* const pTexture = InstanceData.GetTexture(Command.TextureParameterIndex, 0);
+        if (pTexture != nullptr)
+        {
+            RadientTextureSamplingInfo SamplingInfo{};
+            const bool                 SamplingInfoAvailable =
+                RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo);
+            VERIFY_EXPR(SamplingInfoAvailable);
+            if (SamplingInfoAvailable)
+            {
+                std::memcpy(pShaderData + Command.Offset + ShaderTextureSliceOffset,
+                            &SamplingInfo.TextureSlice,
+                            sizeof(SamplingInfo.TextureSlice));
+                std::memcpy(pShaderData + Command.Offset + ShaderTextureAtlasUVOffset,
+                            &SamplingInfo.UVScaleBias,
+                            sizeof(SamplingInfo.UVScaleBias));
+            }
+        }
+    }
+}
+
+RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::CreateInstance(
+    IRadientMaterialInstance** ppInstance) const
+{
+    if (ppInstance == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppInstance = nullptr;
+
+    const RADIENT_STATUS DefinitionStatus = GetStatus();
+    if (RADIENT_FAILED(DefinitionStatus))
+        return DefinitionStatus;
+
+    try
+    {
+        RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+        switch (m_Data.GetDesc().Type)
+        {
+            case RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE:
+                pInstance = RadientMaterialDetail::MakeSurfaceMaterialInstance(
+                    const_cast<RadientMaterialDefinitionImpl*>(this),
+                    m_DefinitionHandle);
+                break;
+
+            case RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS:
+            case RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE:
+                pInstance = RadientMaterialDetail::MakeMaterialInstance(
+                    const_cast<RadientMaterialDefinitionImpl*>(this),
+                    m_DefinitionHandle);
+                break;
+
+            default:
+                UNEXPECTED("Unexpected material definition type");
+                return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        *ppInstance = pInstance.Detach();
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient material instance: ", Error.what());
+        return RADIENT_STATUS_FAILED;
+    }
 }
 
 } // namespace Diligent
