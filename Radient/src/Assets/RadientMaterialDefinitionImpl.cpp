@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 
+#include "Assets/RadientMaterialAssetFactory.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 
@@ -768,6 +769,23 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::FindParameter(
         return RADIENT_STATUS_NOT_FOUND;
 
     return GetParameterHandle(It->second, pHandle);
+}
+
+RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDefinitionImpl::CreateAsset()
+{
+    switch (m_Data.GetDesc().Type)
+    {
+        case RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE:
+            return RadientMaterialDetail::MakeSurfaceMaterialAsset(this, m_DefinitionHandle);
+
+        case RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS:
+        case RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE:
+            return RadientMaterialDetail::MakeGenericMaterialAsset(this, m_DefinitionHandle);
+
+        default:
+            UNEXPECTED("Unexpected material definition type");
+            return {};
+    }
 }
 
 void RadientMaterialDefinitionImpl::WriteShaderData(

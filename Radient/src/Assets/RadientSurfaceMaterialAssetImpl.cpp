@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Assets/RadientSurfaceMaterialAssetImpl.hpp"
+#include "Assets/RadientMaterialAssetFactory.hpp"
 
 #include "RadientMaterialAssetImplBase.hpp"
 

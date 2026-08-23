@@ -65,13 +65,13 @@ set(INCLUDE
     include/Assets/RadientCacheKeyBuilder.hpp
     include/Assets/RadientFilesystemAssetResolver.hpp
     include/Assets/RadientGLTFLoader.hpp
+    include/Assets/RadientMaterialAssetFactory.hpp
     include/Assets/RadientMaterialAssetManager.hpp
     include/Assets/RadientMaterialDefinitionImpl.hpp
     include/Assets/RadientMaterialStorage.hpp
     include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
     include/Assets/RadientMeshVertexSource.hpp
-    include/Assets/RadientSurfaceMaterialAssetImpl.hpp
     include/Assets/RadientMeshViewSource.hpp
     include/Assets/RadientTextureAssetManager.hpp
     include/Assets/RadientTextureFormat.hpp

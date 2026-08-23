@@ -28,7 +28,6 @@
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
-#include "Assets/RadientSurfaceMaterialAssetImpl.hpp"
 #include "DebugUtilities.hpp"
 
 #include <exception>
@@ -112,26 +111,10 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
 
     try
     {
-        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-        switch (pDefinitionImpl->GetDesc().Type)
-        {
-            case RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE:
-                pMaterial = RadientMaterialDetail::MakeSurfaceMaterialAsset(
-                    pDefinitionImpl, pDefinitionImpl->GetDefinitionHandle());
-                break;
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial = pDefinitionImpl->CreateAsset();
+        if (pMaterial == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
 
-            case RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS:
-            case RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE:
-                pMaterial = RadientMaterialDetail::MakeMaterialAsset(
-                    pDefinitionImpl, pDefinitionImpl->GetDefinitionHandle());
-                break;
-
-            default:
-                UNEXPECTED("Unexpected material definition type");
-                return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        VERIFY_EXPR(pMaterial != nullptr);
         *ppMaterial = pMaterial.Detach();
         return RADIENT_STATUS_OK;
     }

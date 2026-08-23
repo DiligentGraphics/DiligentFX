@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientMaterialAssetFactory.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
 
 #include "RadientMaterialAssetImplBase.hpp"
@@ -413,11 +414,6 @@ IRadientMaterialDefinitionAsset* MaterialStorage::GetDefinition() const noexcept
     return m_pDefinition;
 }
 
-RadientHandle MaterialStorage::GetDefinitionHandle() const noexcept
-{
-    return m_DefinitionHandle;
-}
-
 Uint64 MaterialStorage::GetVersion() const noexcept
 {
     return m_Version;
@@ -698,7 +694,7 @@ RefCntAutoPtr<RadientMaterialWriterImpl> RadientMaterialAssetImpl::MakeWriter() 
 
 } // namespace
 
-RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeMaterialAsset(
+RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeGenericMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle)
 {

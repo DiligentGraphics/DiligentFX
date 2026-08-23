@@ -26,13 +26,19 @@
 
 #pragma once
 
-#include "Assets/RadientMaterialStorage.hpp"
+#include "RadientMaterials.h"
+
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
 namespace RadientMaterialDetail
 {
+
+RefCntAutoPtr<IRadientMaterialAsset> MakeGenericMaterialAsset(
+    IRadientMaterialDefinitionAsset* pDefinition,
+    RadientHandle                    DefinitionHandle);
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,

@@ -30,6 +30,7 @@
 
 #include "HashUtils.hpp"
 #include "ObjectBase.hpp"
+#include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
 
 #ifdef _MSC_VER
@@ -193,6 +194,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE FindParameter(const Char*                     Name,
                                                             RadientMaterialParameterHandle* pHandle) const override final;
 
+    RefCntAutoPtr<IRadientMaterialAsset> CreateAsset();
+
     Uint32 GetShaderDataSize() const noexcept
     {
         return m_Data.PackingPlan.Size;
@@ -206,11 +209,6 @@ public:
     /// data.
     void WriteShaderData(const IRadientMaterialAsset& Material,
                          void*                        pData) const noexcept;
-
-    RadientHandle GetDefinitionHandle() const noexcept
-    {
-        return m_DefinitionHandle;
-    }
 
 private:
     struct ShaderDataCopyCommand
@@ -250,9 +248,9 @@ private:
             Other.PackingPlan = {};
         }
 
-        PackedData(const PackedData&)            = delete;
+        PackedData(const PackedData&) = delete;
         PackedData& operator=(const PackedData&) = delete;
-        PackedData& operator=(PackedData&&)      = delete;
+        PackedData& operator=(PackedData&&) = delete;
 
         ~PackedData()
         {

@@ -100,7 +100,6 @@ public:
     // clang-format on
 
     IRadientMaterialDefinitionAsset* GetDefinition() const noexcept;
-    RadientHandle                    GetDefinitionHandle() const noexcept;
     Uint64                           GetVersion() const noexcept;
 
     RADIENT_STATUS GetParameter(RadientMaterialParameterHandle Handle,
@@ -179,10 +178,6 @@ private:
     std::vector<Uint8>                          m_ValueData;
     std::vector<PackedMaterialData::TexturePtr> m_TextureData;
 };
-
-RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(
-    IRadientMaterialDefinitionAsset* pDefinition,
-    RadientHandle                    DefinitionHandle);
 
 MaterialStorage*       TryGetMaterialStorage(IRadientMaterialAsset* pMaterial) noexcept;
 const MaterialStorage* TryGetMaterialStorage(const IRadientMaterialAsset* pMaterial) noexcept;
