@@ -186,9 +186,8 @@ RefCntAutoPtr<IRadientMaterialInstance> MakeMaterialInstance(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
-MaterialInstanceState* TryGetMaterialInstanceState(IRadientMaterialInstance* pInstance) noexcept;
-
-const PackedMaterialInstanceData& GetMaterialInstanceData(const IRadientMaterialInstance& Instance) noexcept;
+MaterialInstanceState*       TryGetMaterialInstanceState(IRadientMaterialInstance* pInstance) noexcept;
+const MaterialInstanceState* TryGetMaterialInstanceState(const IRadientMaterialInstance* pInstance) noexcept;
 
 } // namespace RadientMaterialDetail
 

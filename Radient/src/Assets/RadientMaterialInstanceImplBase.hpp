@@ -39,14 +39,29 @@ namespace Diligent
 namespace RadientMaterialDetail
 {
 
+// {484A2342-30BE-447A-AC3C-B7472D3FB6AF}
+static constexpr INTERFACE_ID IID_MaterialInstanceStateProvider =
+    {0x484a2342, 0x30be, 0x447a, {0xac, 0x3c, 0xb7, 0x47, 0x2d, 0x3f, 0xb6, 0xaf}};
+
+
+struct IMaterialInstanceStateProvider : IObject
+{
+    virtual MaterialInstanceState& DILIGENT_CALL_TYPE GetState() noexcept = 0;
+};
+
+template <typename InterfaceType>
+struct MaterialInstanceCombinedInterface :
+    InterfaceType,
+    IMaterialInstanceStateProvider
+{};
+
 template <typename DerivedType,
           typename InterfaceType,
-          const INTERFACE_ID& InterfaceID,
-          const INTERFACE_ID& ImplID>
-class MaterialInstanceImplBase : public ObjectBase<InterfaceType>
+          const INTERFACE_ID& InterfaceID>
+class MaterialInstanceImplBase : public RefCountedObject<MaterialInstanceCombinedInterface<InterfaceType>>
 {
 public:
-    using TBase = ObjectBase<InterfaceType>;
+    using TBase = RefCountedObject<MaterialInstanceCombinedInterface<InterfaceType>>;
 
     MaterialInstanceImplBase(IReferenceCounters*              pRefCounters,
                              IRadientMaterialDefinitionAsset* pDefinition,
@@ -61,19 +76,23 @@ public:
         if (ppInterface == nullptr)
             return;
 
-        if (IID == InterfaceID ||
-            IID == IID_RadientMaterialInstance ||
-            IID == ImplID)
+        *ppInterface = nullptr;
+        if (IID == IID_MaterialInstanceStateProvider)
         {
-            *ppInterface = static_cast<DerivedType*>(this);
+            *ppInterface = static_cast<IMaterialInstanceStateProvider*>(this);
+        }
+        else if (IID == InterfaceID)
+        {
+            *ppInterface = static_cast<InterfaceType*>(this);
+        }
+        else if (IID == IID_RadientMaterialInstance || IID == IID_Unknown)
+        {
+            *ppInterface = static_cast<IRadientMaterialInstance*>(static_cast<InterfaceType*>(this));
+        }
+
+        if (*ppInterface != nullptr)
             (*ppInterface)->AddRef();
-        }
-        else
-        {
-            TBase::QueryInterface(IID, ppInterface);
-        }
     }
-    using IObject::QueryInterface;
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
@@ -144,17 +163,9 @@ public:
         return m_State;
     }
 
-    MaterialInstanceState& GetState() noexcept
+    virtual MaterialInstanceState& DILIGENT_CALL_TYPE GetState() noexcept override final
     {
         return m_State;
-    }
-
-    static MaterialInstanceState* TryGetState(IRadientMaterialInstance* pInstance) noexcept
-    {
-        RefCntAutoPtr<IObject> pImpl{pInstance, ImplID};
-        return pImpl != nullptr ?
-            &static_cast<DerivedType*>(pImpl.RawPtr())->GetState() :
-            nullptr;
     }
 
 private:

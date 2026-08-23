@@ -782,10 +782,13 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
     const bool                                   IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
     const IRadientSurfaceMaterialInstance* const pSurfaceInstance =
         IsSurface ? &static_cast<const IRadientSurfaceMaterialInstance&>(Instance) : nullptr;
+    const RadientMaterialDetail::MaterialInstanceState* const pInstanceState =
+        RadientMaterialDetail::TryGetMaterialInstanceState(&Instance);
+    VERIFY_EXPR(pInstanceState != nullptr);
+    if (pInstanceState == nullptr)
+        return;
     const RadientMaterialDetail::PackedMaterialInstanceData& InstanceData =
-        IsSurface ?
-        RadientMaterialDetail::GetSurfaceMaterialInstanceData(*pSurfaceInstance) :
-        RadientMaterialDetail::GetMaterialInstanceData(Instance);
+        pInstanceState->GetPackedData();
 
     std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
     for (Uint32 InitializationIndex = 0;

@@ -38,13 +38,6 @@ RefCntAutoPtr<IRadientMaterialInstance> MakeSurfaceMaterialInstance(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
-// Implementation probe used by the unified TryGetMaterialInstanceState()
-// dispatcher. Material asset code must use the unified dispatcher instead.
-MaterialInstanceState* TryGetSurfaceMaterialInstanceStateImpl(IRadientMaterialInstance* pInstance) noexcept;
-
-const PackedMaterialInstanceData& GetSurfaceMaterialInstanceData(
-    const IRadientSurfaceMaterialInstance& Instance) noexcept;
-
 } // namespace RadientMaterialDetail
 
 } // namespace Diligent

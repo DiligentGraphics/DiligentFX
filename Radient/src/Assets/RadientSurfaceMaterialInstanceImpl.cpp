@@ -38,18 +38,13 @@ namespace
 
 using namespace RadientMaterialDetail;
 
-// {0343A08D-C858-466B-B68B-F288DD89C8F0}
-static constexpr INTERFACE_ID IID_SurfaceMaterialInstanceImpl =
-    {0x343a08d, 0xc858, 0x466b, {0xb6, 0x8b, 0xf2, 0x88, 0xdd, 0x89, 0xc8, 0xf0}};
-
 class RadientSurfaceMaterialInstanceImpl;
 class RadientSurfaceMaterialInstanceWriterImpl;
 
 using RadientSurfaceMaterialInstanceImplBase =
     MaterialInstanceImplBase<RadientSurfaceMaterialInstanceImpl,
                              IRadientSurfaceMaterialInstance,
-                             IID_RadientSurfaceMaterialInstance,
-                             IID_SurfaceMaterialInstanceImpl>;
+                             IID_RadientSurfaceMaterialInstance>;
 
 class RadientSurfaceMaterialInstanceImpl final : public RadientSurfaceMaterialInstanceImplBase
 {
@@ -202,18 +197,6 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeSurfaceMateri
 {
     return RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>{
         MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
-}
-
-RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetSurfaceMaterialInstanceStateImpl(
-    IRadientMaterialInstance* pInstance) noexcept
-{
-    return RadientSurfaceMaterialInstanceImpl::TryGetState(pInstance);
-}
-
-const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetSurfaceMaterialInstanceData(
-    const IRadientSurfaceMaterialInstance& Instance) noexcept
-{
-    return static_cast<const RadientSurfaceMaterialInstanceImpl&>(Instance).GetState().GetPackedData();
 }
 
 } // namespace Diligent

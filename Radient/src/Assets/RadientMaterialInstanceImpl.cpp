@@ -31,7 +31,6 @@
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
-#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -678,18 +677,13 @@ namespace
 
 using namespace RadientMaterialDetail;
 
-// {FE1C68A6-5839-46D6-80BF-FCBF184756BA}
-static constexpr INTERFACE_ID IID_MaterialInstanceImpl =
-    {0xfe1c68a6, 0x5839, 0x46d6, {0x80, 0xbf, 0xfc, 0xbf, 0x18, 0x47, 0x56, 0xba}};
-
 class RadientMaterialInstanceImpl;
 class RadientMaterialInstanceWriterImpl;
 
 using RadientMaterialInstanceImplBase =
     MaterialInstanceImplBase<RadientMaterialInstanceImpl,
                              IRadientMaterialInstance,
-                             IID_RadientMaterialInstance,
-                             IID_MaterialInstanceImpl>;
+                             IID_RadientMaterialInstance>;
 
 class RadientMaterialInstanceImpl final : public RadientMaterialInstanceImplBase
 {
@@ -742,16 +736,14 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInsta
 RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
     IRadientMaterialInstance* pInstance) noexcept
 {
-    if (MaterialInstanceState* pState = RadientMaterialInstanceImpl::TryGetState(pInstance))
-        return pState;
-
-    return TryGetSurfaceMaterialInstanceStateImpl(pInstance);
+    RefCntAutoPtr<IMaterialInstanceStateProvider> pStateProvider{pInstance, IID_MaterialInstanceStateProvider};
+    return pStateProvider != nullptr ? &pStateProvider->GetState() : nullptr;
 }
 
-const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetMaterialInstanceData(
-    const IRadientMaterialInstance& Instance) noexcept
+const RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
+    const IRadientMaterialInstance* pInstance) noexcept
 {
-    return static_cast<const RadientMaterialInstanceImpl&>(Instance).GetState().GetPackedData();
+    return TryGetMaterialInstanceState(const_cast<IRadientMaterialInstance*>(pInstance));
 }
 
 } // namespace Diligent
