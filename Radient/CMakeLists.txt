@@ -12,6 +12,7 @@ set(SOURCE
     src/Assets/RadientMaterialAssetManager.cpp
     src/Assets/RadientMaterialDefinitionImpl.cpp
     src/Assets/RadientMaterialInstanceImpl.cpp
+    src/Assets/RadientMaterialInstanceImplBase.hpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
     src/Assets/RadientMeshPrimitives.cpp

@@ -26,10 +26,9 @@
 
 #include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 
-#include "DebugUtilities.hpp"
-#include "ObjectBase.hpp"
+#include "RadientMaterialInstanceImplBase.hpp"
 
-#include <exception>
+#include "DebugUtilities.hpp"
 
 namespace Diligent
 {
@@ -43,66 +42,29 @@ using namespace RadientMaterialDetail;
 static constexpr INTERFACE_ID IID_SurfaceMaterialInstanceImpl =
     {0x343a08d, 0xc858, 0x466b, {0xb6, 0x8b, 0xf2, 0x88, 0xdd, 0x89, 0xc8, 0xf0}};
 
+class RadientSurfaceMaterialInstanceImpl;
 class RadientSurfaceMaterialInstanceWriterImpl;
 
-class RadientSurfaceMaterialInstanceImpl final : public ObjectBase<IRadientSurfaceMaterialInstance>
+using RadientSurfaceMaterialInstanceImplBase =
+    MaterialInstanceImplBase<RadientSurfaceMaterialInstanceImpl,
+                             IRadientSurfaceMaterialInstance,
+                             IID_RadientSurfaceMaterialInstance,
+                             IID_SurfaceMaterialInstanceImpl>;
+
+class RadientSurfaceMaterialInstanceImpl final : public RadientSurfaceMaterialInstanceImplBase
 {
 public:
-    using TBase = ObjectBase<IRadientSurfaceMaterialInstance>;
+    using TBase = RadientSurfaceMaterialInstanceImplBase;
 
     RadientSurfaceMaterialInstanceImpl(IReferenceCounters*                       pRefCounters,
                                        IRadientMaterialDefinitionAsset*          pDefinition,
                                        RadientHandle                             DefinitionHandle,
                                        const RadientSurfaceMaterialInstanceImpl* pSource = nullptr) :
-        TBase{pRefCounters},
-        m_State{pDefinition, DefinitionHandle, pSource != nullptr ? &pSource->m_State : nullptr},
+        TBase{pRefCounters, pDefinition, DefinitionHandle, pSource != nullptr ? &pSource->GetState() : nullptr},
         m_SurfaceMode{pSource != nullptr ? pSource->m_SurfaceMode : RADIENT_MATERIAL_SURFACE_MODE_OPAQUE},
         m_AlphaCutoff{pSource != nullptr ? pSource->m_AlphaCutoff : 0.5f},
         m_IsDoubleSided{pSource != nullptr ? pSource->m_IsDoubleSided : False}
     {}
-
-    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
-    {
-        if (ppInterface == nullptr)
-            return;
-
-        if (IID == IID_RadientSurfaceMaterialInstance ||
-            IID == IID_RadientMaterialInstance ||
-            IID == IID_SurfaceMaterialInstanceImpl)
-        {
-            *ppInterface = this;
-            (*ppInterface)->AddRef();
-        }
-        else
-        {
-            TBase::QueryInterface(IID, ppInterface);
-        }
-    }
-    using IObject::QueryInterface;
-
-    virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
-    {
-        return m_State.GetDefinition();
-    }
-
-    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
-    {
-        return m_State.GetVersion();
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
-                                                           void*                          pData,
-                                                           Uint32                         DataSize) const override final
-    {
-        return m_State.GetParameter(Handle, pData, DataSize);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset**         ppTexture) const override final
-    {
-        return m_State.GetTexture(Handle, ArrayIndex, ppTexture);
-    }
 
     virtual RADIENT_MATERIAL_SURFACE_MODE DILIGENT_CALL_TYPE GetSurfaceMode() const override final
     {
@@ -119,55 +81,28 @@ public:
         return m_IsDoubleSided;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const override final;
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final;
-
-    const MaterialInstanceState& GetState() const noexcept
-    {
-        return m_State;
-    }
-
-    MaterialInstanceState& GetState() noexcept
-    {
-        return m_State;
-    }
+    RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> MakeWriter() const;
+    RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>       MakeClone() const;
 
 private:
     friend class RadientSurfaceMaterialInstanceWriterImpl;
 
-    MaterialInstanceState         m_State;
     RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode   = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
     Float32                       m_AlphaCutoff   = 0.5f;
     Bool                          m_IsDoubleSided = False;
 };
 
-class RadientSurfaceMaterialInstanceWriterImpl final : public ObjectBase<IRadientSurfaceMaterialInstanceWriter>
+using RadientSurfaceMaterialInstanceWriterImplBase =
+    MaterialInstanceWriterImplBase<RadientSurfaceMaterialInstanceWriterImpl,
+                                   IRadientSurfaceMaterialInstanceWriter,
+                                   IID_RadientSurfaceMaterialInstanceWriter,
+                                   RadientSurfaceMaterialInstanceImpl>;
+
+class RadientSurfaceMaterialInstanceWriterImpl final : public RadientSurfaceMaterialInstanceWriterImplBase
 {
 public:
-    using TBase = ObjectBase<IRadientSurfaceMaterialInstanceWriter>;
-
-    RadientSurfaceMaterialInstanceWriterImpl(IReferenceCounters*                 pRefCounters,
-                                             RadientSurfaceMaterialInstanceImpl* pInstance) :
-        TBase{pRefCounters},
-        m_pInstance{pInstance},
-        m_Parameters{pInstance, pInstance->m_State}
-    {}
-
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientSurfaceMaterialInstanceWriter, IID_RadientMaterialInstanceWriter, TBase)
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParameter(RadientMaterialParameterHandle Handle,
-                                                           const void*                    pData,
-                                                           Uint32                         DataSize) override final
-    {
-        return m_Parameters.SetParameter(Handle, pData, DataSize);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset*          pTexture) override final
-    {
-        return m_Parameters.SetTexture(Handle, ArrayIndex, pTexture);
-    }
+    using TBase = RadientSurfaceMaterialInstanceWriterImplBase;
+    using TBase::TBase;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) override final
     {
@@ -175,7 +110,7 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         const RADIENT_MATERIAL_SURFACE_MODE CurrentMode =
-            m_SurfaceModeChanged ? m_SurfaceMode : m_pInstance->m_SurfaceMode;
+            m_SurfaceModeChanged ? m_SurfaceMode : GetInstance().m_SurfaceMode;
         if (CurrentMode == SurfaceMode)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -187,7 +122,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetAlphaCutoff(Float32 AlphaCutoff) override final
     {
         const Float32 CurrentValue =
-            m_AlphaCutoffChanged ? m_AlphaCutoff : m_pInstance->m_AlphaCutoff;
+            m_AlphaCutoffChanged ? m_AlphaCutoff : GetInstance().m_AlphaCutoff;
         if (CurrentValue == AlphaCutoff)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -199,7 +134,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDoubleSided(Bool DoubleSided) override final
     {
         DoubleSided             = DoubleSided != False ? True : False;
-        const Bool CurrentValue = m_DoubleSidedChanged ? m_IsDoubleSided : m_pInstance->m_IsDoubleSided;
+        const Bool CurrentValue = m_DoubleSidedChanged ? m_IsDoubleSided : GetInstance().m_IsDoubleSided;
         if (CurrentValue == DoubleSided)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -208,85 +143,55 @@ public:
         return RADIENT_STATUS_OK;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
+    bool ApplySpecializedChanges() noexcept
     {
-        bool StateChanged = m_Parameters.ApplyParameterChanges();
+        bool StateChanged = false;
 
-        if (m_SurfaceModeChanged && m_pInstance->m_SurfaceMode != m_SurfaceMode)
+        if (m_SurfaceModeChanged && GetInstance().m_SurfaceMode != m_SurfaceMode)
         {
-            m_pInstance->m_SurfaceMode = m_SurfaceMode;
-            StateChanged               = true;
+            GetInstance().m_SurfaceMode = m_SurfaceMode;
+            StateChanged                = true;
         }
-        if (m_AlphaCutoffChanged && m_pInstance->m_AlphaCutoff != m_AlphaCutoff)
+        if (m_AlphaCutoffChanged && GetInstance().m_AlphaCutoff != m_AlphaCutoff)
         {
-            m_pInstance->m_AlphaCutoff = m_AlphaCutoff;
-            StateChanged               = true;
+            GetInstance().m_AlphaCutoff = m_AlphaCutoff;
+            StateChanged                = true;
         }
-        if (m_DoubleSidedChanged && m_pInstance->m_IsDoubleSided != m_IsDoubleSided)
+        if (m_DoubleSidedChanged && GetInstance().m_IsDoubleSided != m_IsDoubleSided)
         {
-            m_pInstance->m_IsDoubleSided = m_IsDoubleSided;
-            StateChanged                 = true;
+            GetInstance().m_IsDoubleSided = m_IsDoubleSided;
+            StateChanged                  = true;
         }
 
         m_SurfaceModeChanged = false;
         m_AlphaCutoffChanged = false;
         m_DoubleSidedChanged = false;
-        return m_Parameters.FinishCommit(StateChanged);
+        return StateChanged;
     }
 
 private:
-    RadientSurfaceMaterialInstanceImpl* const m_pInstance;
-    MaterialInstanceWriterState               m_Parameters;
-    RADIENT_MATERIAL_SURFACE_MODE             m_SurfaceMode        = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
-    Float32                                   m_AlphaCutoff        = 0.5f;
-    Bool                                      m_IsDoubleSided      = False;
-    bool                                      m_SurfaceModeChanged = false;
-    bool                                      m_AlphaCutoffChanged = false;
-    bool                                      m_DoubleSidedChanged = false;
+    RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode        = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Float32                       m_AlphaCutoff        = 0.5f;
+    Bool                          m_IsDoubleSided      = False;
+    bool                          m_SurfaceModeChanged = false;
+    bool                          m_AlphaCutoffChanged = false;
+    bool                          m_DoubleSidedChanged = false;
 };
 
-RADIENT_STATUS RadientSurfaceMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const
+RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> RadientSurfaceMaterialInstanceImpl::MakeWriter() const
 {
-    if (ppWriter == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppWriter = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl> pWriter{
-            MakeNewRCObj<RadientSurfaceMaterialInstanceWriterImpl>()(
-                const_cast<RadientSurfaceMaterialInstanceImpl*>(this))};
-        *ppWriter = pWriter.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient surface material instance writer: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
+    return RefCntAutoPtr<RadientSurfaceMaterialInstanceWriterImpl>{
+        MakeNewRCObj<RadientSurfaceMaterialInstanceWriterImpl>()(
+            const_cast<RadientSurfaceMaterialInstanceImpl*>(this))};
 }
 
-RADIENT_STATUS RadientSurfaceMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppInstance) const
+RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl> RadientSurfaceMaterialInstanceImpl::MakeClone() const
 {
-    if (ppInstance == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl> pInstance{
-            MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(
-                m_State.GetDefinition(),
-                m_State.GetDefinitionHandle(),
-                this)};
-        *ppInstance = pInstance.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to clone Radient surface material instance: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
+    return RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>{
+        MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(
+            GetState().GetDefinition(),
+            GetState().GetDefinitionHandle(),
+            this)};
 }
 
 } // namespace
@@ -299,13 +204,10 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeSurfaceMateri
         MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
 }
 
-RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetSurfaceMaterialInstanceState(
+RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetSurfaceMaterialInstanceStateImpl(
     IRadientMaterialInstance* pInstance) noexcept
 {
-    RefCntAutoPtr<IObject> pImpl{pInstance, IID_SurfaceMaterialInstanceImpl};
-    return pImpl != nullptr ?
-        &static_cast<RadientSurfaceMaterialInstanceImpl*>(pInstance)->GetState() :
-        nullptr;
+    return RadientSurfaceMaterialInstanceImpl::TryGetState(pInstance);
 }
 
 const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetSurfaceMaterialInstanceData(

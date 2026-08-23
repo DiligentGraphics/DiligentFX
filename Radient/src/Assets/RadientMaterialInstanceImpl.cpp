@@ -26,9 +26,12 @@
 
 #include "Assets/RadientMaterialInstanceImpl.hpp"
 
+#include "RadientMaterialInstanceImplBase.hpp"
+
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -679,143 +682,52 @@ using namespace RadientMaterialDetail;
 static constexpr INTERFACE_ID IID_MaterialInstanceImpl =
     {0xfe1c68a6, 0x5839, 0x46d6, {0x80, 0xbf, 0xfc, 0xbf, 0x18, 0x47, 0x56, 0xba}};
 
+class RadientMaterialInstanceImpl;
 class RadientMaterialInstanceWriterImpl;
 
-class RadientMaterialInstanceImpl final : public ObjectBase<IRadientMaterialInstance>
+using RadientMaterialInstanceImplBase =
+    MaterialInstanceImplBase<RadientMaterialInstanceImpl,
+                             IRadientMaterialInstance,
+                             IID_RadientMaterialInstance,
+                             IID_MaterialInstanceImpl>;
+
+class RadientMaterialInstanceImpl final : public RadientMaterialInstanceImplBase
 {
 public:
-    using TBase = ObjectBase<IRadientMaterialInstance>;
+    using TBase = RadientMaterialInstanceImplBase;
+    using TBase::TBase;
 
-    RadientMaterialInstanceImpl(IReferenceCounters*                pRefCounters,
-                                IRadientMaterialDefinitionAsset*   pDefinition,
-                                RadientHandle                      DefinitionHandle,
-                                const RadientMaterialInstanceImpl* pSource = nullptr) :
-        TBase{pRefCounters},
-        m_State{pDefinition, DefinitionHandle, pSource != nullptr ? &pSource->m_State : nullptr}
-    {}
-
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialInstance, IID_MaterialInstanceImpl, TBase)
-
-    virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
-    {
-        return m_State.GetDefinition();
-    }
-
-    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
-    {
-        return m_State.GetVersion();
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
-                                                           void*                          pData,
-                                                           Uint32                         DataSize) const override final
-    {
-        return m_State.GetParameter(Handle, pData, DataSize);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset**         ppTexture) const override final
-    {
-        return m_State.GetTexture(Handle, ArrayIndex, ppTexture);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const override final;
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final;
-
-    const MaterialInstanceState& GetState() const noexcept
-    {
-        return m_State;
-    }
-
-    MaterialInstanceState& GetState() noexcept
-    {
-        return m_State;
-    }
-
-private:
-    friend class RadientMaterialInstanceWriterImpl;
-
-    MaterialInstanceState m_State;
+    RefCntAutoPtr<RadientMaterialInstanceWriterImpl> MakeWriter() const;
+    RefCntAutoPtr<RadientMaterialInstanceImpl>       MakeClone() const;
 };
 
-class RadientMaterialInstanceWriterImpl final : public ObjectBase<IRadientMaterialInstanceWriter>
+using RadientMaterialInstanceWriterImplBase =
+    MaterialInstanceWriterImplBase<RadientMaterialInstanceWriterImpl,
+                                   IRadientMaterialInstanceWriter,
+                                   IID_RadientMaterialInstanceWriter,
+                                   RadientMaterialInstanceImpl>;
+
+class RadientMaterialInstanceWriterImpl final : public RadientMaterialInstanceWriterImplBase
 {
 public:
-    using TBase = ObjectBase<IRadientMaterialInstanceWriter>;
-
-    RadientMaterialInstanceWriterImpl(IReferenceCounters*          pRefCounters,
-                                      RadientMaterialInstanceImpl* pInstance) :
-        TBase{pRefCounters},
-        m_State{pInstance, pInstance->m_State}
-    {}
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstanceWriter, TBase)
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParameter(RadientMaterialParameterHandle Handle,
-                                                           const void*                    pData,
-                                                           Uint32                         DataSize) override final
-    {
-        return m_State.SetParameter(Handle, pData, DataSize);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset*          pTexture) override final
-    {
-        return m_State.SetTexture(Handle, ArrayIndex, pTexture);
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
-    {
-        return m_State.FinishCommit(m_State.ApplyParameterChanges());
-    }
-
-private:
-    MaterialInstanceWriterState m_State;
+    using TBase = RadientMaterialInstanceWriterImplBase;
+    using TBase::TBase;
 };
 
-RADIENT_STATUS RadientMaterialInstanceImpl::CreateWriter(IRadientMaterialInstanceWriter** ppWriter) const
+RefCntAutoPtr<RadientMaterialInstanceWriterImpl> RadientMaterialInstanceImpl::MakeWriter() const
 {
-    if (ppWriter == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppWriter = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientMaterialInstanceWriterImpl> pWriter{
-            MakeNewRCObj<RadientMaterialInstanceWriterImpl>()(const_cast<RadientMaterialInstanceImpl*>(this))};
-        *ppWriter = pWriter.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient material instance writer: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
+    return RefCntAutoPtr<RadientMaterialInstanceWriterImpl>{
+        MakeNewRCObj<RadientMaterialInstanceWriterImpl>()(
+            const_cast<RadientMaterialInstanceImpl*>(this))};
 }
 
-RADIENT_STATUS RadientMaterialInstanceImpl::Clone(IRadientMaterialInstance** ppInstance) const
+RefCntAutoPtr<RadientMaterialInstanceImpl> RadientMaterialInstanceImpl::MakeClone() const
 {
-    if (ppInstance == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    *ppInstance = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientMaterialInstanceImpl> pInstance{
-            MakeNewRCObj<RadientMaterialInstanceImpl>()(
-                m_State.GetDefinition(),
-                m_State.GetDefinitionHandle(),
-                this)};
-        *ppInstance = pInstance.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to clone Radient material instance: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
+    return RefCntAutoPtr<RadientMaterialInstanceImpl>{
+        MakeNewRCObj<RadientMaterialInstanceImpl>()(
+            GetState().GetDefinition(),
+            GetState().GetDefinitionHandle(),
+            &GetState())};
 }
 
 } // namespace
@@ -830,10 +742,10 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInsta
 RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
     IRadientMaterialInstance* pInstance) noexcept
 {
-    RefCntAutoPtr<IObject> pImpl{pInstance, IID_MaterialInstanceImpl};
-    return pImpl != nullptr ?
-        &static_cast<RadientMaterialInstanceImpl*>(pInstance)->GetState() :
-        nullptr;
+    if (MaterialInstanceState* pState = RadientMaterialInstanceImpl::TryGetState(pInstance))
+        return pState;
+
+    return TryGetSurfaceMaterialInstanceStateImpl(pInstance);
 }
 
 const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetMaterialInstanceData(

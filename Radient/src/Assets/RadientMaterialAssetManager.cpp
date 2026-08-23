@@ -30,7 +30,6 @@
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "Assets/RadientMaterialInstanceImpl.hpp"
-#include "Assets/RadientSurfaceMaterialInstanceImpl.hpp"
 #include "DebugUtilities.hpp"
 
 #include <exception>
@@ -173,8 +172,6 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
 
     RadientMaterialDetail::MaterialInstanceState* pInstanceState =
         RadientMaterialDetail::TryGetMaterialInstanceState(pInstance);
-    if (pInstanceState == nullptr)
-        pInstanceState = RadientMaterialDetail::TryGetSurfaceMaterialInstanceState(pInstance);
     if (pInstanceState == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
