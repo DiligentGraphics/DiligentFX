@@ -33,6 +33,7 @@
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
@@ -53,6 +54,36 @@ IVertexPool* const     TestVertexPool = reinterpret_cast<IVertexPool*>(size_t{1}
 
 std::unique_ptr<RadientTesseraMaterialCache> MakeDrawableMaterialCache();
 RADIENT_STATUS                               PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache);
+
+RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
+    RadientMaterialAssetManager&  MaterialManager,
+    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE,
+    Float32                       AlphaCutoff = 0.5f,
+    Bool                          DoubleSided = False)
+{
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    const RADIENT_STATUS                 Status = CreateStandardMaterialAsset(
+        MaterialManager,
+        {},
+        [SurfaceMode, AlphaCutoff, DoubleSided](IRadientMaterialDefinition&,
+                                                IRadientMaterialInstanceWriter& Writer) -> RADIENT_STATUS {
+            RefCntAutoPtr<IRadientSurfaceMaterialInstanceWriter> pSurfaceWriter{
+                &Writer, IID_RadientSurfaceMaterialInstanceWriter};
+            EXPECT_NE(pSurfaceWriter, nullptr);
+            if (!pSurfaceWriter)
+                return RADIENT_STATUS_INVALID_OPERATION;
+
+            RADIENT_STATUS InitializeStatus = pSurfaceWriter->SetSurfaceMode(SurfaceMode);
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = pSurfaceWriter->SetAlphaCutoff(AlphaCutoff);
+            if (RADIENT_SUCCEEDED(InitializeStatus))
+                InitializeStatus = pSurfaceWriter->SetDoubleSided(DoubleSided);
+            return InitializeStatus;
+        },
+        pMaterial.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    return Status == RADIENT_STATUS_OK ? pMaterial : RefCntAutoPtr<IRadientMaterialAsset>{};
+}
 
 class TestDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
@@ -102,15 +133,17 @@ public:
         Data.Materials.reserve(Model.Materials.size());
         for (const GLTF::Material& SourceMaterial : Model.Materials)
         {
-            GLTF::Material Material;
-            Material.Attribs.AlphaMode   = SourceMaterial.Attribs.AlphaMode;
-            Material.Attribs.AlphaCutoff = SourceMaterial.Attribs.AlphaCutoff;
-            Material.DoubleSided         = SourceMaterial.DoubleSided;
+            static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_OPAQUE) == RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+            static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_MASK) == RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+            static_assert(static_cast<Uint32>(GLTF::Material::ALPHA_MODE_BLEND) == RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
 
-            RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-            const RADIENT_STATUS                 MaterialStatus =
-                pMaterialManager->CreateGLTFMaterial(std::move(Material), nullptr, 0, pMaterial.GetAddressOfEmpty());
-            if (RADIENT_FAILED(MaterialStatus))
+            RefCntAutoPtr<IRadientMaterialAsset> pMaterial =
+                MakeSurfaceMaterialAsset(
+                    *pMaterialManager,
+                    static_cast<RADIENT_MATERIAL_SURFACE_MODE>(SourceMaterial.Attribs.AlphaMode),
+                    SourceMaterial.Attribs.AlphaCutoff,
+                    SourceMaterial.DoubleSided ? True : False);
+            if (!pMaterial)
             {
                 ADD_FAILURE() << "Registered mesh data must use valid material data";
                 return;
@@ -588,10 +621,10 @@ std::unique_ptr<RadientTesseraMaterialCache> MakeDrawableMaterialCache()
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeRenderableMaterialAsset()
 {
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    RadientMaterialAssetManager::Create()->CreateGLTFMaterial(
-        GLTF::Material{}, nullptr, 0, pMaterial.GetAddressOfEmpty());
-    return pMaterial;
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    EXPECT_NE(pMaterialManager, nullptr);
+    return pMaterialManager ? MakeSurfaceMaterialAsset(*pMaterialManager) :
+                              RefCntAutoPtr<IRadientMaterialAsset>{};
 }
 
 RADIENT_STATUS PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache)

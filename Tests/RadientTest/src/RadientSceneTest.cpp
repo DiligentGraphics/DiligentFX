@@ -30,9 +30,11 @@
 
 #include "RadientEngine.h"
 #include "RadientMaterials.h"
+#include "RadientStandardMaterialParameters.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 
 #include "BasicMath.hpp"
 #include "ThreadPool.hpp"
@@ -121,12 +123,29 @@ RADIENT_STATUS ProcessTestGLTFLoad(IRadientAssetManager& AssetManager, IRadientS
 
 RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& AssetManager)
 {
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.Name            = "Radient test material";
-    MaterialCI.BaseColorFactor = {1.f, 0.f, 0.f, 1.f};
-
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    EXPECT_EQ(AssetManager.CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(
+        CreateStandardMaterialAsset(
+            AssetManager,
+            {},
+            [](IRadientMaterialDefinition&     Definition,
+               IRadientMaterialInstanceWriter& Writer) {
+                RadientMaterialParameterHandle BaseColorHandle;
+                RADIENT_STATUS                 Status = Definition.FindParameter(RadientStandardMaterialBaseColorFactorName,
+                                                                 &BaseColorHandle);
+                EXPECT_EQ(Status, RADIENT_STATUS_OK);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+
+                const RadientFloat4 BaseColorFactor{1.f, 0.f, 0.f, 1.f};
+                Status = Writer.SetParameter(BaseColorHandle,
+                                             &BaseColorFactor,
+                                             static_cast<Uint32>(sizeof(BaseColorFactor)));
+                EXPECT_EQ(Status, RADIENT_STATUS_OK);
+                return Status;
+            },
+            pMaterial.GetAddressOfEmpty()),
+        RADIENT_STATUS_OK);
     EXPECT_NE(pMaterial, nullptr);
     if (pMaterial != nullptr)
     {
@@ -522,6 +541,13 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
+    RefCntAutoPtr<IRadientMaterialInstance> pMaterialInstance;
+    ASSERT_EQ(CreateStandardMaterialInstance(*pAssetManager,
+                                             {},
+                                             pMaterialInstance.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterialInstance, nullptr);
+
     EXPECT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
     RefCntAutoPtr<IRadientMeshAsset>          pMesh;
     RefCntAutoPtr<IRadientMaterialDefinition> pMaterialDefinition;
@@ -533,8 +559,8 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
               RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMaterialDefinition, nullptr);
 
-    static constexpr RadientMaterialCreateInfo MaterialCI{};
-    EXPECT_EQ(pAssetManager->CreateMaterial(MaterialCI, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pAssetManager->CreateMaterial(pMaterialInstance, pMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMaterial, nullptr);
 
     EXPECT_EQ(pAssetManager->CreateMesh(RadientMeshCreateInfo{}, pMesh.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);

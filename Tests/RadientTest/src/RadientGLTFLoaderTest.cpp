@@ -33,6 +33,7 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
@@ -1229,8 +1230,7 @@ TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive
     EXPECT_TRUE(Materials.empty());
 
     RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
-    RadientMaterialCreateInfo            DefaultMaterialCI{};
-    ASSERT_EQ(pMaterialManager->CreateMaterial(DefaultMaterialCI, pDefaultMaterial.GetAddressOfEmpty()),
+    ASSERT_EQ(CreateStandardMaterialAsset(*pMaterialManager, {}, pDefaultMaterial.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     ASSERT_NE(pDefaultMaterial, nullptr);
 

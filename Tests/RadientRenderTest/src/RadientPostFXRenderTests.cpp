@@ -32,6 +32,8 @@
 #include "GPUTestingEnvironment.hpp"
 #include "GraphicsAccessories.hpp"
 #include "Radient.h"
+#include "RadientMaterialTestHelpers.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "RefCntAutoPtr.hpp"
 #include "TestingSwapChainBase.hpp"
 
@@ -56,6 +58,72 @@ static constexpr std::chrono::seconds RenderReadyTimeout{120};
 bool IsPendingOrOK(RADIENT_STATUS Status)
 {
     return Status == RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK;
+}
+
+struct StandardMaterialValues
+{
+    RadientFloat4         BaseColor{1.f, 1.f, 1.f, 1.f};
+    Float32               Metallic  = 1.f;
+    Float32               Roughness = 1.f;
+    RadientFloat3         Emissive{};
+    IRadientTextureAsset* pBaseColorTexture = nullptr;
+};
+
+template <typename ValueType>
+RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinition&     Definition,
+                                    IRadientMaterialInstanceWriter& Writer,
+                                    const char*                     Name,
+                                    const ValueType&                Value)
+{
+    RadientMaterialParameterHandle Handle;
+    RADIENT_STATUS                 Status = Definition.FindParameter(Name, &Handle);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    return Writer.SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value)));
+}
+
+RADIENT_STATUS CreateStandardMaterialAsset(IRadientAssetManager&         AssetManager,
+                                           const StandardMaterialValues& Values,
+                                           IRadientMaterialAsset**       ppMaterial)
+{
+    return Diligent::Testing::CreateStandardMaterialAsset(
+        AssetManager,
+        {},
+        [&Values](IRadientMaterialDefinition&     Definition,
+                  IRadientMaterialInstanceWriter& Writer) {
+            const auto SetParameter = [&](const char* Name, const auto& Value) {
+                return SetMaterialParameter(Definition, Writer, Name, Value);
+            };
+
+            RADIENT_STATUS Status = SetParameter(RadientStandardMaterialBaseColorFactorName, Values.BaseColor);
+            if (RADIENT_SUCCEEDED(Status))
+                Status = SetParameter(RadientStandardMaterialMetallicFactorName, Values.Metallic);
+            if (RADIENT_SUCCEEDED(Status))
+                Status = SetParameter(RadientStandardMaterialRoughnessFactorName, Values.Roughness);
+            if (RADIENT_SUCCEEDED(Status))
+                Status = SetParameter(RadientStandardMaterialEmissiveFactorName, Values.Emissive);
+            if (RADIENT_FAILED(Status))
+                return Status;
+
+            if (Values.pBaseColorTexture != nullptr)
+            {
+                RadientMaterialParameterHandle TextureHandle;
+                Status = Definition.FindParameter(RadientStandardMaterialBaseColorTextureName, &TextureHandle);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+
+                Status = Writer.SetTexture(TextureHandle, 0, Values.pBaseColorTexture);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+
+                static constexpr Int32 UVSelector = 0;
+                Status                            = SetParameter(RadientStandardMaterialBaseColorTextureUVSelectorName, UVSelector);
+            }
+
+            return Status;
+        },
+        ppMaterial);
 }
 
 RadientTransform MakeCameraTransform(const float3& Eye,
@@ -269,15 +337,15 @@ TEST_F(RadientRender, Bloom)
                                     Float32       Metallic,
                                     Float32       Roughness,
                                     RadientFloat3 Emissive) {
-        RadientMaterialCreateInfo MaterialCI{};
-        MaterialCI.Name            = Name;
-        MaterialCI.BaseColorFactor = BaseColor;
-        MaterialCI.MetallicFactor  = Metallic;
-        MaterialCI.RoughnessFactor = Roughness;
-        MaterialCI.EmissiveFactor  = Emissive;
+        (void)Name;
+        StandardMaterialValues Values{};
+        Values.BaseColor = BaseColor;
+        Values.Metallic  = Metallic;
+        Values.Roughness = Roughness;
+        Values.Emissive  = Emissive;
 
         RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-        const RADIENT_STATUS                 Status = GetAssetManager()->CreateMaterial(MaterialCI, &pMaterial);
+        const RADIENT_STATUS                 Status = CreateStandardMaterialAsset(*GetAssetManager(), Values, &pMaterial);
         EXPECT_TRUE(IsPendingOrOK(Status));
         EXPECT_NE(pMaterial, nullptr);
         return pMaterial;
@@ -524,14 +592,13 @@ TEST_F(RadientRender, SSAO)
     ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(EnvironmentLoadInfo, &pEnvironmentMap)));
     ASSERT_NE(pEnvironmentMap, nullptr);
 
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.Name            = "SSAO test material";
-    MaterialCI.BaseColorFactor = {1.f, 1.f, 1.f, 1.f};
-    MaterialCI.MetallicFactor  = 0.f;
-    MaterialCI.RoughnessFactor = 1.f;
+    StandardMaterialValues MaterialValues{};
+    MaterialValues.BaseColor = {1.f, 1.f, 1.f, 1.f};
+    MaterialValues.Metallic  = 0.f;
+    MaterialValues.Roughness = 1.f;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->CreateMaterial(MaterialCI, &pMaterial)));
+    ASSERT_TRUE(IsPendingOrOK(CreateStandardMaterialAsset(*GetAssetManager(), MaterialValues, &pMaterial)));
     ASSERT_NE(pMaterial, nullptr);
 
     RadientCubeMeshCreateInfo CubeCI{};
@@ -777,15 +844,15 @@ TEST_F(RadientRender, SSR)
                                     Float32               Metallic,
                                     Float32               Roughness,
                                     IRadientTextureAsset* pBaseColorTexture = nullptr) {
-        RadientMaterialCreateInfo MaterialCI{};
-        MaterialCI.Name              = Name;
-        MaterialCI.BaseColorFactor   = BaseColor;
-        MaterialCI.MetallicFactor    = Metallic;
-        MaterialCI.RoughnessFactor   = Roughness;
-        MaterialCI.pBaseColorTexture = pBaseColorTexture;
+        (void)Name;
+        StandardMaterialValues Values{};
+        Values.BaseColor         = BaseColor;
+        Values.Metallic          = Metallic;
+        Values.Roughness         = Roughness;
+        Values.pBaseColorTexture = pBaseColorTexture;
 
         RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-        const RADIENT_STATUS                 Status = GetAssetManager()->CreateMaterial(MaterialCI, &pMaterial);
+        const RADIENT_STATUS                 Status = CreateStandardMaterialAsset(*GetAssetManager(), Values, &pMaterial);
         EXPECT_TRUE(IsPendingOrOK(Status));
         EXPECT_NE(pMaterial, nullptr);
         return pMaterial;

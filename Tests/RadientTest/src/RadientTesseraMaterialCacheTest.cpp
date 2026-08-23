@@ -28,6 +28,7 @@
 
 #include "Assets/RadientMaterialImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "ThreadPool.hpp"
@@ -70,23 +71,36 @@ RadientMaterialDefaultTextureBindings MakeDefaultTextureBindings()
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(bool EnableClearcoat = false)
 {
-    GLTF::Material Material;
-    Material.HasClearcoat = EnableClearcoat;
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    EXPECT_NE(pMaterialManager, nullptr);
+    if (!pMaterialManager)
+        return {};
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    if (EnableClearcoat)
+        DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    RadientMaterialAssetManager::Create()->CreateGLTFMaterial(
-        std::move(Material), nullptr, 0, pMaterial.GetAddressOfEmpty());
+    const RADIENT_STATUS                 Status = Testing::CreateStandardMaterialAsset(
+        *pMaterialManager, DefinitionCI, pMaterial.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
     return pMaterial;
 }
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeUnlitMaterialAsset()
 {
-    GLTF::Material Material;
-    Material.Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_UNLIT;
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    EXPECT_NE(pMaterialManager, nullptr);
+    if (!pMaterialManager)
+        return {};
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    RadientMaterialAssetManager::Create()->CreateGLTFMaterial(
-        std::move(Material), nullptr, 0, pMaterial.GetAddressOfEmpty());
+    const RADIENT_STATUS                 Status = Testing::CreateStandardMaterialAsset(
+        *pMaterialManager, DefinitionCI, pMaterial.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
     return pMaterial;
 }
 

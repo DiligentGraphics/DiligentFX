@@ -91,8 +91,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                                                IRadientMaterialDefinition**                       ppDefinition) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
-                                                             IRadientMaterialAsset**          ppMaterial) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(IRadientMaterialInstance* pInstance,
+                                                             IRadientMaterialAsset**   ppMaterial) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                           IRadientTextureAsset**        ppTexture) override final;

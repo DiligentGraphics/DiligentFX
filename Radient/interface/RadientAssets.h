@@ -202,48 +202,6 @@ struct RadientMeshCreateInfo
 typedef struct RadientMeshCreateInfo RadientMeshCreateInfo;
 
 
-/// PBR material creation attributes.
-struct RadientMaterialCreateInfo
-{
-    /// Material name.
-    const Char* Name DEFAULT_INITIALIZER(nullptr);
-
-    /// Base color multiplier.
-    RadientFloat4 BaseColorFactor DEFAULT_INITIALIZER({1.f, 1.f, 1.f, 1.f});
-
-    /// Metallic multiplier.
-    Float32 MetallicFactor DEFAULT_INITIALIZER(1.f);
-
-    /// Roughness multiplier.
-    Float32 RoughnessFactor DEFAULT_INITIALIZER(1.f);
-
-    /// Emissive multiplier.
-    RadientFloat3 EmissiveFactor DEFAULT_INITIALIZER({0.f, 0.f, 0.f});
-
-    /// Alpha cutoff used by alpha-tested materials.
-    Float32 AlphaCutoff DEFAULT_INITIALIZER(0.5f);
-
-    /// Whether the material should render both sides.
-    Bool DoubleSided DEFAULT_INITIALIZER(False);
-
-    /// Optional base color texture.
-    IRadientTextureAsset* pBaseColorTexture DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional metallic-roughness texture.
-    IRadientTextureAsset* pMetallicRoughnessTexture DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional normal texture.
-    IRadientTextureAsset* pNormalTexture DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional occlusion texture.
-    IRadientTextureAsset* pOcclusionTexture DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional emissive texture.
-    IRadientTextureAsset* pEmissiveTexture DEFAULT_INITIALIZER(nullptr);
-};
-typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
-
-
 /// Texture load attributes.
 /// Optional callback used to release memory passed through RadientTextureLoadInfo::pData or
 /// RadientTextureLoadInfo::pTextureData->pData.
@@ -517,12 +475,13 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                                     const RadientStandardMaterialDefinitionCreateInfo REF DefinitionCI,
                                                                     IRadientMaterialDefinition**                          ppDefinition) PURE;
 
-    /// Creates a standard metallic-roughness material asset. This convenience
-    /// path obtains a cached standard material definition and initializes a
-    /// definition-backed instance from MaterialCI.
+    /// Creates a material asset from a fully initialized material instance. The
+    /// asset retains the exact instance. Until material-instance modification is
+    /// supported by material assets, the caller must not modify the instance
+    /// after this method succeeds.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
-                                                  const RadientMaterialCreateInfo REF MaterialCI,
-                                                  IRadientMaterialAsset**             ppMaterial) PURE;
+                                                  IRadientMaterialInstance* pInstance,
+                                                  IRadientMaterialAsset**   ppMaterial) PURE;
 
     /// Starts loading a texture asset from a URI or texture data.
     ///

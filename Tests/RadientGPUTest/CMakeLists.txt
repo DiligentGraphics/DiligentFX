@@ -11,6 +11,7 @@ set_common_target_properties(RadientGPUTest)
 target_include_directories(RadientGPUTest
 PRIVATE
     ../../Radient/include
+    ../RadientCommon/include
 )
 
 target_link_libraries(RadientGPUTest

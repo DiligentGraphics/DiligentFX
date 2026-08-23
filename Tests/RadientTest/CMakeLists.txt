@@ -14,6 +14,7 @@ set_common_target_properties(RadientTest)
 target_include_directories(RadientTest
 PRIVATE
     ../../Radient/include
+    ../RadientCommon/include
 )
 
 if (PLATFORM_WEB)  

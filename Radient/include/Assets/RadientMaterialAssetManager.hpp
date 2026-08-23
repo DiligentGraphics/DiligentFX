@@ -28,9 +28,7 @@
 
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
-#include "RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
-#include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "WeakObjectCache.hpp"
 
@@ -168,13 +166,8 @@ public:
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                     IRadientMaterialDefinition**                       ppDefinition);
 
-    RADIENT_STATUS CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
-                                  IRadientMaterialAsset**          ppMaterial);
-
-    RADIENT_STATUS CreateGLTFMaterial(GLTF::Material               Material,
-                                      IRadientTextureAsset* const* ppTextures,
-                                      Uint32                       TextureCount,
-                                      IRadientMaterialAsset**      ppMaterial);
+    RADIENT_STATUS CreateMaterial(IRadientMaterialInstance* pInstance,
+                                  IRadientMaterialAsset**   ppMaterial);
 
     // Reports material source/dependency status. A failed requested texture is
     // replaced by its semantic default when one is available. OK means every
@@ -201,17 +194,6 @@ public:
 
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
-
-    RADIENT_STATUS CreateStandardMaterialInstance(const RadientMaterialCreateInfo& MaterialCI,
-                                                  IRadientMaterialInstance**       ppInstance);
-
-    RADIENT_STATUS CreateGLTFMaterialInstance(const GLTF::Material&        Material,
-                                              IRadientTextureAsset* const* ppTextures,
-                                              Uint32                       TextureCount,
-                                              IRadientMaterialInstance**   ppInstance);
-
-    RADIENT_STATUS CreateMaterialAsset(IRadientMaterialInstance* pInstance,
-                                       IRadientMaterialAsset**   ppMaterial);
 
     RadientMaterialDefaultTextures              m_DefaultTextures;
     WeakObjectCache<IRadientMaterialDefinition> m_StandardMaterialDefinitions;

@@ -32,6 +32,7 @@
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 #include "TestingEnvironment.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 
 #include "gtest/gtest.h"
 
@@ -54,6 +55,14 @@ bool IsAcceptedOrMissingGPU(RADIENT_STATUS Status)
     // still be accepted; GPU availability is reported separately.
     return (Status == RADIENT_STATUS_OK ||
             Status == RADIENT_STATUS_PENDING);
+}
+
+RefCntAutoPtr<IRadientMaterialAsset> CreateDefaultMaterial(RadientMaterialAssetManager& MaterialManager)
+{
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    EXPECT_EQ(Testing::CreateStandardMaterialAsset(MaterialManager, {}, pMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    return pMaterial;
 }
 
 void DrainThreadPool(IThreadPool& ThreadPool)
@@ -755,18 +764,10 @@ TEST(RadientMeshAssetManagerTest, MeshViewCacheDistinguishesMaterialsFromDiffere
     ASSERT_NE(pMaterialManagerA, nullptr);
     ASSERT_NE(pMaterialManagerB, nullptr);
 
-    RadientMaterialCreateInfo MaterialCIA{};
-    MaterialCIA.Name            = "material from manager A";
-    MaterialCIA.BaseColorFactor = {1.f, 0.f, 0.f, 1.f};
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterialA;
-    ASSERT_EQ(pMaterialManagerA->CreateMaterial(MaterialCIA, pMaterialA.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialA = CreateDefaultMaterial(*pMaterialManagerA);
     ASSERT_NE(pMaterialA, nullptr);
 
-    RadientMaterialCreateInfo MaterialCIB{};
-    MaterialCIB.Name            = "material from manager B";
-    MaterialCIB.BaseColorFactor = {0.f, 0.f, 1.f, 1.f};
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterialB;
-    ASSERT_EQ(pMaterialManagerB->CreateMaterial(MaterialCIB, pMaterialB.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialB = CreateDefaultMaterial(*pMaterialManagerB);
     ASSERT_NE(pMaterialB, nullptr);
 
     const RadientAssetReference& MaterialRefA = pMaterialA->GetReference();

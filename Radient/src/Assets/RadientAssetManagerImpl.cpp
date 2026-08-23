@@ -365,11 +365,20 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
 
     m_pMaterialManager = RadientMaterialAssetManager::Create(MaterialManagerCI);
 
-    RadientMaterialCreateInfo DefaultMaterialCI{};
-    const RADIENT_STATUS      DefaultMaterialStatus =
-        m_pMaterialManager != nullptr ?
-        m_pMaterialManager->CreateMaterial(DefaultMaterialCI, m_pDefaultMaterial.GetAddressOfEmpty()) :
-        RADIENT_STATUS_INVALID_OPERATION;
+    RADIENT_STATUS DefaultMaterialStatus = RADIENT_STATUS_INVALID_OPERATION;
+    if (m_pMaterialManager != nullptr)
+    {
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        RefCntAutoPtr<IRadientMaterialDefinition>   pDefinition;
+        DefaultMaterialStatus = m_pMaterialManager->CreateStandardMaterialDefinition(
+            DefinitionCI, pDefinition.GetAddressOfEmpty());
+
+        RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+        if (DefaultMaterialStatus == RADIENT_STATUS_OK)
+            DefaultMaterialStatus = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+        if (DefaultMaterialStatus == RADIENT_STATUS_OK)
+            DefaultMaterialStatus = m_pMaterialManager->CreateMaterial(pInstance, m_pDefaultMaterial.GetAddressOfEmpty());
+    }
     if (RADIENT_FAILED(DefaultMaterialStatus) || m_pDefaultMaterial == nullptr)
         LOG_ERROR_AND_THROW("Failed to create the default Radient material");
 }
@@ -420,8 +429,8 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateStandardMaterialDefinition(const R
     return m_pMaterialManager->CreateStandardMaterialDefinition(DefinitionCI, ppDefinition);
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
-                                                       IRadientMaterialAsset**          ppMaterial)
+RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(IRadientMaterialInstance* pInstance,
+                                                       IRadientMaterialAsset**   ppMaterial)
 {
     if (ppMaterial == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -431,7 +440,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     if (m_Stopped.load(std::memory_order_acquire))
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return m_pMaterialManager->CreateMaterial(MaterialCI, ppMaterial);
+    return m_pMaterialManager->CreateMaterial(pInstance, ppMaterial);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,

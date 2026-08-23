@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 
 #include "gtest/gtest.h"
 
@@ -65,14 +66,11 @@ RADIENT_STATUS CreateViewStatus(const RadientMeshViewCreateInfo& ViewCI,
     return RadientMeshViewSource{ViewCI, IndexCount}.GetStatus();
 }
 
-RefCntAutoPtr<IRadientMaterialAsset> CreateMaterial(RadientMaterialAssetManager& MaterialManager,
-                                                    const char*                  Name)
+RefCntAutoPtr<IRadientMaterialAsset> CreateMaterial(RadientMaterialAssetManager& MaterialManager)
 {
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.Name = Name;
-
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    EXPECT_EQ(MaterialManager.CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(Testing::CreateStandardMaterialAsset(MaterialManager, {}, pMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
     EXPECT_NE(pMaterial, nullptr);
     return pMaterial;
 }
@@ -108,7 +106,7 @@ TEST(RadientMeshViewSourceTest, CopiesPrimitiveRangesAndKeepsMaterialsAlive)
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager, "mesh view material");
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager);
     ASSERT_NE(pMaterial, nullptr);
 
     std::string PrimitiveName{"mesh view primitive"};
@@ -145,7 +143,7 @@ TEST(RadientMeshViewSourceTest, MoveConstructorRebindsPrimitiveNames)
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager, "mesh view move material");
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(*pMaterialManager);
     ASSERT_NE(pMaterial, nullptr);
 
     std::string PrimitiveName{"mesh view moved primitive"};
@@ -184,8 +182,8 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesPrimitiveRangesAndMaterials)
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial0 = CreateMaterial(*pMaterialManager, "mesh view material 0");
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial1 = CreateMaterial(*pMaterialManager, "mesh view material 1");
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial0 = CreateMaterial(*pMaterialManager);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial1 = CreateMaterial(*pMaterialManager);
     ASSERT_NE(pMaterial0, nullptr);
     ASSERT_NE(pMaterial1, nullptr);
 

@@ -677,6 +677,46 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
     return Textures;
 }
 
+RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManager,
+                                      const GLTF::Material&        Material,
+                                      IRadientTextureAsset* const* ppTextures,
+                                      Uint32                       TextureCount,
+                                      IRadientMaterialAsset**      ppMaterial)
+{
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    RADIENT_STATUS                              Status =
+        RadientGLTFConverter::ConvertMaterialDefinition(Material, DefinitionCI);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialDefinition> pDefinition;
+    Status = MaterialManager.CreateStandardMaterialDefinition(
+        DefinitionCI, pDefinition.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance;
+    Status = pDefinition->CreateInstance(pInstance.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RefCntAutoPtr<IRadientMaterialInstanceWriter> pWriter;
+    Status = pInstance->CreateWriter(pWriter.GetAddressOfEmpty());
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    Status = RadientGLTFConverter::PopulateMaterialInstance(
+        Material, ppTextures, TextureCount, *pDefinition, *pWriter);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    Status = pWriter->Commit();
+    if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+        return Status;
+
+    return MaterialManager.CreateMaterial(pInstance, ppMaterial);
+}
+
 RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
                                                const std::shared_ptr<GLTF::Document>& pDocument,
                                                const RadientImport::TextureAssetList& Textures)
@@ -694,13 +734,14 @@ RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&     
 
     for (Uint32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
     {
-        GLTF::Material Material = GLTF::LoadMaterial(*pDocument, MaterialIndex);
+        const GLTF::Material Material = GLTF::LoadMaterial(*pDocument, MaterialIndex);
 
         const RADIENT_STATUS Status =
-            MaterialManager.CreateGLTFMaterial(std::move(Material),
-                                               RawTextures.empty() ? nullptr : RawTextures.data(),
-                                               static_cast<Uint32>(RawTextures.size()),
-                                               Materials[MaterialIndex].GetAddressOfEmpty());
+            CreateImportedMaterial(MaterialManager,
+                                   Material,
+                                   RawTextures.empty() ? nullptr : RawTextures.data(),
+                                   static_cast<Uint32>(RawTextures.size()),
+                                   Materials[MaterialIndex].GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || Materials[MaterialIndex] == nullptr)
         {
             LOG_ERROR_MESSAGE("Failed to create Radient material asset for GLTF material ", MaterialIndex);

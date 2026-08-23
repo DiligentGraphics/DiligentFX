@@ -28,14 +28,14 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "GPUTestingEnvironment.hpp"
-#include "GLTFBuilder.hpp"
 #include "RadientGPUTestHelpers.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 
 #include "gtest/gtest.h"
 
-#include <utility>
+#include <initializer_list>
 #include <vector>
 
 using namespace Diligent;
@@ -96,6 +96,57 @@ struct MaterialWithTextureManagers
     RadientMaterialAssetManagerSharedPtr pMaterialManager;
 };
 
+struct StandardMaterialTextureBinding
+{
+    const char*           TextureName;
+    const char*           UVSelectorName;
+    IRadientTextureAsset* pTexture;
+    Int32                 UVSelector;
+};
+
+RADIENT_STATUS CreateStandardMaterial(
+    RadientMaterialAssetManager&                          MaterialManager,
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS                Features,
+    std::initializer_list<StandardMaterialTextureBinding> TextureBindings,
+    IRadientMaterialAsset**                               ppMaterial)
+{
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features = Features;
+
+    return CreateStandardMaterialAsset(
+        MaterialManager,
+        DefinitionCI,
+        [TextureBindings](IRadientMaterialDefinition&     Definition,
+                          IRadientMaterialInstanceWriter& Writer) {
+            for (const StandardMaterialTextureBinding& Binding : TextureBindings)
+            {
+                RadientMaterialParameterHandle TextureHandle;
+                RADIENT_STATUS                 Status = Definition.FindParameter(Binding.TextureName, &TextureHandle);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+
+                Status = Writer.SetTexture(TextureHandle, 0, Binding.pTexture);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+
+                RadientMaterialParameterHandle UVSelectorHandle;
+                Status = Definition.FindParameter(Binding.UVSelectorName, &UVSelectorHandle);
+                if (Status != RADIENT_STATUS_OK)
+                    return Status;
+
+                Status = Writer.SetParameter(
+                    UVSelectorHandle,
+                    &Binding.UVSelector,
+                    static_cast<Uint32>(sizeof(Binding.UVSelector)));
+                if (RADIENT_FAILED(Status))
+                    return Status;
+            }
+
+            return RADIENT_STATUS_OK;
+        },
+        ppMaterial);
+}
+
 bool CreateMaterialWithBaseColorTexture(IRenderDevice*                        pDevice,
                                         IDeviceContext*                       pContext,
                                         IThreadPool&                          ThreadPool,
@@ -140,10 +191,14 @@ bool CreateMaterialWithBaseColorTexture(IRenderDevice*                        pD
         return false;
     }
 
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.pBaseColorTexture = pTexture;
-
-    const RADIENT_STATUS MaterialStatus = Managers.pMaterialManager->CreateMaterial(MaterialCI, &pMaterial);
+    const RADIENT_STATUS MaterialStatus = CreateStandardMaterial(
+        *Managers.pMaterialManager,
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE,
+        {{RadientStandardMaterialBaseColorTextureName,
+          RadientStandardMaterialBaseColorTextureUVSelectorName,
+          pTexture,
+          0}},
+        &pMaterial);
     if (MaterialStatus != RADIENT_STATUS_OK || pMaterial == nullptr)
     {
         ADD_FAILURE() << "Failed to create material: " << MaterialStatus;
@@ -151,25 +206,6 @@ bool CreateMaterialWithBaseColorTexture(IRenderDevice*                        pD
     }
 
     return true;
-}
-
-GLTF::Material CreateGLTFMaterialWithSharedTexture()
-{
-    GLTF::Material        Material;
-    GLTF::MaterialBuilder Builder{Material};
-
-    Builder.SetTextureId(GLTF::DefaultBaseColorTextureAttribId, 0);
-    Builder.GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId).SetUVSelector(0);
-
-    Builder.SetTextureId(GLTF::DefaultNormalTextureAttribId, 0);
-    Builder.GetTextureAttrib(GLTF::DefaultNormalTextureAttribId).SetUVSelector(1);
-
-    Builder.SetTextureId(GLTF::DefaultClearcoatTextureAttribId, 0);
-    Builder.GetTextureAttrib(GLTF::DefaultClearcoatTextureAttribId).SetUVSelector(2);
-
-    Builder.Finalize();
-    Material.HasClearcoat = true;
-    return Material;
 }
 
 TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
@@ -208,11 +244,16 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.pBaseColorTexture = pTexture;
-
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterial(
+                  *pMaterialManager,
+                  RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE,
+                  {{RadientStandardMaterialBaseColorTextureName,
+                    RadientStandardMaterialBaseColorTextureUVSelectorName,
+                    pTexture,
+                    0}},
+                  &pMaterial),
+              RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
     // The texture worker is blocked, so the material must not expose texture
@@ -237,7 +278,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     pThreadPool->StopThreads();
 }
 
-TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorage)
+TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsForTextureStorage)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
@@ -273,17 +314,30 @@ TEST(RadientMaterialAssetManagerGPUTest, CreateGLTFMaterialWaitsForTextureStorag
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
-    GLTF::Material        Material    = CreateGLTFMaterialWithSharedTexture();
-    IRadientTextureAsset* pTextures[] = {pTexture};
-
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_EQ(pMaterialManager->CreateGLTFMaterial(std::move(Material), pTextures, 1, &pMaterial),
+    ASSERT_EQ(CreateStandardMaterial(
+                  *pMaterialManager,
+                  RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT,
+                  {
+                      {RadientStandardMaterialBaseColorTextureName,
+                       RadientStandardMaterialBaseColorTextureUVSelectorName,
+                       pTexture,
+                       0},
+                      {RadientStandardMaterialNormalTextureName,
+                       RadientStandardMaterialNormalTextureUVSelectorName,
+                       pTexture,
+                       1},
+                      {RadientStandardMaterialClearCoatTextureName,
+                       RadientStandardMaterialClearCoatTextureUVSelectorName,
+                       pTexture,
+                       2},
+                  },
+                  &pMaterial),
               RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
-    // The texture worker is blocked. The material was created from GLTF data,
-    // but it must still wait for referenced texture assets before exposing
-    // atlas-dependent texture attributes.
+    // The texture worker is blocked, so the material must wait for referenced
+    // texture assets before exposing atlas-dependent texture attributes.
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
     EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 

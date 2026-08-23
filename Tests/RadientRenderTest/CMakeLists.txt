@@ -18,6 +18,7 @@ PRIVATE
 target_include_directories(RadientRenderTest
 PRIVATE
     ../../Radient/include
+    ../RadientCommon/include
     ${DILIGENT_NATIVE_APP_SOURCE_DIR}/include
 )
 

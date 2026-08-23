@@ -31,6 +31,7 @@
 #include "RadientStandardMaterialParameters.h"
 
 #include "GPUTestingEnvironment.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "TempDirectory.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
@@ -40,7 +41,6 @@
 #include <array>
 #include <chrono>
 #include <fstream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -357,8 +357,7 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     ASSERT_NE(pAssetManager, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    RadientMaterialCreateInfo            MaterialCI{};
-    ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
     // Default textures use the normal asynchronous texture path and become
@@ -445,8 +444,7 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
                   pPBRRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL));
 
         RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-        RadientMaterialCreateInfo            MaterialCI{};
-        ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+        ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pMaterial), RADIENT_STATUS_OK);
         ASSERT_NE(pMaterial, nullptr);
 
         const RadientTesseraMaterialResolveResult Result =
@@ -472,7 +470,7 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
         // Reusing an already-created SRB must not make a newly allocated
         // material record ready before the render thread uploads its bytes.
         RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial;
-        ASSERT_EQ(pAssetManager->CreateMaterial(MaterialCI, &pSecondMaterial), RADIENT_STATUS_OK);
+        ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pSecondMaterial), RADIENT_STATUS_OK);
         ASSERT_NE(pSecondMaterial, nullptr);
 
         const RadientTesseraMaterialResolveResult SecondResult =
@@ -512,8 +510,7 @@ TEST(RadientAssetManagerGPUTest, MapsDefaultsForAllSupportedMaterialTextures)
     ASSERT_NE(pAssetManager, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
-    RadientMaterialCreateInfo            DefaultMaterialCI{};
-    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pDefaultMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pDefaultMaterial, nullptr);
     ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
 
@@ -543,16 +540,17 @@ TEST(RadientAssetManagerGPUTest, MapsDefaultsForAllSupportedMaterialTextures)
         RadientMaterialAssetManager::Create(MaterialManagerCI);
     ASSERT_NE(pMaterialManager, nullptr);
 
-    GLTF::Material Material;
-    Material.HasClearcoat = true;
-    Material.Sheen        = std::make_unique<GLTF::Material::SheenShaderAttribs>();
-    Material.Anisotropy   = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
-    Material.Iridescence  = std::make_unique<GLTF::Material::IridescenceShaderAttribs>();
-    Material.Transmission = std::make_unique<GLTF::Material::TransmissionShaderAttribs>();
-    Material.Volume       = std::make_unique<GLTF::Material::VolumeShaderAttribs>();
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features =
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_EQ(pMaterialManager->CreateGLTFMaterial(std::move(Material), nullptr, 0, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(*pMaterialManager, DefinitionCI, &pMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
     const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
@@ -588,8 +586,7 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
     ASSERT_NE(pAssetManager, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
-    RadientMaterialCreateInfo            DefaultMaterialCI{};
-    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pDefaultMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pDefaultMaterial, nullptr);
 
     TempDirectory     TempDir{"RadientAssetManagerGPUTest"};
@@ -680,8 +677,7 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingDDSTextureUsesDefault)
     ASSERT_NE(pAssetManager, nullptr);
 
     RefCntAutoPtr<IRadientMaterialAsset> pDefaultMaterial;
-    RadientMaterialCreateInfo            DefaultMaterialCI{};
-    ASSERT_EQ(pAssetManager->CreateMaterial(DefaultMaterialCI, &pDefaultMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pDefaultMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pDefaultMaterial, nullptr);
 
     TempDirectory     TempDir{"RadientAssetManagerGPUTest"};

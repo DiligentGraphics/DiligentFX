@@ -27,8 +27,10 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "RadientStandardMaterialParameters.h"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientGPUTestHelpers.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "ThreadPool.hpp"
 
 #include "gtest/gtest.h"
@@ -133,11 +135,38 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
 
-    RadientMaterialCreateInfo MaterialCI{};
-    MaterialCI.pBaseColorTexture = pTexture;
-
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    ASSERT_EQ(pMaterialManager->CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(CreateStandardMaterialAsset(
+                  *pMaterialManager,
+                  {},
+                  [&](IRadientMaterialDefinition&     Definition,
+                      IRadientMaterialInstanceWriter& Writer) {
+                      RadientMaterialParameterHandle BaseColorTextureHandle;
+                      RADIENT_STATUS                 Status = Definition.FindParameter(
+                          RadientStandardMaterialBaseColorTextureName,
+                          &BaseColorTextureHandle);
+                      if (Status != RADIENT_STATUS_OK)
+                          return Status;
+
+                      Status = Writer.SetTexture(BaseColorTextureHandle, 0, pTexture);
+                      if (RADIENT_FAILED(Status))
+                          return Status;
+
+                      RadientMaterialParameterHandle BaseColorUVSelectorHandle;
+                      Status = Definition.FindParameter(
+                          RadientStandardMaterialBaseColorTextureUVSelectorName,
+                          &BaseColorUVSelectorHandle);
+                      if (Status != RADIENT_STATUS_OK)
+                          return Status;
+
+                      static constexpr Int32 BaseColorUVSelector = 0;
+                      return Writer.SetParameter(
+                          BaseColorUVSelectorHandle,
+                          &BaseColorUVSelector,
+                          static_cast<Uint32>(sizeof(BaseColorUVSelector)));
+                  },
+                  &pMaterial),
+              RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
     ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
     ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_PENDING);
