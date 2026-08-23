@@ -38,6 +38,8 @@ RefCntAutoPtr<IRadientMaterialInstance> MakeSurfaceMaterialInstance(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
 
+MaterialInstanceState* TryGetSurfaceMaterialInstanceState(IRadientMaterialInstance* pInstance) noexcept;
+
 const PackedMaterialInstanceData& GetSurfaceMaterialInstanceData(
     const IRadientSurfaceMaterialInstance& Instance) noexcept;
 

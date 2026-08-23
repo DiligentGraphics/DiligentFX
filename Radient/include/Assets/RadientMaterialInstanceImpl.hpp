@@ -37,6 +37,8 @@
 namespace Diligent
 {
 
+struct RadientMaterialAssetView;
+
 namespace RadientMaterialDetail
 {
 
@@ -90,6 +92,8 @@ public:
                           RadientHandle                    DefinitionHandle,
                           const MaterialInstanceState*     pSource = nullptr);
 
+    ~MaterialInstanceState();
+
     // clang-format off
     MaterialInstanceState           (const MaterialInstanceState&) = delete;
     MaterialInstanceState& operator=(const MaterialInstanceState&) = delete;
@@ -109,6 +113,10 @@ public:
                               Uint32                         ArrayIndex,
                               IRadientTextureAsset**         ppTexture) const;
 
+    RADIENT_STATUS           GetLoadStatus() const noexcept;
+    RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
+    RadientMaterialAssetView GetMaterialView(IRadientMaterialInstance* pInstance);
+
     const PackedMaterialInstanceData& GetPackedData() const noexcept;
 
 private:
@@ -116,10 +124,13 @@ private:
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept;
 
+    struct TextureState;
+
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> m_pDefinition;
     const RadientHandle                            m_DefinitionHandle;
     PackedMaterialInstanceData                     m_Data;
     Uint64                                         m_Version = 1;
+    std::unique_ptr<TextureState>                  m_pTextureState;
 };
 
 class MaterialInstanceWriterState final
@@ -174,6 +185,8 @@ private:
 RefCntAutoPtr<IRadientMaterialInstance> MakeMaterialInstance(
     IRadientMaterialDefinitionAsset* pDefinition,
     RadientHandle                    DefinitionHandle);
+
+MaterialInstanceState* TryGetMaterialInstanceState(IRadientMaterialInstance* pInstance) noexcept;
 
 const PackedMaterialInstanceData& GetMaterialInstanceData(const IRadientMaterialInstance& Instance) noexcept;
 

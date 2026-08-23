@@ -617,8 +617,21 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
     ASSERT_EQ(pImportedScene->Materials.size(), 1u);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pImportedScene->Textures[0]), RADIENT_STATUS_NOT_FOUND);
 
+    RefCntAutoPtr<IRadientMaterialInstance> pMetallicRoughnessInstance =
+        RadientMaterialAssetManager::GetInstance(pImportedScene->Materials[0]);
+    ASSERT_NE(pMetallicRoughnessInstance, nullptr);
+    const Uint64 InitialMaterialVersion = pMetallicRoughnessInstance->GetVersion();
+
+    RefCntAutoPtr<IRadientMaterialAsset> pAliasedMaterial;
+    ASSERT_EQ(pAssetManager->CreateMaterial(
+                  pMetallicRoughnessInstance,
+                  pAliasedMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
     const RadientMaterialAssetView MetallicRoughnessMaterialData =
         RadientMaterialAssetManager::GetMaterialView(pImportedScene->Materials[0]);
+    ASSERT_TRUE(MetallicRoughnessMaterialData);
+    EXPECT_EQ(pMetallicRoughnessInstance->GetVersion(), InitialMaterialVersion + 1);
 
     const RadientMaterialAssetView DefaultMaterialData =
         RadientMaterialAssetManager::GetMaterialView(pDefaultMaterial);
@@ -641,10 +654,19 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
 
     ExpectMetallicRoughnessTextureDefaults(MetallicRoughnessMaterialData, DefaultTextures);
 
-    RefCntAutoPtr<IRadientMaterialInstance> pMetallicRoughnessInstance =
-        RadientMaterialAssetManager::GetInstance(pImportedScene->Materials[0]);
-    ASSERT_NE(pMetallicRoughnessInstance, nullptr);
     ExpectMaterialInstanceTextures(*pMetallicRoughnessInstance, MetallicRoughnessMaterialData);
+
+    const RadientMaterialAssetView AliasedMaterialData =
+        RadientMaterialAssetManager::GetMaterialView(pAliasedMaterial);
+    ASSERT_TRUE(AliasedMaterialData);
+    EXPECT_EQ(pMetallicRoughnessInstance->GetVersion(), InitialMaterialVersion + 1);
+    EXPECT_EQ(AliasedMaterialData.pInstance, pMetallicRoughnessInstance);
+    EXPECT_EQ(AliasedMaterialData.pTextures, MetallicRoughnessMaterialData.pTextures);
+    EXPECT_EQ(AliasedMaterialData.TextureCount, MetallicRoughnessMaterialData.TextureCount);
+    EXPECT_EQ(AliasedMaterialData.pTextureIndexByParameter,
+              MetallicRoughnessMaterialData.pTextureIndexByParameter);
+    EXPECT_EQ(AliasedMaterialData.ParameterCount, MetallicRoughnessMaterialData.ParameterCount);
+    ExpectMetallicRoughnessTextureDefaults(AliasedMaterialData, DefaultTextures);
 
     for (Uint32 TextureIndex = 0; TextureIndex < MetallicRoughnessMaterialData.TextureCount; ++TextureIndex)
     {

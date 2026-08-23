@@ -285,6 +285,41 @@ TEST(RadientMaterialAssetManagerTest, CreateMaterial)
     EXPECT_EQ(pSecondInstance->GetDefinition(), pInstance->GetDefinition());
 }
 
+TEST(RadientMaterialAssetManagerTest, SharedInstanceAssetsShareFinalizedTextureStorage)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialInstance> pInstance =
+        CreateTestMaterialInstance(*pMaterialManager);
+    ASSERT_NE(pInstance, nullptr);
+    const Uint64 InitialVersion = pInstance->GetVersion();
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialA;
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterialB;
+    ASSERT_EQ(pMaterialManager->CreateMaterial(pInstance, pMaterialA.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pMaterialManager->CreateMaterial(pInstance, pMaterialB.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
+    const RadientMaterialAssetView ViewA =
+        RadientMaterialAssetManager::GetMaterialView(pMaterialA);
+    const RadientMaterialAssetView ViewB =
+        RadientMaterialAssetManager::GetMaterialView(pMaterialB);
+    ASSERT_TRUE(ViewA);
+    ASSERT_TRUE(ViewB);
+
+    EXPECT_EQ(RadientMaterialAssetManager::GetInstance(pMaterialA), pInstance);
+    EXPECT_EQ(RadientMaterialAssetManager::GetInstance(pMaterialB), pInstance);
+    EXPECT_EQ(ViewA.pInstance, pInstance);
+    EXPECT_EQ(ViewB.pInstance, pInstance);
+    EXPECT_EQ(ViewA.pTextures, ViewB.pTextures);
+    EXPECT_EQ(ViewA.TextureCount, ViewB.TextureCount);
+    EXPECT_EQ(ViewA.pTextureIndexByParameter, ViewB.pTextureIndexByParameter);
+    EXPECT_EQ(ViewA.ParameterCount, ViewB.ParameterCount);
+    EXPECT_EQ(pInstance->GetVersion(), InitialVersion);
+}
+
 TEST(RadientMaterialAssetManagerTest, CreateMaterialPreservesGenericTextureLayout)
 {
     std::array<RadientMaterialParameterDesc, 4> Parameters{};

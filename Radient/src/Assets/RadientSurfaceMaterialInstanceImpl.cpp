@@ -39,6 +39,10 @@ namespace
 
 using namespace RadientMaterialDetail;
 
+// {0343A08D-C858-466B-B68B-F288DD89C8F0}
+static constexpr INTERFACE_ID IID_SurfaceMaterialInstanceImpl =
+    {0x343a08d, 0xc858, 0x466b, {0xb6, 0x8b, 0xf2, 0x88, 0xdd, 0x89, 0xc8, 0xf0}};
+
 class RadientSurfaceMaterialInstanceWriterImpl;
 
 class RadientSurfaceMaterialInstanceImpl final : public ObjectBase<IRadientSurfaceMaterialInstance>
@@ -57,7 +61,24 @@ public:
         m_IsDoubleSided{pSource != nullptr ? pSource->m_IsDoubleSided : False}
     {}
 
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientSurfaceMaterialInstance, IID_RadientMaterialInstance, TBase)
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
+    {
+        if (ppInterface == nullptr)
+            return;
+
+        if (IID == IID_RadientSurfaceMaterialInstance ||
+            IID == IID_RadientMaterialInstance ||
+            IID == IID_SurfaceMaterialInstanceImpl)
+        {
+            *ppInterface = this;
+            (*ppInterface)->AddRef();
+        }
+        else
+        {
+            TBase::QueryInterface(IID, ppInterface);
+        }
+    }
+    using IObject::QueryInterface;
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
@@ -102,6 +123,11 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final;
 
     const MaterialInstanceState& GetState() const noexcept
+    {
+        return m_State;
+    }
+
+    MaterialInstanceState& GetState() noexcept
     {
         return m_State;
     }
@@ -271,6 +297,15 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeSurfaceMateri
 {
     return RefCntAutoPtr<RadientSurfaceMaterialInstanceImpl>{
         MakeNewRCObj<RadientSurfaceMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
+}
+
+RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetSurfaceMaterialInstanceState(
+    IRadientMaterialInstance* pInstance) noexcept
+{
+    RefCntAutoPtr<IObject> pImpl{pInstance, IID_SurfaceMaterialInstanceImpl};
+    return pImpl != nullptr ?
+        &static_cast<RadientSurfaceMaterialInstanceImpl*>(pInstance)->GetState() :
+        nullptr;
 }
 
 const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetSurfaceMaterialInstanceData(

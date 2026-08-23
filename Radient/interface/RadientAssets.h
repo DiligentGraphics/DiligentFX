@@ -478,10 +478,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                                     const RadientStandardMaterialDefinitionCreateInfo REF DefinitionCI,
                                                                     IRadientMaterialDefinitionAsset**                          ppDefinition) PURE;
 
-    /// Creates a material asset from a fully initialized material instance. The
-    /// asset retains the exact instance. Until material-instance modification is
-    /// supported by material assets, the caller must not modify the instance
-    /// after this method succeeds.
+    /// Creates a material asset from a fully initialized material instance created
+    /// by a material definition produced by Radient. The asset retains the exact
+    /// instance. Until material-instance modification is supported by material
+    /// assets, the caller must not modify the instance after this method succeeds.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
                                                   IRadientMaterialInstance* pInstance,
                                                   IRadientMaterialAsset**   ppMaterial) PURE;

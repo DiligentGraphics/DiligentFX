@@ -166,6 +166,8 @@ public:
     RADIENT_STATUS CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                     IRadientMaterialDefinitionAsset**                  ppDefinition);
 
+    // pInstance must have been created by a material definition produced by
+    // Radient.
     RADIENT_STATUS CreateMaterial(IRadientMaterialInstance* pInstance,
                                   IRadientMaterialAsset**   ppMaterial);
 
@@ -189,7 +191,7 @@ public:
     // including semantic defaults selected for failed requested textures.
     // This method finalizes texture selection and must be called from the render
     // thread. It is not thread-safe and must not race with another
-    // GetMaterialView() call for the same material asset.
+    // GetMaterialView() call for a material asset that retains the same instance.
     static RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
 private:

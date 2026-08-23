@@ -26,16 +26,22 @@
 
 #include "Assets/RadientMaterialInstanceImpl.hpp"
 
+#include "Assets/RadientAssetStatus.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
 #include "FixedLinearAllocator.hpp"
 #include "ObjectBase.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <utility>
+#include <vector>
 
 namespace Diligent
 {
@@ -216,13 +222,207 @@ PackedMaterialInstanceData::PackedMaterialInstanceData(const RadientMaterialDefi
         VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
 }
 
+namespace
+{
+
+struct MaterialTextureSource
+{
+    RadientMaterialParameterHandle      Parameter;
+    Uint32                              ArrayIndex = 0;
+    RefCntAutoPtr<IRadientTextureAsset> pFallbackTexture;
+
+    IRadientTextureAsset* GetRequestedTexture(const PackedMaterialInstanceData& Data) const noexcept
+    {
+        return Data.GetTexture(Parameter.Index, ArrayIndex);
+    }
+
+    IRadientTextureAsset* GetRenderTexture(const PackedMaterialInstanceData& Data) const noexcept
+    {
+        IRadientTextureAsset* const pRequestedTexture = GetRequestedTexture(Data);
+        if (pRequestedTexture != nullptr &&
+            RADIENT_SUCCEEDED(RadientTextureAssetManager::GetLoadStatus(pRequestedTexture)))
+        {
+            return pRequestedTexture;
+        }
+
+        return pFallbackTexture != nullptr ? pFallbackTexture.RawPtr() : pRequestedTexture;
+    }
+
+    RADIENT_STATUS GetRenderTextureLoadStatus(const PackedMaterialInstanceData& Data) const noexcept
+    {
+        IRadientTextureAsset* const pRequestedTexture = GetRequestedTexture(Data);
+        if (pRequestedTexture != nullptr)
+        {
+            const RADIENT_STATUS RequestedStatus =
+                RadientTextureAssetManager::GetLoadStatus(pRequestedTexture);
+            if (RADIENT_SUCCEEDED(RequestedStatus) || pFallbackTexture == nullptr)
+                return RequestedStatus;
+        }
+
+        return pFallbackTexture != nullptr ?
+            RadientTextureAssetManager::GetLoadStatus(pFallbackTexture) :
+            RADIENT_STATUS_OK;
+    }
+};
+
+} // namespace
+
+struct MaterialInstanceState::TextureState
+{
+    // Terminal statuses and the finalized view are intentionally not invalidated.
+    // The material-asset contract currently prohibits modifying an instance after
+    // it has been passed to CreateMaterial().
+    using TextureSourceArray = std::vector<MaterialTextureSource>;
+    using TextureEntryArray  = std::vector<RadientMaterialTextureEntry>;
+    using TextureIndexArray  = std::vector<Uint32>;
+
+    explicit TextureState(MaterialInstanceState& InstanceState) :
+        InstanceState{InstanceState}
+    {
+        const RadientMaterialDefinitionDesc& Desc = InstanceState.m_pDefinition->GetDesc();
+        TextureSources.reserve(Desc.ParameterCount);
+        TextureIndexByParameter.resize(Desc.ParameterCount, RadientMaterialAssetView::InvalidTextureIndex);
+
+        for (Uint32 ParameterIndex = 0; ParameterIndex < Desc.ParameterCount; ++ParameterIndex)
+        {
+            const RadientMaterialParameterDesc& ParameterDesc = Desc.pParameters[ParameterIndex];
+            if (ParameterDesc.Type != RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE)
+                continue;
+
+            TextureIndexByParameter[ParameterIndex] = static_cast<Uint32>(TextureSources.size());
+            for (Uint32 ArrayIndex = 0; ArrayIndex < ParameterDesc.ArraySize; ++ArrayIndex)
+            {
+                MaterialTextureSource Source;
+                Source.Parameter.Definition = InstanceState.m_DefinitionHandle;
+                Source.Parameter.Index      = ParameterIndex;
+                Source.ArrayIndex           = ArrayIndex;
+                Source.pFallbackTexture     = ParameterDesc.pDefaultTexture;
+                TextureSources.push_back(std::move(Source));
+            }
+        }
+
+        const RADIENT_STATUS InitialStatus =
+            TextureSources.empty() ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
+        LoadStatus.store(InitialStatus, std::memory_order_relaxed);
+        GPUResourceStatus.store(InitialStatus, std::memory_order_relaxed);
+    }
+
+    RADIENT_STATUS GetLoadStatus() const noexcept
+    {
+        RADIENT_STATUS Status = LoadStatus.load(std::memory_order_acquire);
+        if (Status != RADIENT_STATUS_PENDING)
+            return Status;
+
+        Status = RADIENT_STATUS_OK;
+        for (const MaterialTextureSource& Source : TextureSources)
+        {
+            Status = CombineDependencyStatus(
+                Status,
+                Source.GetRenderTextureLoadStatus(InstanceState.m_Data));
+        }
+
+        if (Status != RADIENT_STATUS_PENDING)
+            LoadStatus.store(Status, std::memory_order_release);
+        return Status;
+    }
+
+    RADIENT_STATUS GetGPUResourceStatus() const noexcept
+    {
+        const RADIENT_STATUS Status = GetLoadStatus();
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        RADIENT_STATUS GPUStatus = GPUResourceStatus.load(std::memory_order_acquire);
+        if (GPUStatus != RADIENT_STATUS_PENDING)
+            return GPUStatus;
+
+        GPUStatus = RADIENT_STATUS_OK;
+        for (const MaterialTextureSource& Source : TextureSources)
+        {
+            IRadientTextureAsset* const pTexture = Source.GetRenderTexture(InstanceState.m_Data);
+            if (pTexture == nullptr)
+                continue;
+
+            GPUStatus = CombineDependencyStatus(
+                GPUStatus,
+                RadientTextureAssetManager::GetGPUResourceStatus(pTexture));
+        }
+
+        if (GPUStatus != RADIENT_STATUS_PENDING)
+            GPUResourceStatus.store(GPUStatus, std::memory_order_release);
+        return GPUStatus;
+    }
+
+    RADIENT_STATUS FinalizeTextureSelection()
+    {
+        if (TextureSelectionReady)
+            return RADIENT_STATUS_OK;
+
+        const RADIENT_STATUS Status = GetLoadStatus();
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        try
+        {
+            TextureEntryArray NewTextureEntries;
+            NewTextureEntries.reserve(TextureSources.size());
+
+            bool StateChanged = false;
+            for (const MaterialTextureSource& Source : TextureSources)
+            {
+                IRadientTextureAsset* const pRequestedTexture =
+                    Source.GetRequestedTexture(InstanceState.m_Data);
+                IRadientTextureAsset* const pSelectedTexture =
+                    Source.GetRenderTexture(InstanceState.m_Data);
+
+                RadientMaterialTextureEntry& Texture = NewTextureEntries.emplace_back();
+                Texture.ParameterIndex               = Source.Parameter.Index;
+                Texture.ArrayIndex                   = Source.ArrayIndex;
+                Texture.pTexture                     = pSelectedTexture;
+
+                if (pSelectedTexture != pRequestedTexture)
+                {
+                    InstanceState.m_Data.SetTexture(
+                        Source.Parameter.Index,
+                        Source.ArrayIndex,
+                        pSelectedTexture);
+                    StateChanged = true;
+                }
+            }
+
+            if (StateChanged)
+                ++InstanceState.m_Version;
+
+            TextureEntries        = std::move(NewTextureEntries);
+            TextureSelectionReady = true;
+            return RADIENT_STATUS_OK;
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to finalize Radient material texture selection: ", Error.what());
+            return RADIENT_STATUS_FAILED;
+        }
+    }
+
+    MaterialInstanceState&              InstanceState;
+    bool                                TextureSelectionReady = false;
+    mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
+    mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
+    TextureSourceArray                  TextureSources;
+    TextureIndexArray                   TextureIndexByParameter;
+    TextureEntryArray                   TextureEntries;
+};
+
 MaterialInstanceState::MaterialInstanceState(IRadientMaterialDefinitionAsset* pDefinition,
                                              RadientHandle                    DefinitionHandle,
                                              const MaterialInstanceState*     pSource) :
     m_pDefinition{pDefinition},
     m_DefinitionHandle{DefinitionHandle},
-    m_Data{pDefinition->GetDesc(), pSource != nullptr ? &pSource->m_Data : nullptr}
+    m_Data{pDefinition->GetDesc(), pSource != nullptr ? &pSource->m_Data : nullptr},
+    m_pTextureState{std::make_unique<TextureState>(*this)}
 {}
+
+MaterialInstanceState::~MaterialInstanceState() = default;
 
 IRadientMaterialDefinitionAsset* MaterialInstanceState::GetDefinition() const noexcept
 {
@@ -275,6 +475,30 @@ RADIENT_STATUS MaterialInstanceState::GetTexture(RadientMaterialParameterHandle 
     if (*ppTexture != nullptr)
         (*ppTexture)->AddRef();
     return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS MaterialInstanceState::GetLoadStatus() const noexcept
+{
+    return m_pTextureState->GetLoadStatus();
+}
+
+RADIENT_STATUS MaterialInstanceState::GetGPUResourceStatus() const noexcept
+{
+    return m_pTextureState->GetGPUResourceStatus();
+}
+
+RadientMaterialAssetView MaterialInstanceState::GetMaterialView(IRadientMaterialInstance* pInstance)
+{
+    if (pInstance == nullptr || m_pTextureState->FinalizeTextureSelection() != RADIENT_STATUS_OK)
+        return {};
+
+    return {
+        pInstance,
+        m_pTextureState->TextureEntries.data(),
+        static_cast<Uint32>(m_pTextureState->TextureEntries.size()),
+        m_pTextureState->TextureIndexByParameter.data(),
+        static_cast<Uint32>(m_pTextureState->TextureIndexByParameter.size()),
+    };
 }
 
 const PackedMaterialInstanceData& MaterialInstanceState::GetPackedData() const noexcept
@@ -451,6 +675,10 @@ namespace
 
 using namespace RadientMaterialDetail;
 
+// {FE1C68A6-5839-46D6-80BF-FCBF184756BA}
+static constexpr INTERFACE_ID IID_MaterialInstanceImpl =
+    {0xfe1c68a6, 0x5839, 0x46d6, {0x80, 0xbf, 0xfc, 0xbf, 0x18, 0x47, 0x56, 0xba}};
+
 class RadientMaterialInstanceWriterImpl;
 
 class RadientMaterialInstanceImpl final : public ObjectBase<IRadientMaterialInstance>
@@ -466,7 +694,7 @@ public:
         m_State{pDefinition, DefinitionHandle, pSource != nullptr ? &pSource->m_State : nullptr}
     {}
 
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMaterialInstance, TBase)
+    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientMaterialInstance, IID_MaterialInstanceImpl, TBase)
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
@@ -496,6 +724,11 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Clone(IRadientMaterialInstance** ppInstance) const override final;
 
     const MaterialInstanceState& GetState() const noexcept
+    {
+        return m_State;
+    }
+
+    MaterialInstanceState& GetState() noexcept
     {
         return m_State;
     }
@@ -592,6 +825,15 @@ RefCntAutoPtr<IRadientMaterialInstance> RadientMaterialDetail::MakeMaterialInsta
     RadientHandle                    DefinitionHandle)
 {
     return RefCntAutoPtr<RadientMaterialInstanceImpl>{MakeNewRCObj<RadientMaterialInstanceImpl>()(pDefinition, DefinitionHandle)};
+}
+
+RadientMaterialDetail::MaterialInstanceState* RadientMaterialDetail::TryGetMaterialInstanceState(
+    IRadientMaterialInstance* pInstance) noexcept
+{
+    RefCntAutoPtr<IObject> pImpl{pInstance, IID_MaterialInstanceImpl};
+    return pImpl != nullptr ?
+        &static_cast<RadientMaterialInstanceImpl*>(pInstance)->GetState() :
+        nullptr;
 }
 
 const RadientMaterialDetail::PackedMaterialInstanceData& RadientMaterialDetail::GetMaterialInstanceData(
