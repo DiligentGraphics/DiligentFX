@@ -60,6 +60,7 @@ public:
                               Uint32                         ArrayIndex,
                               IRadientTextureAsset*          pTexture);
 
+    bool HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept;
     bool ApplyTo(PackedMaterialData& Target) const noexcept;
 
 private:

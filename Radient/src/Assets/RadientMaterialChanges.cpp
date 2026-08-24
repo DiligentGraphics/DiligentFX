@@ -128,6 +128,23 @@ RADIENT_STATUS MaterialParameterChanges::SetTexture(const MaterialStorage&      
     return RADIENT_STATUS_OK;
 }
 
+bool MaterialParameterChanges::HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept
+{
+    for (const ParameterChange& Change : m_Changes)
+    {
+        if (!IsTextureParameter(Target.GetValueType(Change.ParameterIndex)))
+            continue;
+
+        VERIFY_EXPR(Change.ArrayIndex != ValueArrayIndex);
+        IRadientTextureAsset* const pTexture = m_TextureData[Change.DataOffset];
+        if (Target.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcept
 {
     bool StateChanged = false;
