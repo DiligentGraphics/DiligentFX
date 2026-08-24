@@ -80,6 +80,83 @@ TEST(RadientTesseraMaterialBufferTest, ReusesReleasedRegion)
     EXPECT_EQ(Reused.GetOffset(), ReleasedOffset);
 }
 
+TEST(RadientTesseraMaterialBufferTest, UpdatesPersistentRegion)
+{
+    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
+    const std::array<Uint8, 16>  Data{};
+
+    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    ASSERT_TRUE(Allocation);
+    const auto AllocationAlias = Allocation;
+
+    // The first allocation owns generation 1. Updating it advances the shared
+    // allocation state without changing its stable region.
+    ASSERT_TRUE(Allocation.IsUploadedThrough(1));
+    const Uint32 OriginalOffset = Allocation.GetOffset();
+    const Uint32 OriginalSize   = Allocation.GetSize();
+
+    const std::array<Uint8, 4> UpdateData{{1, 2, 3, 4}};
+    EXPECT_EQ(Buffer.Update(Allocation, 6, UpdateData.data(), static_cast<Uint32>(UpdateData.size())),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Allocation.GetOffset(), OriginalOffset);
+    EXPECT_EQ(Allocation.GetSize(), OriginalSize);
+    EXPECT_FALSE(Allocation.IsUploadedThrough(1));
+    EXPECT_FALSE(AllocationAlias.IsUploadedThrough(1));
+    EXPECT_TRUE(Allocation.IsUploadedThrough(2));
+    EXPECT_TRUE(AllocationAlias.IsUploadedThrough(2));
+}
+
+TEST(RadientTesseraMaterialBufferTest, RejectsInvalidPersistentRegionUpdates)
+{
+    RadientTesseraMaterialBuffer Buffer      = MakeMaterialBuffer();
+    RadientTesseraMaterialBuffer OtherBuffer = MakeMaterialBuffer();
+    const std::array<Uint8, 16>  Data{};
+
+    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    ASSERT_TRUE(Allocation);
+
+    RadientTesseraMaterialBufferAllocation EmptyAllocation;
+    EXPECT_EQ(Buffer.Update(EmptyAllocation, 0, Data.data(), 1),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Buffer.Update(Allocation, 0, nullptr, 1),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Buffer.Update(Allocation, Allocation.GetSize(), Data.data(), 1),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Buffer.Update(Allocation, Allocation.GetSize() - 1, Data.data(), 2),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(OtherBuffer.Update(Allocation, 0, Data.data(), 1),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    // Rejected updates do not advance the allocation generation.
+    EXPECT_TRUE(Allocation.IsUploadedThrough(1));
+
+    EXPECT_EQ(Buffer.Update(Allocation,
+                            0,
+                            Data.data(),
+                            static_cast<Uint32>(Data.size())),
+              RADIENT_STATUS_OK);
+    EXPECT_FALSE(Allocation.IsUploadedThrough(1));
+    EXPECT_TRUE(Allocation.IsUploadedThrough(2));
+}
+
+TEST(RadientTesseraMaterialBufferTest, IgnoresEmptyPersistentRegionUpdates)
+{
+    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
+    const std::array<Uint8, 16>  Data{};
+
+    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    ASSERT_TRUE(Allocation);
+
+    EXPECT_EQ(Buffer.Update(Allocation, 0, nullptr, 0), RADIENT_STATUS_OK);
+    EXPECT_EQ(Buffer.Update(Allocation, Allocation.GetSize(), nullptr, 0), RADIENT_STATUS_OK);
+    EXPECT_EQ(Buffer.Update(Allocation, Allocation.GetSize() + 1, nullptr, 0),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+
+    // Empty updates do not dirty the buffer or advance the allocation generation.
+    EXPECT_TRUE(Allocation.IsUploadedThrough(1));
+}
+
 TEST(RadientTesseraMaterialBufferTest, SupportsConcurrentAllocations)
 {
     RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();

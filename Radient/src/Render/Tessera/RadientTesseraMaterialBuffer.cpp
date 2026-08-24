@@ -120,7 +120,7 @@ struct RadientTesseraMaterialBufferAllocationState
     VariableSizeAllocationsManager::Allocation        Allocation;
     const Uint32                                      Offset;
     const Uint32                                      Size;
-    const Uint64                                      Generation;
+    std::atomic<Uint64>                               Generation;
 };
 
 Uint32 RadientTesseraMaterialBufferAllocation::GetOffset() const noexcept
@@ -135,7 +135,8 @@ Uint32 RadientTesseraMaterialBufferAllocation::GetSize() const noexcept
 
 bool RadientTesseraMaterialBufferAllocation::IsUploadedThrough(Uint64 UploadedGeneration) const noexcept
 {
-    return m_pState != nullptr && UploadedGeneration >= m_pState->Generation;
+    return m_pState != nullptr &&
+        UploadedGeneration >= m_pState->Generation.load(std::memory_order_acquire);
 }
 
 RadientTesseraMaterialBuffer::RadientTesseraMaterialBuffer(const CreateInfo& CI)
@@ -202,6 +203,40 @@ RadientTesseraMaterialBufferAllocation RadientTesseraMaterialBuffer::Allocate(
         Size,
         Generation);
     return RadientTesseraMaterialBufferAllocation{std::move(pState)};
+}
+
+RADIENT_STATUS RadientTesseraMaterialBuffer::Update(
+    const RadientTesseraMaterialBufferAllocation& Allocation,
+    Uint32                                        RelativeOffset,
+    const void*                                   pData,
+    Uint32                                        Size)
+{
+    const std::shared_ptr<RadientTesseraMaterialBufferAllocationState>& pState =
+        Allocation.m_pState;
+    if (pState == nullptr || pState->pOwner != m_pImpl ||
+        RelativeOffset > pState->Size)
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (Size == 0)
+        return RADIENT_STATUS_OK;
+
+    if (pData == nullptr || Size > pState->Size - RelativeOffset)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    std::lock_guard<std::mutex> Lock{m_pImpl->Mutex};
+
+    const size_t BufferOffset = size_t{pState->Offset} + RelativeOffset;
+    VERIFY_EXPR(BufferOffset + Size <= m_pImpl->Data.size());
+    std::memcpy(m_pImpl->Data.data() + BufferOffset, pData, Size);
+
+    m_pImpl->DirtyRangeStart = std::min(m_pImpl->DirtyRangeStart, BufferOffset);
+    m_pImpl->DirtyRangeEnd   = std::max(m_pImpl->DirtyRangeEnd, BufferOffset + Size);
+
+    const Uint64 Generation = ++m_pImpl->CurrentGeneration;
+    pState->Generation.store(Generation, std::memory_order_release);
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,

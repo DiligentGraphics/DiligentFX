@@ -41,7 +41,7 @@ struct IRenderDevice;
 struct RadientTesseraMaterialBufferImpl;
 struct RadientTesseraMaterialBufferAllocationState;
 
-/// Owning handle to one immutable material record in the shared Tessera
+/// Owning handle to one persistent material record in the shared Tessera
 /// material buffer. The region is returned to the allocator when the last
 /// handle is destroyed.
 class RadientTesseraMaterialBufferAllocation final
@@ -72,7 +72,7 @@ private:
     friend class RadientTesseraMaterialBuffer;
 };
 
-/// Thread-safe CPU allocator and render-thread GPU uploader for immutable
+/// Thread-safe CPU allocator and render-thread GPU uploader for persistent
 /// Tessera material shader data. Stable allocation offsets survive buffer
 /// growth, while the buffer version identifies replacement GPU buffers.
 class RadientTesseraMaterialBuffer final
@@ -87,14 +87,27 @@ public:
     explicit RadientTesseraMaterialBuffer(const CreateInfo& CI);
     ~RadientTesseraMaterialBuffer();
 
-    RadientTesseraMaterialBuffer(const RadientTesseraMaterialBuffer&)            = delete;
+    // clang-format off
+    RadientTesseraMaterialBuffer           (const RadientTesseraMaterialBuffer&) = delete;
     RadientTesseraMaterialBuffer& operator=(const RadientTesseraMaterialBuffer&) = delete;
-    RadientTesseraMaterialBuffer(RadientTesseraMaterialBuffer&&)                 = delete;
+    RadientTesseraMaterialBuffer           (RadientTesseraMaterialBuffer&&)      = delete;
     RadientTesseraMaterialBuffer& operator=(RadientTesseraMaterialBuffer&&)      = delete;
+    // clang-format on
 
-    /// Allocates an aligned region and copies immutable shader data into the
+    /// Allocates an aligned region and copies shader data into the
     /// CPU shadow. This method may be called concurrently from worker threads.
     RadientTesseraMaterialBufferAllocation Allocate(const void* pData, Uint32 Size);
+
+    /// Replaces a byte range in an existing material record and marks it for
+    /// upload. RelativeOffset is measured from the start of Allocation, not
+    /// from the start of the shared material buffer. The allocation remains at
+    /// the same buffer offset and becomes pending until Prepare() uploads the
+    /// new generation. An empty range is accepted as a successful no-op and
+    /// pData may be null in that case.
+    RADIENT_STATUS Update(const RadientTesseraMaterialBufferAllocation& Allocation,
+                          Uint32                                        RelativeOffset,
+                          const void*                                   pData,
+                          Uint32                                        Size);
 
     /// Creates or grows the GPU buffer and uploads all dirty material records.
     /// This method must only be called from the render thread.
