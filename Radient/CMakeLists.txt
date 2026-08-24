@@ -10,6 +10,8 @@ set(SOURCE
     src/Assets/RadientFilesystemAssetResolver.cpp
     src/Assets/RadientGLTFLoader.cpp
     src/Assets/RadientMaterialAssetManager.cpp
+    src/Assets/RadientMaterialChanges.cpp
+    src/Assets/RadientMaterialChanges.hpp
     src/Assets/RadientMaterialDefinitionImpl.cpp
     src/Assets/RadientMaterialAssetImpl.cpp
     src/Assets/RadientMaterialAssetImplBase.hpp

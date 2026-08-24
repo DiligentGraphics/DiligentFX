@@ -486,8 +486,9 @@ RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Thickness);
 
 /// Sets all six parameters of one standard-material texture semantic on Writer.
 /// The function resolves every parameter before recording any change. It returns
-/// RADIENT_STATUS_OK when at least one value changed and
-/// RADIENT_STATUS_NO_CHANGE when every value was already equal. When
+/// RADIENT_STATUS_OK when at least one assignment was newly recorded and
+/// RADIENT_STATUS_NO_CHANGE when Writer already had all six identical assignments
+/// pending. Commit() determines whether the assignments change the material. When
 /// Parameters.pTexture is null, the texture is reset to the definition-provided
 /// fallback. If a writer setter fails, earlier changes remain pending; retry the
 /// operation with the same writer or discard that writer without committing it.

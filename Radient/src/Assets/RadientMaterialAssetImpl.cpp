@@ -38,11 +38,9 @@
 #include "FixedLinearAllocator.hpp"
 #include "ObjectBase.hpp"
 
-#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <exception>
-#include <limits>
 #include <utility>
 #include <vector>
 
@@ -480,6 +478,11 @@ RadientMaterialAssetView MaterialStorage::GetMaterialView(IRadientMaterialAsset*
     };
 }
 
+PackedMaterialData& MaterialStorage::GetPackedData() noexcept
+{
+    return m_Data;
+}
+
 const PackedMaterialData& MaterialStorage::GetPackedData() const noexcept
 {
     return m_Data;
@@ -492,159 +495,9 @@ bool MaterialStorage::IsValidHandle(RadientMaterialParameterHandle Handle) const
         Handle.Reserved == 0;
 }
 
-MaterialWriterState::MaterialWriterState(IRadientMaterialAsset* pMaterial,
-                                         MaterialStorage&       Storage) noexcept :
-    m_pMaterial{pMaterial},
-    m_Storage{Storage}
-{}
-
-RADIENT_STATUS MaterialWriterState::SetParameter(RadientMaterialParameterHandle Handle,
-                                                 const void*                    pData,
-                                                 Uint32                         DataSize)
+void MaterialStorage::IncrementVersion() noexcept
 {
-    if (!m_Storage.IsValidHandle(Handle) ||
-        IsTextureParameter(m_Storage.m_Data.GetValueType(Handle.Index)))
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const Uint32 ValueSize = m_Storage.m_Data.GetValueSize(Handle.Index);
-    if (pData == nullptr || DataSize != ValueSize)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    ChangeIterator    ChangeIt     = FindChange(Handle.Index, ValueArrayIndex);
-    const bool        HasChange    = ChangeIt != m_Changes.end();
-    const void* const pCurrentData = HasChange ?
-        m_ValueData.data() + ChangeIt->DataOffset :
-        m_Storage.m_Data.GetValueData(Handle.Index);
-    if (std::memcmp(pCurrentData, pData, ValueSize) == 0)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    if (HasChange)
-    {
-        std::memcpy(m_ValueData.data() + ChangeIt->DataOffset, pData, ValueSize);
-        return RADIENT_STATUS_OK;
-    }
-
-    if (m_ValueData.size() > std::numeric_limits<Uint32>::max() - ValueSize)
-    {
-        LOG_ERROR_MESSAGE("Material writer value storage exceeds the supported size");
-        return RADIENT_STATUS_FAILED;
-    }
-
-    try
-    {
-        const Uint32 DataOffset = static_cast<Uint32>(m_ValueData.size());
-        m_Changes.reserve(m_Changes.size() + 1);
-        m_ValueData.resize(m_ValueData.size() + ValueSize);
-        std::memcpy(m_ValueData.data() + DataOffset, pData, ValueSize);
-        m_Changes.push_back(ParameterChange{Handle.Index, ValueArrayIndex, DataOffset});
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to store a material parameter change: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
-
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS MaterialWriterState::SetTexture(RadientMaterialParameterHandle Handle,
-                                               Uint32                         ArrayIndex,
-                                               IRadientTextureAsset*          pTexture)
-{
-    if (!m_Storage.IsValidHandle(Handle) ||
-        !IsTextureParameter(m_Storage.m_Data.GetValueType(Handle.Index)))
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (ArrayIndex >= m_Storage.m_Data.GetValueSize(Handle.Index))
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    ChangeIterator              ChangeIt        = FindChange(Handle.Index, ArrayIndex);
-    const bool                  HasChange       = ChangeIt != m_Changes.end();
-    IRadientTextureAsset* const pCurrentTexture = HasChange ?
-        m_TextureData[ChangeIt->DataOffset].RawPtr() :
-        m_Storage.m_Data.GetTexture(Handle.Index, ArrayIndex);
-    if (pCurrentTexture == pTexture)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    if (HasChange)
-    {
-        m_TextureData[ChangeIt->DataOffset] = pTexture;
-        return RADIENT_STATUS_OK;
-    }
-
-    if (m_TextureData.size() >= std::numeric_limits<Uint32>::max())
-    {
-        LOG_ERROR_MESSAGE("Material writer texture storage exceeds the supported size");
-        return RADIENT_STATUS_FAILED;
-    }
-
-    try
-    {
-        const Uint32 DataOffset = static_cast<Uint32>(m_TextureData.size());
-        m_Changes.reserve(m_Changes.size() + 1);
-        m_TextureData.emplace_back(pTexture);
-        m_Changes.push_back(ParameterChange{Handle.Index, ArrayIndex, DataOffset});
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to store a material texture change: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
-
-    return RADIENT_STATUS_OK;
-}
-
-bool MaterialWriterState::ApplyParameterChanges()
-{
-    bool StateChanged = false;
-    for (const ParameterChange& Change : m_Changes)
-    {
-        if (IsTextureParameter(m_Storage.m_Data.GetValueType(Change.ParameterIndex)))
-        {
-            VERIFY_EXPR(Change.ArrayIndex != ValueArrayIndex);
-            IRadientTextureAsset* const pTexture = m_TextureData[Change.DataOffset];
-            if (m_Storage.m_Data.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
-            {
-                m_Storage.m_Data.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
-                StateChanged = true;
-            }
-        }
-        else
-        {
-            VERIFY_EXPR(Change.ArrayIndex == ValueArrayIndex);
-            const void* const pChangedData = m_ValueData.data() + Change.DataOffset;
-            if (!m_Storage.m_Data.HasSameValue(Change.ParameterIndex, pChangedData))
-            {
-                m_Storage.m_Data.CopyValue(Change.ParameterIndex, pChangedData);
-                StateChanged = true;
-            }
-        }
-    }
-    return StateChanged;
-}
-
-RADIENT_STATUS MaterialWriterState::FinishCommit(bool StateChanged)
-{
-    m_Changes.clear();
-    m_ValueData.clear();
-    m_TextureData.clear();
-
-    if (!StateChanged)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    ++m_Storage.m_Version;
-    return RADIENT_STATUS_OK;
-}
-
-MaterialWriterState::ChangeIterator MaterialWriterState::FindChange(
-    Uint32 ParameterIndex,
-    Uint32 ArrayIndex) noexcept
-{
-    return std::find_if(
-        m_Changes.begin(), m_Changes.end(),
-        [ParameterIndex, ArrayIndex](const ParameterChange& Change) {
-            return Change.ParameterIndex == ParameterIndex && Change.ArrayIndex == ArrayIndex;
-        });
+    ++m_Version;
 }
 
 } // namespace RadientMaterialDetail

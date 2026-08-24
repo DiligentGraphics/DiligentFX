@@ -581,9 +581,9 @@ DILIGENT_END_INTERFACE
 
 /// Reusable material initialization writer.
 ///
-/// A writer records only values changed through its setter methods. Commit()
-/// publishes complete non-texture parameters, individual texture array elements,
-/// and any specialized material properties exposed by a derived writer. If
+/// A writer records every value explicitly assigned through its setter methods.
+/// Commit() publishes complete non-texture parameters, individual texture array
+/// elements, and any specialized material properties exposed by a derived writer. If
 /// multiple writers modify the same value, the last commit replaces that complete
 /// value. Commits must complete before the asset's load status, GPU resource
 /// status, or render view is first queried. The writer and its material asset are
@@ -592,9 +592,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
     /// is copied immediately and DataSize must exactly match the parameter's
-    /// native data size. Texture parameters are not accepted. Returns
-    /// RADIENT_STATUS_NO_CHANGE if the writer's effective value already equals
-    /// the supplied value.
+    /// native data size. Texture parameters are not accepted. The first assignment
+    /// is always recorded, even if the material currently contains the supplied
+    /// value. Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
+    /// identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetParameter)(THIS_
                                                 RadientMaterialParameterHandle Handle,
                                                 const void*                    pData,
@@ -618,16 +619,18 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// Replaces one texture array element identified by Handle and ArrayIndex.
     /// Commit() publishes only modified texture elements, so independent element
     /// updates from different writers are preserved. The writer retains pTexture;
-    /// null is a valid texture value. Non-texture parameters are not accepted.
-    /// Returns RADIENT_STATUS_NO_CHANGE if the writer's effective texture already
-    /// equals pTexture.
+    /// null is a valid texture value. Non-texture parameters are not accepted. The
+    /// first assignment is always recorded, even if the material currently contains
+    /// pTexture. Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
+    /// identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetTexture)(THIS_
                                               RadientMaterialParameterHandle Handle,
                                               Uint32                         ArrayIndex,
                                               IRadientTextureAsset*          pTexture) PURE;
 
     /// Applies the writer's pending changes to its material asset as one logical
-    /// update. The writer remains valid after the call. On success or
+    /// update. This is the authoritative check for whether the assignments change
+    /// the material state. The writer remains valid after the call. On success or
     /// RADIENT_STATUS_NO_CHANGE, pending changes are cleared. On failure, pending
     /// changes are retained so the operation can be retried.
     VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS) PURE;
@@ -659,21 +662,19 @@ DILIGENT_END_INTERFACE
 /// Writer for mutable surface-material state.
 DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialWriter, IRadientMaterialWriter)
 {
-    /// Sets the surface coverage and blending mode. Returns
-    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
-    /// SurfaceMode.
+    /// Sets the surface coverage and blending mode. Returns RADIENT_STATUS_NO_CHANGE
+    /// only if this writer already has an identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetSurfaceMode)(THIS_
                                                   RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) PURE;
 
-    /// Sets the alpha cutoff used by masked surfaces. Returns
-    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
-    /// AlphaCutoff.
+    /// Sets the alpha cutoff used by masked surfaces. Returns RADIENT_STATUS_NO_CHANGE
+    /// only if this writer already has an identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetAlphaCutoff)(THIS_
                                                   Float32 AlphaCutoff) PURE;
 
     /// Controls whether both sides of the surface are rendered. Returns
-    /// RADIENT_STATUS_NO_CHANGE when the writer's effective value already equals
-    /// DoubleSided.
+    /// RADIENT_STATUS_NO_CHANGE only if this writer already has an identical pending
+    /// assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetDoubleSided)(THIS_
                                                   Bool DoubleSided) PURE;
 };

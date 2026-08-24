@@ -32,7 +32,6 @@
 #include "STDAllocator.hpp"
 
 #include <memory>
-#include <vector>
 
 namespace Diligent
 {
@@ -82,7 +81,7 @@ private:
     Uint32                                        m_ValueCount = 0;
 };
 
-class MaterialWriterState;
+class MaterialParameterChanges;
 
 class MaterialStorage final
 {
@@ -114,10 +113,13 @@ public:
     RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
     RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
+    PackedMaterialData&       GetPackedData() noexcept;
     const PackedMaterialData& GetPackedData() const noexcept;
 
+    void IncrementVersion() noexcept;
+
 private:
-    friend class MaterialWriterState;
+    friend class MaterialParameterChanges;
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept;
 
@@ -128,55 +130,6 @@ private:
     PackedMaterialData                             m_Data;
     Uint64                                         m_Version = 1;
     std::unique_ptr<TextureState>                  m_pTextureState;
-};
-
-class MaterialWriterState final
-{
-public:
-    MaterialWriterState(IRadientMaterialAsset* pMaterial,
-                        MaterialStorage&       Storage) noexcept;
-
-    // clang-format off
-    MaterialWriterState           (const MaterialWriterState&) = delete;
-    MaterialWriterState& operator=(const MaterialWriterState&) = delete;
-    MaterialWriterState           (MaterialWriterState&&)      = delete;
-    MaterialWriterState& operator=(MaterialWriterState&&)      = delete;
-    // clang-format on
-
-    RADIENT_STATUS SetParameter(RadientMaterialParameterHandle Handle,
-                                const void*                    pData,
-                                Uint32                         DataSize);
-
-    RADIENT_STATUS SetTexture(RadientMaterialParameterHandle Handle,
-                              Uint32                         ArrayIndex,
-                              IRadientTextureAsset*          pTexture);
-
-    bool           ApplyParameterChanges();
-    RADIENT_STATUS FinishCommit(bool StateChanged);
-
-private:
-    static constexpr Uint32 ValueArrayIndex = ~Uint32{0};
-
-    struct ParameterChange
-    {
-        Uint32 ParameterIndex = 0;
-        Uint32 ArrayIndex     = ValueArrayIndex;
-        Uint32 DataOffset     = 0;
-    };
-
-    using ChangeList     = std::vector<ParameterChange>;
-    using ChangeIterator = ChangeList::iterator;
-
-    ChangeIterator FindChange(Uint32 ParameterIndex, Uint32 ArrayIndex) noexcept;
-
-    // Both members refer to the same material asset. m_pMaterial keeps the
-    // asset, and therefore m_Storage, alive for the writer's lifetime.
-    RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
-    MaterialStorage&                     m_Storage;
-
-    ChangeList                                  m_Changes;
-    std::vector<Uint8>                          m_ValueData;
-    std::vector<PackedMaterialData::TexturePtr> m_TextureData;
 };
 
 MaterialStorage*       TryGetMaterialStorage(IRadientAsset* pAsset) noexcept;

@@ -36,13 +36,91 @@ namespace
 
 using namespace RadientMaterialDetail;
 
+struct SurfaceMaterialState
+{
+    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode   = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Float32                       AlphaCutoff   = 0.5f;
+    Bool                          IsDoubleSided = False;
+};
+
+class SurfaceMaterialChanges final
+{
+public:
+    RADIENT_STATUS SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) noexcept
+    {
+        if (SurfaceMode >= RADIENT_MATERIAL_SURFACE_MODE_COUNT)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        if (m_HasSurfaceMode && m_SurfaceMode == SurfaceMode)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        m_SurfaceMode    = SurfaceMode;
+        m_HasSurfaceMode = true;
+        return RADIENT_STATUS_OK;
+    }
+
+    RADIENT_STATUS SetAlphaCutoff(Float32 AlphaCutoff) noexcept
+    {
+        if (m_HasAlphaCutoff && m_AlphaCutoff == AlphaCutoff)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        m_AlphaCutoff    = AlphaCutoff;
+        m_HasAlphaCutoff = true;
+        return RADIENT_STATUS_OK;
+    }
+
+    RADIENT_STATUS SetDoubleSided(Bool DoubleSided) noexcept
+    {
+        DoubleSided = DoubleSided != False ? True : False;
+        if (m_HasDoubleSided && m_IsDoubleSided == DoubleSided)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        m_IsDoubleSided  = DoubleSided;
+        m_HasDoubleSided = true;
+        return RADIENT_STATUS_OK;
+    }
+
+    bool ApplyTo(SurfaceMaterialState& Target) const noexcept
+    {
+        bool StateChanged = false;
+
+        if (m_HasSurfaceMode && Target.SurfaceMode != m_SurfaceMode)
+        {
+            Target.SurfaceMode = m_SurfaceMode;
+            StateChanged       = true;
+        }
+        if (m_HasAlphaCutoff && Target.AlphaCutoff != m_AlphaCutoff)
+        {
+            Target.AlphaCutoff = m_AlphaCutoff;
+            StateChanged       = true;
+        }
+        if (m_HasDoubleSided && Target.IsDoubleSided != m_IsDoubleSided)
+        {
+            Target.IsDoubleSided = m_IsDoubleSided;
+            StateChanged         = true;
+        }
+
+        return StateChanged;
+    }
+
+private:
+    RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode    = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Float32                       m_AlphaCutoff    = 0.5f;
+    Bool                          m_IsDoubleSided  = False;
+    bool                          m_HasSurfaceMode = false;
+    bool                          m_HasAlphaCutoff = false;
+    bool                          m_HasDoubleSided = false;
+};
+
 class RadientSurfaceMaterialAssetImpl;
 class RadientSurfaceMaterialWriterImpl;
 
 using RadientSurfaceMaterialAssetImplBase =
     MaterialAssetImplBase<RadientSurfaceMaterialAssetImpl,
                           IRadientSurfaceMaterialAsset,
-                          IID_RadientSurfaceMaterialAsset>;
+                          IID_RadientSurfaceMaterialAsset,
+                          SurfaceMaterialState,
+                          SurfaceMaterialChanges>;
 
 class RadientSurfaceMaterialAssetImpl final : public RadientSurfaceMaterialAssetImplBase
 {
@@ -57,27 +135,20 @@ public:
 
     virtual RADIENT_MATERIAL_SURFACE_MODE DILIGENT_CALL_TYPE GetSurfaceMode() const override final
     {
-        return m_SurfaceMode;
+        return GetSpecializedState().SurfaceMode;
     }
 
     virtual Float32 DILIGENT_CALL_TYPE GetAlphaCutoff() const override final
     {
-        return m_AlphaCutoff;
+        return GetSpecializedState().AlphaCutoff;
     }
 
     virtual Bool DILIGENT_CALL_TYPE IsDoubleSided() const override final
     {
-        return m_IsDoubleSided;
+        return GetSpecializedState().IsDoubleSided;
     }
 
     RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> MakeWriter();
-
-private:
-    friend class RadientSurfaceMaterialWriterImpl;
-
-    RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode   = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
-    Float32                       m_AlphaCutoff   = 0.5f;
-    Bool                          m_IsDoubleSided = False;
 };
 
 using RadientSurfaceMaterialWriterImplBase =
@@ -94,76 +165,18 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) override final
     {
-        if (SurfaceMode >= RADIENT_MATERIAL_SURFACE_MODE_COUNT)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        const RADIENT_MATERIAL_SURFACE_MODE CurrentMode =
-            m_SurfaceModeChanged ? m_SurfaceMode : GetMaterial().m_SurfaceMode;
-        if (CurrentMode == SurfaceMode)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        m_SurfaceMode        = SurfaceMode;
-        m_SurfaceModeChanged = true;
-        return RADIENT_STATUS_OK;
+        return GetSpecializedChanges().SetSurfaceMode(SurfaceMode);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetAlphaCutoff(Float32 AlphaCutoff) override final
     {
-        const Float32 CurrentValue =
-            m_AlphaCutoffChanged ? m_AlphaCutoff : GetMaterial().m_AlphaCutoff;
-        if (CurrentValue == AlphaCutoff)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        m_AlphaCutoff        = AlphaCutoff;
-        m_AlphaCutoffChanged = true;
-        return RADIENT_STATUS_OK;
+        return GetSpecializedChanges().SetAlphaCutoff(AlphaCutoff);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetDoubleSided(Bool DoubleSided) override final
     {
-        DoubleSided             = DoubleSided != False ? True : False;
-        const Bool CurrentValue = m_DoubleSidedChanged ? m_IsDoubleSided : GetMaterial().m_IsDoubleSided;
-        if (CurrentValue == DoubleSided)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        m_IsDoubleSided      = DoubleSided;
-        m_DoubleSidedChanged = true;
-        return RADIENT_STATUS_OK;
+        return GetSpecializedChanges().SetDoubleSided(DoubleSided);
     }
-
-    bool ApplySpecializedChanges() noexcept
-    {
-        bool StateChanged = false;
-
-        if (m_SurfaceModeChanged && GetMaterial().m_SurfaceMode != m_SurfaceMode)
-        {
-            GetMaterial().m_SurfaceMode = m_SurfaceMode;
-            StateChanged                = true;
-        }
-        if (m_AlphaCutoffChanged && GetMaterial().m_AlphaCutoff != m_AlphaCutoff)
-        {
-            GetMaterial().m_AlphaCutoff = m_AlphaCutoff;
-            StateChanged                = true;
-        }
-        if (m_DoubleSidedChanged && GetMaterial().m_IsDoubleSided != m_IsDoubleSided)
-        {
-            GetMaterial().m_IsDoubleSided = m_IsDoubleSided;
-            StateChanged                  = true;
-        }
-
-        m_SurfaceModeChanged = false;
-        m_AlphaCutoffChanged = false;
-        m_DoubleSidedChanged = false;
-        return StateChanged;
-    }
-
-private:
-    RADIENT_MATERIAL_SURFACE_MODE m_SurfaceMode        = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
-    Float32                       m_AlphaCutoff        = 0.5f;
-    Bool                          m_IsDoubleSided      = False;
-    bool                          m_SurfaceModeChanged = false;
-    bool                          m_AlphaCutoffChanged = false;
-    bool                          m_DoubleSidedChanged = false;
 };
 
 RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> RadientSurfaceMaterialAssetImpl::MakeWriter()

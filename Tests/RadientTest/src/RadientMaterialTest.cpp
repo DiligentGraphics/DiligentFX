@@ -284,6 +284,94 @@ TEST(RadientMaterialTest, SurfaceStateIsMutableAndPacked)
     EXPECT_FLOAT_EQ(ShaderState.AlphaCutoff, 0.25f);
 }
 
+TEST(RadientMaterialTest, ParameterAndSurfaceChangesCommitAsOneTransaction)
+{
+    const Float32 DefaultValue = 0.f;
+    const Float32 UpdatedValue = 1.f;
+
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name          = "Value";
+    Parameter.Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.pDefaultValue = &DefaultValue;
+
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Combined material transaction definition";
+    DefinitionDesc.pParameters    = &Parameter;
+    DefinitionDesc.ParameterCount = 1;
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle ValueHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+
+    const Uint64                          InitialVersion = pMaterial->GetVersion();
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+
+    ASSERT_EQ(pWriter->SetParameter(ValueHandle, UpdatedValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 1);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), UpdatedValue);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.25f);
+    EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
+}
+
+TEST(RadientMaterialTest, RevertedSurfaceChangesDoNotAdvanceVersion)
+{
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name = "Reverted surface transaction definition";
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+
+    const Uint64                          InitialVersion = pMaterial->GetVersion();
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.5f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.5f);
+    EXPECT_FALSE(pSurfaceMaterial->IsDoubleSided());
+}
+
 TEST(RadientMaterialTest, MaterialAndSurfaceInterfacesShareObjectIdentity)
 {
     RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
@@ -1418,14 +1506,14 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
-    EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, UpdatedValue), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
-    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture = MakeTestTextureAsset("texture://writer-reversion");
@@ -1438,9 +1526,83 @@ TEST(RadientMaterialTest, WriterReversionDoesNotAdvanceVersion)
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
     const Uint64 TextureVersion = pMaterial->GetVersion();
 
-    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pMaterial->GetVersion(), TextureVersion);
+}
+
+TEST(RadientMaterialTest, WriterRetainsExplicitAssignmentsUntilCommit)
+{
+    const Float32 DefaultValue = 0.f;
+    const Float32 UpdatedValue = 1.f;
+
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name          = "Value";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[0].pDefaultValue = &DefaultValue;
+    Parameters[1].Name          = "Texture";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.Name           = "Explicit assignment definition";
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pDefinition, nullptr);
+
+    RadientMaterialParameterHandle ValueHandle;
+    RadientMaterialParameterHandle TextureHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &TextureHandle), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
+        pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceMaterial, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialWriter> pRestoreWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pRestoreWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pRestoreSurfaceWriter{
+        pRestoreWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pRestoreSurfaceWriter, nullptr);
+
+    EXPECT_EQ(pRestoreWriter->SetParameter(ValueHandle, DefaultValue), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRestoreWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRestoreSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRestoreSurfaceWriter->SetAlphaCutoff(0.5f), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRestoreSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientTextureAsset>   pTexture = MakeTestTextureAsset("texture://explicit-assignment");
+    RefCntAutoPtr<IRadientMaterialWriter> pUpdateWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pUpdateWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pUpdateSurfaceWriter{
+        pUpdateWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pUpdateSurfaceWriter, nullptr);
+
+    ASSERT_EQ(pUpdateWriter->SetParameter(ValueHandle, UpdatedValue), RADIENT_STATUS_OK);
+    ASSERT_EQ(pUpdateWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
+    ASSERT_EQ(pUpdateSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pUpdateSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pUpdateSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+
+    const Uint64 InitialVersion = pMaterial->GetVersion();
+    ASSERT_EQ(pUpdateWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRestoreWriter->Commit(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pMaterial->GetVersion(), InitialVersion + 2);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), DefaultValue);
+
+    RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+    EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStoredTexture, nullptr);
+    EXPECT_EQ(pSurfaceMaterial->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(pSurfaceMaterial->GetAlphaCutoff(), 0.5f);
+    EXPECT_FALSE(pSurfaceMaterial->IsDoubleSided());
 }
 
 TEST(RadientMaterialTest, WriterOverwritesPendingParameterValues)

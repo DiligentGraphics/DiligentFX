@@ -29,10 +29,13 @@
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
 
+#include "RadientMaterialChanges.hpp"
+
 #include "DebugUtilities.hpp"
 #include "ObjectBase.hpp"
 
 #include <exception>
+#include <utility>
 
 namespace Diligent
 {
@@ -58,11 +61,14 @@ struct MaterialAssetCombinedInterface :
 
 template <typename DerivedType,
           typename InterfaceType,
-          const INTERFACE_ID& InterfaceID>
+          const INTERFACE_ID& InterfaceID,
+          typename SpecializedStateType   = EmptyMaterialState,
+          typename SpecializedChangesType = EmptyMaterialChanges>
 class MaterialAssetImplBase : public RefCountedObject<MaterialAssetCombinedInterface<InterfaceType>>
 {
 public:
-    using TBase = RefCountedObject<MaterialAssetCombinedInterface<InterfaceType>>;
+    using TBase     = RefCountedObject<MaterialAssetCombinedInterface<InterfaceType>>;
+    using ChangeSet = MaterialChangeSet<SpecializedChangesType>;
 
     MaterialAssetImplBase(IReferenceCounters*              pRefCounters,
                           IRadientMaterialDefinitionAsset* pDefinition,
@@ -159,10 +165,28 @@ public:
         return m_Storage;
     }
 
+    RADIENT_STATUS SubmitChanges(ChangeSet& Changes) noexcept
+    {
+        bool StateChanged = Changes.Parameters.ApplyTo(m_Storage.GetPackedData());
+        StateChanged |= Changes.Specialized.ApplyTo(m_SpecializedState);
+        if (!StateChanged)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        m_Storage.IncrementVersion();
+        return RADIENT_STATUS_OK;
+    }
+
+protected:
+    const SpecializedStateType& GetSpecializedState() const noexcept
+    {
+        return m_SpecializedState;
+    }
+
 private:
     const std::string     m_URI;
     RadientAssetReference m_Reference;
     MaterialStorage       m_Storage;
+    SpecializedStateType  m_SpecializedState;
 };
 
 template <typename DerivedType,
@@ -172,13 +196,14 @@ template <typename DerivedType,
 class MaterialWriterImplBase : public ObjectBase<InterfaceType>
 {
 public:
-    using TBase = ObjectBase<InterfaceType>;
+    using TBase                  = ObjectBase<InterfaceType>;
+    using ChangeSet              = typename MaterialType::ChangeSet;
+    using SpecializedChangesType = typename ChangeSet::SpecializedChangesType;
 
     MaterialWriterImplBase(IReferenceCounters* pRefCounters,
                            MaterialType*       pMaterial) :
         TBase{pRefCounters},
-        m_pMaterial{pMaterial},
-        m_Parameters{pMaterial, pMaterial->GetStorage()}
+        m_pMaterial{pMaterial}
     {
         VERIFY_EXPR(m_pMaterial != nullptr);
     }
@@ -204,39 +229,36 @@ public:
                                                            const void*                    pData,
                                                            Uint32                         DataSize) override final
     {
-        return m_Parameters.SetParameter(Handle, pData, DataSize);
+        return m_Changes.Parameters.SetParameter(m_pMaterial->GetStorage(), Handle, pData, DataSize);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTexture(RadientMaterialParameterHandle Handle,
                                                          Uint32                         ArrayIndex,
                                                          IRadientTextureAsset*          pTexture) override final
     {
-        return m_Parameters.SetTexture(Handle, ArrayIndex, pTexture);
+        return m_Changes.Parameters.SetTexture(m_pMaterial->GetStorage(), Handle, ArrayIndex, pTexture);
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
     {
-        const bool ParameterStateChanged   = m_Parameters.ApplyParameterChanges();
-        const bool SpecializedStateChanged = static_cast<DerivedType*>(this)->ApplySpecializedChanges();
-        return m_Parameters.FinishCommit(ParameterStateChanged || SpecializedStateChanged);
+        ChangeSet Changes = std::exchange(m_Changes, ChangeSet{});
+
+        const RADIENT_STATUS Status = m_pMaterial->SubmitChanges(Changes);
+        if (RADIENT_FAILED(Status))
+            m_Changes = std::move(Changes);
+
+        return Status;
     }
 
 protected:
-    MaterialType& GetMaterial() const noexcept
+    SpecializedChangesType& GetSpecializedChanges() noexcept
     {
-        return *m_pMaterial;
-    }
-
-    bool ApplySpecializedChanges() noexcept
-    {
-        return false;
+        return m_Changes.Specialized;
     }
 
 private:
-    // m_pMaterial is borrowed. m_Parameters retains the same asset strongly and
-    // therefore keeps the typed pointer valid for the writer's lifetime.
-    MaterialType*       m_pMaterial = nullptr;
-    MaterialWriterState m_Parameters;
+    RefCntAutoPtr<MaterialType> m_pMaterial;
+    ChangeSet                   m_Changes;
 };
 
 } // namespace RadientMaterialDetail

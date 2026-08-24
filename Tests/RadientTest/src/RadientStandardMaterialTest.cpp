@@ -565,8 +565,11 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
     EXPECT_EQ(GetParameter<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(*pMaterial, FindHandle(Names.WrapV)),
               Parameters.WrapV);
 
+    const Uint64 VersionBeforeRedundantUpdate = pMaterial->GetVersion();
     EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, Names, Parameters),
-              RADIENT_STATUS_NO_CHANGE);
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pMaterial->GetVersion(), VersionBeforeRedundantUpdate);
 
     Parameters.pTexture = nullptr;
     EXPECT_EQ(SetStandardMaterialTextureParameters(*pDefinition, *pWriter, Names, Parameters),
