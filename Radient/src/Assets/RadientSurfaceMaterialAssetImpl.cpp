@@ -80,27 +80,28 @@ public:
         return RADIENT_STATUS_OK;
     }
 
-    bool ApplyTo(SurfaceMaterialState& Target) const noexcept
+    MATERIAL_CHANGE_FLAGS ApplyTo(SurfaceMaterialState& Target) const noexcept
     {
-        bool StateChanged = false;
+        MATERIAL_CHANGE_FLAGS Flags = MATERIAL_CHANGE_FLAG_NONE;
 
         if (m_HasSurfaceMode && Target.SurfaceMode != m_SurfaceMode)
         {
             Target.SurfaceMode = m_SurfaceMode;
-            StateChanged       = true;
+            Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA |
+                MATERIAL_CHANGE_FLAG_RENDER_STATE;
         }
         if (m_HasAlphaCutoff && Target.AlphaCutoff != m_AlphaCutoff)
         {
             Target.AlphaCutoff = m_AlphaCutoff;
-            StateChanged       = true;
+            Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA;
         }
         if (m_HasDoubleSided && Target.IsDoubleSided != m_IsDoubleSided)
         {
             Target.IsDoubleSided = m_IsDoubleSided;
-            StateChanged         = true;
+            Flags |= MATERIAL_CHANGE_FLAG_RENDER_STATE;
         }
 
-        return StateChanged;
+        return Flags;
     }
 
 private:
@@ -129,8 +130,9 @@ public:
 
     RadientSurfaceMaterialAssetImpl(IReferenceCounters*              pRefCounters,
                                     IRadientMaterialDefinitionAsset* pDefinition,
-                                    RadientHandle                    DefinitionHandle) :
-        TBase{pRefCounters, pDefinition, DefinitionHandle}
+                                    RadientHandle                    DefinitionHandle,
+                                    const MaterialAssetIdentity&     Identity) :
+        TBase{pRefCounters, pDefinition, DefinitionHandle, Identity}
     {}
 
     virtual RADIENT_MATERIAL_SURFACE_MODE DILIGENT_CALL_TYPE GetSurfaceMode() const override final
@@ -189,10 +191,11 @@ RefCntAutoPtr<RadientSurfaceMaterialWriterImpl> RadientSurfaceMaterialAssetImpl:
 
 RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeSurfaceMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
-    RadientHandle                    DefinitionHandle)
+    RadientHandle                    DefinitionHandle,
+    const MaterialAssetIdentity&     Identity)
 {
     return RefCntAutoPtr<RadientSurfaceMaterialAssetImpl>{
-        MakeNewRCObj<RadientSurfaceMaterialAssetImpl>()(pDefinition, DefinitionHandle)};
+        MakeNewRCObj<RadientSurfaceMaterialAssetImpl>()(pDefinition, DefinitionHandle, Identity)};
 }
 
 } // namespace Diligent

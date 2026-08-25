@@ -769,16 +769,17 @@ RADIENT_STATUS DILIGENT_CALL_TYPE RadientMaterialDefinitionImpl::FindParameter(
     return GetParameterHandle(It->second, pHandle);
 }
 
-RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDefinitionImpl::CreateAsset()
+RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDefinitionImpl::CreateAsset(
+    const RadientMaterialDetail::MaterialAssetIdentity& Identity)
 {
     switch (m_Data.GetDesc().Type)
     {
         case RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE:
-            return RadientMaterialDetail::MakeSurfaceMaterialAsset(this, m_DefinitionHandle);
+            return RadientMaterialDetail::MakeSurfaceMaterialAsset(this, m_DefinitionHandle, Identity);
 
         case RADIENT_MATERIAL_DEFINITION_TYPE_POST_PROCESS:
         case RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE:
-            return RadientMaterialDetail::MakeGenericMaterialAsset(this, m_DefinitionHandle);
+            return RadientMaterialDetail::MakeGenericMaterialAsset(this, m_DefinitionHandle, Identity);
 
         default:
             UNEXPECTED("Unexpected material definition type");

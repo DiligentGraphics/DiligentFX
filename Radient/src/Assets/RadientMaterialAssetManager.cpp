@@ -38,7 +38,8 @@ namespace Diligent
 RadientMaterialAssetManager::~RadientMaterialAssetManager() = default;
 
 RadientMaterialAssetManager::RadientMaterialAssetManager(const CreateInfo& CI) :
-    m_DefaultTextures{CI.DefaultTextures}
+    m_DefaultTextures{CI.DefaultTextures},
+    m_pChangeTracker{std::make_shared<RadientMaterialDetail::MaterialChangeTracker>()}
 {
 }
 
@@ -111,7 +112,10 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
 
     try
     {
-        RefCntAutoPtr<IRadientMaterialAsset> pMaterial = pDefinitionImpl->CreateAsset();
+        const RadientMaterialDetail::MaterialAssetIdentity Identity{
+            m_pChangeTracker,
+            m_pChangeTracker->AllocateMaterialID()};
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial = pDefinitionImpl->CreateAsset(Identity);
         if (pMaterial == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -128,6 +132,11 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateMaterial(
         LOG_ERROR_MESSAGE("Failed to create Radient material asset: unknown exception");
         return RADIENT_STATUS_FAILED;
     }
+}
+
+Uint64 RadientMaterialAssetManager::GetMaterialChangeRevision() const noexcept
+{
+    return m_pChangeTracker->GetRevision();
 }
 
 RADIENT_STATUS RadientMaterialAssetManager::GetLoadStatus(IRadientAsset* pMaterial)

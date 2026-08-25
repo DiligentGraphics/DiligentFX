@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientMaterialChangeTracker.hpp"
 #include "RadientMaterials.h"
 
 #include "RefCntAutoPtr.hpp"
@@ -38,11 +39,13 @@ namespace RadientMaterialDetail
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeGenericMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
-    RadientHandle                    DefinitionHandle);
+    RadientHandle                    DefinitionHandle,
+    const MaterialAssetIdentity&     Identity);
 
 RefCntAutoPtr<IRadientMaterialAsset> MakeSurfaceMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
-    RadientHandle                    DefinitionHandle);
+    RadientHandle                    DefinitionHandle,
+    const MaterialAssetIdentity&     Identity);
 
 } // namespace RadientMaterialDetail
 

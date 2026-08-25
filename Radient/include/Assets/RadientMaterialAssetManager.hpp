@@ -28,6 +28,7 @@
 
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
+#include "Assets/RadientMaterialChangeTracker.hpp"
 #include "DebugUtilities.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "WeakObjectCache.hpp"
@@ -165,6 +166,10 @@ public:
     RADIENT_STATUS CreateMaterial(IRadientMaterialDefinitionAsset* pDefinition,
                                   IRadientMaterialAsset**          ppMaterial);
 
+    /// Monotonically increases after every effective material state publication.
+    /// Material creation by itself does not advance the revision.
+    Uint64 GetMaterialChangeRevision() const noexcept;
+
     // Reports material source/dependency status. A failed requested texture is
     // replaced by its semantic default when one is available. OK means every
     // render texture source has loaded. Once the status becomes terminal,
@@ -187,8 +192,9 @@ public:
 private:
     explicit RadientMaterialAssetManager(const CreateInfo& CI);
 
-    RadientMaterialDefaultTextures                   m_DefaultTextures;
-    WeakObjectCache<IRadientMaterialDefinitionAsset> m_StandardMaterialDefinitions;
+    RadientMaterialDefaultTextures                                m_DefaultTextures;
+    WeakObjectCache<IRadientMaterialDefinitionAsset>              m_StandardMaterialDefinitions;
+    std::shared_ptr<RadientMaterialDetail::MaterialChangeTracker> m_pChangeTracker;
 };
 
 } // namespace Diligent

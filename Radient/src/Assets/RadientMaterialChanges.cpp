@@ -145,9 +145,9 @@ bool MaterialParameterChanges::HasEffectiveTextureChanges(const PackedMaterialDa
     return false;
 }
 
-bool MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcept
+MATERIAL_CHANGE_FLAGS MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcept
 {
-    bool StateChanged = false;
+    MATERIAL_CHANGE_FLAGS Flags = MATERIAL_CHANGE_FLAG_NONE;
     for (const ParameterChange& Change : m_Changes)
     {
         if (IsTextureParameter(Target.GetValueType(Change.ParameterIndex)))
@@ -157,7 +157,8 @@ bool MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcep
             if (Target.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
             {
                 Target.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
-                StateChanged = true;
+                Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA |
+                    MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS;
             }
         }
         else
@@ -167,11 +168,11 @@ bool MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcep
             if (!Target.HasSameValue(Change.ParameterIndex, pChangedData))
             {
                 Target.CopyValue(Change.ParameterIndex, pChangedData);
-                StateChanged = true;
+                Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA;
             }
         }
     }
-    return StateChanged;
+    return Flags;
 }
 
 MaterialParameterChanges::ChangeIterator MaterialParameterChanges::FindChange(Uint32 ParameterIndex,

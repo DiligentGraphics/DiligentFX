@@ -72,10 +72,11 @@ public:
 
     MaterialAssetImplBase(IReferenceCounters*              pRefCounters,
                           IRadientMaterialDefinitionAsset* pDefinition,
-                          RadientHandle                    DefinitionHandle) :
+                          RadientHandle                    DefinitionHandle,
+                          const MaterialAssetIdentity&     Identity) :
         TBase{pRefCounters},
         m_URI{MakeRadientAssetURI("material")},
-        m_Storage{pDefinition, DefinitionHandle}
+        m_Storage{pDefinition, DefinitionHandle, Identity}
     {
         m_Reference.URI     = m_URI.c_str();
         m_Reference.Version = 1;
@@ -167,12 +168,12 @@ public:
 
     RADIENT_STATUS SubmitChanges(ChangeSet& Changes) noexcept
     {
-        bool StateChanged = Changes.Parameters.ApplyTo(m_Storage.GetPackedData());
-        StateChanged |= Changes.Specialized.ApplyTo(m_SpecializedState);
-        if (!StateChanged)
+        MATERIAL_CHANGE_FLAGS Flags = Changes.Parameters.ApplyTo(m_Storage.GetPackedData());
+        Flags |= Changes.Specialized.ApplyTo(m_SpecializedState);
+        if (Flags == MATERIAL_CHANGE_FLAG_NONE)
             return RADIENT_STATUS_NO_CHANGE;
 
-        m_Storage.IncrementVersion();
+        m_Storage.PublishChange(Flags);
         return RADIENT_STATUS_OK;
     }
 

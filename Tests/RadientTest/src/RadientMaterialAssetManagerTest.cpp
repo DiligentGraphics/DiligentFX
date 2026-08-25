@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
@@ -156,6 +157,27 @@ RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(
         pMaterial.GetAddressOfEmpty());
     EXPECT_TRUE(RADIENT_SUCCEEDED(Status));
     return RADIENT_SUCCEEDED(Status) ? pMaterial : RefCntAutoPtr<IRadientMaterialAsset>{};
+}
+
+RefCntAutoPtr<IRadientMaterialAsset> CreateUninitializedTestMaterial(
+    RadientMaterialAssetManager& MaterialManager)
+{
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    EXPECT_EQ(Testing::CreateStandardMaterialAsset(
+                  MaterialManager,
+                  {},
+                  pMaterial.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    return pMaterial;
+}
+
+const RadientMaterialDetail::MaterialStorage* GetMaterialStorage(
+    IRadientMaterialAsset* pMaterial)
+{
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(pMaterial);
+    EXPECT_NE(pStorage, nullptr);
+    return pStorage;
 }
 
 void VerifyTestMaterial(IRadientMaterialAsset*    pMaterial,
@@ -299,6 +321,191 @@ TEST(RadientMaterialAssetManagerTest, MaterialsFromCachedDefinitionHaveDistinctI
     EXPECT_EQ(ViewB.pMaterial, pMaterialB);
     EXPECT_EQ(ViewA.TextureCount, ViewB.TextureCount);
     EXPECT_EQ(ViewA.ParameterCount, ViewB.ParameterCount);
+}
+
+TEST(RadientMaterialAssetManagerTest, TracksEffectiveMaterialChanges)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 0u);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial =
+        CreateUninitializedTestMaterial(*pMaterialManager);
+    ASSERT_NE(pMaterial, nullptr);
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        GetMaterialStorage(pMaterial);
+    ASSERT_NE(pStorage, nullptr);
+
+    const auto ExpectVersions =
+        [&](Uint64 Version,
+            Uint64 ShaderDataVersion,
+            Uint64 TextureBindingsVersion,
+            Uint64 RenderStateVersion) {
+            const RadientMaterialDetail::MaterialChangeVersions& Versions =
+                pStorage->GetChangeVersions();
+            EXPECT_EQ(Versions.Version, Version);
+            EXPECT_EQ(Versions.ShaderDataVersion, ShaderDataVersion);
+            EXPECT_EQ(Versions.TextureBindingsVersion, TextureBindingsVersion);
+            EXPECT_EQ(Versions.RenderStateVersion, RenderStateVersion);
+            EXPECT_EQ(pMaterial->GetVersion(), Version);
+        };
+
+    ExpectVersions(1, 1, 1, 1);
+    EXPECT_NE(pStorage->GetIdentity().ID, RadientMaterialDetail::InvalidMaterialID);
+    EXPECT_NE(pStorage->GetIdentity().pChangeTracker, nullptr);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 0u);
+
+    RadientMaterialParameterHandle BaseColorHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(
+                  RadientStandardMaterialBaseColorFactorName,
+                  &BaseColorHandle),
+              RADIENT_STATUS_OK);
+
+    const RadientFloat4 BaseColor{0.25f, 0.5f, 0.75f, 1.f};
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(BaseColorHandle, BaseColor), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ExpectVersions(2, 2, 1, 1);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 1u);
+
+    // A fresh writer records the assignment, but Commit() detects that it does
+    // not effectively change the material.
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(BaseColorHandle, BaseColor), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    }
+    ExpectVersions(2, 2, 1, 1);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 1u);
+
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+            pWriter.RawPtr(), IID_RadientSurfaceMaterialWriter};
+        ASSERT_NE(pSurfaceWriter, nullptr);
+        ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+        EXPECT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ExpectVersions(3, 3, 1, 1);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 2u);
+
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+            pWriter.RawPtr(), IID_RadientSurfaceMaterialWriter};
+        ASSERT_NE(pSurfaceWriter, nullptr);
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT),
+                  RADIENT_STATUS_OK);
+        const RadientFloat4 UpdatedBaseColor{0.5f, 0.25f, 0.75f, 1.f};
+        ASSERT_EQ(pSurfaceWriter->SetParameter(BaseColorHandle, UpdatedBaseColor), RADIENT_STATUS_OK);
+        EXPECT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ExpectVersions(4, 4, 1, 2);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 3u);
+
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+            pWriter.RawPtr(), IID_RadientSurfaceMaterialWriter};
+        ASSERT_NE(pSurfaceWriter, nullptr);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+        EXPECT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ExpectVersions(5, 4, 1, 3);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 4u);
+
+    RadientMaterialParameterHandle TextureHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(
+                  RadientStandardMaterialBaseColorTextureName,
+                  &TextureHandle),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset> pTexture =
+        Testing::MakeTestTextureAsset("texture://change-tracking");
+    {
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ExpectVersions(6, 5, 2, 3);
+    EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 5u);
+}
+
+TEST(RadientMaterialAssetManagerTest, MaterialChangeIdentitiesAreManagerScoped)
+{
+    RadientMaterialAssetManagerSharedPtr pFirstManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pFirstManager, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pFirstMaterial =
+        CreateUninitializedTestMaterial(*pFirstManager);
+    RefCntAutoPtr<IRadientMaterialAsset> pSecondMaterial =
+        CreateUninitializedTestMaterial(*pFirstManager);
+    ASSERT_NE(pFirstMaterial, nullptr);
+    ASSERT_NE(pSecondMaterial, nullptr);
+
+    const RadientMaterialDetail::MaterialStorage* const pFirstStorage =
+        GetMaterialStorage(pFirstMaterial);
+    const RadientMaterialDetail::MaterialStorage* const pSecondStorage =
+        GetMaterialStorage(pSecondMaterial);
+    ASSERT_NE(pFirstStorage, nullptr);
+    ASSERT_NE(pSecondStorage, nullptr);
+    EXPECT_EQ(pFirstStorage->GetIdentity().pChangeTracker,
+              pSecondStorage->GetIdentity().pChangeTracker);
+    EXPECT_NE(pFirstStorage->GetIdentity().ID,
+              pSecondStorage->GetIdentity().ID);
+
+    RadientMaterialAssetManagerSharedPtr pOtherManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pOtherManager, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pOtherMaterial =
+        CreateUninitializedTestMaterial(*pOtherManager);
+    ASSERT_NE(pOtherMaterial, nullptr);
+    const RadientMaterialDetail::MaterialStorage* const pOtherStorage =
+        GetMaterialStorage(pOtherMaterial);
+    ASSERT_NE(pOtherStorage, nullptr);
+    EXPECT_NE(pFirstStorage->GetIdentity().pChangeTracker,
+              pOtherStorage->GetIdentity().pChangeTracker);
+}
+
+TEST(RadientMaterialAssetManagerTest, MaterialChangeTrackerOutlivesManager)
+{
+    RefCntAutoPtr<IRadientMaterialAsset>                        pMaterial;
+    std::weak_ptr<RadientMaterialDetail::MaterialChangeTracker> WeakTracker;
+    {
+        RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+        ASSERT_NE(pMaterialManager, nullptr);
+        pMaterial = CreateUninitializedTestMaterial(*pMaterialManager);
+        ASSERT_NE(pMaterial, nullptr);
+
+        const RadientMaterialDetail::MaterialStorage* const pStorage =
+            GetMaterialStorage(pMaterial);
+        ASSERT_NE(pStorage, nullptr);
+        WeakTracker = pStorage->GetIdentity().pChangeTracker;
+    }
+
+    std::shared_ptr<RadientMaterialDetail::MaterialChangeTracker> pTracker = WeakTracker.lock();
+    ASSERT_NE(pTracker, nullptr);
+    EXPECT_EQ(pTracker->GetRevision(), 0u);
+
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter.RawPtr(), IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(pSurfaceWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pTracker->GetRevision(), 1u);
+
+    pSurfaceWriter.Release();
+    pWriter.Release();
+    pMaterial.Release();
+    pTracker.reset();
+    EXPECT_TRUE(WeakTracker.expired());
 }
 
 TEST(RadientMaterialAssetManagerTest, CreateMaterialPreservesGenericTextureLayout)
