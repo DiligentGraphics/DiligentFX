@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientMaterialChangeTracker.hpp"
 #include "RadientMaterials.h"
 
 #include "RefCntAutoPtr.hpp"
@@ -87,7 +88,8 @@ class MaterialStorage final
 {
 public:
     MaterialStorage(IRadientMaterialDefinitionAsset* pDefinition,
-                    RadientHandle                    DefinitionHandle);
+                    RadientHandle                    DefinitionHandle,
+                    const MaterialAssetIdentity&     Identity);
 
     ~MaterialStorage();
 
@@ -100,6 +102,8 @@ public:
 
     IRadientMaterialDefinitionAsset* GetDefinition() const noexcept;
     Uint64                           GetVersion() const noexcept;
+    const MaterialAssetIdentity&     GetIdentity() const noexcept;
+    const MaterialChangeVersions&    GetChangeVersions() const noexcept;
 
     RADIENT_STATUS GetParameter(RadientMaterialParameterHandle Handle,
                                 void*                          pData,
@@ -116,7 +120,7 @@ public:
     PackedMaterialData&       GetPackedData() noexcept;
     const PackedMaterialData& GetPackedData() const noexcept;
 
-    void IncrementVersion() noexcept;
+    void PublishChange(MATERIAL_CHANGE_FLAGS Flags) noexcept;
 
 private:
     friend class MaterialParameterChanges;
@@ -127,8 +131,9 @@ private:
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> m_pDefinition;
     const RadientHandle                            m_DefinitionHandle;
+    const MaterialAssetIdentity                    m_Identity;
     PackedMaterialData                             m_Data;
-    Uint64                                         m_Version = 1;
+    MaterialChangeVersions                         m_ChangeVersions;
     std::unique_ptr<TextureState>                  m_pTextureState;
 };
 

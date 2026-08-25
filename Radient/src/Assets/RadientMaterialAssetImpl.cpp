@@ -373,11 +373,14 @@ struct MaterialStorage::TextureState
                 }
             }
 
-            if (StateChanged)
-                ++Storage.m_Version;
-
             TextureEntries        = std::move(NewTextureEntries);
             TextureSelectionReady = true;
+
+            if (StateChanged)
+            {
+                Storage.PublishChange(MATERIAL_CHANGE_FLAG_SHADER_DATA |
+                                      MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS);
+            }
             return RADIENT_STATUS_OK;
         }
         catch (const std::exception& Error)
@@ -397,12 +400,17 @@ struct MaterialStorage::TextureState
 };
 
 MaterialStorage::MaterialStorage(IRadientMaterialDefinitionAsset* pDefinition,
-                                 RadientHandle                    DefinitionHandle) :
+                                 RadientHandle                    DefinitionHandle,
+                                 const MaterialAssetIdentity&     Identity) :
     m_pDefinition{pDefinition},
     m_DefinitionHandle{DefinitionHandle},
+    m_Identity{Identity},
     m_Data{pDefinition->GetDesc()},
     m_pTextureState{std::make_unique<TextureState>(*this)}
-{}
+{
+    VERIFY_EXPR(m_Identity.pChangeTracker != nullptr);
+    VERIFY_EXPR(m_Identity.ID != InvalidMaterialID);
+}
 
 MaterialStorage::~MaterialStorage() = default;
 
@@ -413,7 +421,17 @@ IRadientMaterialDefinitionAsset* MaterialStorage::GetDefinition() const noexcept
 
 Uint64 MaterialStorage::GetVersion() const noexcept
 {
-    return m_Version;
+    return m_ChangeVersions.Version;
+}
+
+const MaterialAssetIdentity& MaterialStorage::GetIdentity() const noexcept
+{
+    return m_Identity;
+}
+
+const MaterialChangeVersions& MaterialStorage::GetChangeVersions() const noexcept
+{
+    return m_ChangeVersions;
 }
 
 RADIENT_STATUS MaterialStorage::GetParameter(RadientMaterialParameterHandle Handle,
@@ -495,9 +513,19 @@ bool MaterialStorage::IsValidHandle(RadientMaterialParameterHandle Handle) const
         Handle.Reserved == 0;
 }
 
-void MaterialStorage::IncrementVersion() noexcept
+void MaterialStorage::PublishChange(MATERIAL_CHANGE_FLAGS Flags) noexcept
 {
-    ++m_Version;
+    VERIFY_EXPR(Flags != MATERIAL_CHANGE_FLAG_NONE);
+
+    ++m_ChangeVersions.Version;
+    if ((Flags & MATERIAL_CHANGE_FLAG_SHADER_DATA) != 0)
+        ++m_ChangeVersions.ShaderDataVersion;
+    if ((Flags & MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS) != 0)
+        ++m_ChangeVersions.TextureBindingsVersion;
+    if ((Flags & MATERIAL_CHANGE_FLAG_RENDER_STATE) != 0)
+        ++m_ChangeVersions.RenderStateVersion;
+
+    m_Identity.pChangeTracker->RecordChange();
 }
 
 } // namespace RadientMaterialDetail
@@ -547,9 +575,10 @@ RefCntAutoPtr<RadientMaterialWriterImpl> RadientMaterialAssetImpl::MakeWriter()
 
 RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDetail::MakeGenericMaterialAsset(
     IRadientMaterialDefinitionAsset* pDefinition,
-    RadientHandle                    DefinitionHandle)
+    RadientHandle                    DefinitionHandle,
+    const MaterialAssetIdentity&     Identity)
 {
-    return RefCntAutoPtr<RadientMaterialAssetImpl>{MakeNewRCObj<RadientMaterialAssetImpl>()(pDefinition, DefinitionHandle)};
+    return RefCntAutoPtr<RadientMaterialAssetImpl>{MakeNewRCObj<RadientMaterialAssetImpl>()(pDefinition, DefinitionHandle, Identity)};
 }
 
 RadientMaterialDetail::MaterialStorage* RadientMaterialDetail::TryGetMaterialStorage(

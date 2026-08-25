@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientMaterialChangeTracker.hpp"
 #include "RadientMaterials.h"
 
 #include "HashUtils.hpp"
@@ -194,7 +195,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE FindParameter(const Char*                     Name,
                                                             RadientMaterialParameterHandle* pHandle) const override final;
 
-    RefCntAutoPtr<IRadientMaterialAsset> CreateAsset();
+    RefCntAutoPtr<IRadientMaterialAsset> CreateAsset(
+        const RadientMaterialDetail::MaterialAssetIdentity& Identity);
 
     Uint32 GetShaderDataSize() const noexcept
     {

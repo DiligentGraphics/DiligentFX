@@ -60,8 +60,8 @@ public:
                               Uint32                         ArrayIndex,
                               IRadientTextureAsset*          pTexture);
 
-    bool HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept;
-    bool ApplyTo(PackedMaterialData& Target) const noexcept;
+    bool                  HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept;
+    MATERIAL_CHANGE_FLAGS ApplyTo(PackedMaterialData& Target) const noexcept;
 
 private:
     static constexpr Uint32 ValueArrayIndex = ~Uint32{0};
@@ -88,9 +88,9 @@ struct EmptyMaterialState
 
 struct EmptyMaterialChanges
 {
-    bool ApplyTo(EmptyMaterialState&) const noexcept
+    MATERIAL_CHANGE_FLAGS ApplyTo(EmptyMaterialState&) const noexcept
     {
-        return false;
+        return MATERIAL_CHANGE_FLAG_NONE;
     }
 };
 
