@@ -146,6 +146,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
     
     float3 TSNormal     = GetMicroNormal(Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy, g_Frame.Renderer.MipBias);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, Material, g_Frame.Renderer.MipBias);
+    float4 Specular     = GetSpecular(VSOut, Material, g_Frame.Renderer.MipBias);
     
     PBRMaterialBasicAttribs BasicAttribs = Material.Basic;
     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSSINESS)
@@ -170,7 +171,8 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
         PhysicalDesc.b = saturate(PhysicalDesc.b * BasicAttribs.MetallicFactor);
     }
     Base.Metallic = 0.0;
-    Base.Srf = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc, Base.Metallic);
+    Base.Srf = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc,
+                                     Specular.rgb, Specular.a, Base.Metallic);
     
     Base.Normal = PerturbNormal(NormalInfo,
                                 NMUVInfo.dUV_dx,

@@ -351,7 +351,7 @@ void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Please update the GLTF texture attribute mapping");
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Please update the GLTF texture attribute mapping");
 }
 
 bool InitializeMaterialTextureBinding(IRadientTextureAsset*             pTexture,

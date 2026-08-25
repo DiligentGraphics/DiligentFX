@@ -85,6 +85,8 @@ public:
         TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS,
         TEXTURE_ATTRIB_ID_TRANSMISSION,
         TEXTURE_ATTRIB_ID_THICKNESS,
+        TEXTURE_ATTRIB_ID_SPECULAR,
+        TEXTURE_ATTRIB_ID_SPECULAR_COLOR,
         TEXTURE_ATTRIB_ID_COUNT
     };
 
@@ -161,6 +163,10 @@ public:
         /// Whether to enable sheen.
         /// A pipeline state can use sheen only if this flag is set to true.
         bool EnableSheen = false;
+
+        /// Whether to enable dielectric specular modulation.
+        /// A pipeline state can use specular material parameters only if this flag is set to true.
+        bool EnableSpecular = false;
 
         /// Whether to enable anisotropy.
         /// A pipeline state can use anisotropy only if this flag is set to true.
@@ -273,6 +279,9 @@ public:
 
         /// Immutable sampler for sheen texture.
         SamplerDesc SheenMapImmutableSampler = DefaultSampler;
+
+        /// Immutable sampler for specular textures.
+        SamplerDesc SpecularMapImmutableSampler = DefaultSampler;
 
         /// Immutable sampler for anisotropy texture.
         SamplerDesc AnisotropyMapImmutableSampler = DefaultSampler;
@@ -576,22 +585,25 @@ public:
         PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS),
         PSO_FLAG_USE_TRANSMISSION_MAP          = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_TRANSMISSION),
         PSO_FLAG_USE_THICKNESS_MAP             = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_THICKNESS),
+        PSO_FLAG_USE_SPECULAR_MAP              = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_SPECULAR),
+        PSO_FLAG_USE_SPECULAR_COLOR_MAP        = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_SPECULAR_COLOR),
 
-        PSO_FLAG_LAST_TEXTURE = PSO_FLAG_USE_THICKNESS_MAP,
+        PSO_FLAG_LAST_TEXTURE = PSO_FLAG_USE_SPECULAR_COLOR_MAP,
         PSO_FLAG_ALL_TEXTURES = PSO_FLAG_LAST_TEXTURE * 2ull - 1ull,
 
-        PSO_FLAG_USE_VERTEX_COLORS   = PSO_FLAG_BIT(17),
-        PSO_FLAG_USE_VERTEX_NORMALS  = PSO_FLAG_BIT(18),
-        PSO_FLAG_USE_VERTEX_TANGENTS = PSO_FLAG_BIT(19),
-        PSO_FLAG_USE_TEXCOORD0       = PSO_FLAG_BIT(20),
-        PSO_FLAG_USE_TEXCOORD1       = PSO_FLAG_BIT(21),
-        PSO_FLAG_USE_JOINTS          = PSO_FLAG_BIT(22),
-        PSO_FLAG_ENABLE_CLEAR_COAT   = PSO_FLAG_BIT(23),
-        PSO_FLAG_ENABLE_SHEEN        = PSO_FLAG_BIT(24),
-        PSO_FLAG_ENABLE_ANISOTROPY   = PSO_FLAG_BIT(25),
-        PSO_FLAG_ENABLE_IRIDESCENCE  = PSO_FLAG_BIT(26),
-        PSO_FLAG_ENABLE_TRANSMISSION = PSO_FLAG_BIT(27),
-        PSO_FLAG_ENABLE_VOLUME       = PSO_FLAG_BIT(28),
+        PSO_FLAG_USE_VERTEX_COLORS   = PSO_FLAG_BIT(19),
+        PSO_FLAG_USE_VERTEX_NORMALS  = PSO_FLAG_BIT(20),
+        PSO_FLAG_USE_VERTEX_TANGENTS = PSO_FLAG_BIT(21),
+        PSO_FLAG_USE_TEXCOORD0       = PSO_FLAG_BIT(22),
+        PSO_FLAG_USE_TEXCOORD1       = PSO_FLAG_BIT(23),
+        PSO_FLAG_USE_JOINTS          = PSO_FLAG_BIT(24),
+        PSO_FLAG_ENABLE_CLEAR_COAT   = PSO_FLAG_BIT(25),
+        PSO_FLAG_ENABLE_SHEEN        = PSO_FLAG_BIT(26),
+        PSO_FLAG_ENABLE_ANISOTROPY   = PSO_FLAG_BIT(27),
+        PSO_FLAG_ENABLE_IRIDESCENCE  = PSO_FLAG_BIT(28),
+        PSO_FLAG_ENABLE_TRANSMISSION = PSO_FLAG_BIT(29),
+        PSO_FLAG_ENABLE_VOLUME       = PSO_FLAG_BIT(30),
+        PSO_FLAG_ENABLE_SPECULAR     = PSO_FLAG_BIT(31),
 
         PSO_FLAG_ALL_CLEAR_COAT =
             PSO_FLAG_ENABLE_CLEAR_COAT |
@@ -621,16 +633,21 @@ public:
             PSO_FLAG_ENABLE_VOLUME |
             PSO_FLAG_USE_THICKNESS_MAP,
 
-        PSO_FLAG_USE_IBL                   = PSO_FLAG_BIT(29),
-        PSO_FLAG_USE_LIGHTS                = PSO_FLAG_BIT(30),
-        PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(31),
-        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = PSO_FLAG_BIT(32),
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = PSO_FLAG_BIT(33),
-        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = PSO_FLAG_BIT(34),
-        PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(35),
-        PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(36),
-        PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(37),
-        PSO_FLAG_ENABLE_SHADOWS            = PSO_FLAG_BIT(38),
+        PSO_FLAG_ALL_SPECULAR =
+            PSO_FLAG_ENABLE_SPECULAR |
+            PSO_FLAG_USE_SPECULAR_MAP |
+            PSO_FLAG_USE_SPECULAR_COLOR_MAP,
+
+        PSO_FLAG_USE_IBL                   = PSO_FLAG_BIT(32),
+        PSO_FLAG_USE_LIGHTS                = PSO_FLAG_BIT(33),
+        PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(34),
+        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = PSO_FLAG_BIT(35),
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = PSO_FLAG_BIT(36),
+        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = PSO_FLAG_BIT(37),
+        PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(38),
+        PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(39),
+        PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(40),
+        PSO_FLAG_ENABLE_SHADOWS            = PSO_FLAG_BIT(41),
 
         PSO_FLAG_LAST = PSO_FLAG_ENABLE_SHADOWS,
 
@@ -1117,18 +1134,21 @@ inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(P
     static_assert(PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP == 1u << TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS, "PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP must be 1 << TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS");
     static_assert(PSO_FLAG_USE_TRANSMISSION_MAP          == 1u << TEXTURE_ATTRIB_ID_TRANSMISSION,          "PSO_FLAG_USE_TRANSMISSION_MAP must be 1 << TEXTURE_ATTRIB_ID_TRANSMISSION");
     static_assert(PSO_FLAG_USE_THICKNESS_MAP             == 1u << TEXTURE_ATTRIB_ID_THICKNESS,             "PSO_FLAG_USE_THICKNESS_MAP must be 1 << TEXTURE_ATTRIB_ID_THICKNESS");
+    static_assert(PSO_FLAG_USE_SPECULAR_MAP              == 1u << TEXTURE_ATTRIB_ID_SPECULAR,              "PSO_FLAG_USE_SPECULAR_MAP must be 1 << TEXTURE_ATTRIB_ID_SPECULAR");
+    static_assert(PSO_FLAG_USE_SPECULAR_COLOR_MAP        == 1u << TEXTURE_ATTRIB_ID_SPECULAR_COLOR,        "PSO_FLAG_USE_SPECULAR_COLOR_MAP must be 1 << TEXTURE_ATTRIB_ID_SPECULAR_COLOR");
     // clang-format on
-    static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 16u, "Did you add new texture flag? You may need to handle it here.");
+    static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 18u, "Did you add new texture flag? You may need to handle it here.");
 
     return static_cast<PBR_Renderer::PSO_FLAGS>(Uint64{1} << AttribId);
 }
 
 inline constexpr bool PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
 {
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture attribute? It may need to be handled here.");
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Did you add a new texture attribute? It may need to be handled here.");
     return (AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ||
             AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE ||
-            AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR);
+            AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR ||
+            AttribId == PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR);
 }
 
 template <typename HandlerType>

@@ -85,7 +85,7 @@ struct PBRRendererCreateInfoWrapper
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
-        static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Please update the initializer list above");
+        static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Please update the initializer list above");
 
         if (_CI.ShaderTexturesArrayMode == PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
         {
@@ -141,11 +141,9 @@ static RefCntAutoPtr<ITextureView> GetPBRTextureSRV(ITexture*                   
 
     const TextureDesc& TexDesc = pTexture->GetDesc();
     TEXTURE_FORMAT     ViewFmt = TexDesc.Format;
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture attribute? It may need to be handled here.");
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Did you add a new texture attribute? It may need to be handled here.");
     if ((ConversionMode == PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE) &&
-        (ID == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ||
-         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE ||
-         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR))
+        PBR_Renderer::IsSRGBTextureAttribute(ID))
     {
         const TextureFormatAttribs& FmtInfo = GetTextureFormatAttribs(ViewFmt);
         if (FmtInfo.ComponentType != COMPONENT_TYPE_UNORM_SRGB)

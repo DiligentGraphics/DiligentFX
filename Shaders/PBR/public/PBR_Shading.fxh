@@ -404,15 +404,20 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
 /// \param [in]  BaseColor    - Material base color.
 /// \param [in]  PhysicalDesc - Physical material description. For Metallic-roughness workflow,
 ///                             'g' channel stores roughness, 'b' channel stores metallic.
+/// \param [in]  DielectricSpecularColor  - Dielectric specular color multiplier.
+/// \param [in]  DielectricSpecularWeight - Dielectric specular weight.
 /// \param [out] Metallic     - Metallic value used for shading.
-SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
-                                             float4    BaseColor,
-                                             float4    PhysicalDesc,
+SurfaceReflectanceInfo GetSurfaceReflectance(int        Workflow,
+                                             float4     BaseColor,
+                                             float4     PhysicalDesc,
+                                             float3     DielectricSpecularColor,
+                                             float      DielectricSpecularWeight,
                                              out float Metallic)
 {
     SurfaceReflectanceInfo SrfInfo;
 
     float3 SpecularColor;
+    float3 Reflectance90;
 
     float3 f0 = float3(0.04, 0.04, 0.04);
 
@@ -431,6 +436,10 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
 
         // do conversion between metallic M-R and S-G metallic
         Metallic = SolveMetallic(BaseColor.rgb, SpecularColor, oneMinusSpecularStrength);
+
+        float MaxR0 = max(max(SpecularColor.r, SpecularColor.g), SpecularColor.b);
+        float R90   = clamp(MaxR0 * 50.0, 0.0, 1.0);
+        Reflectance90 = float3(R90, R90, R90);
     }
     else // if (Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
@@ -439,20 +448,20 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
         SrfInfo.PerceptualRoughness = PhysicalDesc.g;
         Metallic                    = PhysicalDesc.b;
 
-        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - Metallic);
-        SpecularColor         = lerp(f0, BaseColor.rgb, Metallic);
+        float3 DielectricF0    = min(f0 * DielectricSpecularColor, float3(1.0, 1.0, 1.0)) * DielectricSpecularWeight;
+        float  MaxDielectricF0 = max(max(DielectricF0.r, DielectricF0.g), DielectricF0.b);
+
+        SrfInfo.DiffuseColor = BaseColor.rgb * (1.0 - MaxDielectricF0) * (1.0 - Metallic);
+        SpecularColor        = lerp(DielectricF0, BaseColor.rgb, Metallic);
+        Reflectance90        = lerp(float3(DielectricSpecularWeight, DielectricSpecularWeight, DielectricSpecularWeight),
+                                   float3(1.0, 1.0, 1.0), Metallic);
     }
 
     SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, 0.0, 1.0);
 
     // Compute reflectance.
-    float3 Reflectance0  = SpecularColor;
-    float  MaxR0         = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
-    // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    float R90 = clamp(MaxR0 * 50.0, 0.0, 1.0);
-
-    SrfInfo.Reflectance0  = Reflectance0;
-    SrfInfo.Reflectance90 = float3(R90, R90, R90);
+    SrfInfo.Reflectance0  = SpecularColor;
+    SrfInfo.Reflectance90 = Reflectance90;
 #if ENABLE_IRIDESCENCE
     SrfInfo.IridescenceFresnel = float3(0.0, 0.0, 0.0);
     SrfInfo.IridescenceFactor  = 0.0;
@@ -461,7 +470,42 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
     return SrfInfo;
 }
 
+SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
+                                             float4    BaseColor,
+                                             float4    PhysicalDesc,
+                                             out float Metallic)
+{
+    return GetSurfaceReflectance(Workflow, BaseColor, PhysicalDesc,
+                                 float3(1.0, 1.0, 1.0), 1.0, Metallic);
+}
+
 /// Calculates surface reflectance info for Metallic-roughness workflow
+SurfaceReflectanceInfo GetSurfaceReflectanceMR(float3 BaseColor,
+                                               float  Metallic,
+                                               float  Roughness,
+                                               float3 DielectricSpecularColor,
+                                               float  DielectricSpecularWeight)
+{
+    SurfaceReflectanceInfo SrfInfo;
+
+    float3 DielectricF0 = min(float3(0.04, 0.04, 0.04) * DielectricSpecularColor,
+                              float3(1.0, 1.0, 1.0)) * DielectricSpecularWeight;
+    float MaxDielectricF0 = max(max(DielectricF0.r, DielectricF0.g), DielectricF0.b);
+
+    SrfInfo.PerceptualRoughness = Roughness;
+    SrfInfo.DiffuseColor        = BaseColor * ((1.0 - MaxDielectricF0) * (1.0 - Metallic));
+
+    SrfInfo.Reflectance0  = lerp(DielectricF0, BaseColor, Metallic);
+    SrfInfo.Reflectance90 = lerp(float3(DielectricSpecularWeight, DielectricSpecularWeight, DielectricSpecularWeight),
+                                 float3(1.0, 1.0, 1.0), Metallic);
+#if ENABLE_IRIDESCENCE
+    SrfInfo.IridescenceFresnel = float3(0.0, 0.0, 0.0);
+    SrfInfo.IridescenceFactor  = 0.0;
+#endif
+
+    return SrfInfo;
+}
+
 SurfaceReflectanceInfo GetSurfaceReflectanceMR(float3 BaseColor,
                                                float  Metallic,
                                                float  Roughness)

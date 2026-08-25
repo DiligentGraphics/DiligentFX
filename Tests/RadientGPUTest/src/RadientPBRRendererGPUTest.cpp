@@ -61,6 +61,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     PBR_Renderer::CreateInfo RendererCI{};
     RendererCI.EnableIBL             = false;
     RendererCI.EnableSheen           = true;
+    RendererCI.EnableSpecular        = true;
     RendererCI.EnableShadows         = true;
     RendererCI.CreateDefaultTextures = false;
     RendererCI.NumBRDFSamples        = 16;
@@ -95,6 +96,11 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_TRUE(HasResource(MaterialDesc, "cbPrimitiveAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "cbMaterialAttribs"));
     EXPECT_TRUE(HasResource(MaterialDesc, "g_BaseColorMap"));
+    EXPECT_TRUE(HasResource(MaterialDesc, "g_SpecularMap"));
+    EXPECT_TRUE(HasResource(MaterialDesc, "g_SpecularColorMap"));
+
+    EXPECT_EQ(Renderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ENABLE_SPECULAR),
+              Renderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_NONE) + sizeof(float4));
 }
 
 TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)

@@ -80,7 +80,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
     if (HasStaticShaderTextureIds)
         StaticShaderTextureIds = *_pStaticShaderTextureIds;
 
-    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{38}, "Please handle the new flag below, if necessary");
+    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{41}, "Please handle the new flag below, if necessary");
     static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please handle the new render pass type below, if necessary");
     if (Type == RenderPassType::Shadow)
     {
@@ -157,7 +157,9 @@ static const char* GetTextureAttribString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
             AttribStrings[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = "IridescenceThickness";
             AttribStrings[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = "Transmission";
             AttribStrings[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = "Thickness";
-            static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Not all texture names are initialized");
+            AttribStrings[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR]              = "Specular";
+            AttribStrings[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR]        = "SpecularColor";
+            static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Not all texture names are initialized");
             return AttribStrings;
         }();
     return TextureAttribStrings[Id];
@@ -206,6 +208,9 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_USE_IRIDESCENCE_MAP:           FlagsStr += "IRIDESCENCE_MAP"; break;
             case PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP: FlagsStr += "IRIDESCENCE_THICKNESS_MAP"; break;
             case PSO_FLAG_USE_TRANSMISSION_MAP:          FlagsStr += "TRANSMISSION_MAP"; break;
+            case PSO_FLAG_USE_THICKNESS_MAP:             FlagsStr += "THICKNESS_MAP"; break;
+            case PSO_FLAG_USE_SPECULAR_MAP:              FlagsStr += "SPECULAR_MAP"; break;
+            case PSO_FLAG_USE_SPECULAR_COLOR_MAP:        FlagsStr += "SPECULAR_COLOR_MAP"; break;
 
             case PSO_FLAG_USE_VERTEX_COLORS:   FlagsStr += "VERTEX_COLORS"; break;
             case PSO_FLAG_USE_VERTEX_NORMALS:  FlagsStr += "VERTEX_NORMALS"; break;
@@ -219,6 +224,7 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_ENABLE_IRIDESCENCE:  FlagsStr += "IRIDESCENCE"; break;
             case PSO_FLAG_ENABLE_TRANSMISSION: FlagsStr += "TRANSMISSION"; break;
             case PSO_FLAG_ENABLE_VOLUME:       FlagsStr += "VOLUME"; break;
+            case PSO_FLAG_ENABLE_SPECULAR:     FlagsStr += "SPECULAR"; break;
 
             case PSO_FLAG_USE_IBL:                   FlagsStr += "IBL"; break;
             case PSO_FLAG_USE_LIGHTS:                FlagsStr += "LIGHTS"; break;
@@ -236,7 +242,7 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
                 FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
         }
     }
-    static_assert(PSO_FLAG_LAST == 1ull << 38ull, "Please update the switch above to handle the new flag");
+    static_assert(PSO_FLAG_LAST == 1ull << 41ull, "Please update the switch above to handle the new flag");
 
     return FlagsStr;
 }
@@ -1283,6 +1289,12 @@ void PBR_Renderer::CreateSignature()
         AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS, "g_Sheen_sampler", m_Settings.SheenMapImmutableSampler);
     }
 
+    if (m_Settings.EnableSpecular)
+    {
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_SPECULAR, "g_Specular_sampler", m_Settings.SpecularMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_SPECULAR_COLOR, "g_Specular_sampler", m_Settings.SpecularMapImmutableSampler);
+    }
+
     if (m_Settings.EnableAnisotropy)
     {
         AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_ANISOTROPY, "g_AnisotropyMap_sampler", m_Settings.AnisotropyMapImmutableSampler);
@@ -1529,7 +1541,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("LOADING_ANIMATION_TRANSITIONING", static_cast<int>(LoadingAnimationMode::Transitioning));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(38), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(41), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1548,6 +1560,8 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(USE_IRIDESCENCE_THICKNESS_MAP);
     ADD_PSO_FLAG_MACRO(USE_TRANSMISSION_MAP);
     ADD_PSO_FLAG_MACRO(USE_THICKNESS_MAP);
+    ADD_PSO_FLAG_MACRO(USE_SPECULAR_MAP);
+    ADD_PSO_FLAG_MACRO(USE_SPECULAR_COLOR_MAP);
 
     ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
     ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
@@ -1561,6 +1575,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(ENABLE_IRIDESCENCE);
     ADD_PSO_FLAG_MACRO(ENABLE_TRANSMISSION);
     ADD_PSO_FLAG_MACRO(ENABLE_VOLUME);
+    ADD_PSO_FLAG_MACRO(ENABLE_SPECULAR);
 
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
@@ -2231,6 +2246,8 @@ PBR_Renderer::PSO_FLAGS PBR_Renderer::GetEnabledPSOFlags(const CreateInfo& Setti
         Flags &= ~PSO_FLAG_ALL_CLEAR_COAT;
     if (!Settings.EnableSheen)
         Flags &= ~PSO_FLAG_ALL_SHEEN;
+    if (!Settings.EnableSpecular)
+        Flags &= ~PSO_FLAG_ALL_SPECULAR;
     if (!Settings.EnableAnisotropy)
         Flags &= ~PSO_FLAG_ALL_ANISOTROPY;
     if (!Settings.EnableIridescence)
@@ -2277,6 +2294,8 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
         Flags &= ~PSO_FLAG_ALL_TRANSMISSION;
     if ((Flags & PSO_FLAG_ENABLE_VOLUME) == 0)
         Flags &= ~PSO_FLAG_ALL_VOLUME;
+    if ((Flags & PSO_FLAG_ENABLE_SPECULAR) == 0)
+        Flags &= ~PSO_FLAG_ALL_SPECULAR;
 
     const PSOKey UpdatedKey{Flags, Key};
 
@@ -2580,6 +2599,7 @@ Uint32 PBR_Renderer::GetPBRMaterialAttribsSize(PSO_FLAGS Flags) const
     // {
     //     PBRMaterialBasicAttribs        Basic;
     //     PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //     PBRMaterialSpecularAttribs     Specular;     // #if ENABLE_SPECULAR
     //     PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
     //     PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
     //     PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
@@ -2599,6 +2619,7 @@ Uint32 PBR_Renderer::GetPBRMaterialAttribsSize(PSO_FLAGS Flags) const
 
     return (sizeof(HLSL::PBRMaterialBasicAttribs) +
             ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
+            ((Flags & PSO_FLAG_ENABLE_SPECULAR) ? sizeof(HLSL::PBRMaterialSpecularAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) ? sizeof(HLSL::PBRMaterialIridescenceAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) ? sizeof(HLSL::PBRMaterialTransmissionAttribs) : 0) +

@@ -33,6 +33,21 @@
 namespace Diligent
 {
 
+TEST(PBRRendererTest, ControlsSpecularFeature)
+{
+    PBR_Renderer::CreateInfo Settings{};
+
+    EXPECT_EQ(PBR_Renderer::GetEnabledPSOFlags(Settings) & PBR_Renderer::PSO_FLAG_ALL_SPECULAR,
+              PBR_Renderer::PSO_FLAG_NONE);
+
+    Settings.EnableSpecular = true;
+    EXPECT_EQ(PBR_Renderer::GetEnabledPSOFlags(Settings) & PBR_Renderer::PSO_FLAG_ALL_SPECULAR,
+              PBR_Renderer::PSO_FLAG_ALL_SPECULAR);
+
+    EXPECT_FALSE(PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR));
+    EXPECT_TRUE(PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR));
+}
+
 TEST(RadientPBRRendererTest, ConvertsDebugVisualizations)
 {
     struct DebugVisualizationMapping

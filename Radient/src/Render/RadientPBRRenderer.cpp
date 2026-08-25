@@ -197,10 +197,11 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     FrameResources.emplace("g_EmissiveMap_sampler");
     FrameResources.emplace("g_ClearCoat_sampler");
     FrameResources.emplace("g_Sheen_sampler");
+    FrameResources.emplace("g_Specular_sampler");
     FrameResources.emplace("g_AnisotropyMap_sampler");
     FrameResources.emplace("g_Iridescence_sampler");
     FrameResources.emplace("g_TransmissionMap_sampler");
-    static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture? Don't forget to update the sampler list above");
+    static_assert(TEXTURE_ATTRIB_ID_COUNT == 19, "Did you add a new texture? Don't forget to update the sampler list above");
 
     FrameResources.emplace("g_OITLayers");
     FrameResources.emplace("g_OITTail");

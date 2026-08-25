@@ -76,6 +76,12 @@
 
 #   undef USE_THICKNESS_MAP
 #   define USE_THICKNESS_MAP 0
+
+#   undef USE_SPECULAR_MAP
+#   define USE_SPECULAR_MAP 0
+
+#   undef USE_SPECULAR_COLOR_MAP
+#   define USE_SPECULAR_COLOR_MAP 0
 #endif
 
 SamplerState g_LinearClampSampler;
@@ -167,6 +173,8 @@ SamplerState g_LinearClampSampler;
 #   define IridescenceThicknessTextureId Material.Textures[IridescenceThicknessTextureAttribId].TextureSlice
 #   define TransmissionTextureId         Material.Textures[TransmissionTextureAttribId].TextureSlice
 #   define ThicknessTextureId            Material.Textures[ThicknessTextureAttribId].TextureSlice
+#   define SpecularTextureId             Material.Textures[SpecularTextureAttribId].TextureSlice
+#   define SpecularColorTextureId        Material.Textures[SpecularColorTextureAttribId].TextureSlice
 #endif
 
 #ifndef WEBGPU
@@ -342,6 +350,28 @@ SamplerState g_LinearClampSampler;
         Texture2DArray g_ThicknessMap;
 #   endif
     SamplerState g_ThicknessMap_sampler;
+#endif
+
+#if USE_SPECULAR_MAP || USE_SPECULAR_COLOR_MAP
+    SamplerState g_Specular_sampler;
+#endif
+
+#if USE_SPECULAR_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_SpecularMap MATERIAL_TEXTURE(SpecularTextureId)
+#   else
+        Texture2DArray g_SpecularMap;
+#   endif
+#   define g_SpecularMap_sampler g_Specular_sampler
+#endif
+
+#if USE_SPECULAR_COLOR_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_SpecularColorMap MATERIAL_TEXTURE(SpecularColorTextureId)
+#   else
+        Texture2DArray g_SpecularColorMap;
+#   endif
+#   define g_SpecularColorMap_sampler g_Specular_sampler
 #endif
 
 float2 SelectUV(VSOutput VSOut, float Selector)
@@ -633,6 +663,51 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
 
 
 // Extensions
+
+// Specular
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_specular
+
+// Returns the dielectric specular color in rgb and the specular weight in alpha.
+float4 GetSpecular(VSOutput              VSOut,
+                   PBRMaterialShaderInfo Material,
+                   float                 MipBias)
+{
+#   if ENABLE_SPECULAR
+    {
+        float SpecularWeight = Material.Specular.Factor;
+#       if USE_SPECULAR_MAP
+        {
+            SpecularWeight *= SampleTexture(g_SpecularMap,
+                                            g_SpecularMap_sampler,
+                                            VSOut,
+                                            Material.Textures[SpecularTextureAttribId],
+                                            MipBias,
+                                            float4(1.0, 1.0, 1.0, 1.0)).a;
+        }
+#       endif
+
+        float3 SpecularColor = float3(Material.Specular.ColorFactorR,
+                                      Material.Specular.ColorFactorG,
+                                      Material.Specular.ColorFactorB);
+#       if USE_SPECULAR_COLOR_MAP
+        {
+            float3 SampledColor = SampleTexture(g_SpecularColorMap,
+                                                g_SpecularColorMap_sampler,
+                                                VSOut,
+                                                Material.Textures[SpecularColorTextureAttribId],
+                                                MipBias,
+                                                float4(1.0, 1.0, 1.0, 1.0)).rgb;
+            SpecularColor *= TO_LINEAR(SampledColor);
+        }
+#       endif
+        return float4(SpecularColor, SpecularWeight);
+    }
+#   else
+    {
+        return float4(1.0, 1.0, 1.0, 1.0);
+    }
+#   endif
+}
 
 // Clear coat
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat

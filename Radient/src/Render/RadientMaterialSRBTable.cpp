@@ -56,7 +56,7 @@ const RadientMaterialTextureSRBSlot* RadientMaterialDefaultTextureBindings::Get(
         return nullptr;
     }
 
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Update the switch statement below to handle new PBR texture attributes");
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Update the switch statement below to handle new PBR texture attributes");
     switch (TextureAttribId)
     {
         case PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL:

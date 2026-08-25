@@ -46,6 +46,10 @@
 #ifndef ENABLE_SHEEN
 #   define ENABLE_SHEEN 0
 #endif
+
+#ifndef ENABLE_SPECULAR
+#   define ENABLE_SPECULAR 0
+#endif
     
 #ifndef ENABLE_ANISOTROPY
 #   define ENABLE_ANISOTROPY 0
@@ -197,6 +201,17 @@ struct PBRMaterialSheenAttribs
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialSheenAttribs);
 #endif
 
+struct PBRMaterialSpecularAttribs
+{
+    float ColorFactorR;
+    float ColorFactorG;
+    float ColorFactorB;
+    float Factor;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialSpecularAttribs);
+#endif
+
 struct PBRMaterialAnisotropyAttribs
 {
     float Strength;
@@ -284,6 +299,10 @@ struct PBRMaterialShaderInfo
     
 #if ENABLE_SHEEN
     PBRMaterialSheenAttribs Sheen;
+#endif
+
+#if ENABLE_SPECULAR
+    PBRMaterialSpecularAttribs Specular;
 #endif
     
 #if ENABLE_ANISOTROPY
