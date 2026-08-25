@@ -46,6 +46,11 @@ TEST(PBRRendererTest, ControlsSpecularFeature)
 
     EXPECT_FALSE(PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR));
     EXPECT_TRUE(PBR_Renderer::IsSRGBTextureAttribute(PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR));
+
+    EXPECT_STREQ(PBR_Renderer::GetDebugViewTypeString(PBR_Renderer::DebugViewType::SpecularFactor),
+                 "SpecularFactor");
+    EXPECT_STREQ(PBR_Renderer::GetDebugViewTypeString(PBR_Renderer::DebugViewType::SpecularColorFactor),
+                 "SpecularColorFactor");
 }
 
 TEST(RadientPBRRendererTest, ConvertsDebugVisualizations)
@@ -84,6 +89,8 @@ TEST(RadientPBRRendererTest, ConvertsDebugVisualizations)
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_SHEEN, PBR_Renderer::DebugViewType::Sheen},
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_SHEEN_COLOR, PBR_Renderer::DebugViewType::SheenColor},
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_SHEEN_ROUGHNESS, PBR_Renderer::DebugViewType::SheenRoughness},
+        DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_SPECULAR_FACTOR, PBR_Renderer::DebugViewType::SpecularFactor},
+        DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_SPECULAR_COLOR_FACTOR, PBR_Renderer::DebugViewType::SpecularColorFactor},
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_ANISOTROPY_STRENGTH, PBR_Renderer::DebugViewType::AnisotropyStrength},
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_ANISOTROPY_DIRECTION, PBR_Renderer::DebugViewType::AnisotropyDirection},
         DebugVisualizationMapping{RADIENT_DEBUG_VISUALIZATION_IRIDESCENCE, PBR_Renderer::DebugViewType::Iridescence},

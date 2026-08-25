@@ -1493,7 +1493,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
         Macros.Add("PCF_FILTER_SIZE", KernelSize);
     }
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 35, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 37, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(Key.GetDebugView()));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
@@ -1523,6 +1523,8 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_SHEEN",                 static_cast<int>(DebugViewType::Sheen));
     Macros.Add("DEBUG_VIEW_SHEEN_COLOR",           static_cast<int>(DebugViewType::SheenColor));
     Macros.Add("DEBUG_VIEW_SHEEN_ROUGHNESS",       static_cast<int>(DebugViewType::SheenRoughness));
+    Macros.Add("DEBUG_VIEW_SPECULAR_FACTOR",       static_cast<int>(DebugViewType::SpecularFactor));
+    Macros.Add("DEBUG_VIEW_SPECULAR_COLOR_FACTOR", static_cast<int>(DebugViewType::SpecularColorFactor));
     Macros.Add("DEBUG_VIEW_ANISOTROPY_STRENGTH",   static_cast<int>(DebugViewType::AnisotropyStrength));
     Macros.Add("DEBUG_VIEW_ANISOTROPY_DIRECTION",  static_cast<int>(DebugViewType::AnisotropyDirection));
     Macros.Add("DEBUG_VIEW_IRIDESCENCE",           static_cast<int>(DebugViewType::Iridescence));
@@ -2697,7 +2699,7 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
 
 const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
 {
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 35, "Please update the switch below to handle the new debug view type");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 37, "Please update the switch below to handle the new debug view type");
     switch (DebugView)
     {
 #define DEBUG_VIEW_TYPE_CASE(Type) \
@@ -2730,6 +2732,8 @@ const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
         DEBUG_VIEW_TYPE_CASE(Sheen);
         DEBUG_VIEW_TYPE_CASE(SheenColor);
         DEBUG_VIEW_TYPE_CASE(SheenRoughness);
+        DEBUG_VIEW_TYPE_CASE(SpecularFactor);
+        DEBUG_VIEW_TYPE_CASE(SpecularColorFactor);
         DEBUG_VIEW_TYPE_CASE(AnisotropyStrength);
         DEBUG_VIEW_TYPE_CASE(AnisotropyDirection);
         DEBUG_VIEW_TYPE_CASE(Iridescence);

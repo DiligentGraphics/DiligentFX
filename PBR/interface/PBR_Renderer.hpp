@@ -429,6 +429,8 @@ public:
         Sheen,
         SheenColor,
         SheenRoughness,
+        SpecularFactor,
+        SpecularColorFactor,
         AnisotropyStrength,
         AnisotropyDirection,
         Iridescence,

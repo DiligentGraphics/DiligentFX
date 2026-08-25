@@ -558,6 +558,11 @@ SurfaceReflectanceInfo GetSurfaceReflectanceClearCoat(float Roughness, float  IO
 struct BaseLayerShadingInfo
 {
     SurfaceReflectanceInfo Srf;
+
+#if ENABLE_SPECULAR
+    float3 SpecularColorFactor;
+    float  SpecularFactor;
+#endif
     
     float Metallic;
     
@@ -1042,6 +1047,14 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
 #elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS && ENABLE_SHEEN)
     {
         return Shading.Sheen.Roughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_FACTOR && ENABLE_SPECULAR)
+    {
+        return Shading.BaseLayer.SpecularFactor * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_COLOR_FACTOR && ENABLE_SPECULAR)
+    {
+        return Shading.BaseLayer.SpecularColorFactor;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY_STRENGTH && ENABLE_ANISOTROPY)
     {

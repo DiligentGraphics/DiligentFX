@@ -173,6 +173,10 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
     Base.Metallic = 0.0;
     Base.Srf = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc,
                                      Specular.rgb, Specular.a, Base.Metallic);
+#if ENABLE_SPECULAR
+    Base.SpecularColorFactor = Specular.rgb;
+    Base.SpecularFactor      = Specular.a;
+#endif
     
     Base.Normal = PerturbNormal(NormalInfo,
                                 NMUVInfo.dUV_dx,
