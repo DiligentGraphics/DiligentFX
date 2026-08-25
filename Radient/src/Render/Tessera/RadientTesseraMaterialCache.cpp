@@ -61,6 +61,8 @@ PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialD
         Flags |= PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT;
     if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN))
         Flags |= PBR_Renderer::PSO_FLAG_ALL_SHEEN;
+    if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_SPECULAR;
     if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
         Flags |= PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY;
     if (HasFeature(RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
@@ -105,6 +107,10 @@ const char* GetMetallicRoughnessTextureParameterName(PBR_Renderer::TEXTURE_ATTRI
             return RadientStandardMaterialSheenColorTextureName;
         case PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS:
             return RadientStandardMaterialSheenRoughnessTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR:
+            return RadientStandardMaterialSpecularTextureName;
+        case PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR:
+            return RadientStandardMaterialSpecularColorTextureName;
         case PBR_Renderer::TEXTURE_ATTRIB_ID_ANISOTROPY:
             return RadientStandardMaterialAnisotropyTextureName;
         case PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE:

@@ -713,9 +713,11 @@ std::string WriteGLTFTextureColorSpaceUsageFile(const TempDirectory& TempDir)
     return WriteGLTFFile(TempDir, "texture_color_space_usage.gltf",
                          R"GLTF({
     "asset": {"version": "2.0"},
-    "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness"],
+    "extensionsUsed": ["KHR_materials_pbrSpecularGlossiness", "KHR_materials_specular"],
     "images": [{"uri": "color_space.png"}],
     "textures": [
+        {"source": 0},
+        {"source": 0},
         {"source": 0},
         {"source": 0},
         {"source": 0},
@@ -732,6 +734,14 @@ std::string WriteGLTFTextureColorSpaceUsageFile(const TempDirectory& TempDir)
             "extensions": {
                 "KHR_materials_pbrSpecularGlossiness": {
                     "specularGlossinessTexture": {"index": 3}
+                }
+            }
+        },
+        {
+            "extensions": {
+                "KHR_materials_specular": {
+                    "specularTexture": {"index": 4},
+                    "specularColorTexture": {"index": 5}
                 }
             }
         }
@@ -926,11 +936,13 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesMaterialTextureColorSpace)
     const std::string GLTFPath = WriteGLTFTextureColorSpaceUsageFile(TempDir);
 
     RadientImport::TextureAssetList Textures = LoadTextures(*pThreadPool, *pTextureManager, GLTFPath);
-    ASSERT_EQ(Textures.size(), 4u);
+    ASSERT_EQ(Textures.size(), 6u);
     ASSERT_NE(Textures[0], nullptr);
     ASSERT_NE(Textures[1], nullptr);
     ASSERT_NE(Textures[2], nullptr);
     ASSERT_NE(Textures[3], nullptr);
+    ASSERT_NE(Textures[4], nullptr);
+    ASSERT_NE(Textures[5], nullptr);
 
     ProcessQueuedTasks(*pThreadPool);
 
@@ -939,10 +951,16 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesMaterialTextureColorSpace)
     const TexturePayloadImpl* pMixedPayload  = RadientTextureAssetManager::GetTexturePayload(Textures[2]);
     const TexturePayloadImpl* pSpecularGlossinessPayload =
         RadientTextureAssetManager::GetTexturePayload(Textures[3]);
+    const TexturePayloadImpl* pSpecularPayload =
+        RadientTextureAssetManager::GetTexturePayload(Textures[4]);
+    const TexturePayloadImpl* pSpecularColorPayload =
+        RadientTextureAssetManager::GetTexturePayload(Textures[5]);
     ASSERT_NE(pSRGBPayload, nullptr);
     ASSERT_NE(pLinearPayload, nullptr);
     ASSERT_NE(pMixedPayload, nullptr);
     ASSERT_NE(pSpecularGlossinessPayload, nullptr);
+    ASSERT_NE(pSpecularPayload, nullptr);
+    ASSERT_NE(pSpecularColorPayload, nullptr);
 
     // sRGB affects mip generation and therefore forms a distinct texture payload.
     EXPECT_NE(pSRGBPayload, pLinearPayload);
@@ -950,6 +968,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesMaterialTextureColorSpace)
     EXPECT_EQ(pMixedPayload, pLinearPayload);
     // Specular RGB is sRGB even though glossiness alpha is sampled linearly.
     EXPECT_EQ(pSpecularGlossinessPayload, pSRGBPayload);
+    EXPECT_EQ(pSpecularPayload, pLinearPayload);
+    EXPECT_EQ(pSpecularColorPayload, pSRGBPayload);
     pThreadPool->StopThreads();
 }
 

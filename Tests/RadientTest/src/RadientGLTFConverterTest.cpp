@@ -69,7 +69,7 @@ struct StandardMaterialTextureTestInfo
     const char* ParameterName;
 };
 
-static constexpr std::array<StandardMaterialTextureTestInfo, 15> StandardMaterialTextureTestInfos{{
+static constexpr std::array<StandardMaterialTextureTestInfo, 17> StandardMaterialTextureTestInfos{{
     {GLTF::DefaultBaseColorTextureAttribId, "BaseColorTexture"},
     {GLTF::DefaultMetallicRoughnessTextureAttribId, "MetallicRoughnessTexture"},
     {GLTF::DefaultNormalTextureAttribId, "NormalTexture"},
@@ -80,6 +80,8 @@ static constexpr std::array<StandardMaterialTextureTestInfo, 15> StandardMateria
     {GLTF::DefaultClearcoatNormalTextureAttribId, "ClearCoatNormalTexture"},
     {GLTF::DefaultSheenColorTextureAttribId, "SheenColorTexture"},
     {GLTF::DefaultSheenRoughnessTextureAttribId, "SheenRoughnessTexture"},
+    {GLTF::DefaultSpecularTextureAttribId, "SpecularTexture"},
+    {GLTF::DefaultSpecularColorTextureAttribId, "SpecularColorTexture"},
     {GLTF::DefaultAnisotropyTextureAttribId, "AnisotropyTexture"},
     {GLTF::DefaultIridescenceTextureAttribId, "IridescenceTexture"},
     {GLTF::DefaultIridescenceThicknessTextureAttribId, "IridescenceThicknessTexture"},
@@ -143,6 +145,10 @@ GLTF::Material MakeExtendedGLTFMaterial(bool AddTextures)
     Material.Sheen->ColorFactor     = float3{0.15f, 0.25f, 0.35f};
     Material.Sheen->RoughnessFactor = 0.46f;
 
+    Material.Specular              = std::make_unique<GLTF::Material::SpecularShaderAttribs>();
+    Material.Specular->Factor      = 0.57f;
+    Material.Specular->ColorFactor = float3{0.26f, 0.36f, 0.46f};
+
     Material.Anisotropy           = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
     Material.Anisotropy->Strength = 0.56f;
     Material.Anisotropy->Rotation = 0.66f;
@@ -166,7 +172,7 @@ GLTF::Material MakeExtendedGLTFMaterial(bool AddTextures)
     {
         GLTF::MaterialBuilder Builder{Material};
         for (Uint32 TextureAttribId = GLTF::DefaultBaseColorTextureAttribId;
-             TextureAttribId <= GLTF::DefaultThicknessTextureAttribId;
+             TextureAttribId <= GLTF::DefaultSpecularColorTextureAttribId;
              ++TextureAttribId)
         {
             Builder.SetTextureId(TextureAttribId, 0);
@@ -674,6 +680,8 @@ TEST(RadientGLTFConverterTest, ConvertsExtendedMaterialDefinitionAndValues)
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "ClearCoatNormalScale"), 0.85f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pMaterial, "SheenColorFactor").y, 0.25f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "SheenRoughnessFactor"), 0.46f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "SpecularWeight"), 0.57f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<RadientFloat3>(*pMaterial, "SpecularColorFactor").z, 0.46f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "AnisotropyStrength"), 0.56f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "AnisotropyRotation"), 0.66f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "IridescenceFactor"), 0.76f);

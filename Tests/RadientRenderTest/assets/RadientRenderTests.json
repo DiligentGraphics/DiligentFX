@@ -271,19 +271,6 @@
       }
     },
     {
-      "name": "SpecGlossVsMetalRough",
-      "model": "Models/SpecGlossVsMetalRough/glTF-Binary/SpecGlossVsMetalRough.glb",
-      "camera": {
-        "eye": [0.0, 0.03, 0.55],
-        "target": [0.0, 0.03, 0.0]
-      },
-      "debugVisualizations": [
-        "DiffuseColor",
-        "SpecularColor",
-        "Roughness"
-      ]
-    },
-    {
       "name": "MultiUVTest",
       "model": "Models/MultiUVTest/glTF-Binary/MultiUVTest.glb",
       "camera": {
@@ -349,6 +336,42 @@
         "SheenRoughness"
       ],
       "directionalLight": false
+    },
+    {
+      "name": "SpecGlossVsMetalRough",
+      "model": "Models/SpecGlossVsMetalRough/glTF-Binary/SpecGlossVsMetalRough.glb",
+      "camera": {
+        "eye": [0.0, 0.03, 0.55],
+        "target": [0.0, 0.03, 0.0]
+      },
+      "debugVisualizations": [
+        "DiffuseColor",
+        "SpecularColor",
+        "Roughness"
+      ]
+    },
+    {
+      "name": "SpecularSilkPouf",
+      "model": "Models/SpecularSilkPouf/glTF-Binary/SpecularSilkPouf.glb",
+      "camera": {
+        "eye": [0.0, 0.62, 0.82],
+        "target": [0.0, 0.1, 0.0]
+      }
+    },
+    {
+        "name": "SpecularTest",
+        "model": "Models/SpecularTest/glTF-Binary/SpecularTest.glb",
+        "camera": {
+          "eye": [-0.19, 0.0, 1.45],
+          "target": [-0.19, 0.0, 0.0]
+        },
+      "debugVisualizations": [
+        "SpecularFactor",
+        "SpecularColorFactor"
+      ],
+      "toneMapping": {
+        "averageLogLum": 0.2
+      }
     },
     {
       "name": "TextureCoordinateTest",

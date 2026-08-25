@@ -113,6 +113,15 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorFactorName[] = "
 /// The parameter requires the sheen feature and defaults to 0.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessFactorName[] = "SheenRoughnessFactor";
 
+/// Name of the FLOAT dielectric-specular weight. The value is expected in
+/// [0, 1]. The parameter requires the specular feature and defaults to 1.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularWeightName[] = "SpecularWeight";
+
+/// Name of the FLOAT3 linear RGB dielectric-specular multiplier. Components
+/// are expected to be non-negative and may exceed 1. The parameter requires
+/// the specular feature and defaults to (1, 1, 1).
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorFactorName[] = "SpecularColorFactor";
+
 /// Name of the FLOAT anisotropy strength. The value is expected in [0, 1]. The
 /// parameter requires the anisotropy feature and defaults to 0.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyStrengthName[] = "AnisotropyStrength";
@@ -345,6 +354,34 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureWrapU
 /// Name of the sheen-roughness texture UINT V address mode.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureWrapVName[] = "SheenRoughnessTextureWrapV";
 
+/// Name of the specular-weight TEXTURE. It is sampled linearly and A stores
+/// the dielectric-specular weight in [0, 1].
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureName[] = "SpecularTexture";
+/// Name of the specular-weight texture INT UV-set selector.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVSelectorName[] = "SpecularTextureUVSelector";
+/// Name of the specular-weight texture FLOAT2X2 UV scale-and-rotation transform.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVScaleAndRotationName[] = "SpecularTextureUVScaleAndRotation";
+/// Name of the specular-weight texture FLOAT2 UV translation.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVBiasName[] = "SpecularTextureUVBias";
+/// Name of the specular-weight texture UINT U address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureWrapUName[] = "SpecularTextureWrapU";
+/// Name of the specular-weight texture UINT V address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureWrapVName[] = "SpecularTextureWrapV";
+
+/// Name of the specular-color TEXTURE. RGB is interpreted as sRGB and expected
+/// to be non-negative; values may exceed 1 after decoding.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureName[] = "SpecularColorTexture";
+/// Name of the specular-color texture INT UV-set selector.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVSelectorName[] = "SpecularColorTextureUVSelector";
+/// Name of the specular-color texture FLOAT2X2 UV scale-and-rotation transform.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVScaleAndRotationName[] = "SpecularColorTextureUVScaleAndRotation";
+/// Name of the specular-color texture FLOAT2 UV translation.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVBiasName[] = "SpecularColorTextureUVBias";
+/// Name of the specular-color texture UINT U address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureWrapUName[] = "SpecularColorTextureWrapU";
+/// Name of the specular-color texture UINT V address mode.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureWrapVName[] = "SpecularColorTextureWrapV";
+
 /// Name of the anisotropy TEXTURE. It is sampled linearly; RG encodes the
 /// tangent-space direction remapped from [0, 1] to [-1, 1], and B stores strength
 /// in [0, 1].
@@ -476,6 +513,8 @@ RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(ClearCoatRoughness);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(ClearCoatNormal);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SheenColor);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SheenRoughness);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Specular);
+RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(SpecularColor);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Anisotropy);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Iridescence);
 RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(IridescenceThickness);
@@ -544,6 +583,7 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     IRadientTextureAsset* const pTexture = Parameters.pTexture != nullptr ?
         Parameters.pTexture :
         Definition.GetParameterDesc(Texture.Index).pDefaultTexture;
+
     Status = Writer.SetTexture(Texture, 0, pTexture);
     if (RADIENT_FAILED(Status))
         return Status;
@@ -577,6 +617,6 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
 }
 
-#endif // DILIGENT_CPP_INTERFACE
+#endif                 // DILIGENT_CPP_INTERFACE
 
 DILIGENT_END_NAMESPACE // Diligent

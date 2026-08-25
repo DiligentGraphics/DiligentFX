@@ -85,6 +85,8 @@ struct PBRRendererCreateInfoWrapper
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR]              = GLTF::DefaultSpecularTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR]        = GLTF::DefaultSpecularColorTextureAttribId;
         static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Please update the initializer list above");
 
         if (_CI.ShaderTexturesArrayMode == PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
@@ -249,6 +251,12 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
         SetTexture(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS, m_pWhiteTexSRV);
     }
 
+    if (m_Settings.EnableSpecular)
+    {
+        SetTexture(TEXTURE_ATTRIB_ID_SPECULAR, m_pWhiteTexSRV);
+        SetTexture(TEXTURE_ATTRIB_ID_SPECULAR_COLOR, m_pWhiteTexSRV);
+    }
+
     if (m_Settings.EnableAnisotropy)
     {
         SetTexture(TEXTURE_ATTRIB_ID_ANISOTROPY, m_pWhiteTexSRV);
@@ -332,6 +340,12 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
     {
         SetTexture(TEXTURE_ATTRIB_ID_SHEEN_COLOR);
         SetTexture(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS);
+    }
+
+    if (m_Settings.EnableSpecular)
+    {
+        SetTexture(TEXTURE_ATTRIB_ID_SPECULAR);
+        SetTexture(TEXTURE_ATTRIB_ID_SPECULAR_COLOR);
     }
 
     if (m_Settings.EnableAnisotropy)
@@ -436,6 +450,9 @@ GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::
 
     if (Material.Sheen)
         PSOFlags |= PSO_FLAG_ALL_SHEEN;
+
+    if (Material.Specular)
+        PSOFlags |= PSO_FLAG_ALL_SPECULAR;
 
     if (Material.Anisotropy)
         PSOFlags |= PSO_FLAG_ALL_ANISOTROPY;
@@ -893,6 +910,7 @@ void* GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(void*                    
     // {
     //     PBRMaterialBasicAttribs        Basic;
     //     PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //     PBRMaterialSpecularAttribs     Specular;     // #if ENABLE_SPECULAR
     //     PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
     //     PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
     //     PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
@@ -909,6 +927,11 @@ void* GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(void*                    
     if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_SHEEN)
     {
         pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialSheenAttribs>(pDstPtr, Material.Sheen.get(), "Sheen Attribs");
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_SPECULAR)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialSpecularAttribs>(pDstPtr, Material.Specular.get(), "Specular Attribs");
     }
 
     if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_ANISOTROPY)

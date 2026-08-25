@@ -71,7 +71,7 @@ void ExpectInvalidStandardDefinition(RadientAssetManagerImpl&                   
     EXPECT_EQ(pDefinition, nullptr);
 }
 
-static constexpr std::array<Uint32, 15> StandardMaterialTextureAttribIds{{
+static constexpr std::array<Uint32, 17> StandardMaterialTextureAttribIds{{
     GLTF::DefaultBaseColorTextureAttribId,
     GLTF::DefaultMetallicRoughnessTextureAttribId,
     GLTF::DefaultNormalTextureAttribId,
@@ -82,6 +82,8 @@ static constexpr std::array<Uint32, 15> StandardMaterialTextureAttribIds{{
     GLTF::DefaultClearcoatNormalTextureAttribId,
     GLTF::DefaultSheenColorTextureAttribId,
     GLTF::DefaultSheenRoughnessTextureAttribId,
+    GLTF::DefaultSpecularTextureAttribId,
+    GLTF::DefaultSpecularColorTextureAttribId,
     GLTF::DefaultAnisotropyTextureAttribId,
     GLTF::DefaultIridescenceTextureAttribId,
     GLTF::DefaultIridescenceThicknessTextureAttribId,
@@ -108,6 +110,10 @@ GLTF::Material MakeExtendedPBRMaterial()
     Material.Sheen                  = std::make_unique<GLTF::Material::SheenShaderAttribs>();
     Material.Sheen->ColorFactor     = float3{0.15f, 0.25f, 0.35f};
     Material.Sheen->RoughnessFactor = 0.46f;
+
+    Material.Specular              = std::make_unique<GLTF::Material::SpecularShaderAttribs>();
+    Material.Specular->Factor      = 0.57f;
+    Material.Specular->ColorFactor = float3{0.26f, 0.36f, 0.46f};
 
     Material.Anisotropy           = std::make_unique<GLTF::Material::AnisotropyShaderAttribs>();
     Material.Anisotropy->Strength = 0.56f;
@@ -210,6 +216,8 @@ const std::array<int, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT>& GetStandardMateria
         Result[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
         Result[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
         Result[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR]              = GLTF::DefaultSpecularTextureAttribId;
+        Result[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR]        = GLTF::DefaultSpecularColorTextureAttribId;
         return Result;
     }();
     return Indices;
@@ -220,6 +228,8 @@ Uint32 GetGLTFMaterialShaderDataSize(PBR_Renderer::PSO_FLAGS Flags)
     Uint32 Size = static_cast<Uint32>(sizeof(GLTF::Material::ShaderAttribs));
     if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_SHEEN)
         Size += static_cast<Uint32>(sizeof(GLTF::Material::SheenShaderAttribs));
+    if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_SPECULAR)
+        Size += static_cast<Uint32>(sizeof(GLTF::Material::SpecularShaderAttribs));
     if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY)
         Size += static_cast<Uint32>(sizeof(GLTF::Material::AnisotropyShaderAttribs));
     if (Flags & PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE)
@@ -386,7 +396,7 @@ TEST(RadientStandardMaterialTest, MaterialsUseDefinitionTextureDefaults)
         IRadientTextureAsset* pTexture;
     };
 
-    const std::array<ExpectedTextureDefault, 15> ExpectedDefaults{{
+    const std::array<ExpectedTextureDefault, 17> ExpectedDefaults{{
         {RadientStandardMaterialBaseColorTextureName, pWhite},
         {RadientStandardMaterialMetallicRoughnessTextureName, pPhysicalDesc},
         {RadientStandardMaterialNormalTextureName, pNormal},
@@ -397,6 +407,8 @@ TEST(RadientStandardMaterialTest, MaterialsUseDefinitionTextureDefaults)
         {RadientStandardMaterialClearCoatNormalTextureName, pNormal},
         {RadientStandardMaterialSheenColorTextureName, pWhite},
         {RadientStandardMaterialSheenRoughnessTextureName, pWhite},
+        {RadientStandardMaterialSpecularTextureName, pWhite},
+        {RadientStandardMaterialSpecularColorTextureName, pWhite},
         {RadientStandardMaterialAnisotropyTextureName, pWhite},
         {RadientStandardMaterialIridescenceTextureName, pWhite},
         {RadientStandardMaterialIridescenceThicknessTextureName, pWhite},
@@ -477,7 +489,7 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
               RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
 
-    static constexpr std::array<const RadientStandardMaterialTextureParameterNames*, 15> TextureSemantics{{
+    static constexpr std::array<const RadientStandardMaterialTextureParameterNames*, 17> TextureSemantics{{
         &RadientStandardMaterialBaseColorTextureParameterNames,
         &RadientStandardMaterialMetallicRoughnessTextureParameterNames,
         &RadientStandardMaterialNormalTextureParameterNames,
@@ -488,6 +500,8 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
         &RadientStandardMaterialClearCoatNormalTextureParameterNames,
         &RadientStandardMaterialSheenColorTextureParameterNames,
         &RadientStandardMaterialSheenRoughnessTextureParameterNames,
+        &RadientStandardMaterialSpecularTextureParameterNames,
+        &RadientStandardMaterialSpecularColorTextureParameterNames,
         &RadientStandardMaterialAnisotropyTextureParameterNames,
         &RadientStandardMaterialIridescenceTextureParameterNames,
         &RadientStandardMaterialIridescenceThicknessTextureParameterNames,
@@ -728,6 +742,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         {RadientStandardMaterialClearCoatNormalScaleName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
         {RadientStandardMaterialSheenColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3},
         {RadientStandardMaterialSheenRoughnessFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
+        {RadientStandardMaterialSpecularWeightName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
+        {RadientStandardMaterialSpecularColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3},
         {RadientStandardMaterialAnisotropyStrengthName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
         {RadientStandardMaterialAnisotropyRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
         {RadientStandardMaterialIridescenceFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT},
@@ -749,6 +765,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         STANDARD_TEXTURE_PARAMETERS(ClearCoatNormal),
         STANDARD_TEXTURE_PARAMETERS(SheenColor),
         STANDARD_TEXTURE_PARAMETERS(SheenRoughness),
+        STANDARD_TEXTURE_PARAMETERS(Specular),
+        STANDARD_TEXTURE_PARAMETERS(SpecularColor),
         STANDARD_TEXTURE_PARAMETERS(Anisotropy),
         STANDARD_TEXTURE_PARAMETERS(Iridescence),
         STANDARD_TEXTURE_PARAMETERS(IridescenceThickness),
@@ -778,6 +796,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         TEXTURE_SEMANTIC_PARAMETERS(ClearCoatNormal),
         TEXTURE_SEMANTIC_PARAMETERS(SheenColor),
         TEXTURE_SEMANTIC_PARAMETERS(SheenRoughness),
+        TEXTURE_SEMANTIC_PARAMETERS(Specular),
+        TEXTURE_SEMANTIC_PARAMETERS(SpecularColor),
         TEXTURE_SEMANTIC_PARAMETERS(Anisotropy),
         TEXTURE_SEMANTIC_PARAMETERS(Iridescence),
         TEXTURE_SEMANTIC_PARAMETERS(IridescenceThickness),

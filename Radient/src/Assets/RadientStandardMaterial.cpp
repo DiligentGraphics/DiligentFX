@@ -130,6 +130,8 @@ struct StandardMaterialParameters
         Uint32 ClearCoatNormalScale        = InvalidParameterIndex;
         Uint32 SheenColorFactor            = InvalidParameterIndex;
         Uint32 SheenRoughnessFactor        = InvalidParameterIndex;
+        Uint32 SpecularWeight              = InvalidParameterIndex;
+        Uint32 SpecularColorFactor         = InvalidParameterIndex;
         Uint32 AnisotropyStrength          = InvalidParameterIndex;
         Uint32 AnisotropyRotation          = InvalidParameterIndex;
         Uint32 IridescenceFactor           = InvalidParameterIndex;
@@ -215,7 +217,7 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
 
     StandardMaterialParameters                 Result;
     std::vector<RadientMaterialParameterDesc>& Parameters = Result.Parameters;
-    Parameters.reserve(32 + 6 * 15);
+    Parameters.reserve(32 + 6 * PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT);
 
     switch (CreateInfo.ShadingModel)
     {
@@ -268,6 +270,11 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
         {
             Result.ShaderIndices.SheenColorFactor     = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialSheenColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, &DefaultSheenColor);
             Result.ShaderIndices.SheenRoughnessFactor = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialSheenRoughnessFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultZero);
+        }
+        if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+        {
+            Result.ShaderIndices.SpecularWeight      = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialSpecularWeightName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultOne);
+            Result.ShaderIndices.SpecularColorFactor = AddStandardMaterialValueParameter(Parameters, RadientStandardMaterialSpecularColorFactorName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, &DefaultSpecular);
         }
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
         {
@@ -346,6 +353,11 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
             ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_COLOR, SheenColor, pWhite);
             ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SHEEN_ROUGHNESS, SheenRoughness, pWhite);
         }
+        if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+        {
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SPECULAR, Specular, pWhite);
+            ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(SPECULAR_COLOR, SpecularColor, pWhite);
+        }
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
             ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(ANISOTROPY, Anisotropy, pWhite);
         if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
@@ -414,6 +426,8 @@ PBR_Renderer::PSO_FLAGS GetStandardMaterialPSOFlags(const RadientStandardMateria
         Flags |= PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT;
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN))
         Flags |= PBR_Renderer::PSO_FLAG_ALL_SHEEN;
+    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+        Flags |= PBR_Renderer::PSO_FLAG_ALL_SPECULAR;
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
         Flags |= PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY;
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
@@ -528,6 +542,14 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
         AddParameterPacking(Layout, Indices.SheenRoughnessFactor,
                             Offset + offsetof(Material::SheenShaderAttribs, RoughnessFactor));
         Offset += sizeof(Material::SheenShaderAttribs);
+    }
+    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+    {
+        AddParameterPacking(Layout, Indices.SpecularColorFactor,
+                            Offset + offsetof(Material::SpecularShaderAttribs, ColorFactor));
+        AddParameterPacking(Layout, Indices.SpecularWeight,
+                            Offset + offsetof(Material::SpecularShaderAttribs, Factor));
+        Offset += sizeof(Material::SpecularShaderAttribs);
     }
     if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
     {

@@ -351,12 +351,14 @@ void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = GLTF::DefaultIridescenceThicknessTextureAttribId;
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
+    CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR]              = GLTF::DefaultSpecularTextureAttribId;
+    CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_SPECULAR_COLOR]        = GLTF::DefaultSpecularColorTextureAttribId;
     static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 19, "Please update the GLTF texture attribute mapping");
 }
 
-bool InitializeMaterialTextureBinding(IRadientTextureAsset*             pTexture,
-                                      RadientTextureViewType            ViewType,
-                                      RadientMaterialTextureSRBSlot&    TextureData)
+bool InitializeMaterialTextureBinding(IRadientTextureAsset*          pTexture,
+                                      RadientTextureViewType         ViewType,
+                                      RadientMaterialTextureSRBSlot& TextureData)
 {
     if (pTexture == nullptr)
         return false;
@@ -387,9 +389,9 @@ void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
 {
     // Default texture assets load asynchronously. Keep each resolved binding so
     // subsequent frames only retry the entries that are not ready yet.
-    auto Initialize = [](IRadientTextureAsset*             pTexture,
-                         RadientTextureViewType            ViewType,
-                         RadientMaterialTextureSRBSlot&    TextureData) {
+    auto Initialize = [](IRadientTextureAsset*          pTexture,
+                         RadientTextureViewType         ViewType,
+                         RadientMaterialTextureSRBSlot& TextureData) {
         return TextureData || InitializeMaterialTextureBinding(pTexture, ViewType, TextureData);
     };
 
@@ -593,6 +595,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.EnableEmissive            = true;
     RendererCI.EnableClearCoat           = true;
     RendererCI.EnableSheen               = true;
+    RendererCI.EnableSpecular            = true;
     RendererCI.EnableAnisotropy          = true;
     RendererCI.EnableIridescence         = true;
     RendererCI.EnableShadows             = false;

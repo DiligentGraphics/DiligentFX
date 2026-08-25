@@ -85,6 +85,7 @@ RadientTextureViewType GetGLTFMaterialTextureViewType(const GLTF::Material& Mate
         TextureAttribId == GLTF::DefaultBaseColorTextureAttribId ||
         TextureAttribId == GLTF::DefaultEmissiveTextureAttribId ||
         TextureAttribId == GLTF::DefaultSheenColorTextureAttribId ||
+        TextureAttribId == GLTF::DefaultSpecularColorTextureAttribId ||
         (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS &&
          TextureAttribId == GLTF::DefaultSpecularGlossinessTextureAttibId);
 

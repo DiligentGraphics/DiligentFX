@@ -54,7 +54,7 @@ struct StandardMaterialTextureSemantic
 
 constexpr auto MakeMetallicRoughnessTextureSemantics() noexcept
 {
-    std::array<StandardMaterialTextureSemantic, GLTF::DefaultThicknessTextureAttribId + 1> Semantics{};
+    std::array<StandardMaterialTextureSemantic, GLTF::DefaultSpecularColorTextureAttribId + 1> Semantics{};
 
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, BaseColor, BaseColor, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, MetallicRoughness, MetallicRoughness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE);
@@ -66,6 +66,8 @@ constexpr auto MakeMetallicRoughnessTextureSemantics() noexcept
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, ClearcoatNormal, ClearCoatNormal, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenColor, SheenColor, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SheenRoughness, SheenRoughness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Specular, Specular, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR);
+    SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, SpecularColor, SpecularColor, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Anisotropy, Anisotropy, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, Iridescence, Iridescence, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
     SET_STANDARD_MATERIAL_TEXTURE_SEMANTIC(Semantics, IridescenceThickness, IridescenceThickness, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE);
@@ -224,6 +226,8 @@ RADIENT_STATUS ConvertMaterialDefinition(
             DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT;
         if (Material.Sheen)
             DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN;
+        if (Material.Specular)
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR;
         if (Material.Anisotropy)
             DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY;
         if (Material.Iridescence)
@@ -357,6 +361,16 @@ RADIENT_STATUS PopulateMaterial(
             };
             SetMaterialParameter(RadientStandardMaterialSheenColorFactorName, SheenColorFactor);
             SetMaterialParameter(RadientStandardMaterialSheenRoughnessFactorName, Material.Sheen->RoughnessFactor);
+        }
+        if (Material.Specular)
+        {
+            const RadientFloat3 SpecularColorFactor{
+                Material.Specular->ColorFactor.x,
+                Material.Specular->ColorFactor.y,
+                Material.Specular->ColorFactor.z,
+            };
+            SetMaterialParameter(RadientStandardMaterialSpecularWeightName, Material.Specular->Factor);
+            SetMaterialParameter(RadientStandardMaterialSpecularColorFactorName, SpecularColorFactor);
         }
         if (Material.Anisotropy)
         {

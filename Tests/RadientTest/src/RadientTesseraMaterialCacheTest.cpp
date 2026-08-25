@@ -88,6 +88,23 @@ RefCntAutoPtr<IRadientMaterialAsset> MakeMaterialAsset(bool EnableClearcoat = fa
     return pMaterial;
 }
 
+RefCntAutoPtr<IRadientMaterialAsset> MakeSpecularMaterialAsset()
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    EXPECT_NE(pMaterialManager, nullptr);
+    if (!pMaterialManager)
+        return {};
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR;
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    const RADIENT_STATUS                 Status = Testing::CreateStandardMaterialAsset(
+        *pMaterialManager, DefinitionCI, pMaterial.GetAddressOfEmpty());
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    return pMaterial;
+}
+
 RefCntAutoPtr<IRadientMaterialAsset> MakeUnlitMaterialAsset()
 {
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
@@ -162,6 +179,9 @@ constexpr PBR_Renderer::PSO_FLAGS ExpectedCoreMaterialPSOFlags =
 constexpr PBR_Renderer::PSO_FLAGS ExpectedClearcoatMaterialPSOFlags =
     PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT;
 
+constexpr PBR_Renderer::PSO_FLAGS ExpectedSpecularMaterialPSOFlags =
+    PBR_Renderer::PSO_FLAG_ENABLE_SPECULAR;
+
 } // namespace
 
 TEST(PBRRendererPSOFlagsTest, EnabledFlagsFollowRendererSettings)
@@ -172,6 +192,7 @@ TEST(PBRRendererPSOFlagsTest, EnabledFlagsFollowRendererSettings)
     Settings.EnableEmissive     = false;
     Settings.EnableClearCoat    = false;
     Settings.EnableSheen        = false;
+    Settings.EnableSpecular     = false;
     Settings.EnableAnisotropy   = false;
     Settings.EnableIridescence  = false;
     Settings.EnableTransmission = false;
@@ -185,6 +206,7 @@ TEST(PBRRendererPSOFlagsTest, EnabledFlagsFollowRendererSettings)
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
         PBR_Renderer::PSO_FLAG_ALL_CLEAR_COAT |
         PBR_Renderer::PSO_FLAG_ALL_SHEEN |
+        PBR_Renderer::PSO_FLAG_ALL_SPECULAR |
         PBR_Renderer::PSO_FLAG_ALL_ANISOTROPY |
         PBR_Renderer::PSO_FLAG_ALL_IRIDESCENCE |
         PBR_Renderer::PSO_FLAG_ALL_TRANSMISSION |
@@ -221,6 +243,15 @@ TEST(GLTFPBRRendererPSOFlagsTest, Sheen)
     EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
               PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
                   PBR_Renderer::PSO_FLAG_ALL_SHEEN);
+}
+
+TEST(GLTFPBRRendererPSOFlagsTest, Specular)
+{
+    GLTF::Material Material;
+    Material.Specular = std::make_unique<GLTF::Material::SpecularShaderAttribs>();
+    EXPECT_EQ(GLTF_PBR_Renderer::GetMaterialPSOFlags(Material),
+              PBR_Renderer::PSO_FLAG_DEFAULT_TEXTURES |
+                  PBR_Renderer::PSO_FLAG_ALL_SPECULAR);
 }
 
 TEST(GLTFPBRRendererPSOFlagsTest, Anisotropy)
@@ -402,6 +433,20 @@ TEST(RadientTesseraMaterialCacheTest, DerivesPSOFlagsFromMaterial)
     ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
 
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedClearcoatMaterialPSOFlags);
+}
+
+TEST(RadientTesseraMaterialCacheTest, DerivesSpecularPSOFlagsFromMaterial)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache =
+        MakeMaterialCache(ExpectedSpecularMaterialPSOFlags);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeSpecularMaterialAsset();
+
+    const RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedSpecularMaterialPSOFlags);
 }
 
 TEST(RadientTesseraMaterialCacheTest, UnlitMaterialDoesNotUseUnshadedPSOFlag)
