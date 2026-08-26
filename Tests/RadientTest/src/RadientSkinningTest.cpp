@@ -305,8 +305,7 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
         Translation(20.f),
     };
     UpdatedTransforms[0].Rotation.w = 2.f;
-    EXPECT_EQ(pWriter->SetJointLocalTransforms(0, 2, UpdatedTransforms.data()), RADIENT_STATUS_OK);
-    EXPECT_EQ(pWriter->SetJointLocalTransforms(0, 2, UpdatedTransforms.data()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetJointLocalTransforms(0, 1, &UpdatedTransforms[0]), RADIENT_STATUS_OK);
 
     std::array<RadientTransform, 2> LocalTransforms{};
     ASSERT_EQ(pPose->GetJointLocalTransforms(0, 2, LocalTransforms.data()), RADIENT_STATUS_OK);
@@ -314,20 +313,33 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
     EXPECT_EQ(LocalTransforms[1], Joints[1].LocalRestTransform);
     EXPECT_EQ(pPose->GetVersion(), 1u);
 
-    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pPose->GetVersion(), 2u);
+    ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->Commit(False), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pPose->GetVersion(), 1u);
 
     std::array<RadientMatrix4x4, 2> GlobalMatrices{};
+    EXPECT_EQ(pPose->GetJointGlobalMatrices(0, 0, nullptr), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_PENDING);
+
+    EXPECT_EQ(pWriter->SetJointLocalTransforms(1, 1, &UpdatedTransforms[1]), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPose->GetVersion(), 1u);
+
     ASSERT_EQ(pPose->GetJointLocalTransforms(0, 2, LocalTransforms.data()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
     EXPECT_EQ(LocalTransforms, UpdatedTransforms);
+    EXPECT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_PENDING);
+
+    ASSERT_EQ(pPose->UpdateGlobalTransforms(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pPose->GetVersion(), 2u);
+
+    ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
     EXPECT_FLOAT_EQ(LocalTransforms[0].Rotation.w, 2.f);
     EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 10.f);
     EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 30.f);
 
     ASSERT_EQ(pWriter->ResetToRestPose(), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
     EXPECT_EQ(pPose->GetVersion(), 3u);
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
     EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 1.f);

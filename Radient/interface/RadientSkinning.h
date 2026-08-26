@@ -213,7 +213,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     /// Returns a borrowed pointer to the skeleton retained by the pose.
     VIRTUAL IRadientSkeletonAsset* METHOD(GetSkeleton)(THIS) CONST PURE;
 
-    /// Returns the monotonically increasing pose version.
+    /// Returns the monotonically increasing version of the global transforms.
+    /// Deferred local-transform commits do not advance the version until
+    /// UpdateGlobalTransforms() is called.
     VIRTUAL Uint64 METHOD(GetVersion)(THIS) CONST PURE;
 
     /// Copies JointCount local transforms beginning at FirstJoint.
@@ -223,10 +225,17 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
                                                            RadientTransform* pTransforms) CONST PURE;
 
     /// Copies JointCount skeleton-space matrices beginning at FirstJoint.
+    /// Returns RADIENT_STATUS_PENDING when committed local transforms have not
+    /// yet been propagated through the skeleton hierarchy.
     VIRTUAL RADIENT_STATUS METHOD(GetJointGlobalMatrices)(THIS_
                                                           Uint32             FirstJoint,
                                                           Uint32             JointCount,
                                                           RadientMatrix4x4*   pMatrices) CONST PURE;
+
+    /// Propagates committed local transforms through the skeleton hierarchy and
+    /// advances the pose version. Returns RADIENT_STATUS_NO_CHANGE when the
+    /// global transforms are already current.
+    VIRTUAL RADIENT_STATUS METHOD(UpdateGlobalTransforms)(THIS) PURE;
 
     /// Creates a reusable writer initialized from the current pose.
     /// On success, ppWriter receives a strong reference.
@@ -243,6 +252,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSkeletonPose_GetVersion(This)                   CALL_IFACE_METHOD(RadientSkeletonPose, GetVersion,              This)
 #    define IRadientSkeletonPose_GetJointLocalTransforms(This, ...) CALL_IFACE_METHOD(RadientSkeletonPose, GetJointLocalTransforms, This, __VA_ARGS__)
 #    define IRadientSkeletonPose_GetJointGlobalMatrices(This, ...)  CALL_IFACE_METHOD(RadientSkeletonPose, GetJointGlobalMatrices,  This, __VA_ARGS__)
+#    define IRadientSkeletonPose_UpdateGlobalTransforms(This)       CALL_IFACE_METHOD(RadientSkeletonPose, UpdateGlobalTransforms,   This)
 #    define IRadientSkeletonPose_CreateWriter(This, ...)            CALL_IFACE_METHOD(RadientSkeletonPose, CreateWriter,            This, __VA_ARGS__)
 
 #endif
@@ -263,9 +273,9 @@ DILIGENT_END_INTERFACE
 ///
 /// A writer owns a private transform set initialized from the pose when the
 /// writer is created. SetJointLocalTransforms() modifies that private set, and
-/// Commit() copies the complete set into the pose and updates its global matrices
-/// in place. A pose and all writers created from it are not thread-safe and must
-/// not be accessed concurrently.
+/// Commit() copies the complete set into the pose. Global-transform propagation
+/// may be performed immediately or deferred. A pose and all writers created from
+/// it are not thread-safe and must not be accessed concurrently.
 DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPoseWriter, IObject)
 {
     /// Replaces JointCount local transforms beginning at FirstJoint. Input data
@@ -281,10 +291,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPoseWriter, IObject)
     /// rest pose. Returns RADIENT_STATUS_NO_CHANGE when it already matches.
     VIRTUAL RADIENT_STATUS METHOD(ResetToRestPose)(THIS) PURE;
 
-    /// Applies the writer's complete pose. Returns RADIENT_STATUS_NO_CHANGE when
-    /// there are no pending changes or the resulting pose is already current.
-    /// The writer remains reusable.
-    VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS) PURE;
+    /// Applies the writer's complete pose. If UpdateGlobalTransforms is true,
+    /// the committed local transforms are immediately propagated through the
+    /// skeleton hierarchy. Otherwise, the application must subsequently call
+    /// IRadientSkeletonPose::UpdateGlobalTransforms(). Returns
+    /// RADIENT_STATUS_NO_CHANGE when there are no pending changes or the
+    /// resulting pose is already current. The writer remains reusable.
+    VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS_
+                                          Bool UpdateGlobalTransforms) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -294,7 +308,7 @@ DILIGENT_END_INTERFACE
 
 #    define IRadientSkeletonPoseWriter_SetJointLocalTransforms(This, ...) CALL_IFACE_METHOD(RadientSkeletonPoseWriter, SetJointLocalTransforms, This, __VA_ARGS__)
 #    define IRadientSkeletonPoseWriter_ResetToRestPose(This)              CALL_IFACE_METHOD(RadientSkeletonPoseWriter, ResetToRestPose,        This)
-#    define IRadientSkeletonPoseWriter_Commit(This)                       CALL_IFACE_METHOD(RadientSkeletonPoseWriter, Commit,                 This)
+#    define IRadientSkeletonPoseWriter_Commit(This, ...)                  CALL_IFACE_METHOD(RadientSkeletonPoseWriter, Commit,                 This, __VA_ARGS__)
 
 #endif
 

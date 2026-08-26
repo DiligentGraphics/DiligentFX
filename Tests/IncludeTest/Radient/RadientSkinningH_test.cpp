@@ -38,5 +38,7 @@ void RadientSkinning_CPP_UseInterfaces(IRadientAssetManager*  pAssetManager,
     (void)pSkin->GetDesc();
     (void)pPose->GetSkeleton();
     (void)pPose->GetVersion();
+    Status = pPose->UpdateGlobalTransforms();
+    Status = pWriter->Commit(True);
     (void)Status;
 }

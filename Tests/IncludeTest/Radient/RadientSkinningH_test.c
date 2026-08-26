@@ -53,11 +53,12 @@ void RadientSkinning_C_TestMacros(IRadientAssetManager*       pAssetManager,
     (void)IRadientSkeletonPose_GetVersion(pPose);
     Status = IRadientSkeletonPose_GetJointLocalTransforms(pPose, 0, 1, &Transform);
     Status = IRadientSkeletonPose_GetJointGlobalMatrices(pPose, 0, 1, &Matrix);
+    Status = IRadientSkeletonPose_UpdateGlobalTransforms(pPose);
     Status = IRadientSkeletonPose_CreateWriter(pPose, &pWriter);
 
     Status = IRadientSkeletonPoseWriter_SetJointLocalTransforms(pWriter, 0, 1, &Transform);
     Status = IRadientSkeletonPoseWriter_ResetToRestPose(pWriter);
-    Status = IRadientSkeletonPoseWriter_Commit(pWriter);
+    Status = IRadientSkeletonPoseWriter_Commit(pWriter, True);
 
     (void)Status;
 }

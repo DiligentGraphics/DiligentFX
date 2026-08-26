@@ -189,6 +189,7 @@ struct SkeletonPoseState
     std::vector<RadientTransform> LocalTransforms;
     std::vector<RadientMatrix4x4> GlobalMatrices;
     Uint64                        Version = 1;
+    bool                          GlobalTransformsDirty = false;
 };
 
 class RadientSkeletonAssetImpl final : public ObjectBase<IRadientSkeletonAsset>
@@ -405,13 +406,30 @@ public:
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
+        if (JointCount == 0)
+            return RADIENT_STATUS_OK;
+        if (m_State.GlobalTransformsDirty)
+            return RADIENT_STATUS_PENDING;
 
-        if (JointCount != 0)
+        std::memcpy(pMatrices,
+                    m_State.GlobalMatrices.data() + FirstJoint,
+                    sizeof(RadientMatrix4x4) * JointCount);
+        return RADIENT_STATUS_OK;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE UpdateGlobalTransforms() override final
+    {
+        if (!m_State.GlobalTransformsDirty)
+            return RADIENT_STATUS_NO_CHANGE;
+        if (m_State.Version == std::numeric_limits<Uint64>::max())
         {
-            std::memcpy(pMatrices,
-                        m_State.GlobalMatrices.data() + FirstJoint,
-                        sizeof(RadientMatrix4x4) * JointCount);
+            LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
+            return RADIENT_STATUS_INVALID_OPERATION;
         }
+
+        ComputeGlobalMatrices();
+        m_State.GlobalTransformsDirty = false;
+        ++m_State.Version;
         return RADIENT_STATUS_OK;
     }
 
@@ -425,23 +443,28 @@ private:
         return m_State.LocalTransforms;
     }
 
-    RADIENT_STATUS ApplyLocalTransforms(const std::vector<RadientTransform>& LocalTransforms) noexcept
+    RADIENT_STATUS ApplyLocalTransforms(const std::vector<RadientTransform>& LocalTransforms,
+                                        Bool                                UpdateGlobals) noexcept
     {
         VERIFY_EXPR(LocalTransforms.size() == m_State.LocalTransforms.size());
-        if (m_State.LocalTransforms == LocalTransforms)
-            return RADIENT_STATUS_NO_CHANGE;
-        if (m_State.Version == std::numeric_limits<Uint64>::max())
+        const bool TransformsChanged = m_State.LocalTransforms != LocalTransforms;
+        if (TransformsChanged)
         {
-            LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-            return RADIENT_STATUS_INVALID_OPERATION;
+            if (m_State.Version == std::numeric_limits<Uint64>::max())
+            {
+                LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
+
+            std::memcpy(m_State.LocalTransforms.data(),
+                        LocalTransforms.data(),
+                        sizeof(RadientTransform) * LocalTransforms.size());
+            m_State.GlobalTransformsDirty = true;
         }
 
-        std::memcpy(m_State.LocalTransforms.data(),
-                    LocalTransforms.data(),
-                    sizeof(RadientTransform) * LocalTransforms.size());
-        ComputeGlobalMatrices();
-        ++m_State.Version;
-        return RADIENT_STATUS_OK;
+        return UpdateGlobals ?
+            UpdateGlobalTransforms() :
+            (TransformsChanged ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE);
     }
 
     void ComputeGlobalMatrices() noexcept
@@ -518,12 +541,12 @@ public:
         return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit() override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit(Bool UpdateGlobalTransforms) override final
     {
         if (!m_HasPendingChanges)
             return RADIENT_STATUS_NO_CHANGE;
 
-        const RADIENT_STATUS Status = m_pPose->ApplyLocalTransforms(m_LocalTransforms);
+        const RADIENT_STATUS Status = m_pPose->ApplyLocalTransforms(m_LocalTransforms, UpdateGlobalTransforms);
         if (RADIENT_SUCCEEDED(Status))
             m_HasPendingChanges = false;
         return Status;
