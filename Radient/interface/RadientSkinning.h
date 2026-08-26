@@ -295,8 +295,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPoseWriter, IObject)
     /// the committed local transforms are immediately propagated through the
     /// skeleton hierarchy. Otherwise, the application must subsequently call
     /// IRadientSkeletonPose::UpdateGlobalTransforms(). Returns
-    /// RADIENT_STATUS_NO_CHANGE when there are no pending changes or the
-    /// resulting pose is already current. The writer remains reusable.
+    /// RADIENT_STATUS_NO_CHANGE when there are no pending changes. The writer
+    /// remains reusable.
     VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS_
                                           Bool UpdateGlobalTransforms) PURE;
 };

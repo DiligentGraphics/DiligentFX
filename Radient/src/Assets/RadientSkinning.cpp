@@ -447,24 +447,20 @@ private:
                                         Bool                                UpdateGlobals) noexcept
     {
         VERIFY_EXPR(LocalTransforms.size() == m_State.LocalTransforms.size());
-        const bool TransformsChanged = m_State.LocalTransforms != LocalTransforms;
-        if (TransformsChanged)
+        if (m_State.Version == std::numeric_limits<Uint64>::max())
         {
-            if (m_State.Version == std::numeric_limits<Uint64>::max())
-            {
-                LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-                return RADIENT_STATUS_INVALID_OPERATION;
-            }
-
-            std::memcpy(m_State.LocalTransforms.data(),
-                        LocalTransforms.data(),
-                        sizeof(RadientTransform) * LocalTransforms.size());
-            m_State.GlobalTransformsDirty = true;
+            LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
+            return RADIENT_STATUS_INVALID_OPERATION;
         }
+
+        std::memcpy(m_State.LocalTransforms.data(),
+                    LocalTransforms.data(),
+                    sizeof(RadientTransform) * LocalTransforms.size());
+        m_State.GlobalTransformsDirty = true;
 
         return UpdateGlobals ?
             UpdateGlobalTransforms() :
-            (TransformsChanged ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE);
+            RADIENT_STATUS_OK;
     }
 
     void ComputeGlobalMatrices() noexcept
