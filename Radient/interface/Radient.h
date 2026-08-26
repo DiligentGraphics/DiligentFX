@@ -32,6 +32,7 @@
 #include "RadientMath.h"
 #include "RadientTypes.h"
 #include "RadientAssets.h"
+#include "RadientSkinning.h"
 #include "RadientMaterials.h"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientMeshPrimitives.h"

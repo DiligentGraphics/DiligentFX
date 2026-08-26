@@ -728,6 +728,10 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
             return pDefinition != nullptr ? pDefinition->GetStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
+        case RADIENT_ASSET_TYPE_SKELETON:
+        case RADIENT_ASSET_TYPE_SKIN:
+            return RADIENT_STATUS_OK;
+
         default:
             return RADIENT_STATUS_OK;
     }

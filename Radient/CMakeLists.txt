@@ -21,6 +21,7 @@ set(SOURCE
     src/Assets/RadientMeshVertexSource.cpp
     src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
     src/Assets/RadientMeshViewSource.cpp
+    src/Assets/RadientSkinning.cpp
     src/Assets/RadientStandardMaterial.cpp
     src/Assets/RadientSurfaceMaterialAssetImpl.cpp
     src/Assets/RadientTextureAssetManager.cpp
@@ -125,6 +126,7 @@ set(INTERFACE
     interface/RadientScene.h
     interface/RadientSceneImporter.h
     interface/RadientSceneWriter.h
+    interface/RadientSkinning.h
     interface/RadientStandardMaterialParameters.h
     interface/RadientTypes.h
     interface/RadientView.h

@@ -110,6 +110,11 @@ inline bool IsFinite(const RadientFloat3& Value)
     return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z);
 }
 
+inline bool IsFinite(const RadientQuaternion& Value)
+{
+    return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z) && IsFinite(Value.w);
+}
+
 inline bool IsFinite(const RadientFloat4& Value)
 {
     return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z) && IsFinite(Value.w);

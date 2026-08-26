@@ -42,9 +42,13 @@ typedef struct IRadientMaterialAsset           IRadientMaterialAsset;
 typedef struct IRadientMaterialDefinitionAsset IRadientMaterialDefinitionAsset;
 typedef struct IRadientTextureAsset            IRadientTextureAsset;
 typedef struct IRadientSceneAsset              IRadientSceneAsset;
+typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
+typedef struct IRadientSkinAsset               IRadientSkinAsset;
 typedef struct IDeviceContext                  IDeviceContext;
 
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
+typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
+typedef struct RadientSkinDesc                             RadientSkinDesc;
 
 // clang-format off
 
@@ -64,7 +68,13 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_SCENE,
 
     /// Material definition asset.
-    RADIENT_ASSET_TYPE_MATERIAL_DEFINITION
+    RADIENT_ASSET_TYPE_MATERIAL_DEFINITION,
+
+    /// Immutable skeleton hierarchy asset.
+    RADIENT_ASSET_TYPE_SKELETON,
+
+    /// Immutable mapping from a mesh skin palette to skeleton joints.
+    RADIENT_ASSET_TYPE_SKIN
 };
 
 /// Authored scene/model source format.
@@ -460,6 +470,20 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               const RadientMeshCreateInfo REF MeshCI,
                                               IRadientMeshAsset**             ppMesh) PURE;
 
+    /// Creates an immutable skeleton hierarchy asset. The description and all
+    /// joint names and transforms are copied before this method returns. On
+    /// success, ppSkeleton receives a strong reference.
+    VIRTUAL RADIENT_STATUS METHOD(CreateSkeleton)(THIS_
+                                                  const RadientSkeletonDesc REF SkeletonDesc,
+                                                  IRadientSkeletonAsset**       ppSkeleton) PURE;
+
+    /// Creates an immutable skin asset that maps a mesh's joint palette to a
+    /// skeleton. The skin retains the skeleton and copies all joint mappings
+    /// and inverse-bind matrices. On success, ppSkin receives a strong reference.
+    VIRTUAL RADIENT_STATUS METHOD(CreateSkin)(THIS_
+                                              const RadientSkinDesc REF SkinDesc,
+                                              IRadientSkinAsset**       ppSkin) PURE;
+
     /// Creates or retrieves a cached built-in standard material definition asset.
     /// Compatible descriptions may return the same immutable asset. On success,
     /// ppDefinition receives a strong reference.
@@ -519,6 +543,8 @@ DILIGENT_END_INTERFACE
 
 #    define IRadientAssetManager_GetDesc(This)                 CALL_IFACE_METHOD(RadientAssetManager, GetDesc,        This)
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateSkeleton(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateSkeleton, This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateSkin(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateSkin,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateStandardMaterialDefinition(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateStandardMaterialDefinition, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)

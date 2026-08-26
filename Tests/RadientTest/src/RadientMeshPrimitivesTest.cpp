@@ -113,6 +113,18 @@ public:
         return RADIENT_STATUS_OK;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSkeleton(const RadientSkeletonDesc&,
+                                                             IRadientSkeletonAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSkin(const RadientSkinDesc&,
+                                                         IRadientSkinAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo&,
                                                                                IRadientMaterialDefinitionAsset**) override final
     {
