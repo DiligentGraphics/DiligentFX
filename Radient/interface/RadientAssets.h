@@ -44,6 +44,7 @@ typedef struct IRadientTextureAsset            IRadientTextureAsset;
 typedef struct IRadientSceneAsset              IRadientSceneAsset;
 typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
 typedef struct IRadientSkinAsset               IRadientSkinAsset;
+typedef struct IRadientSkeletonAnimationAsset  IRadientSkeletonAnimationAsset;
 typedef struct IDeviceContext                  IDeviceContext;
 
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
@@ -74,7 +75,10 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_SKELETON,
 
     /// Immutable mapping from a mesh skin palette to skeleton joints.
-    RADIENT_ASSET_TYPE_SKIN
+    RADIENT_ASSET_TYPE_SKIN,
+
+    /// Immutable animation clip targeting a skeleton hierarchy.
+    RADIENT_ASSET_TYPE_SKELETON_ANIMATION
 };
 
 /// Authored scene/model source format.

@@ -27,7 +27,7 @@
 #pragma once
 
 /// \file
-/// Defines renderer-independent skeleton, skin, and skeleton-pose interfaces.
+/// Defines renderer-independent skeleton, skin, pose, and animation interfaces.
 
 #include "RadientAssets.h"
 
@@ -114,6 +114,109 @@ struct RadientSkinDesc
 typedef struct RadientSkinDesc RadientSkinDesc;
 
 
+// clang-format off
+
+/// Interpolation applied between animation keyframes.
+DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_INTERPOLATION, Uint8)
+{
+    /// Holds the preceding keyframe value until the next keyframe.
+    RADIENT_ANIMATION_INTERPOLATION_STEP = 0,
+
+    /// Linearly interpolates vectors and spherically interpolates rotations.
+    RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+
+    /// Evaluates a cubic Hermite spline using authored incoming and outgoing
+    /// tangents.
+    RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+
+    /// Number of animation interpolation modes.
+    RADIENT_ANIMATION_INTERPOLATION_COUNT
+};
+
+// clang-format on
+
+
+/// One typed animation curve.
+///
+/// The concrete type of pValues is determined by the field containing this
+/// curve: RadientFloat3 for translation and scale, and RadientQuaternion for
+/// rotation. STEP and LINEAR curves contain KeyframeCount values. A
+/// CUBIC_SPLINE curve contains three values per keyframe in incoming-tangent,
+/// value, outgoing-tangent order. Cubic tangents are derivatives per second;
+/// rotation tangents use RadientQuaternion as four-component storage and are
+/// not themselves required to be unit quaternions.
+struct RadientAnimationCurveDesc
+{
+    /// Interpolation used between keyframes.
+    RADIENT_ANIMATION_INTERPOLATION Interpolation DEFAULT_INITIALIZER(RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+
+    /// Strictly increasing clip-local keyframe times, in seconds. Must contain
+    /// KeyframeCount finite values in the inclusive range [0, clip duration].
+    const Float32* pTimes DEFAULT_INITIALIZER(nullptr);
+
+    /// Curve values in the format described above.
+    const void* pValues DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of keyframes. Zero denotes an absent curve, in which case pTimes
+    /// and pValues must both be null.
+    Uint32 KeyframeCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientAnimationCurveDesc RadientAnimationCurveDesc;
+
+
+/// Animation curves targeting one skeleton joint.
+///
+/// An absent component curve preserves that component of the joint's rest
+/// transform. A clip may contain at most one track for each skeleton joint.
+struct RadientSkeletonAnimationTrackDesc
+{
+    /// Index of the target joint in the clip's skeleton.
+    Uint32 SkeletonJointIndex DEFAULT_INITIALIZER(InvalidRadientJointIndex);
+
+    /// Local-space translation curve with RadientFloat3 values.
+    RadientAnimationCurveDesc Translation;
+
+    /// Local-space rotation curve with RadientQuaternion values. Authored
+    /// keyframe values must be normalized; evaluated rotations are normalized.
+    RadientAnimationCurveDesc Rotation;
+
+    /// Local-space scale curve with RadientFloat3 values.
+    RadientAnimationCurveDesc Scale;
+};
+typedef struct RadientSkeletonAnimationTrackDesc RadientSkeletonAnimationTrackDesc;
+
+
+/// Immutable skeleton animation clip description.
+///
+/// During creation, the name, tracks, keyframe times, and curve values are
+/// copied, and the skeleton is retained. The description returned by
+/// IRadientSkeletonAnimationAsset::GetDesc() and all referenced data remain
+/// valid for the lifetime of the animation asset.
+struct RadientSkeletonAnimationDesc
+{
+    /// Optional clip name used for diagnostics. The value returned by a created
+    /// asset is never null.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Skeleton targeted by every track. Must not be null during creation. The
+    /// created animation retains it; the pointer returned in this description
+    /// is borrowed by callers.
+    IRadientSkeletonAsset* pSkeleton DEFAULT_INITIALIZER(nullptr);
+
+    /// Array of TrackCount joint animation tracks. Must not be null when
+    /// TrackCount is nonzero.
+    const RadientSkeletonAnimationTrackDesc* pTracks DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pTracks.
+    Uint32 TrackCount DEFAULT_INITIALIZER(0);
+
+    /// Clip duration in seconds. Must be finite and non-negative. Keyframe
+    /// times must not exceed this value.
+    Float32 Duration DEFAULT_INITIALIZER(0.f);
+};
+typedef struct RadientSkeletonAnimationDesc RadientSkeletonAnimationDesc;
+
+
 // {27F67251-D762-4793-8348-285ED0F6F1FE}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSkeletonAsset =
     {0x27f67251, 0xd762, 0x4793, {0x83, 0x48, 0x28, 0x5e, 0xd0, 0xf6, 0xf1, 0xfe}};
@@ -129,6 +232,10 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSkeletonPose =
 // {63C66C9E-B531-47D1-B841-990107F06112}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSkeletonPoseWriter =
     {0x63c66c9e, 0xb531, 0x47d1, {0xb8, 0x41, 0x99, 0x1, 0x7, 0xf0, 0x61, 0x12}};
+
+// {CE8E3FDB-C668-4468-9BEF-8EDD0EB3084E}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSkeletonAnimationAsset =
+    {0xce8e3fdb, 0xc668, 0x4468, {0x9b, 0xef, 0x8e, 0xdd, 0xe, 0xb3, 0x8, 0x4e}};
 
 
 #define DILIGENT_INTERFACE_NAME IRadientSkeletonAsset
@@ -309,6 +416,45 @@ DILIGENT_END_INTERFACE
 #    define IRadientSkeletonPoseWriter_SetJointLocalTransforms(This, ...) CALL_IFACE_METHOD(RadientSkeletonPoseWriter, SetJointLocalTransforms, This, __VA_ARGS__)
 #    define IRadientSkeletonPoseWriter_ResetToRestPose(This)              CALL_IFACE_METHOD(RadientSkeletonPoseWriter, ResetToRestPose,        This)
 #    define IRadientSkeletonPoseWriter_Commit(This, ...)                  CALL_IFACE_METHOD(RadientSkeletonPoseWriter, Commit,                 This, __VA_ARGS__)
+
+#endif
+
+// clang-format on
+
+
+#define DILIGENT_INTERFACE_NAME IRadientSkeletonAnimationAsset
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientSkeletonAnimationAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;                     \
+    IRadientSkeletonAnimationAssetMethods RadientSkeletonAnimationAsset
+
+// clang-format off
+
+/// Immutable animation clip targeting one skeleton.
+DILIGENT_BEGIN_INTERFACE(IRadientSkeletonAnimationAsset, IRadientAsset)
+{
+    /// Returns the immutable animation description. The reference and all data
+    /// it references remain valid for the lifetime of the animation asset.
+    VIRTUAL const RadientSkeletonAnimationDesc REF METHOD(GetDesc)(THIS) CONST PURE;
+
+    /// Evaluates the clip at an absolute clip-local time into pPose. Time is in
+    /// seconds and is clamped to [0, GetDesc().Duration]. Evaluation resets the
+    /// pose to its skeleton rest pose, applies all animation tracks, and updates
+    /// global transforms once before returning. pPose must target the exact
+    /// skeleton returned by GetDesc().pSkeleton.
+    VIRTUAL RADIENT_STATUS METHOD(Evaluate)(THIS_
+                                             Float64               Time,
+                                             IRadientSkeletonPose* pPose) CONST PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientSkeletonAnimationAsset_GetDesc(This)        CALL_IFACE_METHOD(RadientSkeletonAnimationAsset, GetDesc,  This)
+#    define IRadientSkeletonAnimationAsset_Evaluate(This, ...)  CALL_IFACE_METHOD(RadientSkeletonAnimationAsset, Evaluate, This, __VA_ARGS__)
 
 #endif
 
