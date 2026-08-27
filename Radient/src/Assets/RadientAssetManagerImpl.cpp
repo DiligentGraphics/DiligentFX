@@ -805,6 +805,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::Import
                                         pDocument,
                                         ImportedScene.Materials,
                                         m_pDefaultMaterial,
+                                        this,
                                         ImportedScene);
 }
 

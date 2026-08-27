@@ -883,7 +883,8 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
                          RadientImport::ImportedDocument&        Scene,
-                         IRadientMaterialAsset*                  pDefaultMaterial = nullptr)
+                         IRadientMaterialAsset*                  pDefaultMaterial = nullptr,
+                         IRadientAssetManager*                   pAssetManager    = nullptr)
 {
     return RadientGLTFLoader::LoadScene(ThreadPool,
                                         MeshManager,
@@ -891,6 +892,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                                         pDocument,
                                         Materials,
                                         pDefaultMaterial,
+                                        pAssetManager,
                                         Scene);
 }
 

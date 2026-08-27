@@ -31,6 +31,7 @@
 #include "Import/RadientImportedScene.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientSceneWriter.h"
+#include "RadientSkinning.h"
 
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
@@ -44,6 +45,7 @@
 #include "TinyGltfModelView.hpp"
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -137,10 +139,195 @@ RadientLightComponent ToRadientLight(const GLTF::Light& Light)
     return Result;
 }
 
-RADIENT_STATUS CreateNode(IRadientSceneWriter&                   Writer,
-                          const RadientImport::ImportedDocument& Scene,
-                          Uint32                                 NodeIndex,
-                          RadientEntityID                        Parent)
+bool GetNodeIndex(const GLTF::Model& Model,
+                  const GLTF::Node*  pNode,
+                  Uint32&            NodeIndex)
+{
+    if (pNode == nullptr ||
+        pNode->Index < 0 ||
+        static_cast<size_t>(pNode->Index) >= Model.Nodes.size() ||
+        pNode != &Model.Nodes[static_cast<size_t>(pNode->Index)])
+    {
+        return false;
+    }
+
+    NodeIndex = static_cast<Uint32>(pNode->Index);
+    return true;
+}
+
+RADIENT_STATUS CreateImportedSkin(const GLTF::Model&                Model,
+                                  Uint32                            SkinIndex,
+                                  IRadientAssetManager&             AssetManager,
+                                  RefCntAutoPtr<IRadientSkinAsset>& pSkin)
+{
+    VERIFY_EXPR(SkinIndex < Model.Skins.size());
+    const GLTF::Skin& Skin = Model.Skins[SkinIndex];
+
+    if (Skin.Joints.empty() || Skin.Joints.size() > std::numeric_limits<Uint32>::max())
+    {
+        LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " must contain at least one joint");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    if (!Skin.InverseBindMatrices.empty() &&
+        Skin.InverseBindMatrices.size() != Skin.Joints.size())
+    {
+        LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " contains ", Skin.Joints.size(),
+                          " joints, but ", Skin.InverseBindMatrices.size(), " inverse-bind matrices");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    // A glTF skin only lists palette joints. Preserve every ancestor as well,
+    // because non-joint nodes may contribute transforms to the joint hierarchy.
+    std::vector<Uint8> IncludedNodes(Model.Nodes.size(), 0);
+    std::vector<Uint8> PaletteNodes(Model.Nodes.size(), 0);
+    for (size_t PaletteIndex = 0; PaletteIndex < Skin.Joints.size(); ++PaletteIndex)
+    {
+        const GLTF::Node* pJoint = Skin.Joints[PaletteIndex];
+        Uint32            JointNodeIndex;
+        if (!GetNodeIndex(Model, pJoint, JointNodeIndex))
+        {
+            LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " references an invalid joint node at palette index ", PaletteIndex);
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+        if (PaletteNodes[JointNodeIndex] != 0)
+        {
+            LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " references node ", JointNodeIndex, " more than once");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+        PaletteNodes[JointNodeIndex] = 1;
+
+        for (const GLTF::Node* pAncestor = pJoint; pAncestor != nullptr; pAncestor = pAncestor->Parent)
+        {
+            Uint32 AncestorIndex;
+            if (!GetNodeIndex(Model, pAncestor, AncestorIndex))
+            {
+                LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " contains an invalid joint ancestor");
+                return RADIENT_STATUS_INVALID_DATA;
+            }
+
+            if (IncludedNodes[AncestorIndex] != 0)
+                break;
+
+            IncludedNodes[AncestorIndex] = 1;
+        }
+    }
+
+    std::vector<Uint32> NodeToSkeletonJoint(Model.Nodes.size(), InvalidRadientJointIndex);
+    Uint32              SkeletonJointCount = 0;
+    for (size_t NodeIndex = 0; NodeIndex < IncludedNodes.size(); ++NodeIndex)
+    {
+        if (IncludedNodes[NodeIndex] != 0)
+            NodeToSkeletonJoint[NodeIndex] = SkeletonJointCount++;
+    }
+
+    std::vector<RadientSkeletonJointDesc> SkeletonJoints(SkeletonJointCount);
+    for (size_t NodeIndex = 0; NodeIndex < IncludedNodes.size(); ++NodeIndex)
+    {
+        if (IncludedNodes[NodeIndex] == 0)
+            continue;
+
+        const GLTF::Node&         Node  = Model.Nodes[NodeIndex];
+        RadientSkeletonJointDesc& Joint = SkeletonJoints[NodeToSkeletonJoint[NodeIndex]];
+        Joint.Name                      = Node.Name.c_str();
+        Joint.LocalRestTransform        = ToRadientTransform(Node);
+
+        if (Node.Parent != nullptr)
+        {
+            Uint32 ParentNodeIndex;
+            if (!GetNodeIndex(Model, Node.Parent, ParentNodeIndex) ||
+                NodeToSkeletonJoint[ParentNodeIndex] == InvalidRadientJointIndex)
+            {
+                LOG_ERROR_MESSAGE("GLTF skin ", SkinIndex, " contains an invalid joint parent");
+                return RADIENT_STATUS_INVALID_DATA;
+            }
+            Joint.ParentJointIndex = NodeToSkeletonJoint[ParentNodeIndex];
+        }
+    }
+
+    RadientSkeletonDesc SkeletonDesc{};
+    SkeletonDesc.Name       = Skin.Name.c_str();
+    SkeletonDesc.pJoints    = SkeletonJoints.data();
+    SkeletonDesc.JointCount = SkeletonJointCount;
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
+    RADIENT_STATUS                       Status = AssetManager.CreateSkeleton(SkeletonDesc, pSkeleton.GetAddressOfEmpty());
+    if (RADIENT_FAILED(Status) || pSkeleton == nullptr)
+        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+
+    std::vector<RadientSkinJointBindingDesc> SkinJoints(Skin.Joints.size());
+    for (size_t PaletteIndex = 0; PaletteIndex < Skin.Joints.size(); ++PaletteIndex)
+    {
+        Uint32 JointNodeIndex;
+        if (!GetNodeIndex(Model, Skin.Joints[PaletteIndex], JointNodeIndex))
+        {
+            UNEXPECTED("A validated GLTF skin joint became invalid");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        RadientSkinJointBindingDesc& Joint = SkinJoints[PaletteIndex];
+        Joint.SkeletonJointIndex           = NodeToSkeletonJoint[JointNodeIndex];
+        Joint.InverseBindMatrix            = RadientMath::ToRadientMatrix(
+            Skin.InverseBindMatrices.empty() ?
+                float4x4::Identity() :
+                Skin.InverseBindMatrices[PaletteIndex]);
+    }
+
+    RadientSkinDesc SkinDesc{};
+    SkinDesc.Name       = Skin.Name.c_str();
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = SkinJoints.data();
+    SkinDesc.JointCount = static_cast<Uint32>(SkinJoints.size());
+
+    Status = AssetManager.CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty());
+    return RADIENT_FAILED(Status) || pSkin == nullptr ?
+        (RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED) :
+        RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS ExtractSkins(const GLTF::Model&               Model,
+                            IRadientAssetManager*            pAssetManager,
+                            RadientImport::ImportedDocument& Scene)
+{
+    Scene.Skins.clear();
+    if (Model.Skins.empty())
+        return RADIENT_STATUS_OK;
+
+    if (pAssetManager == nullptr)
+    {
+        LOG_ERROR_MESSAGE("A Radient asset manager is required to import GLTF skins");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+    if (Model.Skins.size() > std::numeric_limits<Uint32>::max())
+        return RADIENT_STATUS_INVALID_DATA;
+
+    Scene.Skins.resize(Model.Skins.size());
+    for (Uint32 SkinIndex = 0; SkinIndex < static_cast<Uint32>(Model.Skins.size()); ++SkinIndex)
+    {
+        const RADIENT_STATUS Status = CreateImportedSkin(Model, SkinIndex, *pAssetManager, Scene.Skins[SkinIndex]);
+        if (RADIENT_FAILED(Status))
+            return Status;
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
+Uint32 FindSkinIndex(const GLTF::Model& Model, const GLTF::Skin* pSkin)
+{
+    for (size_t SkinIndex = 0; SkinIndex < Model.Skins.size(); ++SkinIndex)
+    {
+        if (&Model.Skins[SkinIndex] == pSkin)
+            return static_cast<Uint32>(SkinIndex);
+    }
+
+    return RadientImport::InvalidImportedSkinIndex;
+}
+
+RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writer,
+                          const RadientImport::ImportedDocument&            Scene,
+                          Uint32                                            NodeIndex,
+                          RadientEntityID                                   Parent,
+                          std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses)
 {
     if (NodeIndex >= Scene.Nodes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -180,15 +367,44 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                   Writer,
         if (RADIENT_FAILED(Status))
             return Status;
 
+        if (Node.SkinIndex != RadientImport::InvalidImportedSkinIndex)
+        {
+            if (Node.SkinIndex >= Scene.Skins.size() || Scene.Skins[Node.SkinIndex] == nullptr)
+                return RADIENT_STATUS_INVALID_DATA;
+
+            RefCntAutoPtr<IRadientSkeletonPose>& pPose = SkinPoses[Node.SkinIndex];
+            if (pPose == nullptr)
+            {
+                IRadientSkeletonAsset* const pSkeleton = Scene.Skins[Node.SkinIndex]->GetDesc().pSkeleton;
+                if (pSkeleton == nullptr)
+                    return RADIENT_STATUS_INVALID_DATA;
+
+                Status = pSkeleton->CreatePose(pPose.GetAddressOfEmpty());
+                if (RADIENT_FAILED(Status) || pPose == nullptr)
+                    return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+            }
+
+            RadientSkinComponent SkinComponent{};
+            SkinComponent.pSkin = Scene.Skins[Node.SkinIndex];
+            SkinComponent.pPose = pPose;
+            Status              = Writer.SetSkin(NodeEntity, SkinComponent);
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
+
         RadientMeshRendererComponent Renderer{};
         Status = Writer.SetMeshRenderer(NodeEntity, Renderer);
         if (RADIENT_FAILED(Status))
             return Status;
     }
+    else if (Node.SkinIndex != RadientImport::InvalidImportedSkinIndex)
+    {
+        return RADIENT_STATUS_INVALID_DATA;
+    }
 
     for (Uint32 ChildIndex : Node.Children)
     {
-        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity);
+        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, SkinPoses);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -382,10 +598,16 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
 }
 
 RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
-                                 RadientImport::ImportedDocument& Scene)
+                                 RadientImport::ImportedDocument& Scene,
+                                 IRadientAssetManager*            pAssetManager)
 {
+    RADIENT_STATUS Status = ExtractSkins(GLTFModel, pAssetManager, Scene);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
     Scene.DefaultSceneId = GetDefaultSceneIndex(GLTFModel);
 
+    Scene.Nodes.clear();
     Scene.Nodes.resize(GLTFModel.Nodes.size());
     for (const GLTF::Node& SrcNode : GLTFModel.Nodes)
     {
@@ -401,6 +623,22 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
             DstNode.pMesh = GetRadientMeshAsset(*SrcNode.pMesh);
             if (DstNode.pMesh == nullptr)
                 return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        if (SrcNode.pSkin != nullptr)
+        {
+            if (SrcNode.pMesh == nullptr)
+            {
+                LOG_ERROR_MESSAGE("GLTF node ", SrcNode.Index, " references a skin without a mesh");
+                return RADIENT_STATUS_INVALID_DATA;
+            }
+
+            DstNode.SkinIndex = FindSkinIndex(GLTFModel, SrcNode.pSkin);
+            if (DstNode.SkinIndex == RadientImport::InvalidImportedSkinIndex)
+            {
+                LOG_ERROR_MESSAGE("GLTF node ", SrcNode.Index, " references an invalid skin");
+                return RADIENT_STATUS_INVALID_DATA;
+            }
         }
 
         if (SrcNode.pCamera != nullptr)
@@ -427,6 +665,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
         }
     }
 
+    Scene.Scenes.clear();
     Scene.Scenes.resize(GLTFModel.Scenes.size());
     for (size_t SceneIndex = 0; SceneIndex < GLTFModel.Scenes.size(); ++SceneIndex)
     {
@@ -463,9 +702,10 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
 
     if (ResolvedSceneIndex < Scene.Scenes.size())
     {
+        std::vector<RefCntAutoPtr<IRadientSkeletonPose>> SkinPoses(Scene.Skins.size());
         for (Uint32 NodeIndex : Scene.Scenes[ResolvedSceneIndex].RootNodes)
         {
-            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity);
+            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, SkinPoses);
             if (RADIENT_FAILED(Status))
                 return Status;
         }

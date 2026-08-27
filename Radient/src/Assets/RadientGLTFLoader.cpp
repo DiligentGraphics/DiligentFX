@@ -765,6 +765,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
                          IRadientMaterialAsset*                  pDefaultMaterial,
+                         IRadientAssetManager*                   pAssetManager,
                          RadientImport::ImportedDocument&        Scene)
 {
     VERIFY_EXPR(pDocument != nullptr);
@@ -795,7 +796,7 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
     if (RADIENT_FAILED(MeshStatus))
         return MeshStatus;
 
-    return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene);
+    return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene, pAssetManager);
 }
 
 } // namespace RadientGLTFLoader

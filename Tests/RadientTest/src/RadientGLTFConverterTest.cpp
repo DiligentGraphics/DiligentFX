@@ -28,6 +28,7 @@
 #include "gtest/gtest.h"
 
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "GLTFDocument.hpp"
@@ -35,6 +36,7 @@
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientSkinning.h"
 #include "RadientTestAssetHelpers.hpp"
 
 #define TINYGLTF_NO_STB_IMAGE
@@ -1357,4 +1359,81 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphConvertsLights)
     EXPECT_NEAR(Scene.Nodes[2].Light->Intensity, 4.f, EPSILON);
     EXPECT_NEAR(Scene.Nodes[2].Light->InnerConeAngle, 0.1f, EPSILON);
     EXPECT_NEAR(Scene.Nodes[2].Light->OuterConeAngle, 0.4f, EPSILON);
+}
+
+TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHierarchy)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://skinned", 1);
+    ASSERT_NE(pMesh, nullptr);
+
+    GLTF::Model Model;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh.RawPtr(), IID_Unknown};
+
+    Model.Nodes.reserve(5);
+    for (int NodeIndex = 0; NodeIndex < 5; ++NodeIndex)
+        Model.Nodes.emplace_back(NodeIndex);
+
+    Model.Nodes[0].Name        = "Root";
+    Model.Nodes[0].Translation = {1.f, 0.f, 0.f};
+    Model.Nodes[0].Children    = {&Model.Nodes[1]};
+
+    Model.Nodes[1].Name        = "NonJointAncestor";
+    Model.Nodes[1].Parent      = &Model.Nodes[0];
+    Model.Nodes[1].Translation = {0.f, 2.f, 0.f};
+    Model.Nodes[1].Children    = {&Model.Nodes[2]};
+
+    Model.Nodes[2].Name        = "JointA";
+    Model.Nodes[2].Parent      = &Model.Nodes[1];
+    Model.Nodes[2].Translation = {0.f, 0.f, 3.f};
+    Model.Nodes[2].Children    = {&Model.Nodes[3]};
+
+    Model.Nodes[3].Name   = "JointB";
+    Model.Nodes[3].Parent = &Model.Nodes[2];
+    Model.Nodes[3].Scale  = {2.f, 3.f, 4.f};
+
+    Model.Skins.resize(1);
+    Model.Skins[0].Name          = "Character";
+    Model.Skins[0].pSkeletonRoot = &Model.Nodes[2];
+    Model.Skins[0].Joints        = {&Model.Nodes[2], &Model.Nodes[3]};
+
+    Model.Nodes[4].Name  = "SkinnedMesh";
+    Model.Nodes[4].pMesh = &Model.Meshes[0];
+    Model.Nodes[4].pSkin = &Model.Skins[0];
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[4]};
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Skins.size(), 1u);
+    ASSERT_NE(Scene.Skins[0], nullptr);
+    EXPECT_EQ(Scene.Nodes[4].SkinIndex, 0u);
+
+    const RadientSkinDesc& SkinDesc = Scene.Skins[0]->GetDesc();
+    ASSERT_NE(SkinDesc.pSkeleton, nullptr);
+    ASSERT_EQ(SkinDesc.JointCount, 2u);
+    EXPECT_EQ(SkinDesc.pJoints[0].SkeletonJointIndex, 2u);
+    EXPECT_EQ(SkinDesc.pJoints[1].SkeletonJointIndex, 3u);
+    EXPECT_EQ(SkinDesc.pJoints[0].InverseBindMatrix, RadientMatrix4x4{});
+    EXPECT_EQ(SkinDesc.pJoints[1].InverseBindMatrix, RadientMatrix4x4{});
+
+    const RadientSkeletonDesc& SkeletonDesc = SkinDesc.pSkeleton->GetDesc();
+    ASSERT_EQ(SkeletonDesc.JointCount, 4u);
+    EXPECT_STREQ(SkeletonDesc.pJoints[0].Name, "Root");
+    EXPECT_EQ(SkeletonDesc.pJoints[0].ParentJointIndex, InvalidRadientJointIndex);
+    EXPECT_STREQ(SkeletonDesc.pJoints[1].Name, "NonJointAncestor");
+    EXPECT_EQ(SkeletonDesc.pJoints[1].ParentJointIndex, 0u);
+    EXPECT_STREQ(SkeletonDesc.pJoints[2].Name, "JointA");
+    EXPECT_EQ(SkeletonDesc.pJoints[2].ParentJointIndex, 1u);
+    EXPECT_STREQ(SkeletonDesc.pJoints[3].Name, "JointB");
+    EXPECT_EQ(SkeletonDesc.pJoints[3].ParentJointIndex, 2u);
+    ExpectFloat3Near(SkeletonDesc.pJoints[0].LocalRestTransform.Position, {1.f, 0.f, 0.f});
+    ExpectFloat3Near(SkeletonDesc.pJoints[1].LocalRestTransform.Position, {0.f, 2.f, 0.f});
+    ExpectFloat3Near(SkeletonDesc.pJoints[2].LocalRestTransform.Position, {0.f, 0.f, 3.f});
+    ExpectFloat3Near(SkeletonDesc.pJoints[3].LocalRestTransform.Scale, {2.f, 3.f, 4.f});
 }

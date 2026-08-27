@@ -29,6 +29,7 @@
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
 #include "RadientScene.h"
+#include "RadientSkinning.h"
 #include "RefCntAutoPtr.hpp"
 
 #include <optional>
@@ -44,6 +45,9 @@ namespace RadientImport
 using TextureAssetList  = std::vector<RefCntAutoPtr<IRadientTextureAsset>>;
 using MaterialAssetList = std::vector<RefCntAutoPtr<IRadientMaterialAsset>>;
 using MeshAssetList     = std::vector<RefCntAutoPtr<IRadientMeshAsset>>;
+using SkinAssetList     = std::vector<RefCntAutoPtr<IRadientSkinAsset>>;
+
+static constexpr Uint32 InvalidImportedSkinIndex = ~Uint32{0};
 
 struct ImportedNode
 {
@@ -52,6 +56,10 @@ struct ImportedNode
     RadientTransform Transform{};
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
+
+    /// Index in ImportedDocument::Skins, or InvalidImportedSkinIndex when the
+    /// node does not use skinning.
+    Uint32 SkinIndex = InvalidImportedSkinIndex;
 
     std::optional<RadientCameraComponent> Camera;
     std::optional<RadientLightComponent>  Light;
@@ -72,6 +80,7 @@ struct ImportedDocument
     TextureAssetList  Textures;
     MaterialAssetList Materials;
     MeshAssetList     Meshes;
+    SkinAssetList     Skins;
 
     std::vector<ImportedNode>  Nodes;
     std::vector<ImportedScene> Scenes;
