@@ -730,6 +730,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
 
         case RADIENT_ASSET_TYPE_SKELETON:
         case RADIENT_ASSET_TYPE_SKIN:
+        case RADIENT_ASSET_TYPE_SKELETON_ANIMATION:
             return RADIENT_STATUS_OK;
 
         default:

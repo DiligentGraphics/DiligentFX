@@ -50,6 +50,7 @@ typedef struct IDeviceContext                  IDeviceContext;
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
 typedef struct RadientSkinDesc                             RadientSkinDesc;
+typedef struct RadientSkeletonAnimationDesc                RadientSkeletonAnimationDesc;
 
 // clang-format off
 
@@ -488,6 +489,13 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               const RadientSkinDesc REF SkinDesc,
                                               IRadientSkinAsset**       ppSkin) PURE;
 
+    /// Creates an immutable animation clip targeting a skeleton. The animation
+    /// retains the skeleton and copies all tracks, keyframe times, and values.
+    /// On success, ppAnimation receives a strong reference.
+    VIRTUAL RADIENT_STATUS METHOD(CreateSkeletonAnimation)(THIS_
+                                                           const RadientSkeletonAnimationDesc REF AnimationDesc,
+                                                           IRadientSkeletonAnimationAsset**       ppAnimation) PURE;
+
     /// Creates or retrieves a cached built-in standard material definition asset.
     /// Compatible descriptions may return the same immutable asset. On success,
     /// ppDefinition receives a strong reference.
@@ -549,6 +557,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateSkeleton(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateSkeleton, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateSkin(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateSkin,     This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateSkeletonAnimation(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateSkeletonAnimation, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateStandardMaterialDefinition(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateStandardMaterialDefinition, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)

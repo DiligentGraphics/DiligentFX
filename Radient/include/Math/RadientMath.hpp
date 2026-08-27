@@ -150,6 +150,11 @@ inline constexpr Float32 LengthSq(const RadientFloat3& Value)
     return Value.x * Value.x + Value.y * Value.y + Value.z * Value.z;
 }
 
+inline constexpr Float32 LengthSq(const RadientQuaternion& Value)
+{
+    return Value.x * Value.x + Value.y * Value.y + Value.z * Value.z + Value.w * Value.w;
+}
+
 inline RadientFloat3 Normalize(const RadientFloat3& Value)
 {
     const Float32 LenSq = LengthSq(Value);
@@ -158,6 +163,49 @@ inline RadientFloat3 Normalize(const RadientFloat3& Value)
 
     return Value * (1.f / std::sqrt(LenSq));
 }
+
+inline RadientQuaternion Normalize(const RadientQuaternion& Value)
+{
+    const Float32 LenSq = LengthSq(Value);
+    if (LenSq <= 0.f)
+        return {};
+
+    const Float32 InvLength = 1.f / std::sqrt(LenSq);
+    return {
+        Value.x * InvLength,
+        Value.y * InvLength,
+        Value.z * InvLength,
+        Value.w * InvLength,
+    };
+}
+
+/// Linearly interpolates between two three-component vectors.
+RadientFloat3 Lerp(const RadientFloat3& Start,
+                   const RadientFloat3& End,
+                   Float32              Factor) noexcept;
+
+/// Spherically interpolates normalized rotations along the shortest path.
+RadientQuaternion Slerp(const RadientQuaternion& Start,
+                        const RadientQuaternion& End,
+                        Float32                  Factor) noexcept;
+
+/// Evaluates a cubic Hermite vector segment. Tangents are derivatives per
+/// second and are scaled by Duration.
+RadientFloat3 CubicHermite(const RadientFloat3& Start,
+                           const RadientFloat3& StartTangent,
+                           const RadientFloat3& End,
+                           const RadientFloat3& EndTangent,
+                           Float32              Factor,
+                           Float32              Duration) noexcept;
+
+/// Evaluates a component-wise cubic Hermite quaternion segment and normalizes
+/// the result. Tangents are derivatives per second and are scaled by Duration.
+RadientQuaternion CubicHermite(const RadientQuaternion& Start,
+                               const RadientQuaternion& StartTangent,
+                               const RadientQuaternion& End,
+                               const RadientQuaternion& EndTangent,
+                               Float32                  Factor,
+                               Float32                  Duration) noexcept;
 
 inline QuaternionF ToQuaternion(const RadientQuaternion& Value)
 {
@@ -189,25 +237,9 @@ inline RadientQuaternion ToRadientQuaternion(const QuaternionF& Value)
 
 inline RadientTransform NormalizeTransform(const RadientTransform& Transform)
 {
-    RadientQuaternion Rotation = Transform.Rotation;
-
-    const float LengthSq = Rotation.x * Rotation.x + Rotation.y * Rotation.y + Rotation.z * Rotation.z + Rotation.w * Rotation.w;
-    if (LengthSq > 0.f)
-    {
-        const float InvLength = 1.f / std::sqrt(LengthSq);
-        Rotation.x *= InvLength;
-        Rotation.y *= InvLength;
-        Rotation.z *= InvLength;
-        Rotation.w *= InvLength;
-    }
-    else
-    {
-        Rotation = {};
-    }
-
     return {
         Transform.Position,
-        Rotation,
+        Normalize(Transform.Rotation),
         Transform.Scale,
     };
 }

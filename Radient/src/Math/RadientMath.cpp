@@ -26,6 +26,7 @@
 
 #include "Math/RadientMath.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace Diligent
@@ -79,6 +80,115 @@ void MakeZRotation(Float32 Angle, RadientQuaternion& Rotation)
 
 namespace RadientMath
 {
+
+RadientFloat3 Lerp(const RadientFloat3& Start,
+                   const RadientFloat3& End,
+                   Float32              Factor) noexcept
+{
+    return Start * (1.f - Factor) + End * Factor;
+}
+
+RadientQuaternion Slerp(const RadientQuaternion& Start,
+                        const RadientQuaternion& End,
+                        Float32                  Factor) noexcept
+{
+    const RadientQuaternion Q0 = Normalize(Start);
+    RadientQuaternion       Q1 = Normalize(End);
+    Float32 Dot = Q0.x * Q1.x + Q0.y * Q1.y + Q0.z * Q1.z + Q0.w * Q1.w;
+
+    if (Dot < 0.f)
+    {
+        Dot  = -Dot;
+        Q1.x = -Q1.x;
+        Q1.y = -Q1.y;
+        Q1.z = -Q1.z;
+        Q1.w = -Q1.w;
+    }
+
+    Dot = std::min(Dot, 1.f);
+    if (Dot > 0.9995f)
+    {
+        return Normalize(RadientQuaternion{
+            Q0.x + (Q1.x - Q0.x) * Factor,
+            Q0.y + (Q1.y - Q0.y) * Factor,
+            Q0.z + (Q1.z - Q0.z) * Factor,
+            Q0.w + (Q1.w - Q0.w) * Factor,
+        });
+    }
+
+    const Float32 Angle    = std::acos(Dot);
+    const Float32 SinAngle = std::sin(Angle);
+    const Float32 W0       = std::sin((1.f - Factor) * Angle) / SinAngle;
+    const Float32 W1       = std::sin(Factor * Angle) / SinAngle;
+    return Normalize(RadientQuaternion{
+        Q0.x * W0 + Q1.x * W1,
+        Q0.y * W0 + Q1.y * W1,
+        Q0.z * W0 + Q1.z * W1,
+        Q0.w * W0 + Q1.w * W1,
+    });
+}
+
+namespace
+{
+
+void GetCubicHermiteWeights(Float32  Factor,
+                            Float32  Duration,
+                            Float32& StartValueWeight,
+                            Float32& StartTangentWeight,
+                            Float32& EndValueWeight,
+                            Float32& EndTangentWeight) noexcept
+{
+    const Float32 Factor2 = Factor * Factor;
+    const Float32 Factor3 = Factor2 * Factor;
+    StartValueWeight      = 2.f * Factor3 - 3.f * Factor2 + 1.f;
+    StartTangentWeight    = (Factor3 - 2.f * Factor2 + Factor) * Duration;
+    EndValueWeight        = -2.f * Factor3 + 3.f * Factor2;
+    EndTangentWeight      = (Factor3 - Factor2) * Duration;
+}
+
+} // namespace
+
+RadientFloat3 CubicHermite(const RadientFloat3& Start,
+                           const RadientFloat3& StartTangent,
+                           const RadientFloat3& End,
+                           const RadientFloat3& EndTangent,
+                           Float32              Factor,
+                           Float32              Duration) noexcept
+{
+    Float32 StartValueWeight;
+    Float32 StartTangentWeight;
+    Float32 EndValueWeight;
+    Float32 EndTangentWeight;
+    GetCubicHermiteWeights(Factor, Duration,
+                           StartValueWeight, StartTangentWeight,
+                           EndValueWeight, EndTangentWeight);
+    return Start * StartValueWeight +
+        StartTangent * StartTangentWeight +
+        End * EndValueWeight +
+        EndTangent * EndTangentWeight;
+}
+
+RadientQuaternion CubicHermite(const RadientQuaternion& Start,
+                               const RadientQuaternion& StartTangent,
+                               const RadientQuaternion& End,
+                               const RadientQuaternion& EndTangent,
+                               Float32                  Factor,
+                               Float32                  Duration) noexcept
+{
+    Float32 StartValueWeight;
+    Float32 StartTangentWeight;
+    Float32 EndValueWeight;
+    Float32 EndTangentWeight;
+    GetCubicHermiteWeights(Factor, Duration,
+                           StartValueWeight, StartTangentWeight,
+                           EndValueWeight, EndTangentWeight);
+    return Normalize(RadientQuaternion{
+        Start.x * StartValueWeight + StartTangent.x * StartTangentWeight + End.x * EndValueWeight + EndTangent.x * EndTangentWeight,
+        Start.y * StartValueWeight + StartTangent.y * StartTangentWeight + End.y * EndValueWeight + EndTangent.y * EndTangentWeight,
+        Start.z * StartValueWeight + StartTangent.z * StartTangentWeight + End.z * EndValueWeight + EndTangent.z * EndTangentWeight,
+        Start.w * StartValueWeight + StartTangent.w * StartTangentWeight + End.w * EndValueWeight + EndTangent.w * EndTangentWeight,
+    });
+}
 
 CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
                                      float                         Aspect,

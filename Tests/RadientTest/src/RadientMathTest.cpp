@@ -203,6 +203,41 @@ TEST(RadientMathTest, NormalizeTransformTreatsZeroRotationAsIdentity)
     EXPECT_EQ(NormalizedTransform.Scale, Transform.Scale);
 }
 
+TEST(RadientMathTest, InterpolatesAnimationValues)
+{
+    ExpectFloat3Near(
+        RadientMath::Lerp(RadientFloat3{0.f, 2.f, 4.f}, RadientFloat3{4.f, 6.f, 8.f}, 0.25f),
+        RadientFloat3{1.f, 3.f, 5.f});
+
+    const RadientQuaternion HalfRotation =
+        RadientMath::Slerp(RadientQuaternion{}, RadientQuaternion{0.f, 0.f, 1.f, 0.f}, 0.5f);
+    ExpectQuaternionNear(HalfRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
+
+    const RadientQuaternion SameRotation =
+        RadientMath::Slerp(RadientQuaternion{}, RadientQuaternion{0.f, 0.f, 0.f, -1.f}, 0.5f);
+    ExpectQuaternionNear(SameRotation, RadientQuaternion{});
+
+    ExpectFloat3Near(
+        RadientMath::CubicHermite(
+            RadientFloat3{0.f, 0.f, 0.f},
+            RadientFloat3{2.f, 0.f, 0.f},
+            RadientFloat3{2.f, 0.f, 0.f},
+            RadientFloat3{0.f, 0.f, 0.f},
+            0.5f,
+            2.f),
+        RadientFloat3{1.5f, 0.f, 0.f});
+
+    const RadientQuaternion CubicRotation =
+        RadientMath::CubicHermite(
+            RadientQuaternion{},
+            RadientQuaternion{0.f, 0.f, 0.f, 0.f},
+            RadientQuaternion{0.f, 0.f, 1.f, 0.f},
+            RadientQuaternion{0.f, 0.f, 0.f, 0.f},
+            0.5f,
+            2.f);
+    ExpectQuaternionNear(CubicRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
+}
+
 TEST(RadientMathTest, RoundTripsMatrixType)
 {
     // Matrix layout conversion should be lossless in both directions.

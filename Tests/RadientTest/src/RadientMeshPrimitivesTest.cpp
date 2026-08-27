@@ -125,6 +125,12 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSkeletonAnimation(const RadientSkeletonAnimationDesc&,
+                                                                      IRadientSkeletonAnimationAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo&,
                                                                                IRadientMaterialDefinitionAsset**) override final
     {

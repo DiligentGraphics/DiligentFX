@@ -167,7 +167,8 @@ typedef struct RadientAnimationCurveDesc RadientAnimationCurveDesc;
 /// Animation curves targeting one skeleton joint.
 ///
 /// An absent component curve preserves that component of the joint's rest
-/// transform. A clip may contain at most one track for each skeleton joint.
+/// transform. At least one component curve must be present. A clip may contain
+/// at most one track for each skeleton joint.
 struct RadientSkeletonAnimationTrackDesc
 {
     /// Index of the target joint in the clip's skeleton.
@@ -438,14 +439,22 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonAnimationAsset, IRadientAsset)
     /// it references remain valid for the lifetime of the animation asset.
     VIRTUAL const RadientSkeletonAnimationDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
-    /// Evaluates the clip at an absolute clip-local time into pPose. Time is in
-    /// seconds and is clamped to [0, GetDesc().Duration]. Evaluation resets the
-    /// pose to its skeleton rest pose, applies all animation tracks, and updates
-    /// global transforms once before returning. pPose must target the exact
-    /// skeleton returned by GetDesc().pSkeleton.
+    /// Evaluates the clip at an absolute clip-local time into pPose. Time must
+    /// be finite, is expressed in seconds, and is clamped to
+    /// [0, GetDesc().Duration]. Joints whose animation has not started, and
+    /// joints without animation tracks, are restored to their rest transforms.
+    /// Active tracks are evaluated, while tracks that have ended leave their
+    /// joints unchanged so the last evaluated pose is preserved. The active
+    /// interval of a track spans from the earliest first key to the latest last
+    /// key among its curves. If UpdateGlobalTransforms is true, global
+    /// transforms are updated once before the method returns. Otherwise, the
+    /// caller must subsequently call
+    /// IRadientSkeletonPose::UpdateGlobalTransforms(). pPose must target the
+    /// exact skeleton returned by GetDesc().pSkeleton.
     VIRTUAL RADIENT_STATUS METHOD(Evaluate)(THIS_
                                              Float64               Time,
-                                             IRadientSkeletonPose* pPose) CONST PURE;
+                                             IRadientSkeletonPose* pPose,
+                                             Bool                  UpdateGlobalTransforms) CONST PURE;
 };
 DILIGENT_END_INTERFACE
 

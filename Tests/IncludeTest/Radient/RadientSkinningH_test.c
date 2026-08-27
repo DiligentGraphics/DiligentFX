@@ -18,31 +18,40 @@
 
 void RadientSkinning_C_UseTypes(void)
 {
-    RadientSkeletonJointDesc    SkeletonJoint = {0};
-    RadientSkeletonDesc         SkeletonDesc  = {0};
-    RadientSkinJointBindingDesc SkinJoint     = {0};
-    RadientSkinDesc             SkinDesc      = {0};
+    RadientSkeletonJointDesc          SkeletonJoint  = {0};
+    RadientSkeletonDesc               SkeletonDesc   = {0};
+    RadientSkinJointBindingDesc       SkinJoint      = {0};
+    RadientSkinDesc                   SkinDesc       = {0};
+    RadientAnimationCurveDesc         CurveDesc      = {0};
+    RadientSkeletonAnimationTrackDesc AnimationTrack = {0};
+    RadientSkeletonAnimationDesc      AnimationDesc  = {0};
 
     (void)SkeletonJoint;
     (void)SkeletonDesc;
     (void)SkinJoint;
     (void)SkinDesc;
+    (void)CurveDesc;
+    (void)AnimationTrack;
+    (void)AnimationDesc;
 }
 
-void RadientSkinning_C_TestMacros(IRadientAssetManager*       pAssetManager,
-                                  IRadientSkeletonAsset*      pSkeleton,
-                                  IRadientSkinAsset*          pSkin,
-                                  IRadientSkeletonPose*       pPose,
-                                  IRadientSkeletonPoseWriter* pWriter)
+void RadientSkinning_C_TestMacros(IRadientAssetManager*           pAssetManager,
+                                  IRadientSkeletonAsset*          pSkeleton,
+                                  IRadientSkinAsset*              pSkin,
+                                  IRadientSkeletonPose*           pPose,
+                                  IRadientSkeletonPoseWriter*     pWriter,
+                                  IRadientSkeletonAnimationAsset* pAnimation)
 {
-    RadientSkeletonDesc SkeletonDesc = {0};
-    RadientSkinDesc     SkinDesc     = {0};
-    RadientTransform    Transform    = {0};
-    RadientMatrix4x4    Matrix       = {0};
-    RADIENT_STATUS      Status       = RADIENT_STATUS_OK;
+    RadientSkeletonDesc          SkeletonDesc  = {0};
+    RadientSkinDesc              SkinDesc      = {0};
+    RadientSkeletonAnimationDesc AnimationDesc = {0};
+    RadientTransform             Transform     = {0};
+    RadientMatrix4x4             Matrix        = {0};
+    RADIENT_STATUS               Status        = RADIENT_STATUS_OK;
 
     Status = IRadientAssetManager_CreateSkeleton(pAssetManager, &SkeletonDesc, &pSkeleton);
     Status = IRadientAssetManager_CreateSkin(pAssetManager, &SkinDesc, &pSkin);
+    Status = IRadientAssetManager_CreateSkeletonAnimation(pAssetManager, &AnimationDesc, &pAnimation);
 
     (void)IRadientSkeletonAsset_GetDesc(pSkeleton);
     Status = IRadientSkeletonAsset_CreatePose(pSkeleton, &pPose);
@@ -59,6 +68,9 @@ void RadientSkinning_C_TestMacros(IRadientAssetManager*       pAssetManager,
     Status = IRadientSkeletonPoseWriter_SetJointLocalTransforms(pWriter, 0, 1, &Transform);
     Status = IRadientSkeletonPoseWriter_ResetToRestPose(pWriter);
     Status = IRadientSkeletonPoseWriter_Commit(pWriter, True);
+
+    (void)IRadientSkeletonAnimationAsset_GetDesc(pAnimation);
+    Status = IRadientSkeletonAnimationAsset_Evaluate(pAnimation, 0.0, pPose, True);
 
     (void)Status;
 }
