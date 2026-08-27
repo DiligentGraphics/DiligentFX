@@ -389,6 +389,55 @@ struct RadientSceneLoadInfo
 };
 typedef struct RadientSceneLoadInfo RadientSceneLoadInfo;
 
+
+/// Associates one skeleton-specific animation with a logical scene animation.
+/// The animation is retained by the scene asset and the pointer is borrowed by
+/// callers.
+struct RadientSceneSkeletonAnimationBinding
+{
+    IRadientSkeletonAnimationAsset* pAnimation DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct RadientSceneSkeletonAnimationBinding RadientSceneSkeletonAnimationBinding;
+
+
+/// Immutable logical animation imported with a scene asset.
+///
+/// One source animation may contain SkeletonAnimationCount independent
+/// skeleton animations. Every skeleton animation identifies its target through
+/// IRadientSkeletonAnimationAsset::GetDesc().pSkeleton. Name may be empty or
+/// shared by multiple animations; the animation index is its stable identity
+/// within the scene asset.
+struct RadientSceneAnimationDesc
+{
+    /// Source animation name. The value returned by a scene asset is never null.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Clip-local duration in seconds.
+    Float32 Duration DEFAULT_INITIALIZER(0.f);
+
+    /// Array of SkeletonAnimationCount skeleton-animation bindings. The array
+    /// and its pointers remain valid while the scene asset is retained.
+    const RadientSceneSkeletonAnimationBinding* pSkeletonAnimations DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pSkeletonAnimations.
+    Uint32 SkeletonAnimationCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientSceneAnimationDesc RadientSceneAnimationDesc;
+
+
+/// Immutable description of an imported scene asset.
+struct RadientSceneAssetDesc
+{
+    /// Array of AnimationCount logical animations. The array and all data
+    /// referenced by its elements remain valid while the scene asset is
+    /// retained. May be null when AnimationCount is zero.
+    const RadientSceneAnimationDesc* pAnimations DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pAnimations.
+    Uint32 AnimationCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientSceneAssetDesc RadientSceneAssetDesc;
+
 // {81E53AF7-3CBD-4750-ACA9-72D301E8E286}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAsset =
     {0x81e53af7, 0x3cbd, 0x4750, {0xac, 0xa9, 0x72, 0xd3, 0x1, 0xe8, 0xe2, 0x86}};
@@ -444,12 +493,37 @@ struct IRadientTextureAsset : public IRadientAsset
 {
 };
 
-/// Imported scene/model asset.
-struct IRadientSceneAsset : public IRadientAsset
+#endif
+
+
+#define DILIGENT_INTERFACE_NAME IRadientSceneAsset
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientSceneAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;         \
+    IRadientSceneAssetMethods RadientSceneAsset
+
+// clang-format off
+
+/// Imported scene/model asset and its immutable animation catalog.
+DILIGENT_BEGIN_INTERFACE(IRadientSceneAsset, IRadientAsset)
 {
+    /// Returns the immutable scene asset description. The description is empty
+    /// until scene loading completes successfully. The returned reference and
+    /// all data it references remain valid while the scene asset is retained.
+    VIRTUAL const RadientSceneAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 };
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientSceneAsset_GetDesc(This) CALL_IFACE_METHOD(RadientSceneAsset, GetDesc, This)
 
 #endif
+
+// clang-format on
 
 
 #define DILIGENT_INTERFACE_NAME IRadientAssetManager

@@ -72,15 +72,28 @@ struct ImportedSceneStorage
     {
     }
 
-    ImportedSceneStorage& operator=(ImportedSceneStorage&& Rhs) = delete;
-    ImportedSceneStorage(ImportedSceneStorage&& Rhs)            = delete;
-    ImportedSceneStorage(const ImportedSceneStorage&)           = delete;
+    ImportedSceneStorage& operator=(ImportedSceneStorage&& Rhs)  = delete;
+    ImportedSceneStorage(ImportedSceneStorage&& Rhs)             = delete;
+    ImportedSceneStorage(const ImportedSceneStorage&)            = delete;
     ImportedSceneStorage& operator=(const ImportedSceneStorage&) = delete;
 
     void SetScene(RadientImport::ImportedDocument ImportedScene,
                   RADIENT_STATUS                  InitialGPUStatus)
     {
         Scene = std::move(ImportedScene);
+
+        AnimationDescs.resize(Scene.Animations.size());
+        for (size_t AnimationIndex = 0; AnimationIndex < Scene.Animations.size(); ++AnimationIndex)
+        {
+            const RadientImport::ImportedAnimation& Animation     = Scene.Animations[AnimationIndex];
+            RadientSceneAnimationDesc&              AnimationDesc = AnimationDescs[AnimationIndex];
+            AnimationDesc.Name                                    = Animation.Name.c_str();
+            AnimationDesc.Duration                                = Animation.Duration;
+            AnimationDesc.pSkeletonAnimations                     = Animation.SkeletonAnimationBindings.empty() ? nullptr : Animation.SkeletonAnimationBindings.data();
+            AnimationDesc.SkeletonAnimationCount                  = static_cast<Uint32>(Animation.SkeletonAnimationBindings.size());
+        }
+        AssetDesc.pAnimations    = AnimationDescs.empty() ? nullptr : AnimationDescs.data();
+        AssetDesc.AnimationCount = static_cast<Uint32>(AnimationDescs.size());
 
         GPUResourceStatus.store(InitialGPUStatus, std::memory_order_relaxed);
         LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_relaxed);
@@ -175,10 +188,12 @@ struct ImportedSceneStorage
         return Status;
     }
 
-    RadientImport::ImportedDocument     Scene;
-    std::atomic_bool                    SceneDataReady{false};
-    mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
-    mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
+    RadientImport::ImportedDocument        Scene;
+    std::vector<RadientSceneAnimationDesc> AnimationDescs;
+    RadientSceneAssetDesc                  AssetDesc;
+    std::atomic_bool                       SceneDataReady{false};
+    mutable std::atomic<RADIENT_STATUS>    LoadStatus{RADIENT_STATUS_OK};
+    mutable std::atomic<RADIENT_STATUS>    GPUResourceStatus{RADIENT_STATUS_OK};
 };
 
 GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
@@ -323,8 +338,51 @@ public:
 namespace
 {
 
-using SceneAssetImpl =
+using SceneAssetImplBase =
     RadientAssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, IID_SceneAssetImpl, RADIENT_ASSET_TYPE_SCENE, ScenePayloadImpl>;
+
+class SceneAssetImpl final : public SceneAssetImplBase
+{
+public:
+    using TBase = SceneAssetImplBase;
+
+    SceneAssetImpl(IReferenceCounters*               pRefCounters,
+                   std::string&&                     AssetURI,
+                   RefCntAutoPtr<ScenePayloadImpl>&& pPayload = {}) :
+        TBase{pRefCounters, std::move(AssetURI), std::move(pPayload)}
+    {
+    }
+
+    static RefCntAutoPtr<SceneAssetImpl> Create(std::string                       AssetURI,
+                                                RefCntAutoPtr<ScenePayloadImpl>&& pPayload = {})
+    {
+        return RefCntAutoPtr<SceneAssetImpl>{
+            MakeNewRCObj<SceneAssetImpl>()(std::move(AssetURI), std::move(pPayload))};
+    }
+
+    static RefCntAutoPtr<SceneAssetImpl> ResolveAsset(IRadientSceneAsset* pAsset)
+    {
+        RefCntAutoPtr<SceneAssetImpl> pImpl{pAsset, IID_SceneAssetImpl};
+        if (pImpl == nullptr || pImpl->GetPayloadStatus() != RADIENT_STATUS_OK)
+            return {};
+
+        return pImpl;
+    }
+
+    virtual const RadientSceneAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientSceneAssetDesc EmptyDesc{};
+
+        if (GetLoadStatus() != RADIENT_STATUS_OK)
+            return EmptyDesc;
+
+        const RefCntAutoPtr<ScenePayloadImpl> pPayload = GetPayload();
+        if (pPayload == nullptr)
+            return EmptyDesc;
+
+        return pPayload->GetStorage().AssetDesc;
+    }
+};
 
 } // namespace
 

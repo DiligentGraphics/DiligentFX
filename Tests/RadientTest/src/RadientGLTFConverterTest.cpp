@@ -1404,6 +1404,39 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     Model.Nodes[4].pMesh = &Model.Meshes[0];
     Model.Nodes[4].pSkin = &Model.Skins[0];
 
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Joint motion";
+
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers.back().Inputs      = {2.f, 4.f};
+    Animation.Samplers.back().OutputsVec4 = {
+        {0.f, 0.f, 3.f, 0.f},
+        {2.f, 0.f, 3.f, 0.f},
+    };
+
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
+    Animation.Samplers.back().Inputs      = {2.f, 4.f};
+    Animation.Samplers.back().OutputsVec4 = {
+        {0.f, 0.f, 0.f, 0.f},
+        {0.f, 0.f, 0.f, 1.f},
+        {0.f, 0.f, 0.f, 0.f},
+        {0.f, 0.f, 0.f, 0.f},
+        {0.f, 0.f, 1.f, 0.f},
+        {0.f, 0.f, 0.f, 0.f},
+    };
+
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers.back().Inputs      = {2.f, 4.f};
+    Animation.Samplers.back().OutputsVec4 = {
+        {2.f, 3.f, 4.f, 0.f},
+        {5.f, 6.f, 7.f, 0.f},
+    };
+
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[2], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[3], 1);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[3], 2);
+
     Model.Scenes.resize(1);
     Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[4]};
 
@@ -1436,4 +1469,80 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     ExpectFloat3Near(SkeletonDesc.pJoints[1].LocalRestTransform.Position, {0.f, 2.f, 0.f});
     ExpectFloat3Near(SkeletonDesc.pJoints[2].LocalRestTransform.Position, {0.f, 0.f, 3.f});
     ExpectFloat3Near(SkeletonDesc.pJoints[3].LocalRestTransform.Scale, {2.f, 3.f, 4.f});
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    EXPECT_EQ(ImportedAnimation.Name, "Joint motion");
+    EXPECT_FLOAT_EQ(ImportedAnimation.Duration, 2.f);
+    ASSERT_EQ(ImportedAnimation.SkeletonAnimationBindings.size(), 1u);
+    ASSERT_NE(ImportedAnimation.SkeletonAnimationBindings[0].pAnimation, nullptr);
+
+    const RadientSkeletonAnimationDesc& AnimationDesc =
+        ImportedAnimation.SkeletonAnimationBindings[0].pAnimation->GetDesc();
+    EXPECT_EQ(AnimationDesc.pSkeleton, SkinDesc.pSkeleton);
+    EXPECT_FLOAT_EQ(AnimationDesc.Duration, 2.f);
+    ASSERT_EQ(AnimationDesc.TrackCount, 2u);
+
+    const RadientSkeletonAnimationTrackDesc& JointATrack = AnimationDesc.pTracks[0];
+    EXPECT_EQ(JointATrack.SkeletonJointIndex, 2u);
+    EXPECT_EQ(JointATrack.Translation.Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+    ASSERT_EQ(JointATrack.Translation.KeyframeCount, 2u);
+    EXPECT_FLOAT_EQ(JointATrack.Translation.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(JointATrack.Translation.pTimes[1], 2.f);
+
+    const RadientSkeletonAnimationTrackDesc& JointBTrack = AnimationDesc.pTracks[1];
+    EXPECT_EQ(JointBTrack.SkeletonJointIndex, 3u);
+    EXPECT_EQ(JointBTrack.Rotation.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+    EXPECT_EQ(JointBTrack.Scale.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    ASSERT_EQ(JointBTrack.Rotation.KeyframeCount, 2u);
+    ASSERT_EQ(JointBTrack.Scale.KeyframeCount, 2u);
+}
+
+TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.reserve(2);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes[0].Name     = "Root";
+    Model.Nodes[0].Children = {&Model.Nodes[1]};
+    Model.Nodes[1].Name     = "Joint";
+    Model.Nodes[1].Parent   = &Model.Nodes[0];
+
+    Model.Skins.resize(2);
+    for (GLTF::Skin& Skin : Model.Skins)
+    {
+        Skin.pSkeletonRoot = &Model.Nodes[1];
+        Skin.Joints        = {&Model.Nodes[1]};
+    }
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Shared motion";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs      = {0.f, 1.f};
+    Animation.Samplers[0].OutputsVec4 = {
+        {0.f, 0.f, 0.f, 0.f},
+        {1.f, 0.f, 0.f, 0.f},
+    };
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[1], 0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Skins.size(), 2u);
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_EQ(Scene.Animations[0].SkeletonAnimationBindings.size(), 2u);
+
+    for (Uint32 SkinIndex = 0; SkinIndex < 2; ++SkinIndex)
+    {
+        IRadientSkeletonAnimationAsset* const pAnimation =
+            Scene.Animations[0].SkeletonAnimationBindings[SkinIndex].pAnimation;
+        ASSERT_NE(pAnimation, nullptr);
+        EXPECT_EQ(pAnimation->GetDesc().pSkeleton, Scene.Skins[SkinIndex]->GetDesc().pSkeleton);
+    }
+    EXPECT_NE(Scene.Skins[0]->GetDesc().pSkeleton, Scene.Skins[1]->GetDesc().pSkeleton);
 }

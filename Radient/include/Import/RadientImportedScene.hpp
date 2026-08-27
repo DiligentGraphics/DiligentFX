@@ -34,6 +34,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Diligent
@@ -73,6 +74,21 @@ struct ImportedScene
     std::vector<Uint32> RootNodes;
 };
 
+struct ImportedAnimation
+{
+    void AddSkeletonAnimation(RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation)
+    {
+        SkeletonAnimationAssets.emplace_back(std::move(pAnimation));
+        SkeletonAnimationBindings.push_back({SkeletonAnimationAssets.back().RawPtr()});
+    }
+
+    std::string Name;
+    Float32     Duration = 0.f;
+
+    std::vector<RefCntAutoPtr<IRadientSkeletonAnimationAsset>> SkeletonAnimationAssets;
+    std::vector<RadientSceneSkeletonAnimationBinding>          SkeletonAnimationBindings;
+};
+
 /// Radient-native data produced by an asset importer. Source-format documents
 /// are temporary loading artifacts and are not retained here.
 struct ImportedDocument
@@ -82,8 +98,9 @@ struct ImportedDocument
     MeshAssetList     Meshes;
     SkinAssetList     Skins;
 
-    std::vector<ImportedNode>  Nodes;
-    std::vector<ImportedScene> Scenes;
+    std::vector<ImportedNode>      Nodes;
+    std::vector<ImportedScene>     Scenes;
+    std::vector<ImportedAnimation> Animations;
 
     Uint32 DefaultSceneId = 0;
 };

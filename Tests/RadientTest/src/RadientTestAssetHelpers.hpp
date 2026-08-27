@@ -47,12 +47,12 @@ namespace Testing
 {
 
 template <typename InterfaceType, const INTERFACE_ID& InterfaceID, RADIENT_ASSET_TYPE AssetType>
-class TestRadientAsset final : public ObjectBase<InterfaceType>
+class TestRadientAssetBase : public ObjectBase<InterfaceType>
 {
 public:
     using TBase = ObjectBase<InterfaceType>;
 
-    TestRadientAsset(IReferenceCounters* pRefCounters, const char* URI, Uint64 Version) :
+    TestRadientAssetBase(IReferenceCounters* pRefCounters, const char* URI, Uint64 Version) :
         TBase{pRefCounters},
         m_URI{URI != nullptr ? URI : ""}
     {
@@ -92,33 +92,27 @@ private:
     RadientAssetReference m_Ref{};
 };
 
-using TestMeshAsset    = TestRadientAsset<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
-using TestTextureAsset = TestRadientAsset<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
-using TestSceneAsset   = TestRadientAsset<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+using TestMeshAsset    = TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
+using TestTextureAsset = TestRadientAssetBase<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
 
-class TestMaterialAsset final : public ObjectBase<IRadientMaterialAsset>
+class TestSceneAsset final : public TestRadientAssetBase<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>
 {
 public:
-    using TBase = ObjectBase<IRadientMaterialAsset>;
+    using TBase = TestRadientAssetBase<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>;
+    using TBase::TBase;
 
-    TestMaterialAsset(IReferenceCounters* pRefCounters, const char* URI, Uint64 Version) :
-        TBase{pRefCounters},
-        m_URI{URI != nullptr ? URI : ""},
-        m_Version{Version}
+    virtual const RadientSceneAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        m_Ref.URI     = m_URI.empty() ? nullptr : m_URI.c_str();
-        m_Ref.Version = Version;
+        static const RadientSceneAssetDesc Desc{};
+        return Desc;
     }
+};
 
-    virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
-    {
-        return m_Ref;
-    }
-
-    virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
-    {
-        return RADIENT_ASSET_TYPE_MATERIAL;
-    }
+class TestMaterialAsset final : public TestRadientAssetBase<IRadientMaterialAsset, IID_RadientMaterialAsset, RADIENT_ASSET_TYPE_MATERIAL>
+{
+public:
+    using TBase = TestRadientAssetBase<IRadientMaterialAsset, IID_RadientMaterialAsset, RADIENT_ASSET_TYPE_MATERIAL>;
+    using TBase::TBase;
 
     virtual IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override final
     {
@@ -127,7 +121,7 @@ public:
 
     virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
     {
-        return m_Version;
+        return GetReference().Version;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle,
@@ -154,28 +148,6 @@ public:
         *ppWriter = nullptr;
         return RADIENT_STATUS_INVALID_OPERATION;
     }
-
-    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
-    {
-        if (ppInterface == nullptr)
-            return;
-
-        if (IID == IID_RadientMaterialAsset || IID == IID_RadientAsset)
-        {
-            *ppInterface = this;
-            (*ppInterface)->AddRef();
-        }
-        else
-        {
-            TBase::QueryInterface(IID, ppInterface);
-        }
-    }
-    using IObject::QueryInterface;
-
-private:
-    std::string           m_URI;
-    RadientAssetReference m_Ref{};
-    Uint64                m_Version = 0;
 };
 
 class TestShaderResourceVariable final : public ObjectBase<IShaderResourceVariable>

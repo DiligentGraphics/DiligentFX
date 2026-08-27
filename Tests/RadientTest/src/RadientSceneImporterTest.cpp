@@ -107,14 +107,20 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
         0.f, 3.f, 0.f, 0.f,
         0.f, 0.f, 4.f, 0.f,
         0.f, 0.f, 0.f, 1.f};
-    const std::array<Uint16, 3> Indices{0, 1, 2};
+    const std::array<Uint16, 3>  Indices{0, 1, 2};
+    const std::array<Float32, 2> AnimationTimes{1.f, 3.f};
+    const std::array<Float32, 6> AnimationTranslations{
+        0.f, 0.f, 3.f,
+        2.f, 0.f, 3.f};
 
     std::vector<Uint8> Buffer;
-    const size_t       PositionOffset    = AppendBytes(Buffer, Positions);
-    const size_t       JointsOffset      = AppendBytes(Buffer, Joints);
-    const size_t       WeightsOffset     = AppendBytes(Buffer, Weights);
-    const size_t       InverseBindOffset = AppendBytes(Buffer, InverseBindMatrices);
-    const size_t       IndexOffset       = AppendBytes(Buffer, Indices);
+    const size_t       PositionOffset             = AppendBytes(Buffer, Positions);
+    const size_t       JointsOffset               = AppendBytes(Buffer, Joints);
+    const size_t       WeightsOffset              = AppendBytes(Buffer, Weights);
+    const size_t       InverseBindOffset          = AppendBytes(Buffer, InverseBindMatrices);
+    const size_t       IndexOffset                = AppendBytes(Buffer, Indices);
+    const size_t       AnimationTimeOffset        = AppendBytes(Buffer, AnimationTimes);
+    const size_t       AnimationTranslationOffset = AppendBytes(Buffer, AnimationTranslations);
     WriteBinaryFile(TempDir, "skin.bin", Buffer);
 
     std::ostringstream GLTF;
@@ -131,6 +137,11 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
         {"name": "SkinnedMeshB", "mesh": 0, "skin": 0, "translation": [1, 0, 0]}
     ],
     "skins": [{"name": "Character", "skeleton": 2, "joints": [2, 3], "inverseBindMatrices": 3}],
+    "animations": [{
+        "name": "Joint motion",
+        "samplers": [{"input": 5, "output": 6, "interpolation": "LINEAR"}],
+        "channels": [{"sampler": 0, "target": {"node": 2, "path": "translation"}}]
+    }],
     "meshes": [{"primitives": [{
         "attributes": {"POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2},
         "indices": 4
@@ -147,14 +158,20 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
         {"buffer": 0, "byteOffset": )GLTF"
          << InverseBindOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(InverseBindMatrices) << R"GLTF(},
         {"buffer": 0, "byteOffset": )GLTF"
-         << IndexOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963}
+         << IndexOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTimeOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTimes) << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTranslationOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTranslations) << R"GLTF(}
     ],
     "accessors": [
         {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [-0.5, 0, 0], "max": [0.5, 1, 0]},
         {"bufferView": 1, "componentType": 5123, "count": 3, "type": "VEC4"},
         {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC4"},
         {"bufferView": 3, "componentType": 5126, "count": 2, "type": "MAT4"},
-        {"bufferView": 4, "componentType": 5123, "count": 3, "type": "SCALAR"}
+        {"bufferView": 4, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 5, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [1], "max": [3]},
+        {"bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3"}
     ]
 })GLTF";
 
@@ -812,6 +829,19 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
     ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
     ASSERT_NE(ImportResult.pModel, nullptr);
+
+    const RadientSceneAssetDesc& SceneAssetDesc = ImportResult.pModel->GetDesc();
+    ASSERT_EQ(SceneAssetDesc.AnimationCount, 1u);
+    ASSERT_NE(SceneAssetDesc.pAnimations, nullptr);
+    const RadientSceneAnimationDesc& SceneAnimation = SceneAssetDesc.pAnimations[0];
+    EXPECT_STREQ(SceneAnimation.Name, "Joint motion");
+    EXPECT_FLOAT_EQ(SceneAnimation.Duration, 2.f);
+    ASSERT_EQ(SceneAnimation.SkeletonAnimationCount, 1u);
+    ASSERT_NE(SceneAnimation.pSkeletonAnimations, nullptr);
+    ASSERT_NE(SceneAnimation.pSkeletonAnimations[0].pAnimation, nullptr);
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pImportedAnimation{
+        SceneAnimation.pSkeletonAnimations[0].pAnimation};
+
     ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
@@ -849,6 +879,7 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
 
     const RadientSkinDesc& SkinDesc = Skins[0].pSkin->GetDesc();
     ASSERT_NE(SkinDesc.pSkeleton, nullptr);
+    EXPECT_EQ(pImportedAnimation->GetDesc().pSkeleton, SkinDesc.pSkeleton);
     ASSERT_EQ(SkinDesc.JointCount, 2u);
     EXPECT_EQ(SkinDesc.pJoints[0].SkeletonJointIndex, 2u);
     EXPECT_EQ(SkinDesc.pJoints[1].SkeletonJointIndex, 3u);
@@ -878,6 +909,11 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     ExpectFloat3Near(LocalTransforms[2].Position, {0.f, 0.f, 3.f});
     ExpectFloat3Near(LocalTransforms[3].Scale, {2.f, 3.f, 4.f});
 
+    RefCntAutoPtr<IRadientSkeletonPose> pFirstInstancePose = Skins[0].pPose;
+    ASSERT_EQ(pImportedAnimation->Evaluate(1.0, Skins[0].pPose, True), RADIENT_STATUS_OK);
+    ASSERT_EQ(Skins[0].pPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
+    ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
+
     RadientSceneInstantiateInfo SecondInstantiateInfo{};
     SecondInstantiateInfo.Name = "Second skinned instance";
     RadientEntityID SecondRoot = InvalidRadientEntityID;
@@ -889,14 +925,13 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     Skins = CaptureSkins();
     ASSERT_EQ(Skins.size(), 4u);
 
-    IRadientSkeletonPose* const pFirstPose         = Skins[0].pPose;
-    IRadientSkeletonPose*       pSecondPose        = nullptr;
-    Uint32                      FirstPoseUseCount  = 0;
-    Uint32                      SecondPoseUseCount = 0;
+    IRadientSkeletonPose* pSecondPose        = nullptr;
+    Uint32                FirstPoseUseCount  = 0;
+    Uint32                SecondPoseUseCount = 0;
     for (const CapturedSkin& Skin : Skins)
     {
         EXPECT_EQ(Skin.pSkin, Skins[0].pSkin);
-        if (Skin.pPose == pFirstPose)
+        if (Skin.pPose == pFirstInstancePose)
         {
             ++FirstPoseUseCount;
         }
@@ -910,9 +945,12 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     }
 
     EXPECT_NE(pSecondPose, nullptr);
-    EXPECT_NE(pSecondPose, pFirstPose);
+    EXPECT_NE(pSecondPose, pFirstInstancePose);
     EXPECT_EQ(FirstPoseUseCount, 2u);
     EXPECT_EQ(SecondPoseUseCount, 2u);
+
+    ASSERT_EQ(pSecondPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
+    ExpectFloat3Near(LocalTransforms[2].Position, {0.f, 0.f, 3.f});
 }
 
 } // namespace
