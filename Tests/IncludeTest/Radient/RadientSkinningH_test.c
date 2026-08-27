@@ -62,6 +62,7 @@ void RadientSkinning_C_TestMacros(IRadientAssetManager*           pAssetManager,
     (void)IRadientSkeletonPose_GetVersion(pPose);
     Status = IRadientSkeletonPose_GetJointLocalTransforms(pPose, 0, 1, &Transform);
     Status = IRadientSkeletonPose_GetJointGlobalMatrices(pPose, 0, 1, &Matrix);
+    Status = IRadientSkeletonPose_ComputeSkinningMatrices(pPose, pSkin, &Matrix, True);
     Status = IRadientSkeletonPose_UpdateGlobalTransforms(pPose);
     Status = IRadientSkeletonPose_CreateWriter(pPose, &pWriter);
 

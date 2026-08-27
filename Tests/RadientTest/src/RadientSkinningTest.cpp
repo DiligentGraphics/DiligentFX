@@ -529,6 +529,82 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
     EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 3.f);
 }
 
+TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    std::array<RadientSkeletonJointDesc, 2> Joints{};
+    Joints[0].LocalRestTransform = Translation(1.f);
+    Joints[1].ParentJointIndex   = 0;
+    Joints[1].LocalRestTransform = Translation(2.f);
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton =
+        CreateSkeleton(*pAssetManager, Joints.data(), static_cast<Uint32>(Joints.size()));
+    ASSERT_NE(pSkeleton, nullptr);
+
+    std::array<RadientSkinJointBindingDesc, 2> SkinJoints{};
+    SkinJoints[0].SkeletonJointIndex         = 1;
+    SkinJoints[0].InverseBindMatrix.Data[12] = -2.f;
+    SkinJoints[1].SkeletonJointIndex         = 0;
+    SkinJoints[1].InverseBindMatrix.Data[12] = -4.f;
+
+    RadientSkinDesc SkinDesc;
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = SkinJoints.data();
+    SkinDesc.JointCount = static_cast<Uint32>(SkinJoints.size());
+
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pSkin, nullptr);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pPose, nullptr);
+
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data()), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 1.f);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), -3.f);
+
+    EXPECT_EQ(pPose->ComputeSkinningMatrices(nullptr, SkinningMatrices.data()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pPose->ComputeSkinningMatrices(pSkin, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+    ASSERT_EQ(pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const std::array UpdatedTransforms{
+        Translation(10.f),
+        Translation(20.f),
+    };
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 2, UpdatedTransforms.data()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPose->GetVersion(), 1u);
+
+    RadientSkeletonJointDesc             OtherJoint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton =
+        CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
+    RefCntAutoPtr<IRadientSkinAsset> pOtherSkin = CreateSkin(*pAssetManager, pOtherSkeleton, "Other skin");
+    ASSERT_NE(pOtherSkin, nullptr);
+
+    SkinningMatrices[0].Data[12] = 100.f;
+    SkinningMatrices[1].Data[12] = 200.f;
+    EXPECT_EQ(pPose->ComputeSkinningMatrices(pOtherSkin, SkinningMatrices.data()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pPose->GetVersion(), 1u);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
+
+    EXPECT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data(), False), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pPose->GetVersion(), 1u);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
+
+    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPose->GetVersion(), 2u);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 28.f);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 6.f);
+    EXPECT_EQ(pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+}
+
 TEST(RadientSkinningTest, AnimationCopiesDescriptionAndRetainsSkeleton)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();

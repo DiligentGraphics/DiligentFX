@@ -340,6 +340,20 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
                                                           Uint32             JointCount,
                                                           RadientMatrix4x4*   pMatrices) CONST PURE;
 
+    /// Computes the skinning matrices for pSkin and writes
+    /// pSkin->GetDesc().JointCount elements to pMatrices. Each output matrix
+    /// combines the skin joint's inverse-bind matrix with the corresponding
+    /// skeleton-space pose matrix. pSkin must reference this pose's skeleton.
+    ///
+    /// If UpdateGlobalMatrices is true, dirty global matrices are updated
+    /// before computing the result. Otherwise, the method returns
+    /// RADIENT_STATUS_PENDING while global matrices are dirty. The output is
+    /// not modified unless the method returns RADIENT_STATUS_OK.
+    VIRTUAL RADIENT_STATUS METHOD(ComputeSkinningMatrices)(THIS_
+                                                           IRadientSkinAsset* pSkin,
+                                                           RadientMatrix4x4*  pMatrices,
+                                                           Bool               UpdateGlobalMatrices DEFAULT_VALUE(True)) PURE;
+
     /// Propagates committed local transforms through the skeleton hierarchy and
     /// advances the pose version. Returns RADIENT_STATUS_NO_CHANGE when the
     /// global transforms are already current.
@@ -360,6 +374,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSkeletonPose_GetVersion(This)                   CALL_IFACE_METHOD(RadientSkeletonPose, GetVersion,              This)
 #    define IRadientSkeletonPose_GetJointLocalTransforms(This, ...) CALL_IFACE_METHOD(RadientSkeletonPose, GetJointLocalTransforms, This, __VA_ARGS__)
 #    define IRadientSkeletonPose_GetJointGlobalMatrices(This, ...)  CALL_IFACE_METHOD(RadientSkeletonPose, GetJointGlobalMatrices,  This, __VA_ARGS__)
+#    define IRadientSkeletonPose_ComputeSkinningMatrices(This, ...) CALL_IFACE_METHOD(RadientSkeletonPose, ComputeSkinningMatrices, This, __VA_ARGS__)
 #    define IRadientSkeletonPose_UpdateGlobalTransforms(This)       CALL_IFACE_METHOD(RadientSkeletonPose, UpdateGlobalTransforms,   This)
 #    define IRadientSkeletonPose_CreateWriter(This, ...)            CALL_IFACE_METHOD(RadientSkeletonPose, CreateWriter,            This, __VA_ARGS__)
 

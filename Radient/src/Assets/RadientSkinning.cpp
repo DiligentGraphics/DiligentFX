@@ -865,6 +865,37 @@ public:
         return RADIENT_STATUS_OK;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset* pSkin,
+                                                                       RadientMatrix4x4*  pMatrices,
+                                                                       Bool               UpdateGlobalMatrices) override final
+    {
+        if (pSkin == nullptr || pMatrices == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        const RadientSkinDesc& SkinDesc = pSkin->GetDesc();
+        if (SkinDesc.pSkeleton != m_pSkeleton)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        if (m_State.GlobalTransformsDirty)
+        {
+            if (!UpdateGlobalMatrices)
+                return RADIENT_STATUS_PENDING;
+
+            const RADIENT_STATUS Status = UpdateGlobalTransforms();
+            if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
+                return Status;
+        }
+
+        for (Uint32 JointIndex = 0; JointIndex < SkinDesc.JointCount; ++JointIndex)
+        {
+            const RadientSkinJointBindingDesc& Joint = SkinDesc.pJoints[JointIndex];
+            pMatrices[JointIndex] = RadientMath::MultiplyMatrices(
+                Joint.InverseBindMatrix,
+                m_State.GlobalMatrices[Joint.SkeletonJointIndex]);
+        }
+        return RADIENT_STATUS_OK;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE UpdateGlobalTransforms() override final
     {
         if (!m_State.GlobalTransformsDirty)
