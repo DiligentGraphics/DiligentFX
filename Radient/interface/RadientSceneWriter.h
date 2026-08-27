@@ -91,6 +91,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                            RadientEntityID                Entity,
                                            const RadientMeshComponent REF Mesh) PURE;
 
+    /// Adds or updates a skin component.
+    VIRTUAL RADIENT_STATUS METHOD(SetSkin)(THIS_
+                                           RadientEntityID                Entity,
+                                           const RadientSkinComponent REF Skin) PURE;
+
     /// Adds or updates a mesh renderer component.
     VIRTUAL RADIENT_STATUS METHOD(SetMeshRenderer)(THIS_
                                                    RadientEntityID                        Entity,
@@ -133,6 +138,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_SetLocalTransform(This, ...)      CALL_IFACE_METHOD(RadientSceneWriter, SetLocalTransform, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetCamera(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetCamera,         This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMesh(This, ...)                CALL_IFACE_METHOD(RadientSceneWriter, SetMesh,           This, __VA_ARGS__)
+#    define IRadientSceneWriter_SetSkin(This, ...)                CALL_IFACE_METHOD(RadientSceneWriter, SetSkin,           This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMeshRenderer(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, SetMeshRenderer,   This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMaterialBindings(This, ...)    CALL_IFACE_METHOD(RadientSceneWriter, SetMaterialBindings, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetLight(This, ...)               CALL_IFACE_METHOD(RadientSceneWriter, SetLight,          This, __VA_ARGS__)

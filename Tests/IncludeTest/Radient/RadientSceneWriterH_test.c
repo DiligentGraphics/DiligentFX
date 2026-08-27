@@ -34,6 +34,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     RadientTransform                 Transform        = {0};
     RadientCameraComponent           Camera           = {0};
     RadientMeshComponent             Mesh             = {0};
+    RadientSkinComponent             Skin             = {0};
     RadientMeshRendererComponent     MeshRenderer     = {0};
     RadientMaterialBindingsComponent MaterialBindings = {0};
     RadientLightComponent            Light            = {0};
@@ -48,6 +49,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     Status = IRadientSceneWriter_SetLocalTransform(pWriter, Entity, &Transform);
     Status = IRadientSceneWriter_SetCamera(pWriter, Entity, &Camera);
     Status = IRadientSceneWriter_SetMesh(pWriter, Entity, &Mesh);
+    Status = IRadientSceneWriter_SetSkin(pWriter, Entity, &Skin);
     Status = IRadientSceneWriter_SetMeshRenderer(pWriter, Entity, &MeshRenderer);
     Status = IRadientSceneWriter_SetMaterialBindings(pWriter, Entity, &MaterialBindings);
     Status = IRadientSceneWriter_SetLight(pWriter, Entity, &Light);

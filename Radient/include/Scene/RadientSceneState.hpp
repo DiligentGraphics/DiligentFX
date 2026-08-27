@@ -30,6 +30,7 @@
 #include "FlagEnum.h"
 #include "Scene/Components/RadientMaterialBindingsStorage.hpp"
 #include "Scene/Components/RadientMeshComponentStorage.hpp"
+#include "Scene/Components/RadientSkinComponentStorage.hpp"
 
 #include "entt/entity/registry.hpp"
 #include "entt/entity/storage.hpp"
@@ -68,6 +69,7 @@ public:
         const RadientMeshComponent&             Mesh;
         const RadientMeshRendererComponent&     Renderer;
         const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
+        const RadientSkinComponent*             pSkin             = nullptr;
         const RadientMatrix4x4&                 WorldMatrix;
         const Bool&                             EffectiveVisible;
     };
@@ -173,6 +175,7 @@ public:
     RADIENT_STATUS SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform);
     RADIENT_STATUS SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera);
     RADIENT_STATUS SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh);
+    RADIENT_STATUS SetSkin(RadientEntityID Entity, const RadientSkinComponent& Skin);
     RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
     RADIENT_STATUS SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings);
     RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
@@ -200,7 +203,7 @@ private:
     {
         CHANGE_FLAG_NONE = 0u,
 
-        // Mesh, mesh renderer, or material bindings changed.
+        // Mesh, mesh renderer, material bindings, or skin changed.
         CHANGE_FLAG_DRAWABLES = 1u << 0u,
 
         // Light component data changed.
@@ -450,12 +453,14 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
     const EffectiveVisibilityComponent& EffectiveVisible = m_CoreStorages.get<EffectiveVisibilityComponent>(Entity);
 
     const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
+    const SkinComponentStorage*    pSkin             = m_Registry.try_get<SkinComponentStorage>(Entity);
 
     return RenderableMesh{
         EntityData.ID,
         MeshStorage.Component,
         Renderer,
         pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
+        pSkin != nullptr ? &pSkin->Component : nullptr,
         WorldTransform.Matrix,
         EffectiveVisible.Visible};
 }

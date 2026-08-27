@@ -48,6 +48,8 @@ static_assert(std::is_standard_layout<RadientCameraComponent>::value, "RadientCa
 static_assert(std::is_trivially_copyable<RadientCameraComponent>::value, "RadientCameraComponent must be trivially copyable");
 static_assert(std::is_standard_layout<RadientLightComponent>::value, "RadientLightComponent must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientLightComponent>::value, "RadientLightComponent must be trivially copyable");
+static_assert(std::is_standard_layout<RadientSkinComponent>::value, "RadientSkinComponent must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientSkinComponent>::value, "RadientSkinComponent must be trivially copyable");
 static_assert(std::is_standard_layout<RadientCustomComponentData>::value, "RadientCustomComponentData must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientCustomComponentData>::value, "RadientCustomComponentData must be trivially copyable");
 
@@ -76,6 +78,10 @@ static_assert(DefaultLight.Radius == 0.5f, "Unexpected RadientLightComponent rad
 static_assert(DefaultLight.Angle == 0.53f, "Unexpected RadientLightComponent angle default value");
 static_assert(DefaultLight.InnerConeAngle == 0.f, "Unexpected RadientLightComponent inner cone angle default value");
 static_assert(DefaultLight.ShapingFocus == 0.f, "Unexpected RadientLightComponent shaping focus default value");
+
+constexpr RadientSkinComponent DefaultSkin{};
+static_assert(DefaultSkin.pSkin == nullptr, "Unexpected RadientSkinComponent skin default value");
+static_assert(DefaultSkin.pPose == nullptr, "Unexpected RadientSkinComponent pose default value");
 
 constexpr RadientCustomComponentData DefaultCustomComponent{};
 static_assert(DefaultCustomComponent.ComponentType == InvalidRadientComponentTypeID, "Unexpected RadientCustomComponentData component type default value");

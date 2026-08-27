@@ -25,8 +25,11 @@
  */
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Scene/Components/RadientSkinComponentStorage.hpp"
+#include "Scene/RadientSceneState.hpp"
 
 #include "RadientSkinning.h"
+#include "RadientTestAssetHelpers.hpp"
 
 #include "RefCntAutoPtr.hpp"
 #include "TestingEnvironment.hpp"
@@ -34,6 +37,7 @@
 
 #include <array>
 #include <limits>
+#include <utility>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -74,6 +78,24 @@ RefCntAutoPtr<IRadientSkeletonAsset> CreateSkeleton(
     return pSkeleton;
 }
 
+RefCntAutoPtr<IRadientSkinAsset> CreateSkin(RadientAssetManagerImpl& AssetManager,
+                                            IRadientSkeletonAsset*   pSkeleton,
+                                            const Char*              Name = "Test skin")
+{
+    RadientSkinJointBindingDesc Joint;
+    Joint.SkeletonJointIndex = 0;
+
+    RadientSkinDesc Desc;
+    Desc.Name       = Name;
+    Desc.pSkeleton  = pSkeleton;
+    Desc.pJoints    = &Joint;
+    Desc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    EXPECT_EQ(AssetManager.CreateSkin(Desc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    return pSkin;
+}
+
 void ExpectInvalidAnimation(RadientAssetManagerImpl&            AssetManager,
                             const RadientSkeletonAnimationDesc& Desc,
                             const char*                         ExpectedError)
@@ -98,6 +120,144 @@ void ExpectQuaternionNear(const RadientQuaternion& Value,
 }
 
 } // namespace
+
+TEST(RadientSkinningTest, SkinComponentStorageRetainsResourcesAndRepairsPointersAfterMove)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             Joint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
+    RefCntAutoPtr<IRadientSkinAsset>     pSkin     = CreateSkin(*pAssetManager, pSkeleton);
+    RefCntAutoPtr<IRadientSkeletonPose>  pPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pSkin, nullptr);
+    ASSERT_NE(pPose, nullptr);
+
+    IRadientSkinAsset* const    pExpectedSkin = pSkin;
+    IRadientSkeletonPose* const pExpectedPose = pPose;
+
+    SkinComponentStorage Storage;
+    Storage.Assign({pSkin, pPose});
+    pSkin.Release();
+    pPose.Release();
+    pSkeleton.Release();
+
+    EXPECT_EQ(Storage.Component.pSkin, pExpectedSkin);
+    EXPECT_EQ(Storage.Component.pPose, pExpectedPose);
+
+    SkinComponentStorage MoveConstructed{std::move(Storage)};
+    EXPECT_EQ(Storage.Component.pSkin, nullptr);
+    EXPECT_EQ(Storage.Component.pPose, nullptr);
+    EXPECT_EQ(MoveConstructed.Component.pSkin, pExpectedSkin);
+    EXPECT_EQ(MoveConstructed.Component.pPose, pExpectedPose);
+
+    SkinComponentStorage MoveAssigned;
+    MoveAssigned = std::move(MoveConstructed);
+    EXPECT_EQ(MoveConstructed.Component.pSkin, nullptr);
+    EXPECT_EQ(MoveConstructed.Component.pPose, nullptr);
+    EXPECT_EQ(MoveAssigned.Component.pSkin, pExpectedSkin);
+    EXPECT_EQ(MoveAssigned.Component.pPose, pExpectedPose);
+}
+
+TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             Joint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
+    RefCntAutoPtr<IRadientSkinAsset>     pSkin     = CreateSkin(*pAssetManager, pSkeleton);
+    RefCntAutoPtr<IRadientSkeletonPose>  pPose;
+    RefCntAutoPtr<IRadientSkeletonPose>  pUpdatedPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSkeleton->CreatePose(pUpdatedPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSkeletonJointDesc             OtherJoint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton = CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
+    RefCntAutoPtr<IRadientSkeletonPose>  pOtherPose;
+    ASSERT_EQ(pOtherSkeleton->CreatePose(pOtherPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetSkin(InvalidRadientEntityID, {pSkin, pPose}), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.SetSkin(Entity, {}), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.SetSkin(Entity, {pSkin, pOtherPose}), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    Bool HasSkin = True;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasSkin, False);
+
+    const RadientSceneRevisions RevisionsBeforeSkin = State.GetSceneRevisions();
+    ASSERT_EQ(State.SetSkin(Entity, {pSkin, pPose}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetSceneRevisions().Drawables, RevisionsBeforeSkin.Drawables + 1);
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasSkin, True);
+
+    Uint32 PendingChangeCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&PendingChangeCount](const RadientSceneState::RenderableMeshChange&,
+                              const RadientSceneState::RenderableMesh*) {
+            ++PendingChangeCount;
+        });
+    EXPECT_EQ(PendingChangeCount, 0u);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://skinned");
+    ASSERT_EQ(State.SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 AddedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++AddedCount;
+            EXPECT_EQ(Change.Entity, Entity);
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Added);
+            ASSERT_NE(pRenderable, nullptr);
+            ASSERT_NE(pRenderable->pSkin, nullptr);
+            EXPECT_EQ(pRenderable->pSkin->pSkin, pSkin.RawPtr());
+            EXPECT_EQ(pRenderable->pSkin->pPose, pPose.RawPtr());
+        });
+    EXPECT_EQ(AddedCount, 1u);
+    State.ClearRenderableMeshChanges();
+
+    const RadientSceneRevisions RevisionsBeforeNoChange = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetSkin(Entity, {pSkin, pPose}), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetSceneRevisions(), RevisionsBeforeNoChange);
+
+    ASSERT_EQ(State.SetSkin(Entity, {pSkin, pUpdatedPose}), RADIENT_STATUS_OK);
+    Uint32 UpdatedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++UpdatedCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            ASSERT_NE(pRenderable->pSkin, nullptr);
+            EXPECT_EQ(pRenderable->pSkin->pPose, pUpdatedPose.RawPtr());
+        });
+    EXPECT_EQ(UpdatedCount, 1u);
+    State.ClearRenderableMeshChanges();
+
+    ASSERT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasSkin, False);
+
+    Uint32 RemovedSkinCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++RemovedSkinCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            EXPECT_EQ(pRenderable->pSkin, nullptr);
+        });
+    EXPECT_EQ(RemovedSkinCount, 1u);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_NO_CHANGE);
+}
 
 TEST(RadientSkinningTest, SkeletonCopiesHierarchyAndSupportsArbitraryJointOrder)
 {

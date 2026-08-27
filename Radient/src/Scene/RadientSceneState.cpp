@@ -63,6 +63,7 @@ bool IsBuiltInComponentType(const RadientComponentTypeID ComponentType)
             ComponentType == RADIENT_COMPONENT_TYPE_MESH ||
             ComponentType == RADIENT_COMPONENT_TYPE_MESH_RENDERER ||
             ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS ||
+            ComponentType == RADIENT_COMPONENT_TYPE_SKIN ||
             ComponentType == RADIENT_COMPONENT_TYPE_LIGHT);
 }
 
@@ -355,6 +356,10 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
             HasComponent = m_Registry.all_of<MaterialBindingsStorage>(E) ? True : False;
             break;
 
+        case RADIENT_COMPONENT_TYPE_SKIN:
+            HasComponent = m_Registry.all_of<SkinComponentStorage>(E) ? True : False;
+            break;
+
         case RADIENT_COMPONENT_TYPE_LIGHT:
             HasComponent = m_Registry.all_of<RadientLightComponent>(E) ? True : False;
             break;
@@ -598,6 +603,33 @@ RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientM
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::SetSkin(RadientEntityID Entity, const RadientSkinComponent& Skin)
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (Skin.pSkin == nullptr ||
+        Skin.pPose == nullptr ||
+        Skin.pSkin->GetDesc().pSkeleton != Skin.pPose->GetSkeleton())
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    SkinComponentStorage* pExistingSkin = m_Registry.try_get<SkinComponentStorage>(E);
+    if (pExistingSkin != nullptr && pExistingSkin->Component == Skin)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    SkinComponentStorage& SkinStorage = pExistingSkin != nullptr ?
+        *pExistingSkin :
+        m_Registry.emplace<SkinComponentStorage>(E);
+
+    SkinStorage.Assign(Skin);
+    Touch(CHANGE_FLAG_DRAWABLES);
+    RecordRenderableMeshUpdated(E);
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
 {
     const entt::entity E = FindEntity(Entity);
@@ -740,6 +772,11 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
             ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
+        case RADIENT_COMPONENT_TYPE_SKIN:
+            Removed     = m_Registry.remove<SkinComponentStorage>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_DRAWABLES;
+            break;
+
         case RADIENT_COMPONENT_TYPE_LIGHT:
             if (m_Registry.all_of<RadientLightComponent>(E))
             {
@@ -784,7 +821,8 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
         Touch(ChangeFlags);
         if (ChangeFlags == CHANGE_FLAG_DRAWABLES)
         {
-            if (ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS)
+            if (ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS ||
+                ComponentType == RADIENT_COMPONENT_TYPE_SKIN)
                 RecordRenderableMeshUpdated(E);
             else
                 UpdateRenderableMeshState(E);
@@ -957,7 +995,8 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
             (HadRenderableChange ||
              m_Registry.all_of<MeshComponentStorage>(Current) ||
              m_Registry.all_of<RadientMeshRendererComponent>(Current) ||
-             m_Registry.all_of<MaterialBindingsStorage>(Current)))
+             m_Registry.all_of<MaterialBindingsStorage>(Current) ||
+             m_Registry.all_of<SkinComponentStorage>(Current)))
         {
             ChangeFlags |= CHANGE_FLAG_DRAWABLES;
         }

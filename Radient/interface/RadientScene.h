@@ -36,6 +36,8 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
+typedef struct IRadientSkeletonPose IRadientSkeletonPose;
+
 // clang-format off
 
 /// Entity flags.
@@ -223,6 +225,31 @@ struct RadientMeshComponent
 #endif
 };
 typedef struct RadientMeshComponent RadientMeshComponent;
+
+
+/// Skin component that associates a mesh with its skin and current skeleton pose.
+struct RadientSkinComponent
+{
+    /// Skin asset. The scene retains a strong reference.
+    IRadientSkinAsset* pSkin DEFAULT_INITIALIZER(nullptr);
+
+    /// Current skeleton pose. The scene retains a strong reference. The pose
+    /// and skin must reference the same skeleton.
+    IRadientSkeletonPose* pPose DEFAULT_INITIALIZER(nullptr);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientSkinComponent& Rhs) const
+    {
+        return pSkin == Rhs.pSkin && pPose == Rhs.pPose;
+    }
+
+    bool operator!=(const RadientSkinComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientSkinComponent RadientSkinComponent;
 
 
 /// Mesh renderer component.

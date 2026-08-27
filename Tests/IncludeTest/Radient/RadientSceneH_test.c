@@ -96,6 +96,16 @@ void RadientScene_C_UseMaterialBindingsComponent(void)
     (void)Bindings;
 }
 
+void RadientScene_C_UseSkinComponent(void)
+{
+    RadientSkinComponent Skin = {0};
+
+    Skin.pSkin = 0;
+    Skin.pPose = 0;
+
+    (void)Skin;
+}
+
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID              Entity          = 0;
