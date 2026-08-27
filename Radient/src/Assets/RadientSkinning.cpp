@@ -31,14 +31,18 @@
 #include "RadientSkinning.h"
 
 #include "DebugUtilities.hpp"
+#include "EngineMemory.h"
+#include "FixedLinearAllocator.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "STDAllocator.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -195,6 +199,12 @@ struct AnimationTimeRange
     Float32 End   = -std::numeric_limits<Float32>::infinity();
 };
 
+struct JointAnimationStart
+{
+    Float32 StartTime  = std::numeric_limits<Float32>::infinity();
+    Uint32  JointIndex = 0;
+};
+
 AnimationTimeRange GetAnimationTrackTimeRange(const RadientSkeletonAnimationTrackDesc& Track) noexcept
 {
     AnimationTimeRange Range;
@@ -210,6 +220,33 @@ AnimationTimeRange GetAnimationTrackTimeRange(const RadientSkeletonAnimationTrac
     IncludeCurve(Track.Rotation);
     IncludeCurve(Track.Scale);
     return Range;
+}
+
+template <typename ValueType>
+void AddAnimationCurveSpace(FixedLinearAllocator&            Allocator,
+                            const RadientAnimationCurveDesc& Curve) noexcept
+{
+    if (Curve.KeyframeCount == 0)
+        return;
+
+    Allocator.AddSpace<Float32>(Curve.KeyframeCount);
+    Allocator.AddSpace<ValueType>(GetAnimationCurveValueCount(Curve));
+}
+
+template <typename ValueType>
+void CopyAnimationCurve(FixedLinearAllocator&            Writer,
+                        const RadientAnimationCurveDesc& SrcCurve,
+                        RadientAnimationCurveDesc&       DstCurve)
+{
+    DstCurve.Interpolation = SrcCurve.Interpolation;
+    DstCurve.KeyframeCount = SrcCurve.KeyframeCount;
+    if (SrcCurve.KeyframeCount == 0)
+        return;
+
+    DstCurve.pTimes  = Writer.CopyArray(SrcCurve.pTimes, SrcCurve.KeyframeCount);
+    DstCurve.pValues = Writer.CopyArray(
+        static_cast<const ValueType*>(SrcCurve.pValues),
+        GetAnimationCurveValueCount(SrcCurve));
 }
 
 template <typename ValueType>
@@ -372,6 +409,91 @@ struct SkeletonPoseState
     bool                          GlobalTransformsDirty = false;
 };
 
+using PackedMemory = std::unique_ptr<void, STDDeleterRawMem<void>>;
+
+class PackedSkeletonData final
+{
+public:
+    PackedSkeletonData(const RadientSkeletonDesc& Desc,
+                       const std::vector<Uint32>& EvaluationOrder)
+    {
+        const Char* const Name = Desc.Name != nullptr ? Desc.Name : "";
+        const std::string URI  = MakeRadientAssetURI("skeleton");
+
+        FixedLinearAllocator Allocator{GetRawAllocator()};
+        Allocator.AddSpaceForString(URI.c_str());
+        Allocator.AddSpaceForString(Name);
+        Allocator.AddSpace<RadientSkeletonJointDesc>(Desc.JointCount);
+        Allocator.AddSpace<Uint32>(Desc.JointCount);
+        for (Uint32 JointIndex = 0; JointIndex < Desc.JointCount; ++JointIndex)
+        {
+            if (Desc.pJoints[JointIndex].Name != nullptr)
+            {
+                Allocator.AddSpaceForString(Desc.pJoints[JointIndex].Name);
+            }
+            else
+            {
+                const std::string JointName = std::string{"Joint "} + std::to_string(JointIndex);
+                Allocator.AddSpaceForString(JointName.c_str());
+            }
+        }
+
+        Allocator.Reserve();
+        const size_t MemorySize = Allocator.GetReservedSize();
+        m_Memory                = PackedMemory{Allocator.ReleaseOwnership(), STDDeleterRawMem<void>{GetRawAllocator()}};
+
+        FixedLinearAllocator Writer{m_Memory.get(), MemorySize};
+        m_Reference.URI = Writer.CopyString(URI);
+        m_Desc.Name     = Writer.CopyString(Name);
+
+        RadientSkeletonJointDesc* const pJoints =
+            Writer.ConstructArray<RadientSkeletonJointDesc>(Desc.JointCount);
+        VERIFY_EXPR(EvaluationOrder.size() == Desc.JointCount);
+        m_pEvaluationOrder = Writer.CopyArray(EvaluationOrder.data(), Desc.JointCount);
+        for (Uint32 JointIndex = 0; JointIndex < Desc.JointCount; ++JointIndex)
+        {
+            pJoints[JointIndex] = Desc.pJoints[JointIndex];
+            if (Desc.pJoints[JointIndex].Name != nullptr)
+            {
+                pJoints[JointIndex].Name = Writer.CopyString(Desc.pJoints[JointIndex].Name);
+            }
+            else
+            {
+                const std::string JointName = std::string{"Joint "} + std::to_string(JointIndex);
+                pJoints[JointIndex].Name     = Writer.CopyString(JointName);
+            }
+            pJoints[JointIndex].LocalRestTransform =
+                RadientMath::NormalizeTransform(Desc.pJoints[JointIndex].LocalRestTransform);
+        }
+
+        m_Reference.Version = 1;
+        m_Desc.pJoints      = pJoints;
+        m_Desc.JointCount   = Desc.JointCount;
+        VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
+    }
+
+    const RadientAssetReference& GetReference() const noexcept
+    {
+        return m_Reference;
+    }
+
+    const RadientSkeletonDesc& GetDesc() const noexcept
+    {
+        return m_Desc;
+    }
+
+    const Uint32* GetEvaluationOrder() const noexcept
+    {
+        return m_pEvaluationOrder;
+    }
+
+private:
+    PackedMemory          m_Memory;
+    RadientAssetReference m_Reference;
+    RadientSkeletonDesc   m_Desc;
+    const Uint32*         m_pEvaluationOrder = nullptr;
+};
+
 class RadientSkeletonAssetImpl final : public ObjectBase<IRadientSkeletonAsset>
 {
 public:
@@ -379,36 +501,10 @@ public:
 
     RadientSkeletonAssetImpl(IReferenceCounters*        pRefCounters,
                              const RadientSkeletonDesc& Desc,
-                             std::vector<Uint32>&&      EvaluationOrder) :
+                             const std::vector<Uint32>& EvaluationOrder) :
         TBase{pRefCounters},
-        m_URI{MakeRadientAssetURI("skeleton")},
-        m_Name{Desc.Name != nullptr ? Desc.Name : ""},
-        m_EvaluationOrder{std::move(EvaluationOrder)}
-    {
-        m_Reference.URI     = m_URI.c_str();
-        m_Reference.Version = 1;
-
-        m_JointNames.resize(Desc.JointCount);
-        m_Joints.resize(Desc.JointCount);
-        for (Uint32 JointIndex = 0; JointIndex < Desc.JointCount; ++JointIndex)
-        {
-            if (Desc.pJoints[JointIndex].Name != nullptr)
-                m_JointNames[JointIndex] = Desc.pJoints[JointIndex].Name;
-            else
-                m_JointNames[JointIndex] = std::string{"Joint "} + std::to_string(JointIndex);
-        }
-
-        for (Uint32 JointIndex = 0; JointIndex < Desc.JointCount; ++JointIndex)
-        {
-            m_Joints[JointIndex]                    = Desc.pJoints[JointIndex];
-            m_Joints[JointIndex].Name               = m_JointNames[JointIndex].c_str();
-            m_Joints[JointIndex].LocalRestTransform = RadientMath::NormalizeTransform(Desc.pJoints[JointIndex].LocalRestTransform);
-        }
-
-        m_Desc.Name       = m_Name.c_str();
-        m_Desc.pJoints    = m_Joints.data();
-        m_Desc.JointCount = static_cast<Uint32>(m_Joints.size());
-    }
+        m_Data{Desc, EvaluationOrder}
+    {}
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
@@ -429,7 +525,7 @@ public:
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
-        return m_Reference;
+        return m_Data.GetReference();
     }
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
@@ -439,29 +535,63 @@ public:
 
     virtual const RadientSkeletonDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        return m_Desc;
+        return m_Data.GetDesc();
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreatePose(IRadientSkeletonPose** ppPose) override final;
 
-    const std::vector<RadientSkeletonJointDesc>& GetJoints() const noexcept
+    const Uint32* GetEvaluationOrder() const noexcept
     {
-        return m_Joints;
-    }
-
-    const std::vector<Uint32>& GetEvaluationOrder() const noexcept
-    {
-        return m_EvaluationOrder;
+        return m_Data.GetEvaluationOrder();
     }
 
 private:
-    const std::string                     m_URI;
-    RadientAssetReference                 m_Reference;
-    const std::string                     m_Name;
-    std::vector<std::string>              m_JointNames;
-    std::vector<RadientSkeletonJointDesc> m_Joints;
-    RadientSkeletonDesc                   m_Desc;
-    const std::vector<Uint32>             m_EvaluationOrder;
+    PackedSkeletonData m_Data;
+};
+
+class PackedSkinData final
+{
+public:
+    explicit PackedSkinData(const RadientSkinDesc& Desc) :
+        m_pSkeleton{Desc.pSkeleton}
+    {
+        const Char* const Name = Desc.Name != nullptr ? Desc.Name : "";
+        const std::string URI  = MakeRadientAssetURI("skin");
+
+        FixedLinearAllocator Allocator{GetRawAllocator()};
+        Allocator.AddSpaceForString(URI.c_str());
+        Allocator.AddSpaceForString(Name);
+        Allocator.AddSpace<RadientSkinJointBindingDesc>(Desc.JointCount);
+
+        Allocator.Reserve();
+        const size_t MemorySize = Allocator.GetReservedSize();
+        m_Memory                = PackedMemory{Allocator.ReleaseOwnership(), STDDeleterRawMem<void>{GetRawAllocator()}};
+
+        FixedLinearAllocator Writer{m_Memory.get(), MemorySize};
+        m_Reference.URI     = Writer.CopyString(URI);
+        m_Reference.Version = 1;
+        m_Desc.Name         = Writer.CopyString(Name);
+        m_Desc.pSkeleton    = m_pSkeleton;
+        m_Desc.pJoints      = Writer.CopyArray(Desc.pJoints, Desc.JointCount);
+        m_Desc.JointCount   = Desc.JointCount;
+        VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
+    }
+
+    const RadientAssetReference& GetReference() const noexcept
+    {
+        return m_Reference;
+    }
+
+    const RadientSkinDesc& GetDesc() const noexcept
+    {
+        return m_Desc;
+    }
+
+private:
+    RefCntAutoPtr<IRadientSkeletonAsset> m_pSkeleton;
+    PackedMemory                         m_Memory;
+    RadientAssetReference                m_Reference;
+    RadientSkinDesc                      m_Desc;
 };
 
 class RadientSkinAssetImpl final : public ObjectBase<IRadientSkinAsset>
@@ -472,19 +602,8 @@ public:
     RadientSkinAssetImpl(IReferenceCounters*    pRefCounters,
                          const RadientSkinDesc& Desc) :
         TBase{pRefCounters},
-        m_URI{MakeRadientAssetURI("skin")},
-        m_Name{Desc.Name != nullptr ? Desc.Name : ""},
-        m_pSkeleton{Desc.pSkeleton},
-        m_Joints{Desc.pJoints, Desc.pJoints + Desc.JointCount}
-    {
-        m_Reference.URI     = m_URI.c_str();
-        m_Reference.Version = 1;
-
-        m_Desc.Name       = m_Name.c_str();
-        m_Desc.pSkeleton  = m_pSkeleton;
-        m_Desc.pJoints    = m_Joints.data();
-        m_Desc.JointCount = static_cast<Uint32>(m_Joints.size());
-    }
+        m_Data{Desc}
+    {}
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
@@ -505,7 +624,7 @@ public:
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
-        return m_Reference;
+        return m_Data.GetReference();
     }
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
@@ -515,16 +634,112 @@ public:
 
     virtual const RadientSkinDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        return m_Desc;
+        return m_Data.GetDesc();
     }
 
 private:
-    const std::string                              m_URI;
-    RadientAssetReference                          m_Reference;
-    const std::string                              m_Name;
-    const RefCntAutoPtr<IRadientSkeletonAsset>     m_pSkeleton;
-    const std::vector<RadientSkinJointBindingDesc> m_Joints;
-    RadientSkinDesc                                m_Desc;
+    PackedSkinData m_Data;
+};
+
+class PackedSkeletonAnimationData final
+{
+public:
+    explicit PackedSkeletonAnimationData(const RadientSkeletonAnimationDesc& Desc) :
+        m_pSkeleton{Desc.pSkeleton}
+    {
+        const Char* const Name               = Desc.Name != nullptr ? Desc.Name : "";
+        const std::string URI                = MakeRadientAssetURI("skeleton-animation");
+        const Uint32      SkeletonJointCount = m_pSkeleton->GetDesc().JointCount;
+
+        FixedLinearAllocator Allocator{GetRawAllocator()};
+        Allocator.AddSpaceForString(URI.c_str());
+        Allocator.AddSpaceForString(Name);
+        Allocator.AddSpace<RadientSkeletonAnimationTrackDesc>(Desc.TrackCount);
+        Allocator.AddSpace<AnimationTimeRange>(Desc.TrackCount);
+        Allocator.AddSpace<JointAnimationStart>(SkeletonJointCount);
+        for (Uint32 TrackIndex = 0; TrackIndex < Desc.TrackCount; ++TrackIndex)
+        {
+            const RadientSkeletonAnimationTrackDesc& Track = Desc.pTracks[TrackIndex];
+            AddAnimationCurveSpace<RadientFloat3>(Allocator, Track.Translation);
+            AddAnimationCurveSpace<RadientQuaternion>(Allocator, Track.Rotation);
+            AddAnimationCurveSpace<RadientFloat3>(Allocator, Track.Scale);
+        }
+
+        Allocator.Reserve();
+        const size_t MemorySize = Allocator.GetReservedSize();
+        m_Memory                = PackedMemory{Allocator.ReleaseOwnership(), STDDeleterRawMem<void>{GetRawAllocator()}};
+
+        FixedLinearAllocator Writer{m_Memory.get(), MemorySize};
+        m_Reference.URI = Writer.CopyString(URI);
+        m_Desc.Name     = Writer.CopyString(Name);
+
+        RadientSkeletonAnimationTrackDesc* const pTracks =
+            Writer.ConstructArray<RadientSkeletonAnimationTrackDesc>(Desc.TrackCount);
+        m_pTrackTimeRanges   = Writer.ConstructArray<AnimationTimeRange>(Desc.TrackCount);
+        m_pJointsByStartTime = Writer.ConstructArray<JointAnimationStart>(SkeletonJointCount);
+        for (Uint32 JointIndex = 0; JointIndex < SkeletonJointCount; ++JointIndex)
+            m_pJointsByStartTime[JointIndex].JointIndex = JointIndex;
+
+        for (Uint32 TrackIndex = 0; TrackIndex < Desc.TrackCount; ++TrackIndex)
+        {
+            const RadientSkeletonAnimationTrackDesc& SrcTrack = Desc.pTracks[TrackIndex];
+            RadientSkeletonAnimationTrackDesc&       DstTrack = pTracks[TrackIndex];
+            DstTrack.SkeletonJointIndex                       = SrcTrack.SkeletonJointIndex;
+            CopyAnimationCurve<RadientFloat3>(Writer, SrcTrack.Translation, DstTrack.Translation);
+            CopyAnimationCurve<RadientQuaternion>(Writer, SrcTrack.Rotation, DstTrack.Rotation);
+            CopyAnimationCurve<RadientFloat3>(Writer, SrcTrack.Scale, DstTrack.Scale);
+
+            const AnimationTimeRange TimeRange                          = GetAnimationTrackTimeRange(DstTrack);
+            m_pTrackTimeRanges[TrackIndex]                              = TimeRange;
+            m_pJointsByStartTime[DstTrack.SkeletonJointIndex].StartTime = TimeRange.Start;
+        }
+
+        std::sort(m_pJointsByStartTime, m_pJointsByStartTime + SkeletonJointCount,
+                  [](const JointAnimationStart& Lhs, const JointAnimationStart& Rhs) {
+                      return Lhs.StartTime < Rhs.StartTime ||
+                          (Lhs.StartTime == Rhs.StartTime && Lhs.JointIndex < Rhs.JointIndex);
+                  });
+
+        m_Reference.Version = 1;
+        m_Desc.pSkeleton    = m_pSkeleton;
+        m_Desc.pTracks      = pTracks;
+        m_Desc.TrackCount   = Desc.TrackCount;
+        m_Desc.Duration     = Desc.Duration;
+        VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
+    }
+
+    const RadientAssetReference& GetReference() const noexcept
+    {
+        return m_Reference;
+    }
+
+    const RadientSkeletonAnimationDesc& GetDesc() const noexcept
+    {
+        return m_Desc;
+    }
+
+    IRadientSkeletonAsset* GetSkeleton() const noexcept
+    {
+        return m_pSkeleton;
+    }
+
+    const AnimationTimeRange* GetTrackTimeRanges() const noexcept
+    {
+        return m_pTrackTimeRanges;
+    }
+
+    const JointAnimationStart* GetJointsByStartTime() const noexcept
+    {
+        return m_pJointsByStartTime;
+    }
+
+private:
+    RefCntAutoPtr<IRadientSkeletonAsset> m_pSkeleton;
+    PackedMemory                         m_Memory;
+    RadientAssetReference                m_Reference;
+    RadientSkeletonAnimationDesc         m_Desc;
+    AnimationTimeRange*                  m_pTrackTimeRanges   = nullptr;
+    JointAnimationStart*                 m_pJointsByStartTime = nullptr;
 };
 
 class RadientSkeletonAnimationAssetImpl final : public ObjectBase<IRadientSkeletonAnimationAsset>
@@ -535,63 +750,8 @@ public:
     RadientSkeletonAnimationAssetImpl(IReferenceCounters*                 pRefCounters,
                                       const RadientSkeletonAnimationDesc& Desc) :
         TBase{pRefCounters},
-        m_URI{MakeRadientAssetURI("skeleton-animation")},
-        m_Name{Desc.Name != nullptr ? Desc.Name : ""},
-        m_pSkeleton{Desc.pSkeleton}
+        m_Data{Desc}
     {
-        m_Reference.URI     = m_URI.c_str();
-        m_Reference.Version = 1;
-
-        size_t TimeCount          = 0;
-        size_t VectorValueCount   = 0;
-        size_t RotationValueCount = 0;
-        for (Uint32 TrackIndex = 0; TrackIndex < Desc.TrackCount; ++TrackIndex)
-        {
-            const RadientSkeletonAnimationTrackDesc& Track = Desc.pTracks[TrackIndex];
-            TimeCount += Track.Translation.KeyframeCount;
-            TimeCount += Track.Rotation.KeyframeCount;
-            TimeCount += Track.Scale.KeyframeCount;
-            VectorValueCount += GetAnimationCurveValueCount(Track.Translation);
-            VectorValueCount += GetAnimationCurveValueCount(Track.Scale);
-            RotationValueCount += GetAnimationCurveValueCount(Track.Rotation);
-        }
-
-        m_Times.reserve(TimeCount);
-        m_VectorValues.reserve(VectorValueCount);
-        m_RotationValues.reserve(RotationValueCount);
-        m_Tracks.resize(Desc.TrackCount);
-        m_TrackTimeRanges.resize(Desc.TrackCount);
-
-        const Uint32 SkeletonJointCount = m_pSkeleton->GetDesc().JointCount;
-        m_JointsByStartTime.resize(SkeletonJointCount);
-        for (Uint32 JointIndex = 0; JointIndex < SkeletonJointCount; ++JointIndex)
-            m_JointsByStartTime[JointIndex].JointIndex = JointIndex;
-
-        for (Uint32 TrackIndex = 0; TrackIndex < Desc.TrackCount; ++TrackIndex)
-        {
-            const RadientSkeletonAnimationTrackDesc& SrcTrack = Desc.pTracks[TrackIndex];
-            RadientSkeletonAnimationTrackDesc&       DstTrack = m_Tracks[TrackIndex];
-            DstTrack.SkeletonJointIndex                       = SrcTrack.SkeletonJointIndex;
-            CopyCurve(SrcTrack.Translation, DstTrack.Translation, m_VectorValues);
-            CopyCurve(SrcTrack.Rotation, DstTrack.Rotation, m_RotationValues);
-            CopyCurve(SrcTrack.Scale, DstTrack.Scale, m_VectorValues);
-
-            const AnimationTimeRange TimeRange                         = GetAnimationTrackTimeRange(DstTrack);
-            m_TrackTimeRanges[TrackIndex]                              = TimeRange;
-            m_JointsByStartTime[DstTrack.SkeletonJointIndex].StartTime = TimeRange.Start;
-        }
-
-        std::sort(m_JointsByStartTime.begin(), m_JointsByStartTime.end(),
-                  [](const JointAnimationStart& Lhs, const JointAnimationStart& Rhs) {
-                      return Lhs.StartTime < Rhs.StartTime ||
-                          (Lhs.StartTime == Rhs.StartTime && Lhs.JointIndex < Rhs.JointIndex);
-                  });
-
-        m_Desc.Name       = m_Name.c_str();
-        m_Desc.pSkeleton  = m_pSkeleton;
-        m_Desc.pTracks    = m_Tracks.data();
-        m_Desc.TrackCount = static_cast<Uint32>(m_Tracks.size());
-        m_Desc.Duration   = Desc.Duration;
     }
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
@@ -613,7 +773,7 @@ public:
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
     {
-        return m_Reference;
+        return m_Data.GetReference();
     }
 
     virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override final
@@ -623,7 +783,7 @@ public:
 
     virtual const RadientSkeletonAnimationDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
-        return m_Desc;
+        return m_Data.GetDesc();
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Evaluate(Float64               Time,
@@ -631,45 +791,7 @@ public:
                                                        Bool                  UpdateGlobalTransforms) const override final;
 
 private:
-    struct JointAnimationStart
-    {
-        Float32 StartTime  = std::numeric_limits<Float32>::infinity();
-        Uint32  JointIndex = 0;
-    };
-
-    template <typename ValueType>
-    void CopyCurve(const RadientAnimationCurveDesc& SrcCurve,
-                   RadientAnimationCurveDesc&       DstCurve,
-                   std::vector<ValueType>&          Values)
-    {
-        DstCurve.Interpolation = SrcCurve.Interpolation;
-        DstCurve.KeyframeCount = SrcCurve.KeyframeCount;
-        if (SrcCurve.KeyframeCount == 0)
-            return;
-
-        const size_t TimeOffset = m_Times.size();
-        m_Times.insert(m_Times.end(), SrcCurve.pTimes, SrcCurve.pTimes + SrcCurve.KeyframeCount);
-        DstCurve.pTimes = m_Times.data() + TimeOffset;
-
-        const size_t     ValueOffset = Values.size();
-        const size_t     ValueCount  = GetAnimationCurveValueCount(SrcCurve);
-        const ValueType* pValues     = static_cast<const ValueType*>(SrcCurve.pValues);
-        Values.insert(Values.end(), pValues, pValues + ValueCount);
-        DstCurve.pValues = Values.data() + ValueOffset;
-    }
-
-private:
-    const std::string                              m_URI;
-    RadientAssetReference                          m_Reference;
-    const std::string                              m_Name;
-    const RefCntAutoPtr<IRadientSkeletonAsset>     m_pSkeleton;
-    std::vector<Float32>                           m_Times;
-    std::vector<RadientFloat3>                     m_VectorValues;
-    std::vector<RadientQuaternion>                 m_RotationValues;
-    std::vector<RadientSkeletonAnimationTrackDesc> m_Tracks;
-    std::vector<AnimationTimeRange>                m_TrackTimeRanges;
-    std::vector<JointAnimationStart>               m_JointsByStartTime;
-    RadientSkeletonAnimationDesc                   m_Desc;
+    PackedSkeletonAnimationData m_Data;
 };
 
 class RadientSkeletonPoseImpl final : public ObjectBase<IRadientSkeletonPose>
@@ -684,9 +806,10 @@ public:
     {
         VERIFY_EXPR(m_pSkeleton != nullptr);
 
-        m_State.LocalTransforms.reserve(m_pSkeleton->GetJoints().size());
-        for (const RadientSkeletonJointDesc& Joint : m_pSkeleton->GetJoints())
-            m_State.LocalTransforms.push_back(Joint.LocalRestTransform);
+        const RadientSkeletonDesc& SkeletonDesc = m_pSkeleton->GetDesc();
+        m_State.LocalTransforms.reserve(SkeletonDesc.JointCount);
+        for (Uint32 JointIndex = 0; JointIndex < SkeletonDesc.JointCount; ++JointIndex)
+            m_State.LocalTransforms.push_back(SkeletonDesc.pJoints[JointIndex].LocalRestTransform);
         m_State.GlobalMatrices.resize(m_State.LocalTransforms.size());
         ComputeGlobalMatrices();
     }
@@ -792,11 +915,13 @@ private:
     void ComputeGlobalMatrices() noexcept
     {
         VERIFY_EXPR(m_State.GlobalMatrices.size() == m_State.LocalTransforms.size());
-        const std::vector<RadientSkeletonJointDesc>& Joints = m_pSkeleton->GetJoints();
-        for (Uint32 JointIndex : m_pSkeleton->GetEvaluationOrder())
+        const RadientSkeletonDesc& SkeletonDesc     = m_pSkeleton->GetDesc();
+        const Uint32* const        pEvaluationOrder = m_pSkeleton->GetEvaluationOrder();
+        for (Uint32 OrderIndex = 0; OrderIndex < SkeletonDesc.JointCount; ++OrderIndex)
         {
+            const Uint32           JointIndex  = pEvaluationOrder[OrderIndex];
             const RadientMatrix4x4 LocalMatrix = RadientMath::TransformToMatrix(m_State.LocalTransforms[JointIndex]);
-            const Uint32           ParentIndex = Joints[JointIndex].ParentJointIndex;
+            const Uint32           ParentIndex = SkeletonDesc.pJoints[JointIndex].ParentJointIndex;
             m_State.GlobalMatrices[JointIndex] = ParentIndex == InvalidRadientJointIndex ?
                 LocalMatrix :
                 RadientMath::MultiplyMatrices(LocalMatrix, m_State.GlobalMatrices[ParentIndex]);
@@ -846,15 +971,14 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResetToRestPose() override final
     {
-        const std::vector<RadientSkeletonJointDesc>& Joints =
-            static_cast<RadientSkeletonAssetImpl*>(m_pPose->GetSkeleton())->GetJoints();
+        const RadientSkeletonDesc& SkeletonDesc = m_pPose->GetSkeleton()->GetDesc();
 
         bool Changed = false;
-        for (Uint32 JointIndex = 0; JointIndex < Joints.size(); ++JointIndex)
+        for (Uint32 JointIndex = 0; JointIndex < SkeletonDesc.JointCount; ++JointIndex)
         {
-            if (m_LocalTransforms[JointIndex] != Joints[JointIndex].LocalRestTransform)
+            if (m_LocalTransforms[JointIndex] != SkeletonDesc.pJoints[JointIndex].LocalRestTransform)
             {
-                m_LocalTransforms[JointIndex] = Joints[JointIndex].LocalRestTransform;
+                m_LocalTransforms[JointIndex] = SkeletonDesc.pJoints[JointIndex].LocalRestTransform;
                 Changed                       = true;
             }
         }
@@ -1006,7 +1130,10 @@ RADIENT_STATUS RadientSkeletonAnimationAssetImpl::Evaluate(Float64              
 {
     if (pPose == nullptr || !std::isfinite(Time))
         return RADIENT_STATUS_INVALID_ARGUMENT;
-    if (pPose->GetSkeleton() != m_pSkeleton.RawPtr())
+
+    const RadientSkeletonAnimationDesc& AnimationDesc = m_Data.GetDesc();
+    IRadientSkeletonAsset* const        pSkeleton     = m_Data.GetSkeleton();
+    if (pPose->GetSkeleton() != pSkeleton)
     {
         LOG_ERROR_MESSAGE("Skeleton animation and target pose use different skeletons");
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1020,28 +1147,32 @@ RADIENT_STATUS RadientSkeletonAnimationAssetImpl::Evaluate(Float64              
     }
 
     std::vector<RadientTransform>& LocalTransforms = pPoseImpl->m_State.LocalTransforms;
-    const RadientSkeletonDesc&     SkeletonDesc    = m_pSkeleton->GetDesc();
+    const RadientSkeletonDesc&     SkeletonDesc    = pSkeleton->GetDesc();
     VERIFY_EXPR(LocalTransforms.size() == SkeletonDesc.JointCount);
-    const Float32 ClampedTime = static_cast<Float32>(std::clamp(Time, 0.0, static_cast<Float64>(m_Desc.Duration)));
+    const Float32 ClampedTime = static_cast<Float32>(std::clamp(Time, 0.0, static_cast<Float64>(AnimationDesc.Duration)));
 
-    const auto FirstNotStarted = std::upper_bound(
-        m_JointsByStartTime.begin(), m_JointsByStartTime.end(), ClampedTime,
+    const JointAnimationStart* const pJointsByStartTime = m_Data.GetJointsByStartTime();
+    const auto                       FirstNotStarted    = std::upper_bound(
+        pJointsByStartTime, pJointsByStartTime + SkeletonDesc.JointCount, ClampedTime,
         [](Float32 Time, const JointAnimationStart& Joint) {
             return Time < Joint.StartTime;
         });
-    for (auto JointIt = FirstNotStarted; JointIt != m_JointsByStartTime.end(); ++JointIt)
+    for (auto JointIt = FirstNotStarted;
+         JointIt != pJointsByStartTime + SkeletonDesc.JointCount;
+         ++JointIt)
     {
         LocalTransforms[JointIt->JointIndex] =
             SkeletonDesc.pJoints[JointIt->JointIndex].LocalRestTransform;
     }
 
-    for (size_t TrackIndex = 0; TrackIndex < m_Tracks.size(); ++TrackIndex)
+    const AnimationTimeRange* const pTrackTimeRanges = m_Data.GetTrackTimeRanges();
+    for (Uint32 TrackIndex = 0; TrackIndex < AnimationDesc.TrackCount; ++TrackIndex)
     {
-        const AnimationTimeRange& TimeRange = m_TrackTimeRanges[TrackIndex];
+        const AnimationTimeRange& TimeRange = pTrackTimeRanges[TrackIndex];
         if (ClampedTime < TimeRange.Start || ClampedTime > TimeRange.End)
             continue;
 
-        const RadientSkeletonAnimationTrackDesc& Track     = m_Tracks[TrackIndex];
+        const RadientSkeletonAnimationTrackDesc& Track     = AnimationDesc.pTracks[TrackIndex];
         RadientTransform                         Transform = SkeletonDesc.pJoints[Track.SkeletonJointIndex].LocalRestTransform;
         Transform.Position                                 = EvaluateAnimationCurve(Track.Translation, ClampedTime, Transform.Position);
         Transform.Rotation                                 = EvaluateAnimationCurve(Track.Rotation, ClampedTime, Transform.Rotation);
@@ -1076,7 +1207,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateSkeleton(const RadientSkeletonDesc
             return ValidationStatus;
 
         RefCntAutoPtr<RadientSkeletonAssetImpl> pSkeleton{
-            MakeNewRCObj<RadientSkeletonAssetImpl>()(SkeletonDesc, std::move(EvaluationOrder))};
+            MakeNewRCObj<RadientSkeletonAssetImpl>()(SkeletonDesc, EvaluationOrder)};
         *ppSkeleton = pSkeleton.Detach();
         return RADIENT_STATUS_OK;
     }
