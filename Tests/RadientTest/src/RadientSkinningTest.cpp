@@ -96,6 +96,28 @@ RefCntAutoPtr<IRadientSkinAsset> CreateSkin(RadientAssetManagerImpl& AssetManage
     return pSkin;
 }
 
+void ExpectInvalidSkeleton(RadientAssetManagerImpl&   AssetManager,
+                           const RadientSkeletonDesc& Desc,
+                           const char*                ExpectedError)
+{
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
+    TestingEnvironment::ErrorScope       ExpectedErrors{ExpectedError};
+    EXPECT_EQ(AssetManager.CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pSkeleton);
+}
+
+void ExpectInvalidSkin(RadientAssetManagerImpl& AssetManager,
+                       const RadientSkinDesc&   Desc,
+                       const char*              ExpectedError)
+{
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    TestingEnvironment::ErrorScope   ExpectedErrors{ExpectedError};
+    EXPECT_EQ(AssetManager.CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pSkin);
+}
+
 void ExpectInvalidAnimation(RadientAssetManagerImpl&            AssetManager,
                             const RadientSkeletonAnimationDesc& Desc,
                             const char*                         ExpectedError)
@@ -105,6 +127,105 @@ void ExpectInvalidAnimation(RadientAssetManagerImpl&            AssetManager,
     EXPECT_EQ(AssetManager.CreateSkeletonAnimation(Desc, pAnimation.GetAddressOfEmpty()),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pAnimation);
+}
+
+class RadientSkinningAnimationValidationTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        pAssetManager = CreateAssetManager();
+        ASSERT_NE(pAssetManager, nullptr);
+
+        RadientSkeletonJointDesc Joint;
+        pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
+        ASSERT_NE(pSkeleton, nullptr);
+
+        Track.SkeletonJointIndex        = 0;
+        Track.Translation.Interpolation = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+        Track.Translation.pTimes        = Times.data();
+        Track.Translation.pValues       = Values.data();
+        Track.Translation.KeyframeCount = static_cast<Uint32>(Times.size());
+
+        Desc.pSkeleton  = pSkeleton;
+        Desc.pTracks    = &Track;
+        Desc.TrackCount = 1;
+        Desc.Duration   = 1.f;
+    }
+
+    void ExpectInvalid(const char* ExpectedError)
+    {
+        ExpectInvalidAnimation(*pAssetManager, Desc, ExpectedError);
+    }
+
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> CreateAnimation()
+    {
+        RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation;
+        EXPECT_EQ(pAssetManager->CreateSkeletonAnimation(Desc, pAnimation.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        return pAnimation;
+    }
+
+    RefCntAutoPtr<IRadientSkeletonPose> CreatePose()
+    {
+        RefCntAutoPtr<IRadientSkeletonPose> pPose;
+        EXPECT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        return pPose;
+    }
+
+protected:
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
+    RefCntAutoPtr<IRadientSkeletonAsset>   pSkeleton;
+    std::array<Float32, 2>                 Times  = {0.f, 1.f};
+    std::array<RadientFloat3, 2>           Values = {RadientFloat3{}, RadientFloat3{1.f, 1.f, 1.f}};
+    RadientSkeletonAnimationTrackDesc      Track;
+    RadientSkeletonAnimationDesc           Desc;
+};
+
+struct PoseSkinningTestObjects
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
+    RefCntAutoPtr<IRadientSkeletonAsset>   pSkeleton;
+    RefCntAutoPtr<IRadientSkinAsset>       pSkin;
+    RefCntAutoPtr<IRadientSkeletonPose>    pPose;
+};
+
+PoseSkinningTestObjects CreatePoseSkinningTestObjects()
+{
+    PoseSkinningTestObjects Objects;
+    Objects.pAssetManager = CreateAssetManager();
+    EXPECT_NE(Objects.pAssetManager, nullptr);
+    if (!Objects.pAssetManager)
+        return Objects;
+
+    std::array<RadientSkeletonJointDesc, 2> Joints{};
+    Joints[0].LocalRestTransform = Translation(1.f);
+    Joints[1].ParentJointIndex   = 0;
+    Joints[1].LocalRestTransform = Translation(2.f);
+    Objects.pSkeleton            = CreateSkeleton(
+        *Objects.pAssetManager, Joints.data(), static_cast<Uint32>(Joints.size()));
+    EXPECT_NE(Objects.pSkeleton, nullptr);
+    if (!Objects.pSkeleton)
+        return Objects;
+
+    std::array<RadientSkinJointBindingDesc, 2> SkinJoints{};
+    SkinJoints[0].SkeletonJointIndex         = 1;
+    SkinJoints[0].InverseBindMatrix.Data[12] = -2.f;
+    SkinJoints[1].SkeletonJointIndex         = 0;
+    SkinJoints[1].InverseBindMatrix.Data[12] = -4.f;
+
+    RadientSkinDesc SkinDesc;
+    SkinDesc.pSkeleton  = Objects.pSkeleton;
+    SkinDesc.pJoints    = SkinJoints.data();
+    SkinDesc.JointCount = static_cast<Uint32>(SkinJoints.size());
+    EXPECT_EQ(Objects.pAssetManager->CreateSkin(SkinDesc, Objects.pSkin.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    if (!Objects.pSkin)
+        return Objects;
+
+    EXPECT_EQ(Objects.pSkeleton->CreatePose(Objects.pPose.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    return Objects;
 }
 
 void ExpectQuaternionNear(const RadientQuaternion& Value,
@@ -173,18 +294,9 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_EQ(pSkeleton->CreatePose(pUpdatedPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RadientSkeletonJointDesc             OtherJoint;
-    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton = CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
-    RefCntAutoPtr<IRadientSkeletonPose>  pOtherPose;
-    ASSERT_EQ(pOtherSkeleton->CreatePose(pOtherPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-
     RadientSceneState State;
     RadientEntityID   Entity = InvalidRadientEntityID;
     ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
-
-    EXPECT_EQ(State.SetSkin(InvalidRadientEntityID, {pSkin, pPose}), RADIENT_STATUS_NOT_FOUND);
-    EXPECT_EQ(State.SetSkin(Entity, {}), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(State.SetSkin(Entity, {pSkin, pOtherPose}), RADIENT_STATUS_INVALID_ARGUMENT);
 
     Bool HasSkin = True;
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
@@ -259,6 +371,51 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_NO_CHANGE);
 }
 
+TEST(RadientSkinningTest, SceneSetSkinRejectsUnknownEntity)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             Joint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
+    RefCntAutoPtr<IRadientSkinAsset>     pSkin     = CreateSkin(*pAssetManager, pSkeleton);
+    RefCntAutoPtr<IRadientSkeletonPose>  pPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSceneState State;
+    EXPECT_EQ(State.SetSkin(InvalidRadientEntityID, {pSkin, pPose}), RADIENT_STATUS_NOT_FOUND);
+}
+
+TEST(RadientSkinningTest, SceneSetSkinRejectsNullResources)
+{
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetSkin(Entity, {}), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientSkinningTest, SceneSetSkinRejectsPoseFromDifferentSkeleton)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             Joint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
+    RefCntAutoPtr<IRadientSkinAsset>     pSkin     = CreateSkin(*pAssetManager, pSkeleton);
+
+    RadientSkeletonJointDesc             OtherJoint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton =
+        CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
+    RefCntAutoPtr<IRadientSkeletonPose> pOtherPose;
+    ASSERT_EQ(pOtherSkeleton->CreatePose(pOtherPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetSkin(Entity, {pSkin, pOtherPose}), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(RadientSkinningTest, SkeletonCopiesHierarchyAndSupportsArbitraryJointOrder)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
@@ -311,57 +468,75 @@ TEST(RadientSkinningTest, SkeletonCopiesHierarchyAndSupportsArbitraryJointOrder)
     EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[2]), 9.f);
 }
 
-TEST(RadientSkinningTest, SkeletonRejectsInvalidHierarchyAndTransforms)
+TEST(RadientSkinningTest, CreateSkeletonRejectsNullOutput)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
     ASSERT_NE(pAssetManager, nullptr);
 
-    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
-    RadientSkeletonDesc                  Desc;
+    RadientSkeletonDesc Desc;
+    EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+}
 
-    EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, nullptr),
-              RADIENT_STATUS_INVALID_ARGUMENT);
+TEST(RadientSkinningTest, CreateSkeletonRejectsEmptyJointArray)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
 
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"at least one joint"};
-        EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+    RadientSkeletonDesc Desc;
+    ExpectInvalidSkeleton(*pAssetManager, Desc, "at least one joint");
+}
 
+TEST(RadientSkinningTest, CreateSkeletonRejectsNullJointData)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonDesc Desc;
     Desc.JointCount = 1;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"joint data must not be null"};
-        EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+    ExpectInvalidSkeleton(*pAssetManager, Desc, "joint data must not be null");
+}
+
+TEST(RadientSkinningTest, CreateSkeletonRejectsInvalidParentJoint)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
 
     std::array<RadientSkeletonJointDesc, 2> Joints{};
+    Joints[0].ParentJointIndex = 2;
+
+    RadientSkeletonDesc Desc;
     Desc.pJoints    = Joints.data();
     Desc.JointCount = static_cast<Uint32>(Joints.size());
+    ExpectInvalidSkeleton(*pAssetManager, Desc, "invalid parent joint");
+}
 
-    Joints[0].ParentJointIndex = 2;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"invalid parent joint"};
-        EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+TEST(RadientSkinningTest, CreateSkeletonRejectsHierarchyCycle)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
 
+    std::array<RadientSkeletonJointDesc, 2> Joints{};
     Joints[0].ParentJointIndex = 1;
     Joints[1].ParentJointIndex = 0;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"contains a cycle"};
-        EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
 
-    Joints[0].ParentJointIndex              = InvalidRadientJointIndex;
-    Joints[1].ParentJointIndex              = InvalidRadientJointIndex;
-    Joints[1].LocalRestTransform.Position.x = std::numeric_limits<Float32>::infinity();
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"non-finite local rest transform"};
-        EXPECT_EQ(pAssetManager->CreateSkeleton(Desc, pSkeleton.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+    RadientSkeletonDesc Desc;
+    Desc.pJoints    = Joints.data();
+    Desc.JointCount = static_cast<Uint32>(Joints.size());
+    ExpectInvalidSkeleton(*pAssetManager, Desc, "contains a cycle");
+}
+
+TEST(RadientSkinningTest, CreateSkeletonRejectsNonFiniteRestTransform)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc Joint;
+    Joint.LocalRestTransform.Position.x = std::numeric_limits<Float32>::infinity();
+
+    RadientSkeletonDesc Desc;
+    Desc.pJoints    = &Joint;
+    Desc.JointCount = 1;
+    ExpectInvalidSkeleton(*pAssetManager, Desc, "non-finite local rest transform");
 }
 
 TEST(RadientSkinningTest, SkinCopiesMappingsAndRetainsSkeleton)
@@ -409,55 +584,90 @@ TEST(RadientSkinningTest, SkinCopiesMappingsAndRetainsSkeleton)
     EXPECT_FLOAT_EQ(StoredDesc.pJoints[0].InverseBindMatrix.Data[12], -2.f);
 }
 
-TEST(RadientSkinningTest, SkinRejectsInvalidMappings)
+TEST(RadientSkinningTest, CreateSkinRejectsNullOutput)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientSkinDesc                  Desc;
-    RefCntAutoPtr<IRadientSkinAsset> pSkin;
-    EXPECT_EQ(pAssetManager->CreateSkin(Desc, nullptr),
-              RADIENT_STATUS_INVALID_ARGUMENT);
+    RadientSkinDesc Desc;
+    EXPECT_EQ(pAssetManager->CreateSkin(Desc, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+}
 
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"must reference a skeleton"};
-        EXPECT_EQ(pAssetManager->CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+TEST(RadientSkinningTest, CreateSkinRejectsNullSkeleton)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkinDesc Desc;
+    ExpectInvalidSkin(*pAssetManager, Desc, "must reference a skeleton");
+}
+
+TEST(RadientSkinningTest, CreateSkinRejectsEmptyJointArray)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
 
     RadientSkeletonJointDesc             SkeletonJoint{};
     RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &SkeletonJoint, 1);
     ASSERT_NE(pSkeleton, nullptr);
+
+    RadientSkinDesc Desc;
     Desc.pSkeleton = pSkeleton;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"at least one joint"};
-        EXPECT_EQ(pAssetManager->CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+    ExpectInvalidSkin(*pAssetManager, Desc, "at least one joint");
+}
+
+TEST(RadientSkinningTest, CreateSkinRejectsNullJointData)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             SkeletonJoint{};
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &SkeletonJoint, 1);
+    ASSERT_NE(pSkeleton, nullptr);
+
+    RadientSkinDesc Desc;
+    Desc.pSkeleton  = pSkeleton;
+    Desc.JointCount = 1;
+    ExpectInvalidSkin(*pAssetManager, Desc, "joint data must not be null");
+}
+
+TEST(RadientSkinningTest, CreateSkinRejectsInvalidSkeletonJoint)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             SkeletonJoint{};
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &SkeletonJoint, 1);
+    ASSERT_NE(pSkeleton, nullptr);
 
     RadientSkinJointBindingDesc SkinJoint{};
-    Desc.JointCount = 1;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"joint data must not be null"};
-        EXPECT_EQ(pAssetManager->CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
-
     SkinJoint.SkeletonJointIndex = 1;
-    Desc.pJoints                 = &SkinJoint;
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"invalid skeleton joint"};
-        EXPECT_EQ(pAssetManager->CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
 
+    RadientSkinDesc Desc;
+    Desc.pSkeleton  = pSkeleton;
+    Desc.pJoints    = &SkinJoint;
+    Desc.JointCount = 1;
+    ExpectInvalidSkin(*pAssetManager, Desc, "invalid skeleton joint");
+}
+
+TEST(RadientSkinningTest, CreateSkinRejectsNonFiniteInverseBindMatrix)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc             SkeletonJoint{};
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &SkeletonJoint, 1);
+    ASSERT_NE(pSkeleton, nullptr);
+
+    RadientSkinJointBindingDesc SkinJoint{};
     SkinJoint.SkeletonJointIndex        = 0;
     SkinJoint.InverseBindMatrix.Data[0] = std::numeric_limits<Float32>::quiet_NaN();
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"non-finite inverse-bind matrix"};
-        EXPECT_EQ(pAssetManager->CreateSkin(Desc, pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_INVALID_ARGUMENT);
-    }
+
+    RadientSkinDesc Desc;
+    Desc.pSkeleton  = pSkeleton;
+    Desc.pJoints    = &SkinJoint;
+    Desc.JointCount = 1;
+    ExpectInvalidSkin(*pAssetManager, Desc, "non-finite inverse-bind matrix");
 }
 
 TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
@@ -531,78 +741,91 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
 
 TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
 {
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
-    ASSERT_NE(pAssetManager, nullptr);
-
-    std::array<RadientSkeletonJointDesc, 2> Joints{};
-    Joints[0].LocalRestTransform = Translation(1.f);
-    Joints[1].ParentJointIndex   = 0;
-    Joints[1].LocalRestTransform = Translation(2.f);
-
-    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton =
-        CreateSkeleton(*pAssetManager, Joints.data(), static_cast<Uint32>(Joints.size()));
-    ASSERT_NE(pSkeleton, nullptr);
-
-    std::array<RadientSkinJointBindingDesc, 2> SkinJoints{};
-    SkinJoints[0].SkeletonJointIndex         = 1;
-    SkinJoints[0].InverseBindMatrix.Data[12] = -2.f;
-    SkinJoints[1].SkeletonJointIndex         = 0;
-    SkinJoints[1].InverseBindMatrix.Data[12] = -4.f;
-
-    RadientSkinDesc SkinDesc;
-    SkinDesc.pSkeleton  = pSkeleton;
-    SkinDesc.pJoints    = SkinJoints.data();
-    SkinDesc.JointCount = static_cast<Uint32>(SkinJoints.size());
-
-    RefCntAutoPtr<IRadientSkinAsset> pSkin;
-    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pSkin, nullptr);
-
-    RefCntAutoPtr<IRadientSkeletonPose> pPose;
-    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_NE(pPose, nullptr);
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
 
     std::array<RadientMatrix4x4, 2> SkinningMatrices{};
-    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data()), RADIENT_STATUS_OK);
+    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data()),
+              RADIENT_STATUS_OK);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 1.f);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), -3.f);
 
-    EXPECT_EQ(pPose->ComputeSkinningMatrices(nullptr, SkinningMatrices.data()), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pPose->ComputeSkinningMatrices(pSkin, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
-    ASSERT_EQ(pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     const std::array UpdatedTransforms{
         Translation(10.f),
         Translation(20.f),
     };
     ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 2, UpdatedTransforms.data()), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
-    EXPECT_EQ(pPose->GetVersion(), 1u);
+
+    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data()),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(Objects.pPose->GetVersion(), 2u);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 28.f);
+    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 6.f);
+    EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsNullSkin)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(nullptr, SkinningMatrices.data()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsNullOutput)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, nullptr),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsSkinFromDifferentSkeleton)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
 
     RadientSkeletonJointDesc             OtherJoint;
     RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton =
-        CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
-    RefCntAutoPtr<IRadientSkinAsset> pOtherSkin = CreateSkin(*pAssetManager, pOtherSkeleton, "Other skin");
+        CreateSkeleton(*Objects.pAssetManager, &OtherJoint, 1, "Other skeleton");
+    RefCntAutoPtr<IRadientSkinAsset> pOtherSkin =
+        CreateSkin(*Objects.pAssetManager, pOtherSkeleton, "Other skin");
     ASSERT_NE(pOtherSkin, nullptr);
 
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
     SkinningMatrices[0].Data[12] = 100.f;
     SkinningMatrices[1].Data[12] = 200.f;
-    EXPECT_EQ(pPose->ComputeSkinningMatrices(pOtherSkin, SkinningMatrices.data()), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pPose->GetVersion(), 1u);
+    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(pOtherSkin, SkinningMatrices.data()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
+}
 
-    EXPECT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data(), False), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(pPose->GetVersion(), 1u);
+TEST(RadientSkinningTest, ComputeSkinningMatricesDefersDirtyGlobalTransformsWhenUpdateDisabled)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+    ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientTransform UpdatedTransform = Translation(10.f);
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 1, &UpdatedTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
+
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+    SkinningMatrices[0].Data[12] = 100.f;
+    SkinningMatrices[1].Data[12] = 200.f;
+    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data(), False),
+              RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Objects.pPose->GetVersion(), 1u);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
     EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
-
-    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, SkinningMatrices.data()), RADIENT_STATUS_OK);
-    EXPECT_EQ(pPose->GetVersion(), 2u);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 28.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 6.f);
-    EXPECT_EQ(pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientSkinningTest, AnimationCopiesDescriptionAndRetainsSkeleton)
@@ -751,18 +974,6 @@ TEST(RadientSkinningTest, AnimationEvaluatesStepLinearAndCubicCurves)
     EXPECT_EQ(LocalTransforms[0].Position, Translations[1]);
     ExpectQuaternionNear(LocalTransforms[1].Rotation, Rotations[1]);
     EXPECT_EQ(LocalTransforms[2].Scale, (RadientFloat3{3.f, 1.f, 1.f}));
-
-    EXPECT_EQ(pAnimation->Evaluate(0.0, nullptr, True), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pAnimation->Evaluate(std::numeric_limits<Float64>::quiet_NaN(), pPose, True), RADIENT_STATUS_INVALID_ARGUMENT);
-
-    RadientSkeletonJointDesc             OtherJoint{};
-    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton = CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other");
-    RefCntAutoPtr<IRadientSkeletonPose>  pOtherPose;
-    ASSERT_EQ(pOtherSkeleton->CreatePose(pOtherPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"use different skeletons"};
-        EXPECT_EQ(pAnimation->Evaluate(0.0, pOtherPose, True), RADIENT_STATUS_INVALID_ARGUMENT);
-    }
 }
 
 TEST(RadientSkinningTest, AnimationOnlyWritesStartedAndActiveTracks)
@@ -845,90 +1056,167 @@ TEST(RadientSkinningTest, AnimationOnlyWritesStartedAndActiveTracks)
     EXPECT_EQ(LocalTransforms[2], Joints[2].LocalRestTransform);
 }
 
-TEST(RadientSkinningTest, AnimationRejectsInvalidDescriptions)
+TEST_F(RadientSkinningAnimationValidationTest, EvaluateRejectsNullPose)
 {
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
-    ASSERT_NE(pAssetManager, nullptr);
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation = CreateAnimation();
+    ASSERT_NE(pAnimation, nullptr);
 
-    RadientSkeletonAnimationDesc Desc;
+    EXPECT_EQ(pAnimation->Evaluate(0.0, nullptr, True), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, EvaluateRejectsNonFiniteTime)
+{
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation = CreateAnimation();
+    RefCntAutoPtr<IRadientSkeletonPose>           pPose      = CreatePose();
+    ASSERT_NE(pAnimation, nullptr);
+    ASSERT_NE(pPose, nullptr);
+
+    EXPECT_EQ(pAnimation->Evaluate(std::numeric_limits<Float64>::quiet_NaN(), pPose, True),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, EvaluateRejectsPoseFromDifferentSkeleton)
+{
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation = CreateAnimation();
+    ASSERT_NE(pAnimation, nullptr);
+
+    RadientSkeletonJointDesc             OtherJoint;
+    RefCntAutoPtr<IRadientSkeletonAsset> pOtherSkeleton =
+        CreateSkeleton(*pAssetManager, &OtherJoint, 1, "Other skeleton");
+    RefCntAutoPtr<IRadientSkeletonPose> pOtherPose;
+    ASSERT_EQ(pOtherSkeleton->CreatePose(pOtherPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    TestingEnvironment::ErrorScope ExpectedErrors{"use different skeletons"};
+    EXPECT_EQ(pAnimation->Evaluate(0.0, pOtherPose, True), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNullOutput)
+{
     EXPECT_EQ(pAssetManager->CreateSkeletonAnimation(Desc, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    ExpectInvalidAnimation(*pAssetManager, Desc, "must reference a skeleton");
+}
 
-    RadientSkeletonJointDesc             Joint{};
-    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton = CreateSkeleton(*pAssetManager, &Joint, 1);
-    ASSERT_NE(pSkeleton, nullptr);
-    Desc.pSkeleton = pSkeleton;
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNullSkeleton)
+{
+    Desc.pSkeleton = nullptr;
+    ExpectInvalid("must reference a skeleton");
+}
 
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNegativeDuration)
+{
     Desc.Duration = -1.f;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "duration must be finite and non-negative");
+    ExpectInvalid("duration must be finite and non-negative");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonFiniteDuration)
+{
     Desc.Duration = std::numeric_limits<Float32>::infinity();
-    ExpectInvalidAnimation(*pAssetManager, Desc, "duration must be finite and non-negative");
-    Desc.Duration   = 1.f;
-    Desc.TrackCount = 1;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "track data must not be null");
+    ExpectInvalid("duration must be finite and non-negative");
+}
 
-    RadientSkeletonAnimationTrackDesc Track;
-    Desc.pTracks = &Track;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "invalid skeleton joint");
-    Track.SkeletonJointIndex = 0;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "does not contain any curves");
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNullTrackData)
+{
+    Desc.pTracks = nullptr;
+    ExpectInvalid("track data must not be null");
+}
 
-    std::array<Float32, 2>       Times  = {0.f, 1.f};
-    std::array<RadientFloat3, 2> Values = {RadientFloat3{0.f, 0.f, 0.f}, RadientFloat3{1.f, 1.f, 1.f}};
-    Track.Translation.pTimes            = Times.data();
-    Track.Translation.pValues           = Values.data();
-    Track.Translation.KeyframeCount     = 2;
+TEST_F(RadientSkinningAnimationValidationTest, RejectsInvalidSkeletonJoint)
+{
+    Track.SkeletonJointIndex = InvalidRadientJointIndex;
+    ExpectInvalid("invalid skeleton joint");
+}
 
-    std::array<RadientSkeletonAnimationTrackDesc, 2> DuplicateTracks = {Track, Track};
-    Desc.pTracks                                                     = DuplicateTracks.data();
-    Desc.TrackCount                                                  = 2;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "duplicate skeleton joint");
-    Desc.pTracks    = &Track;
-    Desc.TrackCount = 1;
+TEST_F(RadientSkinningAnimationValidationTest, RejectsTrackWithoutCurves)
+{
+    Track.Translation = {};
+    ExpectInvalid("does not contain any curves");
+}
 
+TEST_F(RadientSkinningAnimationValidationTest, RejectsDuplicateSkeletonJoint)
+{
+    std::array<RadientSkeletonAnimationTrackDesc, 2> Tracks = {Track, Track};
+    Desc.pTracks                                            = Tracks.data();
+    Desc.TrackCount                                         = static_cast<Uint32>(Tracks.size());
+    ExpectInvalid("duplicate skeleton joint");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsInvalidInterpolationMode)
+{
     Track.Translation.Interpolation = RADIENT_ANIMATION_INTERPOLATION_COUNT;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "invalid interpolation mode");
+    ExpectInvalid("invalid interpolation mode");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsCubicCurveWithTooManyKeyframes)
+{
     Track.Translation.Interpolation = RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE;
     Track.Translation.KeyframeCount = std::numeric_limits<Uint32>::max() / 3u + 1u;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "contains too many keyframes");
-    Track.Translation.Interpolation = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
-    Track.Translation.KeyframeCount = 2;
+    ExpectInvalid("contains too many keyframes");
+}
 
+TEST_F(RadientSkinningAnimationValidationTest, RejectsAbsentCurveWithKeyframeData)
+{
     Track.Translation.KeyframeCount = 0;
-    Track.Translation.pValues       = nullptr;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "must not provide keyframe data");
-    Track.Translation.KeyframeCount = 2;
-    Track.Translation.pTimes        = nullptr;
-    Track.Translation.pValues       = Values.data();
-    ExpectInvalidAnimation(*pAssetManager, Desc, "keyframe times must not be null");
-    Track.Translation.pTimes  = Times.data();
+    ExpectInvalid("must not provide keyframe data");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNullKeyframeTimes)
+{
+    Track.Translation.pTimes = nullptr;
+    ExpectInvalid("keyframe times must not be null");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNullCurveValues)
+{
     Track.Translation.pValues = nullptr;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "curve values must not be null");
-    Track.Translation.pValues = Values.data();
+    ExpectInvalid("curve values must not be null");
+}
 
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNegativeKeyframeTime)
+{
     Times[0] = -1.f;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "outside the clip duration");
-    Times[0] = 0.f;
+    ExpectInvalid("outside the clip duration");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonFiniteKeyframeTime)
+{
     Times[1] = std::numeric_limits<Float32>::quiet_NaN();
-    ExpectInvalidAnimation(*pAssetManager, Desc, "outside the clip duration");
+    ExpectInvalid("outside the clip duration");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsKeyframeAfterClipDuration)
+{
     Times[1] = 2.f;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "outside the clip duration");
+    ExpectInvalid("outside the clip duration");
+}
+
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonIncreasingKeyframeTimes)
+{
     Times[1] = 0.f;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "strictly increasing");
-    Times[1] = 1.f;
+    ExpectInvalid("strictly increasing");
+}
 
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonFiniteCurveValue)
+{
     Values[1].x = std::numeric_limits<Float32>::infinity();
-    ExpectInvalidAnimation(*pAssetManager, Desc, "non-finite value");
-    Values[1].x = 1.f;
+    ExpectInvalid("non-finite value");
+}
 
-    Track.Translation                          = RadientAnimationCurveDesc{};
-    std::array<RadientQuaternion, 2> Rotations = {RadientQuaternion{0.f, 0.f, 0.f, 1.f}, RadientQuaternion{0.f, 0.f, 0.f, 2.f}};
-    Track.Rotation.pTimes                      = Times.data();
-    Track.Rotation.pValues                     = Rotations.data();
-    Track.Rotation.KeyframeCount               = 2;
-    ExpectInvalidAnimation(*pAssetManager, Desc, "is not a normalized rotation");
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonNormalizedRotation)
+{
+    const std::array<RadientQuaternion, 2> Rotations = {
+        RadientQuaternion{0.f, 0.f, 0.f, 1.f},
+        RadientQuaternion{0.f, 0.f, 0.f, 2.f},
+    };
+    Track.Translation            = {};
+    Track.Rotation.Interpolation = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    Track.Rotation.pTimes        = Times.data();
+    Track.Rotation.pValues       = Rotations.data();
+    Track.Rotation.KeyframeCount = static_cast<Uint32>(Rotations.size());
+    ExpectInvalid("is not a normalized rotation");
+}
 
-    std::array<RadientQuaternion, 6> CubicRotations = {{
+TEST_F(RadientSkinningAnimationValidationTest, RejectsNonFiniteCubicRotationValue)
+{
+    std::array<RadientQuaternion, 6> Rotations = {{
         {0.f, 0.f, 0.f, 0.f},
         {0.f, 0.f, 0.f, 1.f},
         {0.f, 0.f, 0.f, 0.f},
@@ -936,8 +1224,11 @@ TEST(RadientSkinningTest, AnimationRejectsInvalidDescriptions)
         {0.f, 0.f, 1.f, 0.f},
         {0.f, 0.f, 0.f, 0.f},
     }};
-    CubicRotations[2].x                             = std::numeric_limits<Float32>::quiet_NaN();
-    Track.Rotation.Interpolation                    = RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE;
-    Track.Rotation.pValues                          = CubicRotations.data();
-    ExpectInvalidAnimation(*pAssetManager, Desc, "non-finite value");
+    Rotations[2].x                             = std::numeric_limits<Float32>::quiet_NaN();
+    Track.Translation                          = {};
+    Track.Rotation.Interpolation               = RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE;
+    Track.Rotation.pTimes                      = Times.data();
+    Track.Rotation.pValues                     = Rotations.data();
+    Track.Rotation.KeyframeCount               = static_cast<Uint32>(Times.size());
+    ExpectInvalid("non-finite value");
 }
