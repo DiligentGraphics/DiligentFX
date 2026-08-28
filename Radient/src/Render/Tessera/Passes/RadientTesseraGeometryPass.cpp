@@ -650,8 +650,8 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     PSOFlags &= m_RenderFlags;
     PSOFlags &= PBR_Renderer::GetEnabledPSOFlags(pRenderer->GetSettings());
 
-    const RadientMaterialSRBLease&                MaterialSRB = TesseraMaterialData.GetMaterialSRB();
-    const RadientTesseraMaterialBufferAllocation& MaterialBufferAllocation =
+    const RadientMaterialSRBLease&        MaterialSRB = TesseraMaterialData.GetMaterialSRB();
+    const RadientTesseraBufferAllocation& MaterialBufferAllocation =
         TesseraMaterialData.GetMaterialBufferAllocation();
     if (!MaterialSRB || !MaterialBufferAllocation)
     {

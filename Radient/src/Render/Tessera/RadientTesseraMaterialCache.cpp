@@ -43,6 +43,25 @@ namespace
 
 std::atomic<UniqueIdentifier> s_NextUniqueID{0};
 
+RadientTesseraBufferSuballocator::CreateInfo GetMaterialBufferCreateInfo(
+    Uint32 ConstantBufferOffsetAlignment,
+    Uint32 MaxMaterialAttribsSize)
+{
+    if (MaxMaterialAttribsSize == 0)
+        LOG_ERROR_AND_THROW("Tessera maximum material attributes size must not be zero");
+
+    RadientTesseraBufferSuballocator::CreateInfo CI;
+    CI.Desc = BufferDesc{
+        "Radient Tessera material attributes buffer",
+        0,
+        BIND_UNIFORM_BUFFER,
+        USAGE_DEFAULT,
+    };
+    CI.AllocationAlignment = ConstantBufferOffsetAlignment;
+    CI.MinimumBoundRange   = MaxMaterialAttribsSize;
+    return CI;
+}
+
 PBR_Renderer::PSO_FLAGS GetSurfaceMaterialPSOFlags(const RadientSurfaceMaterialDefinitionDesc& Desc) noexcept
 {
     if (Desc.ShadingModel == RADIENT_SURFACE_SHADING_MODEL_UNLIT)
@@ -277,7 +296,7 @@ void RadientTesseraMaterialData::PublishSuccess(
     RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
     Bool                                          IsDoubleSided,
     RadientMaterialSRBLease                       MaterialSRB,
-    RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
+    RadientTesseraBufferAllocation                MaterialBufferAllocation,
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept
 {
     VERIFY_EXPR(MaterialSRB);
@@ -304,11 +323,13 @@ struct RadientTesseraMaterialCache::ProcessingContext
     Uint32                                   MaterialTextureSlotCount = 0;
     PBR_Renderer::PSO_FLAGS                  EnabledMaterialPSOFlags  = PBR_Renderer::PSO_FLAG_NONE;
     RadientMaterialDefaultTextureBindings    DefaultTextures;
-    RadientTesseraMaterialBuffer             MaterialBuffer;
+    const Uint32                             MaxMaterialAttribsSize;
+    RadientTesseraBufferSuballocator         MaterialBuffer;
 
     ProcessingContext(Uint32 ConstantBufferOffsetAlignment,
                       Uint32 MaxMaterialAttribsSize) :
-        MaterialBuffer{{ConstantBufferOffsetAlignment, MaxMaterialAttribsSize}}
+        MaxMaterialAttribsSize{MaxMaterialAttribsSize},
+        MaterialBuffer{GetMaterialBufferCreateInfo(ConstantBufferOffsetAlignment, MaxMaterialAttribsSize)}
     {}
 };
 
@@ -406,7 +427,7 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
     const CreateSRBCallbackType&         CreateSRB)
 {
-    const RadientTesseraMaterialBuffer& MaterialBuffer = m_pProcessingContext->MaterialBuffer;
+    const RadientTesseraBufferSuballocator& MaterialBuffer = m_pProcessingContext->MaterialBuffer;
     return Prepare(
         TextureVersion,
         MaterialBuffer.GetVersion(),
@@ -438,7 +459,7 @@ IBuffer* RadientTesseraMaterialCache::GetMaterialBuffer() const noexcept
 
 Uint32 RadientTesseraMaterialCache::GetMaxMaterialAttribsSize() const noexcept
 {
-    return m_pProcessingContext->MaterialBuffer.GetMaxMaterialAttribsSize();
+    return m_pProcessingContext->MaxMaterialAttribsSize;
 }
 
 void RadientTesseraMaterialCache::ProcessMaterial(
@@ -512,7 +533,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
 
     const Uint32 MaterialAttribsSize = pDefinition->GetShaderDataSize();
     if (MaterialAttribsSize == 0 ||
-        MaterialAttribsSize > pContext->MaterialBuffer.GetMaxMaterialAttribsSize())
+        MaterialAttribsSize > pContext->MaxMaterialAttribsSize)
     {
         Data.PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
         return;
@@ -521,7 +542,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     std::vector<Uint8> MaterialAttribs(MaterialAttribsSize);
     pDefinition->WriteShaderData(*pMaterial, MaterialAttribs.data());
 
-    RadientTesseraMaterialBufferAllocation MaterialBufferAllocation =
+    RadientTesseraBufferAllocation MaterialBufferAllocation =
         pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), MaterialAttribsSize);
     if (!MaterialBufferAllocation)
     {

@@ -25,7 +25,7 @@
  */
 
 
-#include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 
 #include "gtest/gtest.h"
 
@@ -38,17 +38,31 @@ using namespace Diligent;
 namespace
 {
 
-RadientTesseraMaterialBuffer MakeMaterialBuffer()
+RadientTesseraBufferSuballocator::CreateInfo MakeBufferCreateInfo()
 {
-    return RadientTesseraMaterialBuffer{{256, 1024}};
+    RadientTesseraBufferSuballocator::CreateInfo CI;
+    CI.Desc = BufferDesc{
+        "Tessera suballocated buffer test",
+        0,
+        BIND_UNIFORM_BUFFER,
+        USAGE_DEFAULT,
+    };
+    CI.AllocationAlignment = 256;
+    CI.MinimumBoundRange   = 1024;
+    return CI;
+}
+
+RadientTesseraBufferSuballocator MakeBuffer()
+{
+    return RadientTesseraBufferSuballocator{MakeBufferCreateInfo()};
 }
 
 } // namespace
 
-TEST(RadientTesseraMaterialBufferTest, AllocatesAlignedPersistentRegions)
+TEST(RadientTesseraBufferSuballocatorTest, AllocatesAlignedPersistentRegions)
 {
-    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
     const auto First  = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
     const auto Second = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
@@ -63,10 +77,10 @@ TEST(RadientTesseraMaterialBufferTest, AllocatesAlignedPersistentRegions)
     EXPECT_EQ(First.GetSize(), Data.size());
 }
 
-TEST(RadientTesseraMaterialBufferTest, ReusesReleasedRegion)
+TEST(RadientTesseraBufferSuballocatorTest, ReusesReleasedRegion)
 {
-    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
     Uint32 ReleasedOffset = 0;
     {
@@ -80,10 +94,10 @@ TEST(RadientTesseraMaterialBufferTest, ReusesReleasedRegion)
     EXPECT_EQ(Reused.GetOffset(), ReleasedOffset);
 }
 
-TEST(RadientTesseraMaterialBufferTest, UpdatesPersistentRegion)
+TEST(RadientTesseraBufferSuballocatorTest, UpdatesPersistentRegion)
 {
-    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
     const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
     ASSERT_TRUE(Allocation);
@@ -107,16 +121,16 @@ TEST(RadientTesseraMaterialBufferTest, UpdatesPersistentRegion)
     EXPECT_TRUE(AllocationAlias.IsUploadedThrough(2));
 }
 
-TEST(RadientTesseraMaterialBufferTest, RejectsInvalidPersistentRegionUpdates)
+TEST(RadientTesseraBufferSuballocatorTest, RejectsInvalidPersistentRegionUpdates)
 {
-    RadientTesseraMaterialBuffer Buffer      = MakeMaterialBuffer();
-    RadientTesseraMaterialBuffer OtherBuffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer      = MakeBuffer();
+    RadientTesseraBufferSuballocator OtherBuffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
     const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
     ASSERT_TRUE(Allocation);
 
-    RadientTesseraMaterialBufferAllocation EmptyAllocation;
+    RadientTesseraBufferAllocation EmptyAllocation;
     EXPECT_EQ(Buffer.Update(EmptyAllocation, 0, Data.data(), 1),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Buffer.Update(Allocation, 0, nullptr, 1),
@@ -140,10 +154,10 @@ TEST(RadientTesseraMaterialBufferTest, RejectsInvalidPersistentRegionUpdates)
     EXPECT_TRUE(Allocation.IsUploadedThrough(2));
 }
 
-TEST(RadientTesseraMaterialBufferTest, IgnoresEmptyPersistentRegionUpdates)
+TEST(RadientTesseraBufferSuballocatorTest, IgnoresEmptyPersistentRegionUpdates)
 {
-    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
     const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
     ASSERT_TRUE(Allocation);
@@ -157,14 +171,14 @@ TEST(RadientTesseraMaterialBufferTest, IgnoresEmptyPersistentRegionUpdates)
     EXPECT_TRUE(Allocation.IsUploadedThrough(1));
 }
 
-TEST(RadientTesseraMaterialBufferTest, SupportsConcurrentAllocations)
+TEST(RadientTesseraBufferSuballocatorTest, SupportsConcurrentAllocations)
 {
-    RadientTesseraMaterialBuffer Buffer = MakeMaterialBuffer();
-    const std::array<Uint8, 16>  Data{};
+    RadientTesseraBufferSuballocator Buffer = MakeBuffer();
+    const std::array<Uint8, 16>      Data{};
 
-    constexpr size_t                                                ThreadCount = 16;
-    std::array<RadientTesseraMaterialBufferAllocation, ThreadCount> Allocations;
-    std::vector<std::thread>                                        Threads;
+    constexpr size_t                                        ThreadCount = 16;
+    std::array<RadientTesseraBufferAllocation, ThreadCount> Allocations;
+    std::vector<std::thread>                                Threads;
     Threads.reserve(ThreadCount);
     for (size_t ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
     {

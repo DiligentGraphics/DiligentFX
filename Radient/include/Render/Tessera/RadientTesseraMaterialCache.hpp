@@ -28,7 +28,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Render/RadientMaterialSRBTable.hpp"
-#include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 #include "UniqueIdentifier.hpp"
 #include "WeakValueHashMap.hpp"
 
@@ -75,7 +75,7 @@ public:
         return m_MaterialSRB;
     }
 
-    const RadientTesseraMaterialBufferAllocation& GetMaterialBufferAllocation() const noexcept
+    const RadientTesseraBufferAllocation& GetMaterialBufferAllocation() const noexcept
     {
         return m_MaterialBufferAllocation;
     }
@@ -107,15 +107,15 @@ private:
                         RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
                         Bool                                          IsDoubleSided,
                         RadientMaterialSRBLease                       MaterialSRB,
-                        RadientTesseraMaterialBufferAllocation        MaterialBufferAllocation,
+                        RadientTesseraBufferAllocation                MaterialBufferAllocation,
                         PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept;
 
     void PublishFailure(RADIENT_STATUS Status) noexcept;
 
-    RefCntAutoPtr<IRadientMaterialAsset>   m_pMaterial;
-    RadientMaterialAssetView               m_MaterialView;
-    RadientMaterialSRBLease                m_MaterialSRB;
-    RadientTesseraMaterialBufferAllocation m_MaterialBufferAllocation;
+    RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
+    RadientMaterialAssetView             m_MaterialView;
+    RadientMaterialSRBLease              m_MaterialSRB;
+    RadientTesseraBufferAllocation       m_MaterialBufferAllocation;
 
     const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};

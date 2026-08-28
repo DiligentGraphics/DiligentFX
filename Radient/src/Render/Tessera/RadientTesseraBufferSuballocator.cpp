@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 
 #include "DebugUtilities.hpp"
 #include "DefaultRawMemoryAllocator.hpp"
@@ -42,37 +42,22 @@
 namespace Diligent
 {
 
-namespace
+struct RadientTesseraBufferSuballocatorImpl
 {
-
-constexpr size_t InitialMaterialBufferSize = 64u << 10u;
-
-} // namespace
-
-struct RadientTesseraMaterialBufferImpl
-{
-    RadientTesseraMaterialBufferImpl(Uint32 Alignment, Uint32 MaxAttribsSize) :
-        ConstantBufferOffsetAlignment{Alignment},
-        MaxMaterialAttribsSize{MaxAttribsSize},
+    explicit RadientTesseraBufferSuballocatorImpl(const RadientTesseraBufferSuballocator::CreateInfo& CI) :
+        AllocationAlignment{CI.AllocationAlignment},
+        MinimumBoundRange{CI.MinimumBoundRange},
         RegionManager{VariableSizeAllocationsManager::CreateInfo{
             DefaultRawMemoryAllocator::GetAllocator(),
-            InitialMaterialBufferSize,
+            CI.InitialSize,
             true,
         }},
-        Buffer{nullptr,
-               DynamicBufferCreateInfo{
-                   BufferDesc{
-                       "Radient Tessera material attributes buffer",
-                       0,
-                       BIND_UNIFORM_BUFFER,
-                       USAGE_DEFAULT,
-                   },
-               }}
+        Buffer{nullptr, DynamicBufferCreateInfo{CI.Desc}}
     {}
 
-    ~RadientTesseraMaterialBufferImpl()
+    ~RadientTesseraBufferSuballocatorImpl()
     {
-        VERIFY(RegionManager.GetUsedSize() == 0, "Not all Tessera material buffer regions have been released");
+        VERIFY(RegionManager.GetUsedSize() == 0, "Not all Tessera buffer regions have been released");
     }
 
     void Free(VariableSizeAllocationsManager::Allocation&& Allocation)
@@ -81,8 +66,8 @@ struct RadientTesseraMaterialBufferImpl
         RegionManager.Free(std::move(Allocation));
     }
 
-    const Uint32 ConstantBufferOffsetAlignment;
-    const Uint32 MaxMaterialAttribsSize;
+    const Uint32 AllocationAlignment;
+    const Uint32 MinimumBoundRange;
 
     mutable std::mutex             Mutex;
     VariableSizeAllocationsManager RegionManager;
@@ -95,14 +80,14 @@ struct RadientTesseraMaterialBufferImpl
     std::atomic<Uint64>            UploadedGeneration{0};
 };
 
-struct RadientTesseraMaterialBufferAllocationState
+struct RadientTesseraBufferAllocationState
 {
-    RadientTesseraMaterialBufferAllocationState(
-        std::shared_ptr<RadientTesseraMaterialBufferImpl> Owner,
-        VariableSizeAllocationsManager::Allocation        Region,
-        Uint32                                            AlignedOffset,
-        Uint32                                            DataSize,
-        Uint64                                            DataGeneration) :
+    RadientTesseraBufferAllocationState(
+        std::shared_ptr<RadientTesseraBufferSuballocatorImpl> Owner,
+        VariableSizeAllocationsManager::Allocation            Region,
+        Uint32                                                AlignedOffset,
+        Uint32                                                DataSize,
+        Uint64                                                DataGeneration) :
         pOwner{std::move(Owner)},
         Allocation{std::move(Region)},
         Offset{AlignedOffset},
@@ -110,60 +95,62 @@ struct RadientTesseraMaterialBufferAllocationState
         Generation{DataGeneration}
     {}
 
-    ~RadientTesseraMaterialBufferAllocationState()
+    ~RadientTesseraBufferAllocationState()
     {
         if (pOwner != nullptr && Allocation.IsValid())
             pOwner->Free(std::move(Allocation));
     }
 
-    std::shared_ptr<RadientTesseraMaterialBufferImpl> pOwner;
-    VariableSizeAllocationsManager::Allocation        Allocation;
-    const Uint32                                      Offset;
-    const Uint32                                      Size;
-    std::atomic<Uint64>                               Generation;
+    std::shared_ptr<RadientTesseraBufferSuballocatorImpl> pOwner;
+    VariableSizeAllocationsManager::Allocation            Allocation;
+    const Uint32                                          Offset;
+    const Uint32                                          Size;
+    std::atomic<Uint64>                                   Generation;
 };
 
-Uint32 RadientTesseraMaterialBufferAllocation::GetOffset() const noexcept
+Uint32 RadientTesseraBufferAllocation::GetOffset() const noexcept
 {
     return m_pState != nullptr ? m_pState->Offset : ~Uint32{0};
 }
 
-Uint32 RadientTesseraMaterialBufferAllocation::GetSize() const noexcept
+Uint32 RadientTesseraBufferAllocation::GetSize() const noexcept
 {
     return m_pState != nullptr ? m_pState->Size : 0;
 }
 
-bool RadientTesseraMaterialBufferAllocation::IsUploadedThrough(Uint64 UploadedGeneration) const noexcept
+bool RadientTesseraBufferAllocation::IsUploadedThrough(Uint64 UploadedGeneration) const noexcept
 {
     return m_pState != nullptr &&
         UploadedGeneration >= m_pState->Generation.load(std::memory_order_acquire);
 }
 
-RadientTesseraMaterialBuffer::RadientTesseraMaterialBuffer(const CreateInfo& CI)
+RadientTesseraBufferSuballocator::RadientTesseraBufferSuballocator(const CreateInfo& CI)
 {
-    if (CI.ConstantBufferOffsetAlignment == 0 || !IsPowerOfTwo(CI.ConstantBufferOffsetAlignment))
-        LOG_ERROR_AND_THROW("Tessera material buffer offset alignment must be a non-zero power of two");
-    if (CI.MaxMaterialAttribsSize == 0)
-        LOG_ERROR_AND_THROW("Tessera maximum material attributes size must not be zero");
+    if (CI.Desc.Size != 0)
+        LOG_ERROR_AND_THROW("Tessera suballocated buffer description size must be zero");
+    if (CI.Desc.Usage != USAGE_DEFAULT)
+        LOG_ERROR_AND_THROW("Tessera suballocated buffer must use USAGE_DEFAULT");
+    if (CI.InitialSize == 0)
+        LOG_ERROR_AND_THROW("Tessera suballocated buffer initial size must not be zero");
+    if (CI.AllocationAlignment == 0 || !IsPowerOfTwo(CI.AllocationAlignment))
+        LOG_ERROR_AND_THROW("Tessera suballocated buffer alignment must be a non-zero power of two");
 
-    m_pImpl = std::make_shared<RadientTesseraMaterialBufferImpl>(
-        CI.ConstantBufferOffsetAlignment,
-        CI.MaxMaterialAttribsSize);
+    m_pImpl = std::make_shared<RadientTesseraBufferSuballocatorImpl>(CI);
 }
 
-RadientTesseraMaterialBuffer::~RadientTesseraMaterialBuffer() = default;
+RadientTesseraBufferSuballocator::~RadientTesseraBufferSuballocator() = default;
 
-RadientTesseraMaterialBufferAllocation RadientTesseraMaterialBuffer::Allocate(
+RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
     const void* pData,
     Uint32      Size)
 {
-    if (pData == nullptr || Size == 0 || Size > m_pImpl->MaxMaterialAttribsSize)
+    if (pData == nullptr || Size == 0)
         return {};
 
     std::lock_guard<std::mutex> Lock{m_pImpl->Mutex};
 
     VariableSizeAllocationsManager::Allocation Allocation =
-        m_pImpl->RegionManager.Allocate(Size, m_pImpl->ConstantBufferOffsetAlignment);
+        m_pImpl->RegionManager.Allocate(Size, m_pImpl->AllocationAlignment);
     while (!Allocation.IsValid())
     {
         const size_t CurrentSize = m_pImpl->RegionManager.GetMaxSize();
@@ -171,22 +158,39 @@ RadientTesseraMaterialBufferAllocation RadientTesseraMaterialBuffer::Allocate(
             return {};
 
         m_pImpl->RegionManager.Extend(CurrentSize);
-        Allocation = m_pImpl->RegionManager.Allocate(Size, m_pImpl->ConstantBufferOffsetAlignment);
+        Allocation = m_pImpl->RegionManager.Allocate(Size, m_pImpl->AllocationAlignment);
     }
 
-    const size_t Offset = AlignUp(Allocation.UnalignedOffset, size_t{m_pImpl->ConstantBufferOffsetAlignment});
-    if (Offset > (std::numeric_limits<Uint32>::max)() ||
-        Offset + Size > (std::numeric_limits<Uint32>::max)())
+    const size_t     Offset           = AlignUp(Allocation.UnalignedOffset, size_t{m_pImpl->AllocationAlignment});
+    constexpr size_t MaxAllocationEnd = (std::numeric_limits<Uint32>::max)();
+    if (Offset > MaxAllocationEnd ||
+        Size > MaxAllocationEnd - Offset)
     {
         m_pImpl->RegionManager.Free(std::move(Allocation));
         return {};
     }
 
-    // Bind each SRB to the maximum material range, so the backing buffer must
-    // reserve that full range after every stable material offset.
+    // A fixed resource binding may expose more bytes than this allocation owns.
+    // Ensure that range exists after every stable allocation offset without
+    // reserving it exclusively in the CPU allocator.
+    const size_t RequiredRange = std::max<size_t>(Size, m_pImpl->MinimumBoundRange);
+    if (RequiredRange > MaxAllocationEnd - Offset)
+    {
+        m_pImpl->RegionManager.Free(std::move(Allocation));
+        return {};
+    }
+
+    const size_t RequiredEnd  = Offset + RequiredRange;
+    const size_t AlignmentPad = m_pImpl->AllocationAlignment - 1u;
+    if (RequiredEnd > MaxAllocationEnd - AlignmentPad)
+    {
+        m_pImpl->RegionManager.Free(std::move(Allocation));
+        return {};
+    }
+
     m_pImpl->RequiredBufferSize = std::max(
         m_pImpl->RequiredBufferSize,
-        AlignUp(Offset + m_pImpl->MaxMaterialAttribsSize, size_t{m_pImpl->ConstantBufferOffsetAlignment}));
+        AlignUp(RequiredEnd, size_t{m_pImpl->AllocationAlignment}));
     if (m_pImpl->Data.size() < m_pImpl->RequiredBufferSize)
         m_pImpl->Data.resize(m_pImpl->RequiredBufferSize);
     std::memcpy(m_pImpl->Data.data() + Offset, pData, Size);
@@ -196,22 +200,22 @@ RadientTesseraMaterialBufferAllocation RadientTesseraMaterialBuffer::Allocate(
 
     const Uint64 Generation = ++m_pImpl->CurrentGeneration;
 
-    auto pState = std::make_shared<RadientTesseraMaterialBufferAllocationState>(
+    auto pState = std::make_shared<RadientTesseraBufferAllocationState>(
         m_pImpl,
         std::move(Allocation),
         static_cast<Uint32>(Offset),
         Size,
         Generation);
-    return RadientTesseraMaterialBufferAllocation{std::move(pState)};
+    return RadientTesseraBufferAllocation{std::move(pState)};
 }
 
-RADIENT_STATUS RadientTesseraMaterialBuffer::Update(
-    const RadientTesseraMaterialBufferAllocation& Allocation,
-    Uint32                                        RelativeOffset,
-    const void*                                   pData,
-    Uint32                                        Size)
+RADIENT_STATUS RadientTesseraBufferSuballocator::Update(
+    const RadientTesseraBufferAllocation& Allocation,
+    Uint32                                RelativeOffset,
+    const void*                           pData,
+    Uint32                                Size)
 {
-    const std::shared_ptr<RadientTesseraMaterialBufferAllocationState>& pState =
+    const std::shared_ptr<RadientTesseraBufferAllocationState>& pState =
         Allocation.m_pState;
     if (pState == nullptr || pState->pOwner != m_pImpl ||
         RelativeOffset > pState->Size)
@@ -239,8 +243,8 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Update(
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
-                                                     IDeviceContext* pContext)
+RADIENT_STATUS RadientTesseraBufferSuballocator::Prepare(IRenderDevice*  pDevice,
+                                                         IDeviceContext* pContext)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -251,7 +255,7 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
     if (m_pImpl->RequiredBufferSize > m_pImpl->Buffer.GetDesc().Size)
     {
         Uint64 NewBufferSize = std::max<Uint64>(m_pImpl->Buffer.GetDesc().Size,
-                                                InitialMaterialBufferSize);
+                                                m_pImpl->RegionManager.GetMaxSize());
         while (NewBufferSize < m_pImpl->RequiredBufferSize)
             NewBufferSize *= 2;
 
@@ -269,7 +273,8 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
     {
         size_t UploadStart = m_pImpl->DirtyRangeStart;
         size_t UploadEnd   = m_pImpl->DirtyRangeEnd;
-        if (pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11)
+        if (pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11 &&
+            (pBuffer->GetDesc().BindFlags & BIND_UNIFORM_BUFFER) != 0)
         {
             // D3D11 does not support partial constant-buffer updates, so the
             // CPU shadow must cover the geometrically overallocated buffer.
@@ -298,24 +303,19 @@ RADIENT_STATUS RadientTesseraMaterialBuffer::Prepare(IRenderDevice*  pDevice,
     return RADIENT_STATUS_OK;
 }
 
-IBuffer* RadientTesseraMaterialBuffer::GetBuffer() const noexcept
+IBuffer* RadientTesseraBufferSuballocator::GetBuffer() const noexcept
 {
     return m_pImpl->Buffer.GetBuffer();
 }
 
-Uint32 RadientTesseraMaterialBuffer::GetVersion() const noexcept
+Uint32 RadientTesseraBufferSuballocator::GetVersion() const noexcept
 {
     return m_pImpl->Buffer.GetVersion();
 }
 
-Uint64 RadientTesseraMaterialBuffer::GetUploadedGeneration() const noexcept
+Uint64 RadientTesseraBufferSuballocator::GetUploadedGeneration() const noexcept
 {
     return m_pImpl->UploadedGeneration.load(std::memory_order_acquire);
-}
-
-Uint32 RadientTesseraMaterialBuffer::GetMaxMaterialAttribsSize() const noexcept
-{
-    return m_pImpl->MaxMaterialAttribsSize;
 }
 
 } // namespace Diligent

@@ -25,7 +25,7 @@
  */
 
 
-#include "Render/Tessera/RadientTesseraMaterialBuffer.hpp"
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 
 #include "GPUTestingEnvironment.hpp"
 #include "gtest/gtest.h"
@@ -38,7 +38,7 @@
 using namespace Diligent;
 using namespace Diligent::Testing;
 
-TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGrowth)
+TEST(RadientTesseraBufferSuballocatorGPUTest, ReservesMinimumBoundRange)
 {
     GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
     IRenderDevice*         pDevice  = pEnv->GetDevice();
@@ -48,13 +48,59 @@ TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGr
 
     GPUTestingEnvironment::ScopedReleaseResources AutoReleaseResources;
 
-    constexpr Uint32             MaxMaterialAttribsSize = 1024;
-    const Uint32                 Alignment              = std::max(pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment, 1u);
-    RadientTesseraMaterialBuffer Buffer{{Alignment, MaxMaterialAttribsSize}};
+    constexpr Uint32 MinimumBoundRange = 1024;
+    const Uint32     Alignment         = std::max(pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment, 1u);
+
+    RadientTesseraBufferSuballocator::CreateInfo BufferCI;
+    BufferCI.Desc = BufferDesc{
+        "Tessera minimum bound range test",
+        0,
+        BIND_UNIFORM_BUFFER,
+        USAGE_DEFAULT,
+    };
+    BufferCI.InitialSize         = Alignment;
+    BufferCI.AllocationAlignment = Alignment;
+    BufferCI.MinimumBoundRange   = MinimumBoundRange;
+    RadientTesseraBufferSuballocator Buffer{BufferCI};
+
+    const std::array<Uint8, 16>          Data{};
+    const RadientTesseraBufferAllocation Allocation =
+        Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    ASSERT_TRUE(Allocation);
+    EXPECT_EQ(Allocation.GetSize(), Data.size());
+
+    ASSERT_EQ(Buffer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+    ASSERT_NE(Buffer.GetBuffer(), nullptr);
+    EXPECT_GE(Buffer.GetBuffer()->GetDesc().Size,
+              Uint64{Allocation.GetOffset()} + MinimumBoundRange);
+}
+
+TEST(RadientTesseraBufferSuballocatorGPUTest, UploadsDataAndPreservesOffsetsAcrossGrowth)
+{
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    GPUTestingEnvironment::ScopedReleaseResources AutoReleaseResources;
+
+    constexpr Uint32                             MaxMaterialAttribsSize = 1024;
+    const Uint32                                 Alignment              = std::max(pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment, 1u);
+    RadientTesseraBufferSuballocator::CreateInfo BufferCI;
+    BufferCI.Desc = BufferDesc{
+        "Tessera suballocated buffer GPU test",
+        0,
+        BIND_UNIFORM_BUFFER,
+        USAGE_DEFAULT,
+    };
+    BufferCI.AllocationAlignment = Alignment;
+    BufferCI.MinimumBoundRange   = MaxMaterialAttribsSize;
+    RadientTesseraBufferSuballocator Buffer{BufferCI};
 
     std::array<Uint8, 32> FirstData;
     FirstData.fill(0x2A);
-    const RadientTesseraMaterialBufferAllocation First =
+    const RadientTesseraBufferAllocation First =
         Buffer.Allocate(FirstData.data(), static_cast<Uint32>(FirstData.size()));
     ASSERT_TRUE(First);
     EXPECT_FALSE(First.IsUploadedThrough(Buffer.GetUploadedGeneration()));
@@ -71,7 +117,7 @@ TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGr
 
     std::array<Uint8, 32> LateData;
     LateData.fill(0x7B);
-    const RadientTesseraMaterialBufferAllocation Late =
+    const RadientTesseraBufferAllocation Late =
         Buffer.Allocate(LateData.data(), static_cast<Uint32>(LateData.size()));
     ASSERT_TRUE(Late);
     ASSERT_LE(Uint64{Late.GetOffset()} + MaxMaterialAttribsSize, InitialBufferSize);
@@ -85,9 +131,9 @@ TEST(RadientTesseraMaterialBufferGPUTest, UploadsDataAndPreservesOffsetsAcrossGr
     EXPECT_GT(UpdatedGeneration, InitialGeneration);
     EXPECT_TRUE(Late.IsUploadedThrough(UpdatedGeneration));
 
-    std::vector<Uint8>                                  LastData(MaxMaterialAttribsSize, 0xA5);
-    const size_t                                        AllocationCount = static_cast<size_t>(InitialBufferSize / MaxMaterialAttribsSize) + 2;
-    std::vector<RadientTesseraMaterialBufferAllocation> Allocations;
+    std::vector<Uint8>                          LastData(MaxMaterialAttribsSize, 0xA5);
+    const size_t                                AllocationCount = static_cast<size_t>(InitialBufferSize / MaxMaterialAttribsSize) + 2;
+    std::vector<RadientTesseraBufferAllocation> Allocations;
     Allocations.reserve(AllocationCount);
     for (size_t Index = 0; Index < AllocationCount; ++Index)
         Allocations.push_back(Buffer.Allocate(LastData.data(), static_cast<Uint32>(LastData.size())));
