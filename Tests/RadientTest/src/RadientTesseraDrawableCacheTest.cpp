@@ -27,6 +27,7 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 #include "Scene/RadientSceneImpl.hpp"
@@ -592,6 +593,24 @@ const RadientDrawableSlot* GetFirstDrawableSlot(const RadientTesseraDrawableCach
         return nullptr;
 
     return Cache.GetDrawableSlot(Items.front().DrawableID);
+}
+
+std::vector<const RadientDrawableSlot*> GetDrawableSlotsForEntity(
+    const RadientTesseraDrawableCache& Cache,
+    RadientEntityID                    Entity)
+{
+    std::vector<const RadientDrawableSlot*> Slots;
+    for (Uint32 AlphaMode = 0; AlphaMode < PBR_Renderer::ALPHA_MODE_NUM_MODES; ++AlphaMode)
+    {
+        const auto& Items = Cache.GetDrawList(static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode)).GetItems();
+        for (const RadientDrawItem& Item : Items)
+        {
+            const RadientDrawableSlot* pSlot = Cache.GetDrawableSlot(Item.DrawableID);
+            if (pSlot != nullptr && pSlot->Entity == Entity)
+                Slots.push_back(pSlot);
+        }
+    }
+    return Slots;
 }
 
 const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientTesseraDrawableCache& Cache,
@@ -1733,6 +1752,154 @@ TEST(RadientTesseraDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables
     EXPECT_EQ(MeshProvider.NumCalls, 0u);
     ExpectDrawableChangeCounts(DrawableCache, 0u, 6u, 0u);
     EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+}
+
+TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-skin", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+
+    const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc SkeletonJoint;
+    RadientSkeletonDesc      SkeletonDesc;
+    SkeletonDesc.Name       = "Drawable cache skeleton";
+    SkeletonDesc.pJoints    = &SkeletonJoint;
+    SkeletonDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
+    ASSERT_EQ(pAssetManager->CreateSkeleton(SkeletonDesc, pSkeleton.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSkinJointBindingDesc SkinJoint;
+    SkinJoint.SkeletonJointIndex = 0;
+    RadientSkinDesc SkinDesc;
+    SkinDesc.Name       = "Drawable cache skin";
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = &SkinJoint;
+    SkinDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetSkin(Entity, {pSkin, pPose}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    ExpectDrawableChangeCounts(DrawableCache, 0u, 0u, 6u);
+
+    std::vector<const RadientDrawableSlot*> Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
+    ASSERT_EQ(Slots.size(), 6u);
+    RadientTesseraSkinData* const pSharedSkinData = Slots.front()->pSkinData;
+    ASSERT_NE(pSharedSkinData, nullptr);
+    EXPECT_EQ(pSharedSkinData->GetSkin(), pSkin.RawPtr());
+    EXPECT_EQ(pSharedSkinData->GetPose(), pPose.RawPtr());
+    for (const RadientDrawableSlot* pSlot : Slots)
+        EXPECT_EQ(pSlot->pSkinData, pSharedSkinData);
+
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    pScene->ClearPendingRenderChanges();
+
+    const RadientEntityID SecondEntity =
+        AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
+    ASSERT_NE(SecondEntity, InvalidRadientEntityID);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pSecondPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pSecondPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetSkin(SecondEntity, {pSkin, pSecondPose}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    // Growing the dense skin list must not invalidate pointers retained by
+    // drawable slots created for existing renderables.
+    Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
+    ASSERT_EQ(Slots.size(), 6u);
+    for (const RadientDrawableSlot* pSlot : Slots)
+        EXPECT_EQ(pSlot->pSkinData, pSharedSkinData);
+
+    std::vector<const RadientDrawableSlot*> SecondSlots =
+        GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(SecondSlots.size(), 6u);
+    RadientTesseraSkinData* const pSecondSkinData = SecondSlots.front()->pSkinData;
+    ASSERT_NE(pSecondSkinData, nullptr);
+    for (const RadientDrawableSlot* pSlot : SecondSlots)
+        EXPECT_EQ(pSlot->pSkinData, pSecondSkinData);
+
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    pScene->ClearPendingRenderChanges();
+
+    // A changed palette must produce OK even when another renderable remains
+    // unchanged.
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pPoseWriter;
+    ASSERT_EQ(pPose->CreateWriter(pPoseWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientTransform UpdatedJointTransform = MakeTranslation(2.f, 0.f, 0.f);
+    ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &UpdatedJointTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pReplacementPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pReplacementPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetSkin(Entity, {pSkin, pReplacementPose}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
+    ASSERT_EQ(Slots.size(), 6u);
+    RadientTesseraSkinData* const pReplacementSkinData = Slots.front()->pSkinData;
+    ASSERT_NE(pReplacementSkinData, nullptr);
+    EXPECT_NE(pReplacementSkinData, pSharedSkinData);
+    EXPECT_EQ(pReplacementSkinData->GetPose(), pReplacementPose.RawPtr());
+    for (const RadientDrawableSlot* pSlot : Slots)
+        EXPECT_EQ(pSlot->pSkinData, pReplacementSkinData);
+    pScene->ClearPendingRenderChanges();
+
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
+    ASSERT_EQ(Slots.size(), 6u);
+    for (const RadientDrawableSlot* pSlot : Slots)
+        EXPECT_EQ(pSlot->pSkinData, nullptr);
+
+    // Removing the first skin swap-moves the second entry in the dense skin
+    // list. Its palette pointer remains stable, and its repaired index must
+    // support both preparation and removal.
+    SecondSlots = GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(SecondSlots.size(), 6u);
+    for (const RadientDrawableSlot* pSlot : SecondSlots)
+        EXPECT_EQ(pSlot->pSkinData, pSecondSkinData);
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pSecondPoseWriter;
+    ASSERT_EQ(pSecondPose->CreateWriter(pSecondPoseWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientTransform SecondUpdatedJointTransform = MakeTranslation(3.f, 0.f, 0.f);
+    ASSERT_EQ(pSecondPoseWriter->SetJointLocalTransforms(0, 1, &SecondUpdatedJointTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondPoseWriter->Commit(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+
+    pScene->ClearPendingRenderChanges();
+    ASSERT_EQ(pWriter->DestroyEntity(SecondEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)

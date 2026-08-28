@@ -30,6 +30,7 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientLightList.hpp"
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
+#include "Render/Tessera/RadientTesseraSkinData.hpp"
 #include "RadientScene.h"
 #include "Scene/RadientSceneState.hpp"
 
@@ -45,6 +46,7 @@
 #endif
 
 #include <deque>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -81,9 +83,11 @@ struct RadientDrawableSlot
     const RadientMeshRendererComponent* pRenderer         = nullptr;
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
+    RadientTesseraSkinData*             pSkinData         = nullptr;
 
-    // RenderableRecord::pMesh keeps the mesh payload alive. MaterialData keeps
-    // the renderer-specific material state and its material asset alive.
+    // RenderableRecord keeps the mesh payload alive. m_SkinnedRenderables
+    // keeps shared skin data alive. MaterialData keeps the renderer-specific
+    // material state and its material asset alive.
     RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
     IVertexPool* pVertexPool = nullptr;
@@ -231,6 +235,11 @@ public:
         return !m_PendingRenderableEntities.empty();
     }
 
+    /// Rebuilds the CPU joint palettes for every skinned renderable whose pose
+    /// version changed. Each renderable is prepared once regardless of how
+    /// many primitive drawable slots reference it.
+    RADIENT_STATUS PrepareSkinningData();
+
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
     {
         if (DrawableID >= m_DrawableSlots.size())
@@ -245,6 +254,8 @@ public:
     }
 
 private:
+    static constexpr size_t InvalidSkinListIndex = ~size_t{0};
+
     struct RenderableRecord
     {
         // Strong mesh asset reference kept while pending or expanded drawables still depend on it.
@@ -255,11 +266,21 @@ private:
         const RadientMatrix4x4*             pWorldMatrix      = nullptr;
         const Bool*                         pEffectiveVisible = nullptr;
 
+        // Identifies the palette shared by every primitive expanded from this
+        // renderable. Drawable slots hold non-owning pointers to the palette.
+        size_t SkinListIndex = InvalidSkinListIndex;
+
         // True while this entity is waiting for its mesh asset to become drawable.
         bool PendingResolution = false;
 
         // Drawable IDs produced from this renderable's mesh primitives.
         std::vector<RadientDrawableID> DrawableIDs;
+    };
+
+    struct SkinnedRenderable
+    {
+        RadientEntityID                         Entity = InvalidRadientEntityID;
+        std::unique_ptr<RadientTesseraSkinData> pSkinData;
     };
 
     struct LightListLocation
@@ -274,6 +295,16 @@ private:
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
     void ResolvePendingRenderableMeshes(
         const RadientTesseraMaterialResolveContext& MaterialResolveContext);
+
+    void UpdateRenderableSkin(RadientEntityID             Entity,
+                              RenderableRecord&           Record,
+                              const RadientSkinComponent* pSkin);
+
+    void RemoveRenderableSkin(RadientEntityID Entity, RenderableRecord& Record);
+
+    RadientTesseraSkinData* GetRenderableSkinData(
+        RadientEntityID         Entity,
+        const RenderableRecord& Record) const;
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
@@ -300,6 +331,11 @@ private:
     using LightMap      = std::unordered_map<RadientEntityID, LightListLocation>;
     RenderableMap m_Renderables;
     LightMap      m_Lights;
+
+    // Dense owning list of renderables that require skin palette preparation.
+    // Each record stores its position so removal is constant-time. Heap-owned
+    // palette objects keep drawable-slot pointers stable as the list moves.
+    std::vector<SkinnedRenderable> m_SkinnedRenderables;
 
     // Renderer-specific material data is retained only while an entity waits
     // for all of its primitive materials to become GPU-ready.

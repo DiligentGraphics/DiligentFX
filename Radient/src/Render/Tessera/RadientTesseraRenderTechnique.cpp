@@ -131,19 +131,30 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
 
     ViewRenderState& ViewState = GetOrCreateViewRenderState(pView);
 
-    RADIENT_STATUS Status = ViewState.FrameTargets.Prepare(Context.pDevice, *ViewDesc.pRenderTarget);
-    if (RADIENT_FAILED(Status) || Context.pDevice == nullptr || Context.pContext == nullptr)
-        return Status;
+    RADIENT_STATUS FrameStatus = ViewState.FrameTargets.Prepare(Context.pDevice, *ViewDesc.pRenderTarget);
+    if (RADIENT_FAILED(FrameStatus) || Context.pDevice == nullptr || Context.pContext == nullptr)
+        return FrameStatus;
 
     SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene, false);
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    Status = m_GeometryRenderer.Prepare(Context.pDevice,
-                                        Context.pContext,
-                                        m_pAssetManager->GetResourceManager());
-    if (RADIENT_FAILED(Status))
-        return Status;
+    const RADIENT_STATUS SkinningStatus = pSceneState->DrawableCache.PrepareSkinningData();
+    if (RADIENT_FAILED(SkinningStatus))
+        return SkinningStatus;
+
+    // NO_CHANGE only describes whether CPU skin palettes were rebuilt. It does
+    // not affect whether the rest of the frame resources are ready.
+    if (SkinningStatus != RADIENT_STATUS_NO_CHANGE)
+        FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
+
+    const RADIENT_STATUS GeometryRendererStatus =
+        m_GeometryRenderer.Prepare(Context.pDevice,
+                                   Context.pContext,
+                                   m_pAssetManager->GetResourceManager());
+    if (RADIENT_FAILED(GeometryRendererStatus))
+        return GeometryRendererStatus;
+    FrameStatus = CombineDependencyStatus(FrameStatus, GeometryRendererStatus);
 
     RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
     if (pPBRRenderer == nullptr || pPBRRenderer->GetFrameAttribsCB() == nullptr)
@@ -153,32 +164,38 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     const bool HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
     if (HasDrawables || HasSkybox)
     {
-        Status = pView->Prepare(*pPBRRenderer, Context.pContext);
-        if (RADIENT_FAILED(Status))
-            return Status;
+        const RADIENT_STATUS ViewStatus = pView->Prepare(*pPBRRenderer, Context.pContext);
+        if (RADIENT_FAILED(ViewStatus))
+            return ViewStatus;
+        FrameStatus = CombineDependencyStatus(FrameStatus, ViewStatus);
     }
 
-    Status = pSceneState->GeometryPass.Prepare(m_GeometryRenderer,
-                                               Context.pDevice,
-                                               Context.pContext,
-                                               pSceneState->DrawableCache,
-                                               ViewState.FrameTargets,
-                                               RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization),
-                                               ViewDesc.EnableIBL);
-    if (RADIENT_FAILED(Status))
-        return Status;
+    const RADIENT_STATUS GeometryPassStatus =
+        pSceneState->GeometryPass.Prepare(m_GeometryRenderer,
+                                          Context.pDevice,
+                                          Context.pContext,
+                                          pSceneState->DrawableCache,
+                                          ViewState.FrameTargets,
+                                          RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization),
+                                          ViewDesc.EnableIBL);
+    if (RADIENT_FAILED(GeometryPassStatus))
+        return GeometryPassStatus;
+    FrameStatus = CombineDependencyStatus(FrameStatus, GeometryPassStatus);
 
-    Status = m_SkyboxPass.Prepare(m_GeometryRenderer, Context.pDevice, ViewState.FrameTargets);
-    if (RADIENT_FAILED(Status))
-        return Status;
+    const RADIENT_STATUS SkyboxStatus =
+        m_SkyboxPass.Prepare(m_GeometryRenderer, Context.pDevice, ViewState.FrameTargets);
+    if (RADIENT_FAILED(SkyboxStatus))
+        return SkyboxStatus;
+    FrameStatus = CombineDependencyStatus(FrameStatus, SkyboxStatus);
 
     RadientTesseraPostProcessPipeline::PrepareInfo PostProcessInfo{ViewState.FrameTargets, ViewDesc};
-    PostProcessInfo.pDevice              = Context.pDevice;
-    PostProcessInfo.pContext             = Context.pContext;
-    PostProcessInfo.FrameIndex           = ViewState.FrameHistory.GetFrameIndex();
-    PostProcessInfo.pFrameAttribsCB      = pPBRRenderer->GetFrameAttribsCB();
-    PostProcessInfo.pPreintegratedGGXSRV = pPBRRenderer->GetPreintegratedGGX_SRV();
-    return ViewState.PostProcessPipeline.Prepare(PostProcessInfo);
+    PostProcessInfo.pDevice                = Context.pDevice;
+    PostProcessInfo.pContext               = Context.pContext;
+    PostProcessInfo.FrameIndex             = ViewState.FrameHistory.GetFrameIndex();
+    PostProcessInfo.pFrameAttribsCB        = pPBRRenderer->GetFrameAttribsCB();
+    PostProcessInfo.pPreintegratedGGXSRV   = pPBRRenderer->GetPreintegratedGGX_SRV();
+    const RADIENT_STATUS PostProcessStatus = ViewState.PostProcessPipeline.Prepare(PostProcessInfo);
+    return CombineDependencyStatus(FrameStatus, PostProcessStatus);
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderContext& Context)
