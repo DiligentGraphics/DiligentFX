@@ -42,6 +42,20 @@
 namespace Diligent
 {
 
+namespace
+{
+
+RADIENT_STATUS CopyUpdateData(void* pDstData, Uint32 Size, void* pUserData)
+{
+    if (pUserData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    std::memcpy(pDstData, pUserData, Size);
+    return RADIENT_STATUS_OK;
+}
+
+} // namespace
+
 struct RadientTesseraBufferSuballocatorImpl
 {
     explicit RadientTesseraBufferSuballocatorImpl(const RadientTesseraBufferSuballocator::CreateInfo& CI) :
@@ -141,10 +155,10 @@ RadientTesseraBufferSuballocator::RadientTesseraBufferSuballocator(const CreateI
 RadientTesseraBufferSuballocator::~RadientTesseraBufferSuballocator() = default;
 
 RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
-    const void* pData,
-    Uint32      Size)
+    Uint32      Size,
+    const void* pInitialData)
 {
-    if (pData == nullptr || Size == 0)
+    if (Size == 0)
         return {};
 
     std::lock_guard<std::mutex> Lock{m_pImpl->Mutex};
@@ -193,12 +207,18 @@ RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
         AlignUp(RequiredEnd, size_t{m_pImpl->AllocationAlignment}));
     if (m_pImpl->Data.size() < m_pImpl->RequiredBufferSize)
         m_pImpl->Data.resize(m_pImpl->RequiredBufferSize);
-    std::memcpy(m_pImpl->Data.data() + Offset, pData, Size);
 
-    m_pImpl->DirtyRangeStart = std::min(m_pImpl->DirtyRangeStart, Offset);
-    m_pImpl->DirtyRangeEnd   = std::max(m_pImpl->DirtyRangeEnd, Offset + Size);
+    // An uninitialized reservation must remain pending for every uploaded
+    // generation until its first successful Update().
+    Uint64 Generation = (std::numeric_limits<Uint64>::max)();
+    if (pInitialData != nullptr)
+    {
+        std::memcpy(m_pImpl->Data.data() + Offset, pInitialData, Size);
 
-    const Uint64 Generation = ++m_pImpl->CurrentGeneration;
+        m_pImpl->DirtyRangeStart = std::min(m_pImpl->DirtyRangeStart, Offset);
+        m_pImpl->DirtyRangeEnd   = std::max(m_pImpl->DirtyRangeEnd, Offset + Size);
+        Generation               = ++m_pImpl->CurrentGeneration;
+    }
 
     auto pState = std::make_shared<RadientTesseraBufferAllocationState>(
         m_pImpl,
@@ -215,6 +235,20 @@ RADIENT_STATUS RadientTesseraBufferSuballocator::Update(
     const void*                           pData,
     Uint32                                Size)
 {
+    return Update(Allocation,
+                  RelativeOffset,
+                  Size,
+                  CopyUpdateData,
+                  const_cast<void*>(pData));
+}
+
+RADIENT_STATUS RadientTesseraBufferSuballocator::Update(
+    const RadientTesseraBufferAllocation& Allocation,
+    Uint32                                RelativeOffset,
+    Uint32                                Size,
+    UpdateCallbackType                    UpdateData,
+    void*                                 pUserData)
+{
     const std::shared_ptr<RadientTesseraBufferAllocationState>& pState =
         Allocation.m_pState;
     if (pState == nullptr || pState->pOwner != m_pImpl ||
@@ -226,14 +260,16 @@ RADIENT_STATUS RadientTesseraBufferSuballocator::Update(
     if (Size == 0)
         return RADIENT_STATUS_OK;
 
-    if (pData == nullptr || Size > pState->Size - RelativeOffset)
+    if (UpdateData == nullptr || Size > pState->Size - RelativeOffset)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     std::lock_guard<std::mutex> Lock{m_pImpl->Mutex};
 
     const size_t BufferOffset = size_t{pState->Offset} + RelativeOffset;
     VERIFY_EXPR(BufferOffset + Size <= m_pImpl->Data.size());
-    std::memcpy(m_pImpl->Data.data() + BufferOffset, pData, Size);
+    const RADIENT_STATUS Status = UpdateData(m_pImpl->Data.data() + BufferOffset, Size, pUserData);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
 
     m_pImpl->DirtyRangeStart = std::min(m_pImpl->DirtyRangeStart, BufferOffset);
     m_pImpl->DirtyRangeEnd   = std::max(m_pImpl->DirtyRangeEnd, BufferOffset + Size);

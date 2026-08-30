@@ -78,6 +78,8 @@ private:
 class RadientTesseraBufferSuballocator final
 {
 public:
+    using UpdateCallbackType = RADIENT_STATUS (*)(void* pData, Uint32 Size, void* pUserData);
+
     struct CreateInfo
     {
         /// Description of the resizable GPU buffer. Size must be zero because
@@ -107,9 +109,11 @@ public:
     RadientTesseraBufferSuballocator& operator=(RadientTesseraBufferSuballocator&&)      = delete;
     // clang-format on
 
-    /// Allocates an aligned region and copies its initial contents into the CPU
-    /// shadow. This method may be called concurrently from worker threads.
-    RadientTesseraBufferAllocation Allocate(const void* pData, Uint32 Size);
+    /// Allocates an aligned region. If pInitialData is not null, Size bytes are
+    /// copied into the CPU shadow. Otherwise, the allocation remains pending
+    /// until Update() populates it. This method may be called concurrently from
+    /// worker threads.
+    RadientTesseraBufferAllocation Allocate(Uint32 Size, const void* pInitialData = nullptr);
 
     /// Replaces a byte range in an existing allocation and marks it for
     /// upload. RelativeOffset is measured from the start of Allocation, not
@@ -121,6 +125,16 @@ public:
                           Uint32                                RelativeOffset,
                           const void*                           pData,
                           Uint32                                Size);
+
+    /// Invokes UpdateData synchronously with direct access to a range in the
+    /// allocation's CPU shadow. The range is marked for upload only when the
+    /// callback returns RADIENT_STATUS_OK. The callback executes while the
+    /// allocator is locked and must not call back into this allocator.
+    RADIENT_STATUS Update(const RadientTesseraBufferAllocation& Allocation,
+                          Uint32                                RelativeOffset,
+                          Uint32                                Size,
+                          UpdateCallbackType                    UpdateData,
+                          void*                                 pUserData = nullptr);
 
     /// Creates or grows the GPU buffer and uploads all dirty regions.
     /// This method must only be called from the render thread.

@@ -30,6 +30,7 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cstring>
 #include <thread>
 #include <vector>
 
@@ -57,6 +58,37 @@ RadientTesseraBufferSuballocator MakeBuffer()
     return RadientTesseraBufferSuballocator{MakeBufferCreateInfo()};
 }
 
+struct DirectUpdateAttribs
+{
+    const Uint8* pExpectedData = nullptr;
+    Uint32       ExpectedSize  = 0;
+    bool         WasCalled     = false;
+};
+
+RADIENT_STATUS WriteDirectUpdate(void* pData, Uint32 Size, void* pUserData)
+{
+    auto& Attribs = *static_cast<DirectUpdateAttribs*>(pUserData);
+    EXPECT_EQ(Size, Attribs.ExpectedSize);
+    if (Size != Attribs.ExpectedSize)
+        return RADIENT_STATUS_FAILED;
+
+    std::memcpy(pData, Attribs.pExpectedData, Size);
+    Attribs.WasCalled = true;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS VerifyDirectUpdate(void* pData, Uint32 Size, void* pUserData)
+{
+    auto& Attribs = *static_cast<DirectUpdateAttribs*>(pUserData);
+    EXPECT_EQ(Size, Attribs.ExpectedSize);
+    if (Size != Attribs.ExpectedSize)
+        return RADIENT_STATUS_FAILED;
+
+    EXPECT_EQ(std::memcmp(pData, Attribs.pExpectedData, Size), 0);
+    Attribs.WasCalled = true;
+    return RADIENT_STATUS_NO_CHANGE;
+}
+
 } // namespace
 
 TEST(RadientTesseraBufferSuballocatorTest, AllocatesAlignedPersistentRegions)
@@ -64,8 +96,8 @@ TEST(RadientTesseraBufferSuballocatorTest, AllocatesAlignedPersistentRegions)
     RadientTesseraBufferSuballocator Buffer = MakeBuffer();
     const std::array<Uint8, 16>      Data{};
 
-    const auto First  = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
-    const auto Second = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    const auto First  = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
+    const auto Second = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
 
     ASSERT_TRUE(First);
     ASSERT_TRUE(Second);
@@ -84,12 +116,12 @@ TEST(RadientTesseraBufferSuballocatorTest, ReusesReleasedRegion)
 
     Uint32 ReleasedOffset = 0;
     {
-        const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+        const auto Allocation = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
         ASSERT_TRUE(Allocation);
         ReleasedOffset = Allocation.GetOffset();
     }
 
-    const auto Reused = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    const auto Reused = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
     ASSERT_TRUE(Reused);
     EXPECT_EQ(Reused.GetOffset(), ReleasedOffset);
 }
@@ -99,7 +131,7 @@ TEST(RadientTesseraBufferSuballocatorTest, UpdatesPersistentRegion)
     RadientTesseraBufferSuballocator Buffer = MakeBuffer();
     const std::array<Uint8, 16>      Data{};
 
-    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    const auto Allocation = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
     ASSERT_TRUE(Allocation);
     const auto AllocationAlias = Allocation;
 
@@ -121,13 +153,44 @@ TEST(RadientTesseraBufferSuballocatorTest, UpdatesPersistentRegion)
     EXPECT_TRUE(AllocationAlias.IsUploadedThrough(2));
 }
 
+TEST(RadientTesseraBufferSuballocatorTest, PopulatesReservedRegionDirectly)
+{
+    RadientTesseraBufferSuballocator Buffer     = MakeBuffer();
+    const auto                       Allocation = Buffer.Allocate(16);
+    ASSERT_TRUE(Allocation);
+    EXPECT_FALSE(Allocation.IsUploadedThrough(Buffer.GetUploadedGeneration()));
+
+    const std::array<Uint8, 8> Data{{1, 2, 3, 4, 5, 6, 7, 8}};
+    DirectUpdateAttribs        WriteAttribs{Data.data(), static_cast<Uint32>(Data.size())};
+    EXPECT_EQ(Buffer.Update(Allocation,
+                            4,
+                            static_cast<Uint32>(Data.size()),
+                            WriteDirectUpdate,
+                            &WriteAttribs),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(WriteAttribs.WasCalled);
+    EXPECT_TRUE(Allocation.IsUploadedThrough(1));
+
+    DirectUpdateAttribs VerifyAttribs{Data.data(), static_cast<Uint32>(Data.size())};
+    EXPECT_EQ(Buffer.Update(Allocation,
+                            4,
+                            static_cast<Uint32>(Data.size()),
+                            VerifyDirectUpdate,
+                            &VerifyAttribs),
+              RADIENT_STATUS_NO_CHANGE);
+    EXPECT_TRUE(VerifyAttribs.WasCalled);
+
+    // A callback that reports no change does not advance the allocation generation.
+    EXPECT_TRUE(Allocation.IsUploadedThrough(1));
+}
+
 TEST(RadientTesseraBufferSuballocatorTest, RejectsInvalidPersistentRegionUpdates)
 {
     RadientTesseraBufferSuballocator Buffer      = MakeBuffer();
     RadientTesseraBufferSuballocator OtherBuffer = MakeBuffer();
     const std::array<Uint8, 16>      Data{};
 
-    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    const auto Allocation = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
     ASSERT_TRUE(Allocation);
 
     RadientTesseraBufferAllocation EmptyAllocation;
@@ -141,6 +204,21 @@ TEST(RadientTesseraBufferSuballocatorTest, RejectsInvalidPersistentRegionUpdates
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(OtherBuffer.Update(Allocation, 0, Data.data(), 1),
               RADIENT_STATUS_INVALID_ARGUMENT);
+
+    DirectUpdateAttribs DirectUpdate{Data.data(), static_cast<Uint32>(Data.size())};
+    EXPECT_EQ(Buffer.Update(EmptyAllocation, 0, 1, WriteDirectUpdate, &DirectUpdate),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Buffer.Update(Allocation, 0, 1, nullptr, &DirectUpdate),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Buffer.Update(Allocation,
+                            Allocation.GetSize(),
+                            1,
+                            WriteDirectUpdate,
+                            &DirectUpdate),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(OtherBuffer.Update(Allocation, 0, 1, WriteDirectUpdate, &DirectUpdate),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(DirectUpdate.WasCalled);
 
     // Rejected updates do not advance the allocation generation.
     EXPECT_TRUE(Allocation.IsUploadedThrough(1));
@@ -159,7 +237,7 @@ TEST(RadientTesseraBufferSuballocatorTest, IgnoresEmptyPersistentRegionUpdates)
     RadientTesseraBufferSuballocator Buffer = MakeBuffer();
     const std::array<Uint8, 16>      Data{};
 
-    const auto Allocation = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+    const auto Allocation = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
     ASSERT_TRUE(Allocation);
 
     EXPECT_EQ(Buffer.Update(Allocation, 0, nullptr, 0), RADIENT_STATUS_OK);
@@ -183,7 +261,7 @@ TEST(RadientTesseraBufferSuballocatorTest, SupportsConcurrentAllocations)
     for (size_t ThreadIndex = 0; ThreadIndex < ThreadCount; ++ThreadIndex)
     {
         Threads.emplace_back([&, ThreadIndex] {
-            Allocations[ThreadIndex] = Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+            Allocations[ThreadIndex] = Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
         });
     }
     for (std::thread& Thread : Threads)

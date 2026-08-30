@@ -543,7 +543,7 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     pDefinition->WriteShaderData(*pMaterial, MaterialAttribs.data());
 
     RadientTesseraBufferAllocation MaterialBufferAllocation =
-        pContext->MaterialBuffer.Allocate(MaterialAttribs.data(), MaterialAttribsSize);
+        pContext->MaterialBuffer.Allocate(MaterialAttribsSize, MaterialAttribs.data());
     if (!MaterialBufferAllocation)
     {
         Data.PublishFailure(RADIENT_STATUS_FAILED);

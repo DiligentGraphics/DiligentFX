@@ -65,7 +65,7 @@ TEST(RadientTesseraBufferSuballocatorGPUTest, ReservesMinimumBoundRange)
 
     const std::array<Uint8, 16>          Data{};
     const RadientTesseraBufferAllocation Allocation =
-        Buffer.Allocate(Data.data(), static_cast<Uint32>(Data.size()));
+        Buffer.Allocate(static_cast<Uint32>(Data.size()), Data.data());
     ASSERT_TRUE(Allocation);
     EXPECT_EQ(Allocation.GetSize(), Data.size());
 
@@ -101,7 +101,7 @@ TEST(RadientTesseraBufferSuballocatorGPUTest, UploadsDataAndPreservesOffsetsAcro
     std::array<Uint8, 32> FirstData;
     FirstData.fill(0x2A);
     const RadientTesseraBufferAllocation First =
-        Buffer.Allocate(FirstData.data(), static_cast<Uint32>(FirstData.size()));
+        Buffer.Allocate(static_cast<Uint32>(FirstData.size()), FirstData.data());
     ASSERT_TRUE(First);
     EXPECT_FALSE(First.IsUploadedThrough(Buffer.GetUploadedGeneration()));
     const Uint32 FirstOffset = First.GetOffset();
@@ -118,7 +118,7 @@ TEST(RadientTesseraBufferSuballocatorGPUTest, UploadsDataAndPreservesOffsetsAcro
     std::array<Uint8, 32> LateData;
     LateData.fill(0x7B);
     const RadientTesseraBufferAllocation Late =
-        Buffer.Allocate(LateData.data(), static_cast<Uint32>(LateData.size()));
+        Buffer.Allocate(static_cast<Uint32>(LateData.size()), LateData.data());
     ASSERT_TRUE(Late);
     ASSERT_LE(Uint64{Late.GetOffset()} + MaxMaterialAttribsSize, InitialBufferSize);
     EXPECT_FALSE(Late.IsUploadedThrough(Buffer.GetUploadedGeneration()));
@@ -136,7 +136,7 @@ TEST(RadientTesseraBufferSuballocatorGPUTest, UploadsDataAndPreservesOffsetsAcro
     std::vector<RadientTesseraBufferAllocation> Allocations;
     Allocations.reserve(AllocationCount);
     for (size_t Index = 0; Index < AllocationCount; ++Index)
-        Allocations.push_back(Buffer.Allocate(LastData.data(), static_cast<Uint32>(LastData.size())));
+        Allocations.push_back(Buffer.Allocate(static_cast<Uint32>(LastData.size()), LastData.data()));
     ASSERT_TRUE(Allocations.back());
     EXPECT_FALSE(Allocations.back().IsUploadedThrough(Buffer.GetUploadedGeneration()));
 
