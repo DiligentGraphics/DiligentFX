@@ -703,7 +703,11 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
-                    void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, !m_Settings.PackMatrixRowMajor, m_Settings.UseSkinPreTransform);
+                    void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData,
+                                                                   AttribsData,
+                                                                   !m_Settings.PackMatrixRowMajor,
+                                                                   m_Settings.UseSkinPreTransform,
+                                                                   m_Settings.VertexPosPackMode);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
@@ -784,7 +788,8 @@ Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* Debu
 void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
                                                         const PBRPrimitiveShaderAttribsData& AttribsData,
                                                         bool                                 TransposeMatrices,
-                                                        bool                                 UseSkinPreTransform)
+                                                        bool                                 UseSkinPreTransform,
+                                                        VERTEX_POS_PACK_MODE                 VertexPosPackMode)
 {
     // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
 
@@ -795,19 +800,23 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        float4x4 NodeMatrix;
     //        float4x4 PrevNodeMatrix; // #if COMPUTE_MOTION_VECTORS
     //
-    //        int   JointCount;
-    //        int   FirstJoint;
-    //        float PosBiasX;
-    //        float PosBiasY;
+    //        struct GLTFNodeSkinningShaderAttribs // #if USE_JOINTS
+    //        {
+    //            int JointCount;
+    //            int FirstJoint;
+    //            int Padding0;
+    //            int Padding1;
     //
-    //        float PosBiasZ;
-    //        float PosScaleX;
-    //        float PosScaleY;
-    //        float PosScaleZ;
-    //
-    //        float4x4 SkinPreTransform;     // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
-    //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+    //            float4x4 PreTransform;     // #if USE_SKIN_PRE_TRANSFORM
+    //            float4x4 PrevPreTransform; // #if USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+    //        } Skinning;
     //    } Transforms;
+    //
+    //    struct PBRVertexPositionUnpackShaderAttribs // #if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
+    //    {
+    //        float4 Bias;
+    //        float4 Scale;
+    //    } PositionUnpack;
     //
     //    float4      FallbackColor;
     //    UserDefined CustomData;
@@ -843,44 +852,55 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
             pDstPtr += sizeof(float4x4);
         }
 
-        WriteValue(static_cast<int>(AttribsData.JointCount));
-        WriteValue(static_cast<int>(AttribsData.FirstJoint));
+        const bool UseJoints = (AttribsData.PSOFlags & PSO_FLAG_USE_JOINTS) != 0;
+        if (UseJoints)
+        {
+            WriteValue(static_cast<int>(AttribsData.JointCount));
+            WriteValue(static_cast<int>(AttribsData.FirstJoint));
+            WriteValue(0);
+            WriteValue(0);
 
+            if (UseSkinPreTransform)
+            {
+                if (AttribsData.SkinPreTransform != nullptr)
+                {
+                    WriteShaderMatrix(pDstPtr, *AttribsData.SkinPreTransform, TransposeMatrices);
+                }
+                else
+                {
+                    UNEXPECTED("Skin pre-transform matrix must not be null");
+                }
+                pDstPtr += sizeof(float4x4);
+
+                if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
+                {
+                    if (AttribsData.PrevSkinPreTransform != nullptr)
+                    {
+                        WriteShaderMatrix(pDstPtr, *AttribsData.PrevSkinPreTransform, TransposeMatrices);
+                    }
+                    else
+                    {
+                        UNEXPECTED("Previous skin pre-transform matrix must not be null");
+                    }
+                    pDstPtr += sizeof(float4x4);
+                }
+            }
+        }
+    }
+
+    if (VertexPosPackMode != VERTEX_POS_PACK_MODE_NONE)
+    {
         const float3& PosBias = AttribsData.PosBias != nullptr ? *AttribsData.PosBias : float3{0, 0, 0};
         WriteValue(PosBias.x);
         WriteValue(PosBias.y);
         WriteValue(PosBias.z);
+        WriteValue(0.f);
 
         const float3& PosScale = AttribsData.PosScale != nullptr ? *AttribsData.PosScale : float3{1, 1, 1};
         WriteValue(PosScale.x);
         WriteValue(PosScale.y);
         WriteValue(PosScale.z);
-
-        if (UseSkinPreTransform && (AttribsData.PSOFlags & PSO_FLAG_USE_JOINTS))
-        {
-            if (AttribsData.SkinPreTransform != nullptr)
-            {
-                WriteShaderMatrix(pDstPtr, *AttribsData.SkinPreTransform, TransposeMatrices);
-            }
-            else
-            {
-                UNEXPECTED("Skin pre-transform matrix must not be null");
-            }
-            pDstPtr += sizeof(float4x4);
-
-            if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
-            {
-                if (AttribsData.PrevSkinPreTransform != nullptr)
-                {
-                    WriteShaderMatrix(pDstPtr, *AttribsData.PrevSkinPreTransform, TransposeMatrices);
-                }
-                else
-                {
-                    UNEXPECTED("Previous skin pre-transform matrix must not be null");
-                }
-                pDstPtr += sizeof(float4x4);
-            }
-        }
+        WriteValue(0.f);
     }
 
     {

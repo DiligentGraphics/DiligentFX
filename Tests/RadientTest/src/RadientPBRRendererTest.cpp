@@ -25,10 +25,12 @@
  */
 
 #include "Render/RadientPBRRenderer.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cstring>
 
 namespace Diligent
 {
@@ -51,6 +53,101 @@ TEST(PBRRendererTest, ControlsSpecularFeature)
                  "SpecularFactor");
     EXPECT_STREQ(PBR_Renderer::GetDebugViewTypeString(PBR_Renderer::DebugViewType::SpecularColorFactor),
                  "SpecularColorFactor");
+}
+
+TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
+{
+    struct LayoutCase
+    {
+        PBR_Renderer::PSO_FLAGS            Flags;
+        PBR_Renderer::VERTEX_POS_PACK_MODE VertexPosPackMode;
+        bool                               UseSkinPreTransform;
+    };
+
+    constexpr std::array Cases{
+        LayoutCase{PBR_Renderer::PSO_FLAG_NONE, PBR_Renderer::VERTEX_POS_PACK_MODE_NONE, false},
+        LayoutCase{PBR_Renderer::PSO_FLAG_USE_JOINTS, PBR_Renderer::VERTEX_POS_PACK_MODE_NONE, false},
+        LayoutCase{PBR_Renderer::PSO_FLAG_NONE, PBR_Renderer::VERTEX_POS_PACK_MODE_64_BIT, false},
+        LayoutCase{PBR_Renderer::PSO_FLAG_USE_JOINTS, PBR_Renderer::VERTEX_POS_PACK_MODE_64_BIT, false},
+        LayoutCase{PBR_Renderer::PSO_FLAG_USE_JOINTS, PBR_Renderer::VERTEX_POS_PACK_MODE_NONE, true},
+        LayoutCase{PBR_Renderer::PSO_FLAG_USE_JOINTS | PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS,
+                   PBR_Renderer::VERTEX_POS_PACK_MODE_64_BIT, true},
+    };
+
+    const float4x4 NodeMatrix{1.f};
+    const float4x4 PrevNodeMatrix{2.f};
+    const float4x4 SkinPreTransform{3.f};
+    const float4x4 PrevSkinPreTransform{4.f};
+    const float3   PosScale{2.f, 3.f, 4.f};
+    const float3   PosBias{5.f, 6.f, 7.f};
+
+    for (const LayoutCase& TestCase : Cases)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(TestCase.Flags));
+        SCOPED_TRACE(static_cast<Uint32>(TestCase.VertexPosPackMode));
+        SCOPED_TRACE(TestCase.UseSkinPreTransform);
+
+        std::array<float4, 32> ShaderData{};
+
+        GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData Attribs;
+        Attribs.PSOFlags             = TestCase.Flags;
+        Attribs.NodeMatrix           = &NodeMatrix;
+        Attribs.PrevNodeMatrix       = &PrevNodeMatrix;
+        Attribs.JointCount           = 7;
+        Attribs.FirstJoint           = 11;
+        Attribs.PosScale             = &PosScale;
+        Attribs.PosBias              = &PosBias;
+        Attribs.SkinPreTransform     = &SkinPreTransform;
+        Attribs.PrevSkinPreTransform = &PrevSkinPreTransform;
+
+        void* const pEnd = GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
+            ShaderData.data(),
+            Attribs,
+            false,
+            TestCase.UseSkinPreTransform,
+            TestCase.VertexPosPackMode);
+
+        const Uint8* const pShaderData  = reinterpret_cast<const Uint8*>(ShaderData.data());
+        Uint32             Offset       = 0;
+        const auto         ExpectMatrix = [&](const float4x4& Expected) {
+            EXPECT_EQ(std::memcmp(pShaderData + Offset, &Expected, sizeof(Expected)), 0);
+            Offset += static_cast<Uint32>(sizeof(Expected));
+        };
+
+        ExpectMatrix(NodeMatrix);
+        if ((TestCase.Flags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+            ExpectMatrix(PrevNodeMatrix);
+
+        if ((TestCase.Flags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0)
+        {
+            std::array<int, 4> JointData{};
+            std::memcpy(JointData.data(), pShaderData + Offset, sizeof(JointData));
+            EXPECT_EQ(JointData, (std::array<int, 4>{7, 11, 0, 0}));
+            Offset += static_cast<Uint32>(sizeof(float4));
+
+            if (TestCase.UseSkinPreTransform)
+            {
+                ExpectMatrix(SkinPreTransform);
+                if ((TestCase.Flags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+                    ExpectMatrix(PrevSkinPreTransform);
+            }
+        }
+
+        if (TestCase.VertexPosPackMode != PBR_Renderer::VERTEX_POS_PACK_MODE_NONE)
+        {
+            std::array<float, 8> PositionData{};
+            std::memcpy(PositionData.data(), pShaderData + Offset, sizeof(PositionData));
+            EXPECT_EQ(PositionData, (std::array<float, 8>{5.f, 6.f, 7.f, 0.f, 2.f, 3.f, 4.f, 0.f}));
+            Offset += static_cast<Uint32>(sizeof(PositionData));
+        }
+
+        std::array<float, 4> FallbackColor{};
+        std::memcpy(FallbackColor.data(), pShaderData + Offset, sizeof(FallbackColor));
+        EXPECT_EQ(FallbackColor, (std::array<float, 4>{1.f, 1.f, 1.f, 1.f}));
+        Offset += static_cast<Uint32>(sizeof(FallbackColor));
+
+        EXPECT_EQ(pEnd, pShaderData + Offset);
+    }
 }
 
 TEST(RadientPBRRendererTest, ConvertsDebugVisualizations)

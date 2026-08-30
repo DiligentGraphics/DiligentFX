@@ -2564,19 +2564,23 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //        float4x4 NodeMatrix;
     //        float4x4 PrevNodeMatrix; // #if COMPUTE_MOTION_VECTORS
     //
-    //        int   JointCount;
-    //        int   FirstJoint;
-    //        float PosBiasX;
-    //        float PosBiasY;
+    //        struct GLTFNodeSkinningShaderAttribs // #if USE_JOINTS
+    //        {
+    //            int JointCount;
+    //            int FirstJoint;
+    //            int Padding0;
+    //            int Padding1;
     //
-    //        float PosBiasZ;
-    //        float PosScaleX;
-    //        float PosScaleY;
-    //        float PosScaleZ;
-    //
-    //        float4x4 SkinPreTransform;     // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
-    //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+    //            float4x4 PreTransform;     // #if USE_SKIN_PRE_TRANSFORM
+    //            float4x4 PrevPreTransform; // #if USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+    //        } Skinning;
     //    } Transforms;
+    //
+    //    struct PBRVertexPositionUnpackShaderAttribs // #if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
+    //    {
+    //        float4 Bias;
+    //        float4 Scale;
+    //    } PositionUnpack;
     //
     //    float4      FallbackColor;
     //    UserDefined CustomData;
@@ -2584,12 +2588,15 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
 
     const bool UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
     const bool UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
+    const bool UseJoints               = (Flags & PSO_FLAG_USE_JOINTS) != 0;
+    const bool UsePackedPosition       = m_Settings.VertexPosPackMode != VERTEX_POS_PACK_MODE_NONE;
 
     return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
             ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
-            sizeof(int) * 2 + sizeof(float) * 6 +                                // Transforms.JointCount ... Transforms.PosScaleZ
-            (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.SkinPreTransform
-            (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.PrevSkinPreTransform
+            (UseJoints ? sizeof(float4) : 0) +                                   // Transforms.Skinning.JointCount ... Padding1
+            (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.Skinning.PreTransform
+            (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.Skinning.PrevPreTransform
+            (UsePackedPosition ? sizeof(float4) * 2 : 0) +                       // PositionUnpack
 
             sizeof(float4) + // FallbackColor
             CustomDataSize);

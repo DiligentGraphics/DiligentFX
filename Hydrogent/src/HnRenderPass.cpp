@@ -748,7 +748,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         };
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData,
                                                           /*TransposeMatrices = */ !PackMatrixRowMajor,
-                                                          State.RendererSettings.UseSkinPreTransform);
+                                                          State.RendererSettings.UseSkinPreTransform,
+                                                          State.RendererSettings.VertexPosPackMode);
 
         ListItem.PrevTransform = Transform.Matrix;
 

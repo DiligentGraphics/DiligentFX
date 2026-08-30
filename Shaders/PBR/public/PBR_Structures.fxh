@@ -83,6 +83,34 @@
 #   define USE_SKIN_PRE_TRANSFORM 0
 #endif
 
+struct GLTFNodeSkinningShaderAttribs
+{
+    int JointCount;
+    int FirstJoint; // Index of the first joint in the joints buffer to start from
+    int Padding0;
+    int Padding1;
+
+#if USE_SKIN_PRE_TRANSFORM
+    float4x4 PreTransform;
+#   if COMPUTE_MOTION_VECTORS
+        float4x4 PrevPreTransform;
+#   endif
+#endif
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(GLTFNodeSkinningShaderAttribs);
+#endif
+
+struct PBRVertexPositionUnpackShaderAttribs
+{
+    // Scale and bias unpack the position before applying the node matrix.
+    float4 Bias;  // xyz used; w is padding
+    float4 Scale; // xyz used; w is padding
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRVertexPositionUnpackShaderAttribs);
+#endif
+
 // When updating this structure, make sure to update GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs,
 // and PBR_Renderer::GetPBRPrimitiveAttribsSize.
 struct GLTFNodeShaderTransforms
@@ -92,21 +120,8 @@ struct GLTFNodeShaderTransforms
     float4x4 PrevNodeMatrix;
 #endif
 
-	int   JointCount;
-    int   FirstJoint; // Index of the first joint in the joints buffer to start from
-    float PosBiasX;   // Bias to apply to the position
-    float PosBiasY;
-    
-    float PosBiasZ;   // Scale and bias are used to unpack
-    float PosScaleX;  // position (Pos = Pos * PosScale + PosBias)
-    float PosScaleY;  // and are applied before the NodeMatrix.
-    float PosScaleZ;
-    
-#if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
-    float4x4 SkinPreTransform;
-#   if COMPUTE_MOTION_VECTORS
-        float4x4 PrevSkinPreTransform;
-#   endif
+#if USE_JOINTS
+    GLTFNodeSkinningShaderAttribs Skinning;
 #endif
 };
 #ifdef CHECK_STRUCT_ALIGNMENT

@@ -31,6 +31,10 @@ struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
 
+#if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
+    PBRVertexPositionUnpackShaderAttribs PositionUnpack;
+#endif
+
     float4 FallbackColor;
     float4 CustomData;
 };

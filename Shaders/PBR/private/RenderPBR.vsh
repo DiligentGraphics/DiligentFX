@@ -142,10 +142,8 @@ float3 GetPosition(VSInput VSIn)
     Pos.y = float((PackedPos.x >> 21u) | ((PackedPos.y & 1023u) << 11u)) * U21Scale;
     Pos.z = float(PackedPos.y >> 10u) * U21Scale;
     
-    GLTFNodeShaderTransforms PrimTransforms = PRIMITIVE.Transforms;
-    float3 PosScale = float3(PrimTransforms.PosScaleX, PrimTransforms.PosScaleY, PrimTransforms.PosScaleZ);
-    float3 PosBias  = float3(PrimTransforms.PosBiasX,  PrimTransforms.PosBiasY,  PrimTransforms.PosBiasZ);
-    return Pos * PosScale + PosBias;
+    PBRVertexPositionUnpackShaderAttribs PositionUnpack = PRIMITIVE.PositionUnpack;
+    return Pos * PositionUnpack.Scale.xyz + PositionUnpack.Bias.xyz;
 }
 #else
 float3 GetPosition(VSInput VSIn)
@@ -169,8 +167,8 @@ void main(in  VSInput  VSIn,
 #endif
     
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
-    int JointCount = Primitive.Transforms.JointCount;
-    int FirstJoint = Primitive.Transforms.FirstJoint;
+    int JointCount = Primitive.Transforms.Skinning.JointCount;
+    int FirstJoint = Primitive.Transforms.Skinning.FirstJoint;
     if (JointCount > 0)
     {
         // Mesh is skinned
@@ -182,7 +180,7 @@ void main(in  VSInput  VSIn,
         Transform = mul(SkinMat, Transform);
 #       if USE_SKIN_PRE_TRANSFORM
         {
-            Transform = mul(Primitive.Transforms.SkinPreTransform, Transform);
+            Transform = mul(Primitive.Transforms.Skinning.PreTransform, Transform);
         }
 #       endif
     
@@ -196,7 +194,7 @@ void main(in  VSInput  VSIn,
             PrevTransform = mul(PrevSkinMat, PrevTransform);
 #           if USE_SKIN_PRE_TRANSFORM
             {
-                PrevTransform = mul(Primitive.Transforms.PrevSkinPreTransform, PrevTransform);
+                PrevTransform = mul(Primitive.Transforms.Skinning.PrevPreTransform, PrevTransform);
             }
 #           endif    
         }

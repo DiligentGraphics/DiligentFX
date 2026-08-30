@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -237,7 +237,8 @@ public:
     static void* WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
                                                 const PBRPrimitiveShaderAttribsData& AttribsData,
                                                 bool                                 TransposeMatrices,
-                                                bool                                 UseSkinPreTransform);
+                                                bool                                 UseSkinPreTransform,
+                                                VERTEX_POS_PACK_MODE                 VertexPosPackMode);
 
     struct PBRMaterialShaderAttribsData
     {
