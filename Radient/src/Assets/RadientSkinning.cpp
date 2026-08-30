@@ -460,7 +460,7 @@ public:
             else
             {
                 const std::string JointName = std::string{"Joint "} + std::to_string(JointIndex);
-                pJoints[JointIndex].Name     = Writer.CopyString(JointName);
+                pJoints[JointIndex].Name    = Writer.CopyString(JointName);
             }
             pJoints[JointIndex].LocalRestTransform =
                 RadientMath::NormalizeTransform(Desc.pJoints[JointIndex].LocalRestTransform);
@@ -866,8 +866,9 @@ public:
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset* pSkin,
-                                                                       RadientMatrix4x4*  pMatrices,
-                                                                       Bool               UpdateGlobalMatrices) override final
+                                                                      RadientMatrix4x4*  pMatrices,
+                                                                      Bool               TransposeMatrices,
+                                                                      Bool               UpdateGlobalMatrices) override final
     {
         if (pSkin == nullptr || pMatrices == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -889,9 +890,14 @@ public:
         for (Uint32 JointIndex = 0; JointIndex < SkinDesc.JointCount; ++JointIndex)
         {
             const RadientSkinJointBindingDesc& Joint = SkinDesc.pJoints[JointIndex];
-            pMatrices[JointIndex] = RadientMath::MultiplyMatrices(
+
+            RadientMatrix4x4 Matrix = RadientMath::MultiplyMatrices(
                 Joint.InverseBindMatrix,
                 m_State.GlobalMatrices[Joint.SkeletonJointIndex]);
+
+            pMatrices[JointIndex] = TransposeMatrices ?
+                RadientMath::TransposeMatrix(Matrix) :
+                Matrix;
         }
         return RADIENT_STATUS_OK;
     }

@@ -345,6 +345,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     /// combines the skin joint's inverse-bind matrix with the corresponding
     /// skeleton-space pose matrix. pSkin must reference this pose's skeleton.
     ///
+    /// If TransposeMatrices is true, every matrix is transposed before it is
+    /// written to pMatrices.
+    ///
     /// If UpdateGlobalMatrices is true, dirty global matrices are updated
     /// before computing the result. Otherwise, the method returns
     /// RADIENT_STATUS_PENDING while global matrices are dirty. The output is
@@ -352,6 +355,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     VIRTUAL RADIENT_STATUS METHOD(ComputeSkinningMatrices)(THIS_
                                                            IRadientSkinAsset* pSkin,
                                                            RadientMatrix4x4*  pMatrices,
+                                                           Bool               TransposeMatrices DEFAULT_VALUE(False),
                                                            Bool               UpdateGlobalMatrices DEFAULT_VALUE(True)) PURE;
 
     /// Propagates committed local transforms through the skeleton hierarchy and

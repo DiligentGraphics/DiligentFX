@@ -296,6 +296,16 @@ inline RadientMatrix4x4 MultiplyMatrices(
     return Result;
 }
 
+inline RadientMatrix4x4 TransposeMatrix(const RadientMatrix4x4& Matrix)
+{
+    return RadientMatrix4x4{
+        Matrix.Data[0], Matrix.Data[4], Matrix.Data[8], Matrix.Data[12],
+        Matrix.Data[1], Matrix.Data[5], Matrix.Data[9], Matrix.Data[13],
+        Matrix.Data[2], Matrix.Data[6], Matrix.Data[10], Matrix.Data[14],
+        Matrix.Data[3], Matrix.Data[7], Matrix.Data[11], Matrix.Data[15],
+    };
+}
+
 inline bool TryInverseMatrix(const RadientMatrix4x4& Matrix, RadientMatrix4x4& Inverse)
 {
     float4x4 InverseMatrix;

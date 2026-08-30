@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Math/RadientMath.hpp"
 #include "Scene/Components/RadientSkinComponentStorage.hpp"
 #include "Scene/RadientSceneState.hpp"
 
@@ -52,9 +53,35 @@ RadientTransform Translation(Float32 X, Float32 Y = 0.f, Float32 Z = 0.f)
     return Transform;
 }
 
-Float32 GetTranslationX(const RadientMatrix4x4& Matrix)
+RadientMatrix4x4 TranslationMatrix(Float32 X)
 {
-    return Matrix.Data[12];
+    return RadientMath::TransformToMatrix(Translation(X));
+}
+
+void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
+                      const RadientMatrix4x4& Reference)
+{
+    for (Uint32 Element = 0; Element < 16; ++Element)
+    {
+        EXPECT_NEAR(Matrix.Data[Element], Reference.Data[Element], 1e-5f)
+            << "Matrix element " << Element;
+    }
+}
+
+std::array<RadientMatrix4x4, 2> MakeSentinelMatrices()
+{
+    return {{
+        RadientMatrix4x4{
+            1.f, 2.f, 3.f, 4.f,
+            5.f, 6.f, 7.f, 8.f,
+            9.f, 10.f, 11.f, 12.f,
+            13.f, 14.f, 15.f, 16.f},
+        RadientMatrix4x4{
+            17.f, 18.f, 19.f, 20.f,
+            21.f, 22.f, 23.f, 24.f,
+            25.f, 26.f, 27.f, 28.f,
+            29.f, 30.f, 31.f, 32.f},
+    }};
 }
 
 RefCntAutoPtr<RadientAssetManagerImpl> CreateAssetManager()
@@ -463,9 +490,9 @@ TEST(RadientSkinningTest, SkeletonCopiesHierarchyAndSupportsArbitraryJointOrder)
 
     std::array<RadientMatrix4x4, 3> GlobalMatrices{};
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 3, GlobalMatrices.data()), RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 5.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 3.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[2]), 9.f);
+    ExpectMatrixNear(GlobalMatrices[0], TranslationMatrix(5.f));
+    ExpectMatrixNear(GlobalMatrices[1], TranslationMatrix(3.f));
+    ExpectMatrixNear(GlobalMatrices[2], TranslationMatrix(9.f));
 }
 
 TEST(RadientSkinningTest, CreateSkeletonRejectsNullOutput)
@@ -558,6 +585,7 @@ TEST(RadientSkinningTest, SkinCopiesMappingsAndRetainsSkeleton)
     SkinJoints[0].InverseBindMatrix.Data[12] = -2.f;
     SkinJoints[1].SkeletonJointIndex         = 0;
     SkinJoints[1].InverseBindMatrix.Data[12] = -1.f;
+    const std::array ExpectedSkinJoints      = SkinJoints;
 
     RadientSkinDesc Desc;
     Desc.Name       = "Test skin";
@@ -580,8 +608,13 @@ TEST(RadientSkinningTest, SkinCopiesMappingsAndRetainsSkeleton)
     EXPECT_EQ(StoredDesc.pSkeleton, pExpectedSkeleton);
     ASSERT_EQ(StoredDesc.JointCount, 2u);
     ASSERT_NE(StoredDesc.pJoints, nullptr);
-    EXPECT_EQ(StoredDesc.pJoints[0].SkeletonJointIndex, 1u);
-    EXPECT_FLOAT_EQ(StoredDesc.pJoints[0].InverseBindMatrix.Data[12], -2.f);
+    for (Uint32 JointIndex = 0; JointIndex < StoredDesc.JointCount; ++JointIndex)
+    {
+        EXPECT_EQ(StoredDesc.pJoints[JointIndex].SkeletonJointIndex,
+                  ExpectedSkinJoints[JointIndex].SkeletonJointIndex);
+        EXPECT_EQ(StoredDesc.pJoints[JointIndex].InverseBindMatrix,
+                  ExpectedSkinJoints[JointIndex].InverseBindMatrix);
+    }
 }
 
 TEST(RadientSkinningTest, CreateSkinRejectsNullOutput)
@@ -728,15 +761,15 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
 
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
     EXPECT_FLOAT_EQ(LocalTransforms[0].Rotation.w, 2.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 10.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 30.f);
+    ExpectMatrixNear(GlobalMatrices[0], TranslationMatrix(10.f));
+    ExpectMatrixNear(GlobalMatrices[1], TranslationMatrix(30.f));
 
     ASSERT_EQ(pWriter->ResetToRestPose(), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
     EXPECT_EQ(pPose->GetVersion(), 3u);
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 1.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 3.f);
+    ExpectMatrixNear(GlobalMatrices[0], TranslationMatrix(1.f));
+    ExpectMatrixNear(GlobalMatrices[1], TranslationMatrix(3.f));
 }
 
 TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
@@ -747,8 +780,8 @@ TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
     std::array<RadientMatrix4x4, 2> SkinningMatrices{};
     ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data()),
               RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 1.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), -3.f);
+    ExpectMatrixNear(SkinningMatrices[0], TranslationMatrix(1.f));
+    ExpectMatrixNear(SkinningMatrices[1], TranslationMatrix(-3.f));
 
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
     ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -762,9 +795,24 @@ TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
     ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data()),
               RADIENT_STATUS_OK);
     EXPECT_EQ(Objects.pPose->GetVersion(), 2u);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 28.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 6.f);
+    ExpectMatrixNear(SkinningMatrices[0], TranslationMatrix(28.f));
+    ExpectMatrixNear(SkinningMatrices[1], TranslationMatrix(6.f));
     EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientSkinningTest, PoseComputesTransposedSkinningMatrices)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(
+                  Objects.pSkin,
+                  SkinningMatrices.data(),
+                  True),
+              RADIENT_STATUS_OK);
+    ExpectMatrixNear(SkinningMatrices[0], RadientMath::TransposeMatrix(TranslationMatrix(1.f)));
+    ExpectMatrixNear(SkinningMatrices[1], RadientMath::TransposeMatrix(TranslationMatrix(-3.f)));
 }
 
 TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsNullSkin)
@@ -798,13 +846,11 @@ TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsSkinFromDifferentSkeleto
         CreateSkin(*Objects.pAssetManager, pOtherSkeleton, "Other skin");
     ASSERT_NE(pOtherSkin, nullptr);
 
-    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
-    SkinningMatrices[0].Data[12] = 100.f;
-    SkinningMatrices[1].Data[12] = 200.f;
+    const std::array InitialMatrices  = MakeSentinelMatrices();
+    std::array       SkinningMatrices = InitialMatrices;
     EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(pOtherSkin, SkinningMatrices.data()),
               RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
+    EXPECT_EQ(SkinningMatrices, InitialMatrices);
 }
 
 TEST(RadientSkinningTest, ComputeSkinningMatricesDefersDirtyGlobalTransformsWhenUpdateDisabled)
@@ -818,14 +864,12 @@ TEST(RadientSkinningTest, ComputeSkinningMatricesDefersDirtyGlobalTransformsWhen
     ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 1, &UpdatedTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
 
-    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
-    SkinningMatrices[0].Data[12] = 100.f;
-    SkinningMatrices[1].Data[12] = 200.f;
-    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data(), False),
+    const std::array InitialMatrices  = MakeSentinelMatrices();
+    std::array       SkinningMatrices = InitialMatrices;
+    EXPECT_EQ(Objects.pPose->ComputeSkinningMatrices(Objects.pSkin, SkinningMatrices.data(), False, False),
               RADIENT_STATUS_PENDING);
     EXPECT_EQ(Objects.pPose->GetVersion(), 1u);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[0]), 100.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(SkinningMatrices[1]), 200.f);
+    EXPECT_EQ(SkinningMatrices, InitialMatrices);
 }
 
 TEST(RadientSkinningTest, AnimationCopiesDescriptionAndRetainsSkeleton)
@@ -960,8 +1004,13 @@ TEST(RadientSkinningTest, AnimationEvaluatesStepLinearAndCubicCurves)
 
     std::array<RadientMatrix4x4, 4> GlobalMatrices{};
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 4, GlobalMatrices.data()), RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[0]), 1.f);
-    EXPECT_FLOAT_EQ(GetTranslationX(GlobalMatrices[1]), 3.f);
+    const RadientMatrix4x4 ExpectedRoot = RadientMath::TransformToMatrix(LocalTransforms[0]);
+    ExpectMatrixNear(GlobalMatrices[0], ExpectedRoot);
+    ExpectMatrixNear(
+        GlobalMatrices[1],
+        RadientMath::MultiplyMatrices(RadientMath::TransformToMatrix(LocalTransforms[1]), ExpectedRoot));
+    ExpectMatrixNear(GlobalMatrices[2], RadientMath::TransformToMatrix(LocalTransforms[2]));
+    ExpectMatrixNear(GlobalMatrices[3], RadientMath::TransformToMatrix(LocalTransforms[3]));
 
     ASSERT_EQ(pAnimation->Evaluate(-10.0, pPose, True), RADIENT_STATUS_OK);
     ASSERT_EQ(pPose->GetJointLocalTransforms(0, 3, LocalTransforms.data()), RADIENT_STATUS_OK);
