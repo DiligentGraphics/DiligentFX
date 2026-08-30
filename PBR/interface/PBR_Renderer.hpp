@@ -197,6 +197,10 @@ public:
         ///             - Default physical description map
         bool CreateDefaultTextures = true;
 
+        /// Whether to create a default joints buffer when pJointsBuffer is null.
+        /// Disable this when joint data is supplied through renderer-specific SRBs.
+        bool CreateDefaultJointsBuffer = true;
+
         /// Whether to enable shadows.
         /// A pipeline state can use shadows only if this flag is set to true.
         bool EnableShadows = false;
@@ -364,7 +368,8 @@ public:
         IBuffer* pMaterialAttribsCB = nullptr;
 
         /// A pointer to the user-provided joints buffer.
-        /// If null, the renderer will allocate the buffer.
+        /// If null and CreateDefaultJointsBuffer is true, the renderer will
+        /// allocate the buffer.
         IBuffer* pJointsBuffer = nullptr;
 
         /// Texture attribute index info
@@ -865,11 +870,25 @@ public:
 
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                           IBuffer*                pFrameAttribs,
-                           bool                    BindPrimitiveAttribsBuffer = true,
-                           bool                    BindMaterialAttribsBuffer  = true,
-                           ITextureView*           pShadowMap                 = nullptr) const;
+    struct InitCommonSRBVarsAttribs
+    {
+        /// Optional frame attributes buffer.
+        IBuffer* pFrameAttribs = nullptr;
+
+        /// Optional joints buffer. When null, the renderer-owned buffer is used.
+        IBuffer* pJointsBuffer = nullptr;
+
+        /// Optional shadow map view.
+        ITextureView* pShadowMap = nullptr;
+
+        /// Whether to bind the renderer-owned primitive attributes buffer.
+        bool BindPrimitiveAttribsBuffer = true;
+
+        /// Whether to bind the renderer-owned material attributes buffer.
+        bool BindMaterialAttribsBuffer = true;
+    };
+    void InitCommonSRBVars(IShaderResourceBinding*         pSRB,
+                           const InitCommonSRBVarsAttribs& Attribs) const;
 
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 

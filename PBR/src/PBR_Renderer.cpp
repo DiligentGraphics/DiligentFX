@@ -431,7 +431,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             }
 
             const Uint32 JointsBufferSize = GetJointsBufferSize();
-            if (!m_JointsBuffer)
+            if (!m_JointsBuffer && m_Settings.CreateDefaultJointsBuffer)
             {
                 BufferDesc JointsBuffDesc;
                 JointsBuffDesc.Name           = "PBR joint transforms";
@@ -451,7 +451,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                 pDevice->CreateBuffer(JointsBuffDesc, nullptr, &m_JointsBuffer);
                 VERIFY_EXPR(m_JointsBuffer);
             }
-            else
+            else if (m_JointsBuffer)
             {
                 DEV_CHECK_ERR(m_JointsBuffer->GetDesc().Size >= JointsBufferSize, "PBR joint transforms buffer is too small to hold ", m_Settings.MaxJointCount, " joints.");
             }
@@ -978,11 +978,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
 }
 
 
-void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                                     IBuffer*                pFrameAttribs,
-                                     bool                    BindPrimitiveAttribsBuffer,
-                                     bool                    BindMaterialAttribsBuffer,
-                                     ITextureView*           pShadowMap) const
+void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding*         pSRB,
+                                     const InitCommonSRBVarsAttribs& Attribs) const
 {
     if (pSRB == nullptr)
     {
@@ -990,7 +987,7 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         return;
     }
 
-    if (BindPrimitiveAttribsBuffer)
+    if (Attribs.BindPrimitiveAttribsBuffer)
     {
         if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"})
         {
@@ -999,7 +996,7 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         }
     }
 
-    if (BindMaterialAttribsBuffer)
+    if (Attribs.BindMaterialAttribsBuffer)
     {
         if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_PIXEL, "cbMaterialAttribs"})
         {
@@ -1014,14 +1011,24 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         {
             if (Var.Get() == nullptr)
             {
+                IBuffer* const pJointsBuffer = Attribs.pJointsBuffer != nullptr ?
+                    Attribs.pJointsBuffer :
+                    m_JointsBuffer.RawPtr();
+
+                if (pJointsBuffer == nullptr)
+                {
+                    UNEXPECTED("Joints buffer is not initialized");
+                    return;
+                }
+
                 if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
                 {
                     const Uint32 JointsBufferSize = GetJointsBufferSize();
-                    Var.SetBufferRange(m_JointsBuffer, 0, JointsBufferSize);
+                    Var.SetBufferRange(pJointsBuffer, 0, JointsBufferSize);
                 }
                 else if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
                 {
-                    Var.Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                    Var.Set(pJointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
                 }
                 else
                 {
@@ -1031,14 +1038,14 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         }
     }
 
-    if (pFrameAttribs != nullptr)
+    if (Attribs.pFrameAttribs != nullptr)
     {
-        ShaderResourceVariableX{pSRB, SHADER_TYPE_VERTEX, "cbFrameAttribs"}.Set(pFrameAttribs);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_VERTEX, "cbFrameAttribs"}.Set(Attribs.pFrameAttribs);
     }
 
-    if (m_Settings.EnableShadows && pShadowMap != nullptr)
+    if (m_Settings.EnableShadows && Attribs.pShadowMap != nullptr)
     {
-        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_ShadowMap"}.Set(pShadowMap);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_ShadowMap"}.Set(Attribs.pShadowMap);
     }
 }
 

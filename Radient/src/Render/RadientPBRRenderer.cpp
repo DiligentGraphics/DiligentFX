@@ -114,12 +114,10 @@ void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB,
         return;
     }
 
-    constexpr bool BindPrimitiveAttribsBuffer = false;
-    constexpr bool BindMaterialAttribsBuffer  = false;
-    InitCommonSRBVars(pSRB,
-                      nullptr,
-                      BindPrimitiveAttribsBuffer,
-                      BindMaterialAttribsBuffer);
+    InitCommonSRBVarsAttribs Attribs;
+    Attribs.BindPrimitiveAttribsBuffer = false;
+    Attribs.BindMaterialAttribsBuffer  = false;
+    InitCommonSRBVars(pSRB, Attribs);
 
     IShaderResourceVariable* const pPrimitiveAttribs = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
     if (pPrimitiveAttribs == nullptr || GetPBRPrimitiveAttribsCB() == nullptr)
@@ -159,12 +157,11 @@ RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(Ra
     if (pFrameSRB == nullptr)
         return {};
 
-    constexpr bool BindPrimitiveAttribsBuffer = false;
-    constexpr bool BindMaterialAttribsBuffer  = false;
-    InitCommonSRBVars(pFrameSRB,
-                      m_pFrameAttribsCB,
-                      BindPrimitiveAttribsBuffer,
-                      BindMaterialAttribsBuffer);
+    InitCommonSRBVarsAttribs Attribs;
+    Attribs.pFrameAttribs                  = m_pFrameAttribsCB;
+    Attribs.BindPrimitiveAttribsBuffer     = false;
+    Attribs.BindMaterialAttribsBuffer      = false;
+    InitCommonSRBVars(pFrameSRB, Attribs);
     SetIBLResourceViews(pFrameSRB,
                         pResources->GetIrradianceCubeSRV(),
                         pResources->GetPrefilteredEnvMapSRV(),

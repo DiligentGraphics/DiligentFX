@@ -193,7 +193,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
         return;
     }
 
-    InitCommonSRBVars(pMaterialSRB, pFrameAttribs);
+    InitCommonSRBVars(pMaterialSRB, InitCommonSRBVarsAttribs{pFrameAttribs});
 
     auto SetTexture = [&](TEXTURE_ATTRIB_ID ID, ITextureView* pDefaultTexSRV) //
     {
@@ -298,7 +298,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
         return;
     }
 
-    InitCommonSRBVars(pSRB, pFrameAttribs);
+    InitCommonSRBVars(pSRB, InitCommonSRBVarsAttribs{pFrameAttribs});
     SetIBLResourceViews(pSRB, pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
 
     auto SetTexture = [&](TEXTURE_ATTRIB_ID ID) //
