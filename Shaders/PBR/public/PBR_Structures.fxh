@@ -86,9 +86,9 @@
 struct GLTFNodeSkinningShaderAttribs
 {
     int JointCount;
-    int FirstJoint; // Index of the first joint in the joints buffer to start from
-    int Padding0;
-    int Padding1;
+    int FirstJoint;     // Index of the first joint in the joints buffer to start from
+    int PrevFirstJoint; // Index of the first previous-frame joint
+    int Padding;
 
 #if USE_SKIN_PRE_TRANSFORM
     float4x4 PreTransform;

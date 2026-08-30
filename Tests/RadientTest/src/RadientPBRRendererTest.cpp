@@ -95,6 +95,7 @@ TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
         Attribs.PrevNodeMatrix       = &PrevNodeMatrix;
         Attribs.JointCount           = 7;
         Attribs.FirstJoint           = 11;
+        Attribs.PrevFirstJoint       = 13;
         Attribs.PosScale             = &PosScale;
         Attribs.PosBias              = &PosBias;
         Attribs.SkinPreTransform     = &SkinPreTransform;
@@ -122,7 +123,7 @@ TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
         {
             std::array<int, 4> JointData{};
             std::memcpy(JointData.data(), pShaderData + Offset, sizeof(JointData));
-            EXPECT_EQ(JointData, (std::array<int, 4>{7, 11, 0, 0}));
+            EXPECT_EQ(JointData, (std::array<int, 4>{7, 11, 13, 0}));
             Offset += static_cast<Uint32>(sizeof(float4));
 
             if (TestCase.UseSkinPreTransform)

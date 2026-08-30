@@ -738,6 +738,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             &ListItem.PrevTransform,
             Joints.JointCount,
             Joints.FirstJoint,
+            Joints.FirstJoint + Joints.JointCount,
             &Transform.PosScale,
             &Transform.PosBias,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,

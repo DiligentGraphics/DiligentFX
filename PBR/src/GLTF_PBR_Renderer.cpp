@@ -702,6 +702,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &NodeTransform,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
+                        0,
+                        static_cast<Uint32>(JointCount),
                     };
                     void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData,
                                                                    AttribsData,
@@ -804,8 +806,8 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        {
     //            int JointCount;
     //            int FirstJoint;
-    //            int Padding0;
-    //            int Padding1;
+    //            int PrevFirstJoint;
+    //            int Padding;
     //
     //            float4x4 PreTransform;     // #if USE_SKIN_PRE_TRANSFORM
     //            float4x4 PrevPreTransform; // #if USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
@@ -857,7 +859,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         {
             WriteValue(static_cast<int>(AttribsData.JointCount));
             WriteValue(static_cast<int>(AttribsData.FirstJoint));
-            WriteValue(0);
+            WriteValue(static_cast<int>(AttribsData.PrevFirstJoint));
             WriteValue(0);
 
             if (UseSkinPreTransform)

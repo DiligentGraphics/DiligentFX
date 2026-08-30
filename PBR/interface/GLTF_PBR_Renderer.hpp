@@ -225,7 +225,8 @@ public:
         const float4x4* NodeMatrix           = nullptr;
         const float4x4* PrevNodeMatrix       = nullptr; // #if COMPUTE_MOTION_VECTORS
         Uint32          JointCount           = 0;
-        Uint32          FirstJoint           = 0;
+        Uint32          FirstJoint           = 0; // #if USE_JOINTS
+        Uint32          PrevFirstJoint       = 0; // #if USE_JOINTS && COMPUTE_MOTION_VECTORS
         const float3*   PosScale             = nullptr;
         const float3*   PosBias              = nullptr;
         const float4x4* SkinPreTransform     = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM

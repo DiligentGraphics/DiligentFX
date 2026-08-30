@@ -76,7 +76,7 @@ cbuffer cbJointTransforms
 
 float4x4 GetJointMatrix(int JointIndex, int FirstJoint)
 {
-    return g_Skin.Joints[JointIndex];
+    return g_Skin.Joints[JointIndex + FirstJoint];
 }
 
 #elif JOINTS_BUFFER_MODE == JOINTS_BUFFER_MODE_STRUCTURED
@@ -169,6 +169,7 @@ void main(in  VSInput  VSIn,
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
     int JointCount = Primitive.Transforms.Skinning.JointCount;
     int FirstJoint = Primitive.Transforms.Skinning.FirstJoint;
+    int PrevFirstJoint = Primitive.Transforms.Skinning.PrevFirstJoint;
     if (JointCount > 0)
     {
         // Mesh is skinned
@@ -187,10 +188,10 @@ void main(in  VSInput  VSIn,
 #       if COMPUTE_MOTION_VECTORS
         {
             float4x4 PrevSkinMat = 
-                VSIn.Weight0.x * GetJointMatrix(JointCount + int(VSIn.Joint0.x), FirstJoint) +
-                VSIn.Weight0.y * GetJointMatrix(JointCount + int(VSIn.Joint0.y), FirstJoint) +
-                VSIn.Weight0.z * GetJointMatrix(JointCount + int(VSIn.Joint0.z), FirstJoint) +
-                VSIn.Weight0.w * GetJointMatrix(JointCount + int(VSIn.Joint0.w), FirstJoint);
+                VSIn.Weight0.x * GetJointMatrix(int(VSIn.Joint0.x), PrevFirstJoint) +
+                VSIn.Weight0.y * GetJointMatrix(int(VSIn.Joint0.y), PrevFirstJoint) +
+                VSIn.Weight0.z * GetJointMatrix(int(VSIn.Joint0.z), PrevFirstJoint) +
+                VSIn.Weight0.w * GetJointMatrix(int(VSIn.Joint0.w), PrevFirstJoint);
             PrevTransform = mul(PrevSkinMat, PrevTransform);
 #           if USE_SKIN_PRE_TRANSFORM
             {
