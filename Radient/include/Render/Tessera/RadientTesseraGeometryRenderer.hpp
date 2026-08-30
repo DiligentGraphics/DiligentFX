@@ -30,6 +30,7 @@
 #include "Render/RadientLightList.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "Render/Tessera/RadientTesseraFrameHistory.hpp"
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientView.h"
@@ -58,7 +59,7 @@ class RadientTesseraGeometryRenderer
 public:
     RadientTesseraGeometryRenderer(Uint32                                MaterialTextureSlotCount,
                                    const RadientMaterialDefaultTextures& DefaultTextures,
-                                   Uint32                                MultiDrawBatchSize = 16) noexcept;
+                                   Uint32                                MultiDrawBatchSize = 16);
 
     RADIENT_STATUS Prepare(IRenderDevice*         pDevice,
                            IDeviceContext*        pContext,
@@ -82,6 +83,11 @@ public:
         return m_pMaterialCache.get();
     }
 
+    RadientTesseraBufferSuballocator& GetJointBuffer() noexcept
+    {
+        return m_JointBuffer;
+    }
+
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext);
 
@@ -93,6 +99,8 @@ private:
                                        Uint32          TextureVersion);
 
 private:
+    RadientTesseraBufferSuballocator m_JointBuffer;
+
     std::unique_ptr<RadientPBRRenderer>          m_pRenderer;
     std::unique_ptr<RadientTesseraMaterialCache> m_pMaterialCache;
 

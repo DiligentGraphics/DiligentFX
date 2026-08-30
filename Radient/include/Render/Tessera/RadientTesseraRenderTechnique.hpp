@@ -61,8 +61,11 @@ public:
 private:
     struct SceneRenderState
     {
-        SceneRenderState(IRadientScene* pScene, bool EnableAsyncPipelineCompilation) :
+        SceneRenderState(IRadientScene*                    pScene,
+                         bool                              EnableAsyncPipelineCompilation,
+                         RadientTesseraBufferSuballocator& JointBuffer) :
             WeakScene{pScene},
+            DrawableCache{JointBuffer},
             GeometryPass{EnableAsyncPipelineCompilation}
         {}
 

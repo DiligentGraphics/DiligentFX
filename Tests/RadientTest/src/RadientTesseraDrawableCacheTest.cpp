@@ -265,11 +265,17 @@ public:
         return {&MeshData.Mesh, RADIENT_STATUS_OK};
     }
 
+    RadientTesseraBufferSuballocator& GetJointBuffer() noexcept
+    {
+        return m_JointBuffer;
+    }
+
     std::unordered_map<IRadientMeshAsset*, MeshData> Meshes;
     IRadientMeshAsset*                               pLastMesh = nullptr;
     Uint32                                           NumCalls  = 0;
 
 private:
+    RadientTesseraBufferSuballocator             m_JointBuffer{GetTesseraJointBufferCreateInfo()};
     RefCntAutoPtr<IThreadPool>                   m_pThreadPool;
     std::unique_ptr<RadientTesseraMaterialCache> m_pMaterialCache;
 };
@@ -694,7 +700,7 @@ RADIENT_STATUS PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache)
 TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -780,7 +786,7 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
 TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSync)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -813,7 +819,7 @@ TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeS
 TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableLightChangesBeforeSync)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -845,7 +851,7 @@ TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableLightChangesBefore
 TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeometry)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -919,7 +925,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanFail)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -988,7 +994,7 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanFail)
 TEST(RadientTesseraDrawableCacheTest, ReadyMeshWaitsForMaterialCache)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene      = RadientSceneImpl::Create();
     RefCntAutoPtr<IThreadPool>      pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     ASSERT_NE(pScene, nullptr);
@@ -1021,7 +1027,7 @@ TEST(RadientTesseraDrawableCacheTest, ReadyMeshWaitsForMaterialCache)
 TEST(RadientTesseraDrawableCacheTest, MaterialProcessingDefersAndSharesDrawables)
 {
     TestDrawableMeshProvider                     MeshProvider;
-    RadientTesseraDrawableCache                  DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache                  DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl>              pScene         = RadientSceneImpl::Create();
     RefCntAutoPtr<IThreadPool>                   pThreadPool    = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pMaterialCache = MakeDrawableMaterialCache();
@@ -1082,7 +1088,7 @@ TEST(RadientTesseraDrawableCacheTest, MaterialProcessingDefersAndSharesDrawables
 TEST(RadientTesseraDrawableCacheTest, RenderableMayBeRemovedWhileMaterialProcessingIsPending)
 {
     TestDrawableMeshProvider                     MeshProvider;
-    RadientTesseraDrawableCache                  DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache                  DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl>              pScene         = RadientSceneImpl::Create();
     RefCntAutoPtr<IThreadPool>                   pThreadPool    = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pMaterialCache = MakeDrawableMaterialCache();
@@ -1124,7 +1130,7 @@ TEST(RadientTesseraDrawableCacheTest, RenderableMayBeRemovedWhileMaterialProcess
 TEST(RadientTesseraDrawableCacheTest, MeshMayChangeWhileMaterialProcessingIsPending)
 {
     TestDrawableMeshProvider                     MeshProvider;
-    RadientTesseraDrawableCache                  DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache                  DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl>              pScene         = RadientSceneImpl::Create();
     RefCntAutoPtr<IThreadPool>                   pThreadPool    = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pMaterialCache = MakeDrawableMaterialCache();
@@ -1180,7 +1186,7 @@ TEST(RadientTesseraDrawableCacheTest, MeshMayChangeWhileMaterialProcessingIsPend
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1229,7 +1235,7 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshCanBeRemoved)
 TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntities)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1327,7 +1333,7 @@ TEST(RadientTesseraDrawableCacheTest, SharedPendingMeshExpandsForMultipleEntitie
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhenReady)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1379,7 +1385,7 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshUsesLatestRendererWhe
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindingsBeforeReady)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1426,7 +1432,7 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshAcceptsMaterialBindin
 TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshOnly)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1487,7 +1493,7 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshO
 TEST(RadientTesseraDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1539,7 +1545,7 @@ TEST(RadientTesseraDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
 TEST(RadientTesseraDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1570,7 +1576,7 @@ TEST(RadientTesseraDrawableCacheTest, MeshExpansionSkipsInvalidPrimitives)
 TEST(RadientTesseraDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1609,7 +1615,7 @@ TEST(RadientTesseraDrawableCacheTest, RendererChangeUpdatesExistingDrawableSlots
 TEST(RadientTesseraDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListIndices)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1647,7 +1653,7 @@ TEST(RadientTesseraDrawableCacheTest, RemovingMiddleRenderableRepairsDrawListInd
 TEST(RadientTesseraDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawableSlots)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1685,7 +1691,7 @@ TEST(RadientTesseraDrawableCacheTest, MaterialBindingsChangeUpdatesExistingDrawa
 TEST(RadientTesseraDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1757,7 +1763,7 @@ TEST(RadientTesseraDrawableCacheTest, ComponentRemovalUpdatesRenderableDrawables
 TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
     ASSERT_NE(pScene, nullptr);
 
@@ -1905,7 +1911,7 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
 TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -1960,7 +1966,7 @@ TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDr
 TEST(RadientTesseraDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawableUpdate)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -2028,7 +2034,7 @@ TEST(RadientTesseraDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDra
 TEST(RadientTesseraDrawableCacheTest, LightListsUpdateIncrementallyByType)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -2106,7 +2112,7 @@ TEST(RadientTesseraDrawableCacheTest, LightListsUpdateIncrementallyByType)
 TEST(RadientTesseraDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWithoutLightUpdate)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);
@@ -2178,7 +2184,7 @@ TEST(RadientTesseraDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWith
 TEST(RadientTesseraDrawableCacheTest, LightVisibilityIsSkippedByGeometryPass)
 {
     TestDrawableMeshProvider        MeshProvider;
-    RadientTesseraDrawableCache     DrawableCache{&MeshProvider};
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
     RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
 
     ASSERT_NE(pScene, nullptr);

@@ -25,6 +25,7 @@
  */
 
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
+#include "Render/Tessera/RadientTesseraSkinData.hpp"
 
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
@@ -379,7 +380,8 @@ bool InitializeMaterialTextureBinding(IRadientTextureAsset*          pTexture,
 RadientTesseraGeometryRenderer::RadientTesseraGeometryRenderer(
     Uint32                                MaterialTextureSlotCount,
     const RadientMaterialDefaultTextures& DefaultTextures,
-    Uint32                                MultiDrawBatchSize) noexcept :
+    Uint32                                MultiDrawBatchSize) :
+    m_JointBuffer{GetTesseraJointBufferCreateInfo()},
     m_DefaultMaterialTextures{DefaultTextures},
     m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8},
     m_MultiDrawBatchSize{MultiDrawBatchSize != 0 ? MultiDrawBatchSize : 16}
@@ -482,6 +484,10 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pD
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
+
+    const RADIENT_STATUS JointBufferStatus = m_JointBuffer.Prepare(pDevice, pContext);
+    if (RADIENT_FAILED(JointBufferStatus))
+        return JointBufferStatus;
 
     if (m_pRenderer == nullptr)
     {

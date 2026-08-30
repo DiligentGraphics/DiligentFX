@@ -26,14 +26,16 @@
 
 #pragma once
 
+#include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 #include "RadientSkinning.h"
 
 #include "RefCntAutoPtr.hpp"
 
-#include <vector>
-
 namespace Diligent
 {
+
+/// Returns the configuration used by Tessera's shared structured joint buffer.
+RadientTesseraBufferSuballocator::CreateInfo GetTesseraJointBufferCreateInfo();
 
 /// Tessera-side joint palettes for one skin and pose.
 ///
@@ -44,17 +46,19 @@ namespace Diligent
 class RadientTesseraSkinData final
 {
 public:
-    RadientTesseraSkinData(IRadientSkinAsset*    pSkin,
-                           IRadientSkeletonPose* pPose);
+    RadientTesseraSkinData(IRadientSkinAsset*                pSkin,
+                           IRadientSkeletonPose*             pPose,
+                           RadientTesseraBufferSuballocator& JointBuffer);
 
     RadientTesseraSkinData(const RadientTesseraSkinData&)            = delete;
     RadientTesseraSkinData& operator=(const RadientTesseraSkinData&) = delete;
 
-    /// Updates dirty pose globals and rebuilds the current palette when their
-    /// version changes. The old current palette becomes the previous palette.
-    /// On the first successful preparation, both palettes contain the same
-    /// matrices. Failures leave the last valid palettes unchanged.
-    RADIENT_STATUS Prepare();
+    /// Updates dirty pose globals and writes a new palette into the inactive
+    /// half of the joint-buffer allocation when their version changes. The two
+    /// halves then exchange current and previous roles without copying matrix
+    /// data. On the first successful preparation, both roles reference the
+    /// populated half. Failures leave the last valid roles unchanged.
+    RADIENT_STATUS Prepare(bool PackMatrixRowMajor = true);
 
     bool Matches(IRadientSkinAsset* pSkin, IRadientSkeletonPose* pPose) const noexcept
     {
@@ -83,25 +87,41 @@ public:
 
     Uint32 GetJointCount() const noexcept
     {
-        return static_cast<Uint32>(m_CurrentJointMatrices.size());
+        return m_JointCount;
     }
 
-    const std::vector<RadientMatrix4x4>& GetCurrentJointMatrices() const noexcept
+    /// Returns the structured-buffer element at which the current joint
+    /// palette begins.
+    Uint32 GetFirstJoint() const noexcept
     {
-        return m_CurrentJointMatrices;
+        return m_FirstJoint;
     }
 
-    const std::vector<RadientMatrix4x4>& GetPreviousJointMatrices() const noexcept
+    /// Returns the structured-buffer element at which the previous joint
+    /// palette begins. This equals GetFirstJoint() after initial preparation.
+    Uint32 GetPreviousFirstJoint() const noexcept
     {
-        return m_PreviousJointMatrices;
+        return m_PreviousFirstJoint;
+    }
+
+    const RadientTesseraBufferAllocation& GetJointBufferAllocation() const noexcept
+    {
+        return m_JointBufferAllocation;
     }
 
 private:
     RefCntAutoPtr<IRadientSkinAsset>    m_pSkin;
     RefCntAutoPtr<IRadientSkeletonPose> m_pPose;
 
-    std::vector<RadientMatrix4x4> m_CurrentJointMatrices;
-    std::vector<RadientMatrix4x4> m_PreviousJointMatrices;
+    RadientTesseraBufferSuballocator& m_JointBuffer;
+    RadientTesseraBufferAllocation    m_JointBufferAllocation;
+
+    Uint32 m_JointCount         = 0;
+    Uint32 m_PaletteByteSize    = 0;
+    Uint32 m_CurrentHalf        = 0;
+    Uint32 m_HalfFirstJoints[2] = {~Uint32{0}, ~Uint32{0}};
+    Uint32 m_FirstJoint         = ~Uint32{0};
+    Uint32 m_PreviousFirstJoint = ~Uint32{0};
 
     Uint64 m_PreparedPoseVersion = 0;
     bool   m_IsPrepared          = false;

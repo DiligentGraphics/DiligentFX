@@ -51,11 +51,9 @@ RadientMatrix4x4 MakeTranslationMatrix(Float32 TranslationX)
     return RadientMath::TransformToMatrix(MakeTransform(TranslationX));
 }
 
-void ExpectMatrixNear(const RadientMatrix4x4& Value,
-                      const RadientMatrix4x4& Expected)
+RadientTesseraBufferSuballocator MakeJointBuffer()
 {
-    for (Uint32 Element = 0; Element < 16; ++Element)
-        EXPECT_NEAR(Value.Data[Element], Expected.Data[Element], 1e-6f) << "Element " << Element;
+    return RadientTesseraBufferSuballocator{GetTesseraJointBufferCreateInfo()};
 }
 
 struct TestSkinningObjects
@@ -118,25 +116,26 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     ASSERT_NE(Objects.pSkin, nullptr);
     ASSERT_NE(Objects.pPose, nullptr);
 
-    RadientTesseraSkinData SkinData{Objects.pSkin, Objects.pPose};
+    RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
+    RadientTesseraSkinData           SkinData{Objects.pSkin, Objects.pPose, JointBuffer};
     EXPECT_EQ(SkinData.GetSkin(), Objects.pSkin.RawPtr());
     EXPECT_EQ(SkinData.GetPose(), Objects.pPose.RawPtr());
     EXPECT_EQ(SkinData.GetJointCount(), 2u);
     EXPECT_FALSE(SkinData.IsPrepared());
+    EXPECT_EQ(SkinData.GetFirstJoint(), ~Uint32{0});
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), ~Uint32{0});
+
+    const RadientTesseraBufferAllocation& Allocation = SkinData.GetJointBufferAllocation();
+    ASSERT_TRUE(Allocation);
+    EXPECT_EQ(Allocation.GetOffset() % sizeof(RadientMatrix4x4), 0u);
+    EXPECT_EQ(Allocation.GetSize(),
+              2u * SkinData.GetJointCount() * static_cast<Uint32>(sizeof(RadientMatrix4x4)));
 
     ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
     EXPECT_TRUE(SkinData.IsPrepared());
     EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
-
-    const auto& InitialCurrent  = SkinData.GetCurrentJointMatrices();
-    const auto& InitialPrevious = SkinData.GetPreviousJointMatrices();
-    ASSERT_EQ(InitialCurrent.size(), 2u);
-    ASSERT_EQ(InitialPrevious.size(), 2u);
-    EXPECT_FLOAT_EQ(InitialCurrent[0].Data[12], 8.f);
-    EXPECT_FLOAT_EQ(InitialCurrent[1].Data[0], 2.f);
-    EXPECT_FLOAT_EQ(InitialCurrent[1].Data[12], 1.f);
-    ExpectMatrixNear(InitialPrevious[0], InitialCurrent[0]);
-    ExpectMatrixNear(InitialPrevious[1], InitialCurrent[1]);
+    const Uint32 InitialFirstJoint = SkinData.GetFirstJoint();
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(SkinData.Prepare(), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
@@ -152,15 +151,19 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
 
     ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
     EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
+    EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
 
-    const auto& UpdatedCurrent  = SkinData.GetCurrentJointMatrices();
-    const auto& UpdatedPrevious = SkinData.GetPreviousJointMatrices();
-    EXPECT_FLOAT_EQ(UpdatedCurrent[0].Data[12], 16.f);
-    EXPECT_FLOAT_EQ(UpdatedCurrent[1].Data[0], 2.f);
-    EXPECT_FLOAT_EQ(UpdatedCurrent[1].Data[12], 9.f);
-    EXPECT_FLOAT_EQ(UpdatedPrevious[0].Data[12], 8.f);
-    EXPECT_FLOAT_EQ(UpdatedPrevious[1].Data[0], 2.f);
-    EXPECT_FLOAT_EQ(UpdatedPrevious[1].Data[12], 1.f);
+    const std::array SecondUpdatedTransforms{
+        MakeTransform(23.f, 2.f),
+        MakeTransform(29.f),
+    };
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(0, static_cast<Uint32>(SecondUpdatedTransforms.size()), SecondUpdatedTransforms.data()),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint);
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
 }
 
 TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
@@ -176,12 +179,12 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
     ASSERT_EQ(pWriter->SetJointLocalTransforms(1, 1, &UpdatedTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
 
-    RadientTesseraSkinData UnpreparedData{Objects.pSkin, Objects.pPose};
+    RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
+    RadientTesseraSkinData           UnpreparedData{Objects.pSkin, Objects.pPose, JointBuffer};
     ASSERT_EQ(UnpreparedData.Prepare(), RADIENT_STATUS_OK);
     EXPECT_TRUE(UnpreparedData.IsPrepared());
-    EXPECT_FLOAT_EQ(UnpreparedData.GetCurrentJointMatrices()[0].Data[12], 20.f);
-    ExpectMatrixNear(UnpreparedData.GetPreviousJointMatrices()[0],
-                     UnpreparedData.GetCurrentJointMatrices()[0]);
+    const Uint32 InitialFirstJoint = UnpreparedData.GetFirstJoint();
+    EXPECT_EQ(UnpreparedData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
 
     const RadientTransform DeferredTransform = MakeTransform(31.f);
@@ -189,7 +192,7 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
 
     ASSERT_EQ(UnpreparedData.Prepare(), RADIENT_STATUS_OK);
-    EXPECT_FLOAT_EQ(UnpreparedData.GetCurrentJointMatrices()[0].Data[12], 30.f);
-    EXPECT_FLOAT_EQ(UnpreparedData.GetPreviousJointMatrices()[0].Data[12], 20.f);
+    EXPECT_EQ(UnpreparedData.GetFirstJoint(), InitialFirstJoint + UnpreparedData.GetJointCount());
+    EXPECT_EQ(UnpreparedData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
 }

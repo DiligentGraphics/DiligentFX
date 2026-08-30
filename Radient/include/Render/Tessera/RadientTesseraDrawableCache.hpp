@@ -189,7 +189,9 @@ public:
 class RadientTesseraDrawableCache
 {
 public:
-    explicit RadientTesseraDrawableCache(IRadientDrawableMeshProvider* pMeshProvider = nullptr);
+    explicit RadientTesseraDrawableCache(
+        RadientTesseraBufferSuballocator& JointBuffer,
+        IRadientDrawableMeshProvider*     pMeshProvider = nullptr);
 
     RADIENT_STATUS SyncScene(
         const IRadientScene&                        Scene,
@@ -235,10 +237,10 @@ public:
         return !m_PendingRenderableEntities.empty();
     }
 
-    /// Rebuilds the CPU joint palettes for every skinned renderable whose pose
-    /// version changed. Each renderable is prepared once regardless of how
-    /// many primitive drawable slots reference it.
-    RADIENT_STATUS PrepareSkinningData();
+    /// Updates the shared joint-buffer shadow for every skinned renderable
+    /// whose pose version changed. Each renderable is prepared once regardless
+    /// of how many primitive drawable slots reference it.
+    RADIENT_STATUS PrepareSkinningData(bool PackMatrixRowMajor = true);
 
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
     {
@@ -326,6 +328,8 @@ private:
 
 private:
     IRadientDrawableMeshProvider& m_MeshProvider;
+
+    RadientTesseraBufferSuballocator& m_JointBuffer;
 
     using RenderableMap = std::unordered_map<RadientEntityID, RenderableRecord>;
     using LightMap      = std::unordered_map<RadientEntityID, LightListLocation>;

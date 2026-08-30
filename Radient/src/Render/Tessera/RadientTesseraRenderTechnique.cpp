@@ -139,7 +139,13 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const RADIENT_STATUS SkinningStatus = pSceneState->DrawableCache.PrepareSkinningData();
+    // Structured-buffer matrices follow the same backend-specific packing as
+    // PBR_Renderer::WriteSkinningData(). Every changed skin writes one half of
+    // its allocation before the geometry renderer uploads the joint buffer.
+    const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
+
+    const RADIENT_STATUS SkinningStatus =
+        pSceneState->DrawableCache.PrepareSkinningData(PackJointMatricesRowMajor);
     if (RADIENT_FAILED(SkinningStatus))
         return SkinningStatus;
 
@@ -464,7 +470,8 @@ RadientTesseraRenderTechnique::SceneRenderState& RadientTesseraRenderTechnique::
 
     m_SceneRenderStates.push_back(
         std::make_unique<SceneRenderState>(const_cast<IRadientScene*>(&Scene),
-                                           m_EnableAsyncPipelineCompilation));
+                                           m_EnableAsyncPipelineCompilation,
+                                           m_GeometryRenderer.GetJointBuffer()));
     return *m_SceneRenderStates.back();
 }
 

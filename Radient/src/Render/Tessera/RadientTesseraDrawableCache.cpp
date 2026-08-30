@@ -79,8 +79,11 @@ IRadientDrawableMeshProvider& GetDefaultDrawableMeshProvider()
 
 } // namespace
 
-RadientTesseraDrawableCache::RadientTesseraDrawableCache(IRadientDrawableMeshProvider* pMeshProvider) :
-    m_MeshProvider{pMeshProvider != nullptr ? *pMeshProvider : GetDefaultDrawableMeshProvider()}
+RadientTesseraDrawableCache::RadientTesseraDrawableCache(
+    RadientTesseraBufferSuballocator& JointBuffer,
+    IRadientDrawableMeshProvider*     pMeshProvider) :
+    m_MeshProvider{pMeshProvider != nullptr ? *pMeshProvider : GetDefaultDrawableMeshProvider()},
+    m_JointBuffer{JointBuffer}
 {
 }
 
@@ -169,7 +172,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData()
+RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(bool PackMatrixRowMajor)
 {
     RADIENT_STATUS Status     = RADIENT_STATUS_OK;
     bool           HasChanges = false;
@@ -179,7 +182,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData()
         if (Renderable.pSkinData == nullptr)
             continue;
 
-        const RADIENT_STATUS SkinStatus = Renderable.pSkinData->Prepare();
+        const RADIENT_STATUS SkinStatus = Renderable.pSkinData->Prepare(PackMatrixRowMajor);
         if (SkinStatus == RADIENT_STATUS_OK)
             HasChanges = true;
         else if (SkinStatus != RADIENT_STATUS_NO_CHANGE)
@@ -269,7 +272,7 @@ void RadientTesseraDrawableCache::UpdateRenderableSkin(RadientEntityID          
     }
 
     std::unique_ptr<RadientTesseraSkinData> pSkinData =
-        std::make_unique<RadientTesseraSkinData>(pSkin->pSkin, pSkin->pPose);
+        std::make_unique<RadientTesseraSkinData>(pSkin->pSkin, pSkin->pPose, m_JointBuffer);
 
     if (Record.SkinListIndex == InvalidSkinListIndex)
     {
