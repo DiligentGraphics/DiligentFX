@@ -101,4 +101,27 @@ TEST(RadientFrameSRBCacheGPUTest, ResourcesMayOutliveCache)
     EXPECT_EQ(NewCache.GetSize(), 0u);
 }
 
+TEST(RadientFrameSRBCacheGPUTest, ReplacesEntriesForNewResourceVersions)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    RefCntAutoPtr<IShaderResourceBinding> pFirstSRB  = CreateTestFrameSRB();
+    RefCntAutoPtr<IShaderResourceBinding> pSecondSRB = CreateTestFrameSRB();
+    ASSERT_NE(pFirstSRB, nullptr);
+    ASSERT_NE(pSecondSRB, nullptr);
+    ASSERT_NE(pFirstSRB, pSecondSRB);
+
+    RadientFrameSRBCache Cache;
+    auto                 pResources = std::make_unique<RadientIBLResources>(nullptr, nullptr, nullptr);
+
+    Cache.Add(pResources.get(), pFirstSRB, 1);
+    EXPECT_EQ(Cache.Get(pResources.get(), 1).RawPtr(), pFirstSRB.RawPtr());
+    EXPECT_EQ(Cache.Get(pResources.get(), 2), nullptr);
+
+    Cache.Add(pResources.get(), pSecondSRB, 2);
+    EXPECT_EQ(Cache.GetSize(), 1u);
+    EXPECT_EQ(Cache.Get(pResources.get(), 1), nullptr);
+    EXPECT_EQ(Cache.Get(pResources.get(), 2).RawPtr(), pSecondSRB.RawPtr());
+}
+
 } // namespace

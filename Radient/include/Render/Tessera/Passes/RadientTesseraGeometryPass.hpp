@@ -51,6 +51,7 @@ namespace Diligent
 {
 
 class RadientTesseraDrawableCache;
+class RadientTesseraSkinData;
 struct RadientDrawableSlot;
 
 /// Mesh geometry render pass used by shadow and forward rendering stages.
@@ -103,6 +104,7 @@ private:
         // per-batch traversal compact and independent of the full drawable slot.
         const RadientMatrix4x4* pWorldMatrix      = nullptr;
         const Bool*             pEffectiveVisible = nullptr;
+        RadientTesseraSkinData* pSkinData         = nullptr;
 
         RadientDrawableID DrawableID    = InvalidRadientDrawableID;
         Uint32            Generation    = 0;
@@ -188,7 +190,7 @@ private:
     bool                                                                        m_EnableAsyncPipelineCompilation = true;
     bool                                                                        m_EnableIBL                      = true;
     DEVICE_FEATURE_STATE                                                        m_NativeMultiDrawSupported       = DEVICE_FEATURE_STATE_OPTIONAL;
-    PBR_Renderer::DebugViewType                                                  m_DebugView                      = PBR_Renderer::DebugViewType::None;
+    PBR_Renderer::DebugViewType                                                 m_DebugView                      = PBR_Renderer::DebugViewType::None;
 };
 
 } // namespace Diligent

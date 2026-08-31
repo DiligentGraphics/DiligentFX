@@ -234,7 +234,12 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         if (pPBRRenderer == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        m_pFrameSRB = pPBRRenderer->GetOrCreateFrameSRB(pView->GetIBLResources());
+        const RadientTesseraBufferSuballocator& JointBuffer = m_GeometryRenderer.GetJointBuffer();
+
+        m_pFrameSRB = pPBRRenderer->GetOrCreateFrameSRB(
+            pView->GetIBLResources(),
+            JointBuffer.GetBuffer(),
+            JointBuffer.GetVersion());
         if (m_pFrameSRB == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
     }

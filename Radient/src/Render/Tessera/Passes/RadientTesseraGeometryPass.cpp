@@ -30,6 +30,7 @@
 #include "Math/RadientMath.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
+#include "Render/Tessera/RadientTesseraSkinData.hpp"
 
 #include "GraphicsAccessories.hpp"
 #include "GLTF_PBR_Renderer.hpp"
@@ -314,10 +315,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         Uint32 MultiDrawCount = 0;
         for (const DrawableBatchItem& Drawable : Batch.Drawables)
         {
+            const bool UsesSkinning = (Batch.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0;
             if (Drawable.pWorldMatrix == nullptr ||
                 Drawable.pEffectiveVisible == nullptr ||
                 !*Drawable.pEffectiveVisible ||
-                Drawable.ElementCount == 0)
+                Drawable.ElementCount == 0 ||
+                (UsesSkinning && (Drawable.pSkinData == nullptr || !Drawable.pSkinData->IsPrepared())))
             {
                 continue;
             }
@@ -359,6 +362,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             AttribsData.PrevNodeMatrix = &PrevNodeTransform;
             AttribsData.CustomData     = &CustomData;
             AttribsData.CustomDataSize = sizeof(CustomData);
+            if (UsesSkinning)
+            {
+                AttribsData.JointCount     = Drawable.pSkinData->GetJointCount();
+                AttribsData.FirstJoint     = Drawable.pSkinData->GetFirstJoint();
+                AttribsData.PrevFirstJoint = Drawable.pSkinData->GetPreviousFirstJoint();
+            }
 
             void* const pPrimitiveAttribsEnd =
                 GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
@@ -639,7 +648,26 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     }
     const PBR_Renderer::ALPHA_MODE AlphaMode = ToPBRAlphaMode(SurfaceMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
+    PBR_Renderer::PSO_FLAGS PSOFlags  = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
+    RadientTesseraSkinData* pSkinData = nullptr;
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0)
+    {
+        pSkinData = Drawable.pSkinData;
+        if (pSkinData == nullptr)
+        {
+            // A mesh containing joint attributes may also be instantiated by
+            // an unskinned node. Render that instance in its authored pose.
+            PSOFlags &= ~PBR_Renderer::PSO_FLAG_USE_JOINTS;
+        }
+        else if (!pSkinData->IsPrepared())
+        {
+            return;
+        }
+    }
+    else if (Drawable.pSkinData != nullptr)
+    {
+        UNEXPECTED("A skinned drawable does not contain joint and weight vertex attributes");
+    }
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
@@ -729,6 +757,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     Batch.Drawables.push_back({
         Drawable.pWorldMatrix,
         Drawable.pEffectiveVisible,
+        pSkinData,
         DrawableID,
         Drawable.Generation,
         Drawable.ElementCount,

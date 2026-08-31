@@ -48,8 +48,12 @@ public:
     /// corresponding PBR renderer debug view.
     static DebugViewType GetDebugViewType(RADIENT_DEBUG_VISUALIZATION DebugVisualization) noexcept;
 
-    /// Returns the cached immutable frame SRB for the IBL resources, creating it if necessary.
-    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources);
+    /// Returns the cached frame SRB for the IBL and joint-buffer resources,
+    /// creating it if necessary. JointsBufferVersion must change whenever
+    /// pJointsBuffer is replaced.
+    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources,
+                                                              IBuffer*             pJointsBuffer       = nullptr,
+                                                              Uint32               JointsBufferVersion = 0);
 
     /// Initializes common material resources and binds the primitive and shared
     /// material attribute buffers so passes can select records through dynamic offsets.

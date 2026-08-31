@@ -560,11 +560,6 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    if (m_pRenderer->GetJointsBuffer() != nullptr)
-    {
-        MapHelper<float4x4> pJoints{pContext, m_pRenderer->GetJointsBuffer(), MAP_WRITE, MAP_FLAG_DISCARD};
-    }
-
     if (IBuffer* pIndexBuffer = pResourceManager->GetIndexBuffer())
         pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -596,17 +591,23 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     }
 
     PBR_Renderer::CreateInfo RendererCI;
-    RendererCI.EnableIBL                 = true;
-    RendererCI.EnableAO                  = true;
-    RendererCI.EnableEmissive            = true;
-    RendererCI.EnableClearCoat           = true;
-    RendererCI.EnableSheen               = true;
-    RendererCI.EnableSpecular            = true;
-    RendererCI.EnableAnisotropy          = true;
-    RendererCI.EnableIridescence         = true;
-    RendererCI.EnableShadows             = false;
-    RendererCI.MaxLightCount             = RadientMaxLightCount;
-    RendererCI.MaxJointCount             = 0;
+    RendererCI.EnableIBL         = true;
+    RendererCI.EnableAO          = true;
+    RendererCI.EnableEmissive    = true;
+    RendererCI.EnableClearCoat   = true;
+    RendererCI.EnableSheen       = true;
+    RendererCI.EnableSpecular    = true;
+    RendererCI.EnableAnisotropy  = true;
+    RendererCI.EnableIridescence = true;
+    RendererCI.EnableShadows     = false;
+    RendererCI.MaxLightCount     = RadientMaxLightCount;
+    // Structured-buffer shaders only use MaxJointCount as the switch that
+    // enables skinning resources. Tessera manages the actual capacity through
+    // its resizable renderer-wide joint buffer.
+    RendererCI.MaxJointCount             = 1;
+    RendererCI.JointsBufferMode          = PBR_Renderer::JOINTS_BUFFER_MODE_STRUCTURED;
+    RendererCI.CreateDefaultJointsBuffer = false;
+    RendererCI.CreateDefaultTextures     = false;
     RendererCI.PackMatrixRowMajor        = true;
     RendererCI.ShaderTexturesArrayMode   = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
     RendererCI.MaterialTexturesArraySize = m_MaterialTextureSlotCount;

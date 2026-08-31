@@ -97,13 +97,16 @@ public:
     RadientFrameSRBCache& operator=(RadientFrameSRBCache&&)      = delete;
     // clang-format on
 
-    /// Adds the SRB unless the resources are already cached.
+    /// Adds or replaces the SRB for the specified resource version.
     void Add(RadientIBLResources*    pResources,
-             IShaderResourceBinding* pSRB);
+             IShaderResourceBinding* pSRB,
+             Uint32                  ResourceVersion = 0);
 
     /// Returns a strong reference that remains valid if the cache entry is
-    /// concurrently removed.
-    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources* pResources) const noexcept;
+    /// concurrently removed. Returns null when the cached entry has a
+    /// different resource version.
+    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources* pResources,
+                                              Uint32                     ResourceVersion = 0) const noexcept;
 
     size_t GetSize() const noexcept;
 
