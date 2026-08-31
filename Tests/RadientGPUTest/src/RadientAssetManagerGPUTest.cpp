@@ -435,6 +435,7 @@ TEST(RadientAssetManagerGPUTest, TesseraMaterialWaitsForPreparedSRB)
         RadientTesseraGeometryRenderer Renderer{8, pAssetManager->GetDefaultMaterialTextures()};
         ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
         ASSERT_NE(Renderer.GetMaterialCache(), nullptr);
+        ASSERT_NE(Renderer.GetJointBuffer().GetBuffer(), nullptr);
 
         PBR_Renderer* const pPBRRenderer = Renderer.GetRenderer();
         ASSERT_NE(pPBRRenderer, nullptr);

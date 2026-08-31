@@ -71,6 +71,7 @@ RadientTesseraBufferSuballocator::CreateInfo GetTesseraJointBufferCreateInfo()
     CI.Desc.BindFlags         = BIND_SHADER_RESOURCE;
     CI.Desc.Mode              = BUFFER_MODE_STRUCTURED;
     CI.Desc.ElementByteStride = JointMatrixSize;
+    CI.Desc.Size              = CI.InitialSize;
     CI.AllocationAlignment    = JointMatrixSize;
     return CI;
 }

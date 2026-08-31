@@ -82,11 +82,12 @@ public:
 
     struct CreateInfo
     {
-        /// Description of the resizable GPU buffer. Size must be zero because
-        /// storage is created on demand by Prepare().
+        /// Description of the resizable GPU buffer. A non-zero Size creates an
+        /// initial GPU buffer during the first Prepare(); zero keeps GPU
+        /// storage lazy until the first allocation.
         BufferDesc Desc;
 
-        /// Initial capacity of the CPU allocator and GPU buffer.
+        /// Initial capacity of the CPU allocation arena.
         Uint32 InitialSize = 64u << 10u;
 
         /// Alignment of every allocation offset. Must be a non-zero power of two.

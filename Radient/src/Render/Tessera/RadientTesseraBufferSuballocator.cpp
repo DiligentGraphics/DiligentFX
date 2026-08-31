@@ -66,7 +66,8 @@ struct RadientTesseraBufferSuballocatorImpl
             CI.InitialSize,
             true,
         }},
-        Buffer{nullptr, DynamicBufferCreateInfo{CI.Desc}}
+        Buffer{nullptr, DynamicBufferCreateInfo{CI.Desc}},
+        RequiredBufferSize{static_cast<size_t>(CI.Desc.Size)}
     {}
 
     ~RadientTesseraBufferSuballocatorImpl()
@@ -140,8 +141,8 @@ bool RadientTesseraBufferAllocation::IsUploadedThrough(Uint64 UploadedGeneration
 
 RadientTesseraBufferSuballocator::RadientTesseraBufferSuballocator(const CreateInfo& CI)
 {
-    if (CI.Desc.Size != 0)
-        LOG_ERROR_AND_THROW("Tessera suballocated buffer description size must be zero");
+    if (CI.Desc.Size > (std::numeric_limits<Uint32>::max)())
+        LOG_ERROR_AND_THROW("Tessera suballocated buffer initial size exceeds the supported range");
     if (CI.Desc.Usage != USAGE_DEFAULT)
         LOG_ERROR_AND_THROW("Tessera suballocated buffer must use USAGE_DEFAULT");
     if (CI.InitialSize == 0)

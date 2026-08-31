@@ -38,6 +38,33 @@
 using namespace Diligent;
 using namespace Diligent::Testing;
 
+TEST(RadientTesseraBufferSuballocatorGPUTest, CreatesConfiguredInitialBufferWithoutAllocations)
+{
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    GPUTestingEnvironment::ScopedReleaseResources AutoReleaseResources;
+
+    constexpr Uint32 InitialBufferSize = 64u << 10u;
+
+    RadientTesseraBufferSuballocator::CreateInfo BufferCI;
+    BufferCI.Desc.Name              = "Tessera initial buffer size test";
+    BufferCI.Desc.Size              = InitialBufferSize;
+    BufferCI.Desc.BindFlags         = BIND_SHADER_RESOURCE;
+    BufferCI.Desc.Usage             = USAGE_DEFAULT;
+    BufferCI.Desc.Mode              = BUFFER_MODE_STRUCTURED;
+    BufferCI.Desc.ElementByteStride = 16;
+    BufferCI.InitialSize            = InitialBufferSize;
+    RadientTesseraBufferSuballocator Buffer{BufferCI};
+
+    ASSERT_EQ(Buffer.Prepare(pDevice, pContext), RADIENT_STATUS_OK);
+    ASSERT_NE(Buffer.GetBuffer(), nullptr);
+    EXPECT_EQ(Buffer.GetBuffer()->GetDesc().Size, InitialBufferSize);
+}
+
 TEST(RadientTesseraBufferSuballocatorGPUTest, ReservesMinimumBoundRange)
 {
     GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
