@@ -1858,6 +1858,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &UpdatedJointTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    // The first stationary frame collapses previous onto current.
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientSkeletonPose> pReplacementPose;
@@ -1898,6 +1900,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     const RadientTransform SecondUpdatedJointTransform = MakeTranslation(3.f, 0.f, 0.f);
     ASSERT_EQ(pSecondPoseWriter->SetJointLocalTransforms(0, 1, &SecondUpdatedJointTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondPoseWriter->Commit(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
+    // The first stationary frame collapses previous onto current.
     EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
 

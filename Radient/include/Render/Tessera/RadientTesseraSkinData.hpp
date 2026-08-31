@@ -56,8 +56,10 @@ public:
     /// Updates dirty pose globals and writes a new palette into the inactive
     /// half of the joint-buffer allocation when their version changes. The two
     /// halves then exchange current and previous roles without copying matrix
-    /// data. On the first successful preparation, both roles reference the
-    /// populated half. Failures leave the last valid roles unchanged.
+    /// data. On the first unchanged frame after motion stops, both roles are
+    /// pointed at the current half so motion vectors become zero. On the first
+    /// successful preparation, both roles reference the populated half.
+    /// Failures leave the last valid roles unchanged.
     RADIENT_STATUS Prepare(bool PackMatrixRowMajor = true);
 
     bool Matches(IRadientSkinAsset* pSkin, IRadientSkeletonPose* pPose) const noexcept

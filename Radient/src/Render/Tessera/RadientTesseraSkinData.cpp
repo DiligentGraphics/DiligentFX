@@ -123,7 +123,15 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(bool PackMatrixRowMajor)
 
     const Uint64 PoseVersion = m_pPose->GetVersion();
     if (m_IsPrepared && m_PreparedPoseVersion == PoseVersion)
-        return RADIENT_STATUS_NO_CHANGE;
+    {
+        if (m_PreviousFirstJoint == m_FirstJoint)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        // The pose stopped changing. Reference the current palette as both
+        // current and previous so subsequent frames produce zero motion.
+        m_PreviousFirstJoint = m_FirstJoint;
+        return RADIENT_STATUS_OK;
+    }
 
     const Uint32 DestinationHalf = m_IsPrepared ? 1u - m_CurrentHalf : 0u;
 

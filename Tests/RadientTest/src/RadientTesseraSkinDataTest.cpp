@@ -154,6 +154,13 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
 
+    // The first stationary frame must collapse the previous palette onto the
+    // current one so skinning motion vectors become zero.
+    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), SkinData.GetFirstJoint());
+    EXPECT_EQ(SkinData.Prepare(), RADIENT_STATUS_NO_CHANGE);
+
     const std::array SecondUpdatedTransforms{
         MakeTransform(23.f, 2.f),
         MakeTransform(29.f),
