@@ -141,6 +141,7 @@ public:
     RADIENT_STATUS GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
     RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
     RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    RADIENT_STATUS GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const;
     RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
     const RadientSceneRevisions&    GetSceneRevisions() const;

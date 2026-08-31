@@ -92,6 +92,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetCamera(RadientEntityID         Entity,
                                                         RadientCameraComponent& Camera) const override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetSkin(RadientEntityID       Entity,
+                                                      RadientSkinComponent& Skin) const override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
                                                            RadientComponentTypeID ComponentType,
                                                            Bool&                  HasComponent) const override final;

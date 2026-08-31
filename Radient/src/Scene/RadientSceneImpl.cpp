@@ -120,6 +120,11 @@ RADIENT_STATUS RadientSceneImpl::GetCamera(RadientEntityID Entity, RadientCamera
     return m_pState->GetCamera(Entity, Camera);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const
+{
+    return m_pState->GetSkin(Entity, Skin);
+}
+
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     return m_pState->HasComponent(Entity, ComponentType, HasComponent);

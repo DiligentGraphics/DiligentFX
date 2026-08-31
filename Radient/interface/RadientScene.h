@@ -527,6 +527,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                              RadientEntityID            Entity,
                                              RadientCameraComponent REF Camera) CONST PURE;
 
+    /// Gets skin component. The returned skin and pose pointers are borrowed
+    /// from the scene and remain valid until the component is changed or
+    /// removed. The caller may retain either object when a longer lifetime is
+    /// required.
+    VIRTUAL RADIENT_STATUS METHOD(GetSkin)(THIS_
+                                           RadientEntityID          Entity,
+                                           RadientSkinComponent REF Skin) CONST PURE;
+
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
                                                 RadientEntityID        Entity,
@@ -555,6 +563,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
+#    define IRadientScene_GetSkin(This, ...)                     CALL_IFACE_METHOD(RadientScene, GetSkin,                     This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetSceneRevisions(This)                CALL_IFACE_METHOD(RadientScene, GetSceneRevisions,           This)
 

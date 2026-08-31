@@ -329,11 +329,20 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
     EXPECT_EQ(HasSkin, False);
 
+    RadientSkinComponent StoredSkin{pSkin, pPose};
+    EXPECT_EQ(State.GetSkin(InvalidRadientEntityID, StoredSkin), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredSkin, RadientSkinComponent{});
+    StoredSkin = {pSkin, pPose};
+    EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredSkin, RadientSkinComponent{});
+
     const RadientSceneRevisions RevisionsBeforeSkin = State.GetSceneRevisions();
     ASSERT_EQ(State.SetSkin(Entity, {pSkin, pPose}), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetSceneRevisions().Drawables, RevisionsBeforeSkin.Drawables + 1);
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
     EXPECT_EQ(HasSkin, True);
+    EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(StoredSkin, (RadientSkinComponent{pSkin, pPose}));
 
     Uint32 PendingChangeCount = 0;
     State.EnumerateRenderableMeshChanges(
@@ -368,6 +377,8 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     EXPECT_EQ(State.GetSceneRevisions(), RevisionsBeforeNoChange);
 
     ASSERT_EQ(State.SetSkin(Entity, {pSkin, pUpdatedPose}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(StoredSkin, (RadientSkinComponent{pSkin, pUpdatedPose}));
     Uint32 UpdatedCount = 0;
     State.EnumerateRenderableMeshChanges(
         [&](const RadientSceneState::RenderableMeshChange& Change,
@@ -384,6 +395,8 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     ASSERT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
     EXPECT_EQ(HasSkin, False);
+    EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredSkin, RadientSkinComponent{});
 
     Uint32 RemovedSkinCount = 0;
     State.EnumerateRenderableMeshChanges(

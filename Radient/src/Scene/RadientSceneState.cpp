@@ -323,6 +323,22 @@ RADIENT_STATUS RadientSceneState::GetCamera(RadientEntityID Entity, RadientCamer
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const
+{
+    Skin = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const SkinComponentStorage* pSkin = m_Registry.try_get<SkinComponentStorage>(E);
+    if (pSkin == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Skin = pSkin->Component;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     HasComponent = False;
