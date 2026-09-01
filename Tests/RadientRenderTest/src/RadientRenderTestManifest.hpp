@@ -59,6 +59,12 @@ struct RadientRenderTestStatistics
     std::optional<Uint32> UpdateBufferMax;
 };
 
+struct RadientRenderTestAnimation
+{
+    std::string Name;
+    float       Time = 0.f;
+};
+
 struct RadientRenderTestCase
 {
     std::string Name;
@@ -69,6 +75,7 @@ struct RadientRenderTestCase
     TestImageComparisonAttribs                                                                            Comparison;
     std::array<std::optional<RadientRenderTestStatistics>, static_cast<size_t>(RENDER_DEVICE_TYPE_COUNT)> Statistics;
     std::vector<RADIENT_DEBUG_VISUALIZATION>                                                              DebugVisualizations;
+    std::optional<RadientRenderTestAnimation>                                                             Animation;
     bool                                                                                                  DirectionalLight = true;
     bool                                                                                                  EnableIBL        = true;
 };

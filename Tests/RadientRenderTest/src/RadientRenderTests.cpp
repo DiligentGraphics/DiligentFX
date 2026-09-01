@@ -38,10 +38,12 @@
 #include "GraphicsAccessories.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "RadientEngine.h"
+#include "RadientSkinning.h"
 #include "RefCntAutoPtr.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -306,6 +308,105 @@ public:
             RADIENT_STATUS_PENDING;
     }
 
+    RADIENT_STATUS EvaluateAnimation(const RadientRenderTestAnimation& AnimationSettings)
+    {
+        if (m_pSceneAsset == nullptr || m_ModelRoot == InvalidRadientEntityID)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        const RadientSceneAssetDesc&     SceneDesc           = m_pSceneAsset->GetDesc();
+        const RadientSceneAnimationDesc* pSceneAnimation     = nullptr;
+        Uint32                           AnimationMatchCount = 0;
+        for (Uint32 AnimationIndex = 0; AnimationIndex < SceneDesc.AnimationCount; ++AnimationIndex)
+        {
+            const RadientSceneAnimationDesc& Candidate = SceneDesc.pAnimations[AnimationIndex];
+            if (std::strcmp(Candidate.Name, AnimationSettings.Name.c_str()) == 0)
+            {
+                pSceneAnimation = &Candidate;
+                ++AnimationMatchCount;
+            }
+        }
+
+        if (AnimationMatchCount != 1 ||
+            AnimationSettings.Time > pSceneAnimation->Duration)
+        {
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        std::vector<RefCntAutoPtr<IRadientSkeletonPose>> Poses;
+        std::vector<RadientEntityID>                     PendingEntities{m_ModelRoot};
+        for (size_t EntityIndex = 0; EntityIndex < PendingEntities.size(); ++EntityIndex)
+        {
+            const RadientEntityID Entity = PendingEntities[EntityIndex];
+
+            RadientSkinComponent Skin{};
+            const RADIENT_STATUS SkinStatus = m_pScene->GetSkin(Entity, Skin);
+            if (SkinStatus == RADIENT_STATUS_OK && Skin.pPose != nullptr)
+            {
+                const auto PoseIt = std::find_if(
+                    Poses.begin(), Poses.end(),
+                    [pPose = Skin.pPose](const RefCntAutoPtr<IRadientSkeletonPose>& pStoredPose) {
+                        return pStoredPose == pPose;
+                    });
+                if (PoseIt == Poses.end())
+                    Poses.emplace_back(Skin.pPose);
+            }
+            else if (SkinStatus != RADIENT_STATUS_NOT_FOUND)
+            {
+                return SkinStatus;
+            }
+
+            Uint32               ChildCount       = 0;
+            const RADIENT_STATUS ChildCountStatus = m_pScene->GetChildCount(Entity, ChildCount);
+            if (RADIENT_FAILED(ChildCountStatus))
+                return ChildCountStatus;
+
+            if (ChildCount == 0)
+                continue;
+
+            const size_t FirstChild = PendingEntities.size();
+            PendingEntities.resize(FirstChild + ChildCount);
+
+            Uint32               NumChildrenWritten = 0;
+            const RADIENT_STATUS ChildrenStatus     = m_pScene->GetChildren(
+                Entity,
+                0,
+                ChildCount,
+                PendingEntities.data() + FirstChild,
+                NumChildrenWritten);
+            if (RADIENT_FAILED(ChildrenStatus))
+                return ChildrenStatus;
+            PendingEntities.resize(FirstChild + NumChildrenWritten);
+        }
+
+        for (Uint32 BindingIndex = 0;
+             BindingIndex < pSceneAnimation->SkeletonAnimationCount;
+             ++BindingIndex)
+        {
+            IRadientSkeletonAnimationAsset* const pAnimation =
+                pSceneAnimation->pSkeletonAnimations[BindingIndex].pAnimation;
+            if (pAnimation == nullptr)
+                return RADIENT_STATUS_INVALID_OPERATION;
+
+            IRadientSkeletonAsset* const pSkeleton     = pAnimation->GetDesc().pSkeleton;
+            bool                         PoseEvaluated = false;
+            for (const RefCntAutoPtr<IRadientSkeletonPose>& pPose : Poses)
+            {
+                if (pPose->GetSkeleton() != pSkeleton)
+                    continue;
+
+                const RADIENT_STATUS Status = pAnimation->Evaluate(AnimationSettings.Time, pPose, True);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+                PoseEvaluated = true;
+            }
+
+            if (!PoseEvaluated)
+                return RADIENT_STATUS_NOT_FOUND;
+        }
+
+        return RADIENT_STATUS_OK;
+    }
+
     RADIENT_STATUS RenderFrame(IDeviceContext* pContext, double Time)
     {
         RadientRenderAttribs Attribs{};
@@ -412,12 +513,21 @@ private:
         // Render every output once after dependencies become ready to request
         // all asynchronous PSO permutations before capture readback begins.
         bool AllCapturesRequested = false;
+        bool AnimationEvaluated   = !m_TestCase.Animation.has_value();
 
         while (PendingCaptureCount != 0 && std::chrono::steady_clock::now() < Deadline)
         {
             const RADIENT_STATUS PrepareStatus = Scene.PrepareFrame();
             ASSERT_FALSE(RADIENT_FAILED(PrepareStatus));
             const bool DependenciesReady = PrepareStatus == RADIENT_STATUS_OK;
+
+            if (DependenciesReady && !AnimationEvaluated)
+            {
+                ASSERT_EQ(Scene.EvaluateAnimation(*m_TestCase.Animation), RADIENT_STATUS_OK)
+                    << "Failed to evaluate animation '" << m_TestCase.Animation->Name
+                    << "' at time " << m_TestCase.Animation->Time;
+                AnimationEvaluated = true;
+            }
 
             for (CaptureEntry& Capture : Captures)
             {

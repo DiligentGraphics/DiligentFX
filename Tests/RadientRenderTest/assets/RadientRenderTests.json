@@ -231,6 +231,18 @@
       "directionalLight": false
     },
     {
+      "name": "Fox",
+      "model": "Models/Fox/glTF-Binary/Fox.glb",
+      "camera": {
+        "eye": [-220.0, 39.0, -10.0],
+        "target": [0.0, 39.0, -10.0]
+      },
+      "animation": {
+        "name": "Run",
+        "time": 0.5
+      }
+    },
+    {
       "name": "IridescenceDielectricSpheres",
       "model": "Models/IridescenceDielectricSpheres/glTF/IridescenceDielectricSpheres.gltf",
       "camera": {

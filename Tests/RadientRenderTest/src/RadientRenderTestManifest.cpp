@@ -253,6 +253,32 @@ bool ParseToneMapping(const Json&             Object,
     return true;
 }
 
+bool ParseAnimation(const Json&                 Object,
+                    RadientRenderTestAnimation& Animation,
+                    const std::string&          Path,
+                    std::string&                Error)
+{
+    if (!Object.is_object())
+        return SetError(Error, Path + " must be an object");
+
+    const auto NameIt = Object.find("name");
+    if (NameIt == Object.end() || !NameIt->is_string())
+        return SetError(Error, Path + ".name is required and must be a string");
+    Animation.Name = NameIt->get<std::string>();
+    if (Animation.Name.empty())
+        return SetError(Error, Path + ".name must not be empty");
+
+    const auto TimeIt = Object.find("time");
+    if (TimeIt == Object.end())
+        return SetError(Error, Path + ".time is required");
+    if (!ParseFloat(*TimeIt, Animation.Time, Path + ".time", Error))
+        return false;
+    if (Animation.Time < 0.f)
+        return SetError(Error, Path + ".time must be non-negative");
+
+    return true;
+}
+
 bool ParseDebugVisualizations(const Json&                               Value,
                               std::vector<RADIENT_DEBUG_VISUALIZATION>& Result,
                               const std::string&                        Path,
@@ -362,6 +388,14 @@ bool ParseTestCase(const Json&                     Object,
             return SetError(Error, Path + ".enableIBL must be a boolean");
 
         Test.EnableIBL = EnableIBLIt->get<bool>();
+    }
+
+    if (const auto AnimationIt = Object.find("animation"); AnimationIt != Object.end())
+    {
+        RadientRenderTestAnimation Animation;
+        if (!ParseAnimation(*AnimationIt, Animation, Path + ".animation", Error))
+            return false;
+        Test.Animation = std::move(Animation);
     }
 
     if (const auto DebugVisualizationsIt = Object.find("debugVisualizations");
