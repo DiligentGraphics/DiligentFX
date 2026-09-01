@@ -46,6 +46,8 @@ static_assert(static_cast<Uint8>(RADIENT_LIGHT_TYPE_SPOT) == 2, "Unexpected RADI
 
 static_assert(std::is_standard_layout<RadientCameraComponent>::value, "RadientCameraComponent must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientCameraComponent>::value, "RadientCameraComponent must be trivially copyable");
+static_assert(std::is_standard_layout<RadientSceneCreateInfo>::value, "RadientSceneCreateInfo must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientSceneCreateInfo>::value, "RadientSceneCreateInfo must be trivially copyable");
 static_assert(std::is_standard_layout<RadientLightComponent>::value, "RadientLightComponent must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientLightComponent>::value, "RadientLightComponent must be trivially copyable");
 static_assert(std::is_standard_layout<RadientSkinComponent>::value, "RadientSkinComponent must be a standard-layout type");
@@ -63,6 +65,9 @@ static_assert(DefaultCamera.FocalLength == 50.f, "Unexpected RadientCameraCompon
 static_assert(DefaultCamera.ClippingRange.x == 0.1f && DefaultCamera.ClippingRange.y == 1000.f, "Unexpected RadientCameraComponent clipping range default value");
 static_assert(DefaultCamera.FStop == 0.f, "Unexpected RadientCameraComponent f-stop default value");
 static_assert(DefaultCamera.FocusDistance == 0.f, "Unexpected RadientCameraComponent focus distance default value");
+
+constexpr RadientSceneCreateInfo DefaultSceneCI{};
+static_assert(DefaultSceneCI.Desc.Name == nullptr, "Unexpected RadientSceneCreateInfo scene name default value");
 
 constexpr RadientLightComponent DefaultLight{};
 static_assert(DefaultLight.Type == RADIENT_LIGHT_TYPE_DIRECTIONAL, "Unexpected RadientLightComponent type default value");

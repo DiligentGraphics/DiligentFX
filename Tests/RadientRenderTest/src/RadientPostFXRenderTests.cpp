@@ -397,11 +397,11 @@ TEST_F(RadientRender, Bloom)
     ASSERT_NE(pDimEmissiveSphere, nullptr);
     ASSERT_NE(pGlossySphere, nullptr);
 
-    RadientSceneDesc SceneDesc{};
-    SceneDesc.Name = "Bloom render test scene";
+    RadientSceneCreateInfo SceneCI{};
+    SceneCI.Desc.Name = "Bloom render test scene";
 
     RefCntAutoPtr<IRadientScene> pScene;
-    ASSERT_EQ(GetEngine()->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(GetEngine()->CreateScene(SceneCI, &pScene), RADIENT_STATUS_OK);
     ASSERT_NE(pScene, nullptr);
 
     RefCntAutoPtr<IRadientSceneWriter> pWriter;
@@ -614,11 +614,11 @@ TEST_F(RadientRender, SSAO)
     ASSERT_TRUE(IsPendingOrOK(CreateRadientSphereMesh(GetAssetManager(), SphereCI, &pSphere)));
     ASSERT_NE(pSphere, nullptr);
 
-    RadientSceneDesc SceneDesc{};
-    SceneDesc.Name = "SSAO render test scene";
+    RadientSceneCreateInfo SceneCI{};
+    SceneCI.Desc.Name = "SSAO render test scene";
 
     RefCntAutoPtr<IRadientScene> pScene;
-    ASSERT_EQ(GetEngine()->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(GetEngine()->CreateScene(SceneCI, &pScene), RADIENT_STATUS_OK);
     ASSERT_NE(pScene, nullptr);
 
     RefCntAutoPtr<IRadientSceneWriter> pWriter;
@@ -922,11 +922,11 @@ TEST_F(RadientRender, SSR)
         ASSERT_NE(Spheres[SphereIndex], nullptr);
     }
 
-    RadientSceneDesc SceneDesc{};
-    SceneDesc.Name = "SSR render test scene";
+    RadientSceneCreateInfo SceneCI{};
+    SceneCI.Desc.Name = "SSR render test scene";
 
     RefCntAutoPtr<IRadientScene> pScene;
-    ASSERT_EQ(GetEngine()->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(GetEngine()->CreateScene(SceneCI, &pScene), RADIENT_STATUS_OK);
     ASSERT_NE(pScene, nullptr);
 
     RefCntAutoPtr<IRadientSceneWriter> pWriter;

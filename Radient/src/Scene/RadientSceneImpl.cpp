@@ -36,9 +36,9 @@ RadientSceneImpl::RadientSceneImpl(IReferenceCounters* pRefCounters) :
     m_pState{std::make_shared<RadientSceneState>()}
 {}
 
-RadientSceneImpl::RadientSceneImpl(IReferenceCounters* pRefCounters, const RadientSceneDesc& Desc) :
+RadientSceneImpl::RadientSceneImpl(IReferenceCounters* pRefCounters, const RadientSceneCreateInfo& CreateInfo) :
     TBase{pRefCounters},
-    m_pState{std::make_shared<RadientSceneState>(Desc)}
+    m_pState{std::make_shared<RadientSceneState>(CreateInfo.Desc)}
 {}
 
 RadientSceneImpl::~RadientSceneImpl()
@@ -50,9 +50,9 @@ RefCntAutoPtr<RadientSceneImpl> RadientSceneImpl::Create()
     return RefCntAutoPtr<RadientSceneImpl>{MakeNewRCObj<RadientSceneImpl>()()};
 }
 
-RefCntAutoPtr<RadientSceneImpl> RadientSceneImpl::Create(const RadientSceneDesc& Desc)
+RefCntAutoPtr<RadientSceneImpl> RadientSceneImpl::Create(const RadientSceneCreateInfo& CreateInfo)
 {
-    return RefCntAutoPtr<RadientSceneImpl>{MakeNewRCObj<RadientSceneImpl>()(Desc)};
+    return RefCntAutoPtr<RadientSceneImpl>{MakeNewRCObj<RadientSceneImpl>()(CreateInfo)};
 }
 
 const RadientSceneDesc& RadientSceneImpl::GetDesc() const

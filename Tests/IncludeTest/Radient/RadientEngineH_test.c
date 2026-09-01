@@ -28,7 +28,7 @@
 
 void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
 {
-    RadientSceneDesc       SceneDesc     = {0};
+    RadientSceneCreateInfo SceneCI       = {0};
     RadientRendererDesc    RendererDesc  = {0};
     IRadientBackend*       pBackend      = 0;
     IRadientAssetManager*  pAssetManager = 0;
@@ -42,7 +42,7 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
 
     Status = IRadientEngine_GetBackend(pEngine, &pBackend);
     Status = IRadientEngine_GetAssetManager(pEngine, &pAssetManager);
-    Status = IRadientEngine_CreateScene(pEngine, &SceneDesc, &pScene);
+    Status = IRadientEngine_CreateScene(pEngine, &SceneCI, &pScene);
     Status = IRadientEngine_CreateSceneWriter(pEngine, pScene, &pWriter);
     Status = IRadientEngine_CreateSceneImporter(pEngine, pWriter, &pImporter);
     Status = IRadientEngine_CreateRenderer(pEngine, &RendererDesc, &pRenderer);

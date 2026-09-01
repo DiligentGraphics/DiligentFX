@@ -124,7 +124,7 @@ RADIENT_STATUS RadientEngineImpl::GetAssetManager(IRadientAssetManager** ppAsset
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientEngineImpl::CreateScene(const RadientSceneDesc& Desc, IRadientScene** ppScene)
+RADIENT_STATUS RadientEngineImpl::CreateScene(const RadientSceneCreateInfo& CreateInfo, IRadientScene** ppScene)
 {
     if (ppScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -132,7 +132,7 @@ RADIENT_STATUS RadientEngineImpl::CreateScene(const RadientSceneDesc& Desc, IRad
     DEV_CHECK_ERR(*ppScene == nullptr, "Output scene pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppScene = nullptr;
 
-    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create(Desc);
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create(CreateInfo);
     *ppScene                               = pScene.Detach();
     return RADIENT_STATUS_OK;
 }

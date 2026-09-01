@@ -51,8 +51,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetAssetManager(IRadientAssetManager** ppAssetManager) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateScene(const RadientSceneDesc& Desc,
-                                                          IRadientScene**         ppScene) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateScene(const RadientSceneCreateInfo& CreateInfo,
+                                                          IRadientScene**               ppScene) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneWriter(IRadientScene*        pScene,
                                                                 IRadientSceneWriter** ppWriter) override final;

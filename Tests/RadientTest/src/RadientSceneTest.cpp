@@ -222,14 +222,14 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
 
 RefCntAutoPtr<IRadientScene> CreateTestScene(IRadientEngine& Engine)
 {
-    RadientSceneDesc SceneDesc{};
-    SceneDesc.Name = "Radient test scene";
+    RadientSceneCreateInfo SceneCI{};
+    SceneCI.Desc.Name = "Radient test scene";
 
     RefCntAutoPtr<IRadientScene> pScene;
-    EXPECT_EQ(Engine.CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(Engine.CreateScene(SceneCI, &pScene), RADIENT_STATUS_OK);
     EXPECT_NE(pScene, nullptr);
     if (pScene != nullptr)
-        EXPECT_STREQ(pScene->GetDesc().Name, SceneDesc.Name);
+        EXPECT_STREQ(pScene->GetDesc().Name, SceneCI.Desc.Name);
 
     return pScene;
 }

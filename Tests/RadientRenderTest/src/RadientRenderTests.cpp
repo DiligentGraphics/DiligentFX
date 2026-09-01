@@ -177,9 +177,9 @@ public:
         m_pView{pView},
         m_pEnvironmentMap{pEnvironmentMap}
     {
-        RadientSceneDesc SceneDesc{};
-        SceneDesc.Name = "Radient render test scene";
-        m_Status       = pEngine->CreateScene(SceneDesc, &m_pScene);
+        RadientSceneCreateInfo SceneCI{};
+        SceneCI.Desc.Name = "Radient render test scene";
+        m_Status          = pEngine->CreateScene(SceneCI, &m_pScene);
         if (RADIENT_FAILED(m_Status))
             return;
 

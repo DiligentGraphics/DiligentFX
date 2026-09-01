@@ -86,8 +86,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientEngine, IObject)
 
     /// Creates a scene.
     VIRTUAL RADIENT_STATUS METHOD(CreateScene)(THIS_
-                                               const RadientSceneDesc REF Desc,
-                                               IRadientScene**            ppScene) PURE;
+                                               const RadientSceneCreateInfo REF CreateInfo,
+                                               IRadientScene**                  ppScene) PURE;
 
     /// Creates a writer for a scene created by this engine.
     VIRTUAL RADIENT_STATUS METHOD(CreateSceneWriter)(THIS_

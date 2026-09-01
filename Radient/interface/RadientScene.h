@@ -94,6 +94,15 @@ struct RadientSceneDesc
 typedef struct RadientSceneDesc RadientSceneDesc;
 
 
+/// Scene creation attributes.
+struct RadientSceneCreateInfo
+{
+    /// Persistent scene description.
+    RadientSceneDesc Desc DEFAULT_INITIALIZER({});
+};
+typedef struct RadientSceneCreateInfo RadientSceneCreateInfo;
+
+
 /// Scene revisions grouped by renderer-relevant data category.
 struct RadientSceneRevisions
 {
