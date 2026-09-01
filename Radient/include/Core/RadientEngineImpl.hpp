@@ -60,6 +60,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneImporter(IRadientSceneWriter*    pWriter,
                                                                   IRadientSceneImporter** ppImporter) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateAnimationRegistry(IRadientScene*              pScene,
+                                                                      IRadientAnimationRegistry** ppRegistry) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateRenderer(const RadientRendererDesc& Desc,
                                                              IRadientRenderer**         ppRenderer) override final;
 

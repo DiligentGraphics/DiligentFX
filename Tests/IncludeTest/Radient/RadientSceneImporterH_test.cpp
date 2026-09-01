@@ -32,5 +32,7 @@ void RadientSceneImporter_CPP_UseTypes()
 {
     RadientSceneInstantiateInfo InstantiateInfo;
 
+    InstantiateInfo.pAnimationRegistry = nullptr;
+
     (void)InstantiateInfo;
 }

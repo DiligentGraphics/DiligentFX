@@ -67,6 +67,9 @@ RADIENT_STATUS RadientSceneImporterImpl::ImportScene(const RadientSceneLoadInfo&
     *ppScene   = nullptr;
     RootEntity = InvalidRadientEntityID;
 
+    if (InstantiateInfo.pAnimationRegistry != nullptr)
+        return RADIENT_STATUS_UNSUPPORTED;
+
     if (m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -85,6 +88,9 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateScene(IRadientSceneAsset*   
                                                           RadientEntityID&                   RootEntity)
 {
     RootEntity = InvalidRadientEntityID;
+
+    if (InstantiateInfo.pAnimationRegistry != nullptr)
+        return RADIENT_STATUS_UNSUPPORTED;
 
     if (m_pWriter == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;

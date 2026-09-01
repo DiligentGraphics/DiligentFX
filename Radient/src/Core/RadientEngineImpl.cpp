@@ -170,6 +170,20 @@ RADIENT_STATUS RadientEngineImpl::CreateSceneImporter(IRadientSceneWriter* pWrit
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientEngineImpl::CreateAnimationRegistry(IRadientScene*              pScene,
+                                                          IRadientAnimationRegistry** ppRegistry)
+{
+    if (ppRegistry == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    DEV_CHECK_ERR(*ppRegistry == nullptr, "Output animation registry pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppRegistry = nullptr;
+    if (pScene == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    return RADIENT_STATUS_UNSUPPORTED;
+}
+
 RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc, IRadientRenderer** ppRenderer)
 {
     if (ppRenderer == nullptr)

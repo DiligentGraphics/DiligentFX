@@ -28,15 +28,16 @@
 
 void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
 {
-    RadientSceneCreateInfo SceneCI       = {0};
-    RadientRendererDesc    RendererDesc  = {0};
-    IRadientBackend*       pBackend      = 0;
-    IRadientAssetManager*  pAssetManager = 0;
-    IRadientScene*         pScene        = 0;
-    IRadientSceneWriter*   pWriter       = 0;
-    IRadientSceneImporter* pImporter     = 0;
-    IRadientRenderer*      pRenderer     = 0;
-    RADIENT_STATUS         Status        = RADIENT_STATUS_OK;
+    RadientSceneCreateInfo     SceneCI            = {0};
+    RadientRendererDesc        RendererDesc       = {0};
+    IRadientBackend*           pBackend           = 0;
+    IRadientAssetManager*      pAssetManager      = 0;
+    IRadientScene*             pScene             = 0;
+    IRadientSceneWriter*       pWriter            = 0;
+    IRadientSceneImporter*     pImporter          = 0;
+    IRadientAnimationRegistry* pAnimationRegistry = 0;
+    IRadientRenderer*          pRenderer          = 0;
+    RADIENT_STATUS             Status             = RADIENT_STATUS_OK;
 
     RendererDesc.MultiDrawBatchSize = 16;
 
@@ -45,6 +46,7 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
     Status = IRadientEngine_CreateScene(pEngine, &SceneCI, &pScene);
     Status = IRadientEngine_CreateSceneWriter(pEngine, pScene, &pWriter);
     Status = IRadientEngine_CreateSceneImporter(pEngine, pWriter, &pImporter);
+    Status = IRadientEngine_CreateAnimationRegistry(pEngine, pScene, &pAnimationRegistry);
     Status = IRadientEngine_CreateRenderer(pEngine, &RendererDesc, &pRenderer);
 
     (void)pBackend;
@@ -52,6 +54,7 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
     (void)pScene;
     (void)pWriter;
     (void)pImporter;
+    (void)pAnimationRegistry;
     (void)pRenderer;
     (void)Status;
 }

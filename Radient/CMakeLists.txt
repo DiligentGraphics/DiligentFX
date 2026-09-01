@@ -119,6 +119,7 @@ set(INCLUDE
 
 set(INTERFACE
     interface/Radient.h
+    interface/RadientAnimation.h
     interface/RadientAssetResolver.h
     interface/RadientAssets.h
     interface/RadientMaterials.h

@@ -30,6 +30,7 @@
 /// Defines Radient scene import interfaces.
 
 #include "RadientAssets.h"
+#include "RadientAnimation.h"
 #include "RadientScene.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
@@ -56,6 +57,15 @@ struct RadientSceneInstantiateInfo
 
     /// Optional scene index to instantiate. InvalidRadientSceneIndex uses the asset default scene.
     Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientSceneIndex);
+
+    /// Optional external animation registry associated with the destination
+    /// scene. When provided, the importer registers the instantiated entities
+    /// targeted by each imported skeleton animation. GetScene() must return the
+    /// destination scene; otherwise, instantiation fails with
+    /// RADIENT_STATUS_INVALID_ARGUMENT. The importer retains the registry while
+    /// an asynchronous instantiation is pending. The caller is responsible for
+    /// removing associations after later scene changes.
+    IRadientAnimationRegistry* pAnimationRegistry DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientSceneInstantiateInfo RadientSceneInstantiateInfo;
 

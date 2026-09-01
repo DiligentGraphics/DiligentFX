@@ -30,6 +30,8 @@ void RadientSceneImporter_C_UseTypes(void)
 {
     RadientSceneInstantiateInfo InstantiateInfo = {0};
 
+    InstantiateInfo.pAnimationRegistry = 0;
+
     (void)InstantiateInfo;
 }
 

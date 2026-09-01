@@ -30,6 +30,7 @@
 /// Defines the main Radient engine interface.
 
 #include "RadientAssets.h"
+#include "RadientAnimation.h"
 #include "RadientRenderer.h"
 #include "RadientSceneImporter.h"
 #include "RadientSceneWriter.h"
@@ -96,8 +97,15 @@ DILIGENT_BEGIN_INTERFACE(IRadientEngine, IObject)
 
     /// Creates a scene importer that writes into the scene through the specified writer.
     VIRTUAL RADIENT_STATUS METHOD(CreateSceneImporter)(THIS_
-                                                       IRadientSceneWriter*   pWriter,
+                                                       IRadientSceneWriter*    pWriter,
                                                        IRadientSceneImporter** ppImporter) PURE;
+
+    /// Creates an external animation registry associated with pScene. The
+    /// registry retains the scene and does not become owned by it. On success,
+    /// ppRegistry receives a strong reference.
+    VIRTUAL RADIENT_STATUS METHOD(CreateAnimationRegistry)(THIS_
+                                                           IRadientScene*              pScene,
+                                                           IRadientAnimationRegistry** ppRegistry) PURE;
 
     /// Creates a renderer.
     VIRTUAL RADIENT_STATUS METHOD(CreateRenderer)(THIS_
@@ -115,6 +123,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientEngine_CreateScene(This, ...)       CALL_IFACE_METHOD(RadientEngine, CreateScene,       This, __VA_ARGS__)
 #    define IRadientEngine_CreateSceneWriter(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateSceneWriter, This, __VA_ARGS__)
 #    define IRadientEngine_CreateSceneImporter(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateSceneImporter, This, __VA_ARGS__)
+#    define IRadientEngine_CreateAnimationRegistry(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateAnimationRegistry, This, __VA_ARGS__)
 #    define IRadientEngine_CreateRenderer(This, ...)    CALL_IFACE_METHOD(RadientEngine, CreateRenderer,    This, __VA_ARGS__)
 
 #endif

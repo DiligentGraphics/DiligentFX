@@ -24,14 +24,31 @@
  *  of the possibility of such damages.
  */
 
-#include "Radient/interface/RadientEngine.h"
+#include "Radient/interface/RadientAnimation.h"
 
-void RadientEngine_CPP_UseAnimationRegistry(Diligent::IRadientEngine* pEngine,
-                                            Diligent::IRadientScene*  pScene)
+void RadientAnimation_C_UseTypes(void)
 {
-    Diligent::IRadientAnimationRegistry* pRegistry = nullptr;
-    const Diligent::RADIENT_STATUS       Status    = pEngine->CreateAnimationRegistry(pScene, &pRegistry);
+    RadientAnimationTarget        Target = {0};
+    RadientAnimationRegistryEntry Entry  = {0};
+    RadientAnimationRegistryState State  = {0};
 
-    (void)pRegistry;
+    (void)Target;
+    (void)Entry;
+    (void)State;
+}
+
+void RadientAnimation_C_TestMacros(IRadientAnimationRegistry*      pRegistry,
+                                   IRadientSkeletonAnimationAsset* pAnimation)
+{
+    RadientEntityID Entities[1] = {0};
+    RADIENT_STATUS  Status      = RADIENT_STATUS_OK;
+
+    (void)IRadientAnimationRegistry_GetScene(pRegistry);
+    Status = IRadientAnimationRegistry_AddAnimatedEntities(pRegistry, pAnimation, Entities, 1);
+    Status = IRadientAnimationRegistry_RemoveAnimatedEntities(pRegistry, pAnimation, Entities, 1);
+    Status = IRadientAnimationRegistry_RemoveEntity(pRegistry, Entities[0]);
+    Status = IRadientAnimationRegistry_RemoveAnimation(pRegistry, pAnimation);
+    (void)IRadientAnimationRegistry_GetState(pRegistry);
+
     (void)Status;
 }
