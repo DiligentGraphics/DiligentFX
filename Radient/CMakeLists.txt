@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 3.13)
 project(Radient CXX)
 
 set(SOURCE
+    src/Animation/RadientAnimationRegistryImpl.cpp
     src/Assets/RadientAssetManagerImpl.cpp
     src/Assets/RadientAssetResolver.cpp
     src/Assets/RadientAssetValidation.cpp
@@ -61,6 +62,7 @@ set(SOURCE
 )
 
 set(INCLUDE
+    include/Animation/RadientAnimationRegistryImpl.hpp
     include/Assets/RadientAssetImpl.hpp
     include/Assets/RadientAssetCache.hpp
     include/Assets/RadientAssetManagerImpl.hpp

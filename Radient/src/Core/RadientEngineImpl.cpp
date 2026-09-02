@@ -26,6 +26,7 @@
 
 #include "Core/RadientEngineImpl.hpp"
 
+#include "Animation/RadientAnimationRegistryImpl.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Core/RadientBackendImpl.hpp"
 #include "Render/RadientRendererImpl.hpp"
@@ -181,7 +182,12 @@ RADIENT_STATUS RadientEngineImpl::CreateAnimationRegistry(IRadientScene*        
     if (pScene == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    return RADIENT_STATUS_UNSUPPORTED;
+    RefCntAutoPtr<IRadientAnimationRegistry> pRegistry = CreateRadientAnimationRegistry(pScene);
+    if (pRegistry == nullptr)
+        return RADIENT_STATUS_FAILED;
+
+    *ppRegistry = pRegistry.Detach();
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc, IRadientRenderer** ppRenderer)
