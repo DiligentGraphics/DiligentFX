@@ -131,7 +131,8 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
 RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scene,
                                      Uint32                                 SceneIndex,
                                      IRadientSceneWriter&                   Writer,
-                                     RadientEntityID                        RootEntity);
+                                     RadientEntityID                        RootEntity,
+                                     IRadientAnimationRegistry*             pAnimationRegistry = nullptr);
 
 } // namespace RadientGLTFConverter
 

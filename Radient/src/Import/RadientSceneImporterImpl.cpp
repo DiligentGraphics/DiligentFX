@@ -67,11 +67,12 @@ RADIENT_STATUS RadientSceneImporterImpl::ImportScene(const RadientSceneLoadInfo&
     *ppScene   = nullptr;
     RootEntity = InvalidRadientEntityID;
 
-    if (InstantiateInfo.pAnimationRegistry != nullptr)
-        return RADIENT_STATUS_UNSUPPORTED;
-
     if (m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
+
+    const RADIENT_STATUS RegistryStatus = ValidateAnimationRegistry(InstantiateInfo.pAnimationRegistry);
+    if (RADIENT_FAILED(RegistryStatus))
+        return RegistryStatus;
 
     RefCntAutoPtr<IRadientSceneAsset> pScene;
     const RADIENT_STATUS              LoadStatus = m_pAssetManager->LoadScene(LoadInfo, &pScene);
@@ -89,14 +90,15 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateScene(IRadientSceneAsset*   
 {
     RootEntity = InvalidRadientEntityID;
 
-    if (InstantiateInfo.pAnimationRegistry != nullptr)
-        return RADIENT_STATUS_UNSUPPORTED;
-
     if (m_pWriter == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS RegistryStatus = ValidateAnimationRegistry(InstantiateInfo.pAnimationRegistry);
+    if (RADIENT_FAILED(RegistryStatus))
+        return RegistryStatus;
 
     const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetSceneLoadStatus(pModel);
     if (RADIENT_FAILED(LoadStatus))
@@ -112,7 +114,8 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateScene(IRadientSceneAsset*   
         return RADIENT_STATUS_PENDING;
     }
 
-    Status = PopulateSceneRoot(pModel, InstantiateInfo.SceneIndex, RootEntity);
+    Status = PopulateSceneRoot(pModel, InstantiateInfo.SceneIndex, RootEntity,
+                               InstantiateInfo.pAnimationRegistry);
     if (RADIENT_FAILED(Status))
     {
         m_pWriter->DestroyEntity(RootEntity);
@@ -146,7 +149,8 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
 
         RADIENT_STATUS Status = LoadStatus;
         if (!RADIENT_FAILED(Status))
-            Status = PopulateSceneRoot(Pending.pModel, Pending.SceneIndex, Pending.RootEntity);
+            Status = PopulateSceneRoot(Pending.pModel, Pending.SceneIndex, Pending.RootEntity,
+                                       Pending.pAnimationRegistry);
 
         if (RADIENT_FAILED(Status))
             m_pWriter->DestroyEntity(Pending.RootEntity);
@@ -160,6 +164,20 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
     }
 
     return Result;
+}
+
+RADIENT_STATUS RadientSceneImporterImpl::ValidateAnimationRegistry(IRadientAnimationRegistry* pAnimationRegistry) const
+{
+    if (pAnimationRegistry == nullptr)
+        return RADIENT_STATUS_OK;
+
+    if (m_pWriter == nullptr || pAnimationRegistry->GetScene() != m_pWriter->GetScene())
+    {
+        LOG_ERROR_MESSAGE("The animation registry and scene writer must reference the same scene");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneImporterImpl::CreateSceneRoot(IRadientSceneAsset*                pModel,
@@ -180,9 +198,10 @@ RADIENT_STATUS RadientSceneImporterImpl::CreateSceneRoot(IRadientSceneAsset*    
     return m_pWriter->CreateEntity(RootDesc, RootEntity);
 }
 
-RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset* pModel,
-                                                           Uint32              SceneIndex,
-                                                           RadientEntityID     RootEntity)
+RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset*        pModel,
+                                                           Uint32                     SceneIndex,
+                                                           RadientEntityID            RootEntity,
+                                                           IRadientAnimationRegistry* pAnimationRegistry)
 {
     if (m_pWriter == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
@@ -191,7 +210,7 @@ RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset* p
     if (pImportedScene == nullptr)
         return RADIENT_STATUS_FAILED;
 
-    return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity);
+    return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity, pAnimationRegistry);
 }
 
 void RadientSceneImporterImpl::AddPendingSceneInstantiation(IRadientSceneAsset*                pModel,
@@ -199,9 +218,10 @@ void RadientSceneImporterImpl::AddPendingSceneInstantiation(IRadientSceneAsset* 
                                                             RadientEntityID                    RootEntity)
 {
     PendingSceneInstantiation Pending;
-    Pending.pModel     = pModel;
-    Pending.SceneIndex = InstantiateInfo.SceneIndex;
-    Pending.RootEntity = RootEntity;
+    Pending.pModel             = pModel;
+    Pending.pAnimationRegistry = InstantiateInfo.pAnimationRegistry;
+    Pending.SceneIndex         = InstantiateInfo.SceneIndex;
+    Pending.RootEntity         = RootEntity;
 
     m_PendingSceneInstantiations.emplace_back(std::move(Pending));
 }

@@ -172,7 +172,8 @@ public:
                        IRadientTextureAsset*          pEnvironmentMap,
                        ISwapChain*                    pSwapChain,
                        const RadientRenderTestCamera& Camera,
-                       bool                           DirectionalLight) :
+                       bool                           DirectionalLight,
+                       bool                           EnableAnimationRegistry) :
         m_pRenderer{pRenderer},
         m_pView{pView},
         m_pEnvironmentMap{pEnvironmentMap}
@@ -182,6 +183,13 @@ public:
         m_Status          = pEngine->CreateScene(SceneCI, &m_pScene);
         if (RADIENT_FAILED(m_Status))
             return;
+
+        if (EnableAnimationRegistry)
+        {
+            m_Status = pEngine->CreateAnimationRegistry(m_pScene, &m_pAnimationRegistry);
+            if (RADIENT_FAILED(m_Status))
+                return;
+        }
 
         m_Status = pEngine->CreateSceneWriter(m_pScene, &m_pWriter);
         if (RADIENT_FAILED(m_Status))
@@ -270,10 +278,12 @@ public:
         LoadInfo.URI = ModelPath;
 
         RadientSceneInstantiateInfo InstantiateInfo{};
-        InstantiateInfo.Name = "Render test model";
+        InstantiateInfo.Name               = "Render test model";
+        InstantiateInfo.pAnimationRegistry = m_pAnimationRegistry;
 
-        const RADIENT_STATUS Status = m_pImporter->ImportScene(
-            LoadInfo, InstantiateInfo, &m_pSceneAsset, m_ModelRoot);
+        RadientEntityID      ModelRoot = InvalidRadientEntityID;
+        const RADIENT_STATUS Status    = m_pImporter->ImportScene(
+            LoadInfo, InstantiateInfo, &m_pSceneAsset, ModelRoot);
         if (RADIENT_FAILED(Status))
             return Status;
 
@@ -310,101 +320,40 @@ public:
 
     RADIENT_STATUS EvaluateAnimation(const RadientRenderTestAnimation& AnimationSettings)
     {
-        if (m_pSceneAsset == nullptr || m_ModelRoot == InvalidRadientEntityID)
+        if (m_pAnimationRegistry == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        const RadientSceneAssetDesc&     SceneDesc           = m_pSceneAsset->GetDesc();
-        const RadientSceneAnimationDesc* pSceneAnimation     = nullptr;
-        Uint32                           AnimationMatchCount = 0;
-        for (Uint32 AnimationIndex = 0; AnimationIndex < SceneDesc.AnimationCount; ++AnimationIndex)
+        const RadientAnimationRegistryState& RegistryState  = m_pAnimationRegistry->GetState();
+        bool                                 AnimationFound = false;
+        for (Uint32 EntryIndex = 0; EntryIndex < RegistryState.EntryCount; ++EntryIndex)
         {
-            const RadientSceneAnimationDesc& Candidate = SceneDesc.pAnimations[AnimationIndex];
-            if (std::strcmp(Candidate.Name, AnimationSettings.Name.c_str()) == 0)
-            {
-                pSceneAnimation = &Candidate;
-                ++AnimationMatchCount;
-            }
-        }
-
-        if (AnimationMatchCount != 1 ||
-            AnimationSettings.Time > pSceneAnimation->Duration)
-        {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-
-        std::vector<RefCntAutoPtr<IRadientSkeletonPose>> Poses;
-        std::vector<RadientEntityID>                     PendingEntities{m_ModelRoot};
-        for (size_t EntityIndex = 0; EntityIndex < PendingEntities.size(); ++EntityIndex)
-        {
-            const RadientEntityID Entity = PendingEntities[EntityIndex];
-
-            RadientSkinComponent Skin{};
-            const RADIENT_STATUS SkinStatus = m_pScene->GetSkin(Entity, Skin);
-            if (SkinStatus == RADIENT_STATUS_OK && Skin.pPose != nullptr)
-            {
-                const auto PoseIt = std::find_if(
-                    Poses.begin(), Poses.end(),
-                    [pPose = Skin.pPose](const RefCntAutoPtr<IRadientSkeletonPose>& pStoredPose) {
-                        return pStoredPose == pPose;
-                    });
-                if (PoseIt == Poses.end())
-                    Poses.emplace_back(Skin.pPose);
-            }
-            else if (SkinStatus != RADIENT_STATUS_NOT_FOUND)
-            {
-                return SkinStatus;
-            }
-
-            Uint32               ChildCount       = 0;
-            const RADIENT_STATUS ChildCountStatus = m_pScene->GetChildCount(Entity, ChildCount);
-            if (RADIENT_FAILED(ChildCountStatus))
-                return ChildCountStatus;
-
-            if (ChildCount == 0)
-                continue;
-
-            const size_t FirstChild = PendingEntities.size();
-            PendingEntities.resize(FirstChild + ChildCount);
-
-            Uint32               NumChildrenWritten = 0;
-            const RADIENT_STATUS ChildrenStatus     = m_pScene->GetChildren(
-                Entity,
-                0,
-                ChildCount,
-                PendingEntities.data() + FirstChild,
-                NumChildrenWritten);
-            if (RADIENT_FAILED(ChildrenStatus))
-                return ChildrenStatus;
-            PendingEntities.resize(FirstChild + NumChildrenWritten);
-        }
-
-        for (Uint32 BindingIndex = 0;
-             BindingIndex < pSceneAnimation->SkeletonAnimationCount;
-             ++BindingIndex)
-        {
-            IRadientSkeletonAnimationAsset* const pAnimation =
-                pSceneAnimation->pSkeletonAnimations[BindingIndex].pAnimation;
-            if (pAnimation == nullptr)
+            const RadientAnimationRegistryEntry& Entry = RegistryState.pEntries[EntryIndex];
+            if (Entry.pAnimation == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
 
-            IRadientSkeletonAsset* const pSkeleton     = pAnimation->GetDesc().pSkeleton;
-            bool                         PoseEvaluated = false;
-            for (const RefCntAutoPtr<IRadientSkeletonPose>& pPose : Poses)
-            {
-                if (pPose->GetSkeleton() != pSkeleton)
-                    continue;
+            const RadientSkeletonAnimationDesc& AnimationDesc = Entry.pAnimation->GetDesc();
+            if (std::strcmp(AnimationDesc.Name, AnimationSettings.Name.c_str()) != 0)
+                continue;
 
-                const RADIENT_STATUS Status = pAnimation->Evaluate(AnimationSettings.Time, pPose, True);
+            AnimationFound = true;
+            if (AnimationSettings.Time > AnimationDesc.Duration)
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            if (Entry.TargetCount == 0)
+                return RADIENT_STATUS_INVALID_OPERATION;
+
+            for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
+            {
+                IRadientSkeletonPose* const pPose = Entry.pTargets[TargetIndex].pPose;
+                if (pPose == nullptr)
+                    return RADIENT_STATUS_INVALID_OPERATION;
+
+                const RADIENT_STATUS Status = Entry.pAnimation->Evaluate(AnimationSettings.Time, pPose, True);
                 if (RADIENT_FAILED(Status))
                     return Status;
-                PoseEvaluated = true;
             }
-
-            if (!PoseEvaluated)
-                return RADIENT_STATUS_NOT_FOUND;
         }
 
-        return RADIENT_STATUS_OK;
+        return AnimationFound ? RADIENT_STATUS_OK : RADIENT_STATUS_NOT_FOUND;
     }
 
     RADIENT_STATUS RenderFrame(IDeviceContext* pContext, double Time)
@@ -418,17 +367,17 @@ public:
     }
 
 private:
-    RefCntAutoPtr<IRadientScene>         m_pScene;
-    RefCntAutoPtr<IRadientSceneWriter>   m_pWriter;
-    RefCntAutoPtr<IRadientSceneImporter> m_pImporter;
-    RefCntAutoPtr<IRadientRenderer>      m_pRenderer;
-    RefCntAutoPtr<IRadientRenderTarget>  m_pRenderTarget;
-    RefCntAutoPtr<IRadientView>          m_pView;
-    RefCntAutoPtr<IRadientTextureAsset>  m_pEnvironmentMap;
-    RefCntAutoPtr<IRadientSceneAsset>    m_pSceneAsset;
+    RefCntAutoPtr<IRadientScene>             m_pScene;
+    RefCntAutoPtr<IRadientSceneWriter>       m_pWriter;
+    RefCntAutoPtr<IRadientSceneImporter>     m_pImporter;
+    RefCntAutoPtr<IRadientAnimationRegistry> m_pAnimationRegistry;
+    RefCntAutoPtr<IRadientRenderer>          m_pRenderer;
+    RefCntAutoPtr<IRadientRenderTarget>      m_pRenderTarget;
+    RefCntAutoPtr<IRadientView>              m_pView;
+    RefCntAutoPtr<IRadientTextureAsset>      m_pEnvironmentMap;
+    RefCntAutoPtr<IRadientSceneAsset>        m_pSceneAsset;
 
     RadientEntityID m_CameraEntity = InvalidRadientEntityID;
-    RadientEntityID m_ModelRoot    = InvalidRadientEntityID;
     RADIENT_STATUS  m_Status       = RADIENT_STATUS_INVALID_OPERATION;
     bool            m_ViewAttached = false;
 };
@@ -500,7 +449,8 @@ private:
                                  GetEnvironmentMap(),
                                  pSwapChain,
                                  m_TestCase.Camera,
-                                 m_TestCase.DirectionalLight};
+                                 m_TestCase.DirectionalLight,
+                                 m_TestCase.Animation.has_value()};
         ASSERT_EQ(Scene.GetStatus(), RADIENT_STATUS_OK);
         const RADIENT_STATUS ImportStatus = Scene.Import(ModelPath.c_str());
         ASSERT_TRUE(IsPendingOrOK(ImportStatus))

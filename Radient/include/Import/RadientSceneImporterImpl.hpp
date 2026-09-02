@@ -66,18 +66,22 @@ public:
 private:
     struct PendingSceneInstantiation
     {
-        RefCntAutoPtr<IRadientSceneAsset> pModel;
-        Uint32                            SceneIndex = InvalidRadientSceneIndex;
-        RadientEntityID                   RootEntity = InvalidRadientEntityID;
+        RefCntAutoPtr<IRadientSceneAsset>        pModel;
+        RefCntAutoPtr<IRadientAnimationRegistry> pAnimationRegistry;
+        Uint32                                   SceneIndex = InvalidRadientSceneIndex;
+        RadientEntityID                          RootEntity = InvalidRadientEntityID;
     };
+
+    RADIENT_STATUS ValidateAnimationRegistry(IRadientAnimationRegistry* pAnimationRegistry) const;
 
     RADIENT_STATUS CreateSceneRoot(IRadientSceneAsset*                pModel,
                                    const RadientSceneInstantiateInfo& InstantiateInfo,
                                    RadientEntityID&                   RootEntity);
 
-    RADIENT_STATUS PopulateSceneRoot(IRadientSceneAsset* pModel,
-                                     Uint32              SceneIndex,
-                                     RadientEntityID     RootEntity);
+    RADIENT_STATUS PopulateSceneRoot(IRadientSceneAsset*        pModel,
+                                     Uint32                     SceneIndex,
+                                     RadientEntityID            RootEntity,
+                                     IRadientAnimationRegistry* pAnimationRegistry);
 
     void AddPendingSceneInstantiation(IRadientSceneAsset*                pModel,
                                       const RadientSceneInstantiateInfo& InstantiateInfo,

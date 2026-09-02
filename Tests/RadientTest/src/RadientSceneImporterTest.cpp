@@ -180,12 +180,13 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
 
 struct ImportFixture
 {
-    RefCntAutoPtr<IRadientEngine>        pEngine;
-    RefCntAutoPtr<IRadientAssetManager>  pAssetManager;
-    RefCntAutoPtr<IRadientScene>         pScene;
-    RefCntAutoPtr<IRadientSceneWriter>   pWriter;
-    RefCntAutoPtr<IRadientSceneImporter> pImporter;
-    RefCntAutoPtr<IThreadPool>           pThreadPool;
+    RefCntAutoPtr<IRadientEngine>            pEngine;
+    RefCntAutoPtr<IRadientAssetManager>      pAssetManager;
+    RefCntAutoPtr<IRadientScene>             pScene;
+    RefCntAutoPtr<IRadientSceneWriter>       pWriter;
+    RefCntAutoPtr<IRadientSceneImporter>     pImporter;
+    RefCntAutoPtr<IRadientAnimationRegistry> pAnimationRegistry;
+    RefCntAutoPtr<IThreadPool>               pThreadPool;
 };
 
 ImportFixture CreateImportFixture(IThreadPool* pThreadPool = nullptr)
@@ -205,6 +206,11 @@ ImportFixture CreateImportFixture(IThreadPool* pThreadPool = nullptr)
 
         EXPECT_EQ(Fixture.pEngine->CreateScene({}, &Fixture.pScene), RADIENT_STATUS_OK);
         EXPECT_NE(Fixture.pScene, nullptr);
+
+        EXPECT_EQ(Fixture.pEngine->CreateAnimationRegistry(
+                      Fixture.pScene, Fixture.pAnimationRegistry.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        EXPECT_NE(Fixture.pAnimationRegistry, nullptr);
 
         EXPECT_EQ(Fixture.pEngine->CreateSceneWriter(Fixture.pScene, &Fixture.pWriter), RADIENT_STATUS_OK);
         EXPECT_NE(Fixture.pWriter, nullptr);
@@ -297,6 +303,19 @@ const CapturedRenderableLight* FindLight(const std::vector<CapturedRenderableLig
                      });
 
     return It != Lights.end() ? &*It : nullptr;
+}
+
+const RadientAnimationRegistryEntry* FindAnimationRegistryEntry(
+    const RadientAnimationRegistryState& State,
+    IRadientSkeletonAnimationAsset*      pAnimation)
+{
+    for (Uint32 EntryIndex = 0; EntryIndex < State.EntryCount; ++EntryIndex)
+    {
+        if (State.pEntries[EntryIndex].pAnimation == pAnimation)
+            return &State.pEntries[EntryIndex];
+    }
+
+    return nullptr;
 }
 
 TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
@@ -810,7 +829,44 @@ TEST(RadientSceneImporterTest, ImportsLights)
     EXPECT_EQ(pSpot->EffectiveVisible, True);
 }
 
-TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
+TEST(RadientSceneImporterTest, RejectsAnimationRegistryForAnotherScene)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFFile(TempDir, "empty.gltf",
+                                               R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": []}]
+})GLTF");
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+
+    RefCntAutoPtr<IRadientScene> pOtherScene;
+    ASSERT_EQ(Fixture.pEngine->CreateScene({}, pOtherScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pOtherScene, nullptr);
+
+    RefCntAutoPtr<IRadientAnimationRegistry> pOtherRegistry;
+    ASSERT_EQ(Fixture.pEngine->CreateAnimationRegistry(
+                  pOtherScene, pOtherRegistry.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pOtherRegistry, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.pAnimationRegistry = pOtherRegistry;
+
+    TestingEnvironment::ErrorScope ExpectedError{
+        "The animation registry and scene writer must reference the same scene"};
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    EXPECT_EQ(ImportResult.Status, RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(ImportResult.pModel, nullptr);
+    EXPECT_EQ(ImportResult.RootEntity, InvalidRadientEntityID);
+}
+
+TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
 {
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFSkinFile(TempDir);
@@ -824,7 +880,8 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     LoadInfo.URI = GLTFPath.c_str();
 
     RadientSceneInstantiateInfo InstantiateInfo{};
-    InstantiateInfo.Name = "First skinned instance";
+    InstantiateInfo.Name               = "First skinned instance";
+    InstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
 
     const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
     ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
@@ -844,33 +901,36 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
 
     ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
-    const RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
-    ASSERT_NE(pSceneImpl, nullptr);
-
     struct CapturedSkin
     {
         RefCntAutoPtr<IRadientSkinAsset>    pSkin;
         RefCntAutoPtr<IRadientSkeletonPose> pPose;
     };
 
-    const auto CaptureSkins = [pSceneImpl]() {
+    const auto CaptureSkins = [&Fixture](const RadientAnimationRegistryEntry& Entry) {
         std::vector<CapturedSkin> Skins;
-        EXPECT_EQ(pSceneImpl->GetState().EnumerateRenderableMeshes(
-                      [&Skins](const RadientSceneState::RenderableMesh& Mesh) {
-                          EXPECT_NE(Mesh.pSkin, nullptr);
-                          if (Mesh.pSkin != nullptr)
-                          {
-                              CapturedSkin Skin;
-                              Skin.pSkin = Mesh.pSkin->pSkin;
-                              Skin.pPose = Mesh.pSkin->pPose;
-                              Skins.emplace_back(std::move(Skin));
-                          }
-                      }),
-                  RADIENT_STATUS_OK);
+        Skins.reserve(Entry.TargetCount);
+        for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
+        {
+            const RadientAnimationTarget& Target = Entry.pTargets[TargetIndex];
+            RadientSkinComponent          SkinComponent{};
+            EXPECT_EQ(Fixture.pScene->GetSkin(Target.Entity, SkinComponent), RADIENT_STATUS_OK);
+            EXPECT_EQ(SkinComponent.pPose, Target.pPose);
+            if (SkinComponent.pSkin != nullptr && SkinComponent.pPose != nullptr)
+            {
+                CapturedSkin& Skin = Skins.emplace_back();
+                Skin.pSkin         = SkinComponent.pSkin;
+                Skin.pPose         = SkinComponent.pPose;
+            }
+        }
         return Skins;
     };
 
-    std::vector<CapturedSkin> Skins = CaptureSkins();
+    const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
+        Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
+    ASSERT_NE(pRegistryEntry, nullptr);
+
+    std::vector<CapturedSkin> Skins = CaptureSkins(*pRegistryEntry);
     ASSERT_EQ(Skins.size(), 2u);
     ASSERT_NE(Skins[0].pSkin, nullptr);
     ASSERT_NE(Skins[0].pPose, nullptr);
@@ -915,14 +975,18 @@ TEST(RadientSceneImporterTest, ImportsSkinsAndCreatesPosesPerSceneInstance)
     ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
 
     RadientSceneInstantiateInfo SecondInstantiateInfo{};
-    SecondInstantiateInfo.Name = "Second skinned instance";
-    RadientEntityID SecondRoot = InvalidRadientEntityID;
+    SecondInstantiateInfo.Name               = "Second skinned instance";
+    SecondInstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+    RadientEntityID SecondRoot               = InvalidRadientEntityID;
     ASSERT_EQ(Fixture.pImporter->InstantiateScene(ImportResult.pModel, SecondInstantiateInfo, SecondRoot),
               RADIENT_STATUS_OK);
     ASSERT_NE(SecondRoot, InvalidRadientEntityID);
     ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
-    Skins = CaptureSkins();
+    pRegistryEntry = FindAnimationRegistryEntry(
+        Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
+    ASSERT_NE(pRegistryEntry, nullptr);
+    Skins = CaptureSkins(*pRegistryEntry);
     ASSERT_EQ(Skins.size(), 4u);
 
     IRadientSkeletonPose* pSecondPose        = nullptr;

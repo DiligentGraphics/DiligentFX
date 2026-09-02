@@ -49,6 +49,10 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
 /// Scene graph mutation interface.
 DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
 {
+    /// Returns the scene modified by this writer. The returned pointer is
+    /// borrowed and remains valid for the writer lifetime.
+    VIRTUAL IRadientScene* METHOD(GetScene)(THIS) CONST PURE;
+
     /// Creates an entity.
     VIRTUAL RADIENT_STATUS METHOD(CreateEntity)(THIS_
                                                 const RadientEntityDesc REF Desc,
@@ -130,6 +134,7 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
+#    define IRadientSceneWriter_GetScene(This)                    CALL_IFACE_METHOD(RadientSceneWriter, GetScene,          This)
 #    define IRadientSceneWriter_CreateEntity(This, ...)           CALL_IFACE_METHOD(RadientSceneWriter, CreateEntity,      This, __VA_ARGS__)
 #    define IRadientSceneWriter_DestroyEntity(This, ...)          CALL_IFACE_METHOD(RadientSceneWriter, DestroyEntity,     This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetEntityFlags(This, ...)         CALL_IFACE_METHOD(RadientSceneWriter, SetEntityFlags,    This, __VA_ARGS__)

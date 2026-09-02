@@ -35,6 +35,7 @@
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
+#include "RadientEngine.h"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientSkinning.h"
 #include "RadientTestAssetHelpers.hpp"
@@ -1545,4 +1546,130 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
         EXPECT_EQ(pAnimation->GetDesc().pSkeleton, Scene.Skins[SkinIndex]->GetDesc().pSkeleton);
     }
     EXPECT_NE(Scene.Skins[0]->GetDesc().pSkeleton, Scene.Skins[1]->GetDesc().pSkeleton);
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc Joint{};
+    Joint.Name = "Root";
+
+    RadientSkeletonDesc SkeletonDesc{};
+    SkeletonDesc.Name       = "Null animation binding skeleton";
+    SkeletonDesc.pJoints    = &Joint;
+    SkeletonDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
+    ASSERT_EQ(pAssetManager->CreateSkeleton(SkeletonDesc, pSkeleton.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
+    RadientSkinJointBindingDesc JointBinding{};
+    JointBinding.SkeletonJointIndex = 0;
+
+    RadientSkinDesc SkinDesc{};
+    SkinDesc.Name       = "Null animation binding skin";
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = &JointBinding;
+    SkinDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientSkeletonAnimationDesc AnimationDesc{};
+    AnimationDesc.Name      = "Valid animation";
+    AnimationDesc.pSkeleton = pSkeleton;
+    AnimationDesc.Duration  = 1.f;
+
+    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation;
+    ASSERT_EQ(pAssetManager->CreateSkeletonAnimation(AnimationDesc, pAnimation.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://null-animation-binding", 1);
+    ASSERT_NE(pMesh, nullptr);
+
+    RadientImport::ImportedDocument ImportedScene;
+    ImportedScene.Skins.emplace_back(pSkin);
+
+    RadientImport::ImportedNode& Node = ImportedScene.Nodes.emplace_back();
+    Node.pMesh                        = pMesh;
+    Node.SkinIndex                    = 0;
+
+    ImportedScene.Scenes.emplace_back().RootNodes.push_back(0);
+
+    RadientImport::ImportedAnimation& ImportedAnimation = ImportedScene.Animations.emplace_back();
+    ImportedAnimation.Name                              = "Imported animation";
+    ImportedAnimation.AddSkeletonAnimation(pAnimation);
+    ImportedAnimation.SkeletonAnimationBindings.push_back({nullptr});
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAnimationRegistry> pRegistry;
+    ASSERT_EQ(pEngine->CreateAnimationRegistry(pScene, pRegistry.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
+                  ImportedScene, 0, *pWriter, RootEntity, pRegistry),
+              RADIENT_STATUS_OK);
+
+    const RadientAnimationRegistryState& RegistryState = pRegistry->GetState();
+    ASSERT_EQ(RegistryState.EntryCount, 1u);
+    EXPECT_EQ(RegistryState.pEntries[0].pAnimation, pAnimation);
+    EXPECT_EQ(RegistryState.pEntries[0].TargetCount, 1u);
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphRendersMeshWithoutAvailableSkin)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://missing-skin", 1);
+    ASSERT_NE(pMesh, nullptr);
+
+    RadientImport::ImportedDocument ImportedScene;
+    RadientImport::ImportedNode&    Node = ImportedScene.Nodes.emplace_back();
+    Node.Name                            = "Missing skin node";
+    Node.pMesh                           = pMesh;
+    Node.SkinIndex                       = 0;
+    ImportedScene.Scenes.emplace_back().RootNodes.push_back(0);
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(ImportedScene, 0, *pWriter, RootEntity),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 ChildCount = 0;
+    ASSERT_EQ(pScene->GetChildCount(RootEntity, ChildCount), RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildCount, 1u);
+
+    RadientEntityID MeshEntity         = InvalidRadientEntityID;
+    Uint32          NumChildrenWritten = 0;
+    ASSERT_EQ(pScene->GetChildren(RootEntity, 0, 1, &MeshEntity, NumChildrenWritten), RADIENT_STATUS_OK);
+    ASSERT_EQ(NumChildrenWritten, 1u);
+
+    Bool HasComponent = False;
+    EXPECT_EQ(pScene->HasComponent(MeshEntity, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, True);
+    EXPECT_EQ(pScene->HasComponent(MeshEntity, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, True);
+    EXPECT_EQ(pScene->HasComponent(MeshEntity, RADIENT_COMPONENT_TYPE_SKIN, HasComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, False);
 }

@@ -29,14 +29,13 @@
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
 
-#include <utility>
-
 namespace Diligent
 {
 
-RadientSceneWriterImpl::RadientSceneWriterImpl(IReferenceCounters* pRefCounters, std::shared_ptr<RadientSceneState> pState) :
+RadientSceneWriterImpl::RadientSceneWriterImpl(IReferenceCounters* pRefCounters, RadientSceneImpl* pScene) :
     TBase{pRefCounters},
-    m_pState{std::move(pState)}
+    m_pScene{pScene},
+    m_pState{pScene != nullptr ? pScene->m_pState : nullptr}
 {}
 
 RadientSceneWriterImpl::~RadientSceneWriterImpl()
@@ -45,7 +44,12 @@ RadientSceneWriterImpl::~RadientSceneWriterImpl()
 
 RefCntAutoPtr<IRadientSceneWriter> RadientSceneWriterImpl::Create(RadientSceneImpl* pScene)
 {
-    return RefCntAutoPtr<RadientSceneWriterImpl>{MakeNewRCObj<RadientSceneWriterImpl>()(pScene != nullptr ? pScene->m_pState : nullptr)};
+    return RefCntAutoPtr<RadientSceneWriterImpl>{MakeNewRCObj<RadientSceneWriterImpl>()(pScene)};
+}
+
+IRadientScene* RadientSceneWriterImpl::GetScene() const
+{
+    return m_pScene;
 }
 
 RADIENT_STATUS RadientSceneWriterImpl::CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity)

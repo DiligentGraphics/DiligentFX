@@ -28,6 +28,7 @@
 
 void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
 {
+    IRadientScene*                   pScene           = 0;
     RadientEntityID                  Entity           = 0;
     RadientEntityDesc                EntityDesc       = {0};
     RADIENT_ENTITY_FLAGS             EntityFlags      = 0;
@@ -41,6 +42,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     RadientCustomComponentData       CustomComponent  = {0};
     RADIENT_STATUS                   Status           = RADIENT_STATUS_OK;
 
+    pScene = IRadientSceneWriter_GetScene(pWriter);
     Status = IRadientSceneWriter_CreateEntity(pWriter, &EntityDesc, &Entity);
     Status = IRadientSceneWriter_DestroyEntity(pWriter, Entity);
     Status = IRadientSceneWriter_SetEntityFlags(pWriter, Entity, EntityFlags);
@@ -57,5 +59,6 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     Status = IRadientSceneWriter_RemoveComponent(pWriter, Entity, CustomComponent.ComponentType);
     Status = IRadientSceneWriter_CommitChanges(pWriter);
 
+    (void)pScene;
     (void)Status;
 }

@@ -38,6 +38,15 @@
 #include "GLTFLoader.hpp"
 #include "GraphicsAccessories.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include "../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
@@ -57,6 +66,8 @@ namespace Diligent
 
 namespace
 {
+
+using SkeletonEntityMap = absl::flat_hash_map<IRadientSkeletonAsset*, std::vector<RadientEntityID>>;
 
 struct MeshSourceDataOwner
 {
@@ -679,7 +690,8 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                           const RadientImport::ImportedDocument&            Scene,
                           Uint32                                            NodeIndex,
                           RadientEntityID                                   Parent,
-                          std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses)
+                          std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
+                          SkeletonEntityMap*                                pSkeletonEntities)
 {
     if (NodeIndex >= Scene.Nodes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -722,26 +734,40 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
         if (Node.SkinIndex != RadientImport::InvalidImportedSkinIndex)
         {
             if (Node.SkinIndex >= Scene.Skins.size() || Scene.Skins[Node.SkinIndex] == nullptr)
-                return RADIENT_STATUS_INVALID_DATA;
-
-            RefCntAutoPtr<IRadientSkeletonPose>& pPose = SkinPoses[Node.SkinIndex];
-            if (pPose == nullptr)
             {
-                IRadientSkeletonAsset* const pSkeleton = Scene.Skins[Node.SkinIndex]->GetDesc().pSkeleton;
-                if (pSkeleton == nullptr)
-                    return RADIENT_STATUS_INVALID_DATA;
-
-                Status = pSkeleton->CreatePose(pPose.GetAddressOfEmpty());
-                if (RADIENT_FAILED(Status) || pPose == nullptr)
-                    return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+                LOG_WARNING_MESSAGE("Imported node '", NodeDesc.Name, "' references unavailable skin ",
+                                    Node.SkinIndex, "; rendering the mesh without skinning");
             }
+            else
+            {
+                IRadientSkinAsset* const     pSkin     = Scene.Skins[Node.SkinIndex];
+                IRadientSkeletonAsset* const pSkeleton = pSkin->GetDesc().pSkeleton;
+                if (pSkeleton == nullptr)
+                {
+                    LOG_WARNING_MESSAGE("Imported node '", NodeDesc.Name, "' references skin ",
+                                        Node.SkinIndex, " without a skeleton; rendering the mesh without skinning");
+                }
+                else
+                {
+                    RefCntAutoPtr<IRadientSkeletonPose>& pPose = SkinPoses[Node.SkinIndex];
+                    if (pPose == nullptr)
+                    {
+                        Status = pSkeleton->CreatePose(pPose.GetAddressOfEmpty());
+                        if (RADIENT_FAILED(Status) || pPose == nullptr)
+                            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+                    }
 
-            RadientSkinComponent SkinComponent{};
-            SkinComponent.pSkin = Scene.Skins[Node.SkinIndex];
-            SkinComponent.pPose = pPose;
-            Status              = Writer.SetSkin(NodeEntity, SkinComponent);
-            if (RADIENT_FAILED(Status))
-                return Status;
+                    RadientSkinComponent SkinComponent{};
+                    SkinComponent.pSkin = pSkin;
+                    SkinComponent.pPose = pPose;
+                    Status              = Writer.SetSkin(NodeEntity, SkinComponent);
+                    if (RADIENT_FAILED(Status))
+                        return Status;
+
+                    if (pSkeletonEntities != nullptr)
+                        (*pSkeletonEntities)[pSkeleton].push_back(NodeEntity);
+                }
+            }
         }
 
         RadientMeshRendererComponent Renderer{};
@@ -751,14 +777,92 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     }
     else if (Node.SkinIndex != RadientImport::InvalidImportedSkinIndex)
     {
-        return RADIENT_STATUS_INVALID_DATA;
+        LOG_WARNING_MESSAGE("Imported node '", NodeDesc.Name, "' references skin ", Node.SkinIndex,
+                            " but has no mesh; ignoring the skin reference");
     }
 
     for (Uint32 ChildIndex : Node.Children)
     {
-        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, SkinPoses);
+        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, SkinPoses, pSkeletonEntities);
         if (RADIENT_FAILED(Status))
             return Status;
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RegisterSceneAnimations(
+    const RadientImport::ImportedDocument& Scene,
+    const SkeletonEntityMap&               SkeletonEntities,
+    IRadientAnimationRegistry&             Registry)
+{
+    struct AppliedRegistration
+    {
+        IRadientSkeletonAnimationAsset*     pAnimation = nullptr;
+        const std::vector<RadientEntityID>* pEntities  = nullptr;
+    };
+
+    std::vector<AppliedRegistration> AppliedRegistrations;
+
+    // A registry mutation failure aborts scene instantiation. Undo only the
+    // registrations made by this call so the registry does not retain targets
+    // for the scene subtree that the importer will destroy.
+    const auto Rollback = [&Registry, &AppliedRegistrations]() {
+        for (auto It = AppliedRegistrations.rbegin(); It != AppliedRegistrations.rend(); ++It)
+        {
+            Registry.RemoveAnimatedEntities(
+                It->pAnimation, It->pEntities->data(), static_cast<Uint32>(It->pEntities->size()));
+        }
+    };
+
+    for (const RadientImport::ImportedAnimation& ImportedAnimation : Scene.Animations)
+    {
+        for (const RadientSceneSkeletonAnimationBinding& Binding : ImportedAnimation.SkeletonAnimationBindings)
+        {
+            IRadientSkeletonAnimationAsset* const pAnimation = Binding.pAnimation;
+            if (pAnimation == nullptr)
+            {
+                LOG_WARNING_MESSAGE("Skipping a null skeleton animation in imported animation '",
+                                    ImportedAnimation.Name, "'");
+                continue;
+            }
+
+            IRadientSkeletonAsset* const pAnimationSkeleton = pAnimation->GetDesc().pSkeleton;
+            if (pAnimationSkeleton == nullptr)
+            {
+                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
+                                    "' because it does not reference a skeleton");
+                continue;
+            }
+
+            const auto EntitiesIt = SkeletonEntities.find(pAnimationSkeleton);
+            if (EntitiesIt == SkeletonEntities.end())
+            {
+                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
+                                    "' because its skeleton is not instantiated in the scene");
+                continue;
+            }
+
+            const std::vector<RadientEntityID>& Entities = EntitiesIt->second;
+            const RADIENT_STATUS                Status   = Registry.AddAnimatedEntities(
+                pAnimation, Entities.data(), static_cast<Uint32>(Entities.size()));
+            if (Status == RADIENT_STATUS_NOT_FOUND)
+            {
+                // AddAnimatedEntities validates the complete batch before
+                // changing the registry, so there is nothing to undo.
+                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
+                                    "' because a target entity does not have a skin component");
+                continue;
+            }
+            if (RADIENT_FAILED(Status))
+            {
+                Rollback();
+                return Status;
+            }
+
+            if (Status == RADIENT_STATUS_OK)
+                AppliedRegistrations.push_back({pAnimation, &Entities});
+        }
     }
 
     return RADIENT_STATUS_OK;
@@ -1050,7 +1154,8 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
 RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scene,
                                      Uint32                                 SceneIndex,
                                      IRadientSceneWriter&                   Writer,
-                                     RadientEntityID                        RootEntity)
+                                     RadientEntityID                        RootEntity,
+                                     IRadientAnimationRegistry*             pAnimationRegistry)
 {
     Uint32         ResolvedSceneIndex = 0;
     RADIENT_STATUS Status             = ResolveSceneIndex(Scene, SceneIndex, ResolvedSceneIndex);
@@ -1060,9 +1165,21 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
     if (ResolvedSceneIndex < Scene.Scenes.size())
     {
         std::vector<RefCntAutoPtr<IRadientSkeletonPose>> SkinPoses(Scene.Skins.size());
+        SkeletonEntityMap                                SkeletonEntities;
+        if (pAnimationRegistry != nullptr)
+            SkeletonEntities.reserve(Scene.Skins.size());
+
         for (Uint32 NodeIndex : Scene.Scenes[ResolvedSceneIndex].RootNodes)
         {
-            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, SkinPoses);
+            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, SkinPoses,
+                                pAnimationRegistry != nullptr ? &SkeletonEntities : nullptr);
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
+
+        if (pAnimationRegistry != nullptr)
+        {
+            Status = RegisterSceneAnimations(Scene, SkeletonEntities, *pAnimationRegistry);
             if (RADIENT_FAILED(Status))
                 return Status;
         }

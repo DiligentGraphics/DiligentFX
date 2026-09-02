@@ -765,7 +765,8 @@ TEST(RadientEngineTest, CreateSceneWriter)
     ASSERT_NE(pScene, nullptr);
 
     RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
-    EXPECT_NE(pWriter, nullptr);
+    ASSERT_NE(pWriter, nullptr);
+    EXPECT_EQ(pWriter->GetScene(), pScene);
 }
 
 TEST(RadientEngineTest, CreateSceneImporter)

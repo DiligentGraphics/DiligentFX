@@ -43,12 +43,14 @@ class RadientSceneWriterImpl final : public ObjectBase<IRadientSceneWriter>
 public:
     using TBase = ObjectBase<IRadientSceneWriter>;
 
-    RadientSceneWriterImpl(IReferenceCounters* pRefCounters, std::shared_ptr<RadientSceneState> pState);
+    RadientSceneWriterImpl(IReferenceCounters* pRefCounters, RadientSceneImpl* pScene);
     ~RadientSceneWriterImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneWriter, TBase)
 
     static RefCntAutoPtr<IRadientSceneWriter> Create(RadientSceneImpl* pScene);
+
+    virtual IRadientScene* DILIGENT_CALL_TYPE GetScene() const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateEntity(const RadientEntityDesc& Desc,
                                                            RadientEntityID&         Entity) override final;
@@ -95,6 +97,7 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CommitChanges() override final;
 
 private:
+    RefCntAutoPtr<IRadientScene>       m_pScene;
     std::shared_ptr<RadientSceneState> m_pState;
 };
 
