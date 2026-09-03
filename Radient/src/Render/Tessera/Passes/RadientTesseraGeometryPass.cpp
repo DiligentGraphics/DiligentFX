@@ -326,14 +326,11 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             }
 
             const RadientTesseraSkinAttachment* pSkinAttachment = nullptr;
-            const RadientTesseraSkinData*       pSkinData       = nullptr;
             if ((Batch.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0)
             {
-                pSkinAttachment = Drawable.pSkinAttachment;
-                pSkinData       = pSkinAttachment != nullptr ? pSkinAttachment->pSkinData : nullptr;
-
-                const RADIENT_STATUS SkinStatus = pSkinData != nullptr ?
-                    pSkinData->GetPreparationStatus() :
+                pSkinAttachment                 = Drawable.pSkinAttachment;
+                const RADIENT_STATUS SkinStatus = pSkinAttachment != nullptr ?
+                    pSkinAttachment->SkinData.GetPreparationStatus() :
                     RADIENT_STATUS_INVALID_OPERATION;
                 if (SkinStatus != RADIENT_STATUS_OK)
                 {
@@ -386,11 +383,12 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             AttribsData.PrevNodeMatrix = &PrevNodeTransform;
             AttribsData.CustomData     = &CustomData;
             AttribsData.CustomDataSize = sizeof(CustomData);
-            if (pSkinData != nullptr)
+            if (pSkinAttachment != nullptr)
             {
-                AttribsData.JointCount     = pSkinData->GetJointCount();
-                AttribsData.FirstJoint     = pSkinData->GetFirstJoint();
-                AttribsData.PrevFirstJoint = pSkinData->GetPreviousFirstJoint();
+                const RadientTesseraSkinData& SkinData = pSkinAttachment->SkinData;
+                AttribsData.JointCount                 = SkinData.GetJointCount();
+                AttribsData.FirstJoint                 = SkinData.GetFirstJoint();
+                AttribsData.PrevFirstJoint             = SkinData.GetPreviousFirstJoint();
             }
 
             void* const pPrimitiveAttribsEnd =
@@ -677,7 +675,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     if ((PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0)
     {
         pSkinAttachment = Drawable.pSkinAttachment;
-        if (pSkinAttachment == nullptr || pSkinAttachment->pSkinData == nullptr)
+        if (pSkinAttachment == nullptr)
         {
             // A mesh containing joint attributes may also be instantiated by
             // an unskinned node. Render that instance in its authored pose.

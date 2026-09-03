@@ -270,15 +270,12 @@ void RadientTesseraDrawableCache::UpdateRenderableSkin(RenderableRecord&        
     }
 
     RadientTesseraSkinData* const pCurrentSkinData =
-        Record.pSkinAttachment != nullptr ? Record.pSkinAttachment->pSkinData : nullptr;
-    if (Record.pSkinAttachment != nullptr && pCurrentSkinData == nullptr)
-        UNEXPECTED("Skin attachment contains null palette data");
+        Record.pSkinAttachment != nullptr ? &Record.pSkinAttachment->SkinData : nullptr;
 
     if (pCurrentSkinData == nullptr || !pCurrentSkinData->Matches(pSkin->pSkin, pSkin->pPose))
     {
         RemoveRenderableSkin(Record);
 
-        auto              pAttachment = std::make_unique<RadientTesseraSkinAttachment>();
         const SkinDataKey Key{pSkin->pSkin, pSkin->pPose};
         auto [It, Inserted]       = m_SkinDataCache.try_emplace(Key);
         SkinDataCacheEntry& Entry = It->second;
@@ -292,8 +289,8 @@ void RadientTesseraDrawableCache::UpdateRenderableSkin(RenderableRecord&        
 
         VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
         ++Entry.UseCount;
-        pAttachment->pSkinData = Entry.pSkinData.get();
-        Record.pSkinAttachment = std::move(pAttachment);
+        Record.pSkinAttachment = std::make_unique<RadientTesseraSkinAttachment>(
+            RadientTesseraSkinAttachment{*Entry.pSkinData});
     }
 
     Record.pSkinAttachment->SkeletonToMeshTransform =
@@ -307,17 +304,10 @@ void RadientTesseraDrawableCache::RemoveRenderableSkin(RenderableRecord& Record)
     if (Record.pSkinAttachment == nullptr)
         return;
 
-    RadientTesseraSkinData* const pSkinData = Record.pSkinAttachment->pSkinData;
-    if (pSkinData == nullptr)
-    {
-        UNEXPECTED("Skin attachment contains null palette data");
-        Record.pSkinAttachment.reset();
-        return;
-    }
-
-    const SkinDataKey Key{pSkinData->GetSkin(), pSkinData->GetPose()};
-    const auto        It = m_SkinDataCache.find(Key);
-    if (It == m_SkinDataCache.end() || It->second.pSkinData.get() != pSkinData)
+    RadientTesseraSkinData& SkinData = Record.pSkinAttachment->SkinData;
+    const SkinDataKey       Key{SkinData.GetSkin(), SkinData.GetPose()};
+    const auto              It = m_SkinDataCache.find(Key);
+    if (It == m_SkinDataCache.end() || It->second.pSkinData.get() != &SkinData)
     {
         UNEXPECTED("Renderable references skin data missing from the cache");
         Record.pSkinAttachment.reset();

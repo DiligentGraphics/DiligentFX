@@ -1812,14 +1812,13 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     ASSERT_EQ(Slots.size(), 6u);
     RadientTesseraSkinAttachment* const pFirstAttachment = Slots.front()->pSkinAttachment;
     ASSERT_NE(pFirstAttachment, nullptr);
-    RadientTesseraSkinData* const pSharedSkinData = pFirstAttachment->pSkinData;
-    ASSERT_NE(pSharedSkinData, nullptr);
-    EXPECT_EQ(pSharedSkinData->GetSkin(), pSkin.RawPtr());
-    EXPECT_EQ(pSharedSkinData->GetPose(), pPose.RawPtr());
+    RadientTesseraSkinData& SharedSkinData = pFirstAttachment->SkinData;
+    EXPECT_EQ(SharedSkinData.GetSkin(), pSkin.RawPtr());
+    EXPECT_EQ(SharedSkinData.GetPose(), pPose.RawPtr());
     for (const RadientDrawableSlot* pSlot : Slots)
     {
         EXPECT_EQ(pSlot->pSkinAttachment, pFirstAttachment);
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSharedSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SharedSkinData);
         EXPECT_FALSE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
     }
 
@@ -1846,7 +1845,7 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     for (const RadientDrawableSlot* pSlot : Slots)
     {
         EXPECT_EQ(pSlot->pSkinAttachment, pFirstAttachment);
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSharedSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SharedSkinData);
         EXPECT_FALSE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
     }
 
@@ -1859,7 +1858,7 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     for (const RadientDrawableSlot* pSlot : SecondSlots)
     {
         EXPECT_EQ(pSlot->pSkinAttachment, pSecondAttachment);
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSharedSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SharedSkinData);
         ASSERT_TRUE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
         EXPECT_EQ(*pSlot->pSkinAttachment->SkeletonToMeshTransform, SecondSkin.SkeletonToMeshTransform);
     }
@@ -1882,19 +1881,18 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
     ASSERT_EQ(Slots.size(), 6u);
     for (const RadientDrawableSlot* pSlot : Slots)
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSharedSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SharedSkinData);
 
     SecondSlots = GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
     ASSERT_EQ(SecondSlots.size(), 6u);
     RadientTesseraSkinAttachment* const pRetargetedSecondAttachment = SecondSlots.front()->pSkinAttachment;
     ASSERT_NE(pRetargetedSecondAttachment, nullptr);
-    RadientTesseraSkinData* const pSecondSkinData = SecondSlots.front()->pSkinAttachment->pSkinData;
-    ASSERT_NE(pSecondSkinData, nullptr);
-    EXPECT_NE(pSecondSkinData, pSharedSkinData);
+    RadientTesseraSkinData& SecondSkinData = SecondSlots.front()->pSkinAttachment->SkinData;
+    EXPECT_NE(&SecondSkinData, &SharedSkinData);
     for (const RadientDrawableSlot* pSlot : SecondSlots)
     {
         EXPECT_EQ(pSlot->pSkinAttachment, pRetargetedSecondAttachment);
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSecondSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SecondSkinData);
         ASSERT_TRUE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
         EXPECT_EQ(*pSlot->pSkinAttachment->SkeletonToMeshTransform, SecondSkin.SkeletonToMeshTransform);
     }
@@ -1927,7 +1925,7 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     for (const RadientDrawableSlot* pSlot : Slots)
     {
         ASSERT_NE(pSlot->pSkinAttachment, nullptr);
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSecondSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SecondSkinData);
         EXPECT_FALSE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
     }
     pScene->ClearPendingRenderChanges();
@@ -1945,7 +1943,7 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     SecondSlots = GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
     ASSERT_EQ(SecondSlots.size(), 6u);
     for (const RadientDrawableSlot* pSlot : SecondSlots)
-        EXPECT_EQ(pSlot->pSkinAttachment->pSkinData, pSecondSkinData);
+        EXPECT_EQ(&pSlot->pSkinAttachment->SkinData, &SecondSkinData);
 
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pSecondPoseWriter;
     ASSERT_EQ(pSecondPose->CreateWriter(pSecondPoseWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);

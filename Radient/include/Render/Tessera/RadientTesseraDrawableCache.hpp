@@ -69,8 +69,8 @@ struct RadientTesseraMaterialResolveContext
 /// which that skeleton is attached to the mesh.
 struct RadientTesseraSkinAttachment
 {
-    RadientTesseraSkinData*         pSkinData = nullptr;
-    std::optional<RadientMatrix4x4> SkeletonToMeshTransform;
+    RadientTesseraSkinData&         SkinData;
+    std::optional<RadientMatrix4x4> SkeletonToMeshTransform = {};
 };
 
 /// Renderer-facing primitive slot addressed by a stable drawable ID.
