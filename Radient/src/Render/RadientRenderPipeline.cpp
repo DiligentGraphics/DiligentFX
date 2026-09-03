@@ -27,6 +27,7 @@
 #include "Render/RadientRenderPipeline.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientAssetStatus.hpp"
 #include "Core/RadientViewImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
@@ -56,17 +57,23 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
-RADIENT_STATUS RadientRenderPipeline::BeginFrame(const RadientFrameAttribs& FrameAttribs)
+RADIENT_STATUS RadientRenderPipeline::BeginFrame(const RadientFrameAttribs& FrameAttribs,
+                                                 RadientFrameID             RenderFrameID)
 {
     IRenderDevice* const  pDevice  = m_pBackend->GetNativeDevice();
     IDeviceContext* const pContext = FrameAttribs.pDeviceContext;
 
-    // Remote execution and headless local tests have no native GPU resources
-    // to update.
-    if (pDevice == nullptr || pContext == nullptr)
-        return RADIENT_STATUS_OK;
+    RADIENT_STATUS AssetStatus = RADIENT_STATUS_OK;
+    if (pDevice != nullptr && pContext != nullptr)
+    {
+        AssetStatus = m_pAssetManager->UpdateGPUResources(pDevice, pContext);
+        if (RADIENT_FAILED(AssetStatus))
+            return AssetStatus;
+    }
 
-    return m_pAssetManager->UpdateGPUResources(pDevice, pContext);
+    const RADIENT_STATUS TechniqueStatus =
+        m_pTechnique->BeginFrame(RadientFrameContext{FrameAttribs, RenderFrameID, pDevice, pContext});
+    return CombineDependencyStatus(AssetStatus, TechniqueStatus);
 }
 
 RADIENT_STATUS RadientRenderPipeline::Update(const RadientFrameAttribs&  FrameAttribs,

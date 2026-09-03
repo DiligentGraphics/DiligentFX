@@ -55,14 +55,14 @@ public:
     RadientTesseraSkinData& operator=(const RadientTesseraSkinData&) = delete;
 
     /// Updates dirty pose globals and writes a new palette when their version
-    /// changes. Repeated calls for the same frame are idempotent; if the pose
-    /// changes again, the current-frame palette is replaced while the previous
-    /// frame remains intact. On the first unchanged subsequent frame, both
-    /// roles are pointed at the current half so motion vectors become zero. On
-    /// the first successful preparation, both roles reference the populated
-    /// half. A failed attempt makes the palette unavailable; the first
-    /// subsequent successful preparation initializes both roles again.
-    RADIENT_STATUS Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor = true);
+    /// changes. Repeated calls for the same render frame are idempotent; if the
+    /// pose changes again, the current-frame palette is replaced while the
+    /// previous frame remains intact. On the first unchanged subsequent frame,
+    /// both roles are pointed at the current half so motion vectors become
+    /// zero. On the first successful preparation, both roles reference the
+    /// populated half. A failed attempt makes the palette unavailable; the
+    /// first subsequent successful preparation initializes both roles again.
+    RADIENT_STATUS Prepare(RadientFrameID RenderFrameID, bool PackMatrixRowMajor = true);
 
     bool Matches(IRadientSkinAsset*    pSkin,
                  IRadientSkeletonPose* pPose) const noexcept
@@ -138,8 +138,8 @@ private:
     Uint32 m_FirstJoint         = ~Uint32{0};
     Uint32 m_PreviousFirstJoint = ~Uint32{0};
 
-    Uint64 m_PreparedPoseVersion = 0;
-    Uint32 m_PreparedFrameIndex  = ~Uint32{0};
+    Uint64         m_PreparedPoseVersion = 0;
+    RadientFrameID m_PreparedFrameID     = InvalidRadientFrameID;
 
     RADIENT_STATUS m_PreparationStatus = RADIENT_STATUS_PENDING;
 };

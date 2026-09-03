@@ -262,6 +262,35 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
 }
 
+TEST(RadientTesseraSkinDataTest, UsesFullRenderFrameID)
+{
+    TestSkinningObjects Objects = CreateTestSkinningObjects();
+    ASSERT_NE(Objects.pSkin, nullptr);
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
+    RadientTesseraSkinData           SkinData{Objects.pSkin, Objects.pPose, JointBuffer};
+
+    constexpr RadientFrameID FirstFrame = 7;
+    ASSERT_EQ(SkinData.Prepare(FirstFrame), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+    ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientTransform UpdatedTransform = MakeTransform(31.f);
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 1, &UpdatedTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
+
+    constexpr RadientFrameID ChangedFrame = FirstFrame + 1;
+    ASSERT_EQ(SkinData.Prepare(ChangedFrame), RADIENT_STATUS_OK);
+    ASSERT_NE(SkinData.GetPreviousFirstJoint(), SkinData.GetFirstJoint());
+
+    // This ID has the same low 32 bits as ChangedFrame. It must still be
+    // recognized as a later frame and collapse the now-stationary palette.
+    constexpr RadientFrameID LaterFrame = (RadientFrameID{1} << 32u) + ChangedFrame;
+    EXPECT_EQ(SkinData.Prepare(LaterFrame), RADIENT_STATUS_OK);
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), SkinData.GetFirstJoint());
+}
+
 TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
 {
     TestSkinningObjects Objects = CreateTestSkinningObjects();

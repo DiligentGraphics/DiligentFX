@@ -52,6 +52,7 @@ public:
                                   RadientAssetManagerImpl*   pAssetManager,
                                   const RadientRendererDesc& Desc);
 
+    virtual RADIENT_STATUS BeginFrame(const RadientFrameContext& Context) override final;
     virtual RADIENT_STATUS SyncScene(const IRadientScene& Scene) override final;
     virtual RADIENT_STATUS PrepareFrame(const RadientRenderContext& Context) override final;
     virtual RADIENT_STATUS BeginView(const RadientRenderContext& Context) override final;
@@ -90,7 +91,7 @@ private:
         RadientTesseraPostProcessPipeline PostProcessPipeline;
     };
 
-    SceneRenderState* FindSceneRenderState(const IRadientScene* pScene, bool PruneExpired);
+    SceneRenderState* FindSceneRenderState(const IRadientScene* pScene);
     SceneRenderState& GetOrCreateSceneRenderState(const IRadientScene& Scene);
 
     ViewRenderState* FindViewRenderState(IRadientView* pView, bool PruneExpired);

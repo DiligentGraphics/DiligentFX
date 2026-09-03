@@ -101,6 +101,41 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*       
     m_PostFXTransitionDuration{ValidatePostFXTransitionDuration(Desc.PostFXTransitionDuration)}
 {}
 
+RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientFrameContext& Context)
+{
+    if (Context.pDevice == nullptr || Context.pContext == nullptr)
+        return RADIENT_STATUS_OK;
+
+    VERIFY_EXPR(Context.RenderFrameID != InvalidRadientFrameID);
+
+    // Structured-buffer matrices follow the same backend-specific packing as
+    // PBR_Renderer::WriteSkinningData(). Prepare every synchronized pose once
+    // before any view can consume the renderer-wide joint buffer.
+    const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
+
+    RADIENT_STATUS FrameStatus = RADIENT_STATUS_OK;
+    for (auto It = m_SceneRenderStates.begin(); It != m_SceneRenderStates.end();)
+    {
+        if ((*It)->WeakScene.Lock() == nullptr)
+        {
+            It = m_SceneRenderStates.erase(It);
+            continue;
+        }
+
+        const RADIENT_STATUS SkinningStatus =
+            (*It)->DrawableCache.PrepareSkinningData(Context.RenderFrameID, PackJointMatricesRowMajor);
+
+        // Per-skin failures are deferred to geometry execution, which skips
+        // only drawables using unavailable palettes.
+        if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
+            FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
+
+        ++It;
+    }
+
+    return FrameStatus;
+}
+
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
 {
     SceneRenderState& SceneState = GetOrCreateSceneRenderState(Scene);
@@ -135,26 +170,9 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (RADIENT_FAILED(FrameStatus) || Context.pDevice == nullptr || Context.pContext == nullptr)
         return FrameStatus;
 
-    SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene, false);
+    SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene);
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
-
-    // Structured-buffer matrices follow the same backend-specific packing as
-    // PBR_Renderer::WriteSkinningData(). Every changed skin writes one half of
-    // its allocation before the geometry renderer uploads the joint buffer.
-    const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
-
-    const RADIENT_STATUS SkinningStatus =
-        pSceneState->DrawableCache.PrepareSkinningData(
-            ViewState.FrameHistory.GetFrameIndex(), PackJointMatricesRowMajor);
-
-    // NO_CHANGE only describes whether CPU skin palettes were rebuilt. It does
-    // not affect whether the rest of the frame resources are ready. Per-skin
-    // failures are deferred to geometry execution, which skips only drawables
-    // using unavailable palettes and reports the failure after rendering all
-    // unrelated batches.
-    if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
-        FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
 
     const RADIENT_STATUS GeometryRendererStatus =
         m_GeometryRenderer.Prepare(Context.pDevice,
@@ -222,7 +240,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
         return RADIENT_STATUS_INVALID_OPERATION;
 
     const RadientViewDesc&  ViewDesc    = pView->GetDesc();
-    SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene, false);
+    SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene);
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -435,44 +453,24 @@ RADIENT_STATUS RadientTesseraRenderTechnique::ValidateActiveViewContext(
     return RADIENT_STATUS_OK;
 }
 
-RadientTesseraRenderTechnique::SceneRenderState* RadientTesseraRenderTechnique::FindSceneRenderState(
-    const IRadientScene* pScene,
-    bool                 PruneExpired)
+RadientTesseraRenderTechnique::SceneRenderState* RadientTesseraRenderTechnique::FindSceneRenderState(const IRadientScene* pScene)
 {
     if (pScene == nullptr)
         return nullptr;
 
-    SceneRenderState* pResult = nullptr;
-    for (auto It = m_SceneRenderStates.begin(); It != m_SceneRenderStates.end();)
+    for (const auto& pState : m_SceneRenderStates)
     {
-        RefCntAutoPtr<IRadientScene> pCachedScene = (*It)->WeakScene.Lock();
-        if (pCachedScene == nullptr && PruneExpired)
-        {
-            It = m_SceneRenderStates.erase(It);
-        }
-        else
-        {
-            if (pCachedScene == pScene)
-            {
-                if (!PruneExpired)
-                    return It->get();
-
-                pResult = It->get();
-            }
-
-            ++It;
-        }
+        if (pState->WeakScene.Lock() == pScene)
+            return pState.get();
     }
 
-    return pResult;
+    return nullptr;
 }
 
 RadientTesseraRenderTechnique::SceneRenderState& RadientTesseraRenderTechnique::GetOrCreateSceneRenderState(
     const IRadientScene& Scene)
 {
-    // SyncScene calls this once per update, making it a natural point to
-    // release renderer state for scenes that are no longer alive.
-    if (SceneRenderState* pState = FindSceneRenderState(&Scene, true))
+    if (SceneRenderState* pState = FindSceneRenderState(&Scene))
         return *pState;
 
     m_SceneRenderStates.push_back(

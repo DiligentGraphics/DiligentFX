@@ -32,6 +32,16 @@
 namespace Diligent
 {
 
+/// Resolved renderer-global inputs passed to a render technique at the start
+/// of a frame.
+struct RadientFrameContext
+{
+    const RadientFrameAttribs& FrameAttribs;
+    RadientFrameID             RenderFrameID = InvalidRadientFrameID;
+    IRenderDevice*             pDevice       = nullptr;
+    IDeviceContext*            pContext      = nullptr;
+};
+
 /// Resolved per-frame inputs passed to a render technique.
 struct RadientRenderContext
 {
@@ -48,6 +58,9 @@ class IRadientRenderTechnique
 {
 public:
     virtual ~IRadientRenderTechnique() = default;
+
+    /// Prepares renderer-global state before any views are rendered.
+    virtual RADIENT_STATUS BeginFrame(const RadientFrameContext& Context) = 0;
 
     /// Incrementally synchronizes renderer-specific state with the scene.
     virtual RADIENT_STATUS SyncScene(const IRadientScene& Scene) = 0;

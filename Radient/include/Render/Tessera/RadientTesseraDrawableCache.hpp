@@ -251,7 +251,7 @@ public:
     /// of how many renderables or primitive slots reference it. FrameIndex
     /// keeps repeated preparation of the same view frame from advancing motion
     /// history.
-    RADIENT_STATUS PrepareSkinningData(Uint32 FrameIndex, bool PackMatrixRowMajor = true);
+    RADIENT_STATUS PrepareSkinningData(RadientFrameID RenderFrameID, bool PackMatrixRowMajor = true);
 
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
     {

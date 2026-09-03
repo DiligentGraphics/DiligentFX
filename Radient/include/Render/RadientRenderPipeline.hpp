@@ -50,7 +50,8 @@ public:
                           const RadientRendererDesc& Desc);
     ~RadientRenderPipeline();
 
-    RADIENT_STATUS BeginFrame(const RadientFrameAttribs& FrameAttribs);
+    RADIENT_STATUS BeginFrame(const RadientFrameAttribs& FrameAttribs,
+                              RadientFrameID             RenderFrameID);
     RADIENT_STATUS Update(const RadientFrameAttribs&  FrameAttribs,
                           RadientFrameID              RenderFrameID,
                           const RadientRenderAttribs& RenderAttribs);

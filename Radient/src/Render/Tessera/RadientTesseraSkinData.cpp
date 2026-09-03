@@ -121,7 +121,7 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
     m_HalfFirstJoints[1] = m_HalfFirstJoints[0] + m_JointCount;
 }
 
-RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor)
+RADIENT_STATUS RadientTesseraSkinData::Prepare(RadientFrameID RenderFrameID, bool PackMatrixRowMajor)
 {
     const bool WasPrepared = m_PreparationStatus == RADIENT_STATUS_OK;
 
@@ -133,14 +133,14 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
         return Fail(UpdateStatus);
 
     const Uint64 PoseVersion = m_pPose->GetVersion();
-    const bool   SameFrame   = WasPrepared && m_PreparedFrameIndex == FrameIndex;
+    const bool   SameFrame   = WasPrepared && m_PreparedFrameID == RenderFrameID;
     if (WasPrepared && m_PreparedPoseVersion == PoseVersion)
     {
         m_PreparationStatus = RADIENT_STATUS_OK;
         if (SameFrame)
             return RADIENT_STATUS_NO_CHANGE;
 
-        m_PreparedFrameIndex = FrameIndex;
+        m_PreparedFrameID = RenderFrameID;
         if (m_PreviousFirstJoint == m_FirstJoint)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -179,7 +179,7 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
 
     m_CurrentHalf         = DestinationHalf;
     m_PreparedPoseVersion = PoseVersion;
-    m_PreparedFrameIndex  = FrameIndex;
+    m_PreparedFrameID     = RenderFrameID;
     m_PreparationStatus   = RADIENT_STATUS_OK;
     return RADIENT_STATUS_OK;
 }

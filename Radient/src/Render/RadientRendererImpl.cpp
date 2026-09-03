@@ -150,14 +150,16 @@ RADIENT_STATUS RadientRendererImpl::BeginFrame(const RadientFrameAttribs& Attrib
     if (m_FrameAttribs.pDeviceContext == nullptr)
         m_FrameAttribs.pDeviceContext = m_pBackend->GetNativeImmediateContext();
 
-    const RADIENT_STATUS Status = m_RenderPipeline->BeginFrame(m_FrameAttribs);
+    const RadientFrameID FrameID = m_NextFrameID;
+    const RADIENT_STATUS Status  = m_RenderPipeline->BeginFrame(m_FrameAttribs, FrameID);
     if (RADIENT_FAILED(Status))
     {
         m_FrameAttribs = {};
         return Status;
     }
 
-    m_CurrentFrameID = m_NextFrameID++;
+    m_CurrentFrameID = FrameID;
+    ++m_NextFrameID;
     if (m_NextFrameID == InvalidRadientFrameID)
         m_NextFrameID = 1;
 
