@@ -54,7 +54,7 @@ constexpr size_t InvalidIndex = std::numeric_limits<size_t>::max();
 class AnimationRegistryEntry
 {
 public:
-    struct RemovedTarget
+    struct RemovedAssociation
     {
         RadientEntityID Entity                 = InvalidRadientEntityID;
         size_t          EntityAssociationIndex = InvalidIndex;
@@ -80,6 +80,12 @@ public:
         return m_pAnimation;
     }
 
+    size_t GetAssociationCount() const noexcept
+    {
+        VerifyInvariants();
+        return m_Associations.size();
+    }
+
     size_t GetTargetCount() const noexcept
     {
         VerifyInvariants();
@@ -88,115 +94,188 @@ public:
 
     bool IsEmpty() const noexcept
     {
-        return GetTargetCount() == 0;
+        return GetAssociationCount() == 0;
     }
 
-    size_t FindTarget(RadientEntityID Entity) const noexcept
+    size_t FindAssociation(RadientEntityID Entity) const noexcept
     {
-        const auto It = m_TargetIndices.find(Entity);
+        const auto It = m_AssociationIndices.find(Entity);
+        if (It == m_AssociationIndices.end())
+            return InvalidIndex;
+
+        VERIFY_EXPR(It->second < m_Associations.size());
+        VERIFY_EXPR(m_Associations[It->second].Entity == Entity);
+        return It->second;
+    }
+
+    size_t FindTarget(IRadientSkeletonPose* pPose) const noexcept
+    {
+        const auto It = m_TargetIndices.find(pPose);
         if (It == m_TargetIndices.end())
             return InvalidIndex;
 
         VERIFY_EXPR(It->second < m_Targets.size());
-        VERIFY_EXPR(m_Targets[It->second].Entity == Entity);
+        VERIFY_EXPR(m_Targets[It->second].pPose == pPose);
         return It->second;
     }
 
-    void ReserveTargets(size_t TargetCount)
+    void Reserve(size_t AssociationCount, size_t TargetCount)
     {
+        m_Associations.reserve(AssociationCount);
+        m_AssociationIndices.reserve(AssociationCount);
         m_Targets.reserve(TargetCount);
         m_Poses.reserve(TargetCount);
-        m_EntityAssociationIndices.reserve(TargetCount);
+        m_TargetAssociationCounts.reserve(TargetCount);
         m_TargetIndices.reserve(TargetCount);
     }
 
-    void AddTarget(RadientEntityID                     Entity,
-                   RefCntAutoPtr<IRadientSkeletonPose> pPose,
-                   size_t                              EntityAssociationIndex);
+    void AddAssociation(RadientEntityID                     Entity,
+                        RefCntAutoPtr<IRadientSkeletonPose> pPose,
+                        size_t                              EntityAssociationIndex);
 
-    RemovedTarget RemoveTarget(size_t TargetIndex) noexcept;
+    RemovedAssociation RemoveAssociation(size_t AssociationIndex) noexcept;
 
-    void SetEntityAssociationIndex(size_t TargetIndex, size_t EntityAssociationIndex) noexcept;
+    void SetEntityAssociationIndex(size_t AssociationIndex, size_t EntityAssociationIndex) noexcept;
     void WritePublicEntry(RadientAnimationRegistryEntry& PublicEntry) const noexcept;
 
 private:
+    struct EntityAssociation
+    {
+        RadientEntityID       Entity                 = InvalidRadientEntityID;
+        IRadientSkeletonPose* pPose                  = nullptr;
+        size_t                EntityAssociationIndex = InvalidIndex;
+    };
+
+    void RemoveTarget(size_t TargetIndex) noexcept;
     void VerifyInvariants() const noexcept;
 
 private:
     // Retains the animation used as a raw key by the registry lookup maps.
     RefCntAutoPtr<IRadientSkeletonAnimationAsset> m_pAnimation;
 
-    // Contiguous target array exposed through RadientAnimationRegistryEntry.
+    // One private association per registered entity. The pose is retained by
+    // its corresponding unique target below.
+    std::vector<EntityAssociation> m_Associations;
+
+    // Maps an entity to its m_Associations index for O(1) lookup and
+    // swap-erase repair.
+    absl::flat_hash_map<RadientEntityID, size_t> m_AssociationIndices;
+
+    // Contiguous unique-pose target array exposed through the public entry.
     std::vector<RadientAnimationTarget> m_Targets;
 
     // Retains the poses referenced by the borrowed pointers in m_Targets.
     std::vector<RefCntAutoPtr<IRadientSkeletonPose>> m_Poses;
 
-    // Reciprocal index into EntityAssociations::Animations for O(1) removal.
-    std::vector<size_t> m_EntityAssociationIndices;
+    // Number of entity associations represented by each unique pose target.
+    std::vector<size_t> m_TargetAssociationCounts;
 
-    // Maps an entity to its m_Targets index for O(1) lookup and swap-erase repair.
-    absl::flat_hash_map<RadientEntityID, size_t> m_TargetIndices;
+    // Maps a retained pose identity to its m_Targets index.
+    absl::flat_hash_map<IRadientSkeletonPose*, size_t> m_TargetIndices;
 };
 
 
-void AnimationRegistryEntry::AddTarget(RadientEntityID                     Entity,
-                                       RefCntAutoPtr<IRadientSkeletonPose> pPose,
-                                       size_t                              EntityAssociationIndex)
+void AnimationRegistryEntry::AddAssociation(RadientEntityID                     Entity,
+                                            RefCntAutoPtr<IRadientSkeletonPose> pPose,
+                                            size_t                              EntityAssociationIndex)
 {
     VerifyInvariants();
     VERIFY_EXPR(pPose != nullptr);
-    VERIFY_EXPR(FindTarget(Entity) == InvalidIndex);
+    VERIFY_EXPR(FindAssociation(Entity) == InvalidIndex);
 
-    const size_t TargetIndex = m_Targets.size();
-    m_Targets.push_back({Entity, pPose});
-    m_Poses.emplace_back(std::move(pPose));
-    m_EntityAssociationIndices.push_back(EntityAssociationIndex);
-    const auto InsertResult = m_TargetIndices.emplace(Entity, TargetIndex);
+    IRadientSkeletonPose* const pPoseRaw    = pPose;
+    const size_t                TargetIndex = FindTarget(pPoseRaw);
+    if (TargetIndex == InvalidIndex)
+    {
+        const size_t NewTargetIndex = m_Targets.size();
+        m_Targets.push_back({pPoseRaw});
+        m_Poses.emplace_back(std::move(pPose));
+        m_TargetAssociationCounts.push_back(1);
+        const auto InsertResult = m_TargetIndices.emplace(pPoseRaw, NewTargetIndex);
+        VERIFY_EXPR(InsertResult.second);
+        static_cast<void>(InsertResult);
+    }
+    else
+    {
+        ++m_TargetAssociationCounts[TargetIndex];
+    }
+
+    const size_t AssociationIndex = m_Associations.size();
+    m_Associations.push_back({Entity, pPoseRaw, EntityAssociationIndex});
+    const auto InsertResult = m_AssociationIndices.emplace(Entity, AssociationIndex);
     VERIFY_EXPR(InsertResult.second);
     static_cast<void>(InsertResult);
 
     VerifyInvariants();
 }
 
-AnimationRegistryEntry::RemovedTarget AnimationRegistryEntry::RemoveTarget(size_t TargetIndex) noexcept
+AnimationRegistryEntry::RemovedAssociation AnimationRegistryEntry::RemoveAssociation(size_t AssociationIndex) noexcept
 {
     VerifyInvariants();
-    VERIFY_EXPR(TargetIndex < m_Targets.size());
+    VERIFY_EXPR(AssociationIndex < m_Associations.size());
 
-    const RemovedTarget Removed{
-        m_Targets[TargetIndex].Entity,
-        m_EntityAssociationIndices[TargetIndex],
+    const EntityAssociation  Association = m_Associations[AssociationIndex];
+    const RemovedAssociation Removed{
+        Association.Entity,
+        Association.EntityAssociationIndex,
     };
 
-    const size_t NumErasedTargets = m_TargetIndices.erase(Removed.Entity);
+    const size_t NumErasedAssociations = m_AssociationIndices.erase(Removed.Entity);
+    VERIFY_EXPR(NumErasedAssociations == 1);
+    static_cast<void>(NumErasedAssociations);
+
+    const size_t LastAssociation = m_Associations.size() - 1;
+    if (AssociationIndex != LastAssociation)
+    {
+        m_Associations[AssociationIndex] = m_Associations[LastAssociation];
+
+        auto MovedAssociationIt = m_AssociationIndices.find(m_Associations[AssociationIndex].Entity);
+        VERIFY_EXPR(MovedAssociationIt != m_AssociationIndices.end());
+        MovedAssociationIt->second = AssociationIndex;
+    }
+    m_Associations.pop_back();
+
+    const size_t TargetIndex = FindTarget(Association.pPose);
+    VERIFY_EXPR(TargetIndex != InvalidIndex);
+    VERIFY_EXPR(m_TargetAssociationCounts[TargetIndex] > 0);
+    if (--m_TargetAssociationCounts[TargetIndex] == 0)
+        RemoveTarget(TargetIndex);
+
+    VerifyInvariants();
+    return Removed;
+}
+
+void AnimationRegistryEntry::SetEntityAssociationIndex(size_t AssociationIndex, size_t EntityAssociationIndex) noexcept
+{
+    VerifyInvariants();
+    VERIFY_EXPR(AssociationIndex < m_Associations.size());
+    m_Associations[AssociationIndex].EntityAssociationIndex = EntityAssociationIndex;
+}
+
+void AnimationRegistryEntry::RemoveTarget(size_t TargetIndex) noexcept
+{
+    VERIFY_EXPR(TargetIndex < m_Targets.size());
+    VERIFY_EXPR(m_TargetAssociationCounts[TargetIndex] == 0);
+
+    IRadientSkeletonPose* const pRemovedPose     = m_Targets[TargetIndex].pPose;
+    const size_t                NumErasedTargets = m_TargetIndices.erase(pRemovedPose);
     VERIFY_EXPR(NumErasedTargets == 1);
     static_cast<void>(NumErasedTargets);
 
     const size_t LastTarget = m_Targets.size() - 1;
     if (TargetIndex != LastTarget)
     {
-        m_Targets[TargetIndex]                  = m_Targets[LastTarget];
-        m_Poses[TargetIndex]                    = std::move(m_Poses[LastTarget]);
-        m_EntityAssociationIndices[TargetIndex] = m_EntityAssociationIndices[LastTarget];
+        m_Targets[TargetIndex]                 = m_Targets[LastTarget];
+        m_Poses[TargetIndex]                   = std::move(m_Poses[LastTarget]);
+        m_TargetAssociationCounts[TargetIndex] = m_TargetAssociationCounts[LastTarget];
 
-        auto MovedTargetIt = m_TargetIndices.find(m_Targets[TargetIndex].Entity);
+        auto MovedTargetIt = m_TargetIndices.find(m_Targets[TargetIndex].pPose);
         VERIFY_EXPR(MovedTargetIt != m_TargetIndices.end());
         MovedTargetIt->second = TargetIndex;
     }
     m_Targets.pop_back();
     m_Poses.pop_back();
-    m_EntityAssociationIndices.pop_back();
-
-    VerifyInvariants();
-    return Removed;
-}
-
-void AnimationRegistryEntry::SetEntityAssociationIndex(size_t TargetIndex, size_t EntityAssociationIndex) noexcept
-{
-    VerifyInvariants();
-    VERIFY_EXPR(TargetIndex < m_EntityAssociationIndices.size());
-    m_EntityAssociationIndices[TargetIndex] = EntityAssociationIndex;
+    m_TargetAssociationCounts.pop_back();
 }
 
 void AnimationRegistryEntry::WritePublicEntry(RadientAnimationRegistryEntry& PublicEntry) const noexcept
@@ -210,9 +289,11 @@ void AnimationRegistryEntry::WritePublicEntry(RadientAnimationRegistryEntry& Pub
 void AnimationRegistryEntry::VerifyInvariants() const noexcept
 {
     VERIFY_EXPR(m_pAnimation != nullptr);
+    VERIFY_EXPR(m_Associations.size() == m_AssociationIndices.size());
     VERIFY_EXPR(m_Targets.size() == m_Poses.size());
-    VERIFY_EXPR(m_Targets.size() == m_EntityAssociationIndices.size());
+    VERIFY_EXPR(m_Targets.size() == m_TargetAssociationCounts.size());
     VERIFY_EXPR(m_Targets.size() == m_TargetIndices.size());
+    VERIFY_EXPR(m_Associations.empty() == m_Targets.empty());
 }
 
 
@@ -262,7 +343,7 @@ private:
 
     size_t FindEntry(IRadientSkeletonAnimationAsset* pAnimation) const noexcept;
     void   UpdatePublicEntry(size_t EntryIndex) noexcept;
-    void   RemoveTarget(size_t EntryIndex, size_t TargetIndex) noexcept;
+    void   RemoveAssociation(size_t EntryIndex, size_t AssociationIndex) noexcept;
     void   RemoveEntry(size_t EntryIndex) noexcept;
     void   PublishMutation() noexcept;
 
@@ -305,12 +386,12 @@ void RadientAnimationRegistryImpl::UpdatePublicEntry(size_t EntryIndex) noexcept
     EntryData.WritePublicEntry(m_PublicEntries[EntryIndex]);
 }
 
-void RadientAnimationRegistryImpl::RemoveTarget(size_t EntryIndex, size_t TargetIndex) noexcept
+void RadientAnimationRegistryImpl::RemoveAssociation(size_t EntryIndex, size_t AssociationIndex) noexcept
 {
     VERIFY_EXPR(EntryIndex < m_Entries.size());
 
-    AnimationRegistryEntry&                     EntryData = m_Entries[EntryIndex];
-    const AnimationRegistryEntry::RemovedTarget Removed   = EntryData.RemoveTarget(TargetIndex);
+    AnimationRegistryEntry&                          EntryData = m_Entries[EntryIndex];
+    const AnimationRegistryEntry::RemovedAssociation Removed   = EntryData.RemoveAssociation(AssociationIndex);
 
     auto EntityIt = m_EntityAssociations.find(Removed.Entity);
     VERIFY_EXPR(EntityIt != m_EntityAssociations.end());
@@ -326,10 +407,10 @@ void RadientAnimationRegistryImpl::RemoveTarget(size_t EntryIndex, size_t Target
 
         const size_t MovedEntryIndex = FindEntry(pMovedAnimation);
         VERIFY_EXPR(MovedEntryIndex != InvalidIndex);
-        AnimationRegistryEntry& MovedEntry       = m_Entries[MovedEntryIndex];
-        const size_t            MovedTargetIndex = MovedEntry.FindTarget(Removed.Entity);
-        VERIFY_EXPR(MovedTargetIndex != InvalidIndex);
-        MovedEntry.SetEntityAssociationIndex(MovedTargetIndex, Removed.EntityAssociationIndex);
+        AnimationRegistryEntry& MovedEntry            = m_Entries[MovedEntryIndex];
+        const size_t            MovedAssociationIndex = MovedEntry.FindAssociation(Removed.Entity);
+        VERIFY_EXPR(MovedAssociationIndex != InvalidIndex);
+        MovedEntry.SetEntityAssociationIndex(MovedAssociationIndex, Removed.EntityAssociationIndex);
     }
     Animations.pop_back();
     if (Animations.empty())
@@ -382,7 +463,7 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimatedEntities(IRadientSkeleto
     if (EntityCount == 0)
         return RADIENT_STATUS_NO_CHANGE;
 
-    struct PendingTarget
+    struct PendingAssociation
     {
         RadientEntityID                     Entity = InvalidRadientEntityID;
         RefCntAutoPtr<IRadientSkeletonPose> pPose;
@@ -393,14 +474,17 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimatedEntities(IRadientSkeleto
     {
         const size_t                  ExistingEntryIndex = FindEntry(pAnimation);
         const AnimationRegistryEntry* pExistingEntry     = ExistingEntryIndex != InvalidIndex ?
-            &m_Entries[ExistingEntryIndex] :
-            nullptr;
+                &m_Entries[ExistingEntryIndex] :
+                nullptr;
 
         absl::flat_hash_map<RadientEntityID, bool> BatchEntities;
         BatchEntities.reserve(EntityCount);
 
-        std::vector<PendingTarget> PendingTargets;
-        PendingTargets.reserve(EntityCount);
+        std::vector<PendingAssociation> PendingAssociations;
+        PendingAssociations.reserve(EntityCount);
+
+        absl::flat_hash_map<IRadientSkeletonPose*, bool> NewTargetPoses;
+        NewTargetPoses.reserve(EntityCount);
 
         IRadientSkeletonAsset* const pAnimationSkeleton = pAnimation->GetDesc().pSkeleton;
         if (pAnimationSkeleton == nullptr)
@@ -409,7 +493,7 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimatedEntities(IRadientSkeleto
         for (Uint32 EntityIndex = 0; EntityIndex < EntityCount; ++EntityIndex)
         {
             const RadientEntityID Entity = pEntities[EntityIndex];
-            if ((pExistingEntry != nullptr && pExistingEntry->FindTarget(Entity) != InvalidIndex) ||
+            if ((pExistingEntry != nullptr && pExistingEntry->FindAssociation(Entity) != InvalidIndex) ||
                 !BatchEntities.emplace(Entity, true).second)
             {
                 continue;
@@ -429,35 +513,38 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimatedEntities(IRadientSkeleto
             if (Skin.pPose->GetSkeleton() != pAnimationSkeleton)
                 return RADIENT_STATUS_INVALID_ARGUMENT;
 
-            PendingTargets.push_back({Entity, RefCntAutoPtr<IRadientSkeletonPose>{Skin.pPose}});
+            PendingAssociations.push_back({Entity, RefCntAutoPtr<IRadientSkeletonPose>{Skin.pPose}});
+            if (pExistingEntry == nullptr || pExistingEntry->FindTarget(Skin.pPose) == InvalidIndex)
+                NewTargetPoses.emplace(Skin.pPose, true);
         }
 
-        if (PendingTargets.empty())
+        if (PendingAssociations.empty())
             return RADIENT_STATUS_NO_CHANGE;
 
         // Reserve every auxiliary container before changing the published
         // target array. Adding each validated association below is then O(1).
-        InsertedEntityAssociations.reserve(PendingTargets.size());
-        m_EntityAssociations.reserve(m_EntityAssociations.size() + PendingTargets.size());
-        for (const PendingTarget& Target : PendingTargets)
+        InsertedEntityAssociations.reserve(PendingAssociations.size());
+        m_EntityAssociations.reserve(m_EntityAssociations.size() + PendingAssociations.size());
+        for (const PendingAssociation& Association : PendingAssociations)
         {
-            auto InsertResult = m_EntityAssociations.try_emplace(Target.Entity);
+            auto InsertResult = m_EntityAssociations.try_emplace(Association.Entity);
             if (InsertResult.second)
-                InsertedEntityAssociations.push_back(Target.Entity);
+                InsertedEntityAssociations.push_back(Association.Entity);
             InsertResult.first->second.Animations.reserve(InsertResult.first->second.Animations.size() + 1);
         }
 
         AnimationRegistryEntry* pEntry = nullptr;
         if (pExistingEntry != nullptr)
         {
-            pEntry                      = &m_Entries[ExistingEntryIndex];
-            const size_t NewTargetCount = pEntry->GetTargetCount() + PendingTargets.size();
-            pEntry->ReserveTargets(NewTargetCount);
+            pEntry                           = &m_Entries[ExistingEntryIndex];
+            const size_t NewAssociationCount = pEntry->GetAssociationCount() + PendingAssociations.size();
+            const size_t NewTargetCount      = pEntry->GetTargetCount() + NewTargetPoses.size();
+            pEntry->Reserve(NewAssociationCount, NewTargetCount);
         }
         else
         {
             AnimationRegistryEntry NewEntry{pAnimation};
-            NewEntry.ReserveTargets(PendingTargets.size());
+            NewEntry.Reserve(PendingAssociations.size(), NewTargetPoses.size());
 
             m_EntryIndices.reserve(m_EntryIndices.size() + 1);
             m_Entries.reserve(m_Entries.size() + 1);
@@ -474,14 +561,14 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimatedEntities(IRadientSkeleto
         VERIFY_EXPR(EntryIndex != InvalidIndex);
         VERIFY_EXPR(pEntry == &m_Entries[EntryIndex]);
 
-        for (PendingTarget& Target : PendingTargets)
+        for (PendingAssociation& Association : PendingAssociations)
         {
-            auto EntityIt = m_EntityAssociations.find(Target.Entity);
+            auto EntityIt = m_EntityAssociations.find(Association.Entity);
             VERIFY_EXPR(EntityIt != m_EntityAssociations.end());
 
             const size_t EntityAssociationIndex = EntityIt->second.Animations.size();
             EntityIt->second.Animations.push_back(pAnimation);
-            pEntry->AddTarget(Target.Entity, std::move(Target.pPose), EntityAssociationIndex);
+            pEntry->AddAssociation(Association.Entity, std::move(Association.pPose), EntityAssociationIndex);
         }
 
         UpdatePublicEntry(EntryIndex);
@@ -528,11 +615,11 @@ RADIENT_STATUS RadientAnimationRegistryImpl::RemoveAnimatedEntities(IRadientSkel
     bool Changed = false;
     for (Uint32 EntityIndex = 0; EntityIndex < EntityCount; ++EntityIndex)
     {
-        const size_t TargetIndex = m_Entries[EntryIndex].FindTarget(pEntities[EntityIndex]);
-        if (TargetIndex == InvalidIndex)
+        const size_t AssociationIndex = m_Entries[EntryIndex].FindAssociation(pEntities[EntityIndex]);
+        if (AssociationIndex == InvalidIndex)
             continue;
 
-        RemoveTarget(EntryIndex, TargetIndex);
+        RemoveAssociation(EntryIndex, AssociationIndex);
         Changed = true;
     }
 
@@ -562,11 +649,11 @@ RADIENT_STATUS RadientAnimationRegistryImpl::RemoveEntity(RadientEntityID Entity
         const size_t                          EntryIndex = FindEntry(pAnimation);
         VERIFY_EXPR(EntryIndex != InvalidIndex);
 
-        AnimationRegistryEntry& EntryData   = m_Entries[EntryIndex];
-        const size_t            TargetIndex = EntryData.FindTarget(Entity);
-        VERIFY_EXPR(TargetIndex != InvalidIndex);
+        AnimationRegistryEntry& EntryData        = m_Entries[EntryIndex];
+        const size_t            AssociationIndex = EntryData.FindAssociation(Entity);
+        VERIFY_EXPR(AssociationIndex != InvalidIndex);
 
-        RemoveTarget(EntryIndex, TargetIndex);
+        RemoveAssociation(EntryIndex, AssociationIndex);
         if (EntryData.IsEmpty())
             RemoveEntry(EntryIndex);
         else
@@ -587,7 +674,7 @@ RADIENT_STATUS RadientAnimationRegistryImpl::RemoveAnimation(IRadientSkeletonAni
         return RADIENT_STATUS_NO_CHANGE;
 
     while (!m_Entries[EntryIndex].IsEmpty())
-        RemoveTarget(EntryIndex, m_Entries[EntryIndex].GetTargetCount() - 1);
+        RemoveAssociation(EntryIndex, m_Entries[EntryIndex].GetAssociationCount() - 1);
 
     RemoveEntry(EntryIndex);
     PublishMutation();

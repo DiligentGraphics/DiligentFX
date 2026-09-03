@@ -921,23 +921,32 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
         RadientEntityID                     Entity = InvalidRadientEntityID;
     };
 
-    const auto CaptureSkins = [&Fixture](const RadientAnimationRegistryEntry& Entry) {
-        std::vector<CapturedSkin> Skins;
-        Skins.reserve(Entry.TargetCount);
-        for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
+    const auto CaptureSkins = [&Fixture](RadientEntityID RootEntity) {
+        std::vector<CapturedSkin>    Skins;
+        std::vector<RadientEntityID> PendingEntities{RootEntity};
+        while (!PendingEntities.empty())
         {
-            const RadientAnimationTarget& Target = Entry.pTargets[TargetIndex];
-            RadientSkinComponent          SkinComponent{};
-            EXPECT_EQ(Fixture.pScene->GetSkin(Target.Entity, SkinComponent), RADIENT_STATUS_OK);
-            EXPECT_EQ(SkinComponent.pPose, Target.pPose);
-            if (SkinComponent.pSkin != nullptr && SkinComponent.pPose != nullptr)
+            const RadientEntityID Entity = PendingEntities.back();
+            PendingEntities.pop_back();
+
+            Bool HasSkin = False;
+            EXPECT_EQ(Fixture.pScene->HasComponent(Entity, RADIENT_COMPONENT_TYPE_SKIN, HasSkin), RADIENT_STATUS_OK);
+            if (HasSkin)
             {
-                CapturedSkin& Skin           = Skins.emplace_back();
-                Skin.pSkin                   = SkinComponent.pSkin;
-                Skin.pPose                   = SkinComponent.pPose;
-                Skin.SkeletonToMeshTransform = SkinComponent.SkeletonToMeshTransform;
-                Skin.Entity                  = Target.Entity;
+                RadientSkinComponent SkinComponent{};
+                EXPECT_EQ(Fixture.pScene->GetSkin(Entity, SkinComponent), RADIENT_STATUS_OK);
+                if (SkinComponent.pSkin != nullptr && SkinComponent.pPose != nullptr)
+                {
+                    CapturedSkin& Skin           = Skins.emplace_back();
+                    Skin.pSkin                   = SkinComponent.pSkin;
+                    Skin.pPose                   = SkinComponent.pPose;
+                    Skin.SkeletonToMeshTransform = SkinComponent.SkeletonToMeshTransform;
+                    Skin.Entity                  = Entity;
+                }
             }
+
+            const std::vector<RadientEntityID> Children = GetChildren(*Fixture.pScene, Entity);
+            PendingEntities.insert(PendingEntities.end(), Children.begin(), Children.end());
         }
         return Skins;
     };
@@ -945,13 +954,15 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
+    ASSERT_EQ(pRegistryEntry->TargetCount, 1u);
 
-    std::vector<CapturedSkin> Skins = CaptureSkins(*pRegistryEntry);
+    std::vector<CapturedSkin> Skins = CaptureSkins(ImportResult.RootEntity);
     ASSERT_EQ(Skins.size(), 2u);
     ASSERT_NE(Skins[0].pSkin, nullptr);
     ASSERT_NE(Skins[0].pPose, nullptr);
     EXPECT_EQ(Skins[1].pSkin, Skins[0].pSkin);
     EXPECT_EQ(Skins[1].pPose, Skins[0].pPose);
+    EXPECT_EQ(pRegistryEntry->pTargets[0].pPose, Skins[0].pPose);
 
     std::array<Float32, 2> SkeletonToMeshTranslations{
         Skins[0].SkeletonToMeshTransform.Data[12],
@@ -1048,7 +1059,10 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
-    Skins = CaptureSkins(*pRegistryEntry);
+    ASSERT_EQ(pRegistryEntry->TargetCount, 2u);
+    Skins                                         = CaptureSkins(ImportResult.RootEntity);
+    std::vector<CapturedSkin> SecondInstanceSkins = CaptureSkins(SecondRoot);
+    Skins.insert(Skins.end(), SecondInstanceSkins.begin(), SecondInstanceSkins.end());
     ASSERT_EQ(Skins.size(), 4u);
 
     IRadientSkeletonPose* pSecondPose        = nullptr;
@@ -1074,6 +1088,16 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     EXPECT_NE(pSecondPose, pFirstInstancePose);
     EXPECT_EQ(FirstPoseUseCount, 2u);
     EXPECT_EQ(SecondPoseUseCount, 2u);
+
+    bool FoundFirstPoseTarget  = false;
+    bool FoundSecondPoseTarget = false;
+    for (Uint32 TargetIndex = 0; TargetIndex < pRegistryEntry->TargetCount; ++TargetIndex)
+    {
+        FoundFirstPoseTarget |= pRegistryEntry->pTargets[TargetIndex].pPose == pFirstInstancePose;
+        FoundSecondPoseTarget |= pRegistryEntry->pTargets[TargetIndex].pPose == pSecondPose;
+    }
+    EXPECT_TRUE(FoundFirstPoseTarget);
+    EXPECT_TRUE(FoundSecondPoseTarget);
 
     ASSERT_EQ(pSecondPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
     ExpectFloat3Near(LocalTransforms[2].Position, {0.f, 0.f, 3.f});

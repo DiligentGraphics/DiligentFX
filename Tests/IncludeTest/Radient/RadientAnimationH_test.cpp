@@ -41,7 +41,6 @@ static_assert(std::is_standard_layout<RadientAnimationRegistryState>::value, "Ra
 static_assert(std::is_trivially_copyable<RadientAnimationRegistryState>::value, "RadientAnimationRegistryState must be trivially copyable");
 
 constexpr RadientAnimationTarget DefaultTarget{};
-static_assert(DefaultTarget.Entity == InvalidRadientEntityID, "Unexpected RadientAnimationTarget entity default value");
 static_assert(DefaultTarget.pPose == nullptr, "Unexpected RadientAnimationTarget pose default value");
 
 constexpr RadientAnimationRegistryEntry DefaultEntry{};

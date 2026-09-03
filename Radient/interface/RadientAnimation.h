@@ -27,7 +27,7 @@
 #pragma once
 
 /// \file
-/// Defines animation-to-scene-entity registry interfaces.
+/// Defines animation-to-pose registry interfaces.
 
 #include "RadientScene.h"
 #include "RadientSkinning.h"
@@ -38,29 +38,26 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 typedef struct IRadientAnimationRegistry IRadientAnimationRegistry;
 
-/// One scene entity targeted by a skeleton animation.
+/// One unique skeleton pose targeted by an animation.
 struct RadientAnimationTarget
 {
-    /// Target scene entity.
-    RadientEntityID Entity DEFAULT_INITIALIZER(InvalidRadientEntityID);
-
-    /// Pose resolved from the entity's RadientSkinComponent when the target is
-    /// added. The registry retains the pose; this pointer is borrowed and is
-    /// never null in a registry state entry.
+    /// Pose resolved from the registered entities' RadientSkinComponent data.
+    /// The registry retains the pose; this pointer is borrowed and is never
+    /// null in a registry state entry.
     IRadientSkeletonPose* pPose DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientAnimationTarget RadientAnimationTarget;
 
 
-/// One animation and the scene entities to which it may be applied.
+/// One animation and the unique poses to which it may be applied.
 struct RadientAnimationRegistryEntry
 {
     /// Animation shared by every target in pTargets. The registry retains the
     /// animation; this pointer is borrowed and is never null.
     IRadientSkeletonAnimationAsset* pAnimation DEFAULT_INITIALIZER(nullptr);
 
-    /// Array of TargetCount unique targets. The pointer and its elements remain
-    /// valid until the registry is modified.
+    /// Array of TargetCount unique pose targets. The pointer and its elements
+    /// remain valid until the registry is modified.
     const RadientAnimationTarget* pTargets DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pTargets. Registry entries never have zero targets.
@@ -100,11 +97,12 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationRegistry =
 
 // clang-format off
 
-/// Externally owned mapping from skeleton animations to animated scene entities.
+/// Externally owned mapping from skeleton animations to unique skeleton poses.
 ///
 /// A registry is associated with one scene and retains that scene. It does not
 /// modify the scene or automatically observe entity destruction. The code that
-/// adds or removes scene content is responsible for updating the registry.
+/// adds or removes scene content is responsible for updating its private entity
+/// associations.
 ///
 /// The interface is externally synchronized. Applications must not call its
 /// methods concurrently without their own synchronization.
@@ -118,7 +116,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationRegistry, IObject)
     ///
     /// The registry resolves each entity's RadientSkinComponent once, retains
     /// its pose, and verifies that the pose and pAnimation target the same
-    /// skeleton. The operation is atomic: no associations are added if any
+    /// skeleton. Entities sharing a pose produce one public animation target;
+    /// the target remains registered until its last entity association is
+    /// removed. The operation is atomic: no associations are added if any
     /// entity is invalid, has no skin component or pose, or targets another
     /// skeleton. Existing associations are ignored. Returns
     /// RADIENT_STATUS_NO_CHANGE when EntityCount is zero or every association
