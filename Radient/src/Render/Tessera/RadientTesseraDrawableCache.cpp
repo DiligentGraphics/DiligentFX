@@ -172,7 +172,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(bool PackMatrixRowMajor)
+RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(Uint32 FrameIndex, bool PackMatrixRowMajor)
 {
     RADIENT_STATUS Status     = RADIENT_STATUS_OK;
     bool           HasChanges = false;
@@ -182,7 +182,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(bool PackMatrixR
         if (Renderable.pSkinData == nullptr)
             continue;
 
-        const RADIENT_STATUS SkinStatus = Renderable.pSkinData->Prepare(PackMatrixRowMajor);
+        const RADIENT_STATUS SkinStatus = Renderable.pSkinData->Prepare(FrameIndex, PackMatrixRowMajor);
         if (SkinStatus == RADIENT_STATUS_OK)
             HasChanges = true;
         else if (SkinStatus != RADIENT_STATUS_NO_CHANGE)

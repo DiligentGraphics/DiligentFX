@@ -1817,8 +1817,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     for (const RadientDrawableSlot* pSlot : Slots)
         EXPECT_EQ(pSlot->pSkinData, pSharedSkinData);
 
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(0), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(0), RADIENT_STATUS_NO_CHANGE);
     pScene->ClearPendingRenderChanges();
 
     const RadientEntityID SecondEntity =
@@ -1846,8 +1846,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     for (const RadientDrawableSlot* pSlot : SecondSlots)
         EXPECT_EQ(pSlot->pSkinData, pSecondSkinData);
 
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_NO_CHANGE);
     pScene->ClearPendingRenderChanges();
 
     // A changed palette must produce OK even when another renderable remains
@@ -1857,10 +1857,11 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     const RadientTransform UpdatedJointTransform = MakeTranslation(2.f, 0.f, 0.f);
     ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &UpdatedJointTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    // The first stationary frame collapses previous onto current.
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_NO_CHANGE);
+    // The first stationary subsequent frame collapses previous onto current.
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientSkeletonPose> pReplacementPose;
     ASSERT_EQ(pSkeleton->CreatePose(pReplacementPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -1900,16 +1901,17 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderablePrimitives)
     const RadientTransform SecondUpdatedJointTransform = MakeTranslation(3.f, 0.f, 0.f);
     ASSERT_EQ(pSecondPoseWriter->SetJointLocalTransforms(0, 1, &SecondUpdatedJointTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pSecondPoseWriter->Commit(True), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    // The first stationary frame collapses previous onto current.
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(4), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(4), RADIENT_STATUS_NO_CHANGE);
+    // The first stationary subsequent frame collapses previous onto current.
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(5), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(5), RADIENT_STATUS_NO_CHANGE);
 
     pScene->ClearPendingRenderChanges();
     ASSERT_EQ(pWriter->DestroyEntity(SecondEntity), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
     ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(6), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)

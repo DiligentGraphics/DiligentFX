@@ -112,7 +112,7 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
     m_HalfFirstJoints[1] = m_HalfFirstJoints[0] + m_JointCount;
 }
 
-RADIENT_STATUS RadientTesseraSkinData::Prepare(bool PackMatrixRowMajor)
+RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor)
 {
     if (!m_JointBufferAllocation)
         return RADIENT_STATUS_FAILED;
@@ -122,8 +122,13 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(bool PackMatrixRowMajor)
         return UpdateStatus;
 
     const Uint64 PoseVersion = m_pPose->GetVersion();
+    const bool   SameFrame    = m_IsPrepared && m_PreparedFrameIndex == FrameIndex;
     if (m_IsPrepared && m_PreparedPoseVersion == PoseVersion)
     {
+        if (SameFrame)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        m_PreparedFrameIndex = FrameIndex;
         if (m_PreviousFirstJoint == m_FirstJoint)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -133,7 +138,11 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(bool PackMatrixRowMajor)
         return RADIENT_STATUS_OK;
     }
 
-    const Uint32 DestinationHalf = m_IsPrepared ? 1u - m_CurrentHalf : 0u;
+    // If this frame already has distinct current and previous palettes, replace
+    // the unrendered current palette in place. Otherwise preserve the current
+    // palette as history and write the new pose into the other half.
+    const bool   ReplaceCurrent  = SameFrame && m_PreviousFirstJoint != m_FirstJoint;
+    const Uint32 DestinationHalf = !m_IsPrepared || ReplaceCurrent ? m_CurrentHalf : 1u - m_CurrentHalf;
 
     WriteSkinningMatricesAttribs WriteAttribs{
         *m_pPose,
@@ -150,11 +159,15 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(bool PackMatrixRowMajor)
     if (PoseStatus != RADIENT_STATUS_OK)
         return PoseStatus;
 
-    m_PreviousFirstJoint = m_IsPrepared ? m_HalfFirstJoints[m_CurrentHalf] : m_HalfFirstJoints[DestinationHalf];
+    if (!m_IsPrepared)
+        m_PreviousFirstJoint = m_HalfFirstJoints[DestinationHalf];
+    else if (!ReplaceCurrent)
+        m_PreviousFirstJoint = m_HalfFirstJoints[m_CurrentHalf];
     m_FirstJoint         = m_HalfFirstJoints[DestinationHalf];
 
     m_CurrentHalf         = DestinationHalf;
     m_PreparedPoseVersion = PoseVersion;
+    m_PreparedFrameIndex  = FrameIndex;
     m_IsPrepared          = true;
     return RADIENT_STATUS_OK;
 }

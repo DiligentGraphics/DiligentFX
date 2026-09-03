@@ -131,12 +131,12 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     EXPECT_EQ(Allocation.GetSize(),
               2u * SkinData.GetJointCount() * static_cast<Uint32>(sizeof(RadientMatrix4x4)));
 
-    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    ASSERT_EQ(SkinData.Prepare(0), RADIENT_STATUS_OK);
     EXPECT_TRUE(SkinData.IsPrepared());
     EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
     const Uint32 InitialFirstJoint = SkinData.GetFirstJoint();
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
-    EXPECT_EQ(SkinData.Prepare(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SkinData.Prepare(0), RADIENT_STATUS_NO_CHANGE);
 
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
     ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -149,17 +149,37 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
               RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
 
-    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    ASSERT_EQ(SkinData.Prepare(1), RADIENT_STATUS_OK);
     EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
     EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
 
-    // The first stationary frame must collapse the previous palette onto the
-    // current one so skinning motion vectors become zero.
-    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    // Repeated preparation of the same frame must preserve its motion history.
+    ASSERT_EQ(SkinData.Prepare(1), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
+
+    const std::array SameFrameTransforms{
+        MakeTransform(19.f, 2.f),
+        MakeTransform(21.f),
+    };
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(0, static_cast<Uint32>(SameFrameTransforms.size()), SameFrameTransforms.data()),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
+
+    // A newer pose prepared before this frame is rendered replaces the current
+    // palette in place and retains the last frame's palette as history.
+    ASSERT_EQ(SkinData.Prepare(1), RADIENT_STATUS_OK);
+    EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
+    EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
+    EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
+
+    // The first stationary subsequent frame collapses the previous palette
+    // onto the current one so skinning motion vectors become zero.
+    ASSERT_EQ(SkinData.Prepare(2), RADIENT_STATUS_OK);
     EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), SkinData.GetFirstJoint());
-    EXPECT_EQ(SkinData.Prepare(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SkinData.Prepare(2), RADIENT_STATUS_NO_CHANGE);
 
     const std::array SecondUpdatedTransforms{
         MakeTransform(23.f, 2.f),
@@ -168,7 +188,7 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     ASSERT_EQ(pWriter->SetJointLocalTransforms(0, static_cast<Uint32>(SecondUpdatedTransforms.size()), SecondUpdatedTransforms.data()),
               RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
-    ASSERT_EQ(SkinData.Prepare(), RADIENT_STATUS_OK);
+    ASSERT_EQ(SkinData.Prepare(3), RADIENT_STATUS_OK);
     EXPECT_EQ(SkinData.GetFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint + SkinData.GetJointCount());
 }
@@ -188,7 +208,7 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
 
     RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
     RadientTesseraSkinData           UnpreparedData{Objects.pSkin, Objects.pPose, JointBuffer};
-    ASSERT_EQ(UnpreparedData.Prepare(), RADIENT_STATUS_OK);
+    ASSERT_EQ(UnpreparedData.Prepare(0), RADIENT_STATUS_OK);
     EXPECT_TRUE(UnpreparedData.IsPrepared());
     const Uint32 InitialFirstJoint = UnpreparedData.GetFirstJoint();
     EXPECT_EQ(UnpreparedData.GetPreviousFirstJoint(), InitialFirstJoint);
@@ -198,7 +218,7 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
     ASSERT_EQ(pWriter->SetJointLocalTransforms(1, 1, &DeferredTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
 
-    ASSERT_EQ(UnpreparedData.Prepare(), RADIENT_STATUS_OK);
+    ASSERT_EQ(UnpreparedData.Prepare(1), RADIENT_STATUS_OK);
     EXPECT_EQ(UnpreparedData.GetFirstJoint(), InitialFirstJoint + UnpreparedData.GetJointCount());
     EXPECT_EQ(UnpreparedData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);

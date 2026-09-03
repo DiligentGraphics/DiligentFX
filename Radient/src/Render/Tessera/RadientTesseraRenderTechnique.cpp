@@ -145,7 +145,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
 
     const RADIENT_STATUS SkinningStatus =
-        pSceneState->DrawableCache.PrepareSkinningData(PackJointMatricesRowMajor);
+        pSceneState->DrawableCache.PrepareSkinningData(
+            ViewState.FrameHistory.GetFrameIndex(), PackJointMatricesRowMajor);
     if (RADIENT_FAILED(SkinningStatus))
         return SkinningStatus;
 
