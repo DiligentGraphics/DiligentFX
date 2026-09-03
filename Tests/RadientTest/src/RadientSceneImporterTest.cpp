@@ -974,6 +974,8 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
 
     // The per-attachment conversion cancels each mesh node's document-space
     // transform, while the external instance-root transform remains applied.
+    // Skinning matrices remain reusable skeleton-space palette data; Tessera
+    // composes the attachment correction into the mesh world transform.
     for (const CapturedSkin& Skin : Skins)
     {
         std::array<RadientMatrix4x4, 2> SkinningMatrices{};
@@ -981,17 +983,19 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
                       Skin.pSkin,
                       SkinningMatrices.data(),
                       False,
-                      True,
-                      &Skin.SkeletonToMeshTransform),
+                      True),
                   RADIENT_STATUS_OK);
 
         RadientMatrix4x4 MeshWorldMatrix;
         ASSERT_EQ(Fixture.pScene->GetWorldMatrix(Skin.Entity, MeshWorldMatrix), RADIENT_STATUS_OK);
+        const RadientMatrix4x4 CorrectedMeshWorldMatrix = RadientMath::MultiplyMatrices(
+            Skin.SkeletonToMeshTransform,
+            MeshWorldMatrix);
 
         RadientTransform ExpectedJointWorldTransform;
         ExpectedJointWorldTransform.Position = {11.f, 2.f, 3.f};
         ExpectMatrixNear(
-            RadientMath::MultiplyMatrices(SkinningMatrices[0], MeshWorldMatrix),
+            RadientMath::MultiplyMatrices(SkinningMatrices[0], CorrectedMeshWorldMatrix),
             RadientMath::TransformToMatrix(ExpectedJointWorldTransform));
     }
 

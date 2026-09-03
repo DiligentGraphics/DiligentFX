@@ -865,11 +865,10 @@ public:
         return RADIENT_STATUS_OK;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset*      pSkin,
-                                                                      RadientMatrix4x4*       pMatrices,
-                                                                      Bool                    TransposeMatrices,
-                                                                      Bool                    UpdateGlobalMatrices,
-                                                                      const RadientMatrix4x4* pSkeletonToMeshTransform) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset* pSkin,
+                                                                      RadientMatrix4x4*  pMatrices,
+                                                                      Bool               TransposeMatrices,
+                                                                      Bool               UpdateGlobalMatrices) override final
     {
         if (pSkin == nullptr || pMatrices == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -892,14 +891,9 @@ public:
         {
             const RadientSkinJointBindingDesc& Joint = SkinDesc.pJoints[JointIndex];
 
-            RadientMatrix4x4 Matrix = RadientMath::MultiplyMatrices(
+            const RadientMatrix4x4 Matrix = RadientMath::MultiplyMatrices(
                 Joint.InverseBindMatrix,
                 m_State.GlobalMatrices[Joint.SkeletonJointIndex]);
-
-            if (pSkeletonToMeshTransform != nullptr)
-            {
-                Matrix = RadientMath::MultiplyMatrices(Matrix, *pSkeletonToMeshTransform);
-            }
 
             pMatrices[JointIndex] = TransposeMatrices ?
                 RadientMath::TransposeMatrix(Matrix) :

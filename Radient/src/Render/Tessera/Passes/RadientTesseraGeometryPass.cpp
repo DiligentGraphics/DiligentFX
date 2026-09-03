@@ -312,15 +312,19 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         if (Batch.MaterialSRB.GetSRB() == nullptr)
             continue;
 
+        RadientMatrix4x4 SkinnedNodeTransform;
+
         Uint32 MultiDrawCount = 0;
         for (const DrawableBatchItem& Drawable : Batch.Drawables)
         {
-            const bool UsesSkinning = (Batch.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0;
+            const bool                          UsesSkinning    = (Batch.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0;
+            const RadientTesseraSkinAttachment* pSkinAttachment = Drawable.pSkinAttachment;
+            RadientTesseraSkinData* const       pSkinData       = pSkinAttachment != nullptr ? pSkinAttachment->pSkinData : nullptr;
             if (Drawable.pWorldMatrix == nullptr ||
                 Drawable.pEffectiveVisible == nullptr ||
                 !*Drawable.pEffectiveVisible ||
                 Drawable.ElementCount == 0 ||
-                (UsesSkinning && (Drawable.pSkinData == nullptr || !Drawable.pSkinData->IsPrepared())))
+                (UsesSkinning && (pSkinData == nullptr || !pSkinData->IsPrepared())))
             {
                 continue;
             }
@@ -347,12 +351,19 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 }
             }
 
+            const RadientMatrix4x4* pNodeTransform = Drawable.pWorldMatrix;
+            if (UsesSkinning && pSkinAttachment->SkeletonToMeshTransform)
+            {
+                SkinnedNodeTransform = RadientMath::MultiplyMatrices(*pSkinAttachment->SkeletonToMeshTransform, *Drawable.pWorldMatrix);
+                pNodeTransform       = &SkinnedNodeTransform;
+            }
+
             void* const            pPrimitiveAttribs = static_cast<Uint8*>(pMappedPrimitiveData) + PrimitiveAttribsOffset;
             const RadientMatrix4x4 PreviousTransform = FrameHistory.UpdateDrawableTransform(
                 Drawable.DrawableID,
                 Drawable.Generation,
-                *Drawable.pWorldMatrix);
-            const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*Drawable.pWorldMatrix);
+                *pNodeTransform);
+            const float4x4& NodeTransform     = reinterpret_cast<const float4x4&>(*pNodeTransform);
             const float4x4& PrevNodeTransform = reinterpret_cast<const float4x4&>(PreviousTransform);
             const float4    CustomData{};
 
@@ -364,9 +375,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             AttribsData.CustomDataSize = sizeof(CustomData);
             if (UsesSkinning)
             {
-                AttribsData.JointCount     = Drawable.pSkinData->GetJointCount();
-                AttribsData.FirstJoint     = Drawable.pSkinData->GetFirstJoint();
-                AttribsData.PrevFirstJoint = Drawable.pSkinData->GetPreviousFirstJoint();
+                AttribsData.JointCount     = pSkinData->GetJointCount();
+                AttribsData.FirstJoint     = pSkinData->GetFirstJoint();
+                AttribsData.PrevFirstJoint = pSkinData->GetPreviousFirstJoint();
             }
 
             void* const pPrimitiveAttribsEnd =
@@ -648,23 +659,23 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     }
     const PBR_Renderer::ALPHA_MODE AlphaMode = ToPBRAlphaMode(SurfaceMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags  = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
-    RadientTesseraSkinData* pSkinData = nullptr;
+    PBR_Renderer::PSO_FLAGS       PSOFlags        = Drawable.VertexAttribFlags | TesseraMaterialData.GetMaterialPSOFlags();
+    RadientTesseraSkinAttachment* pSkinAttachment = nullptr;
     if ((PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0)
     {
-        pSkinData = Drawable.pSkinData;
-        if (pSkinData == nullptr)
+        pSkinAttachment = Drawable.pSkinAttachment;
+        if (pSkinAttachment == nullptr || pSkinAttachment->pSkinData == nullptr)
         {
             // A mesh containing joint attributes may also be instantiated by
             // an unskinned node. Render that instance in its authored pose.
             PSOFlags &= ~PBR_Renderer::PSO_FLAG_USE_JOINTS;
         }
-        else if (!pSkinData->IsPrepared())
+        else if (!pSkinAttachment->pSkinData->IsPrepared())
         {
             return;
         }
     }
-    else if (Drawable.pSkinData != nullptr)
+    else if (Drawable.pSkinAttachment != nullptr)
     {
         UNEXPECTED("A skinned drawable does not contain joint and weight vertex attributes");
     }
@@ -757,7 +768,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     Batch.Drawables.push_back({
         Drawable.pWorldMatrix,
         Drawable.pEffectiveVisible,
-        pSkinData,
+        pSkinAttachment,
         DrawableID,
         Drawable.Generation,
         Drawable.ElementCount,

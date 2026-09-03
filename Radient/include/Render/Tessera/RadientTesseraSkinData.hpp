@@ -31,8 +31,6 @@
 
 #include "RefCntAutoPtr.hpp"
 
-#include <optional>
-
 namespace Diligent
 {
 
@@ -42,16 +40,15 @@ RadientTesseraBufferSuballocator::CreateInfo GetTesseraJointBufferCreateInfo();
 /// Tessera-side joint palettes for one skin and pose.
 ///
 /// Each palette matrix transforms a mesh-space vertex through the inverse bind
-/// transform and the corresponding skeleton-space joint transform, then back
-/// into the mesh entity's local space. The primitive transform to world space
-/// is applied separately by the renderer. The object retains its skin and pose
-/// and is not thread-safe.
+/// transform and the corresponding skeleton-space joint transform. The
+/// attachment-specific skeleton-to-mesh transform and the primitive transform
+/// to world space are applied separately by the renderer. The object retains
+/// its skin and pose and is not thread-safe.
 class RadientTesseraSkinData final
 {
 public:
     RadientTesseraSkinData(IRadientSkinAsset*                pSkin,
                            IRadientSkeletonPose*             pPose,
-                           const RadientMatrix4x4&           SkeletonToMeshTransform,
                            RadientTesseraBufferSuballocator& JointBuffer);
 
     RadientTesseraSkinData(const RadientTesseraSkinData&)            = delete;
@@ -66,15 +63,10 @@ public:
     /// half. Failures leave the last valid roles unchanged.
     RADIENT_STATUS Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor = true);
 
-    bool Matches(IRadientSkinAsset*      pSkin,
-                 IRadientSkeletonPose*   pPose,
-                 const RadientMatrix4x4& SkeletonToMeshTransform) const noexcept
+    bool Matches(IRadientSkinAsset*    pSkin,
+                 IRadientSkeletonPose* pPose) const noexcept
     {
-        return (m_pSkin == pSkin &&
-                m_pPose == pPose &&
-                (m_SkeletonToMeshTransform ?
-                     *m_SkeletonToMeshTransform == SkeletonToMeshTransform :
-                     SkeletonToMeshTransform == RadientMatrix4x4{}));
+        return m_pSkin == pSkin && m_pPose == pPose;
     }
 
     IRadientSkinAsset* GetSkin() const noexcept
@@ -122,9 +114,8 @@ public:
     }
 
 private:
-    RefCntAutoPtr<IRadientSkinAsset>      m_pSkin;
-    RefCntAutoPtr<IRadientSkeletonPose>   m_pPose;
-    const std::optional<RadientMatrix4x4> m_SkeletonToMeshTransform;
+    RefCntAutoPtr<IRadientSkinAsset>    m_pSkin;
+    RefCntAutoPtr<IRadientSkeletonPose> m_pPose;
 
     RadientTesseraBufferSuballocator& m_JointBuffer;
     RadientTesseraBufferAllocation    m_JointBufferAllocation;

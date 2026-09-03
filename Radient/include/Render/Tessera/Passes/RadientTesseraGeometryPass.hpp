@@ -51,8 +51,8 @@ namespace Diligent
 {
 
 class RadientTesseraDrawableCache;
-class RadientTesseraSkinData;
 struct RadientDrawableSlot;
+struct RadientTesseraSkinAttachment;
 
 /// Mesh geometry render pass used by shadow and forward rendering stages.
 class RadientTesseraGeometryPass
@@ -102,9 +102,9 @@ private:
     {
         // Only fields consumed by Execute() are retained here, keeping the hot
         // per-batch traversal compact and independent of the full drawable slot.
-        const RadientMatrix4x4* pWorldMatrix      = nullptr;
-        const Bool*             pEffectiveVisible = nullptr;
-        RadientTesseraSkinData* pSkinData         = nullptr;
+        const RadientMatrix4x4*       pWorldMatrix      = nullptr;
+        const Bool*                   pEffectiveVisible = nullptr;
+        RadientTesseraSkinAttachment* pSkinAttachment   = nullptr;
 
         RadientDrawableID DrawableID    = InvalidRadientDrawableID;
         Uint32            Generation    = 0;

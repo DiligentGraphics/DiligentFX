@@ -50,6 +50,7 @@
 #include <filesystem>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 
 namespace Diligent
 {
@@ -341,11 +342,17 @@ public:
             if (Entry.TargetCount == 0)
                 return RADIENT_STATUS_INVALID_OPERATION;
 
+            // Multiple imported entities may attach the same pose in different
+            // spaces; the animation only needs to update that pose once.
+            std::unordered_set<IRadientSkeletonPose*> EvaluatedPoses;
+            EvaluatedPoses.reserve(Entry.TargetCount);
             for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
             {
                 IRadientSkeletonPose* const pPose = Entry.pTargets[TargetIndex].pPose;
                 if (pPose == nullptr)
                     return RADIENT_STATUS_INVALID_OPERATION;
+                if (!EvaluatedPoses.insert(pPose).second)
+                    continue;
 
                 const RADIENT_STATUS Status = Entry.pAnimation->Evaluate(AnimationSettings.Time, pPose, True);
                 if (RADIENT_FAILED(Status))

@@ -47,6 +47,7 @@
 
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -62,6 +63,14 @@ struct RadientTesseraMaterialResolveContext
 {
     IThreadPool&                 ThreadPool;
     RadientTesseraMaterialCache* pMaterialCache = nullptr;
+};
+
+/// Per-renderable binding between a shared skin/pose palette and the space in
+/// which that skeleton is attached to the mesh.
+struct RadientTesseraSkinAttachment
+{
+    RadientTesseraSkinData*         pSkinData = nullptr;
+    std::optional<RadientMatrix4x4> SkeletonToMeshTransform;
 };
 
 /// Renderer-facing primitive slot addressed by a stable drawable ID.
@@ -83,11 +92,11 @@ struct RadientDrawableSlot
     const RadientMeshRendererComponent* pRenderer         = nullptr;
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
-    RadientTesseraSkinData*             pSkinData         = nullptr;
+    RadientTesseraSkinAttachment*       pSkinAttachment   = nullptr;
 
-    // RenderableRecord keeps the mesh payload alive. m_SkinnedRenderables
-    // keeps shared skin data alive. MaterialData keeps the renderer-specific
-    // material state and its material asset alive.
+    // RenderableRecord keeps the mesh payload and skin attachment alive.
+    // m_SkinDataCache keeps shared palette data alive. MaterialData keeps the
+    // renderer-specific material state and its material asset alive.
     RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
     IVertexPool* pVertexPool = nullptr;
@@ -237,10 +246,10 @@ public:
         return !m_PendingRenderableEntities.empty();
     }
 
-    /// Updates the shared joint-buffer shadow for every skinned renderable
-    /// whose pose version changed. Each renderable is prepared once regardless
-    /// of how many primitive drawable slots reference it. FrameIndex keeps
-    /// repeated preparation of the same view frame from advancing motion
+    /// Updates the shared joint-buffer shadow for every unique skin and pose
+    /// pair whose pose version changed. Each pair is prepared once regardless
+    /// of how many renderables or primitive slots reference it. FrameIndex
+    /// keeps repeated preparation of the same view frame from advancing motion
     /// history.
     RADIENT_STATUS PrepareSkinningData(Uint32 FrameIndex, bool PackMatrixRowMajor = true);
 
@@ -258,8 +267,6 @@ public:
     }
 
 private:
-    static constexpr size_t InvalidSkinListIndex = ~size_t{0};
-
     struct RenderableRecord
     {
         // Strong mesh asset reference kept while pending or expanded drawables still depend on it.
@@ -270,9 +277,9 @@ private:
         const RadientMatrix4x4*             pWorldMatrix      = nullptr;
         const Bool*                         pEffectiveVisible = nullptr;
 
-        // Identifies the palette shared by every primitive expanded from this
-        // renderable. Drawable slots hold non-owning pointers to the palette.
-        size_t SkinListIndex = InvalidSkinListIndex;
+        // Allocated only for skinned renderables. The attachment points to
+        // shared palette data and stores the per-renderable space correction.
+        std::unique_ptr<RadientTesseraSkinAttachment> pSkinAttachment;
 
         // True while this entity is waiting for its mesh asset to become drawable.
         bool PendingResolution = false;
@@ -281,10 +288,27 @@ private:
         std::vector<RadientDrawableID> DrawableIDs;
     };
 
-    struct SkinnedRenderable
+    struct SkinDataKey
     {
-        RadientEntityID                         Entity = InvalidRadientEntityID;
+        // Skin and pose are retained by the cache entry, so the raw pointers are stable
+        IRadientSkinAsset*    pSkin = nullptr;
+        IRadientSkeletonPose* pPose = nullptr;
+
+        bool operator==(const SkinDataKey& Rhs) const noexcept
+        {
+            return pSkin == Rhs.pSkin && pPose == Rhs.pPose;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const SkinDataKey& Key) const noexcept;
+        };
+    };
+
+    struct SkinDataCacheEntry
+    {
         std::unique_ptr<RadientTesseraSkinData> pSkinData;
+        size_t                                  UseCount = 0;
     };
 
     struct LightListLocation
@@ -300,15 +324,10 @@ private:
     void ResolvePendingRenderableMeshes(
         const RadientTesseraMaterialResolveContext& MaterialResolveContext);
 
-    void UpdateRenderableSkin(RadientEntityID             Entity,
-                              RenderableRecord&           Record,
+    void UpdateRenderableSkin(RenderableRecord&           Record,
                               const RadientSkinComponent* pSkin);
 
-    void RemoveRenderableSkin(RadientEntityID Entity, RenderableRecord& Record);
-
-    RadientTesseraSkinData* GetRenderableSkinData(
-        RadientEntityID         Entity,
-        const RenderableRecord& Record) const;
+    void RemoveRenderableSkin(RenderableRecord& Record);
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
@@ -338,10 +357,12 @@ private:
     RenderableMap m_Renderables;
     LightMap      m_Lights;
 
-    // Dense owning list of renderables that require skin palette preparation.
-    // Each record stores its position so removal is constant-time. Heap-owned
-    // palette objects keep drawable-slot pointers stable as the list moves.
-    std::vector<SkinnedRenderable> m_SkinnedRenderables;
+    // One palette allocation per retained skin/pose pair. Entries own strong
+    // skin and pose references through pSkinData, so their raw-pointer keys
+    // cannot be reused while present. Heap allocation keeps drawable pointers
+    // stable when the flat hash map rehashes.
+    using SkinDataCache = absl::flat_hash_map<SkinDataKey, SkinDataCacheEntry, SkinDataKey::Hasher>;
+    SkinDataCache m_SkinDataCache;
 
     // Renderer-specific material data is retained only while an entity waits
     // for all of its primitive materials to become GPU-ready.

@@ -848,43 +848,6 @@ TEST(RadientSkinningTest, PoseComputesTransposedSkinningMatrices)
     ExpectMatrixNear(SkinningMatrices[1], RadientMath::TransposeMatrix(TranslationMatrix(-3.f)));
 }
 
-TEST(RadientSkinningTest, PoseConvertsSkinningMatricesFromSkeletonToMeshSpace)
-{
-    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
-    ASSERT_NE(Objects.pPose, nullptr);
-
-    RadientTransform SkeletonToMesh;
-    SkeletonToMesh.Position                     = {5.f, 6.f, 7.f};
-    SkeletonToMesh.Scale                        = {2.f, 3.f, 4.f};
-    const RadientMatrix4x4 SkeletonToMeshMatrix = RadientMath::TransformToMatrix(SkeletonToMesh);
-
-    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
-    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(
-                  Objects.pSkin,
-                  SkinningMatrices.data(),
-                  False,
-                  True,
-                  &SkeletonToMeshMatrix),
-              RADIENT_STATUS_OK);
-
-    const std::array ExpectedMatrices{
-        RadientMath::MultiplyMatrices(TranslationMatrix(1.f), SkeletonToMeshMatrix),
-        RadientMath::MultiplyMatrices(TranslationMatrix(-3.f), SkeletonToMeshMatrix),
-    };
-    ExpectMatrixNear(SkinningMatrices[0], ExpectedMatrices[0]);
-    ExpectMatrixNear(SkinningMatrices[1], ExpectedMatrices[1]);
-
-    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(
-                  Objects.pSkin,
-                  SkinningMatrices.data(),
-                  True,
-                  True,
-                  &SkeletonToMeshMatrix),
-              RADIENT_STATUS_OK);
-    ExpectMatrixNear(SkinningMatrices[0], RadientMath::TransposeMatrix(ExpectedMatrices[0]));
-    ExpectMatrixNear(SkinningMatrices[1], RadientMath::TransposeMatrix(ExpectedMatrices[1]));
-}
-
 TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsNullSkin)
 {
     PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();

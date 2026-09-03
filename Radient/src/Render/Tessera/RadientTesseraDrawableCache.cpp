@@ -32,11 +32,17 @@
 
 #include "Cast.hpp"
 #include "DebugUtilities.hpp"
+#include "HashUtils.hpp"
 
 #include <algorithm>
 
 namespace Diligent
 {
+
+size_t RadientTesseraDrawableCache::SkinDataKey::Hasher::operator()(const SkinDataKey& Key) const noexcept
+{
+    return ComputeHash(Key.pSkin, Key.pPose);
+}
 
 namespace
 {
@@ -176,13 +182,14 @@ RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(Uint32 FrameInde
 {
     RADIENT_STATUS Status     = RADIENT_STATUS_OK;
     bool           HasChanges = false;
-    for (const SkinnedRenderable& Renderable : m_SkinnedRenderables)
+    for (const auto& CacheItem : m_SkinDataCache)
     {
-        VERIFY(Renderable.pSkinData != nullptr, "Skinned renderable list contains null skin data");
-        if (Renderable.pSkinData == nullptr)
+        const SkinDataCacheEntry& Entry = CacheItem.second;
+        VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
+        if (Entry.pSkinData == nullptr)
             continue;
 
-        const RADIENT_STATUS SkinStatus = Renderable.pSkinData->Prepare(FrameIndex, PackMatrixRowMajor);
+        const RADIENT_STATUS SkinStatus = Entry.pSkinData->Prepare(FrameIndex, PackMatrixRowMajor);
         if (SkinStatus == RADIENT_STATUS_OK)
             HasChanges = true;
         else if (SkinStatus != RADIENT_STATUS_NO_CHANGE)
@@ -218,7 +225,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
     Record.pWorldMatrix      = &Mesh.WorldMatrix;
     Record.pEffectiveVisible = &Mesh.EffectiveVisible;
 
-    UpdateRenderableSkin(Mesh.Entity, Record, Mesh.pSkin);
+    UpdateRenderableSkin(Record, Mesh.pSkin);
 
     if (Record.DrawableIDs.empty())
     {
@@ -226,7 +233,6 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
     }
     else
     {
-        RadientTesseraSkinData* const pSkinData = GetRenderableSkinData(Mesh.Entity, Record);
         for (const RadientDrawableID DrawableID : Record.DrawableIDs)
         {
             VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID in renderable record");
@@ -236,7 +242,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
             Slot.pRenderer         = Record.pRenderer;
             Slot.pWorldMatrix      = Record.pWorldMatrix;
             Slot.pEffectiveVisible = Record.pEffectiveVisible;
-            Slot.pSkinData         = pSkinData;
+            Slot.pSkinAttachment   = Record.pSkinAttachment.get();
             RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
         }
     }
@@ -250,102 +256,85 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID E
 
     RemoveRenderableDrawables(It->second);
     m_PendingMaterialData.erase(Entity);
-    RemoveRenderableSkin(Entity, It->second);
+    RemoveRenderableSkin(It->second);
     m_Renderables.erase(It);
 }
 
-void RadientTesseraDrawableCache::UpdateRenderableSkin(RadientEntityID             Entity,
-                                                       RenderableRecord&           Record,
+void RadientTesseraDrawableCache::UpdateRenderableSkin(RenderableRecord&           Record,
                                                        const RadientSkinComponent* pSkin)
 {
     if (pSkin == nullptr)
     {
-        RemoveRenderableSkin(Entity, Record);
+        RemoveRenderableSkin(Record);
         return;
     }
 
-    RadientTesseraSkinData* const pCurrentSkinData = GetRenderableSkinData(Entity, Record);
-    if (pCurrentSkinData != nullptr &&
-        pCurrentSkinData->Matches(pSkin->pSkin, pSkin->pPose, pSkin->SkeletonToMeshTransform))
+    RadientTesseraSkinData* const pCurrentSkinData =
+        Record.pSkinAttachment != nullptr ? Record.pSkinAttachment->pSkinData : nullptr;
+    if (Record.pSkinAttachment != nullptr && pCurrentSkinData == nullptr)
+        UNEXPECTED("Skin attachment contains null palette data");
+
+    if (pCurrentSkinData == nullptr || !pCurrentSkinData->Matches(pSkin->pSkin, pSkin->pPose))
     {
-        return;
+        RemoveRenderableSkin(Record);
+
+        auto              pAttachment = std::make_unique<RadientTesseraSkinAttachment>();
+        const SkinDataKey Key{pSkin->pSkin, pSkin->pPose};
+        auto [It, Inserted]       = m_SkinDataCache.try_emplace(Key);
+        SkinDataCacheEntry& Entry = It->second;
+        if (Inserted)
+        {
+            Entry.pSkinData = std::make_unique<RadientTesseraSkinData>(
+                pSkin->pSkin,
+                pSkin->pPose,
+                m_JointBuffer);
+        }
+
+        VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
+        ++Entry.UseCount;
+        pAttachment->pSkinData = Entry.pSkinData.get();
+        Record.pSkinAttachment = std::move(pAttachment);
     }
 
-    std::unique_ptr<RadientTesseraSkinData> pSkinData =
-        std::make_unique<RadientTesseraSkinData>(pSkin->pSkin,
-                                                 pSkin->pPose,
-                                                 pSkin->SkeletonToMeshTransform,
-                                                 m_JointBuffer);
-
-    if (Record.SkinListIndex == InvalidSkinListIndex)
-    {
-        const size_t SkinListIndex = m_SkinnedRenderables.size();
-        m_SkinnedRenderables.push_back({Entity, std::move(pSkinData)});
-        Record.SkinListIndex = SkinListIndex;
-    }
-    else
-    {
-        VERIFY(Record.SkinListIndex < m_SkinnedRenderables.size(), "Renderable skin list index is invalid");
-        if (Record.SkinListIndex >= m_SkinnedRenderables.size())
-            return;
-
-        SkinnedRenderable& Renderable = m_SkinnedRenderables[Record.SkinListIndex];
-        VERIFY(Renderable.Entity == Entity, "Renderable skin list index references a different entity");
-        if (Renderable.Entity != Entity)
-            return;
-
-        Renderable.pSkinData = std::move(pSkinData);
-    }
+    Record.pSkinAttachment->SkeletonToMeshTransform =
+        pSkin->SkeletonToMeshTransform != RadientMatrix4x4{} ?
+        std::optional<RadientMatrix4x4>{pSkin->SkeletonToMeshTransform} :
+        std::optional<RadientMatrix4x4>{};
 }
 
-void RadientTesseraDrawableCache::RemoveRenderableSkin(RadientEntityID   Entity,
-                                                       RenderableRecord& Record)
+void RadientTesseraDrawableCache::RemoveRenderableSkin(RenderableRecord& Record)
 {
-    if (Record.SkinListIndex == InvalidSkinListIndex)
+    if (Record.pSkinAttachment == nullptr)
         return;
 
-    const size_t RemovedIndex = Record.SkinListIndex;
-    VERIFY(RemovedIndex < m_SkinnedRenderables.size(), "Renderable skin list index is invalid");
-    if (RemovedIndex >= m_SkinnedRenderables.size())
+    RadientTesseraSkinData* const pSkinData = Record.pSkinAttachment->pSkinData;
+    if (pSkinData == nullptr)
     {
-        Record.SkinListIndex = InvalidSkinListIndex;
+        UNEXPECTED("Skin attachment contains null palette data");
+        Record.pSkinAttachment.reset();
         return;
     }
 
-    VERIFY(m_SkinnedRenderables[RemovedIndex].Entity == Entity, "Renderable skin list index references a different entity");
-    if (m_SkinnedRenderables[RemovedIndex].Entity != Entity)
-        return;
-
-    const size_t LastIndex = m_SkinnedRenderables.size() - 1;
-    if (RemovedIndex != LastIndex)
+    const SkinDataKey Key{pSkinData->GetSkin(), pSkinData->GetPose()};
+    const auto        It = m_SkinDataCache.find(Key);
+    if (It == m_SkinDataCache.end() || It->second.pSkinData.get() != pSkinData)
     {
-        const RadientEntityID MovedEntity  = m_SkinnedRenderables.back().Entity;
-        m_SkinnedRenderables[RemovedIndex] = std::move(m_SkinnedRenderables.back());
-
-        RenderableMap::iterator MovedIt = m_Renderables.find(MovedEntity);
-        VERIFY(MovedIt != m_Renderables.end(), "Skinned renderable list references an entity missing from the renderable records");
-        if (MovedIt != m_Renderables.end())
-            MovedIt->second.SkinListIndex = RemovedIndex;
+        UNEXPECTED("Renderable references skin data missing from the cache");
+        Record.pSkinAttachment.reset();
+        return;
     }
 
-    m_SkinnedRenderables.pop_back();
-    Record.SkinListIndex = InvalidSkinListIndex;
-}
+    SkinDataCacheEntry& Entry = It->second;
+    if (Entry.UseCount == 0)
+    {
+        UNEXPECTED("Skin data cache entry has no users");
+    }
+    else if (--Entry.UseCount == 0)
+    {
+        m_SkinDataCache.erase(It);
+    }
 
-RadientTesseraSkinData* RadientTesseraDrawableCache::GetRenderableSkinData(
-    RadientEntityID         Entity,
-    const RenderableRecord& Record) const
-{
-    if (Record.SkinListIndex == InvalidSkinListIndex)
-        return nullptr;
-
-    VERIFY(Record.SkinListIndex < m_SkinnedRenderables.size(), "Renderable skin list index is invalid");
-    if (Record.SkinListIndex >= m_SkinnedRenderables.size())
-        return nullptr;
-
-    const SkinnedRenderable& Renderable = m_SkinnedRenderables[Record.SkinListIndex];
-    VERIFY(Renderable.Entity == Entity, "Renderable skin list index references a different entity");
-    return Renderable.Entity == Entity ? Renderable.pSkinData.get() : nullptr;
+    Record.pSkinAttachment.reset();
 }
 
 void RadientTesseraDrawableCache::ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light)
@@ -506,7 +495,7 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         Slot.pRenderer          = Record.pRenderer;
         Slot.pWorldMatrix       = Record.pWorldMatrix;
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
-        Slot.pSkinData          = GetRenderableSkinData(Entity, Record);
+        Slot.pSkinAttachment    = Record.pSkinAttachment.get();
         Slot.IsIndexed          = Primitive.IsIndexed;
         Slot.MaterialData       = std::move(MaterialData[PrimitiveIndex]);
         Slot.pVertexPool        = Geometry.pVertexPool;

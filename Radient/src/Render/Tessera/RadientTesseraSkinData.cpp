@@ -40,11 +40,10 @@ constexpr Uint32 JointMatrixSize = static_cast<Uint32>(sizeof(RadientMatrix4x4))
 
 struct WriteSkinningMatricesAttribs
 {
-    IRadientSkeletonPose&   Pose;
-    IRadientSkinAsset&      Skin;
-    const RadientMatrix4x4* pSkeletonToMeshTransform;
-    Uint32                  JointCount;
-    bool                    PackMatrixRowMajor;
+    IRadientSkeletonPose& Pose;
+    IRadientSkinAsset&    Skin;
+    Uint32                JointCount;
+    bool                  PackMatrixRowMajor;
 };
 
 RADIENT_STATUS WriteSkinningMatrices(void* pData, Uint32 Size, void* pUserData)
@@ -59,8 +58,7 @@ RADIENT_STATUS WriteSkinningMatrices(void* pData, Uint32 Size, void* pUserData)
         &Attribs.Skin,
         static_cast<RadientMatrix4x4*>(pData),
         !Attribs.PackMatrixRowMajor,
-        False,
-        Attribs.pSkeletonToMeshTransform);
+        False);
 }
 
 } // namespace
@@ -80,14 +78,9 @@ RadientTesseraBufferSuballocator::CreateInfo GetTesseraJointBufferCreateInfo()
 
 RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*                pSkin,
                                                IRadientSkeletonPose*             pPose,
-                                               const RadientMatrix4x4&           SkeletonToMeshTransform,
                                                RadientTesseraBufferSuballocator& JointBuffer) :
     m_pSkin{pSkin},
     m_pPose{pPose},
-    m_SkeletonToMeshTransform{
-        SkeletonToMeshTransform != RadientMatrix4x4{} ?
-            std::optional<RadientMatrix4x4>{SkeletonToMeshTransform} :
-            std::optional<RadientMatrix4x4>{}},
     m_JointBuffer{JointBuffer}
 {
     VERIFY_EXPR(m_pSkin != nullptr);
@@ -154,7 +147,6 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
     WriteSkinningMatricesAttribs WriteAttribs{
         *m_pPose,
         *m_pSkin,
-        m_SkeletonToMeshTransform ? &*m_SkeletonToMeshTransform : nullptr,
         m_JointCount,
         PackMatrixRowMajor,
     };

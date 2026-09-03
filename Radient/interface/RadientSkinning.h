@@ -355,16 +355,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     /// RADIENT_STATUS_PENDING while global matrices are dirty. The output is
     /// not modified unless the method returns RADIENT_STATUS_OK.
     ///
-    /// If pSkeletonToMeshTransform is not null, it is post-multiplied into
-    /// every skinning matrix to convert the skeleton-space result into the
-    /// local space of the mesh that will use the palette. A null pointer is
-    /// equivalent to identity.
     VIRTUAL RADIENT_STATUS METHOD(ComputeSkinningMatrices)(THIS_
-                                                           IRadientSkinAsset*      pSkin,
-                                                           RadientMatrix4x4*       pMatrices,
-                                                           Bool                    TransposeMatrices DEFAULT_VALUE(False),
-                                                           Bool                    UpdateGlobalMatrices DEFAULT_VALUE(True),
-                                                           const RadientMatrix4x4* pSkeletonToMeshTransform DEFAULT_VALUE(nullptr)) PURE;
+                                                           IRadientSkinAsset* pSkin,
+                                                           RadientMatrix4x4*  pMatrices,
+                                                           Bool               TransposeMatrices DEFAULT_VALUE(False),
+                                                           Bool               UpdateGlobalMatrices DEFAULT_VALUE(True)) PURE;
 
     /// Propagates committed local transforms through the skeleton hierarchy and
     /// advances the pose version. Returns RADIENT_STATUS_NO_CHANGE when the
