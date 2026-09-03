@@ -103,12 +103,20 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateView(const RadientViewDesc& Desc,
                                                          IRadientView**         ppView) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE BeginFrame(const RadientFrameAttribs& Attribs) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Render(const RadientRenderAttribs& Attribs) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE EndFrame() override final;
 
 private:
     std::string m_Name;
 
     RadientRendererDesc m_Desc;
+
+    RadientFrameAttribs m_FrameAttribs;
+    RadientFrameID      m_CurrentFrameID = InvalidRadientFrameID;
+    RadientFrameID      m_NextFrameID    = 1;
 
     RefCntAutoPtr<IRadientBackend>         m_pBackend;
     std::unique_ptr<RadientRenderPipeline> m_RenderPipeline;

@@ -1663,12 +1663,52 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     RefCntAutoPtr<IRadientView> pView = CreateTestView(*pRenderer, pScene, pTarget);
     ASSERT_NE(pView, nullptr);
 
+    RefCntAutoPtr<IRadientView> pSecondView = CreateTestView(*pRenderer, pScene, pTarget);
+    ASSERT_NE(pSecondView, nullptr);
+
     RadientRenderAttribs RenderAttribs{};
     RenderAttribs.pView = pView;
 
     // The test only checks successful submission; image correctness belongs to
     // renderer-specific tests.
+    RadientFrameAttribs FrameAttribs{};
+    EXPECT_EQ(pRenderer->BeginFrame(FrameAttribs), RADIENT_STATUS_OK);
     EXPECT_EQ(pRenderer->Render(RenderAttribs), RADIENT_STATUS_OK);
+    RenderAttribs.pView = pSecondView;
+    EXPECT_EQ(pRenderer->Render(RenderAttribs), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_OK);
+}
+
+TEST(RadientRendererTest, EnforcesFrameLifecycle)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RadientFrameAttribs  FrameAttribs{};
+    RadientRenderAttribs RenderAttribs{};
+
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"outside an active renderer frame"};
+        EXPECT_EQ(pRenderer->Render(RenderAttribs), RADIENT_STATUS_INVALID_OPERATION);
+    }
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"because no frame is active"};
+        EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_INVALID_OPERATION);
+    }
+
+    EXPECT_EQ(pRenderer->BeginFrame(FrameAttribs), RADIENT_STATUS_OK);
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"because another frame is already active"};
+        EXPECT_EQ(pRenderer->BeginFrame(FrameAttribs), RADIENT_STATUS_INVALID_OPERATION);
+    }
+    EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_OK);
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"because no frame is active"};
+        EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_INVALID_OPERATION);
+    }
 }
 
 } // namespace

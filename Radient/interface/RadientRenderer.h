@@ -91,7 +91,19 @@ struct RadientRenderTargetDesc
 typedef struct RadientRenderTargetDesc RadientRenderTargetDesc;
 
 
-/// Render call attributes.
+/// Renderer frame attributes.
+struct RadientFrameAttribs
+{
+    /// Time since the previous application render frame, in seconds.
+    double DeltaTime DEFAULT_INITIALIZER(0.0);
+
+    /// Absolute application time, in seconds.
+    double Time DEFAULT_INITIALIZER(0.0);
+};
+typedef struct RadientFrameAttribs RadientFrameAttribs;
+
+
+/// Per-view render call attributes.
 struct RadientRenderAttribs
 {
     /// View to render.
@@ -99,12 +111,6 @@ struct RadientRenderAttribs
 
     /// Optional device context override for local rendering.
     IDeviceContext* pDeviceContext DEFAULT_INITIALIZER(nullptr);
-
-    /// Time since previous frame.
-    double DeltaTime DEFAULT_INITIALIZER(0.0);
-
-    /// Absolute application time.
-    double Time DEFAULT_INITIALIZER(0.0);
 };
 typedef struct RadientRenderAttribs RadientRenderAttribs;
 
@@ -184,11 +190,24 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
                                               const RadientViewDesc REF Desc,
                                               IRadientView**            ppView) PURE;
 
-    /// Renders one frame. Returns RADIENT_STATUS_PENDING when the frame is
-    /// rendered with ready content while renderer-specific drawable resources
-    /// are still being prepared asynchronously.
+    /// Begins an application render frame.
+    ///
+    /// Zero or more views may be rendered before EndFrame() is called. Frames
+    /// may not be nested. After this method succeeds, EndFrame() must be called
+    /// regardless of the status returned by Render().
+    VIRTUAL RADIENT_STATUS METHOD(BeginFrame)(THIS_
+                                              const RadientFrameAttribs REF Attribs) PURE;
+
+    /// Renders one view in the current application frame. Returns
+    /// RADIENT_STATUS_PENDING when the view is rendered with ready content
+    /// while renderer-specific drawable resources are still being prepared
+    /// asynchronously. BeginFrame() must have succeeded before this method is
+    /// called.
     VIRTUAL RADIENT_STATUS METHOD(Render)(THIS_
                                           const RadientRenderAttribs REF Attribs) PURE;
+
+    /// Ends the current application render frame.
+    VIRTUAL RADIENT_STATUS METHOD(EndFrame)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -199,7 +218,9 @@ DILIGENT_END_INTERFACE
 #    define IRadientRenderer_GetDesc(This)                  CALL_IFACE_METHOD(RadientRenderer, GetDesc,            This)
 #    define IRadientRenderer_CreateRenderTarget(This, ...)  CALL_IFACE_METHOD(RadientRenderer, CreateRenderTarget, This, __VA_ARGS__)
 #    define IRadientRenderer_CreateView(This, ...)          CALL_IFACE_METHOD(RadientRenderer, CreateView,         This, __VA_ARGS__)
+#    define IRadientRenderer_BeginFrame(This, ...)          CALL_IFACE_METHOD(RadientRenderer, BeginFrame,         This, __VA_ARGS__)
 #    define IRadientRenderer_Render(This, ...)              CALL_IFACE_METHOD(RadientRenderer, Render,             This, __VA_ARGS__)
+#    define IRadientRenderer_EndFrame(This)                 CALL_IFACE_METHOD(RadientRenderer, EndFrame,           This)
 
 #endif
 

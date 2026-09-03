@@ -35,9 +35,11 @@ namespace Diligent
 /// Resolved per-frame inputs passed to a render technique.
 struct RadientRenderContext
 {
+    const RadientFrameAttribs&  FrameAttribs;
     const RadientRenderAttribs& Attribs;
-    IRenderDevice*              pDevice  = nullptr;
-    IDeviceContext*             pContext = nullptr;
+    RadientFrameID              RenderFrameID = InvalidRadientFrameID;
+    IRenderDevice*              pDevice       = nullptr;
+    IDeviceContext*             pContext      = nullptr;
 };
 
 

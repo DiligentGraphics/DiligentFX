@@ -138,8 +138,30 @@ RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRad
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientRendererImpl::BeginFrame(const RadientFrameAttribs& Attribs)
+{
+    if (m_CurrentFrameID != InvalidRadientFrameID)
+    {
+        LOG_ERROR_MESSAGE("Cannot begin a Radient renderer frame because another frame is already active");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    m_FrameAttribs   = Attribs;
+    m_CurrentFrameID = m_NextFrameID++;
+    if (m_NextFrameID == InvalidRadientFrameID)
+        m_NextFrameID = 1;
+
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
 {
+    if (m_CurrentFrameID == InvalidRadientFrameID)
+    {
+        LOG_ERROR_MESSAGE("Cannot render a Radient view outside an active renderer frame; call BeginFrame() first");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     if (m_pBackend == nullptr || m_RenderPipeline == nullptr || Attribs.pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -147,15 +169,28 @@ RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS UpdateStatus = m_RenderPipeline->Update(Attribs);
+    const RADIENT_STATUS UpdateStatus = m_RenderPipeline->Update(m_FrameAttribs, m_CurrentFrameID, Attribs);
     if (RADIENT_FAILED(UpdateStatus))
         return UpdateStatus;
 
-    const RADIENT_STATUS RenderStatus = m_RenderPipeline->Render(Attribs);
+    const RADIENT_STATUS RenderStatus = m_RenderPipeline->Render(m_FrameAttribs, m_CurrentFrameID, Attribs);
     if (RADIENT_FAILED(RenderStatus))
         return RenderStatus;
 
     return UpdateStatus == RADIENT_STATUS_PENDING ? RADIENT_STATUS_PENDING : RenderStatus;
+}
+
+RADIENT_STATUS RadientRendererImpl::EndFrame()
+{
+    if (m_CurrentFrameID == InvalidRadientFrameID)
+    {
+        LOG_ERROR_MESSAGE("Cannot end a Radient renderer frame because no frame is active");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    m_FrameAttribs   = {};
+    m_CurrentFrameID = InvalidRadientFrameID;
+    return RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent

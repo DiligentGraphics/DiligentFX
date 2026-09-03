@@ -50,8 +50,12 @@ public:
                           const RadientRendererDesc& Desc);
     ~RadientRenderPipeline();
 
-    RADIENT_STATUS Update(const RadientRenderAttribs& Attribs);
-    RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
+    RADIENT_STATUS Update(const RadientFrameAttribs&  FrameAttribs,
+                          RadientFrameID              RenderFrameID,
+                          const RadientRenderAttribs& RenderAttribs);
+    RADIENT_STATUS Render(const RadientFrameAttribs&  FrameAttribs,
+                          RadientFrameID              RenderFrameID,
+                          const RadientRenderAttribs& RenderAttribs);
 
 private:
     RefCntAutoPtr<IRadientBackend>         m_pBackend;

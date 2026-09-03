@@ -358,12 +358,21 @@ public:
 
     RADIENT_STATUS RenderFrame(IDeviceContext* pContext, double Time)
     {
-        RadientRenderAttribs Attribs{};
-        Attribs.pView          = m_pView;
-        Attribs.pDeviceContext = pContext;
-        Attribs.Time           = Time;
-        Attribs.DeltaTime      = 1.0 / 60.0;
-        return m_pRenderer->Render(Attribs);
+        RadientFrameAttribs FrameAttribs{};
+        FrameAttribs.Time      = Time;
+        FrameAttribs.DeltaTime = 1.0 / 60.0;
+
+        RADIENT_STATUS Status = m_pRenderer->BeginFrame(FrameAttribs);
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
+
+        RadientRenderAttribs RenderAttribs{};
+        RenderAttribs.pView          = m_pView;
+        RenderAttribs.pDeviceContext = pContext;
+
+        const RADIENT_STATUS RenderStatus   = m_pRenderer->Render(RenderAttribs);
+        const RADIENT_STATUS EndFrameStatus = m_pRenderer->EndFrame();
+        return RenderStatus != RADIENT_STATUS_OK ? RenderStatus : EndFrameStatus;
     }
 
 private:

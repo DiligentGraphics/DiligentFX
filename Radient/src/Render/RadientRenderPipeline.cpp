@@ -56,9 +56,11 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
-RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs)
+RADIENT_STATUS RadientRenderPipeline::Update(const RadientFrameAttribs&  FrameAttribs,
+                                             RadientFrameID              RenderFrameID,
+                                             const RadientRenderAttribs& RenderAttribs)
 {
-    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(Attribs.pView);
+    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(RenderAttribs.pView);
     if (pViewImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -71,11 +73,11 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
-    IDeviceContext* pContext = Attribs.pDeviceContext != nullptr ?
-        Attribs.pDeviceContext :
+    IDeviceContext* pContext = RenderAttribs.pDeviceContext != nullptr ?
+        RenderAttribs.pDeviceContext :
         m_pBackend->GetNativeImmediateContext();
 
-    const RadientRenderContext Context{Attribs, pDevice, pContext};
+    const RadientRenderContext Context{FrameAttribs, RenderAttribs, RenderFrameID, pDevice, pContext};
 
     // Remote execution and headless local tests use the same public renderer object.
     // The concrete command serialization/GPU execution will be plugged in behind this pipeline.
@@ -98,9 +100,11 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
     return SyncStatus == RADIENT_STATUS_PENDING ? RADIENT_STATUS_PENDING : PrepareStatus;
 }
 
-RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
+RADIENT_STATUS RadientRenderPipeline::Render(const RadientFrameAttribs&  FrameAttribs,
+                                             RadientFrameID              RenderFrameID,
+                                             const RadientRenderAttribs& RenderAttribs)
 {
-    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(Attribs.pView);
+    RadientViewImpl* pViewImpl = ClassPtrCast<RadientViewImpl>(RenderAttribs.pView);
     if (pViewImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -109,8 +113,8 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
-    IDeviceContext* pContext = Attribs.pDeviceContext != nullptr ?
-        Attribs.pDeviceContext :
+    IDeviceContext* pContext = RenderAttribs.pDeviceContext != nullptr ?
+        RenderAttribs.pDeviceContext :
         m_pBackend->GetNativeImmediateContext();
 
     // Remote execution and headless local tests use the same public renderer object.
@@ -118,7 +122,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    const RadientRenderContext Context{Attribs, pDevice, pContext};
+    const RadientRenderContext Context{FrameAttribs, RenderAttribs, RenderFrameID, pDevice, pContext};
 
     RADIENT_STATUS Status = m_pTechnique->BeginFrame(Context);
     if (RADIENT_FAILED(Status))

@@ -60,6 +60,39 @@ bool IsPendingOrOK(RADIENT_STATUS Status)
     return Status == RADIENT_STATUS_PENDING || Status == RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RenderFrameAndWait(IRadientRenderer* pRenderer,
+                                  IRadientView*     pView,
+                                  IRenderDevice*    pDevice,
+                                  IDeviceContext*   pContext,
+                                  double&           Time)
+{
+    static constexpr double FrameDuration = 1.0 / 60.0;
+
+    RadientFrameAttribs FrameAttribs{};
+    FrameAttribs.Time      = Time;
+    FrameAttribs.DeltaTime = FrameDuration;
+
+    RADIENT_STATUS Status = pRenderer->BeginFrame(FrameAttribs);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    RadientRenderAttribs RenderAttribs{};
+    RenderAttribs.pView          = pView;
+    RenderAttribs.pDeviceContext = pContext;
+
+    const RADIENT_STATUS RenderStatus   = pRenderer->Render(RenderAttribs);
+    const RADIENT_STATUS EndFrameStatus = pRenderer->EndFrame();
+    Status                              = RenderStatus != RADIENT_STATUS_OK ? RenderStatus : EndFrameStatus;
+
+    pContext->Flush();
+    pContext->FinishFrame();
+    pContext->WaitForIdle();
+    pDevice->ReleaseStaleResources();
+
+    Time += FrameDuration;
+    return Status;
+}
+
 struct StandardMaterialValues
 {
     RadientFloat4         BaseColor{1.f, 1.f, 1.f, 1.f};
@@ -490,24 +523,7 @@ TEST_F(RadientRender, Bloom)
     ViewDesc.Bloom.SoftThreshold          = 0.1f;
     ViewDesc.Bloom.Radius                 = 0.75f;
 
-    double     Time        = 0.0;
-    const auto RenderFrame = [&](IRadientView* pView) {
-        RadientRenderAttribs Attribs{};
-        Attribs.pView          = pView;
-        Attribs.pDeviceContext = pContext;
-        Attribs.Time           = Time;
-        Attribs.DeltaTime      = 1.0 / 60.0;
-
-        const RADIENT_STATUS Status = GetRenderer()->Render(Attribs);
-
-        pContext->Flush();
-        pContext->FinishFrame();
-        pContext->WaitForIdle();
-        pDevice->ReleaseStaleResources();
-
-        Time += 1.0 / 60.0;
-        return Status;
-    };
+    double Time = 0.0;
 
     RefCntAutoPtr<IRadientView> pWarmupView;
     ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pWarmupView), RADIENT_STATUS_OK);
@@ -517,7 +533,7 @@ TEST_F(RadientRender, Bloom)
     RADIENT_STATUS WarmupStatus = RADIENT_STATUS_PENDING;
     while (WarmupStatus == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
     {
-        WarmupStatus = RenderFrame(pWarmupView);
+        WarmupStatus = RenderFrameAndWait(GetRenderer(), pWarmupView, pDevice, pContext, Time);
         ASSERT_FALSE(RADIENT_FAILED(WarmupStatus));
         if (WarmupStatus == RADIENT_STATUS_PENDING)
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -535,7 +551,7 @@ TEST_F(RadientRender, Bloom)
     static constexpr Uint32 StableFrameCount = 16;
     for (Uint32 FrameIndex = 0; FrameIndex < StableFrameCount; ++FrameIndex)
     {
-        ASSERT_EQ(RenderFrame(pView), RADIENT_STATUS_OK)
+        ASSERT_EQ(RenderFrameAndWait(GetRenderer(), pView, pDevice, pContext, Time), RADIENT_STATUS_OK)
             << "Capture view became pending after renderer warm-up at frame " << FrameIndex;
     }
 
@@ -698,24 +714,7 @@ TEST_F(RadientRender, SSAO)
     ViewDesc.SSAO.Enabled                 = True;
     ViewDesc.SSAO.EffectRadius            = 1.f;
 
-    double     Time        = 0.0;
-    const auto RenderFrame = [&](IRadientView* pView) {
-        RadientRenderAttribs Attribs{};
-        Attribs.pView          = pView;
-        Attribs.pDeviceContext = pContext;
-        Attribs.Time           = Time;
-        Attribs.DeltaTime      = 1.0 / 60.0;
-
-        const RADIENT_STATUS Status = GetRenderer()->Render(Attribs);
-
-        pContext->Flush();
-        pContext->FinishFrame();
-        pContext->WaitForIdle();
-        pDevice->ReleaseStaleResources();
-
-        Time += 1.0 / 60.0;
-        return Status;
-    };
+    double Time = 0.0;
 
     RefCntAutoPtr<IRadientView> pWarmupView;
     ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pWarmupView), RADIENT_STATUS_OK);
@@ -725,7 +724,7 @@ TEST_F(RadientRender, SSAO)
     RADIENT_STATUS WarmupStatus = RADIENT_STATUS_PENDING;
     while (WarmupStatus == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
     {
-        WarmupStatus = RenderFrame(pWarmupView);
+        WarmupStatus = RenderFrameAndWait(GetRenderer(), pWarmupView, pDevice, pContext, Time);
         ASSERT_FALSE(RADIENT_FAILED(WarmupStatus));
         if (WarmupStatus == RADIENT_STATUS_PENDING)
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -746,7 +745,7 @@ TEST_F(RadientRender, SSAO)
     static constexpr Uint32 StableFrameCount = 16;
     for (Uint32 FrameIndex = 0; FrameIndex < StableFrameCount; ++FrameIndex)
     {
-        ASSERT_EQ(RenderFrame(pView), RADIENT_STATUS_OK)
+        ASSERT_EQ(RenderFrameAndWait(GetRenderer(), pView, pDevice, pContext, Time), RADIENT_STATUS_OK)
             << "Capture view became pending after renderer warm-up at frame " << FrameIndex;
     }
 
@@ -1011,24 +1010,7 @@ TEST_F(RadientRender, SSR)
     ViewDesc.SSR.Enabled                  = True;
     ViewDesc.SSR.RoughnessThreshold       = 0.7f;
 
-    double     Time        = 0.0;
-    const auto RenderFrame = [&](IRadientView* pView) {
-        RadientRenderAttribs Attribs{};
-        Attribs.pView          = pView;
-        Attribs.pDeviceContext = pContext;
-        Attribs.Time           = Time;
-        Attribs.DeltaTime      = 1.0 / 60.0;
-
-        const RADIENT_STATUS Status = GetRenderer()->Render(Attribs);
-
-        pContext->Flush();
-        pContext->FinishFrame();
-        pContext->WaitForIdle();
-        pDevice->ReleaseStaleResources();
-
-        Time += 1.0 / 60.0;
-        return Status;
-    };
+    double Time = 0.0;
 
     RefCntAutoPtr<IRadientView> pWarmupView;
     ASSERT_EQ(GetRenderer()->CreateView(ViewDesc, &pWarmupView), RADIENT_STATUS_OK);
@@ -1038,7 +1020,7 @@ TEST_F(RadientRender, SSR)
     RADIENT_STATUS WarmupStatus = RADIENT_STATUS_PENDING;
     while (WarmupStatus == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
     {
-        WarmupStatus = RenderFrame(pWarmupView);
+        WarmupStatus = RenderFrameAndWait(GetRenderer(), pWarmupView, pDevice, pContext, Time);
         ASSERT_FALSE(RADIENT_FAILED(WarmupStatus));
         if (WarmupStatus == RADIENT_STATUS_PENDING)
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -1056,7 +1038,7 @@ TEST_F(RadientRender, SSR)
     static constexpr Uint32 StableFrameCount = 16;
     for (Uint32 FrameIndex = 0; FrameIndex < StableFrameCount; ++FrameIndex)
     {
-        ASSERT_EQ(RenderFrame(pView), RADIENT_STATUS_OK)
+        ASSERT_EQ(RenderFrameAndWait(GetRenderer(), pView, pDevice, pContext, Time), RADIENT_STATUS_OK)
             << "Capture view became pending after renderer warm-up at frame " << FrameIndex;
     }
 
