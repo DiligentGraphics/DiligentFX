@@ -275,6 +275,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
+    const bool     UsePreviousJointPalette = FrameHistory.HasCameraHistory();
     DrawState      State;
     RADIENT_STATUS Result = RADIENT_STATUS_OK;
 
@@ -388,7 +389,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 const RadientTesseraSkinData& SkinData = pSkinAttachment->SkinData;
                 AttribsData.JointCount                 = SkinData.GetJointCount();
                 AttribsData.FirstJoint                 = SkinData.GetFirstJoint();
-                AttribsData.PrevFirstJoint             = SkinData.GetPreviousFirstJoint();
+                AttribsData.PrevFirstJoint             = UsePreviousJointPalette ?
+                                SkinData.GetPreviousFirstJoint() :
+                                SkinData.GetFirstJoint();
             }
 
             void* const pPrimitiveAttribsEnd =

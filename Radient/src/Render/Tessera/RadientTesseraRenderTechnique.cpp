@@ -244,6 +244,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
+    pViewState->FrameHistory.BeginFrame(Context.RenderFrameID);
+
     const bool HasDrawables = !pSceneState->DrawableCache.GetDrawLists().IsEmpty();
 
     pViewState->FrameTargets.ClearGBuffer(Context.pContext, ViewDesc.ClearColor);

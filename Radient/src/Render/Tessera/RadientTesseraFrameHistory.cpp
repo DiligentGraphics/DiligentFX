@@ -29,6 +29,34 @@
 namespace Diligent
 {
 
+namespace
+{
+
+bool IsImmediatelyFollowingFrame(RadientFrameID PreviousFrameID,
+                                 RadientFrameID CurrentFrameID) noexcept
+{
+    if (PreviousFrameID == InvalidRadientFrameID || CurrentFrameID == InvalidRadientFrameID)
+        return false;
+
+    RadientFrameID NextFrameID = PreviousFrameID + 1;
+    if (NextFrameID == InvalidRadientFrameID)
+        NextFrameID = 1;
+
+    return CurrentFrameID == NextFrameID;
+}
+
+} // namespace
+
+void RadientTesseraFrameHistory::BeginFrame(RadientFrameID RenderFrameID) noexcept
+{
+    VERIFY(RenderFrameID != InvalidRadientFrameID, "The global render frame ID must be valid");
+
+    if (!IsImmediatelyFollowingFrame(m_LastRenderFrameID, RenderFrameID))
+        ResetTemporalHistory();
+
+    m_CurrentRenderFrameID = RenderFrameID;
+}
+
 Uint32 RadientTesseraFrameHistory::GetFrameIndex() const noexcept
 {
     return static_cast<Uint32>(m_FrameNumber);
@@ -94,10 +122,23 @@ RadientMatrix4x4 RadientTesseraFrameHistory::UpdateDrawableTransform(RadientDraw
 
 void RadientTesseraFrameHistory::CommitFrame() noexcept
 {
-    m_PreviousCamera   = m_CurrentCamera;
+    VERIFY(m_CurrentRenderFrameID != InvalidRadientFrameID,
+           "BeginFrame() must be called before committing Tessera frame history");
+
+    m_PreviousCamera       = m_CurrentCamera;
+    m_CurrentCamera        = {};
+    m_HasCameraHistory     = false;
+    m_LastRenderFrameID    = m_CurrentRenderFrameID;
+    m_CurrentRenderFrameID = InvalidRadientFrameID;
+    ++m_FrameNumber;
+}
+
+void RadientTesseraFrameHistory::ResetTemporalHistory() noexcept
+{
+    m_PreviousCamera   = {};
     m_CurrentCamera    = {};
     m_HasCameraHistory = false;
-    ++m_FrameNumber;
+    m_Drawables.clear();
 }
 
 } // namespace Diligent

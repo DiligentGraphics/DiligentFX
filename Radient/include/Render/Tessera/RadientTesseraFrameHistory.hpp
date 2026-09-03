@@ -51,11 +51,18 @@ struct RadientTesseraCameraState
 };
 
 /// Per-view temporal state used to generate camera and object motion vectors.
+/// Global render frame IDs invalidate all history when the view skips a frame.
 /// Drawable generations prevent recycled IDs from inheriting old transforms,
-/// while frame numbers invalidate history after a drawable was not rendered.
+/// while view frame numbers invalidate history after a drawable was not
+/// rendered by an otherwise continuously rendered view.
 class RadientTesseraFrameHistory
 {
 public:
+    /// Starts history tracking for a view rendered during RenderFrameID.
+    /// Temporal history is reset unless the view was last rendered during the
+    /// immediately preceding global render frame.
+    void BeginFrame(RadientFrameID RenderFrameID) noexcept;
+
     Uint32 GetFrameIndex() const noexcept;
     bool   HasCameraHistory() const noexcept;
 
@@ -71,6 +78,8 @@ public:
 private:
     static constexpr Uint64 InvalidFrameNumber = ~Uint64{0};
 
+    void ResetTemporalHistory() noexcept;
+
     struct DrawableState
     {
         RadientMatrix4x4 PreviousTransform;
@@ -82,8 +91,10 @@ private:
     RadientTesseraCameraState  m_PreviousCamera;
     RadientTesseraCameraState  m_CurrentCamera;
     std::vector<DrawableState> m_Drawables;
-    Uint64                     m_FrameNumber      = 0;
-    bool                       m_HasCameraHistory = false;
+    Uint64                     m_FrameNumber          = 0;
+    bool                       m_HasCameraHistory     = false;
+    RadientFrameID             m_CurrentRenderFrameID = InvalidRadientFrameID;
+    RadientFrameID             m_LastRenderFrameID    = InvalidRadientFrameID;
 };
 
 } // namespace Diligent

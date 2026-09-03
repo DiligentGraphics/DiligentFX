@@ -45,10 +45,12 @@ TEST(RadientTesseraFrameHistoryTest, TracksConsecutiveDrawableTransforms)
 {
     RadientTesseraFrameHistory History;
 
+    History.BeginFrame(1);
     const RadientMatrix4x4 Frame0 = MakeTranslation(1.f);
     EXPECT_EQ(History.UpdateDrawableTransform(3, 1, Frame0), Frame0);
 
     History.CommitFrame();
+    History.BeginFrame(2);
     const RadientMatrix4x4 Frame1 = MakeTranslation(2.f);
     EXPECT_EQ(History.UpdateDrawableTransform(3, 1, Frame1), Frame0);
 
@@ -56,11 +58,14 @@ TEST(RadientTesseraFrameHistoryTest, TracksConsecutiveDrawableTransforms)
     EXPECT_EQ(History.UpdateDrawableTransform(3, 1, MakeTranslation(3.f)), Frame0);
 
     History.CommitFrame();
+    History.BeginFrame(3);
     History.CommitFrame();
+    History.BeginFrame(4);
     const RadientMatrix4x4 AfterGap = MakeTranslation(4.f);
     EXPECT_EQ(History.UpdateDrawableTransform(3, 1, AfterGap), AfterGap);
 
     History.CommitFrame();
+    History.BeginFrame(5);
     const RadientMatrix4x4 Recycled = MakeTranslation(5.f);
     EXPECT_EQ(History.UpdateDrawableTransform(3, 2, Recycled), Recycled);
 }
@@ -79,11 +84,13 @@ TEST(RadientTesseraFrameHistoryTest, KeepsCameraHistoryPerSceneCameraAndViewport
     Camera.Jitter       = {0.25f, -0.25f};
     Camera.IsValid      = true;
 
+    History.BeginFrame(1);
     EXPECT_EQ(History.GetPreviousCamera(Camera), nullptr);
     History.SetCurrentCamera(Camera);
     EXPECT_FALSE(History.HasCameraHistory());
     History.CommitFrame();
 
+    History.BeginFrame(2);
     RadientTesseraCameraState Current = Camera;
     Current.World                     = MakeTranslation(2.f);
     ASSERT_NE(History.GetPreviousCamera(Current), nullptr);
@@ -112,6 +119,33 @@ TEST(RadientTesseraFrameHistoryTest, KeepsCameraHistoryPerSceneCameraAndViewport
     RefCntWeakPtr<IRadientScene> WeakScene{pScene.RawPtr()};
     pScene.Release();
     EXPECT_EQ(WeakScene.Lock(), nullptr);
+}
+
+TEST(RadientTesseraFrameHistoryTest, ResetsHistoryWhenViewSkipsGlobalFrame)
+{
+    RadientTesseraFrameHistory      History;
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    RadientTesseraCameraState Camera;
+    Camera.Scene        = pScene.RawPtr();
+    Camera.Camera       = 7;
+    Camera.ViewportSize = {1280, 720};
+    Camera.IsValid      = true;
+
+    History.BeginFrame(3);
+    History.SetCurrentCamera(Camera);
+    const RadientMatrix4x4 PreviousTransform = MakeTranslation(1.f);
+    EXPECT_EQ(History.UpdateDrawableTransform(5, 1, PreviousTransform), PreviousTransform);
+    History.CommitFrame();
+
+    History.BeginFrame(5);
+    EXPECT_EQ(History.GetPreviousCamera(Camera), nullptr);
+    History.SetCurrentCamera(Camera);
+    EXPECT_FALSE(History.HasCameraHistory());
+
+    const RadientMatrix4x4 CurrentTransform = MakeTranslation(2.f);
+    EXPECT_EQ(History.UpdateDrawableTransform(5, 1, CurrentTransform), CurrentTransform);
 }
 
 } // namespace
