@@ -60,7 +60,8 @@ public:
     /// frame remains intact. On the first unchanged subsequent frame, both
     /// roles are pointed at the current half so motion vectors become zero. On
     /// the first successful preparation, both roles reference the populated
-    /// half. Failures leave the last valid roles unchanged.
+    /// half. A failed attempt makes the palette unavailable; the first
+    /// subsequent successful preparation initializes both roles again.
     RADIENT_STATUS Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor = true);
 
     bool Matches(IRadientSkinAsset*    pSkin,
@@ -81,7 +82,15 @@ public:
 
     bool IsPrepared() const noexcept
     {
-        return m_IsPrepared;
+        return m_PreparationStatus == RADIENT_STATUS_OK;
+    }
+
+    /// Returns the result of the latest preparation attempt. The status is OK
+    /// while the current palette may be rendered. PENDING and failure statuses
+    /// make drawables using the palette unavailable for the current frame.
+    RADIENT_STATUS GetPreparationStatus() const noexcept
+    {
+        return m_PreparationStatus;
     }
 
     Uint64 GetPreparedPoseVersion() const noexcept
@@ -114,6 +123,8 @@ public:
     }
 
 private:
+    RADIENT_STATUS Fail(RADIENT_STATUS Status = RADIENT_STATUS_FAILED) noexcept;
+
     RefCntAutoPtr<IRadientSkinAsset>    m_pSkin;
     RefCntAutoPtr<IRadientSkeletonPose> m_pPose;
 
@@ -129,7 +140,8 @@ private:
 
     Uint64 m_PreparedPoseVersion = 0;
     Uint32 m_PreparedFrameIndex  = ~Uint32{0};
-    bool   m_IsPrepared          = false;
+
+    RADIENT_STATUS m_PreparationStatus = RADIENT_STATUS_PENDING;
 };
 
 } // namespace Diligent

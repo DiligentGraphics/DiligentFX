@@ -76,6 +76,13 @@ RadientTesseraBufferSuballocator::CreateInfo GetTesseraJointBufferCreateInfo()
     return CI;
 }
 
+RADIENT_STATUS RadientTesseraSkinData::Fail(RADIENT_STATUS Status) noexcept
+{
+    VERIFY(RADIENT_FAILED(Status), "Skin preparation failure must use a failure status");
+    m_PreparationStatus = Status;
+    return Status;
+}
+
 RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*                pSkin,
                                                IRadientSkeletonPose*             pPose,
                                                RadientTesseraBufferSuballocator& JointBuffer) :
@@ -94,6 +101,7 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
         SkinDesc.JointCount > (std::numeric_limits<Uint32>::max)() / (2u * JointMatrixSize))
     {
         UNEXPECTED("Invalid Tessera skin joint count");
+        Fail();
         return;
     }
 
@@ -103,6 +111,7 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
     if (!m_JointBufferAllocation)
     {
         LOG_ERROR_MESSAGE("Failed to allocate Tessera joint palettes");
+        Fail();
         return;
     }
 
@@ -114,17 +123,20 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
 
 RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatrixRowMajor)
 {
+    const bool WasPrepared = m_PreparationStatus == RADIENT_STATUS_OK;
+
     if (!m_JointBufferAllocation)
-        return RADIENT_STATUS_FAILED;
+        return Fail();
 
     const RADIENT_STATUS UpdateStatus = m_pPose->UpdateGlobalTransforms();
-    if (RADIENT_FAILED(UpdateStatus))
-        return UpdateStatus;
+    if (UpdateStatus != RADIENT_STATUS_OK && UpdateStatus != RADIENT_STATUS_NO_CHANGE)
+        return Fail(UpdateStatus);
 
     const Uint64 PoseVersion = m_pPose->GetVersion();
-    const bool   SameFrame   = m_IsPrepared && m_PreparedFrameIndex == FrameIndex;
-    if (m_IsPrepared && m_PreparedPoseVersion == PoseVersion)
+    const bool   SameFrame   = WasPrepared && m_PreparedFrameIndex == FrameIndex;
+    if (WasPrepared && m_PreparedPoseVersion == PoseVersion)
     {
+        m_PreparationStatus = RADIENT_STATUS_OK;
         if (SameFrame)
             return RADIENT_STATUS_NO_CHANGE;
 
@@ -142,7 +154,7 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
     // the unrendered current palette in place. Otherwise preserve the current
     // palette as history and write the new pose into the other half.
     const bool   ReplaceCurrent  = SameFrame && m_PreviousFirstJoint != m_FirstJoint;
-    const Uint32 DestinationHalf = !m_IsPrepared || ReplaceCurrent ? m_CurrentHalf : 1u - m_CurrentHalf;
+    const Uint32 DestinationHalf = !WasPrepared || ReplaceCurrent ? m_CurrentHalf : 1u - m_CurrentHalf;
 
     WriteSkinningMatricesAttribs WriteAttribs{
         *m_pPose,
@@ -157,9 +169,9 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
         WriteSkinningMatrices,
         &WriteAttribs);
     if (PoseStatus != RADIENT_STATUS_OK)
-        return PoseStatus;
+        return Fail(PoseStatus);
 
-    if (!m_IsPrepared)
+    if (!WasPrepared)
         m_PreviousFirstJoint = m_HalfFirstJoints[DestinationHalf];
     else if (!ReplaceCurrent)
         m_PreviousFirstJoint = m_HalfFirstJoints[m_CurrentHalf];
@@ -168,7 +180,7 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(Uint32 FrameIndex, bool PackMatri
     m_CurrentHalf         = DestinationHalf;
     m_PreparedPoseVersion = PoseVersion;
     m_PreparedFrameIndex  = FrameIndex;
-    m_IsPrepared          = true;
+    m_PreparationStatus   = RADIENT_STATUS_OK;
     return RADIENT_STATUS_OK;
 }
 

@@ -147,12 +147,13 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     const RADIENT_STATUS SkinningStatus =
         pSceneState->DrawableCache.PrepareSkinningData(
             ViewState.FrameHistory.GetFrameIndex(), PackJointMatricesRowMajor);
-    if (RADIENT_FAILED(SkinningStatus))
-        return SkinningStatus;
 
     // NO_CHANGE only describes whether CPU skin palettes were rebuilt. It does
-    // not affect whether the rest of the frame resources are ready.
-    if (SkinningStatus != RADIENT_STATUS_NO_CHANGE)
+    // not affect whether the rest of the frame resources are ready. Per-skin
+    // failures are deferred to geometry execution, which skips only drawables
+    // using unavailable palettes and reports the failure after rendering all
+    // unrelated batches.
+    if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
         FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
 
     const RADIENT_STATUS GeometryRendererStatus =

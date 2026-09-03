@@ -28,6 +28,7 @@
 #include "Math/RadientMath.hpp"
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 
+#include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "gtest/gtest.h"
 
@@ -62,6 +63,66 @@ struct TestSkinningObjects
     RefCntAutoPtr<IRadientSkeletonAsset>   pSkeleton;
     RefCntAutoPtr<IRadientSkinAsset>       pSkin;
     RefCntAutoPtr<IRadientSkeletonPose>    pPose;
+};
+
+class FailingSkeletonPose final : public ObjectBase<IRadientSkeletonPose>
+{
+public:
+    using TBase = ObjectBase<IRadientSkeletonPose>;
+
+    FailingSkeletonPose(IReferenceCounters* pRefCounters, IRadientSkeletonAsset* pSkeleton) :
+        TBase{pRefCounters},
+        m_pSkeleton{pSkeleton}
+    {}
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSkeletonPose, TBase)
+
+    virtual IRadientSkeletonAsset* DILIGENT_CALL_TYPE GetSkeleton() const override final
+    {
+        return m_pSkeleton;
+    }
+
+    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
+    {
+        return 0;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetJointLocalTransforms(Uint32,
+                                                                      Uint32,
+                                                                      RadientTransform*) const override final
+    {
+        return RADIENT_STATUS_FAILED;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetJointGlobalMatrices(Uint32,
+                                                                     Uint32,
+                                                                     RadientMatrix4x4*) const override final
+    {
+        return RADIENT_STATUS_FAILED;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset*,
+                                                                      RadientMatrix4x4*,
+                                                                      Bool,
+                                                                      Bool) override final
+    {
+        return RADIENT_STATUS_FAILED;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE UpdateGlobalTransforms() override final
+    {
+        return RADIENT_STATUS_FAILED;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientSkeletonPoseWriter** ppWriter) override final
+    {
+        if (ppWriter != nullptr)
+            *ppWriter = nullptr;
+        return RADIENT_STATUS_FAILED;
+    }
+
+private:
+    RefCntAutoPtr<IRadientSkeletonAsset> m_pSkeleton;
 };
 
 TestSkinningObjects CreateTestSkinningObjects()
@@ -127,6 +188,7 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     EXPECT_FALSE(SkinData.Matches(Objects.pSkin, pOtherPose));
     EXPECT_EQ(SkinData.GetJointCount(), 2u);
     EXPECT_FALSE(SkinData.IsPrepared());
+    EXPECT_EQ(SkinData.GetPreparationStatus(), RADIENT_STATUS_PENDING);
     EXPECT_EQ(SkinData.GetFirstJoint(), ~Uint32{0});
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), ~Uint32{0});
 
@@ -138,10 +200,12 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
 
     ASSERT_EQ(SkinData.Prepare(0), RADIENT_STATUS_OK);
     EXPECT_TRUE(SkinData.IsPrepared());
+    EXPECT_EQ(SkinData.GetPreparationStatus(), RADIENT_STATUS_OK);
     EXPECT_EQ(SkinData.GetPreparedPoseVersion(), Objects.pPose->GetVersion());
     const Uint32 InitialFirstJoint = SkinData.GetFirstJoint();
     EXPECT_EQ(SkinData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(SkinData.Prepare(0), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SkinData.GetPreparationStatus(), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
     ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -227,4 +291,23 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
     EXPECT_EQ(UnpreparedData.GetFirstJoint(), InitialFirstJoint + UnpreparedData.GetJointCount());
     EXPECT_EQ(UnpreparedData.GetPreviousFirstJoint(), InitialFirstJoint);
     EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientTesseraSkinDataTest, ReportsFailedPreparation)
+{
+    TestSkinningObjects Objects = CreateTestSkinningObjects();
+    ASSERT_NE(Objects.pSkin, nullptr);
+    ASSERT_NE(Objects.pSkeleton, nullptr);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pFailingPose{
+        MakeNewRCObj<FailingSkeletonPose>()(Objects.pSkeleton)};
+    ASSERT_NE(pFailingPose, nullptr);
+
+    RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
+    RadientTesseraSkinData           SkinData{Objects.pSkin, pFailingPose, JointBuffer};
+    EXPECT_EQ(SkinData.GetPreparationStatus(), RADIENT_STATUS_PENDING);
+
+    EXPECT_EQ(SkinData.Prepare(0), RADIENT_STATUS_FAILED);
+    EXPECT_EQ(SkinData.GetPreparationStatus(), RADIENT_STATUS_FAILED);
+    EXPECT_FALSE(SkinData.IsPrepared());
 }
