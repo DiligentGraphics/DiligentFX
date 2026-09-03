@@ -103,17 +103,8 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*       
 
 RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientFrameContext& Context)
 {
-    if (Context.pDevice == nullptr || Context.pContext == nullptr)
-        return RADIENT_STATUS_OK;
-
     VERIFY_EXPR(Context.RenderFrameID != InvalidRadientFrameID);
 
-    // Structured-buffer matrices follow the same backend-specific packing as
-    // PBR_Renderer::WriteSkinningData(). Prepare every synchronized pose once
-    // before any view can consume the renderer-wide joint buffer.
-    const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
-
-    RADIENT_STATUS FrameStatus = RADIENT_STATUS_OK;
     for (auto It = m_SceneRenderStates.begin(); It != m_SceneRenderStates.end();)
     {
         if ((*It)->WeakScene.Lock() == nullptr)
@@ -122,18 +113,10 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientFrameConte
             continue;
         }
 
-        const RADIENT_STATUS SkinningStatus =
-            (*It)->DrawableCache.PrepareSkinningData(Context.RenderFrameID, PackJointMatricesRowMajor);
-
-        // Per-skin failures are deferred to geometry execution, which skips
-        // only drawables using unavailable palettes.
-        if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
-            FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
-
         ++It;
     }
 
-    return FrameStatus;
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
@@ -173,6 +156,23 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     SceneRenderState* const pSceneState = FindSceneRenderState(ViewDesc.pScene);
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (pSceneState->SkinningPreparationFrameID != Context.RenderFrameID)
+    {
+        // Structured-buffer matrices follow the same backend-specific packing
+        // as PBR_Renderer::WriteSkinningData(). The first view using this scene
+        // establishes the pose snapshot shared by all later views this frame.
+        const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
+        pSceneState->SkinningPreparationStatus =
+            pSceneState->DrawableCache.PrepareSkinningData(Context.RenderFrameID, PackJointMatricesRowMajor);
+        pSceneState->SkinningPreparationFrameID = Context.RenderFrameID;
+    }
+
+    // Per-skin failures are deferred to geometry execution, which skips only
+    // drawables using unavailable palettes.
+    const RADIENT_STATUS SkinningStatus = pSceneState->SkinningPreparationStatus;
+    if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
+        FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
 
     const RADIENT_STATUS GeometryRendererStatus =
         m_GeometryRenderer.Prepare(Context.pDevice,

@@ -248,9 +248,9 @@ public:
 
     /// Updates the shared joint-buffer shadow for every unique skin and pose
     /// pair whose pose version changed. Each pair is prepared once regardless
-    /// of how many renderables or primitive slots reference it. FrameIndex
-    /// keeps repeated preparation of the same view frame from advancing motion
-    /// history.
+    /// of how many renderables or primitive slots reference it. RenderFrameID
+    /// keeps repeated preparation during the same renderer frame from advancing
+    /// motion history.
     RADIENT_STATUS PrepareSkinningData(RadientFrameID RenderFrameID, bool PackMatrixRowMajor = true);
 
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
