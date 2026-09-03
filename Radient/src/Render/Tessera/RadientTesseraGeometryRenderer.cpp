@@ -508,13 +508,13 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pD
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*                            pDevice,
-                                                          IDeviceContext*                           pContext,
-                                                          const RadientLightLists&                  LightList,
-                                                          GLTF::ResourceManager*                    pResourceManager,
-                                                          const RadientTesseraGeometryFrameAttribs& FrameAttribs,
-                                                          const RadientFrameRenderTargets&          Targets,
-                                                          RadientTesseraFrameHistory&               FrameHistory)
+RADIENT_STATUS RadientTesseraGeometryRenderer::BeginView(IRenderDevice*                            pDevice,
+                                                         IDeviceContext*                           pContext,
+                                                         const RadientLightLists&                  LightList,
+                                                         GLTF::ResourceManager*                    pResourceManager,
+                                                         const RadientTesseraGeometryFrameAttribs& FrameAttribs,
+                                                         const RadientFrameRenderTargets&          Targets,
+                                                         RadientTesseraFrameHistory&               FrameHistory)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -566,7 +566,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*        
     return RADIENT_STATUS_OK;
 }
 
-void RadientTesseraGeometryRenderer::EndFrame(RadientTesseraFrameHistory& FrameHistory)
+void RadientTesseraGeometryRenderer::EndView(RadientTesseraFrameHistory& FrameHistory)
 {
     FrameHistory.CommitFrame();
 }

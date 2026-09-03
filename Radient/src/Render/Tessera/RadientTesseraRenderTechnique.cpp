@@ -206,12 +206,12 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     return CombineDependencyStatus(FrameStatus, PostProcessStatus);
 }
 
-RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderContext& Context)
+RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderContext& Context)
 {
     m_pFrameSRB.Release();
     m_pActiveViewState  = nullptr;
     m_pActiveSceneState = nullptr;
-    m_FrameActive       = false;
+    m_ViewActive        = false;
 
     RadientViewImpl* pView = ClassPtrCast<RadientViewImpl>(Context.Attribs.pView);
     if (pView == nullptr)
@@ -255,7 +255,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         RadientPBRRenderer::GetDebugViewType(ViewDesc.DebugVisualization),
     };
 
-    const RADIENT_STATUS Status = m_GeometryRenderer.BeginFrame(
+    const RADIENT_STATUS Status = m_GeometryRenderer.BeginView(
         Context.pDevice,
         Context.pContext,
         pSceneState->DrawableCache.GetLightList(),
@@ -264,8 +264,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
         pViewState->FrameTargets,
         pViewState->FrameHistory);
 
-    m_FrameActive = !RADIENT_FAILED(Status);
-    if (m_FrameActive)
+    m_ViewActive = !RADIENT_FAILED(Status);
+    if (m_ViewActive)
     {
         m_pActiveViewState  = pViewState;
         m_pActiveSceneState = pSceneState;
@@ -278,7 +278,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientRenderCont
 
 RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext& Context)
 {
-    const RADIENT_STATUS ValidationStatus = ValidateActiveFrameContext(Context, "Render");
+    const RADIENT_STATUS ValidationStatus = ValidateActiveViewContext(Context, "Render");
     if (RADIENT_FAILED(ValidationStatus))
         return ValidationStatus;
 
@@ -306,7 +306,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
         FrameStatus = CombineDependencyStatus(FrameStatus, Status);
     };
 
-    if (m_FrameActive)
+    if (m_ViewActive)
     {
         if (HasDrawables)
         {
@@ -379,35 +379,35 @@ RADIENT_STATUS RadientTesseraRenderTechnique::Render(const RadientRenderContext&
     return CombineDependencyStatus(FrameStatus, PostProcessStatus);
 }
 
-RADIENT_STATUS RadientTesseraRenderTechnique::EndFrame(const RadientRenderContext& Context)
+RADIENT_STATUS RadientTesseraRenderTechnique::EndView(const RadientRenderContext& Context)
 {
-    const RADIENT_STATUS ValidationStatus = ValidateActiveFrameContext(Context, "EndFrame");
+    const RADIENT_STATUS ValidationStatus = ValidateActiveViewContext(Context, "EndView");
 
-    if (m_FrameActive)
+    if (m_ViewActive)
     {
         VERIFY_EXPR(m_pActiveViewState != nullptr);
         if (m_pActiveViewState != nullptr)
         {
-            m_GeometryRenderer.EndFrame(m_pActiveViewState->FrameHistory);
+            m_GeometryRenderer.EndView(m_pActiveViewState->FrameHistory);
             m_pActiveViewState->FrameTargets.CommitFrame();
         }
     }
 
     m_pActiveViewState  = nullptr;
     m_pActiveSceneState = nullptr;
-    m_FrameActive       = false;
+    m_ViewActive        = false;
     m_pFrameSRB.Release();
 
     return ValidationStatus;
 }
 
-RADIENT_STATUS RadientTesseraRenderTechnique::ValidateActiveFrameContext(
+RADIENT_STATUS RadientTesseraRenderTechnique::ValidateActiveViewContext(
     const RadientRenderContext& Context,
     const Char*                 Operation) const
 {
-    if (!m_FrameActive || m_pActiveViewState == nullptr || m_pActiveSceneState == nullptr)
+    if (!m_ViewActive || m_pActiveViewState == nullptr || m_pActiveSceneState == nullptr)
     {
-        LOG_ERROR_MESSAGE("RadientTesseraRenderTechnique::", Operation, " requires an active frame");
+        LOG_ERROR_MESSAGE("RadientTesseraRenderTechnique::", Operation, " requires an active view");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
@@ -415,7 +415,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::ValidateActiveFrameContext(
     if (Context.Attribs.pView == nullptr || pActiveView.RawPtr() != Context.Attribs.pView)
     {
         LOG_ERROR_MESSAGE("RadientTesseraRenderTechnique::", Operation,
-                          " view does not match the view passed to BeginFrame");
+                          " view does not match the view passed to BeginView");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
@@ -428,7 +428,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::ValidateActiveFrameContext(
     if (pActiveScene.RawPtr() != pView->GetDesc().pScene)
     {
         LOG_ERROR_MESSAGE("RadientTesseraRenderTechnique::", Operation,
-                          " scene does not match the scene passed to BeginFrame");
+                          " scene does not match the scene passed to BeginView");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 

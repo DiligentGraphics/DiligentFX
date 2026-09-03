@@ -54,9 +54,9 @@ public:
 
     virtual RADIENT_STATUS SyncScene(const IRadientScene& Scene) override final;
     virtual RADIENT_STATUS PrepareFrame(const RadientRenderContext& Context) override final;
-    virtual RADIENT_STATUS BeginFrame(const RadientRenderContext& Context) override final;
+    virtual RADIENT_STATUS BeginView(const RadientRenderContext& Context) override final;
     virtual RADIENT_STATUS Render(const RadientRenderContext& Context) override final;
-    virtual RADIENT_STATUS EndFrame(const RadientRenderContext& Context) override final;
+    virtual RADIENT_STATUS EndView(const RadientRenderContext& Context) override final;
 
 private:
     struct SceneRenderState
@@ -96,8 +96,8 @@ private:
     ViewRenderState* FindViewRenderState(IRadientView* pView, bool PruneExpired);
     ViewRenderState& GetOrCreateViewRenderState(IRadientView* pView);
 
-    RADIENT_STATUS ValidateActiveFrameContext(const RadientRenderContext& Context,
-                                              const Char*                 Operation) const;
+    RADIENT_STATUS ValidateActiveViewContext(const RadientRenderContext& Context,
+                                             const Char*                 Operation) const;
 
 private:
     RefCntAutoPtr<IThreadPool>             m_pThreadPool;
@@ -120,7 +120,7 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;
     ViewRenderState*                      m_pActiveViewState  = nullptr;
     SceneRenderState*                     m_pActiveSceneState = nullptr;
-    bool                                  m_FrameActive       = false;
+    bool                                  m_ViewActive        = false;
 };
 
 } // namespace Diligent

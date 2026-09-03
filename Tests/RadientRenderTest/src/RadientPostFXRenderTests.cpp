@@ -69,16 +69,16 @@ RADIENT_STATUS RenderFrameAndWait(IRadientRenderer* pRenderer,
     static constexpr double FrameDuration = 1.0 / 60.0;
 
     RadientFrameAttribs FrameAttribs{};
-    FrameAttribs.Time      = Time;
-    FrameAttribs.DeltaTime = FrameDuration;
+    FrameAttribs.pDeviceContext = pContext;
+    FrameAttribs.Time           = Time;
+    FrameAttribs.DeltaTime      = FrameDuration;
 
     RADIENT_STATUS Status = pRenderer->BeginFrame(FrameAttribs);
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
     RadientRenderAttribs RenderAttribs{};
-    RenderAttribs.pView          = pView;
-    RenderAttribs.pDeviceContext = pContext;
+    RenderAttribs.pView = pView;
 
     const RADIENT_STATUS RenderStatus   = pRenderer->Render(RenderAttribs);
     const RADIENT_STATUS EndFrameStatus = pRenderer->EndFrame();

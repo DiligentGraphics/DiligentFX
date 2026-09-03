@@ -65,15 +65,15 @@ public:
                            IDeviceContext*        pContext,
                            GLTF::ResourceManager* pResourceManager = nullptr);
 
-    RADIENT_STATUS BeginFrame(IRenderDevice*                            pDevice,
-                              IDeviceContext*                           pContext,
-                              const RadientLightLists&                  LightList,
-                              GLTF::ResourceManager*                    pResourceManager,
-                              const RadientTesseraGeometryFrameAttribs& FrameAttribs,
-                              const RadientFrameRenderTargets&          Targets,
-                              RadientTesseraFrameHistory&               FrameHistory);
+    RADIENT_STATUS BeginView(IRenderDevice*                            pDevice,
+                             IDeviceContext*                           pContext,
+                             const RadientLightLists&                  LightList,
+                             GLTF::ResourceManager*                    pResourceManager,
+                             const RadientTesseraGeometryFrameAttribs& FrameAttribs,
+                             const RadientFrameRenderTargets&          Targets,
+                             RadientTesseraFrameHistory&               FrameHistory);
 
-    void EndFrame(RadientTesseraFrameHistory& FrameHistory);
+    void EndView(RadientTesseraFrameHistory& FrameHistory);
 
     RadientPBRRenderer*     GetRenderer() const { return m_pRenderer.get(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }

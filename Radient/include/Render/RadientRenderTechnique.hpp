@@ -55,11 +55,11 @@ public:
     /// Prepares renderer-specific resources for the frame.
     virtual RADIENT_STATUS PrepareFrame(const RadientRenderContext& Context) = 0;
 
-    /// Begins, renders, and ends one frame. EndFrame() is called whenever
-    /// BeginFrame() succeeds, including when Render() reports a failure.
-    virtual RADIENT_STATUS BeginFrame(const RadientRenderContext& Context) = 0;
-    virtual RADIENT_STATUS Render(const RadientRenderContext& Context)     = 0;
-    virtual RADIENT_STATUS EndFrame(const RadientRenderContext& Context)   = 0;
+    /// Begins, renders, and ends one view. EndView() is called whenever
+    /// BeginView() succeeds, including when Render() reports a failure.
+    virtual RADIENT_STATUS BeginView(const RadientRenderContext& Context) = 0;
+    virtual RADIENT_STATUS Render(const RadientRenderContext& Context)    = 0;
+    virtual RADIENT_STATUS EndView(const RadientRenderContext& Context)   = 0;
 };
 
 } // namespace Diligent

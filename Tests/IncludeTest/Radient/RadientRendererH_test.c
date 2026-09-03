@@ -54,6 +54,8 @@ void RadientRenderer_C_TestMacros(IRadientRenderer* pRenderer)
     IRadientView*              pView         = 0;
     RADIENT_STATUS             Status        = RADIENT_STATUS_OK;
 
+    FrameAttribs.pDeviceContext = 0;
+
     Status = IRadientRenderer_CreateRenderTarget(pRenderer, &TargetDesc, &pTarget);
     Status = IRadientRenderer_CreateView(pRenderer, &ViewDesc, &pView);
     Status = IRadientRenderer_BeginFrame(pRenderer, &FrameAttribs);

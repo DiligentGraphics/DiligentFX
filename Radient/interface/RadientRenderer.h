@@ -94,6 +94,11 @@ typedef struct RadientRenderTargetDesc RadientRenderTargetDesc;
 /// Renderer frame attributes.
 struct RadientFrameAttribs
 {
+    /// Optional device context for local rendering. If null, the renderer uses
+    /// the immediate context provided by its backend. The context must remain
+    /// valid until EndFrame() is called.
+    IDeviceContext* pDeviceContext DEFAULT_INITIALIZER(nullptr);
+
     /// Time since the previous application render frame, in seconds.
     double DeltaTime DEFAULT_INITIALIZER(0.0);
 
@@ -108,9 +113,6 @@ struct RadientRenderAttribs
 {
     /// View to render.
     IRadientView* pView DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional device context override for local rendering.
-    IDeviceContext* pDeviceContext DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientRenderAttribs RadientRenderAttribs;
 

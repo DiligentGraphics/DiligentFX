@@ -146,12 +146,22 @@ RADIENT_STATUS RadientRendererImpl::BeginFrame(const RadientFrameAttribs& Attrib
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    m_FrameAttribs   = Attribs;
+    m_FrameAttribs = Attribs;
+    if (m_FrameAttribs.pDeviceContext == nullptr)
+        m_FrameAttribs.pDeviceContext = m_pBackend->GetNativeImmediateContext();
+
+    const RADIENT_STATUS Status = m_RenderPipeline->BeginFrame(m_FrameAttribs);
+    if (RADIENT_FAILED(Status))
+    {
+        m_FrameAttribs = {};
+        return Status;
+    }
+
     m_CurrentFrameID = m_NextFrameID++;
     if (m_NextFrameID == InvalidRadientFrameID)
         m_NextFrameID = 1;
 
-    return RADIENT_STATUS_OK;
+    return Status;
 }
 
 RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)

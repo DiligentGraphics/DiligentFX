@@ -56,6 +56,19 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
+RADIENT_STATUS RadientRenderPipeline::BeginFrame(const RadientFrameAttribs& FrameAttribs)
+{
+    IRenderDevice* const  pDevice  = m_pBackend->GetNativeDevice();
+    IDeviceContext* const pContext = FrameAttribs.pDeviceContext;
+
+    // Remote execution and headless local tests have no native GPU resources
+    // to update.
+    if (pDevice == nullptr || pContext == nullptr)
+        return RADIENT_STATUS_OK;
+
+    return m_pAssetManager->UpdateGPUResources(pDevice, pContext);
+}
+
 RADIENT_STATUS RadientRenderPipeline::Update(const RadientFrameAttribs&  FrameAttribs,
                                              RadientFrameID              RenderFrameID,
                                              const RadientRenderAttribs& RenderAttribs)
@@ -73,9 +86,7 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientFrameAttribs&  FrameAt
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
-    IDeviceContext* pContext = RenderAttribs.pDeviceContext != nullptr ?
-        RenderAttribs.pDeviceContext :
-        m_pBackend->GetNativeImmediateContext();
+    IDeviceContext* pContext = FrameAttribs.pDeviceContext;
 
     const RadientRenderContext Context{FrameAttribs, RenderAttribs, RenderFrameID, pDevice, pContext};
 
@@ -83,10 +94,6 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientFrameAttribs&  FrameAt
     // The concrete command serialization/GPU execution will be plugged in behind this pipeline.
     if (pDevice == nullptr || pContext == nullptr)
         return m_pTechnique->PrepareFrame(Context);
-
-    RADIENT_STATUS Status = m_pAssetManager->UpdateGPUResources(pDevice, pContext);
-    if (RADIENT_FAILED(Status))
-        return Status;
 
     const RADIENT_STATUS SyncStatus = m_pTechnique->SyncScene(*ViewDesc.pScene);
     if (RADIENT_FAILED(SyncStatus))
@@ -113,9 +120,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientFrameAttribs&  FrameAt
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
-    IDeviceContext* pContext = RenderAttribs.pDeviceContext != nullptr ?
-        RenderAttribs.pDeviceContext :
-        m_pBackend->GetNativeImmediateContext();
+    IDeviceContext* pContext = FrameAttribs.pDeviceContext;
 
     // Remote execution and headless local tests use the same public renderer object.
     // The concrete command serialization/GPU execution will be plugged in behind this pipeline.
@@ -124,12 +129,12 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientFrameAttribs&  FrameAt
 
     const RadientRenderContext Context{FrameAttribs, RenderAttribs, RenderFrameID, pDevice, pContext};
 
-    RADIENT_STATUS Status = m_pTechnique->BeginFrame(Context);
+    RADIENT_STATUS Status = m_pTechnique->BeginView(Context);
     if (RADIENT_FAILED(Status))
         return Status;
 
     const RADIENT_STATUS RenderStatus = m_pTechnique->Render(Context);
-    const RADIENT_STATUS EndStatus    = m_pTechnique->EndFrame(Context);
+    const RADIENT_STATUS EndStatus    = m_pTechnique->EndView(Context);
     return RenderStatus != RADIENT_STATUS_OK ? RenderStatus : EndStatus;
 }
 
