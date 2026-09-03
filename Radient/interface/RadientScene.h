@@ -246,10 +246,17 @@ struct RadientSkinComponent
     /// and skin must reference the same skeleton.
     IRadientSkeletonPose* pPose DEFAULT_INITIALIZER(nullptr);
 
+    /// Transforms skeleton-space pose matrices into the local space of the
+    /// mesh entity. This bind-time transform remains unchanged when the entity
+    /// moves and is identity when the skeleton and mesh use the same space.
+    RadientMatrix4x4 SkeletonToMeshTransform DEFAULT_INITIALIZER({});
+
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientSkinComponent& Rhs) const
     {
-        return pSkin == Rhs.pSkin && pPose == Rhs.pPose;
+        return (pSkin == Rhs.pSkin &&
+                pPose == Rhs.pPose &&
+                SkeletonToMeshTransform == Rhs.SkeletonToMeshTransform);
     }
 
     bool operator!=(const RadientSkinComponent& Rhs) const

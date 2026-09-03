@@ -376,9 +376,29 @@ TEST(RadientSkinningTest, SceneStoresSkinAndReportsIncrementalDrawableChanges)
     EXPECT_EQ(State.SetSkin(Entity, {pSkin, pPose}), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), RevisionsBeforeNoChange);
 
-    ASSERT_EQ(State.SetSkin(Entity, {pSkin, pUpdatedPose}), RADIENT_STATUS_OK);
+    RadientSkinComponent UpdatedSkin{pSkin, pPose};
+    UpdatedSkin.SkeletonToMeshTransform = TranslationMatrix(5.f);
+    ASSERT_EQ(State.SetSkin(Entity, UpdatedSkin), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_OK);
-    EXPECT_EQ(StoredSkin, (RadientSkinComponent{pSkin, pUpdatedPose}));
+    EXPECT_EQ(StoredSkin, UpdatedSkin);
+
+    Uint32 TransformUpdatedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++TransformUpdatedCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            ASSERT_NE(pRenderable->pSkin, nullptr);
+            EXPECT_EQ(pRenderable->pSkin->SkeletonToMeshTransform, UpdatedSkin.SkeletonToMeshTransform);
+        });
+    EXPECT_EQ(TransformUpdatedCount, 1u);
+    State.ClearRenderableMeshChanges();
+
+    UpdatedSkin.pPose = pUpdatedPose;
+    ASSERT_EQ(State.SetSkin(Entity, UpdatedSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetSkin(Entity, StoredSkin), RADIENT_STATUS_OK);
+    EXPECT_EQ(StoredSkin, UpdatedSkin);
     Uint32 UpdatedCount = 0;
     State.EnumerateRenderableMeshChanges(
         [&](const RadientSceneState::RenderableMeshChange& Change,
@@ -826,6 +846,43 @@ TEST(RadientSkinningTest, PoseComputesTransposedSkinningMatrices)
               RADIENT_STATUS_OK);
     ExpectMatrixNear(SkinningMatrices[0], RadientMath::TransposeMatrix(TranslationMatrix(1.f)));
     ExpectMatrixNear(SkinningMatrices[1], RadientMath::TransposeMatrix(TranslationMatrix(-3.f)));
+}
+
+TEST(RadientSkinningTest, PoseConvertsSkinningMatricesFromSkeletonToMeshSpace)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    RadientTransform SkeletonToMesh;
+    SkeletonToMesh.Position                     = {5.f, 6.f, 7.f};
+    SkeletonToMesh.Scale                        = {2.f, 3.f, 4.f};
+    const RadientMatrix4x4 SkeletonToMeshMatrix = RadientMath::TransformToMatrix(SkeletonToMesh);
+
+    std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(
+                  Objects.pSkin,
+                  SkinningMatrices.data(),
+                  False,
+                  True,
+                  &SkeletonToMeshMatrix),
+              RADIENT_STATUS_OK);
+
+    const std::array ExpectedMatrices{
+        RadientMath::MultiplyMatrices(TranslationMatrix(1.f), SkeletonToMeshMatrix),
+        RadientMath::MultiplyMatrices(TranslationMatrix(-3.f), SkeletonToMeshMatrix),
+    };
+    ExpectMatrixNear(SkinningMatrices[0], ExpectedMatrices[0]);
+    ExpectMatrixNear(SkinningMatrices[1], ExpectedMatrices[1]);
+
+    ASSERT_EQ(Objects.pPose->ComputeSkinningMatrices(
+                  Objects.pSkin,
+                  SkinningMatrices.data(),
+                  True,
+                  True,
+                  &SkeletonToMeshMatrix),
+              RADIENT_STATUS_OK);
+    ExpectMatrixNear(SkinningMatrices[0], RadientMath::TransposeMatrix(ExpectedMatrices[0]));
+    ExpectMatrixNear(SkinningMatrices[1], RadientMath::TransposeMatrix(ExpectedMatrices[1]));
 }
 
 TEST(RadientSkinningTest, ComputeSkinningMatricesRejectsNullSkin)

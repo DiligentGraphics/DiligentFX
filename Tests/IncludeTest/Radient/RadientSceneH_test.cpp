@@ -87,6 +87,11 @@ static_assert(DefaultLight.ShapingFocus == 0.f, "Unexpected RadientLightComponen
 constexpr RadientSkinComponent DefaultSkin{};
 static_assert(DefaultSkin.pSkin == nullptr, "Unexpected RadientSkinComponent skin default value");
 static_assert(DefaultSkin.pPose == nullptr, "Unexpected RadientSkinComponent pose default value");
+static_assert(DefaultSkin.SkeletonToMeshTransform.Data[0] == 1.f &&
+                  DefaultSkin.SkeletonToMeshTransform.Data[5] == 1.f &&
+                  DefaultSkin.SkeletonToMeshTransform.Data[10] == 1.f &&
+                  DefaultSkin.SkeletonToMeshTransform.Data[15] == 1.f,
+              "Unexpected RadientSkinComponent skeleton-to-mesh transform default value");
 
 constexpr RadientCustomComponentData DefaultCustomComponent{};
 static_assert(DefaultCustomComponent.ComponentType == InvalidRadientComponentTypeID, "Unexpected RadientCustomComponentData component type default value");

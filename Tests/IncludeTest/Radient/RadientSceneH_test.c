@@ -100,8 +100,12 @@ void RadientScene_C_UseSkinComponent(void)
 {
     RadientSkinComponent Skin = {0};
 
-    Skin.pSkin = 0;
-    Skin.pPose = 0;
+    Skin.pSkin                            = 0;
+    Skin.pPose                            = 0;
+    Skin.SkeletonToMeshTransform.Data[0]  = 1.f;
+    Skin.SkeletonToMeshTransform.Data[5]  = 1.f;
+    Skin.SkeletonToMeshTransform.Data[10] = 1.f;
+    Skin.SkeletonToMeshTransform.Data[15] = 1.f;
 
     (void)Skin;
 }

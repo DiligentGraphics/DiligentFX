@@ -266,13 +266,16 @@ void RadientTesseraDrawableCache::UpdateRenderableSkin(RadientEntityID          
 
     RadientTesseraSkinData* const pCurrentSkinData = GetRenderableSkinData(Entity, Record);
     if (pCurrentSkinData != nullptr &&
-        pCurrentSkinData->Matches(pSkin->pSkin, pSkin->pPose))
+        pCurrentSkinData->Matches(pSkin->pSkin, pSkin->pPose, pSkin->SkeletonToMeshTransform))
     {
         return;
     }
 
     std::unique_ptr<RadientTesseraSkinData> pSkinData =
-        std::make_unique<RadientTesseraSkinData>(pSkin->pSkin, pSkin->pPose, m_JointBuffer);
+        std::make_unique<RadientTesseraSkinData>(pSkin->pSkin,
+                                                 pSkin->pPose,
+                                                 pSkin->SkeletonToMeshTransform,
+                                                 m_JointBuffer);
 
     if (Record.SkinListIndex == InvalidSkinListIndex)
     {

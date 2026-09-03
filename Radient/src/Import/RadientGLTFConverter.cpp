@@ -690,14 +690,17 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                           const RadientImport::ImportedDocument&            Scene,
                           Uint32                                            NodeIndex,
                           RadientEntityID                                   Parent,
+                          const RadientMatrix4x4&                           ParentDocumentMatrix,
                           std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
                           SkeletonEntityMap*                                pSkeletonEntities)
 {
     if (NodeIndex >= Scene.Nodes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RadientImport::ImportedNode& Node         = Scene.Nodes[NodeIndex];
-    const std::string                  FallbackName = std::string{"GLTF Node "} + std::to_string(NodeIndex);
+    const RadientImport::ImportedNode& Node               = Scene.Nodes[NodeIndex];
+    const std::string                  FallbackName       = std::string{"GLTF Node "} + std::to_string(NodeIndex);
+    const RadientMatrix4x4             NodeDocumentMatrix = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(Node.Transform), ParentDocumentMatrix);
 
     RadientEntityDesc NodeDesc{};
     NodeDesc.Name      = !Node.Name.empty() ? Node.Name.c_str() : FallbackName.c_str();
@@ -749,23 +752,35 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                 }
                 else
                 {
-                    RefCntAutoPtr<IRadientSkeletonPose>& pPose = SkinPoses[Node.SkinIndex];
-                    if (pPose == nullptr)
+                    RadientMatrix4x4 SkeletonToMeshTransform;
+                    const bool NodeDocumentMatrixIsIdentity = (NodeDocumentMatrix == SkeletonToMeshTransform);
+                    if (!NodeDocumentMatrixIsIdentity &&
+                        !RadientMath::TryInverseMatrix(NodeDocumentMatrix, SkeletonToMeshTransform))
                     {
-                        Status = pSkeleton->CreatePose(pPose.GetAddressOfEmpty());
-                        if (RADIENT_FAILED(Status) || pPose == nullptr)
-                            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+                        LOG_WARNING_MESSAGE("Imported skinned node '", NodeDesc.Name,
+                                            "' has a non-invertible document transform; rendering the mesh without skinning");
                     }
+                    else
+                    {
+                        RefCntAutoPtr<IRadientSkeletonPose>& pPose = SkinPoses[Node.SkinIndex];
+                        if (pPose == nullptr)
+                        {
+                            Status = pSkeleton->CreatePose(pPose.GetAddressOfEmpty());
+                            if (RADIENT_FAILED(Status) || pPose == nullptr)
+                                return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+                        }
 
-                    RadientSkinComponent SkinComponent{};
-                    SkinComponent.pSkin = pSkin;
-                    SkinComponent.pPose = pPose;
-                    Status              = Writer.SetSkin(NodeEntity, SkinComponent);
-                    if (RADIENT_FAILED(Status))
-                        return Status;
+                        RadientSkinComponent SkinComponent{};
+                        SkinComponent.pSkin                   = pSkin;
+                        SkinComponent.pPose                   = pPose;
+                        SkinComponent.SkeletonToMeshTransform = SkeletonToMeshTransform;
+                        Status                                = Writer.SetSkin(NodeEntity, SkinComponent);
+                        if (RADIENT_FAILED(Status))
+                            return Status;
 
-                    if (pSkeletonEntities != nullptr)
-                        (*pSkeletonEntities)[pSkeleton].push_back(NodeEntity);
+                        if (pSkeletonEntities != nullptr)
+                            (*pSkeletonEntities)[pSkeleton].push_back(NodeEntity);
+                    }
                 }
             }
         }
@@ -783,7 +798,8 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
 
     for (Uint32 ChildIndex : Node.Children)
     {
-        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, SkinPoses, pSkeletonEntities);
+        Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, NodeDocumentMatrix,
+                            SkinPoses, pSkeletonEntities);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -1171,7 +1187,7 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
 
         for (Uint32 NodeIndex : Scene.Scenes[ResolvedSceneIndex].RootNodes)
         {
-            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, SkinPoses,
+            Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, RadientMatrix4x4{}, SkinPoses,
                                 pAnimationRegistry != nullptr ? &SkeletonEntities : nullptr);
             if (RADIENT_FAILED(Status))
                 return Status;

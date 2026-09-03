@@ -50,7 +50,8 @@ struct RadientSkeletonJointDesc
     /// unrestricted; parents may appear before or after their children.
     Uint32 ParentJointIndex DEFAULT_INITIALIZER(InvalidRadientJointIndex);
 
-    /// Joint transform relative to its parent in the skeleton's rest pose.
+    /// Joint transform relative to its parent in the skeleton's rest pose. A
+    /// root joint's transform is relative to skeleton space.
     RadientTransform LocalRestTransform DEFAULT_INITIALIZER({});
 };
 typedef struct RadientSkeletonJointDesc RadientSkeletonJointDesc;
@@ -343,7 +344,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     /// Computes the skinning matrices for pSkin and writes
     /// pSkin->GetDesc().JointCount elements to pMatrices. Each output matrix
     /// combines the skin joint's inverse-bind matrix with the corresponding
-    /// skeleton-space pose matrix. pSkin must reference this pose's skeleton.
+    /// skeleton-space pose matrix and therefore transforms mesh bind-space
+    /// vertices into skeleton space. pSkin must reference this pose's skeleton.
     ///
     /// If TransposeMatrices is true, every matrix is transposed before it is
     /// written to pMatrices.
@@ -352,11 +354,17 @@ DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
     /// before computing the result. Otherwise, the method returns
     /// RADIENT_STATUS_PENDING while global matrices are dirty. The output is
     /// not modified unless the method returns RADIENT_STATUS_OK.
+    ///
+    /// If pSkeletonToMeshTransform is not null, it is post-multiplied into
+    /// every skinning matrix to convert the skeleton-space result into the
+    /// local space of the mesh that will use the palette. A null pointer is
+    /// equivalent to identity.
     VIRTUAL RADIENT_STATUS METHOD(ComputeSkinningMatrices)(THIS_
-                                                           IRadientSkinAsset* pSkin,
-                                                           RadientMatrix4x4*  pMatrices,
-                                                           Bool               TransposeMatrices DEFAULT_VALUE(False),
-                                                           Bool               UpdateGlobalMatrices DEFAULT_VALUE(True)) PURE;
+                                                           IRadientSkinAsset*      pSkin,
+                                                           RadientMatrix4x4*       pMatrices,
+                                                           Bool                    TransposeMatrices DEFAULT_VALUE(False),
+                                                           Bool                    UpdateGlobalMatrices DEFAULT_VALUE(True),
+                                                           const RadientMatrix4x4* pSkeletonToMeshTransform DEFAULT_VALUE(nullptr)) PURE;
 
     /// Propagates committed local transforms through the skeleton hierarchy and
     /// advances the pose version. Returns RADIENT_STATUS_NO_CHANGE when the

@@ -117,9 +117,13 @@ TEST(RadientTesseraSkinDataTest, BuildsVersionedCurrentAndPreviousPalettes)
     ASSERT_NE(Objects.pPose, nullptr);
 
     RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
-    RadientTesseraSkinData           SkinData{Objects.pSkin, Objects.pPose, JointBuffer};
+    const RadientMatrix4x4           SkeletonToMeshTransform{};
+    RadientTesseraSkinData           SkinData{
+        Objects.pSkin, Objects.pPose, SkeletonToMeshTransform, JointBuffer};
     EXPECT_EQ(SkinData.GetSkin(), Objects.pSkin.RawPtr());
     EXPECT_EQ(SkinData.GetPose(), Objects.pPose.RawPtr());
+    EXPECT_TRUE(SkinData.Matches(Objects.pSkin, Objects.pPose, SkeletonToMeshTransform));
+    EXPECT_FALSE(SkinData.Matches(Objects.pSkin, Objects.pPose, MakeTranslationMatrix(1.f)));
     EXPECT_EQ(SkinData.GetJointCount(), 2u);
     EXPECT_FALSE(SkinData.IsPrepared());
     EXPECT_EQ(SkinData.GetFirstJoint(), ~Uint32{0});
@@ -207,7 +211,8 @@ TEST(RadientTesseraSkinDataTest, UpdatesDirtyPoseGlobalsBeforeBuildingPalette)
     ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
 
     RadientTesseraBufferSuballocator JointBuffer = MakeJointBuffer();
-    RadientTesseraSkinData           UnpreparedData{Objects.pSkin, Objects.pPose, JointBuffer};
+    RadientTesseraSkinData           UnpreparedData{
+        Objects.pSkin, Objects.pPose, RadientMatrix4x4{}, JointBuffer};
     ASSERT_EQ(UnpreparedData.Prepare(0), RADIENT_STATUS_OK);
     EXPECT_TRUE(UnpreparedData.IsPrepared());
     const Uint32 InitialFirstJoint = UnpreparedData.GetFirstJoint();

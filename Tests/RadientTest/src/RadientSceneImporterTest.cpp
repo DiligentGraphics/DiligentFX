@@ -31,6 +31,7 @@
 #include "RadientEngine.h"
 #include "RadientSkinning.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Math/RadientMath.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
 
@@ -127,14 +128,15 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
     GLTF << R"GLTF({
     "asset": {"version": "2.0"},
     "scene": 0,
-    "scenes": [{"nodes": [0, 4, 5]}],
+    "scenes": [{"nodes": [0, 6, 5]}],
     "nodes": [
         {"name": "Root", "translation": [1, 0, 0], "children": [1]},
         {"name": "NonJointAncestor", "translation": [0, 2, 0], "children": [2]},
         {"name": "JointA", "translation": [0, 0, 3], "children": [3]},
         {"name": "JointB", "scale": [2, 3, 4]},
         {"name": "SkinnedMeshA", "mesh": 0, "skin": 0, "translation": [-1, 0, 0]},
-        {"name": "SkinnedMeshB", "mesh": 0, "skin": 0, "translation": [1, 0, 0]}
+        {"name": "SkinnedMeshB", "mesh": 0, "skin": 0},
+        {"name": "SkinnedMeshParent", "translation": [0, 4, 0], "children": [4]}
     ],
     "skins": [{"name": "Character", "skeleton": 2, "joints": [2, 3], "inverseBindMatrices": 3}],
     "animations": [{
@@ -285,6 +287,15 @@ void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference
 {
     EXPECT_NEAR(Value.x, Reference.x, EPSILON);
     EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+}
+
+void ExpectMatrixNear(const RadientMatrix4x4& Value, const RadientMatrix4x4& Reference)
+{
+    for (Uint32 Element = 0; Element < 16; ++Element)
+    {
+        EXPECT_NEAR(Value.Data[Element], Reference.Data[Element], EPSILON)
+            << "Matrix element " << Element;
+    }
 }
 
 struct CapturedRenderableLight
@@ -880,8 +891,9 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     LoadInfo.URI = GLTFPath.c_str();
 
     RadientSceneInstantiateInfo InstantiateInfo{};
-    InstantiateInfo.Name               = "First skinned instance";
-    InstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+    InstantiateInfo.Name                     = "First skinned instance";
+    InstantiateInfo.RootTransform.Position.x = 10.f;
+    InstantiateInfo.pAnimationRegistry       = Fixture.pAnimationRegistry;
 
     const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
     ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
@@ -905,6 +917,8 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     {
         RefCntAutoPtr<IRadientSkinAsset>    pSkin;
         RefCntAutoPtr<IRadientSkeletonPose> pPose;
+        RadientMatrix4x4                    SkeletonToMeshTransform;
+        RadientEntityID                     Entity = InvalidRadientEntityID;
     };
 
     const auto CaptureSkins = [&Fixture](const RadientAnimationRegistryEntry& Entry) {
@@ -918,9 +932,11 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
             EXPECT_EQ(SkinComponent.pPose, Target.pPose);
             if (SkinComponent.pSkin != nullptr && SkinComponent.pPose != nullptr)
             {
-                CapturedSkin& Skin = Skins.emplace_back();
-                Skin.pSkin         = SkinComponent.pSkin;
-                Skin.pPose         = SkinComponent.pPose;
+                CapturedSkin& Skin           = Skins.emplace_back();
+                Skin.pSkin                   = SkinComponent.pSkin;
+                Skin.pPose                   = SkinComponent.pPose;
+                Skin.SkeletonToMeshTransform = SkinComponent.SkeletonToMeshTransform;
+                Skin.Entity                  = Target.Entity;
             }
         }
         return Skins;
@@ -936,6 +952,48 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ASSERT_NE(Skins[0].pPose, nullptr);
     EXPECT_EQ(Skins[1].pSkin, Skins[0].pSkin);
     EXPECT_EQ(Skins[1].pPose, Skins[0].pPose);
+
+    std::array<Float32, 2> SkeletonToMeshTranslations{
+        Skins[0].SkeletonToMeshTransform.Data[12],
+        Skins[1].SkeletonToMeshTransform.Data[12],
+    };
+    std::sort(SkeletonToMeshTranslations.begin(), SkeletonToMeshTranslations.end());
+    EXPECT_FLOAT_EQ(SkeletonToMeshTranslations[0], 0.f);
+    EXPECT_FLOAT_EQ(SkeletonToMeshTranslations[1], +1.f);
+
+    bool FoundIdentityAttachment = false;
+    for (const CapturedSkin& Skin : Skins)
+    {
+        if (Skin.SkeletonToMeshTransform.Data[12] == 0.f)
+        {
+            EXPECT_TRUE(Skin.SkeletonToMeshTransform == RadientMatrix4x4{});
+            FoundIdentityAttachment = true;
+        }
+    }
+    EXPECT_TRUE(FoundIdentityAttachment);
+
+    // The per-attachment conversion cancels each mesh node's document-space
+    // transform, while the external instance-root transform remains applied.
+    for (const CapturedSkin& Skin : Skins)
+    {
+        std::array<RadientMatrix4x4, 2> SkinningMatrices{};
+        ASSERT_EQ(Skin.pPose->ComputeSkinningMatrices(
+                      Skin.pSkin,
+                      SkinningMatrices.data(),
+                      False,
+                      True,
+                      &Skin.SkeletonToMeshTransform),
+                  RADIENT_STATUS_OK);
+
+        RadientMatrix4x4 MeshWorldMatrix;
+        ASSERT_EQ(Fixture.pScene->GetWorldMatrix(Skin.Entity, MeshWorldMatrix), RADIENT_STATUS_OK);
+
+        RadientTransform ExpectedJointWorldTransform;
+        ExpectedJointWorldTransform.Position = {11.f, 2.f, 3.f};
+        ExpectMatrixNear(
+            RadientMath::MultiplyMatrices(SkinningMatrices[0], MeshWorldMatrix),
+            RadientMath::TransformToMatrix(ExpectedJointWorldTransform));
+    }
 
     const RadientSkinDesc& SkinDesc = Skins[0].pSkin->GetDesc();
     ASSERT_NE(SkinDesc.pSkeleton, nullptr);
