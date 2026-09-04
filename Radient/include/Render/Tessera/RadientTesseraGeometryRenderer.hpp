@@ -61,6 +61,12 @@ public:
                                    const RadientMaterialDefaultTextures& DefaultTextures,
                                    Uint32                                MultiDrawBatchSize = 16);
 
+    /// Initializes renderer-global resources and retries dependencies that may
+    /// have become ready since the previous frame.
+    RADIENT_STATUS BeginFrame(IRenderDevice*  pDevice,
+                              IDeviceContext* pContext);
+
+    /// Publishes shared buffer and material data produced after BeginFrame().
     RADIENT_STATUS Prepare(IRenderDevice*         pDevice,
                            IDeviceContext*        pContext,
                            GLTF::ResourceManager* pResourceManager = nullptr);

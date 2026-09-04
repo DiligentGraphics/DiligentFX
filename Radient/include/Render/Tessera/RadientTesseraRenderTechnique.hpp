@@ -99,7 +99,7 @@ private:
     SceneRenderState* FindSceneRenderState(const IRadientScene* pScene);
     SceneRenderState& GetOrCreateSceneRenderState(const IRadientScene& Scene);
 
-    ViewRenderState* FindViewRenderState(IRadientView* pView, bool PruneExpired);
+    ViewRenderState* FindViewRenderState(IRadientView* pView);
     ViewRenderState& GetOrCreateViewRenderState(IRadientView* pView);
 
     RADIENT_STATUS ValidateActiveViewContext(const RadientRenderContext& Context,
@@ -116,11 +116,12 @@ private:
     float m_PostFXTransitionDuration       = 1.f;
 
     // Per-scene renderer state is retained without extending scene lifetime.
-    // Expired entries are removed when another scene is synchronized.
+    // Expired entries are removed at the start of each frame.
     std::vector<std::unique_ptr<SceneRenderState>> m_SceneRenderStates;
 
     // Per-view render targets and PostFX state are retained weakly with the
     // view so independent views never share renderer-specific frame history.
+    // Expired entries are removed at the start of each frame.
     std::vector<std::unique_ptr<ViewRenderState>> m_ViewRenderStates;
 
     RefCntAutoPtr<IShaderResourceBinding> m_pFrameSRB;

@@ -478,16 +478,11 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
         });
 }
 
-RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pDevice,
-                                                       IDeviceContext*        pContext,
-                                                       GLTF::ResourceManager* pResourceManager)
+RADIENT_STATUS RadientTesseraGeometryRenderer::BeginFrame(IRenderDevice*  pDevice,
+                                                          IDeviceContext* pContext)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
-
-    const RADIENT_STATUS JointBufferStatus = m_JointBuffer.Prepare(pDevice, pContext);
-    if (RADIENT_FAILED(JointBufferStatus))
-        return JointBufferStatus;
 
     if (m_pRenderer == nullptr)
     {
@@ -501,6 +496,20 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pD
 
     if (m_DefaultMaterialTextureBindingsReady && m_pMaterialCache == nullptr)
         CreateMaterialCache(pDevice);
+
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientTesseraGeometryRenderer::Prepare(IRenderDevice*         pDevice,
+                                                       IDeviceContext*        pContext,
+                                                       GLTF::ResourceManager* pResourceManager)
+{
+    if (pDevice == nullptr || pContext == nullptr)
+        return RADIENT_STATUS_OK;
+
+    const RADIENT_STATUS JointBufferStatus = m_JointBuffer.Prepare(pDevice, pContext);
+    if (RADIENT_FAILED(JointBufferStatus))
+        return JointBufferStatus;
 
     if (m_pMaterialCache != nullptr && pResourceManager != nullptr)
         return PrepareMaterialSRBs(pDevice, pContext, pResourceManager->GetTextureVersion());
@@ -519,14 +528,11 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginView(IRenderDevice*         
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    if (m_pRenderer == nullptr)
-    {
-        const RADIENT_STATUS PrepareStatus = Prepare(pDevice, pContext, pResourceManager);
-        if (RADIENT_FAILED(PrepareStatus))
-            return PrepareStatus;
-    }
     if (m_pRenderer == nullptr || m_pRenderer->GetFrameAttribsCB() == nullptr)
-        return RADIENT_STATUS_OK;
+    {
+        UNEXPECTED("Tessera geometry renderer was not initialized before beginning a view");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     {
         MapHelper<HLSL::PBRFrameAttribs> MappedFrameAttribs{pContext, m_pRenderer->GetFrameAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};

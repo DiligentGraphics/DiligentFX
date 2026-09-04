@@ -131,14 +131,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
     PBR_Renderer* pRenderer = Renderer.GetRenderer();
     if (pRenderer == nullptr)
     {
-        const RADIENT_STATUS PrepareStatus = Renderer.Prepare(pDevice, pContext);
-        if (RADIENT_FAILED(PrepareStatus))
-            return PrepareStatus;
-
-        pRenderer = Renderer.GetRenderer();
+        UNEXPECTED("Tessera geometry renderer was not initialized before preparing a geometry pass");
+        return RADIENT_STATUS_INVALID_OPERATION;
     }
-    if (pRenderer == nullptr)
-        return RADIENT_STATUS_OK;
 
     if (m_NativeMultiDrawSupported == DEVICE_FEATURE_STATE_OPTIONAL)
         m_NativeMultiDrawSupported = pDevice->GetDeviceInfo().Features.NativeMultiDraw;

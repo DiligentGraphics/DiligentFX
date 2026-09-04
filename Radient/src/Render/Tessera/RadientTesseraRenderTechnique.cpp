@@ -116,7 +116,18 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginFrame(const RadientFrameConte
         ++It;
     }
 
-    return RADIENT_STATUS_OK;
+    for (auto It = m_ViewRenderStates.begin(); It != m_ViewRenderStates.end();)
+    {
+        if ((*It)->WeakView.Lock() == nullptr)
+        {
+            It = m_ViewRenderStates.erase(It);
+            continue;
+        }
+
+        ++It;
+    }
+
+    return m_GeometryRenderer.BeginFrame(Context.pDevice, Context.pContext);
 }
 
 RADIENT_STATUS RadientTesseraRenderTechnique::SyncScene(const IRadientScene& Scene)
@@ -235,7 +246,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
     if (pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    ViewRenderState* const pViewState = FindViewRenderState(pView, false);
+    ViewRenderState* const pViewState = FindViewRenderState(pView);
     if (pViewState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
@@ -482,39 +493,23 @@ RadientTesseraRenderTechnique::SceneRenderState& RadientTesseraRenderTechnique::
     return *m_SceneRenderStates.back();
 }
 
-RadientTesseraRenderTechnique::ViewRenderState* RadientTesseraRenderTechnique::FindViewRenderState(IRadientView* pView,
-                                                                                                   bool          PruneExpired)
+RadientTesseraRenderTechnique::ViewRenderState* RadientTesseraRenderTechnique::FindViewRenderState(IRadientView* pView)
 {
-    ViewRenderState* pResult = nullptr;
-    for (auto It = m_ViewRenderStates.begin(); It != m_ViewRenderStates.end();)
+    if (pView == nullptr)
+        return nullptr;
+
+    for (const auto& pState : m_ViewRenderStates)
     {
-        RefCntAutoPtr<IRadientView> pCachedView = (*It)->WeakView.Lock();
-        if (pCachedView == nullptr && PruneExpired)
-        {
-            It = m_ViewRenderStates.erase(It);
-        }
-        else
-        {
-            if (pCachedView == pView)
-            {
-                if (!PruneExpired)
-                    return It->get();
-
-                pResult = It->get();
-            }
-
-            ++It;
-        }
+        if (pState->WeakView.Lock() == pView)
+            return pState.get();
     }
 
-    return pResult;
+    return nullptr;
 }
 
 RadientTesseraRenderTechnique::ViewRenderState& RadientTesseraRenderTechnique::GetOrCreateViewRenderState(IRadientView* pView)
 {
-    // PrepareFrame calls this once per frame, making it a natural point to
-    // release resources that belonged to views destroyed since the last frame.
-    if (ViewRenderState* pState = FindViewRenderState(pView, true))
+    if (ViewRenderState* pState = FindViewRenderState(pView))
         return *pState;
 
     m_ViewRenderStates.push_back(std::make_unique<ViewRenderState>(pView, m_PostFXTransitionDuration));
