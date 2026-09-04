@@ -69,8 +69,12 @@ struct RadientTesseraMaterialResolveContext
 /// which that skeleton is attached to the mesh.
 struct RadientTesseraSkinAttachment
 {
+    static constexpr size_t InvalidCacheEntryAttachmentIndex = ~size_t{0};
+
     RadientTesseraSkinData&         SkinData;
-    std::optional<RadientMatrix4x4> SkeletonToMeshTransform = {};
+    const Bool*                     pEffectiveVisible         = nullptr;
+    size_t                          CacheEntryAttachmentIndex = InvalidCacheEntryAttachmentIndex;
+    std::optional<RadientMatrix4x4> SkeletonToMeshTransform   = {};
 };
 
 /// Renderer-facing primitive slot addressed by a stable drawable ID.
@@ -246,11 +250,11 @@ public:
         return !m_PendingRenderableEntities.empty();
     }
 
-    /// Updates the shared joint-buffer shadow for every unique skin and pose
-    /// pair whose pose version changed. Each pair is prepared once regardless
-    /// of how many renderables or primitive slots reference it. RenderFrameID
-    /// keeps repeated preparation during the same renderer frame from advancing
-    /// motion history.
+    /// Updates the shared joint-buffer shadow for every visible unique skin and
+    /// pose pair whose pose version changed. Each pair is prepared once
+    /// regardless of how many renderables or primitive slots reference it.
+    /// RenderFrameID keeps repeated preparation during the same renderer frame
+    /// from advancing motion history.
     RADIENT_STATUS PrepareSkinningData(RadientFrameID RenderFrameID, bool PackMatrixRowMajor = true);
 
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
@@ -307,8 +311,8 @@ private:
 
     struct SkinDataCacheEntry
     {
-        std::unique_ptr<RadientTesseraSkinData> pSkinData;
-        size_t                                  UseCount = 0;
+        std::unique_ptr<RadientTesseraSkinData>    pSkinData;
+        std::vector<RadientTesseraSkinAttachment*> Attachments;
     };
 
     struct LightListLocation
@@ -328,6 +332,8 @@ private:
                               const RadientSkinComponent* pSkin);
 
     void RemoveRenderableSkin(RenderableRecord& Record);
+
+    void RebuildVisibleSkinDataList();
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
@@ -363,6 +369,10 @@ private:
     // stable when the flat hash map rehashes.
     using SkinDataCache = absl::flat_hash_map<SkinDataKey, SkinDataCacheEntry, SkinDataKey::Hasher>;
     SkinDataCache m_SkinDataCache;
+
+    // Rebuilt only when drawable attachments or effective visibility change.
+    // Frame preparation therefore touches no completely hidden skin/pose pairs.
+    std::vector<RadientTesseraSkinData*> m_VisibleSkinData;
 
     // Renderer-specific material data is retained only while an entity waits
     // for all of its primitive materials to become GPU-ready.

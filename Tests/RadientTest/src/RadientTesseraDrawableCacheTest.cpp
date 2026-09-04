@@ -376,6 +376,51 @@ RadientTransform MakeTranslation(float X, float Y, float Z)
     return Transform;
 }
 
+struct TestSkinningObjects
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
+    RefCntAutoPtr<IRadientSkeletonAsset>   pSkeleton;
+    RefCntAutoPtr<IRadientSkinAsset>       pSkin;
+    RefCntAutoPtr<IRadientSkeletonPose>    pPose;
+};
+
+TestSkinningObjects CreateTestSkinningObjects()
+{
+    TestSkinningObjects Objects;
+    Objects.pAssetManager = RadientAssetManagerImpl::Create({});
+    EXPECT_NE(Objects.pAssetManager, nullptr);
+    if (!Objects.pAssetManager)
+        return Objects;
+
+    RadientSkeletonJointDesc SkeletonJoint;
+    RadientSkeletonDesc      SkeletonDesc;
+    SkeletonDesc.Name       = "Drawable cache skeleton";
+    SkeletonDesc.pJoints    = &SkeletonJoint;
+    SkeletonDesc.JointCount = 1;
+    EXPECT_EQ(Objects.pAssetManager->CreateSkeleton(
+                  SkeletonDesc, Objects.pSkeleton.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    if (!Objects.pSkeleton)
+        return Objects;
+
+    RadientSkinJointBindingDesc SkinJoint;
+    SkinJoint.SkeletonJointIndex = 0;
+    RadientSkinDesc SkinDesc;
+    SkinDesc.Name       = "Drawable cache skin";
+    SkinDesc.pSkeleton  = Objects.pSkeleton;
+    SkinDesc.pJoints    = &SkinJoint;
+    SkinDesc.JointCount = 1;
+    EXPECT_EQ(Objects.pAssetManager->CreateSkin(
+                  SkinDesc, Objects.pSkin.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    if (!Objects.pSkin)
+        return Objects;
+
+    EXPECT_EQ(Objects.pSkeleton->CreatePose(Objects.pPose.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    return Objects;
+}
+
 void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
                       const RadientMatrix4x4& Reference)
 {
@@ -1961,6 +2006,122 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
     ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.PrepareSkinningData(7), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientTesseraDrawableCacheTest, PreparesOnlyEffectivelyVisibleSharedSkinData)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-skin-visibility", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+
+    RadientEntityID HiddenParent = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, HiddenParent), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientEntityID HiddenEntity =
+        AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh, HiddenParent);
+    const RadientEntityID VisibleEntity =
+        AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
+    ASSERT_NE(HiddenEntity, InvalidRadientEntityID);
+    ASSERT_NE(VisibleEntity, InvalidRadientEntityID);
+
+    TestSkinningObjects Skinning = CreateTestSkinningObjects();
+    ASSERT_NE(Skinning.pSkin, nullptr);
+    ASSERT_NE(Skinning.pPose, nullptr);
+
+    ASSERT_EQ(pWriter->SetSkin(HiddenEntity, {Skinning.pSkin, Skinning.pPose}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetSkin(VisibleEntity, {Skinning.pSkin, Skinning.pPose}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(HiddenParent, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    const std::vector<const RadientDrawableSlot*> HiddenSlots =
+        GetDrawableSlotsForEntity(DrawableCache, HiddenEntity);
+    const std::vector<const RadientDrawableSlot*> VisibleSlots =
+        GetDrawableSlotsForEntity(DrawableCache, VisibleEntity);
+    ASSERT_FALSE(HiddenSlots.empty());
+    ASSERT_FALSE(VisibleSlots.empty());
+    ASSERT_NE(HiddenSlots.front()->pSkinAttachment, nullptr);
+    ASSERT_NE(VisibleSlots.front()->pSkinAttachment, nullptr);
+
+    RadientTesseraSkinAttachment* const pHiddenAttachment  = HiddenSlots.front()->pSkinAttachment;
+    RadientTesseraSkinAttachment* const pVisibleAttachment = VisibleSlots.front()->pSkinAttachment;
+    RadientTesseraSkinData&             SharedSkinData     = pHiddenAttachment->SkinData;
+    EXPECT_EQ(&pVisibleAttachment->SkinData, &SharedSkinData);
+
+    // One visible attachment is sufficient to prepare the shared palette.
+    ASSERT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_OK);
+    const Uint64 PreparedPoseVersion = SharedSkinData.GetPreparedPoseVersion();
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pPoseWriter;
+    ASSERT_EQ(Skinning.pPose->CreateWriter(pPoseWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientTransform UpdatedTransform = MakeTranslation(2.f, 0.f, 0.f);
+    ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &UpdatedTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
+    ASSERT_NE(Skinning.pPose->GetVersion(), PreparedPoseVersion);
+
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(VisibleEntity, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    // No attachment is visible, so the changed pose remains unprepared.
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SharedSkinData.GetPreparedPoseVersion(), PreparedPoseVersion);
+
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(HiddenParent, True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    // Reappearing after a skipped frame publishes the latest pose without
+    // retaining stale motion history from the last visible frame.
+    ASSERT_EQ(DrawableCache.PrepareSkinningData(4), RADIENT_STATUS_OK);
+    EXPECT_EQ(SharedSkinData.GetPreparedPoseVersion(), Skinning.pPose->GetVersion());
+    EXPECT_EQ(SharedSkinData.GetPreviousFirstJoint(), SharedSkinData.GetFirstJoint());
+
+    // Removing a non-last association moves the final attachment into its
+    // place without invalidating the shared palette or its visibility data.
+    ASSERT_NE(pHiddenAttachment->CacheEntryAttachmentIndex,
+              pVisibleAttachment->CacheEntryAttachmentIndex);
+    const bool                          RemoveHiddenAttachment = pHiddenAttachment->CacheEntryAttachmentIndex == 0;
+    RadientTesseraSkinAttachment* const pRemainingAttachment =
+        RemoveHiddenAttachment ? pVisibleAttachment : pHiddenAttachment;
+    const RadientEntityID RemovedEntity =
+        RemoveHiddenAttachment ? HiddenEntity : VisibleEntity;
+    const RadientEntityID RemainingEntity =
+        RemoveHiddenAttachment ? VisibleEntity : HiddenEntity;
+
+    ASSERT_EQ(pWriter->DestroyEntity(RemovedEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    EXPECT_EQ(pRemainingAttachment->CacheEntryAttachmentIndex, 0u);
+
+    EXPECT_TRUE(RADIENT_SUCCEEDED(pWriter->SetEntityOwnVisibility(RemainingEntity, True)));
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_TRUE(RADIENT_SUCCEEDED(MeshProvider.SyncScene(DrawableCache, *pScene)));
+    pScene->ClearPendingRenderChanges();
+
+    const RadientTransform SecondUpdatedTransform = MakeTranslation(3.f, 0.f, 0.f);
+    ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &SecondUpdatedTransform), RADIENT_STATUS_OK);
+    ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(5), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pWriter->RemoveComponent(RemainingEntity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(6), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)

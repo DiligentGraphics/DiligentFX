@@ -106,6 +106,8 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
 
     const bool UpdateRenderables = (m_SceneRevisions.Drawables != SceneRevisions.Drawables);
     const bool UpdateLights      = (m_SceneRevisions.Lights != SceneRevisions.Lights);
+    const bool UpdateSkinVisibility =
+        UpdateRenderables || m_SceneRevisions.Visibility != SceneRevisions.Visibility;
 
     const RadientSceneImpl*                            pSceneImpl     = ClassPtrCast<const RadientSceneImpl>(&Scene);
     const RadientSceneState&                           State          = pSceneImpl->GetState();
@@ -173,6 +175,9 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
             });
     }
 
+    if (UpdateSkinVisibility)
+        RebuildVisibleSkinDataList();
+
     m_SceneRevisions = SceneRevisions;
 
     return RADIENT_STATUS_OK;
@@ -182,14 +187,13 @@ RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(RadientFrameID R
 {
     RADIENT_STATUS Status     = RADIENT_STATUS_OK;
     bool           HasChanges = false;
-    for (const auto& CacheItem : m_SkinDataCache)
+    for (RadientTesseraSkinData* pSkinData : m_VisibleSkinData)
     {
-        const SkinDataCacheEntry& Entry = CacheItem.second;
-        VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
-        if (Entry.pSkinData == nullptr)
+        VERIFY(pSkinData != nullptr, "Visible skin data list contains a null entry");
+        if (pSkinData == nullptr)
             continue;
 
-        const RADIENT_STATUS SkinStatus = Entry.pSkinData->Prepare(RenderFrameID, PackMatrixRowMajor);
+        const RADIENT_STATUS SkinStatus = pSkinData->Prepare(RenderFrameID, PackMatrixRowMajor);
         if (SkinStatus == RADIENT_STATUS_OK)
             HasChanges = true;
         else if (SkinStatus != RADIENT_STATUS_NO_CHANGE)
@@ -288,10 +292,13 @@ void RadientTesseraDrawableCache::UpdateRenderableSkin(RenderableRecord&        
         }
 
         VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
-        ++Entry.UseCount;
         Record.pSkinAttachment = std::make_unique<RadientTesseraSkinAttachment>(
             RadientTesseraSkinAttachment{*Entry.pSkinData});
+        Record.pSkinAttachment->CacheEntryAttachmentIndex = Entry.Attachments.size();
+        Entry.Attachments.push_back(Record.pSkinAttachment.get());
     }
+
+    Record.pSkinAttachment->pEffectiveVisible = Record.pEffectiveVisible;
 
     Record.pSkinAttachment->SkeletonToMeshTransform =
         pSkin->SkeletonToMeshTransform != RadientMatrix4x4{} ?
@@ -304,9 +311,10 @@ void RadientTesseraDrawableCache::RemoveRenderableSkin(RenderableRecord& Record)
     if (Record.pSkinAttachment == nullptr)
         return;
 
-    RadientTesseraSkinData& SkinData = Record.pSkinAttachment->SkinData;
-    const SkinDataKey       Key{SkinData.GetSkin(), SkinData.GetPose()};
-    const auto              It = m_SkinDataCache.find(Key);
+    RadientTesseraSkinAttachment& Attachment = *Record.pSkinAttachment;
+    RadientTesseraSkinData&       SkinData   = Attachment.SkinData;
+    const SkinDataKey             Key{SkinData.GetSkin(), SkinData.GetPose()};
+    const auto                    It = m_SkinDataCache.find(Key);
     if (It == m_SkinDataCache.end() || It->second.pSkinData.get() != &SkinData)
     {
         UNEXPECTED("Renderable references skin data missing from the cache");
@@ -314,17 +322,58 @@ void RadientTesseraDrawableCache::RemoveRenderableSkin(RenderableRecord& Record)
         return;
     }
 
-    SkinDataCacheEntry& Entry = It->second;
-    if (Entry.UseCount == 0)
+    SkinDataCacheEntry& Entry           = It->second;
+    size_t              AttachmentIndex = Attachment.CacheEntryAttachmentIndex;
+    if (AttachmentIndex >= Entry.Attachments.size() ||
+        Entry.Attachments[AttachmentIndex] != &Attachment)
     {
-        UNEXPECTED("Skin data cache entry has no users");
-    }
-    else if (--Entry.UseCount == 0)
-    {
-        m_SkinDataCache.erase(It);
+        UNEXPECTED("Skin attachment has an invalid cache entry index");
+
+        const auto AttachmentIt = std::find(Entry.Attachments.begin(), Entry.Attachments.end(), &Attachment);
+        if (AttachmentIt == Entry.Attachments.end())
+        {
+            Record.pSkinAttachment.reset();
+            return;
+        }
+        AttachmentIndex = static_cast<size_t>(AttachmentIt - Entry.Attachments.begin());
     }
 
+    RadientTesseraSkinAttachment* const pMovedAttachment = Entry.Attachments.back();
+    VERIFY(pMovedAttachment != nullptr, "Skin data cache contains a null attachment");
+    Entry.Attachments[AttachmentIndex]          = pMovedAttachment;
+    pMovedAttachment->CacheEntryAttachmentIndex = AttachmentIndex;
+    Entry.Attachments.pop_back();
+
+    if (Entry.Attachments.empty())
+        m_SkinDataCache.erase(It);
+
     Record.pSkinAttachment.reset();
+}
+
+void RadientTesseraDrawableCache::RebuildVisibleSkinDataList()
+{
+    m_VisibleSkinData.clear();
+    m_VisibleSkinData.reserve(m_SkinDataCache.size());
+
+    for (const auto& CacheItem : m_SkinDataCache)
+    {
+        const SkinDataCacheEntry& Entry = CacheItem.second;
+        VERIFY(Entry.pSkinData != nullptr, "Skin data cache contains a null entry");
+        if (Entry.pSkinData == nullptr)
+            continue;
+
+        for (const RadientTesseraSkinAttachment* pAttachment : Entry.Attachments)
+        {
+            VERIFY(pAttachment != nullptr, "Skin data cache contains a null attachment");
+            if (pAttachment != nullptr &&
+                pAttachment->pEffectiveVisible != nullptr &&
+                *pAttachment->pEffectiveVisible)
+            {
+                m_VisibleSkinData.push_back(Entry.pSkinData.get());
+                break;
+            }
+        }
+    }
 }
 
 void RadientTesseraDrawableCache::ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light)

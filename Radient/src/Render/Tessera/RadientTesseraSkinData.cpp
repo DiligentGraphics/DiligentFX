@@ -132,8 +132,13 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(RadientFrameID RenderFrameID, boo
     if (UpdateStatus != RADIENT_STATUS_OK && UpdateStatus != RADIENT_STATUS_NO_CHANGE)
         return Fail(UpdateStatus);
 
-    const Uint64 PoseVersion = m_pPose->GetVersion();
-    const bool   SameFrame   = WasPrepared && m_PreparedFrameID == RenderFrameID;
+    const Uint64   PoseVersion         = m_pPose->GetVersion();
+    const bool     SameFrame           = WasPrepared && m_PreparedFrameID == RenderFrameID;
+    RadientFrameID NextPreparedFrameID = m_PreparedFrameID + 1;
+    if (NextPreparedFrameID == InvalidRadientFrameID)
+        NextPreparedFrameID = 1;
+    const bool HasContinuousHistory =
+        SameFrame || (WasPrepared && RenderFrameID == NextPreparedFrameID);
     if (WasPrepared && m_PreparedPoseVersion == PoseVersion)
     {
         m_PreparationStatus = RADIENT_STATUS_OK;
@@ -171,7 +176,7 @@ RADIENT_STATUS RadientTesseraSkinData::Prepare(RadientFrameID RenderFrameID, boo
     if (PoseStatus != RADIENT_STATUS_OK)
         return Fail(PoseStatus);
 
-    if (!WasPrepared)
+    if (!WasPrepared || !HasContinuousHistory)
         m_PreviousFirstJoint = m_HalfFirstJoints[DestinationHalf];
     else if (!ReplaceCurrent)
         m_PreviousFirstJoint = m_HalfFirstJoints[m_CurrentHalf];
