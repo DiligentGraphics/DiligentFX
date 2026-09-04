@@ -129,6 +129,7 @@ set(INTERFACE
     interface/RadientEngine.h
     interface/RadientMath.h
     interface/RadientMeshPrimitives.h
+    interface/RadientMorphTargets.h
     interface/RadientRenderer.h
     interface/RadientScene.h
     interface/RadientSceneImporter.h

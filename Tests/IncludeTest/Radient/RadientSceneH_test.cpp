@@ -52,6 +52,8 @@ static_assert(std::is_standard_layout<RadientLightComponent>::value, "RadientLig
 static_assert(std::is_trivially_copyable<RadientLightComponent>::value, "RadientLightComponent must be trivially copyable");
 static_assert(std::is_standard_layout<RadientSkinComponent>::value, "RadientSkinComponent must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientSkinComponent>::value, "RadientSkinComponent must be trivially copyable");
+static_assert(std::is_standard_layout<RadientMorphComponent>::value, "RadientMorphComponent must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMorphComponent>::value, "RadientMorphComponent must be trivially copyable");
 static_assert(std::is_standard_layout<RadientCustomComponentData>::value, "RadientCustomComponentData must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientCustomComponentData>::value, "RadientCustomComponentData must be trivially copyable");
 
@@ -92,6 +94,9 @@ static_assert(DefaultSkin.SkeletonToMeshTransform.Data[0] == 1.f &&
                   DefaultSkin.SkeletonToMeshTransform.Data[10] == 1.f &&
                   DefaultSkin.SkeletonToMeshTransform.Data[15] == 1.f,
               "Unexpected RadientSkinComponent skeleton-to-mesh transform default value");
+
+constexpr RadientMorphComponent DefaultMorph{};
+static_assert(DefaultMorph.pWeights == nullptr, "Unexpected RadientMorphComponent weights default value");
 
 constexpr RadientCustomComponentData DefaultCustomComponent{};
 static_assert(DefaultCustomComponent.ComponentType == InvalidRadientComponentTypeID, "Unexpected RadientCustomComponentData component type default value");

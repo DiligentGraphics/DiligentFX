@@ -24,24 +24,35 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientMorphTargets.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientMorphTargets_C_UseTypes(void)
+{
+    RadientMorphTargetAttributeCreateInfo Attribute = {0};
+    RadientMorphTargetCreateInfo          Target    = {0};
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientMorphTargets.h"
-#include "RadientSkinning.h"
-#include "RadientAnimation.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
+    Attribute.pDeltas        = 0;
+    Attribute.ComponentCount = 3;
+
+    Target.Name           = "Target";
+    Target.pAttributes    = &Attribute;
+    Target.AttributeCount = 1;
+    Target.DefaultWeight  = 0.f;
+
+    (void)Target;
+}
+
+void RadientMorphTargets_C_TestMacros(IRadientMorphTargetWeights* pTargetWeights)
+{
+    const Float32* pWeights = IRadientMorphTargetWeights_GetWeights(pTargetWeights);
+    Float32        Weight   = 0.f;
+    RADIENT_STATUS Status   = IRadientMorphTargetWeights_SetWeights(pTargetWeights, 0, 1, &Weight);
+
+    (void)IRadientMorphTargetWeights_GetMesh(pTargetWeights);
+    (void)IRadientMorphTargetWeights_GetVersion(pTargetWeights);
+    (void)IRadientMorphTargetWeights_GetWeightCount(pTargetWeights);
+    Status = IRadientMorphTargetWeights_ResetToDefaults(pTargetWeights);
+    (void)pWeights;
+    (void)Status;
+}

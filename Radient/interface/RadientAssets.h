@@ -45,12 +45,14 @@ typedef struct IRadientSceneAsset              IRadientSceneAsset;
 typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
 typedef struct IRadientSkinAsset               IRadientSkinAsset;
 typedef struct IRadientSkeletonAnimationAsset  IRadientSkeletonAnimationAsset;
+typedef struct IRadientMorphTargetWeights      IRadientMorphTargetWeights;
 typedef struct IDeviceContext                  IDeviceContext;
 
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
 typedef struct RadientSkinDesc                             RadientSkinDesc;
 typedef struct RadientSkeletonAnimationDesc                RadientSkeletonAnimationDesc;
+typedef struct RadientMorphTargetCreateInfo                RadientMorphTargetCreateInfo;
 
 // clang-format off
 
@@ -200,6 +202,14 @@ struct RadientMeshCreateInfo
 
     /// Number of vertices.
     Uint32 VertexCount DEFAULT_INITIALIZER(0);
+
+    /// Morph targets whose attribute streams use the mesh vertex domain. Each
+    /// target attribute contains VertexCount vertex deltas. Must not be null
+    /// when MorphTargetCount is nonzero.
+    const RadientMorphTargetCreateInfo* pMorphTargets DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pMorphTargets.
+    Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
 
     /// Index data. Type is controlled by IndexType.
     const void* pIndices DEFAULT_INITIALIZER(nullptr);

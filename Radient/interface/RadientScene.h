@@ -268,6 +268,28 @@ struct RadientSkinComponent
 typedef struct RadientSkinComponent RadientSkinComponent;
 
 
+/// Morph component that associates a mesh with its mutable target weights.
+struct RadientMorphComponent
+{
+    /// Mutable morph-target weights. The scene retains a strong reference. The
+    /// weights must reference the mesh in the entity's RadientMeshComponent.
+    IRadientMorphTargetWeights* pWeights DEFAULT_INITIALIZER(nullptr);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientMorphComponent& Rhs) const
+    {
+        return pWeights == Rhs.pWeights;
+    }
+
+    bool operator!=(const RadientMorphComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientMorphComponent RadientMorphComponent;
+
+
 /// Mesh renderer component.
 struct RadientMeshRendererComponent
 {

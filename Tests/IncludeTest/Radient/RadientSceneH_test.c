@@ -110,6 +110,15 @@ void RadientScene_C_UseSkinComponent(void)
     (void)Skin;
 }
 
+void RadientScene_C_UseMorphComponent(void)
+{
+    RadientMorphComponent Morph = {0};
+
+    Morph.pWeights = 0;
+
+    (void)Morph;
+}
+
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID              Entity          = 0;
