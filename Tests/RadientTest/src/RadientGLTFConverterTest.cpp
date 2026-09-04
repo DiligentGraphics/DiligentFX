@@ -1410,29 +1410,29 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     Animation.Name             = "Joint motion";
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers.back().Inputs      = {2.f, 4.f};
-    Animation.Samplers.back().OutputsVec4 = {
-        {0.f, 0.f, 3.f, 0.f},
-        {2.f, 0.f, 3.f, 0.f},
-    };
+    Animation.Samplers.back().Inputs               = {2.f, 4.f};
+    Animation.Samplers.back().OutputComponentCount = 3;
+    Animation.Samplers.back().Outputs              = {
+        0.f, 0.f, 3.f,
+        2.f, 0.f, 3.f};
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
-    Animation.Samplers.back().Inputs      = {2.f, 4.f};
-    Animation.Samplers.back().OutputsVec4 = {
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 1.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 1.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-    };
+    Animation.Samplers.back().Inputs               = {2.f, 4.f};
+    Animation.Samplers.back().OutputComponentCount = 4;
+    Animation.Samplers.back().Outputs              = {
+        0.f, 0.f, 0.f, 0.f,
+        0.f, 0.f, 0.f, 1.f,
+        0.f, 0.f, 0.f, 0.f,
+        0.f, 0.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 0.f};
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
-    Animation.Samplers.back().Inputs      = {2.f, 4.f};
-    Animation.Samplers.back().OutputsVec4 = {
-        {2.f, 3.f, 4.f, 0.f},
-        {5.f, 6.f, 7.f, 0.f},
-    };
+    Animation.Samplers.back().Inputs               = {2.f, 4.f};
+    Animation.Samplers.back().OutputComponentCount = 3;
+    Animation.Samplers.back().Outputs              = {
+        2.f, 3.f, 4.f,
+        5.f, 6.f, 7.f};
 
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[2], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[3], 1);
@@ -1524,11 +1524,11 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Shared motion";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs      = {0.f, 1.f};
-    Animation.Samplers[0].OutputsVec4 = {
-        {0.f, 0.f, 0.f, 0.f},
-        {1.f, 0.f, 0.f, 0.f},
-    };
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f};
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[1], 0);
 
     RadientImport::ImportedDocument Scene;

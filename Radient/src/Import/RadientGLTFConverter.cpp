@@ -459,6 +459,7 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
                                         Uint32                            AnimationIndex,
                                         Uint32                            SamplerIndex,
                                         const char*                       CurveName,
+                                        Uint32                            ComponentCount,
                                         AnimationCurveStorage<ValueType>& Curve,
                                         ConvertValueType&&                ConvertValue)
 {
@@ -484,8 +485,17 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
     }
 
     const size_t ValuesPerKey = Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
-    if (Sampler.Inputs.size() > std::numeric_limits<size_t>::max() / ValuesPerKey ||
-        Sampler.OutputsVec4.size() != Sampler.Inputs.size() * ValuesPerKey)
+    if (Sampler.Inputs.size() > std::numeric_limits<size_t>::max() / ValuesPerKey)
+    {
+        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
+                          " has too many ", CurveName, " values");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    const size_t ValueCount = Sampler.Inputs.size() * ValuesPerKey;
+    if (Sampler.OutputComponentCount != ComponentCount ||
+        Sampler.Outputs.size() % ComponentCount != 0 ||
+        Sampler.Outputs.size() / ComponentCount != ValueCount)
     {
         LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
                           " has an invalid number of ", CurveName, " values");
@@ -497,9 +507,9 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
     std::transform(Sampler.Inputs.begin(), Sampler.Inputs.end(), Curve.Times.begin(),
                    [AnimationStart](Float32 Time) { return Time - AnimationStart; });
 
-    Curve.Values.reserve(Sampler.OutputsVec4.size());
-    for (const float4& Value : Sampler.OutputsVec4)
-        Curve.Values.push_back(ConvertValue(Value));
+    Curve.Values.reserve(ValueCount);
+    for (size_t ValueIndex = 0; ValueIndex < ValueCount; ++ValueIndex)
+        Curve.Values.push_back(ConvertValue(Sampler.GetOutputElement(ValueIndex)));
 
     return RADIENT_STATUS_OK;
 }
@@ -553,22 +563,25 @@ RADIENT_STATUS CreateImportedSkeletonAnimation(const GLTF::Model&               
             case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
                 Status = InitializeAnimationCurve(
                     Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "translation",
+                    3,
                     Tracks[JointIndex].Translation,
-                    [](const float4& Value) { return RadientFloat3{Value.x, Value.y, Value.z}; });
+                    [](const float* pValue) { return RadientFloat3{pValue[0], pValue[1], pValue[2]}; });
                 break;
 
             case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
                 Status = InitializeAnimationCurve(
                     Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "rotation",
+                    4,
                     Tracks[JointIndex].Rotation,
-                    [](const float4& Value) { return RadientQuaternion{Value.x, Value.y, Value.z, Value.w}; });
+                    [](const float* pValue) { return RadientQuaternion{pValue[0], pValue[1], pValue[2], pValue[3]}; });
                 break;
 
             case GLTF::AnimationChannel::PATH_TYPE::SCALE:
                 Status = InitializeAnimationCurve(
                     Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "scale",
+                    3,
                     Tracks[JointIndex].Scale,
-                    [](const float4& Value) { return RadientFloat3{Value.x, Value.y, Value.z}; });
+                    [](const float* pValue) { return RadientFloat3{pValue[0], pValue[1], pValue[2]}; });
                 break;
 
             default:
