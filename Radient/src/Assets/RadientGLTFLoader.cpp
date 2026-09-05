@@ -31,7 +31,7 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
-#include "Assets/RadientMorphTargetData.hpp"
+#include "Assets/RadientMorphTargetSource.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
@@ -47,8 +47,8 @@
 #include "TinyGltfModelView.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <cstring>
 #include <limits>
 #include <memory>
 #include <string>
@@ -439,29 +439,25 @@ private:
     std::vector<bool>                                                          m_ScannedMeshes;
 };
 
-struct MorphTargetAttributeBuildData
+struct MorphTargetAttributeSchema
 {
-    std::string          Semantic;
-    Uint32               ComponentCount = 0;
-    std::vector<Float32> Deltas;
+    std::string Semantic;
+    Uint32      ComponentCount = 0;
 };
 
-struct MorphTargetBuildData
+struct MorphTargetSchema
 {
-    std::string                                        Name;
-    Float32                                            DefaultWeight = 0.f;
-    std::vector<MorphTargetAttributeBuildData>         Attributes;
-    std::vector<RadientMorphTargetAttributeDesc>       AttributeDescs;
-    std::vector<RadientMorphTargetAttributeCreateInfo> AttributeCreateInfos;
+    std::string                             Name;
+    Float32                                 DefaultWeight = 0.f;
+    std::vector<MorphTargetAttributeSchema> Attributes;
 };
 
-std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& Mesh)
+std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(const GLTF::Mesh& Mesh)
 {
     if (Mesh.Primitives.empty())
-        return nullptr;
+        return {};
 
     const size_t TargetCount = Mesh.Primitives.front().MorphTargets.size();
-    Uint32       VertexCount = 0;
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
     {
         const GLTF::Primitive& Primitive = Mesh.Primitives[PrimitiveIndex];
@@ -470,23 +466,16 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
             LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                 "' because primitive ", PrimitiveIndex, " has ", Primitive.MorphTargets.size(),
                                 " targets, while primitive 0 has ", TargetCount);
-            return nullptr;
+            return {};
         }
-        if (Primitive.VertexCount > (std::numeric_limits<Uint32>::max)() - VertexCount)
-        {
-            LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
-                                "' because its combined vertex count exceeds the supported range");
-            return nullptr;
-        }
-        VertexCount += Primitive.VertexCount;
     }
     if (TargetCount == 0)
-        return nullptr;
+        return {};
     if (TargetCount > (std::numeric_limits<Uint32>::max)())
     {
         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                             "' because the target count exceeds the supported range");
-        return nullptr;
+        return {};
     }
 
     if (!Mesh.Weights.empty() && Mesh.Weights.size() != TargetCount)
@@ -496,15 +485,12 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
                             " targets; missing defaults will be zero and extra defaults will be ignored");
     }
 
-    // Radient uses one logical vertex domain for each mesh. Concatenate the
-    // primitive streams in stored primitive order and leave missing attribute
-    // regions initialized to zero.
     try
     {
-        std::vector<MorphTargetBuildData> Targets(TargetCount);
+        std::vector<MorphTargetSchema> TargetSchemas(TargetCount);
         for (size_t TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
         {
-            MorphTargetBuildData& Target = Targets[TargetIndex];
+            MorphTargetSchema& Target = TargetSchemas[TargetIndex];
             if (TargetIndex < Mesh.MorphTargetNames.size())
                 Target.Name = Mesh.MorphTargetNames[TargetIndex];
             if (TargetIndex < Mesh.Weights.size())
@@ -513,7 +499,7 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
                 {
                     LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                         "' because default weight ", TargetIndex, " is not finite");
-                    return nullptr;
+                    return {};
                 }
                 Target.DefaultWeight = Mesh.Weights[TargetIndex];
             }
@@ -524,7 +510,7 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
                 {
                     const auto ExistingAttribute = std::find_if(
                         Target.Attributes.begin(), Target.Attributes.end(),
-                        [&SourceAttribute](const MorphTargetAttributeBuildData& Attribute) {
+                        [&SourceAttribute](const MorphTargetAttributeSchema& Attribute) {
                             return Attribute.Semantic == SourceAttribute.Semantic;
                         });
                     if (ExistingAttribute != Target.Attributes.end())
@@ -535,7 +521,7 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
                                                 "' because target ", TargetIndex, " attribute '",
                                                 SourceAttribute.Semantic,
                                                 "' has inconsistent component counts between primitives");
-                            return nullptr;
+                            return {};
                         }
                         continue;
                     }
@@ -545,81 +531,105 @@ std::unique_ptr<RadientMorphTargetData> BuildMorphTargetData(const GLTF::Mesh& M
                         SourceAttribute.Semantic == RadientMorphTargetNormalSemantic ||
                         SourceAttribute.Semantic == RadientMorphTargetTangentSemantic;
                     if (SourceAttribute.NumComponents == 0 || SourceAttribute.NumComponents > 4 ||
-                        (IsStandardSemantic && SourceAttribute.NumComponents != 3) ||
-                        VertexCount > (std::numeric_limits<size_t>::max)() / SourceAttribute.NumComponents)
+                        (IsStandardSemantic && SourceAttribute.NumComponents != 3))
                     {
                         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                             "' because target ", TargetIndex, " attribute '",
                                             SourceAttribute.Semantic, "' has an unsupported size");
-                        return nullptr;
+                        return {};
                     }
 
-                    MorphTargetAttributeBuildData& Attribute = Target.Attributes.emplace_back();
-                    Attribute.Semantic                       = SourceAttribute.Semantic;
-                    Attribute.ComponentCount                 = SourceAttribute.NumComponents;
-                    Attribute.Deltas.resize(size_t{VertexCount} * Attribute.ComponentCount, 0.f);
+                    MorphTargetAttributeSchema& Attribute = Target.Attributes.emplace_back();
+                    Attribute.Semantic                    = SourceAttribute.Semantic;
+                    Attribute.ComponentCount              = SourceAttribute.NumComponents;
                 }
             }
+        }
 
-            Uint32 FirstVertex = 0;
-            for (const GLTF::Primitive& Primitive : Mesh.Primitives)
+        std::vector<std::unique_ptr<RadientMorphTargetSource>> Sources;
+        Sources.reserve(Mesh.Primitives.size());
+        for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
+        {
+            const GLTF::Primitive& Primitive = Mesh.Primitives[PrimitiveIndex];
+            if (Primitive.VertexCount == 0)
+                return {};
+
+            std::vector<std::vector<RadientMorphTargetAttributeDesc>>       AttributeDescs(TargetCount);
+            std::vector<std::vector<RadientMorphTargetAttributeCreateInfo>> AttributeCreateInfos(TargetCount);
+            std::vector<RadientMorphTargetCreateInfo>                       TargetCreateInfos(TargetCount);
+            std::array<std::vector<Float32>, 5>                              ZeroDeltas;
+
+            for (size_t TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
             {
+                const MorphTargetSchema& Target       = TargetSchemas[TargetIndex];
                 const GLTF::MorphTarget& SourceTarget = Primitive.MorphTargets[TargetIndex];
-                for (MorphTargetAttributeBuildData& Attribute : Target.Attributes)
-                {
-                    const GLTF::MorphTargetAttribute* const pSourceAttribute =
-                        SourceTarget.FindAttribute(Attribute.Semantic.c_str());
-                    if (pSourceAttribute == nullptr)
-                        continue;
+                AttributeDescs[TargetIndex].resize(Target.Attributes.size());
+                AttributeCreateInfos[TargetIndex].resize(Target.Attributes.size());
 
-                    const size_t ValueCount = size_t{Primitive.VertexCount} * Attribute.ComponentCount;
-                    if (pSourceAttribute->FirstValue > SourceTarget.Values.size() ||
-                        ValueCount > SourceTarget.Values.size() - pSourceAttribute->FirstValue)
+                for (size_t AttributeIndex = 0; AttributeIndex < Target.Attributes.size(); ++AttributeIndex)
+                {
+                    const MorphTargetAttributeSchema& Attribute = Target.Attributes[AttributeIndex];
+                    AttributeDescs[TargetIndex][AttributeIndex].Semantic       = Attribute.Semantic.c_str();
+                    AttributeDescs[TargetIndex][AttributeIndex].ComponentCount = Attribute.ComponentCount;
+
+                    if (Primitive.VertexCount > (std::numeric_limits<size_t>::max)() / Attribute.ComponentCount)
                     {
                         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
-                                            "' because target ", TargetIndex, " attribute '",
-                                            Attribute.Semantic, "' has an invalid value range");
-                        return nullptr;
+                                            "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
+                                            " attribute '", Attribute.Semantic, "' exceeds the supported size");
+                        return {};
                     }
+                    const size_t ValueCount = size_t{Primitive.VertexCount} * Attribute.ComponentCount;
 
-                    std::memcpy(Attribute.Deltas.data() + size_t{FirstVertex} * Attribute.ComponentCount,
-                                SourceTarget.GetAttributeData(*pSourceAttribute),
-                                ValueCount * sizeof(Float32));
+                    const GLTF::MorphTargetAttribute* const pSourceAttribute =
+                        SourceTarget.FindAttribute(Attribute.Semantic.c_str());
+                    if (pSourceAttribute != nullptr)
+                    {
+                        if (pSourceAttribute->FirstValue > SourceTarget.Values.size() ||
+                            ValueCount > SourceTarget.Values.size() - pSourceAttribute->FirstValue)
+                        {
+                            LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
+                                                "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
+                                                " attribute '", Attribute.Semantic, "' has an invalid value range");
+                            return {};
+                        }
+                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltas =
+                            SourceTarget.GetAttributeData(*pSourceAttribute);
+                    }
+                    else
+                    {
+                        std::vector<Float32>& Deltas = ZeroDeltas[Attribute.ComponentCount];
+                        Deltas.resize(ValueCount, 0.f);
+                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltas = Deltas.data();
+                    }
                 }
-                FirstVertex += Primitive.VertexCount;
-            }
-        }
 
-        std::vector<RadientMorphTargetCreateInfo> TargetCreateInfos(TargetCount);
-        for (size_t TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
-        {
-            MorphTargetBuildData& Target = Targets[TargetIndex];
-            Target.AttributeDescs.resize(Target.Attributes.size());
-            Target.AttributeCreateInfos.resize(Target.Attributes.size());
-            for (size_t AttributeIndex = 0; AttributeIndex < Target.Attributes.size(); ++AttributeIndex)
+                RadientMorphTargetCreateInfo& TargetCI = TargetCreateInfos[TargetIndex];
+                TargetCI.Desc.Name                     = Target.Name.c_str();
+                TargetCI.Desc.pAttributes              = AttributeDescs[TargetIndex].empty() ? nullptr : AttributeDescs[TargetIndex].data();
+                TargetCI.Desc.AttributeCount           = static_cast<Uint32>(AttributeDescs[TargetIndex].size());
+                TargetCI.Desc.DefaultWeight            = Target.DefaultWeight;
+                TargetCI.pAttributeData                = AttributeCreateInfos[TargetIndex].empty() ? nullptr : AttributeCreateInfos[TargetIndex].data();
+            }
+
+            auto pSource = std::make_unique<RadientMorphTargetSource>(
+                TargetCreateInfos.data(), static_cast<Uint32>(TargetCreateInfos.size()), Primitive.VertexCount);
+            if (RADIENT_FAILED(pSource->GetStatus()))
             {
-                const MorphTargetAttributeBuildData& Attribute       = Target.Attributes[AttributeIndex];
-                Target.AttributeDescs[AttributeIndex].Semantic       = Attribute.Semantic.c_str();
-                Target.AttributeDescs[AttributeIndex].ComponentCount = Attribute.ComponentCount;
-                Target.AttributeCreateInfos[AttributeIndex].pDeltas  = Attribute.Deltas.data();
+                LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
+                                    "' because primitive ", PrimitiveIndex, " could not be packed");
+                return {};
             }
-
-            RadientMorphTargetCreateInfo& TargetCI = TargetCreateInfos[TargetIndex];
-            TargetCI.Desc.Name                     = Target.Name.c_str();
-            TargetCI.Desc.pAttributes              = Target.AttributeDescs.empty() ? nullptr : Target.AttributeDescs.data();
-            TargetCI.Desc.AttributeCount           = static_cast<Uint32>(Target.AttributeDescs.size());
-            TargetCI.Desc.DefaultWeight            = Target.DefaultWeight;
-            TargetCI.pAttributeData                = Target.AttributeCreateInfos.empty() ? nullptr : Target.AttributeCreateInfos.data();
+            Sources.emplace_back(std::move(pSource));
         }
 
-        return std::make_unique<RadientMorphTargetData>(
-            TargetCreateInfos.data(), static_cast<Uint32>(TargetCreateInfos.size()), VertexCount);
+        return Sources;
     }
     catch (const std::exception& Error)
     {
         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                             "' because their data could not be packed: ", Error.what());
-        return nullptr;
+        return {};
     }
 }
 
@@ -684,7 +694,17 @@ public:
         Primitives.reserve(pPlannedMesh->Primitives.size());
         GeometryIndices.reserve(pPlannedMesh->Primitives.size());
         pNewMesh->Primitives.reserve(pPlannedMesh->Primitives.size());
+        bool HasMorphTargets    = false;
         bool MorphTargetsLoaded = true;
+
+        for (const PlannedPrimitive& PlannedPrimitive : pPlannedMesh->Primitives)
+        {
+            if (GltfMesh.GetPrimitive(PlannedPrimitive.SourcePrimitiveIndex).GetMorphTargetCount() != 0)
+            {
+                HasMorphTargets = true;
+                break;
+            }
+        }
 
         std::vector<const PlannedPrimitive*> SortedPrimitives;
         SortedPrimitives.reserve(pPlannedMesh->Primitives.size());
@@ -719,7 +739,7 @@ public:
             }
 
             Uint32 LocalGeometryIndex = ~0u;
-            if (!MeshGeometryData.empty())
+            if (!HasMorphTargets && !MeshGeometryData.empty())
             {
                 const RadientMeshGeometryData& LastGeometry = MeshGeometryData.back();
                 if (LastGeometry.pVertexData == pVertexData->pVertexData &&
@@ -769,10 +789,38 @@ public:
 
         pNewMesh->UpdateBoundingBox();
 
-        std::unique_ptr<RadientMorphTargetData> pMorphTargetData;
+        std::vector<std::unique_ptr<RadientMorphTargetSource>> MorphTargetSources;
         if (MorphTargetsLoaded)
-            pMorphTargetData = BuildMorphTargetData(*pNewMesh);
-        else
+            MorphTargetSources = BuildMorphTargetSources(*pNewMesh);
+
+        if (HasMorphTargets && MorphTargetSources.size() != pNewMesh->Primitives.size())
+            MorphTargetsLoaded = false;
+
+        // MeshGeometryData stores borrowed pointers. Retain the assets until
+        // CreateMeshView has captured its own strong references.
+        std::vector<RefCntAutoPtr<IRadientMeshMorphTargetData>> MorphTargetDataAssets;
+        if (MorphTargetsLoaded && HasMorphTargets)
+        {
+            VERIFY_EXPR(MorphTargetSources.size() == MeshGeometryData.size());
+            MorphTargetDataAssets.reserve(MorphTargetSources.size());
+            for (size_t GeometryIndex = 0; GeometryIndex < MorphTargetSources.size(); ++GeometryIndex)
+            {
+                RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
+                const RADIENT_STATUS Status =
+                    m_MeshManager.CreateMeshMorphTargetData(m_ThreadPool,
+                                                            std::move(MorphTargetSources[GeometryIndex]),
+                                                            pMorphTargetData.GetAddressOfEmpty());
+                if (RADIENT_FAILED(Status) || pMorphTargetData == nullptr)
+                {
+                    m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+                    return pNewMesh;
+                }
+
+                MeshGeometryData[GeometryIndex].pMorphTargetData = pMorphTargetData;
+                MorphTargetDataAssets.emplace_back(std::move(pMorphTargetData));
+            }
+        }
+        else if (!MorphTargetsLoaded)
         {
             for (GLTF::Primitive& Primitive : pNewMesh->Primitives)
                 Primitive.MorphTargets.clear();
@@ -789,8 +837,7 @@ public:
                                                              MeshGeometryData.data(),
                                                              static_cast<Uint32>(MeshGeometryData.size()),
                                                              ViewCI,
-                                                             pMeshAsset.GetAddressOfEmpty(),
-                                                             std::move(pMorphTargetData));
+                                                             pMeshAsset.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || pMeshAsset == nullptr)
         {
             m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;

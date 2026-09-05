@@ -47,6 +47,7 @@ namespace
 
 static constexpr Uint32 TestVertexPoolSize        = 1024;
 static constexpr Uint64 TestIndexBufferSize       = 1024 * 1024;
+static constexpr Uint64 TestMorphTargetBufferSize = 1024 * 1024;
 static constexpr Uint32 TestTextureAtlasMaxSlice  = 16;
 static constexpr auto   TextureManagerWaitTimeout = std::chrono::seconds{10};
 
@@ -131,6 +132,15 @@ GLTF::ResourceManager::CreateInfo MakeResourceManagerCI(Uint32 TextureAtlasSize)
     CreateInfo.IndexAllocatorCI.Desc.BindFlags = BIND_INDEX_BUFFER;
     CreateInfo.IndexAllocatorCI.ExpansionSize  = static_cast<Uint32>(TestIndexBufferSize);
     CreateInfo.IndexAllocatorCI.MaxSize        = TestIndexBufferSize;
+
+    CreateInfo.MorphTargetAllocatorCI.Desc.Name              = "Radient GPU test morph target buffer";
+    CreateInfo.MorphTargetAllocatorCI.Desc.Size              = TestMorphTargetBufferSize;
+    CreateInfo.MorphTargetAllocatorCI.Desc.Usage             = USAGE_DEFAULT;
+    CreateInfo.MorphTargetAllocatorCI.Desc.BindFlags         = BIND_SHADER_RESOURCE;
+    CreateInfo.MorphTargetAllocatorCI.Desc.Mode              = BUFFER_MODE_STRUCTURED;
+    CreateInfo.MorphTargetAllocatorCI.Desc.ElementByteStride = sizeof(Float32);
+    CreateInfo.MorphTargetAllocatorCI.ExpansionSize          = static_cast<Uint32>(TestMorphTargetBufferSize);
+    CreateInfo.MorphTargetAllocatorCI.MaxSize                = TestMorphTargetBufferSize;
 
     CreateInfo.DefaultPoolDesc.Name        = "Radient GPU test vertex pool";
     CreateInfo.DefaultPoolDesc.VertexCount = TestVertexPoolSize;

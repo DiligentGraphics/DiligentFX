@@ -518,8 +518,9 @@ DILIGENT_END_INTERFACE
 /// Immutable mesh asset and its morph-target schema.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshAsset, IRadientAsset)
 {
-    /// Returns the immutable mesh description. The returned reference and all
-    /// data it references remain valid while the mesh asset is retained.
+    /// Returns the immutable mesh description. The description is empty until
+    /// mesh loading completes successfully. The returned reference and all data
+    /// it references remain valid while the mesh asset is retained.
     VIRTUAL const RadientMeshAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Creates mutable weights initialized to the mesh morph-target defaults.

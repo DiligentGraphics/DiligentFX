@@ -143,6 +143,7 @@ public:
         Data.Status = Status;
         Data.Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
             pVertexPool,
+            nullptr,
             VertexAttribFlags,
             FirstIndexLocation,
             BaseVertex});
@@ -927,11 +928,13 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
 
     Mesh.Geometries[0] = RadientDrawableMeshGeometry{
         Geometry0Pool,
+        nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS,
         17,
         5};
     Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
         Geometry1Pool,
+        nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS,
         29,
         8});

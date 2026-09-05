@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
+#include "Assets/RadientMorphTargetSource.hpp"
 #include "Scene/Components/RadientMorphComponentStorage.hpp"
 #include "Scene/RadientSceneState.hpp"
 #include "ThreadPool.hpp"
@@ -33,8 +34,6 @@
 #include "gtest/gtest.h"
 
 #include <array>
-#include <cstring>
-#include <string>
 
 using namespace Diligent;
 
@@ -125,52 +124,34 @@ RefCntAutoPtr<IRadientMorphTargetWeights> CreateWeights(IRadientMeshAsset& Mesh)
 
 } // namespace
 
-TEST(RadientMorphTargetsTest, PackedDataCopiesTargetsAttributesAndDeltas)
+TEST(RadientMorphTargetsTest, DataCopiesSourceMetadataAndAttributeLayout)
 {
-    MorphMeshData Source;
-    std::string   TargetName      = "Expression";
-    std::string   Semantic        = "CUSTOM_DATA";
-    Source.Targets[0].Desc.Name   = TargetName.c_str();
-    Source.Attributes[1].Semantic = Semantic.c_str();
+    MorphMeshData            Source;
+    RadientMorphTargetSource MorphSource{Source.Targets.data(),
+                                         static_cast<Uint32>(Source.Targets.size()),
+                                         static_cast<Uint32>(Source.Positions.size())};
+    ASSERT_EQ(MorphSource.GetStatus(), RADIENT_STATUS_OK);
 
-    RadientMorphTargetData Data{Source.Targets.data(),
-                                static_cast<Uint32>(Source.Targets.size()),
-                                static_cast<Uint32>(Source.Positions.size())};
-
-    TargetName.assign("changed");
-    Semantic.assign("changed");
-    Source.PositionDeltas.fill(42.f);
-    Source.CustomDeltas.fill(24.f);
-
-    const RadientMeshAssetDesc& Desc = Data.GetDesc();
+    const RadientMorphTargetData Data{MorphSource};
+    const RadientMeshAssetDesc&  Desc = Data.GetDesc();
     ASSERT_EQ(Desc.MorphTargetCount, 2u);
     ASSERT_NE(Desc.pMorphTargets, nullptr);
-    EXPECT_STREQ(Desc.pMorphTargets[0].Name, "Expression");
+    EXPECT_STREQ(Desc.pMorphTargets[0].Name, "Smile");
     EXPECT_FLOAT_EQ(Desc.pMorphTargets[0].DefaultWeight, 0.25f);
     EXPECT_STREQ(Desc.pMorphTargets[1].Name, "");
     EXPECT_FLOAT_EQ(Desc.pMorphTargets[1].DefaultWeight, -0.5f);
 
-    const RadientMorphTargetDesc* pTargets = Desc.pMorphTargets;
-    ASSERT_NE(pTargets, nullptr);
-    ASSERT_EQ(pTargets[0].AttributeCount, 2u);
-    EXPECT_STREQ(pTargets[0].pAttributes[0].Semantic, RadientMorphTargetPositionSemantic);
-    EXPECT_STREQ(pTargets[0].pAttributes[1].Semantic, "CUSTOM_DATA");
-    EXPECT_EQ(pTargets[0].pAttributes[0].ComponentCount, 3u);
-    EXPECT_EQ(pTargets[0].pAttributes[1].ComponentCount, 2u);
-
-    const std::array<Float32, 9> ExpectedPositionDeltas{
-        0.f, 0.f, 0.f,
-        0.1f, 0.2f, 0.3f,
-        -0.1f, -0.2f, -0.3f};
-    const std::array<Float32, 6> ExpectedCustomDeltas{1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
-    EXPECT_EQ(std::memcmp(Data.GetDeltas(0, 0),
-                          ExpectedPositionDeltas.data(),
-                          sizeof(ExpectedPositionDeltas)),
-              0);
-    EXPECT_EQ(std::memcmp(Data.GetDeltas(0, 1),
-                          ExpectedCustomDeltas.data(),
-                          sizeof(ExpectedCustomDeltas)),
-              0);
+    const RadientMorphTargetDesc& Target = Desc.pMorphTargets[0];
+    ASSERT_EQ(Target.AttributeCount, 2u);
+    ASSERT_NE(Target.pAttributes, nullptr);
+    EXPECT_STREQ(Target.pAttributes[0].Semantic, RadientMorphTargetPositionSemantic);
+    EXPECT_STREQ(Target.pAttributes[1].Semantic, "CUSTOM");
+    EXPECT_EQ(Target.pAttributes[0].ComponentCount, 3u);
+    EXPECT_EQ(Target.pAttributes[1].ComponentCount, 2u);
+    EXPECT_EQ(Data.GetVertexCount(), Source.Positions.size());
+    EXPECT_EQ(Data.GetAttributeDataOffset(0, 0), 0u);
+    EXPECT_EQ(Data.GetAttributeDataOffset(0, 1), sizeof(Source.PositionDeltas));
+    EXPECT_EQ(Data.GetDataSize(), sizeof(Source.PositionDeltas) + sizeof(Source.CustomDeltas));
 }
 
 TEST(RadientMorphTargetsTest, MeshCreatesMutableWeightsFromDefaults)

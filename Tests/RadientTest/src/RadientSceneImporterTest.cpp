@@ -538,24 +538,19 @@ TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
     EXPECT_FLOAT_EQ(MeshDesc.pMorphTargets[0].DefaultWeight, 0.25f);
     EXPECT_FLOAT_EQ(MeshDesc.pMorphTargets[1].DefaultWeight, 0.75f);
 
-    const RadientMorphTargetData* const pMorphTargetData =
-        RadientMeshAssetManager::GetMorphTargetData(pMesh);
-    ASSERT_NE(pMorphTargetData, nullptr);
-
-    const std::array<std::array<Float32, 18>, 2> ExpectedDeltas{{
-        {{0.1f, 0.f, 0.f,
-          0.2f, 0.f, 0.f,
-          0.3f, 0.f, 0.f,
-          1.1f, 0.f, 0.f,
-          1.2f, 0.f, 0.f,
-          1.3f, 0.f, 0.f}},
-        {{0.f, 0.4f, 0.f,
-          0.f, 0.5f, 0.f,
-          0.f, 0.6f, 0.f,
-          0.f, 1.4f, 0.f,
-          0.f, 1.5f, 0.f,
-          0.f, 1.6f, 0.f}},
-    }};
+    const RadientDrawableMeshResolveResult DrawableResult =
+        RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    ASSERT_EQ(DrawableResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(DrawableResult.pMesh, nullptr);
+    ASSERT_EQ(DrawableResult.pMesh->Geometries.size(), 2u);
+    for (const RadientDrawableMeshGeometry& Geometry : DrawableResult.pMesh->Geometries)
+    {
+        ASSERT_NE(Geometry.pMorphTargetData, nullptr);
+        EXPECT_EQ(Geometry.pMorphTargetData->GetVertexCount(), 3u);
+        EXPECT_EQ(Geometry.pMorphTargetData->GetDataSize(), 2u * 3u * 3u * sizeof(Float32));
+    }
+    EXPECT_NE(DrawableResult.pMesh->Geometries[0].pMorphTargetData,
+              DrawableResult.pMesh->Geometries[1].pMorphTargetData);
 
     for (Uint32 TargetIndex = 0; TargetIndex < MeshDesc.MorphTargetCount; ++TargetIndex)
     {
@@ -564,10 +559,6 @@ TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
         ASSERT_NE(Target.pAttributes, nullptr);
         EXPECT_STREQ(Target.pAttributes[0].Semantic, RadientMorphTargetPositionSemantic);
         EXPECT_EQ(Target.pAttributes[0].ComponentCount, 3u);
-        EXPECT_EQ(std::memcmp(pMorphTargetData->GetDeltas(TargetIndex, 0),
-                              ExpectedDeltas[TargetIndex].data(),
-                              sizeof(ExpectedDeltas[TargetIndex])),
-                  0);
     }
 }
 

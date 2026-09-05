@@ -34,13 +34,13 @@
 namespace Diligent
 {
 
-/// Packed immutable morph-target data copied from RadientMeshCreateInfo.
+class RadientMorphTargetSource;
+
+/// Packed immutable morph-target metadata stored in a mesh-data payload.
 class RadientMorphTargetData final
 {
 public:
-    RadientMorphTargetData(const RadientMorphTargetCreateInfo* pTargets,
-                           Uint32                              TargetCount,
-                           Uint32                              VertexCount);
+    explicit RadientMorphTargetData(const RadientMorphTargetSource& Source);
 
     RadientMorphTargetData(const RadientMorphTargetData&)            = delete;
     RadientMorphTargetData& operator=(const RadientMorphTargetData&) = delete;
@@ -50,21 +50,34 @@ public:
         return m_Desc;
     }
 
-    /// Returns the copied delta stream for one target attribute.
-    const Float32* GetDeltas(Uint32 TargetIndex, Uint32 AttributeIndex) const noexcept;
+    Uint32 GetVertexCount() const noexcept
+    {
+        return m_VertexCount;
+    }
+
+    Uint32 GetDataSize() const noexcept
+    {
+        return m_DataSize;
+    }
+
+    /// Returns the byte offset of one attribute stream in the GPU allocation.
+    Uint32 GetAttributeDataOffset(Uint32 TargetIndex, Uint32 AttributeIndex) const noexcept;
 
 private:
-    struct AttributeData
+    struct AttributeLayout
     {
-        const Float32* pDeltas = nullptr;
+        Uint32 DataOffset = 0;
     };
 
     using PackedMemory = std::unique_ptr<void, STDDeleterRawMem<void>>;
 
     PackedMemory                           m_Memory;
     RadientMeshAssetDesc                   m_Desc;
-    const RadientMorphTargetAttributeDesc* m_pAttributes    = nullptr;
-    const AttributeData*                   m_pAttributeData = nullptr;
+    const RadientMorphTargetAttributeDesc* m_pAttributes       = nullptr;
+    const AttributeLayout*                 m_pAttributeLayouts = nullptr;
+
+    Uint32 m_VertexCount = 0;
+    Uint32 m_DataSize    = 0;
 };
 
 RADIENT_STATUS CreateRadientMorphTargetWeights(IRadientMeshAsset*           pMesh,

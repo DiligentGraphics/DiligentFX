@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
+#include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "GPUUploadManager.h"
@@ -220,6 +221,131 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_NE(Result.pMesh, nullptr);
     ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
     EXPECT_EQ(Result.pMesh->Primitives[0].pMaterialAsset, pMaterial);
+
+    pThreadPool->StopThreads();
+    StopThreadPool.pThreadPool = nullptr;
+}
+
+TEST(RadientMeshAssetManagerGPUTest, DisablesMorphTargetsWhenAllocatorSizeIsZero)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    IRenderDevice* pDevice = GPUTestingEnvironment::GetInstance()->GetDevice();
+    ASSERT_NE(pDevice, nullptr);
+
+    GLTF::ResourceManager::CreateInfo ResourceManagerCI = MakeResourceManagerCI();
+    ResourceManagerCI.MorphTargetAllocatorCI            = {};
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager =
+        GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+    ASSERT_NE(pResourceManager, nullptr);
+    EXPECT_EQ(pResourceManager->GetMorphTargetBuffer(), nullptr);
+    EXPECT_EQ(pResourceManager->AllocateMorphTargetData(sizeof(Float32)), nullptr);
+    EXPECT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 0u);
+}
+
+TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreadPool{pThreadPool};
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+    EXPECT_NE(pResourceManager->GetMorphTargetBuffer(), nullptr);
+    EXPECT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 0u);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pMeshManager, nullptr);
+
+    const RadientFloat3 Positions[] =
+        {
+            {0.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f},
+            {0.f, 1.f, 0.f},
+        };
+    const Uint32  Indices[] = {0, 1, 2};
+    const Float32 PositionDeltas[] =
+        {
+            0.f,
+            0.f,
+            0.f,
+            0.1f,
+            0.2f,
+            0.3f,
+            -0.1f,
+            -0.2f,
+            -0.3f,
+        };
+
+    RadientMorphTargetAttributeDesc AttributeDesc{};
+    AttributeDesc.Semantic       = RadientMorphTargetPositionSemantic;
+    AttributeDesc.ComponentCount = 3;
+
+    RadientMorphTargetAttributeCreateInfo AttributeCI{};
+    AttributeCI.pDeltas = PositionDeltas;
+
+    RadientMorphTargetCreateInfo MorphTargetCI{};
+    MorphTargetCI.Desc.Name           = "Position offset";
+    MorphTargetCI.Desc.pAttributes    = &AttributeDesc;
+    MorphTargetCI.Desc.AttributeCount = 1;
+    MorphTargetCI.pAttributeData      = &AttributeCI;
+
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    PrimitiveCI.IndexCount = 3;
+
+    RadientMeshCreateInfo MeshCI{};
+    MeshCI.Name             = "Radient morph target GPU upload";
+    MeshCI.pPositions       = Positions;
+    MeshCI.VertexCount      = 3;
+    MeshCI.pMorphTargets    = &MorphTargetCI;
+    MeshCI.MorphTargetCount = 1;
+    MeshCI.pIndices         = Indices;
+    MeshCI.IndexCount       = 3;
+    MeshCI.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives      = &PrimitiveCI;
+    MeshCI.PrimitiveCount   = 1;
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));
+    ASSERT_NE(pMesh, nullptr);
+    ASSERT_TRUE(WaitForMeshLoadStatus(pMesh, RADIENT_STATUS_OK));
+    ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK, pUploadManager, pContext));
+
+    const RadientDrawableMeshResolveResult DrawableResult =
+        RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
+    ASSERT_EQ(DrawableResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(DrawableResult.pMesh, nullptr);
+    ASSERT_EQ(DrawableResult.pMesh->Geometries.size(), 1u);
+
+    const RadientDrawableMeshGeometry&  Geometry         = DrawableResult.pMesh->Geometries[0];
+    const RadientMorphTargetData* const pMorphTargetData = Geometry.pMorphTargetData;
+    ASSERT_NE(pMorphTargetData, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(pMorphTargetData->GetDataSize(), sizeof(PositionDeltas));
+    EXPECT_EQ(pMorphTargetData->GetAttributeDataOffset(0, 0), 0u);
+
+    IBuffer* const pMorphTargetBuffer = pResourceManager->GetMorphTargetBuffer();
+    ASSERT_NE(pMorphTargetBuffer, nullptr);
+    EXPECT_LE(Uint64{Geometry.MorphTargetDataOffset} + pMorphTargetData->GetDataSize(),
+              pMorphTargetBuffer->GetDesc().Size);
+    EXPECT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 1u);
+
+    const BufferDesc& BufferDesc = pMorphTargetBuffer->GetDesc();
+    EXPECT_EQ(BufferDesc.Usage, USAGE_DEFAULT);
+    EXPECT_NE(BufferDesc.BindFlags & BIND_SHADER_RESOURCE, BIND_NONE);
+    EXPECT_EQ(BufferDesc.Mode, BUFFER_MODE_STRUCTURED);
+    EXPECT_EQ(BufferDesc.ElementByteStride, sizeof(Float32));
 
     pThreadPool->StopThreads();
     StopThreadPool.pThreadPool = nullptr;

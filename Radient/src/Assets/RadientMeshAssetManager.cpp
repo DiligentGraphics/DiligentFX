@@ -35,6 +35,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
+#include "Assets/RadientMorphTargetSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
 #include "RadientMeshViewCreateInfoSnapshot.hpp"
@@ -59,11 +60,13 @@ namespace Diligent
 namespace
 {
 
-static constexpr INTERFACE_ID IID_MeshAssetImpl         = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
-static constexpr INTERFACE_ID IID_RadientMeshIndexData  = {0xeb134756, 0x0bac, 0x4bb9, {0x85, 0x84, 0xd5, 0x5f, 0x83, 0x6e, 0x7e, 0x7f}};
-static constexpr INTERFACE_ID IID_MeshIndexDataImpl     = {0xdb8786a7, 0xe63e, 0x4128, {0x92, 0xce, 0x22, 0x86, 0xa4, 0x76, 0x9d, 0x14}};
-static constexpr INTERFACE_ID IID_RadientMeshVertexData = {0x33b53b79, 0x66b9, 0x44ae, {0x82, 0xd6, 0xc4, 0x7f, 0xe3, 0x06, 0x34, 0xa3}};
-static constexpr INTERFACE_ID IID_MeshVertexDataImpl    = {0x059bbe7e, 0x96ed, 0x4213, {0xb6, 0x90, 0xa4, 0x28, 0x60, 0xb0, 0x34, 0xa7}};
+static constexpr INTERFACE_ID IID_MeshAssetImpl              = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
+static constexpr INTERFACE_ID IID_RadientMeshIndexData       = {0xeb134756, 0x0bac, 0x4bb9, {0x85, 0x84, 0xd5, 0x5f, 0x83, 0x6e, 0x7e, 0x7f}};
+static constexpr INTERFACE_ID IID_MeshIndexDataImpl          = {0xdb8786a7, 0xe63e, 0x4128, {0x92, 0xce, 0x22, 0x86, 0xa4, 0x76, 0x9d, 0x14}};
+static constexpr INTERFACE_ID IID_RadientMeshVertexData      = {0x33b53b79, 0x66b9, 0x44ae, {0x82, 0xd6, 0xc4, 0x7f, 0xe3, 0x06, 0x34, 0xa3}};
+static constexpr INTERFACE_ID IID_MeshVertexDataImpl         = {0x059bbe7e, 0x96ed, 0x4213, {0xb6, 0x90, 0xa4, 0x28, 0x60, 0xb0, 0x34, 0xa7}};
+static constexpr INTERFACE_ID IID_RadientMeshMorphTargetData = {0xdc6645d7, 0x7bff, 0x4964, {0x83, 0xaf, 0x18, 0x1c, 0x25, 0x2f, 0x3b, 0xed}};
+static constexpr INTERFACE_ID IID_MeshMorphTargetDataImpl    = {0x2d315efd, 0x3fd0, 0x4904, {0x8a, 0x15, 0xb6, 0x5f, 0xfd, 0x55, 0x53, 0x1b}};
 
 } // namespace
 
@@ -154,6 +157,21 @@ public:
     const PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 };
 
+class MeshMorphTargetDataStorage : public MeshDataStatusStorage
+{
+public:
+    MeshMorphTargetDataStorage(RADIENT_STATUS                  InitLoadStatus,
+                               std::string                     CacheKey,
+                               const RadientMorphTargetSource& Source) :
+        MeshDataStatusStorage{InitLoadStatus, std::move(CacheKey)},
+        Data{Source}
+    {
+    }
+
+    RadientMorphTargetData              Data;
+    RefCntAutoPtr<IBufferSuballocation> pAllocation;
+};
+
 class MeshIndexDataPayloadImpl final : public RadientAssetPayloadImpl<MeshIndexDataStorage, MeshIndexDataPayloadImpl>
 {
 public:
@@ -165,6 +183,13 @@ class MeshVertexDataPayloadImpl final : public RadientAssetPayloadImpl<MeshVerte
 {
 public:
     using TBase = RadientAssetPayloadImpl<MeshVertexDataStorage, MeshVertexDataPayloadImpl>;
+    using TBase::TBase;
+};
+
+class MeshMorphTargetDataPayloadImpl final : public RadientAssetPayloadImpl<MeshMorphTargetDataStorage, MeshMorphTargetDataPayloadImpl>
+{
+public:
+    using TBase = RadientAssetPayloadImpl<MeshMorphTargetDataStorage, MeshMorphTargetDataPayloadImpl>;
     using TBase::TBase;
 };
 
@@ -233,12 +258,45 @@ private:
     RefCntWeakPtr<IAsyncTask> m_pLoadTask;
 };
 
+using MeshMorphTargetDataAssetBase =
+    RadientAssetImpl<IRadientMeshMorphTargetData, IID_RadientMeshMorphTargetData, IID_MeshMorphTargetDataImpl, RADIENT_ASSET_TYPE_MESH, MeshMorphTargetDataPayloadImpl>;
+
+class MeshMorphTargetDataAssetImpl final : public MeshMorphTargetDataAssetBase
+{
+public:
+    using TBase = MeshMorphTargetDataAssetBase;
+    using TBase::TBase;
+
+    static RefCntAutoPtr<MeshMorphTargetDataAssetImpl> Create(std::string AssetURI)
+    {
+        return RefCntAutoPtr<MeshMorphTargetDataAssetImpl>{
+            MakeNewRCObj<MeshMorphTargetDataAssetImpl>()(std::move(AssetURI))};
+    }
+
+    void SetLoadTask(IAsyncTask* pTask)
+    {
+        m_pLoadTask = pTask;
+    }
+
+    RefCntAutoPtr<IAsyncTask> LockLoadTask() const
+    {
+        return m_pLoadTask.Lock();
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_MeshMorphTargetDataImpl, TBase)
+
+private:
+    RefCntWeakPtr<IAsyncTask> m_pLoadTask;
+};
+
 struct MeshGeometryStorage
 {
-    RefCntAutoPtr<MeshIndexDataAssetImpl>    pIndexDataAsset;
-    RefCntAutoPtr<MeshIndexDataPayloadImpl>  pIndexDataPayload;
-    RefCntAutoPtr<MeshVertexDataAssetImpl>   pVertexDataAsset;
-    RefCntAutoPtr<MeshVertexDataPayloadImpl> pVertexDataPayload;
+    RefCntAutoPtr<MeshIndexDataAssetImpl>         pIndexDataAsset;
+    RefCntAutoPtr<MeshIndexDataPayloadImpl>       pIndexDataPayload;
+    RefCntAutoPtr<MeshVertexDataAssetImpl>        pVertexDataAsset;
+    RefCntAutoPtr<MeshVertexDataPayloadImpl>      pVertexDataPayload;
+    RefCntAutoPtr<MeshMorphTargetDataAssetImpl>   pMorphTargetDataAsset;
+    RefCntAutoPtr<MeshMorphTargetDataPayloadImpl> pMorphTargetDataPayload;
 };
 
 struct MeshStorage
@@ -301,27 +359,23 @@ public:
     virtual const RadientMeshAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
         static const RadientMeshAssetDesc EmptyDesc{};
-        return m_pMorphTargetData != nullptr ? m_pMorphTargetData->GetDesc() : EmptyDesc;
+        RefCntAutoPtr<MeshPayloadImpl>    pPayload = GetPayload();
+        if (pPayload == nullptr)
+            return EmptyDesc;
+
+        const MeshStorage& Storage = pPayload->GetStorage();
+        for (const MeshGeometryStorage& Geometry : Storage.Geometries)
+        {
+            if (Geometry.pMorphTargetDataPayload != nullptr)
+                return Geometry.pMorphTargetDataPayload->GetStorage().Data.GetDesc();
+        }
+        return EmptyDesc;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
     {
         return CreateRadientMorphTargetWeights(this, GetDesc(), ppWeights);
     }
-
-    void SetMorphTargetData(std::unique_ptr<RadientMorphTargetData>&& pData)
-    {
-        VERIFY_EXPR(m_pMorphTargetData == nullptr);
-        m_pMorphTargetData = std::move(pData);
-    }
-
-    const RadientMorphTargetData* GetMorphTargetData() const noexcept
-    {
-        return m_pMorphTargetData.get();
-    }
-
-private:
-    std::unique_ptr<RadientMorphTargetData> m_pMorphTargetData;
 };
 
 struct MeshIndexBufferWriteData
@@ -333,6 +387,11 @@ struct MeshVertexBufferWriteData
 {
     const RadientMeshVertexSource* pSource           = nullptr;
     Uint32                         VertexBufferIndex = 0;
+};
+
+struct MorphTargetBufferWriteData
+{
+    const RadientMorphTargetSource* pSource = nullptr;
 };
 
 struct MeshIndexBufferCopyData
@@ -348,6 +407,12 @@ struct MeshVertexBufferCopyData
 
     Uint32 VertexBufferIndex = 0;
     Uint32 VertexStride      = 0;
+};
+
+struct MorphTargetBufferCopyData
+{
+    RefCntAutoPtr<MeshMorphTargetDataPayloadImpl> pMorphTargetDataPayload;
+    RefCntAutoPtr<IRenderDevice>                  pDevice;
 };
 
 void UpdateMeshUploadProgress(MeshDataStatusStorage& Data,
@@ -395,9 +460,16 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             return;
         }
 
+        const RadientMorphTargetData* pMorphTargetData =
+            Geometry.pMorphTargetDataPayload != nullptr ?
+            &Geometry.pMorphTargetDataPayload->GetStorage().Data :
+            nullptr;
+
         DrawableMesh.Geometries.push_back(RadientDrawableMeshGeometry{
             nullptr,
+            pMorphTargetData,
             VertexData.VertexAttribFlags,
+            0,
             0,
             0});
     }
@@ -514,6 +586,18 @@ void WriteMeshVertexData(void* pDstData, Uint32 NumBytes, void* pUserData) noexc
     VERIFY_EXPR(Status == RADIENT_STATUS_OK);
 }
 
+void WriteMorphTargetData(void* pDstData, Uint32 NumBytes, void* pUserData) noexcept
+{
+    MorphTargetBufferWriteData* Data = static_cast<MorphTargetBufferWriteData*>(pUserData);
+    VERIFY_EXPR(Data != nullptr && Data->pSource != nullptr);
+    if (Data == nullptr || Data->pSource == nullptr)
+        return;
+
+    const RADIENT_STATUS Status =
+        Data->pSource->PackData(RadientMorphTargetSource::PackDestination{pDstData, NumBytes});
+    VERIFY_EXPR(Status == RADIENT_STATUS_OK);
+}
+
 void CopyMeshIndexBuffer(IDeviceContext* pContext,
                          IBuffer*        pSrcBuffer,
                          Uint32          SrcOffset,
@@ -579,6 +663,40 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         UpdateMeshUploadProgress(Data->pVertexDataPayload->GetStorage(), CopyScheduled);
 }
 
+void CopyMorphTargetBuffer(IDeviceContext* pContext,
+                           IBuffer*        pSrcBuffer,
+                           Uint32          SrcOffset,
+                           Uint32          NumBytes,
+                           void*           pUserData) noexcept
+{
+    std::unique_ptr<MorphTargetBufferCopyData> Data{static_cast<MorphTargetBufferCopyData*>(pUserData)};
+
+    MeshMorphTargetDataStorage* pMorphTargetData = nullptr;
+    if (Data != nullptr && Data->pMorphTargetDataPayload != nullptr)
+        pMorphTargetData = &Data->pMorphTargetDataPayload->GetStorage();
+
+    bool CopyScheduled = false;
+    if (pContext != nullptr &&
+        pSrcBuffer != nullptr &&
+        pMorphTargetData != nullptr)
+    {
+        IBufferSuballocation* const pAllocation = pMorphTargetData->pAllocation;
+        IBuffer* const              pDstBuffer =
+            pAllocation != nullptr ? pAllocation->Update(Data->pDevice, pContext) : nullptr;
+        if (pDstBuffer != nullptr)
+        {
+            pContext->CopyBuffer(pSrcBuffer, SrcOffset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                                 pDstBuffer, pAllocation->GetOffset(), NumBytes,
+                                 RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            CopyScheduled = true;
+        }
+    }
+
+    VERIFY_EXPR(pMorphTargetData != nullptr);
+    if (pMorphTargetData != nullptr)
+        UpdateMeshUploadProgress(*pMorphTargetData, CopyScheduled);
+}
+
 void ScheduleMeshIndexUpload(IGPUUploadManager*            pUploadManager,
                              IRenderDevice*                pDevice,
                              const RadientMeshIndexSource& Source,
@@ -628,6 +746,31 @@ void ScheduleMeshVertexUpload(IGPUUploadManager*             pUploadManager,
     UpdateInfo.pWriteDataCallbackUserData = &WriteData;
     UpdateInfo.pCopyBufferData            = pCopyData.get();
     UpdateInfo.CopyBuffer                 = CopyMeshVertexBuffer;
+
+    pUploadManager->ScheduleBufferUpdate(UpdateInfo);
+    pCopyData.release();
+}
+
+void ScheduleMorphTargetUpload(IGPUUploadManager*              pUploadManager,
+                               IRenderDevice*                  pDevice,
+                               const RadientMorphTargetSource& Source,
+                               MeshMorphTargetDataPayloadImpl* pMorphTargetDataPayload)
+{
+    std::unique_ptr<MorphTargetBufferCopyData> pCopyData{new MorphTargetBufferCopyData{}};
+    pCopyData->pMorphTargetDataPayload = pMorphTargetDataPayload;
+    pCopyData->pDevice                 = pDevice;
+
+    MorphTargetBufferWriteData WriteData;
+    WriteData.pSource = &Source;
+
+    ScheduleBufferUpdateInfo UpdateInfo;
+    UpdateInfo.pContext                   = nullptr;
+    UpdateInfo.NumBytes                   = Source.GetDataSize();
+    UpdateInfo.pSrcData                   = nullptr;
+    UpdateInfo.WriteDataCallback          = WriteMorphTargetData;
+    UpdateInfo.pWriteDataCallbackUserData = &WriteData;
+    UpdateInfo.pCopyBufferData            = pCopyData.get();
+    UpdateInfo.CopyBuffer                 = CopyMorphTargetBuffer;
 
     pUploadManager->ScheduleBufferUpdate(UpdateInfo);
     pCopyData.release();
@@ -756,15 +899,109 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
     VertexData.SetLoadStatus(RADIENT_STATUS_OK);
 }
 
-std::string MakeMeshGeometryCacheKey(const MeshVertexDataStorage& VertexData,
-                                     const MeshIndexDataStorage&  IndexData)
+void CreateMorphTargetDataFromSource(const RadientMorphTargetSource& Source,
+                                     MeshMorphTargetDataPayloadImpl& MorphTargetDataPayload,
+                                     IRenderDevice*                  pDevice,
+                                     GLTF::ResourceManager*          pResourceManager,
+                                     IGPUUploadManager*              pUploadManager)
 {
-    if (VertexData.CacheKey.empty() || IndexData.CacheKey.empty())
+    MeshMorphTargetDataStorage& MorphTargetData = MorphTargetDataPayload.GetStorage();
+
+    const Uint32 DataSize = Source.GetDataSize();
+    if (DataSize != MorphTargetData.Data.GetDataSize())
+    {
+        MorphTargetData.SetStatus(RADIENT_STATUS_INVALID_ARGUMENT);
+        return;
+    }
+    if (DataSize == 0)
+    {
+        MorphTargetData.SetStatus(RADIENT_STATUS_OK);
+        return;
+    }
+
+    if (pDevice == nullptr)
+    {
+        MorphTargetData.SetGPUResourceStatus(RADIENT_STATUS_NO_GPU_DATA);
+    }
+    else if (pResourceManager == nullptr || pUploadManager == nullptr)
+    {
+        MorphTargetData.SetGPUResourceStatus(RADIENT_STATUS_CANCELLED);
+    }
+    else
+    {
+        RefCntAutoPtr<IBufferSuballocation> pAllocation =
+            pResourceManager->AllocateMorphTargetData(DataSize, alignof(Float32));
+        if (pAllocation == nullptr)
+        {
+            MorphTargetData.SetGPUResourceStatus(RADIENT_STATUS_FAILED);
+        }
+        else
+        {
+            MorphTargetData.pAllocation = std::move(pAllocation);
+            MorphTargetData.PendingUploads.store(1, std::memory_order_release);
+            MorphTargetData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
+            ScheduleMorphTargetUpload(pUploadManager, pDevice, Source, &MorphTargetDataPayload);
+        }
+    }
+
+    MorphTargetData.SetLoadStatus(RADIENT_STATUS_OK);
+}
+
+
+bool AreMorphTargetDescsCompatible(const RadientMeshAssetDesc& Lhs,
+                                   const RadientMeshAssetDesc& Rhs)
+{
+    if (Lhs.MorphTargetCount != Rhs.MorphTargetCount)
+        return false;
+
+    const auto StringsEqual = [](const Char* LhsString, const Char* RhsString) {
+        if (LhsString == nullptr || RhsString == nullptr)
+            return LhsString == RhsString;
+        return std::strcmp(LhsString, RhsString) == 0;
+    };
+
+    for (Uint32 TargetIndex = 0; TargetIndex < Lhs.MorphTargetCount; ++TargetIndex)
+    {
+        const RadientMorphTargetDesc& LhsTarget = Lhs.pMorphTargets[TargetIndex];
+        const RadientMorphTargetDesc& RhsTarget = Rhs.pMorphTargets[TargetIndex];
+        if (!StringsEqual(LhsTarget.Name, RhsTarget.Name) ||
+            LhsTarget.DefaultWeight != RhsTarget.DefaultWeight ||
+            LhsTarget.AttributeCount != RhsTarget.AttributeCount)
+        {
+            return false;
+        }
+
+        for (Uint32 AttributeIndex = 0; AttributeIndex < LhsTarget.AttributeCount; ++AttributeIndex)
+        {
+            const RadientMorphTargetAttributeDesc& LhsAttribute = LhsTarget.pAttributes[AttributeIndex];
+            const RadientMorphTargetAttributeDesc& RhsAttribute = RhsTarget.pAttributes[AttributeIndex];
+            if (!StringsEqual(LhsAttribute.Semantic, RhsAttribute.Semantic) ||
+                LhsAttribute.ComponentCount != RhsAttribute.ComponentCount)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+std::string MakeMeshGeometryCacheKey(const MeshVertexDataStorage&      VertexData,
+                                     const MeshIndexDataStorage&       IndexData,
+                                     const MeshMorphTargetDataStorage* pMorphTargetData)
+{
+    if (VertexData.CacheKey.empty() ||
+        IndexData.CacheKey.empty() ||
+        (pMorphTargetData != nullptr && pMorphTargetData->CacheKey.empty()))
         return {};
 
     RadientCacheKeyBuilder Builder{"mesh-geometry", 1};
     Builder.AddString("vertex", VertexData.CacheKey)
         .AddString("index", IndexData.CacheKey);
+
+    if (pMorphTargetData != nullptr)
+        Builder.AddString("morph-target", pMorphTargetData->CacheKey);
+
     return Builder.GetKey();
 }
 
@@ -805,20 +1042,27 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    std::unique_ptr<RadientMorphTargetData> pMorphTargetData;
+    RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
     if (MeshCI.MorphTargetCount != 0)
     {
         try
         {
-            pMorphTargetData = std::make_unique<RadientMorphTargetData>(
-                MeshCI.pMorphTargets,
-                MeshCI.MorphTargetCount,
-                MeshCI.VertexCount);
+            RADIENT_STATUS Status = CreateMeshMorphTargetData(
+                ThreadPool,
+                std::make_unique<RadientMorphTargetSource>(MeshCI.pMorphTargets,
+                                                           MeshCI.MorphTargetCount,
+                                                           MeshCI.VertexCount),
+                pMorphTargetData.GetAddressOfEmpty());
+            if (RADIENT_FAILED(Status) || pMorphTargetData == nullptr)
+            {
+                LOG_ERROR_MESSAGE("Failed to create Radient mesh morph-target data; creating the mesh without morph targets");
+                pMorphTargetData.Release();
+            }
         }
         catch (const std::exception& Error)
         {
-            LOG_ERROR_MESSAGE("Failed to copy Radient mesh morph targets: ", Error.what());
-            return RADIENT_STATUS_FAILED;
+            LOG_ERROR_MESSAGE("Failed to copy Radient mesh morph targets: ", Error.what(),
+                              "; creating the mesh without morph targets");
         }
     }
 
@@ -840,8 +1084,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (RADIENT_FAILED(Status) || pIndexData == nullptr)
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
-    const RadientMeshGeometryData GeometryData{pVertexData, pIndexData};
-    return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh, std::move(pMorphTargetData));
+    const RadientMeshGeometryData GeometryData{pVertexData, pIndexData, pMorphTargetData};
+    return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
 }
 
 RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&                            ThreadPool,
@@ -1016,12 +1260,90 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
     return TaskEnqueued ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&                            ThreadPool,
-                                                       const RadientMeshGeometryData*          pGeometryData,
-                                                       Uint32                                  GeometryCount,
-                                                       const RadientMeshViewCreateInfo&        ViewCI,
-                                                       IRadientMeshAsset**                     ppMesh,
-                                                       std::unique_ptr<RadientMorphTargetData> pMorphTargetData)
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshMorphTargetData(IThreadPool&                              ThreadPool,
+                                                                  std::unique_ptr<RadientMorphTargetSource> pMorphTargetSource,
+                                                                  IRadientMeshMorphTargetData**             ppMorphTargetData)
+{
+    if (ppMorphTargetData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMorphTargetData == nullptr, "Output mesh morph-target data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMorphTargetData = nullptr;
+
+    if (pMorphTargetSource == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<MeshMorphTargetDataAssetImpl> pMorphTargetDataAsset =
+        MeshMorphTargetDataAssetImpl::Create(MakeRadientAssetURI("mesh-morph-target-data"));
+    if (pMorphTargetDataAsset == nullptr)
+        return RADIENT_STATUS_FAILED;
+
+    RefCntAutoPtr<IAsyncTask> pLoadTask =
+        CreateAsyncWorkTask(
+            [pSelf              = shared_from_this(),
+             pMorphTargetSource = std::move(pMorphTargetSource),
+             pMorphTargetDataAsset](Uint32) mutable //
+            {
+                const auto FailMorphTargetData = [&pMorphTargetDataAsset](RADIENT_STATUS Status = RADIENT_STATUS_FAILED) {
+                    pMorphTargetDataAsset->Fail(Status);
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                };
+
+                const RADIENT_STATUS SourceStatus = pMorphTargetSource->GetStatus();
+                if (RADIENT_FAILED(SourceStatus))
+                    return FailMorphTargetData(SourceStatus);
+
+                std::string CacheKey = pMorphTargetSource->MakeCacheKey();
+                if (CacheKey.empty())
+                    return FailMorphTargetData();
+
+                auto [pMorphTargetDataPayload, DataCreated] =
+                    pSelf->m_MeshMorphTargetDataCache.GetOrCreate(
+                        CacheKey.c_str(),
+                        [&pMorphTargetSource, CacheKey]() mutable {
+                            return MeshMorphTargetDataPayloadImpl::Create(
+                                RADIENT_STATUS_PENDING,
+                                std::move(CacheKey),
+                                *pMorphTargetSource);
+                        });
+
+                if (pMorphTargetDataPayload == nullptr)
+                    return FailMorphTargetData();
+
+                if (!pMorphTargetDataAsset->SetPayload(
+                        RefCntAutoPtr<MeshMorphTargetDataPayloadImpl>{pMorphTargetDataPayload}))
+                {
+                    return ASYNC_TASK_STATUS_COMPLETE;
+                }
+
+                if (DataCreated)
+                {
+                    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = pSelf->m_WeakResourceManager.Lock();
+                    RefCntAutoPtr<IGPUUploadManager>     pUploadManager   = pSelf->m_WeakUploadManager.Lock();
+
+                    CreateMorphTargetDataFromSource(*pMorphTargetSource,
+                                                    *pMorphTargetDataPayload,
+                                                    pSelf->m_pDevice,
+                                                    pResourceManager,
+                                                    pUploadManager);
+                }
+
+                return ASYNC_TASK_STATUS_COMPLETE;
+            });
+
+    pMorphTargetDataAsset->SetLoadTask(pLoadTask);
+    const bool TaskEnqueued = ThreadPool.EnqueueTask(pLoadTask);
+    if (!TaskEnqueued)
+        pMorphTargetDataAsset->Fail(RADIENT_STATUS_INVALID_OPERATION);
+
+    *ppMorphTargetData = pMorphTargetDataAsset.Detach();
+    return TaskEnqueued ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&                     ThreadPool,
+                                                       const RadientMeshGeometryData*   pGeometryData,
+                                                       Uint32                           GeometryCount,
+                                                       const RadientMeshViewCreateInfo& ViewCI,
+                                                       IRadientMeshAsset**              ppMesh)
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1060,11 +1382,17 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
-        ConcreteGeometries.push_back(MeshGeometryStorage{
-            std::move(pIndexData),
-            {},
-            std::move(pVertexData),
-            {}});
+        RefCntAutoPtr<MeshMorphTargetDataAssetImpl> pMorphTargetData{
+            pGeometryData[GeometryIndex].pMorphTargetData,
+            IID_MeshMorphTargetDataImpl};
+        if (pGeometryData[GeometryIndex].pMorphTargetData != nullptr &&
+            pMorphTargetData == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        MeshGeometryStorage& Geometry  = ConcreteGeometries.emplace_back();
+        Geometry.pIndexDataAsset       = std::move(pIndexData);
+        Geometry.pVertexDataAsset      = std::move(pVertexData);
+        Geometry.pMorphTargetDataAsset = std::move(pMorphTargetData);
     }
 
     RefCntAutoPtr<MeshAssetImpl> pMeshAsset =
@@ -1073,13 +1401,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
     if (!pMeshAsset)
         return RADIENT_STATUS_FAILED;
 
-    if (pMorphTargetData != nullptr)
-        pMeshAsset->SetMorphTargetData(std::move(pMorphTargetData));
-
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
     std::vector<RefCntAutoPtr<IAsyncTask>> StrongPrerequisites;
-    StrongPrerequisites.reserve(ConcreteGeometries.size() * 2);
+    StrongPrerequisites.reserve(ConcreteGeometries.size() * 3);
     for (const MeshGeometryStorage& Geometry : ConcreteGeometries)
     {
         if (Geometry.pIndexDataAsset)
@@ -1091,6 +1416,12 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
         if (Geometry.pVertexDataAsset)
         {
             if (RefCntAutoPtr<IAsyncTask> pTask = Geometry.pVertexDataAsset->LockLoadTask())
+                StrongPrerequisites.emplace_back(std::move(pTask));
+        }
+
+        if (Geometry.pMorphTargetDataAsset)
+        {
+            if (RefCntAutoPtr<IAsyncTask> pTask = Geometry.pMorphTargetDataAsset->LockLoadTask())
                 StrongPrerequisites.emplace_back(std::move(pTask));
         }
     }
@@ -1113,6 +1444,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                 GeometryIndexCounts.reserve(ConcreteGeometries.size());
                 std::vector<std::string> GeometryCacheKeys;
                 GeometryCacheKeys.reserve(ConcreteGeometries.size());
+                const RadientMeshAssetDesc* pMeshMorphTargetDesc = nullptr;
                 for (MeshGeometryStorage& Geometry : ConcreteGeometries)
                 {
                     if (Geometry.pIndexDataAsset == nullptr ||
@@ -1133,12 +1465,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                         Geometry.pVertexDataPayload == nullptr)
                         return FailMesh();
 
-                    MeshIndexDataStorage&  IndexData        = Geometry.pIndexDataPayload->GetStorage();
-                    MeshVertexDataStorage& VertexData       = Geometry.pVertexDataPayload->GetStorage();
-                    const std::string      GeometryCacheKey = MakeMeshGeometryCacheKey(VertexData, IndexData);
+                    MeshIndexDataStorage&  IndexData  = Geometry.pIndexDataPayload->GetStorage();
+                    MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
                     if (IndexData.IndexCount == 0 ||
-                        VertexData.VertexCount == 0 ||
-                        GeometryCacheKey.empty())
+                        VertexData.VertexCount == 0)
                         return FailMesh();
 
                     const RADIENT_STATUS IndexDataStatus = IndexData.GetLoadStatus();
@@ -1148,6 +1478,44 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                     const RADIENT_STATUS VertexDataStatus = VertexData.GetLoadStatus();
                     if (RADIENT_FAILED(VertexDataStatus))
                         return FailMesh(VertexDataStatus);
+
+                    MeshMorphTargetDataStorage* pMorphTargetData = nullptr;
+                    if (Geometry.pMorphTargetDataAsset != nullptr)
+                    {
+                        const RADIENT_STATUS MorphPayloadStatus = Geometry.pMorphTargetDataAsset->GetPayloadStatus();
+                        if (MorphPayloadStatus != RADIENT_STATUS_OK)
+                            return FailMesh(MorphPayloadStatus);
+
+                        Geometry.pMorphTargetDataPayload = Geometry.pMorphTargetDataAsset->GetPayload();
+                        if (Geometry.pMorphTargetDataPayload == nullptr)
+                            return FailMesh();
+
+                        pMorphTargetData                     = &Geometry.pMorphTargetDataPayload->GetStorage();
+                        const RADIENT_STATUS MorphDataStatus = pMorphTargetData->GetLoadStatus();
+                        if (MorphDataStatus != RADIENT_STATUS_OK)
+                            return FailMesh(MorphDataStatus);
+
+                        if (pMorphTargetData->Data.GetVertexCount() != VertexData.VertexCount)
+                        {
+                            LOG_ERROR_MESSAGE("Morph-target vertex count ", pMorphTargetData->Data.GetVertexCount(),
+                                              " does not match geometry vertex count ", VertexData.VertexCount);
+                            return FailMesh(RADIENT_STATUS_INVALID_DATA);
+                        }
+
+                        const RadientMeshAssetDesc& MorphTargetDesc = pMorphTargetData->Data.GetDesc();
+                        if (pMeshMorphTargetDesc != nullptr &&
+                            !AreMorphTargetDescsCompatible(*pMeshMorphTargetDesc, MorphTargetDesc))
+                        {
+                            LOG_ERROR_MESSAGE("Morph-target schemas are inconsistent between mesh geometries");
+                            return FailMesh(RADIENT_STATUS_INVALID_DATA);
+                        }
+                        pMeshMorphTargetDesc = &MorphTargetDesc;
+                    }
+
+                    const std::string GeometryCacheKey =
+                        MakeMeshGeometryCacheKey(VertexData, IndexData, pMorphTargetData);
+                    if (GeometryCacheKey.empty())
+                        return FailMesh();
 
                     GeometryIndexCounts.push_back(IndexData.IndexCount);
                     GeometryCacheKeys.push_back(GeometryCacheKey);
@@ -1236,6 +1604,15 @@ RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientMeshVertexData* pM
     return pVertexDataAsset ? pVertexDataAsset->GetLoadStatus() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
+RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientMeshMorphTargetData* pMorphTargetData)
+{
+    MeshMorphTargetDataAssetImpl* const pMorphTargetDataAsset =
+        ClassPtrCast<MeshMorphTargetDataAssetImpl>(pMorphTargetData);
+    return pMorphTargetDataAsset != nullptr ?
+        pMorphTargetDataAsset->GetLoadStatus() :
+        RADIENT_STATUS_INVALID_ARGUMENT;
+}
+
 RADIENT_STATUS RadientMeshAssetManager::GetGPUResourceStatus(IRadientAsset* pMeshAsset)
 {
     MeshAssetImpl* pMesh = ClassPtrCast<MeshAssetImpl>(pMeshAsset);
@@ -1302,6 +1679,20 @@ const MeshVertexDataPayloadImpl* RadientMeshAssetManager::GetMeshVertexDataPaylo
     return Storage.Geometries[GeometryIndex].pVertexDataPayload;
 }
 
+const MeshMorphTargetDataPayloadImpl* RadientMeshAssetManager::GetMeshMorphTargetDataPayload(IRadientMeshAsset* pMeshAsset,
+                                                                                             Uint32             GeometryIndex)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    if (!pMesh)
+        return nullptr;
+
+    MeshStorage& Storage = pMesh->GetStorage();
+    if (GeometryIndex >= Storage.Geometries.size())
+        return nullptr;
+
+    return Storage.Geometries[GeometryIndex].pMorphTargetDataPayload;
+}
+
 const IRadientMeshIndexData* RadientMeshAssetManager::GetMeshIndexData(IRadientMeshAsset* pMeshAsset)
 {
     RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
@@ -1326,12 +1717,6 @@ const IRadientMeshVertexData* RadientMeshAssetManager::GetMeshVertexData(IRadien
         return nullptr;
 
     return Storage.Geometries.front().pVertexDataAsset;
-}
-
-const RadientMorphTargetData* RadientMeshAssetManager::GetMorphTargetData(IRadientMeshAsset* pMeshAsset)
-{
-    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
-    return pMesh ? pMesh->GetMorphTargetData() : nullptr;
 }
 
 namespace
@@ -1365,6 +1750,19 @@ RADIENT_STATUS GetMeshGeometryLoadStatus(MeshStorage& Mesh)
         const MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
         Status                                  = CombineDependencyStatus(Status, IndexData.LoadStatus.load(std::memory_order_acquire));
         Status                                  = CombineDependencyStatus(Status, VertexData.LoadStatus.load(std::memory_order_acquire));
+
+        if (Geometry.pMorphTargetDataAsset != nullptr ||
+            Geometry.pMorphTargetDataPayload != nullptr)
+        {
+            if (Geometry.pMorphTargetDataAsset == nullptr ||
+                Geometry.pMorphTargetDataPayload == nullptr)
+            {
+                return CacheTerminalStatus(Mesh.GeometryLoadStatus, RADIENT_STATUS_INVALID_OPERATION);
+            }
+
+            const MeshMorphTargetDataStorage& MorphTargetData = Geometry.pMorphTargetDataPayload->GetStorage();
+            Status                                            = CombineDependencyStatus(Status, MorphTargetData.LoadStatus.load(std::memory_order_acquire));
+        }
     }
 
     return CacheTerminalStatus(Mesh.GeometryLoadStatus, Status);
@@ -1393,6 +1791,12 @@ RADIENT_STATUS GetMeshGeometryGPUResourceStatus(MeshStorage& Mesh)
 
         Status = CombineDependencyStatus(Status, IndexData.GPUResourceStatus.load(std::memory_order_acquire));
         Status = CombineDependencyStatus(Status, VertexData.GPUResourceStatus.load(std::memory_order_acquire));
+
+        if (Geometry.pMorphTargetDataPayload != nullptr)
+        {
+            const MeshMorphTargetDataStorage& MorphTargetData = Geometry.pMorphTargetDataPayload->GetStorage();
+            Status                                            = CombineDependencyStatus(Status, MorphTargetData.GPUResourceStatus.load(std::memory_order_acquire));
+        }
     }
 
     return CacheTerminalStatus(Mesh.GeometryGPUResourceStatus, Status);
@@ -1533,6 +1937,21 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
                 DrawableGeometry.pVertexPool                  = pVertexPool;
                 DrawableGeometry.FirstIndexLocation           = pIndexAllocation->GetOffset() / sizeof(Uint32);
                 DrawableGeometry.BaseVertex                   = pVertexAllocation->GetStartVertex();
+
+                if (Geometry.pMorphTargetDataPayload != nullptr)
+                {
+                    MeshMorphTargetDataStorage& MorphTargetData = Geometry.pMorphTargetDataPayload->GetStorage();
+                    if (MorphTargetData.Data.GetDataSize() != 0)
+                    {
+                        IBufferSuballocation* const pMorphTargetAllocation = MorphTargetData.pAllocation;
+                        if (pMorphTargetAllocation == nullptr)
+                        {
+                            Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+                            return Result;
+                        }
+                        DrawableGeometry.MorphTargetDataOffset = pMorphTargetAllocation->GetOffset();
+                    }
+                }
             }
         }
 

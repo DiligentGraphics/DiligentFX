@@ -67,8 +67,9 @@ struct RadientMorphTargetAttributeCreateInfo
 {
     /// Tightly packed canonical floating-point deltas. The array contains
     /// RadientMeshCreateInfo::VertexCount times the corresponding attribute
-    /// description's ComponentCount values. Radient copies the data during
-    /// mesh creation.
+    /// description's ComponentCount values. Radient copies the data into
+    /// transient upload storage during mesh creation and does not retain the
+    /// deltas in CPU memory after the upload has been scheduled.
     const Float32* pDeltas DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientMorphTargetAttributeCreateInfo RadientMorphTargetAttributeCreateInfo;
@@ -100,8 +101,9 @@ typedef struct RadientMorphTargetDesc RadientMorphTargetDesc;
 
 /// Morph-target creation attributes.
 ///
-/// Radient copies Desc, all metadata it references, and the attribute creation
-/// data during mesh creation.
+/// Radient retains a copy of Desc and all metadata it references. Attribute
+/// creation data is copied only into transient upload storage and is not kept
+/// in CPU memory after the GPU upload has been scheduled.
 struct RadientMorphTargetCreateInfo
 {
     /// Complete immutable description of the target to create.

@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include "Assets/RadientMorphTargetData.hpp"
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
@@ -48,8 +47,10 @@ class ResourceManager;
 
 class RadientMeshIndexSource;
 class RadientMeshVertexSource;
+class RadientMorphTargetSource;
 class MeshIndexDataPayloadImpl;
 class MeshVertexDataPayloadImpl;
+class MeshMorphTargetDataPayloadImpl;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
 struct RadientMeshViewCreateInfo;
@@ -68,11 +69,19 @@ class IRadientMeshVertexData : public IRadientAsset
 {
 };
 
+// Opaque handle to shared mesh morph-target data. The implementation details
+// are private to RadientMeshAssetManager.
+class IRadientMeshMorphTargetData : public IRadientAsset
+{
+};
+
 struct RadientMeshGeometryData
 {
-    /// Vertex and index data that together form one drawable geometry.
-    IRadientMeshVertexData* pVertexData = nullptr;
-    IRadientMeshIndexData*  pIndexData  = nullptr;
+    /// Vertex, index, and optional morph-target data that together form one
+    /// drawable geometry. Morph-target deltas use the vertex data's domain.
+    IRadientMeshVertexData*      pVertexData      = nullptr;
+    IRadientMeshIndexData*       pIndexData       = nullptr;
+    IRadientMeshMorphTargetData* pMorphTargetData = nullptr;
 };
 
 class RadientMeshAssetManager final : public std::enable_shared_from_this<RadientMeshAssetManager>
@@ -101,15 +110,18 @@ public:
                                         std::unique_ptr<RadientMeshVertexSource> pVertexSource,
                                         IRadientMeshVertexData**                 ppVertexData);
 
+    RADIENT_STATUS CreateMeshMorphTargetData(IThreadPool&                              ThreadPool,
+                                             std::unique_ptr<RadientMorphTargetSource> pMorphTargetSource,
+                                             IRadientMeshMorphTargetData**             ppMorphTargetData);
+
     // Creates a mesh handle and schedules mesh-view payload creation. When
     // vertex or index data is still loading, the view task depends on the
     // corresponding data tasks if they are still available.
-    RADIENT_STATUS CreateMeshView(IThreadPool&                            ThreadPool,
-                                  const RadientMeshGeometryData*          pGeometryData,
-                                  Uint32                                  GeometryCount,
-                                  const RadientMeshViewCreateInfo&        ViewCI,
-                                  IRadientMeshAsset**                     ppMesh,
-                                  std::unique_ptr<RadientMorphTargetData> pMorphTargetData = nullptr);
+    RADIENT_STATUS CreateMeshView(IThreadPool&                     ThreadPool,
+                                  const RadientMeshGeometryData*   pGeometryData,
+                                  Uint32                           GeometryCount,
+                                  const RadientMeshViewCreateInfo& ViewCI,
+                                  IRadientMeshAsset**              ppMesh);
 
     // Returns drawable mesh data when the mesh asset is ready. A pending status
     // means that any mesh dependency may still be unresolved: source/view
@@ -127,18 +139,19 @@ public:
     static RADIENT_STATUS GetLoadStatus(IRadientMeshIndexData* pMeshIndexData);
     // Reports CPU-side mesh data readiness for shared mesh vertex data handles.
     static RADIENT_STATUS GetLoadStatus(IRadientMeshVertexData* pMeshVertexData);
+    // Reports CPU-side mesh data readiness for shared morph-target data handles.
+    static RADIENT_STATUS GetLoadStatus(IRadientMeshMorphTargetData* pMorphTargetData);
 
     // Reports render-resource readiness. This follows GetLoadStatus(), then
     // checks geometry GPU resources and material/texture GPU resources.
-    static RADIENT_STATUS                   GetGPUResourceStatus(IRadientAsset* pMeshAsset);
-    static const MeshPayloadImpl*           GetMeshPayload(IRadientMeshAsset* pMeshAsset);
-    static Uint32                           GetMeshGeometryCount(IRadientMeshAsset* pMeshAsset);
-    static const MeshIndexDataPayloadImpl*  GetMeshIndexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
-    static const MeshVertexDataPayloadImpl* GetMeshVertexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
-    static const IRadientMeshIndexData*     GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
-    static const IRadientMeshVertexData*    GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
-    // Returns packed morph deltas for a ready mesh asset.
-    static const RadientMorphTargetData* GetMorphTargetData(IRadientMeshAsset* pMeshAsset);
+    static RADIENT_STATUS                        GetGPUResourceStatus(IRadientAsset* pMeshAsset);
+    static const MeshPayloadImpl*                GetMeshPayload(IRadientMeshAsset* pMeshAsset);
+    static Uint32                                GetMeshGeometryCount(IRadientMeshAsset* pMeshAsset);
+    static const MeshIndexDataPayloadImpl*       GetMeshIndexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
+    static const MeshVertexDataPayloadImpl*      GetMeshVertexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
+    static const MeshMorphTargetDataPayloadImpl* GetMeshMorphTargetDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
+    static const IRadientMeshIndexData*          GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
+    static const IRadientMeshVertexData*         GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);
@@ -147,9 +160,10 @@ private:
     RefCntWeakPtr<GLTF::ResourceManager> m_WeakResourceManager;
     RefCntWeakPtr<IGPUUploadManager>     m_WeakUploadManager;
 
-    RadientAssetCache<MeshPayloadImpl>           m_MeshCache;
-    RadientAssetCache<MeshIndexDataPayloadImpl>  m_MeshIndexDataCache;
-    RadientAssetCache<MeshVertexDataPayloadImpl> m_MeshVertexDataCache;
+    RadientAssetCache<MeshPayloadImpl>                m_MeshCache;
+    RadientAssetCache<MeshIndexDataPayloadImpl>       m_MeshIndexDataCache;
+    RadientAssetCache<MeshVertexDataPayloadImpl>      m_MeshVertexDataCache;
+    RadientAssetCache<MeshMorphTargetDataPayloadImpl> m_MeshMorphTargetDataCache;
 };
 
 } // namespace Diligent

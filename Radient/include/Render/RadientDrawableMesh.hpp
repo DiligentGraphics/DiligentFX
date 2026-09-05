@@ -35,6 +35,7 @@
 namespace Diligent
 {
 
+class RadientMorphTargetData;
 struct IRadientMaterialAsset;
 
 struct RadientDrawableMeshPrimitive
@@ -53,10 +54,18 @@ struct RadientDrawableMeshGeometry
 {
     IVertexPool* pVertexPool = nullptr;
 
+    /// Immutable layout of this geometry's morph-target streams, or null when
+    /// the geometry has no morph targets.
+    const RadientMorphTargetData* pMorphTargetData = nullptr;
+
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
+
+    /// Byte offset of the geometry's packed deltas in the shared morph-target
+    /// buffer. Valid when pMorphTargetData is non-null and contains GPU data.
+    Uint32 MorphTargetDataOffset = 0;
 };
 
 /// Resolved mesh data needed to expand one scene renderable into drawable primitive slots.

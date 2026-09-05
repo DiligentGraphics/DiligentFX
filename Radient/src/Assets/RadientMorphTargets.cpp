@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientMorphTargetData.hpp"
+#include "Assets/RadientMorphTargetSource.hpp"
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -40,29 +41,27 @@
 namespace Diligent
 {
 
-RadientMorphTargetData::RadientMorphTargetData(const RadientMorphTargetCreateInfo* pTargets,
-                                               Uint32                              TargetCount,
-                                               Uint32                              VertexCount)
+RadientMorphTargetData::RadientMorphTargetData(const RadientMorphTargetSource& Source)
 {
-    VERIFY_EXPR(pTargets != nullptr && TargetCount != 0 && VertexCount != 0);
+    VERIFY_EXPR(Source.GetStatus() == RADIENT_STATUS_OK);
+
+    const Uint32 TargetCount = Source.GetTargetCount();
 
     size_t AttributeCount = 0;
     for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
-        AttributeCount += pTargets[TargetIndex].Desc.AttributeCount;
+        AttributeCount += Source.GetTarget(TargetIndex).Attributes.size();
 
     FixedLinearAllocator Allocator{GetRawAllocator()};
     Allocator.AddSpace<RadientMorphTargetDesc>(TargetCount);
     Allocator.AddSpace<RadientMorphTargetAttributeDesc>(AttributeCount);
-    Allocator.AddSpace<AttributeData>(AttributeCount);
+    Allocator.AddSpace<AttributeLayout>(AttributeCount);
     for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
     {
-        const RadientMorphTargetDesc& Target = pTargets[TargetIndex].Desc;
-        Allocator.AddSpaceForString(Target.Name != nullptr ? Target.Name : "");
-        for (Uint32 AttributeIndex = 0; AttributeIndex < Target.AttributeCount; ++AttributeIndex)
+        const RadientMorphTargetSource::Target& Target = Source.GetTarget(TargetIndex);
+        Allocator.AddSpaceForString(Target.Name.c_str());
+        for (const RadientMorphTargetSource::Attribute& Attribute : Target.Attributes)
         {
-            const RadientMorphTargetAttributeDesc& Attribute = Target.pAttributes[AttributeIndex];
-            Allocator.AddSpaceForString(Attribute.Semantic);
-            Allocator.AddSpace<Float32>(size_t{VertexCount} * Attribute.ComponentCount);
+            Allocator.AddSpaceForString(Attribute.Semantic.c_str());
         }
     }
 
@@ -71,50 +70,49 @@ RadientMorphTargetData::RadientMorphTargetData(const RadientMorphTargetCreateInf
     m_Memory                = PackedMemory{Allocator.ReleaseOwnership(), STDDeleterRawMem<void>{GetRawAllocator()}};
 
     FixedLinearAllocator          Writer{m_Memory.get(), MemorySize};
-    RadientMorphTargetDesc* const pTargetDescs   = Writer.ConstructArray<RadientMorphTargetDesc>(TargetCount);
-    auto* const                   pAttributes    = Writer.ConstructArray<RadientMorphTargetAttributeDesc>(AttributeCount);
-    auto* const                   pAttributeData = Writer.ConstructArray<AttributeData>(AttributeCount);
+    RadientMorphTargetDesc* const pTargetDescs      = Writer.ConstructArray<RadientMorphTargetDesc>(TargetCount);
+    auto* const                   pAttributes       = Writer.ConstructArray<RadientMorphTargetAttributeDesc>(AttributeCount);
+    auto* const                   pAttributeLayouts = Writer.ConstructArray<AttributeLayout>(AttributeCount);
 
     size_t FirstAttribute = 0;
     for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
     {
-        const RadientMorphTargetCreateInfo& SourceTargetCI = pTargets[TargetIndex];
-        const RadientMorphTargetDesc&       SourceTarget   = SourceTargetCI.Desc;
-        RadientMorphTargetDesc&             Target         = pTargetDescs[TargetIndex];
+        const RadientMorphTargetSource::Target& SourceTarget = Source.GetTarget(TargetIndex);
+        RadientMorphTargetDesc&                 Target       = pTargetDescs[TargetIndex];
 
-        Target.Name           = Writer.CopyString(SourceTarget.Name != nullptr ? SourceTarget.Name : "");
-        Target.AttributeCount = SourceTarget.AttributeCount;
+        Target.Name           = Writer.CopyString(SourceTarget.Name.c_str());
+        Target.AttributeCount = static_cast<Uint32>(SourceTarget.Attributes.size());
         Target.DefaultWeight  = SourceTarget.DefaultWeight;
-        Target.pAttributes    = SourceTarget.AttributeCount != 0 ? pAttributes + FirstAttribute : nullptr;
-        for (Uint32 AttributeIndex = 0; AttributeIndex < SourceTarget.AttributeCount; ++AttributeIndex)
+        Target.pAttributes    = !SourceTarget.Attributes.empty() ? pAttributes + FirstAttribute : nullptr;
+        for (Uint32 AttributeIndex = 0; AttributeIndex < SourceTarget.Attributes.size(); ++AttributeIndex)
         {
-            const RadientMorphTargetAttributeDesc& SourceAttribute     = SourceTarget.pAttributes[AttributeIndex];
-            const auto&                            SourceAttributeData = SourceTargetCI.pAttributeData[AttributeIndex];
-            RadientMorphTargetAttributeDesc&       Attribute           = pAttributes[FirstAttribute + AttributeIndex];
-            auto&                                  AttributeData       = pAttributeData[FirstAttribute + AttributeIndex];
+            const RadientMorphTargetSource::Attribute& SourceAttribute = SourceTarget.Attributes[AttributeIndex];
+            RadientMorphTargetAttributeDesc&           Attribute       = pAttributes[FirstAttribute + AttributeIndex];
+            AttributeLayout&                           Layout          = pAttributeLayouts[FirstAttribute + AttributeIndex];
 
-            Attribute.Semantic       = Writer.CopyString(SourceAttribute.Semantic);
+            Attribute.Semantic       = Writer.CopyString(SourceAttribute.Semantic.c_str());
             Attribute.ComponentCount = SourceAttribute.ComponentCount;
-            AttributeData.pDeltas    = Writer.CopyArray(SourceAttributeData.pDeltas,
-                                                        size_t{VertexCount} * SourceAttribute.ComponentCount);
+            Layout.DataOffset        = SourceAttribute.DataOffset;
         }
-        FirstAttribute += SourceTarget.AttributeCount;
+        FirstAttribute += SourceTarget.Attributes.size();
     }
 
     m_Desc.pMorphTargets    = pTargetDescs;
     m_Desc.MorphTargetCount = TargetCount;
     m_pAttributes           = pAttributes;
-    m_pAttributeData        = pAttributeData;
+    m_pAttributeLayouts     = pAttributeLayouts;
+    m_VertexCount           = Source.GetVertexCount();
+    m_DataSize              = Source.GetDataSize();
     VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
 }
 
-const Float32* RadientMorphTargetData::GetDeltas(Uint32 TargetIndex, Uint32 AttributeIndex) const noexcept
+Uint32 RadientMorphTargetData::GetAttributeDataOffset(Uint32 TargetIndex, Uint32 AttributeIndex) const noexcept
 {
     VERIFY_EXPR(TargetIndex < m_Desc.MorphTargetCount);
     const RadientMorphTargetDesc& Target = m_Desc.pMorphTargets[TargetIndex];
     VERIFY_EXPR(AttributeIndex < Target.AttributeCount);
     const size_t DataIndex = static_cast<size_t>(Target.pAttributes - m_pAttributes) + AttributeIndex;
-    return m_pAttributeData[DataIndex].pDeltas;
+    return m_pAttributeLayouts[DataIndex].DataOffset;
 }
 
 namespace
