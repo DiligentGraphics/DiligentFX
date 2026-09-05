@@ -196,20 +196,27 @@ public:
 namespace
 {
 
-using MeshIndexDataAssetBase =
-    RadientAssetImpl<IRadientMeshIndexData, IID_RadientMeshIndexData, IID_MeshIndexDataImpl, RADIENT_ASSET_TYPE_MESH, MeshIndexDataPayloadImpl>;
-
-class MeshIndexDataAssetImpl final : public MeshIndexDataAssetBase
+template <typename InterfaceType,
+          const INTERFACE_ID& InterfaceID,
+          const INTERFACE_ID& ImplID,
+          typename PayloadType>
+class MeshDataAssetImpl final :
+    public RadientAssetImpl<InterfaceType,
+                            InterfaceID,
+                            ImplID,
+                            RADIENT_ASSET_TYPE_MESH,
+                            PayloadType,
+                            MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, PayloadType>>
 {
 public:
-    using TBase = MeshIndexDataAssetBase;
+    using TBase = RadientAssetImpl<InterfaceType,
+                                   InterfaceID,
+                                   ImplID,
+                                   RADIENT_ASSET_TYPE_MESH,
+                                   PayloadType,
+                                   MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, PayloadType>>;
     using TBase::TBase;
-
-    static RefCntAutoPtr<MeshIndexDataAssetImpl> Create(std::string AssetURI)
-    {
-        return RefCntAutoPtr<MeshIndexDataAssetImpl>{
-            MakeNewRCObj<MeshIndexDataAssetImpl>()(std::move(AssetURI))};
-    }
+    using TBase::Create;
 
     void SetLoadTask(IAsyncTask* pTask)
     {
@@ -221,73 +228,26 @@ public:
         return m_pLoadTask.Lock();
     }
 
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_MeshIndexDataImpl, TBase)
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(ImplID, TBase)
 
 private:
     RefCntWeakPtr<IAsyncTask> m_pLoadTask;
 };
 
-using MeshVertexDataAssetBase =
-    RadientAssetImpl<IRadientMeshVertexData, IID_RadientMeshVertexData, IID_MeshVertexDataImpl, RADIENT_ASSET_TYPE_MESH, MeshVertexDataPayloadImpl>;
+using MeshIndexDataAssetImpl = MeshDataAssetImpl<IRadientMeshIndexData,
+                                                 IID_RadientMeshIndexData,
+                                                 IID_MeshIndexDataImpl,
+                                                 MeshIndexDataPayloadImpl>;
 
-class MeshVertexDataAssetImpl final : public MeshVertexDataAssetBase
-{
-public:
-    using TBase = MeshVertexDataAssetBase;
-    using TBase::TBase;
+using MeshVertexDataAssetImpl = MeshDataAssetImpl<IRadientMeshVertexData,
+                                                  IID_RadientMeshVertexData,
+                                                  IID_MeshVertexDataImpl,
+                                                  MeshVertexDataPayloadImpl>;
 
-    static RefCntAutoPtr<MeshVertexDataAssetImpl> Create(std::string AssetURI)
-    {
-        return RefCntAutoPtr<MeshVertexDataAssetImpl>{
-            MakeNewRCObj<MeshVertexDataAssetImpl>()(std::move(AssetURI))};
-    }
-
-    void SetLoadTask(IAsyncTask* pTask)
-    {
-        m_pLoadTask = pTask;
-    }
-
-    RefCntAutoPtr<IAsyncTask> LockLoadTask() const
-    {
-        return m_pLoadTask.Lock();
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_MeshVertexDataImpl, TBase)
-
-private:
-    RefCntWeakPtr<IAsyncTask> m_pLoadTask;
-};
-
-using MeshMorphTargetDataAssetBase =
-    RadientAssetImpl<IRadientMeshMorphTargetData, IID_RadientMeshMorphTargetData, IID_MeshMorphTargetDataImpl, RADIENT_ASSET_TYPE_MESH, MeshMorphTargetDataPayloadImpl>;
-
-class MeshMorphTargetDataAssetImpl final : public MeshMorphTargetDataAssetBase
-{
-public:
-    using TBase = MeshMorphTargetDataAssetBase;
-    using TBase::TBase;
-
-    static RefCntAutoPtr<MeshMorphTargetDataAssetImpl> Create(std::string AssetURI)
-    {
-        return RefCntAutoPtr<MeshMorphTargetDataAssetImpl>{
-            MakeNewRCObj<MeshMorphTargetDataAssetImpl>()(std::move(AssetURI))};
-    }
-
-    void SetLoadTask(IAsyncTask* pTask)
-    {
-        m_pLoadTask = pTask;
-    }
-
-    RefCntAutoPtr<IAsyncTask> LockLoadTask() const
-    {
-        return m_pLoadTask.Lock();
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_MeshMorphTargetDataImpl, TBase)
-
-private:
-    RefCntWeakPtr<IAsyncTask> m_pLoadTask;
-};
+using MeshMorphTargetDataAssetImpl = MeshDataAssetImpl<IRadientMeshMorphTargetData,
+                                                       IID_RadientMeshMorphTargetData,
+                                                       IID_MeshMorphTargetDataImpl,
+                                                       MeshMorphTargetDataPayloadImpl>;
 
 struct MeshGeometryStorage
 {
