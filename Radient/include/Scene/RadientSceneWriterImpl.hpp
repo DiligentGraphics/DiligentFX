@@ -79,6 +79,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkin(RadientEntityID             Entity,
                                                       const RadientSkinComponent& Skin) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMorph(RadientEntityID              Entity,
+                                                       const RadientMorphComponent& Morph) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMeshRenderer(RadientEntityID                     Entity,
                                                               const RadientMeshRendererComponent& Renderer) override final;
 

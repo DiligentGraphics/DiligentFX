@@ -56,6 +56,7 @@ set(SOURCE
     src/Render/Tessera/RadientTesseraSkinData.cpp
     src/Scene/Components/RadientMaterialBindingsStorage.cpp
     src/Scene/Components/RadientMeshComponentStorage.cpp
+    src/Scene/Components/RadientMorphComponentStorage.cpp
     src/Scene/Components/RadientSkinComponentStorage.cpp
     src/Scene/RadientSceneImpl.cpp
     src/Scene/RadientSceneState.cpp
@@ -119,6 +120,7 @@ set(INCLUDE
     include/Render/Tessera/RadientTesseraMaterialCache.hpp
     include/Render/Tessera/RadientTesseraRenderTechnique.hpp
     include/Render/Tessera/RadientTesseraSkinData.hpp
+    include/Scene/Components/RadientMorphComponentStorage.hpp
 )
 
 set(INTERFACE

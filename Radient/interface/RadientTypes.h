@@ -125,6 +125,7 @@ static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH_REN
 static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_LIGHT             = 5;
 static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS = 6;
 static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_SKIN              = 7;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MORPH             = 8;
 
 /// Asset reference used by scenes, components, and render features.
 struct RadientAssetReference

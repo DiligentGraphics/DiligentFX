@@ -90,7 +90,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                              RadientEntityID                  Entity,
                                              const RadientCameraComponent REF Camera) PURE;
 
-    /// Adds or updates a mesh component.
+    /// Adds or updates a mesh component. Replacing the mesh removes an existing
+    /// morph component if its weights belong to a different mesh.
     VIRTUAL RADIENT_STATUS METHOD(SetMesh)(THIS_
                                            RadientEntityID                Entity,
                                            const RadientMeshComponent REF Mesh) PURE;
@@ -99,6 +100,12 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
     VIRTUAL RADIENT_STATUS METHOD(SetSkin)(THIS_
                                            RadientEntityID                Entity,
                                            const RadientSkinComponent REF Skin) PURE;
+
+    /// Adds or updates a morph component. The weights must belong to the mesh
+    /// currently assigned to the entity.
+    VIRTUAL RADIENT_STATUS METHOD(SetMorph)(THIS_
+                                            RadientEntityID                 Entity,
+                                            const RadientMorphComponent REF Morph) PURE;
 
     /// Adds or updates a mesh renderer component.
     VIRTUAL RADIENT_STATUS METHOD(SetMeshRenderer)(THIS_
@@ -144,6 +151,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_SetCamera(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetCamera,         This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMesh(This, ...)                CALL_IFACE_METHOD(RadientSceneWriter, SetMesh,           This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetSkin(This, ...)                CALL_IFACE_METHOD(RadientSceneWriter, SetSkin,           This, __VA_ARGS__)
+#    define IRadientSceneWriter_SetMorph(This, ...)               CALL_IFACE_METHOD(RadientSceneWriter, SetMorph,          This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMeshRenderer(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, SetMeshRenderer,   This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMaterialBindings(This, ...)    CALL_IFACE_METHOD(RadientSceneWriter, SetMaterialBindings, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetLight(This, ...)               CALL_IFACE_METHOD(RadientSceneWriter, SetLight,          This, __VA_ARGS__)

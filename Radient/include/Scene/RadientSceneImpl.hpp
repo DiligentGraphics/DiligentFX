@@ -95,6 +95,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetSkin(RadientEntityID       Entity,
                                                       RadientSkinComponent& Skin) const override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetMorph(RadientEntityID        Entity,
+                                                       RadientMorphComponent& Morph) const override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
                                                            RadientComponentTypeID ComponentType,
                                                            Bool&                  HasComponent) const override final;

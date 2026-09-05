@@ -106,7 +106,7 @@ typedef struct RadientSceneCreateInfo RadientSceneCreateInfo;
 /// Scene revisions grouped by renderer-relevant data category.
 struct RadientSceneRevisions
 {
-    /// Mesh, mesh renderer, or material binding data changed.
+    /// Mesh, mesh renderer, material binding, skin, or morph data changed.
     RadientRevision Drawables DEFAULT_INITIALIZER(0);
 
     /// Light component data changed.
@@ -573,6 +573,13 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                            RadientEntityID          Entity,
                                            RadientSkinComponent REF Skin) CONST PURE;
 
+    /// Gets morph component. The returned weights pointer is borrowed from the
+    /// scene and remains valid until the component is changed or removed. The
+    /// caller may retain it when a longer lifetime is required.
+    VIRTUAL RADIENT_STATUS METHOD(GetMorph)(THIS_
+                                            RadientEntityID           Entity,
+                                            RadientMorphComponent REF Morph) CONST PURE;
+
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
                                                 RadientEntityID        Entity,
@@ -602,6 +609,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
 #    define IRadientScene_GetSkin(This, ...)                     CALL_IFACE_METHOD(RadientScene, GetSkin,                     This, __VA_ARGS__)
+#    define IRadientScene_GetMorph(This, ...)                    CALL_IFACE_METHOD(RadientScene, GetMorph,                    This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetSceneRevisions(This)                CALL_IFACE_METHOD(RadientScene, GetSceneRevisions,           This)
 

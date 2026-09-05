@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
+#include "Scene/Components/RadientMorphComponentStorage.hpp"
+#include "Scene/RadientSceneState.hpp"
 #include "ThreadPool.hpp"
 
 #include "gtest/gtest.h"
@@ -111,6 +113,14 @@ RefCntAutoPtr<IRadientMeshAsset> CreateMesh(const RadientMeshCreateInfo& CI)
     pThreadPool->WaitForAllTasks();
     pThreadPool->StopThreads();
     return pMesh;
+}
+
+RefCntAutoPtr<IRadientMorphTargetWeights> CreateWeights(IRadientMeshAsset& Mesh)
+{
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    EXPECT_EQ(Mesh.CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    EXPECT_NE(pWeights, nullptr);
+    return pWeights;
 }
 
 } // namespace
@@ -277,4 +287,244 @@ TEST(RadientMorphTargetsTest, MeshWithoutTargetsCreatesEmptyWeights)
     EXPECT_EQ(pWeights->SetWeights(0, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWeights->ResetToDefaults(), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWeights->GetVersion(), 1u);
+}
+
+TEST(RadientMorphTargetsTest, MorphComponentStorageRetainsWeightsAndRepairsPointerAfterMove)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+    IRadientMorphTargetWeights* const pExpectedWeights = pWeights;
+
+    MorphComponentStorage Storage;
+    Storage.Assign({pWeights});
+    pWeights.Release();
+    pMesh.Release();
+
+    ASSERT_EQ(Storage.Component.pWeights, pExpectedWeights);
+    EXPECT_EQ(Storage.Component.pWeights->GetWeightCount(), 2u);
+
+    MorphComponentStorage MoveConstructed{std::move(Storage)};
+    EXPECT_EQ(Storage.Component.pWeights, nullptr);
+    EXPECT_EQ(MoveConstructed.Component.pWeights, pExpectedWeights);
+
+    MorphComponentStorage MoveAssigned;
+    MoveAssigned = std::move(MoveConstructed);
+    EXPECT_EQ(MoveConstructed.Component.pWeights, nullptr);
+    EXPECT_EQ(MoveAssigned.Component.pWeights, pExpectedWeights);
+}
+
+TEST(RadientMorphTargetsTest, SceneSetMorphRejectsUnknownEntity)
+{
+    RadientSceneState State;
+    EXPECT_EQ(State.SetMorph(InvalidRadientEntityID, {}), RADIENT_STATUS_NOT_FOUND);
+}
+
+TEST(RadientMorphTargetsTest, SceneSetMorphRejectsNullWeights)
+{
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMorph(Entity, {}), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+}
+
+TEST(RadientMorphTargetsTest, SceneSetMorphRequiresMesh)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMorph(Entity, {pWeights}), RADIENT_STATUS_INVALID_OPERATION);
+}
+
+TEST(RadientMorphTargetsTest, SceneSetMorphRejectsWeightsForDifferentMesh)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh      = CreateMesh(Source.MakeCreateInfo());
+    RefCntAutoPtr<IRadientMeshAsset> pOtherMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    ASSERT_NE(pOtherMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pOtherWeights = CreateWeights(*pOtherMesh);
+    ASSERT_NE(pOtherWeights, nullptr);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMorph(Entity, {pOtherWeights}), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+
+    Bool HasMorph = True;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH, HasMorph), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMorph, False);
+}
+
+TEST(RadientMorphTargetsTest, SceneStoresMorphAndReportsDrawableChanges)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+    IRadientMorphTargetWeights* const pExpectedWeights = pWeights;
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    State.ClearRenderableMeshChanges();
+
+    RadientMorphComponent StoredMorph{pWeights};
+    EXPECT_EQ(State.GetMorph(InvalidRadientEntityID, StoredMorph), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredMorph, RadientMorphComponent{});
+    StoredMorph = {pWeights};
+    EXPECT_EQ(State.GetMorph(Entity, StoredMorph), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredMorph, RadientMorphComponent{});
+
+    const RadientSceneRevisions RevisionsBeforeMorph = State.GetSceneRevisions();
+    ASSERT_EQ(State.SetMorph(Entity, {pWeights}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetSceneRevisions().Drawables, RevisionsBeforeMorph.Drawables + 1);
+
+    pWeights.Release();
+    pMesh.Release();
+
+    Bool HasMorph = False;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH, HasMorph), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMorph, True);
+    EXPECT_EQ(State.GetMorph(Entity, StoredMorph), RADIENT_STATUS_OK);
+    ASSERT_EQ(StoredMorph.pWeights, pExpectedWeights);
+    EXPECT_EQ(StoredMorph.pWeights->GetWeightCount(), 2u);
+
+    Uint32 UpdatedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++UpdatedCount;
+            EXPECT_EQ(Change.Entity, Entity);
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            ASSERT_NE(pRenderable->pMorph, nullptr);
+            EXPECT_EQ(pRenderable->pMorph->pWeights, pExpectedWeights);
+        });
+    EXPECT_EQ(UpdatedCount, 1u);
+    State.ClearRenderableMeshChanges();
+
+    const RadientSceneRevisions RevisionsBeforeNoChange = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetMorph(Entity, StoredMorph), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetSceneRevisions(), RevisionsBeforeNoChange);
+    Uint32 NoChangeCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&NoChangeCount](const RadientSceneState::RenderableMeshChange&,
+                         const RadientSceneState::RenderableMesh*) {
+            ++NoChangeCount;
+        });
+    EXPECT_EQ(NoChangeCount, 0u);
+
+    ASSERT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH, HasMorph), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMorph, False);
+    EXPECT_EQ(State.GetMorph(Entity, StoredMorph), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(StoredMorph, RadientMorphComponent{});
+
+    Uint32 RemovedMorphCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++RemovedMorphCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            EXPECT_EQ(pRenderable->pMorph, nullptr);
+        });
+    EXPECT_EQ(RemovedMorphCount, 1u);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientMorphTargetsTest, ReplacingMeshRemovesIncompatibleMorph)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh      = CreateMesh(Source.MakeCreateInfo());
+    RefCntAutoPtr<IRadientMeshAsset> pOtherMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    ASSERT_NE(pOtherMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMorph(Entity, {pWeights}), RADIENT_STATUS_OK);
+    State.ClearRenderableMeshChanges();
+
+    ASSERT_EQ(State.SetMesh(Entity, {pOtherMesh}), RADIENT_STATUS_OK);
+
+    Bool HasMorph = True;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH, HasMorph), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMorph, False);
+    RadientMorphComponent Morph{pWeights};
+    EXPECT_EQ(State.GetMorph(Entity, Morph), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Morph, RadientMorphComponent{});
+
+    Uint32 UpdatedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++UpdatedCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Updated);
+            ASSERT_NE(pRenderable, nullptr);
+            EXPECT_EQ(pRenderable->Mesh.pMesh, pOtherMesh.RawPtr());
+            EXPECT_EQ(pRenderable->pMorph, nullptr);
+        });
+    EXPECT_EQ(UpdatedCount, 1u);
+}
+
+TEST(RadientMorphTargetsTest, RemovingMeshRemovesMorph)
+{
+    MorphMeshData                    Source;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+
+    RadientSceneState State;
+    RadientEntityID   Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.SetMorph(Entity, {pWeights}), RADIENT_STATUS_OK);
+    State.ClearRenderableMeshChanges();
+
+    ASSERT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH), RADIENT_STATUS_OK);
+
+    Bool HasMorph = True;
+    EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MORPH, HasMorph), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasMorph, False);
+    RadientMorphComponent Morph{pWeights};
+    EXPECT_EQ(State.GetMorph(Entity, Morph), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Morph, RadientMorphComponent{});
+
+    Uint32 RemovedCount = 0;
+    State.EnumerateRenderableMeshChanges(
+        [&](const RadientSceneState::RenderableMeshChange& Change,
+            const RadientSceneState::RenderableMesh*       pRenderable) {
+            ++RemovedCount;
+            EXPECT_EQ(Change.Type, RadientSceneState::RenderableMeshChangeType::Removed);
+            EXPECT_EQ(pRenderable, nullptr);
+        });
+    EXPECT_EQ(RemovedCount, 1u);
 }

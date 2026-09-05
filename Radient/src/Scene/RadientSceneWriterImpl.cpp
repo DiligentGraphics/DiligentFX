@@ -98,6 +98,11 @@ RADIENT_STATUS RadientSceneWriterImpl::SetSkin(RadientEntityID Entity, const Rad
     return m_pState ? m_pState->SetSkin(Entity, Skin) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
+RADIENT_STATUS RadientSceneWriterImpl::SetMorph(RadientEntityID Entity, const RadientMorphComponent& Morph)
+{
+    return m_pState ? m_pState->SetMorph(Entity, Morph) : RADIENT_STATUS_INVALID_ARGUMENT;
+}
+
 RADIENT_STATUS RadientSceneWriterImpl::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
 {
     return m_pState ? m_pState->SetMeshRenderer(Entity, Renderer) : RADIENT_STATUS_INVALID_ARGUMENT;

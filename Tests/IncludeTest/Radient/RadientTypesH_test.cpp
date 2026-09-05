@@ -66,6 +66,7 @@ static_assert(RADIENT_COMPONENT_TYPE_MESH_RENDERER == 4, "Unexpected RADIENT_COM
 static_assert(RADIENT_COMPONENT_TYPE_LIGHT == 5, "Unexpected RADIENT_COMPONENT_TYPE_LIGHT value");
 static_assert(RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS == 6, "Unexpected RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS value");
 static_assert(RADIENT_COMPONENT_TYPE_SKIN == 7, "Unexpected RADIENT_COMPONENT_TYPE_SKIN value");
+static_assert(RADIENT_COMPONENT_TYPE_MORPH == 8, "Unexpected RADIENT_COMPONENT_TYPE_MORPH value");
 
 static_assert(std::is_standard_layout<RadientAssetReference>::value, "RadientAssetReference must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAssetReference>::value, "RadientAssetReference must be trivially copyable");

@@ -64,6 +64,7 @@ bool IsBuiltInComponentType(const RadientComponentTypeID ComponentType)
             ComponentType == RADIENT_COMPONENT_TYPE_MESH_RENDERER ||
             ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS ||
             ComponentType == RADIENT_COMPONENT_TYPE_SKIN ||
+            ComponentType == RADIENT_COMPONENT_TYPE_MORPH ||
             ComponentType == RADIENT_COMPONENT_TYPE_LIGHT);
 }
 
@@ -339,6 +340,22 @@ RADIENT_STATUS RadientSceneState::GetSkin(RadientEntityID Entity, RadientSkinCom
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::GetMorph(RadientEntityID Entity, RadientMorphComponent& Morph) const
+{
+    Morph = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const MorphComponentStorage* pMorph = m_Registry.try_get<MorphComponentStorage>(E);
+    if (pMorph == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Morph = pMorph->Component;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     HasComponent = False;
@@ -374,6 +391,10 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
 
         case RADIENT_COMPONENT_TYPE_SKIN:
             HasComponent = m_Registry.all_of<SkinComponentStorage>(E) ? True : False;
+            break;
+
+        case RADIENT_COMPONENT_TYPE_MORPH:
+            HasComponent = m_Registry.all_of<MorphComponentStorage>(E) ? True : False;
             break;
 
         case RADIENT_COMPONENT_TYPE_LIGHT:
@@ -609,6 +630,10 @@ RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientM
     if (pExistingMesh != nullptr && pExistingMesh->Component == Mesh)
         return RADIENT_STATUS_NO_CHANGE;
 
+    const MorphComponentStorage* pMorph = m_Registry.try_get<MorphComponentStorage>(E);
+    if (pMorph != nullptr && pMorph->Component.pWeights->GetMesh() != Mesh.pMesh)
+        m_Registry.remove<MorphComponentStorage>(E);
+
     MeshComponentStorage& MeshStorage = pExistingMesh != nullptr ?
         *pExistingMesh :
         m_Registry.emplace<MeshComponentStorage>(E);
@@ -641,6 +666,36 @@ RADIENT_STATUS RadientSceneState::SetSkin(RadientEntityID Entity, const RadientS
         m_Registry.emplace<SkinComponentStorage>(E);
 
     SkinStorage.Assign(Skin);
+    Touch(CHANGE_FLAG_DRAWABLES);
+    RecordRenderableMeshUpdated(E);
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::SetMorph(RadientEntityID Entity, const RadientMorphComponent& Morph)
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (Morph.pWeights == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const MeshComponentStorage* pMesh = m_Registry.try_get<MeshComponentStorage>(E);
+    if (pMesh == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (Morph.pWeights->GetMesh() != pMesh->Component.pMesh)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    MorphComponentStorage* pExistingMorph = m_Registry.try_get<MorphComponentStorage>(E);
+    if (pExistingMorph != nullptr && pExistingMorph->Component == Morph)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    MorphComponentStorage& MorphStorage = pExistingMorph != nullptr ?
+        *pExistingMorph :
+        m_Registry.emplace<MorphComponentStorage>(E);
+
+    MorphStorage.Assign(Morph);
     Touch(CHANGE_FLAG_DRAWABLES);
     RecordRenderableMeshUpdated(E);
     return RADIENT_STATUS_OK;
@@ -774,7 +829,9 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH:
-            Removed     = m_Registry.remove<MeshComponentStorage>(E) != 0;
+            Removed = m_Registry.remove<MeshComponentStorage>(E) != 0;
+            if (Removed)
+                m_Registry.remove<MorphComponentStorage>(E);
             ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
@@ -790,6 +847,11 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
         case RADIENT_COMPONENT_TYPE_SKIN:
             Removed     = m_Registry.remove<SkinComponentStorage>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_DRAWABLES;
+            break;
+
+        case RADIENT_COMPONENT_TYPE_MORPH:
+            Removed     = m_Registry.remove<MorphComponentStorage>(E) != 0;
             ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
@@ -838,7 +900,8 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
         if (ChangeFlags == CHANGE_FLAG_DRAWABLES)
         {
             if (ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS ||
-                ComponentType == RADIENT_COMPONENT_TYPE_SKIN)
+                ComponentType == RADIENT_COMPONENT_TYPE_SKIN ||
+                ComponentType == RADIENT_COMPONENT_TYPE_MORPH)
                 RecordRenderableMeshUpdated(E);
             else
                 UpdateRenderableMeshState(E);
@@ -1012,7 +1075,8 @@ RadientSceneState::CHANGE_FLAGS RadientSceneState::DestroyEntitySubtree(entt::en
              m_Registry.all_of<MeshComponentStorage>(Current) ||
              m_Registry.all_of<RadientMeshRendererComponent>(Current) ||
              m_Registry.all_of<MaterialBindingsStorage>(Current) ||
-             m_Registry.all_of<SkinComponentStorage>(Current)))
+             m_Registry.all_of<SkinComponentStorage>(Current) ||
+             m_Registry.all_of<MorphComponentStorage>(Current)))
         {
             ChangeFlags |= CHANGE_FLAG_DRAWABLES;
         }

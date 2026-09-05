@@ -125,6 +125,11 @@ RADIENT_STATUS RadientSceneImpl::GetSkin(RadientEntityID Entity, RadientSkinComp
     return m_pState->GetSkin(Entity, Skin);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetMorph(RadientEntityID Entity, RadientMorphComponent& Morph) const
+{
+    return m_pState->GetMorph(Entity, Morph);
+}
+
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     return m_pState->HasComponent(Entity, ComponentType, HasComponent);

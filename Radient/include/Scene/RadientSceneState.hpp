@@ -30,6 +30,7 @@
 #include "FlagEnum.h"
 #include "Scene/Components/RadientMaterialBindingsStorage.hpp"
 #include "Scene/Components/RadientMeshComponentStorage.hpp"
+#include "Scene/Components/RadientMorphComponentStorage.hpp"
 #include "Scene/Components/RadientSkinComponentStorage.hpp"
 
 #include "entt/entity/registry.hpp"
@@ -70,6 +71,7 @@ public:
         const RadientMeshRendererComponent&     Renderer;
         const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
         const RadientSkinComponent*             pSkin             = nullptr;
+        const RadientMorphComponent*            pMorph            = nullptr;
         const RadientMatrix4x4&                 WorldMatrix;
         const Bool&                             EffectiveVisible;
     };
@@ -142,6 +144,7 @@ public:
     RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
     RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
     RADIENT_STATUS GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const;
+    RADIENT_STATUS GetMorph(RadientEntityID Entity, RadientMorphComponent& Morph) const;
     RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
     const RadientSceneRevisions&    GetSceneRevisions() const;
@@ -177,6 +180,7 @@ public:
     RADIENT_STATUS SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera);
     RADIENT_STATUS SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh);
     RADIENT_STATUS SetSkin(RadientEntityID Entity, const RadientSkinComponent& Skin);
+    RADIENT_STATUS SetMorph(RadientEntityID Entity, const RadientMorphComponent& Morph);
     RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
     RADIENT_STATUS SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings);
     RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
@@ -204,7 +208,7 @@ private:
     {
         CHANGE_FLAG_NONE = 0u,
 
-        // Mesh, mesh renderer, material bindings, or skin changed.
+        // Mesh, mesh renderer, material bindings, skin, or morph changed.
         CHANGE_FLAG_DRAWABLES = 1u << 0u,
 
         // Light component data changed.
@@ -455,6 +459,7 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
 
     const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
     const SkinComponentStorage*    pSkin             = m_Registry.try_get<SkinComponentStorage>(Entity);
+    const MorphComponentStorage*   pMorph            = m_Registry.try_get<MorphComponentStorage>(Entity);
 
     return RenderableMesh{
         EntityData.ID,
@@ -462,6 +467,7 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
         Renderer,
         pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
         pSkin != nullptr ? &pSkin->Component : nullptr,
+        pMorph != nullptr ? &pMorph->Component : nullptr,
         WorldTransform.Matrix,
         EffectiveVisible.Visible};
 }
