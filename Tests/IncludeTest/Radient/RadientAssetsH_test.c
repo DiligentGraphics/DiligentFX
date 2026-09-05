@@ -32,6 +32,7 @@ void RadientAssets_C_UseTypes(void)
     RadientAssetManagerCreateInfo        AssetManagerCI      = {0};
     RadientMeshPrimitiveCreateInfo       Primitive           = {0};
     RadientMeshCreateInfo                MeshCI              = {0};
+    RadientMeshAssetDesc                 MeshDesc            = {0};
     RadientTextureLoadInfo               TextureLoadInfo     = {0};
     RadientSceneLoadInfo                 SceneLoadInfo       = {0};
     RadientSceneAssetDesc                SceneAssetDesc      = {0};
@@ -48,6 +49,7 @@ void RadientAssets_C_UseTypes(void)
     (void)AssetManagerCI;
     (void)Primitive;
     (void)MeshCI;
+    (void)MeshDesc;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
     (void)SceneAssetDesc;
@@ -75,6 +77,14 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
     RADIENT_STATUS                   Status              = RADIENT_STATUS_OK;
 
     Status = IRadientAssetManager_CreateMesh(pAssetManager, &MeshCI, &pMesh);
+    if (pMesh != 0)
+    {
+        IRadientMorphTargetWeights* pWeights  = 0;
+        const RadientMeshAssetDesc* pMeshDesc = IRadientMeshAsset_GetDesc(pMesh);
+        Status                                = IRadientMeshAsset_CreateMorphTargetWeights(pMesh, &pWeights);
+        (void)pMeshDesc;
+        (void)pWeights;
+    }
     Status = IRadientAssetManager_CreateMaterial(pAssetManager, pMaterialDefinition, &pMaterial);
     Status = IRadientAssetManager_LoadTexture(pAssetManager, &TextureInfo, &pTexture);
     Status = IRadientAssetManager_LoadScene(pAssetManager, &SceneLoadInfo, &pScene);

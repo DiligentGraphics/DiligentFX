@@ -26,6 +26,8 @@
 
 #include "Radient/interface/RadientAssets.h"
 
+#include <type_traits>
+
 using namespace Diligent;
 
 static_assert(RADIENT_ASSET_TYPE_MESH == 0, "Unexpected RADIENT_ASSET_TYPE_MESH value");
@@ -46,6 +48,8 @@ static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UIN
 
 static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
 static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
+static_assert(std::is_standard_layout<RadientMeshAssetDesc>::value, "RadientMeshAssetDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMeshAssetDesc>::value, "RadientMeshAssetDesc must be trivially copyable");
 
 void RadientAssets_CPP_UseMeshCreateInfo()
 {
@@ -58,4 +62,13 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     (void)MeshCI;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
+}
+
+void RadientAssets_CPP_UseMeshAsset(IRadientMeshAsset* pMesh)
+{
+    IRadientMorphTargetWeights* pWeights = nullptr;
+    const RadientMeshAssetDesc& Desc     = pMesh->GetDesc();
+    (void)pMesh->CreateMorphTargetWeights(&pWeights);
+    (void)Desc;
+    (void)pWeights;
 }

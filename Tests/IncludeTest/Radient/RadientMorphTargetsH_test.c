@@ -28,19 +28,24 @@
 
 void RadientMorphTargets_C_UseTypes(void)
 {
-    RadientMorphTargetAttributeCreateInfo Attribute = {0};
-    RadientMorphTargetCreateInfo          Target    = {0};
+    RadientMorphTargetAttributeDesc       Attribute     = {0};
+    RadientMorphTargetAttributeCreateInfo AttributeData = {0};
+    RadientMorphTargetCreateInfo          Target        = {0};
+    RadientMorphTargetDesc                TargetDesc    = {0};
 
     Attribute.Semantic       = RadientMorphTargetPositionSemantic;
-    Attribute.pDeltas        = 0;
     Attribute.ComponentCount = 3;
+    AttributeData.pDeltas    = 0;
 
-    Target.Name           = "Target";
-    Target.pAttributes    = &Attribute;
-    Target.AttributeCount = 1;
-    Target.DefaultWeight  = 0.f;
+    TargetDesc.Name           = "Target";
+    TargetDesc.pAttributes    = &Attribute;
+    TargetDesc.AttributeCount = 1;
+    TargetDesc.DefaultWeight  = 0.f;
+    Target.Desc               = TargetDesc;
+    Target.pAttributeData     = &AttributeData;
 
     (void)Target;
+    (void)TargetDesc;
 }
 
 void RadientMorphTargets_C_TestMacros(IRadientMorphTargetWeights* pTargetWeights)

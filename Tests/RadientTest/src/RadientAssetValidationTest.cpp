@@ -25,11 +25,13 @@
  */
 
 #include "Assets/RadientAssetValidation.hpp"
+#include "RadientMorphTargets.h"
 
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 
@@ -41,12 +43,18 @@ namespace
 
 struct MeshValidationData
 {
-    std::array<RadientFloat3, 2>       Positions{};
-    std::array<Uint16, 3>              Indices16{0, 1, 0};
-    std::array<Uint32, 3>              Indices32{0, 1, 0};
-    std::array<RadientBoneIndices4, 2> BoneIndices{};
-    std::array<RadientFloat4, 2>       BoneWeights{};
-    RadientMeshPrimitiveCreateInfo     Primitive{};
+    std::array<RadientFloat3, 2>                         Positions{};
+    std::array<Uint16, 3>                                Indices16{0, 1, 0};
+    std::array<Uint32, 3>                                Indices32{0, 1, 0};
+    std::array<RadientBoneIndices4, 2>                   BoneIndices{};
+    std::array<RadientFloat4, 2>                         BoneWeights{};
+    std::array<Float32, 6>                               MorphDeltas{};
+    RadientMorphTargetAttributeDesc                      MorphAttribute{};
+    RadientMorphTargetAttributeCreateInfo                MorphAttributeData{};
+    std::array<RadientMorphTargetAttributeDesc, 2>       DuplicateMorphAttributes{};
+    std::array<RadientMorphTargetAttributeCreateInfo, 2> DuplicateMorphAttributeData{};
+    RadientMorphTargetCreateInfo                         MorphTarget{};
+    RadientMeshPrimitiveCreateInfo                       Primitive{};
 
     RadientMeshCreateInfo MakeMeshCI()
     {
@@ -62,6 +70,22 @@ struct MeshValidationData
         MeshCI.pPrimitives    = &Primitive;
         MeshCI.PrimitiveCount = 1;
         return MeshCI;
+    }
+
+    void AddMorphTarget(RadientMeshCreateInfo& MeshCI)
+    {
+        MorphAttribute.Semantic       = RadientMorphTargetPositionSemantic;
+        MorphAttribute.ComponentCount = 3;
+        MorphAttributeData.pDeltas    = MorphDeltas.data();
+
+        MorphTarget.Desc.Name           = "Target";
+        MorphTarget.Desc.pAttributes    = &MorphAttribute;
+        MorphTarget.Desc.AttributeCount = 1;
+        MorphTarget.Desc.DefaultWeight  = 0.5f;
+        MorphTarget.pAttributeData      = &MorphAttributeData;
+
+        MeshCI.pMorphTargets    = &MorphTarget;
+        MeshCI.MorphTargetCount = 1;
     }
 };
 
@@ -127,6 +151,118 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMismatchedSkinningData)
     ExpectInvalidMeshCreateInfo("pBoneIndices0 and pBoneWeights0 must both be specified or both be null",
                                 [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
                                     MeshCI.pBoneWeights0 = Data.BoneWeights.data();
+                                });
+}
+
+TEST(RadientAssetValidationTest, ValidatesMeshCreateInfoMorphTargets)
+{
+    MeshValidationData    Data;
+    RadientMeshCreateInfo MeshCI = Data.MakeMeshCI();
+    Data.AddMorphTarget(MeshCI);
+    EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
+
+    Data.MorphAttribute.Semantic       = "CUSTOM_ATTRIBUTE";
+    Data.MorphAttribute.ComponentCount = 2;
+    EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
+}
+
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetArray)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets must not be null when MorphTargetCount is nonzero",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+                                    MeshCI.MorphTargetCount = 1;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsNonFiniteMorphTargetDefaultWeight)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.DefaultWeight must be finite",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphTarget.Desc.DefaultWeight = std::numeric_limits<Float32>::infinity();
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeArray)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.pAttributes must not be null when AttributeCount is nonzero",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphTarget.Desc.pAttributes = nullptr;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeDataArray)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].pAttributeData must not be null when Desc.AttributeCount is nonzero",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphTarget.pAttributeData = nullptr;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeSemantic)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.pAttributes[0].Semantic must not be null or empty",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttribute.Semantic = nullptr;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsEmptyMorphTargetAttributeSemantic)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.pAttributes[0].Semantic must not be null or empty",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttribute.Semantic = "";
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeDeltas)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].pAttributeData[0].pDeltas must not be null",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttributeData.pDeltas = nullptr;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsInvalidMorphTargetAttributeComponentCount)
+{
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.pAttributes[0].ComponentCount must be in [1, 4]",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttribute.ComponentCount = 0;
+                                });
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].Desc.pAttributes[0].ComponentCount must be in [1, 4]",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttribute.ComponentCount = 5;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsInvalidStandardMorphTargetComponentCount)
+{
+    ExpectInvalidMeshCreateInfo("standard semantic 'POSITION' requires ComponentCount equal to 3",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.MorphAttribute.ComponentCount = 4;
+                                });
+}
+
+TEST(RadientAssetValidationTest, RejectsDuplicateMorphTargetAttributeSemantics)
+{
+    ExpectInvalidMeshCreateInfo("contains duplicate attribute semantic 'POSITION'",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
+                                    Data.AddMorphTarget(MeshCI);
+                                    Data.DuplicateMorphAttributes[0]     = Data.MorphAttribute;
+                                    Data.DuplicateMorphAttributes[1]     = Data.MorphAttribute;
+                                    Data.DuplicateMorphAttributeData[0]  = Data.MorphAttributeData;
+                                    Data.DuplicateMorphAttributeData[1]  = Data.MorphAttributeData;
+                                    Data.MorphTarget.Desc.pAttributes    = Data.DuplicateMorphAttributes.data();
+                                    Data.MorphTarget.Desc.AttributeCount = static_cast<Uint32>(Data.DuplicateMorphAttributes.size());
+                                    Data.MorphTarget.pAttributeData      = Data.DuplicateMorphAttributeData.data();
                                 });
 }
 

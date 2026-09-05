@@ -29,9 +29,14 @@
 #include "Assets/RadientTextureFormat.hpp"
 #include "Assets/RadientTextureSource.hpp"
 #include "Errors.hpp"
+#include "RadientMorphTargets.h"
 
+#include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <limits>
+#include <string_view>
+#include <unordered_set>
 #include <utility>
 
 namespace Diligent
@@ -69,6 +74,87 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     {
         return LogValidationError("RadientMeshCreateInfo",
                                   "pBoneIndices0 and pBoneWeights0 must both be specified or both be null.");
+    }
+
+    if (MeshCI.MorphTargetCount != 0 && MeshCI.pMorphTargets == nullptr)
+    {
+        return LogValidationError("RadientMeshCreateInfo",
+                                  "pMorphTargets must not be null when MorphTargetCount is nonzero.");
+    }
+
+    for (Uint32 TargetIndex = 0; TargetIndex < MeshCI.MorphTargetCount; ++TargetIndex)
+    {
+        const RadientMorphTargetCreateInfo& TargetCI = MeshCI.pMorphTargets[TargetIndex];
+        const RadientMorphTargetDesc&       Target   = TargetCI.Desc;
+        if (!std::isfinite(Target.DefaultWeight))
+        {
+            return LogValidationError("RadientMeshCreateInfo",
+                                      "pMorphTargets[", TargetIndex, "].Desc.DefaultWeight must be finite.");
+        }
+        if (Target.AttributeCount != 0 && Target.pAttributes == nullptr)
+        {
+            return LogValidationError("RadientMeshCreateInfo",
+                                      "pMorphTargets[", TargetIndex,
+                                      "].Desc.pAttributes must not be null when AttributeCount is nonzero.");
+        }
+        if (Target.AttributeCount != 0 && TargetCI.pAttributeData == nullptr)
+        {
+            return LogValidationError("RadientMeshCreateInfo",
+                                      "pMorphTargets[", TargetIndex,
+                                      "].pAttributeData must not be null when Desc.AttributeCount is nonzero.");
+        }
+
+        std::unordered_set<std::string_view> Semantics;
+        Semantics.reserve(Target.AttributeCount);
+        for (Uint32 AttributeIndex = 0; AttributeIndex < Target.AttributeCount; ++AttributeIndex)
+        {
+            const RadientMorphTargetAttributeDesc& Attribute = Target.pAttributes[AttributeIndex];
+            if (Attribute.Semantic == nullptr || *Attribute.Semantic == '\0')
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "].Semantic must not be null or empty.");
+            }
+            if (TargetCI.pAttributeData[AttributeIndex].pDeltas == nullptr)
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex, "].pAttributeData[", AttributeIndex,
+                                          "].pDeltas must not be null.");
+            }
+            if (Attribute.ComponentCount == 0 || Attribute.ComponentCount > 4)
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "].ComponentCount must be in [1, 4].");
+            }
+
+            const bool IsStandardSemantic =
+                std::strcmp(Attribute.Semantic, RadientMorphTargetPositionSemantic) == 0 ||
+                std::strcmp(Attribute.Semantic, RadientMorphTargetNormalSemantic) == 0 ||
+                std::strcmp(Attribute.Semantic, RadientMorphTargetTangentSemantic) == 0;
+            if (IsStandardSemantic && Attribute.ComponentCount != 3)
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "] standard semantic '", Attribute.Semantic,
+                                          "' requires ComponentCount equal to 3.");
+            }
+
+            if (!Semantics.emplace(Attribute.Semantic).second)
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex,
+                                          "].Desc contains duplicate attribute semantic '", Attribute.Semantic, "'.");
+            }
+
+            const Uint64 ValueCount = Uint64{MeshCI.VertexCount} * Attribute.ComponentCount;
+            if (ValueCount > (std::numeric_limits<size_t>::max)() / sizeof(Float32))
+            {
+                return LogValidationError("RadientMeshCreateInfo",
+                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "] data size exceeds the addressable range.");
+            }
+        }
     }
 
     if (MeshCI.IndexCount == 0)

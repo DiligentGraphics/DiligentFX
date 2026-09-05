@@ -18,6 +18,7 @@ set(SOURCE
     src/Assets/RadientMaterialAssetImplBase.hpp
     src/Assets/RadientMeshIndexSource.cpp
     src/Assets/RadientMeshAssetManager.cpp
+    src/Assets/RadientMorphTargets.cpp
     src/Assets/RadientMeshPrimitives.cpp
     src/Assets/RadientMeshVertexSource.cpp
     src/Assets/RadientMeshViewCreateInfoSnapshot.hpp
@@ -78,6 +79,7 @@ set(INCLUDE
     include/Assets/RadientMaterialStorage.hpp
     include/Assets/RadientMeshIndexSource.hpp
     include/Assets/RadientMeshAssetManager.hpp
+    include/Assets/RadientMorphTargetData.hpp
     include/Assets/RadientMeshVertexSource.hpp
     include/Assets/RadientMeshViewSource.hpp
     include/Assets/RadientTextureAssetManager.hpp

@@ -30,33 +30,49 @@
 
 using namespace Diligent;
 
+static_assert(std::is_standard_layout<RadientMorphTargetAttributeDesc>::value, "RadientMorphTargetAttributeDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMorphTargetAttributeDesc>::value, "RadientMorphTargetAttributeDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientMorphTargetAttributeCreateInfo>::value, "RadientMorphTargetAttributeCreateInfo must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientMorphTargetAttributeCreateInfo>::value, "RadientMorphTargetAttributeCreateInfo must be trivially copyable");
 static_assert(std::is_standard_layout<RadientMorphTargetCreateInfo>::value, "RadientMorphTargetCreateInfo must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientMorphTargetCreateInfo>::value, "RadientMorphTargetCreateInfo must be trivially copyable");
+static_assert(std::is_standard_layout<RadientMorphTargetDesc>::value, "RadientMorphTargetDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMorphTargetDesc>::value, "RadientMorphTargetDesc must be trivially copyable");
 
-constexpr RadientMorphTargetAttributeCreateInfo DefaultAttribute{};
+constexpr RadientMorphTargetAttributeDesc DefaultAttribute{};
 static_assert(DefaultAttribute.Semantic == nullptr, "Unexpected morph-target attribute semantic default value");
-static_assert(DefaultAttribute.pDeltas == nullptr, "Unexpected morph-target attribute data default value");
 static_assert(DefaultAttribute.ComponentCount == 0, "Unexpected morph-target attribute component count default value");
 
+constexpr RadientMorphTargetAttributeCreateInfo DefaultAttributeData{};
+static_assert(DefaultAttributeData.pDeltas == nullptr, "Unexpected morph-target attribute data default value");
+
 constexpr RadientMorphTargetCreateInfo DefaultTarget{};
-static_assert(DefaultTarget.Name == nullptr, "Unexpected morph-target name default value");
-static_assert(DefaultTarget.pAttributes == nullptr, "Unexpected morph-target attribute array default value");
-static_assert(DefaultTarget.AttributeCount == 0, "Unexpected morph-target attribute count default value");
-static_assert(DefaultTarget.DefaultWeight == 0.f, "Unexpected morph-target default weight");
+static_assert(DefaultTarget.Desc.Name == nullptr, "Unexpected morph-target name default value");
+static_assert(DefaultTarget.Desc.pAttributes == nullptr, "Unexpected morph-target attribute array default value");
+static_assert(DefaultTarget.Desc.AttributeCount == 0, "Unexpected morph-target attribute count default value");
+static_assert(DefaultTarget.Desc.DefaultWeight == 0.f, "Unexpected morph-target default weight");
+static_assert(DefaultTarget.pAttributeData == nullptr, "Unexpected morph-target attribute creation data default value");
+
+constexpr RadientMorphTargetDesc DefaultTargetDesc{};
+static_assert(DefaultTargetDesc.Name == nullptr, "Unexpected morph-target description name default value");
+static_assert(DefaultTargetDesc.pAttributes == nullptr, "Unexpected morph-target description attribute array default value");
+static_assert(DefaultTargetDesc.AttributeCount == 0, "Unexpected morph-target description attribute count default value");
+static_assert(DefaultTargetDesc.DefaultWeight == 0.f, "Unexpected morph-target description default weight");
 
 void RadientMorphTargets_CPP_UseInterface(IRadientMorphTargetWeights* pTargetWeights)
 {
-    RadientMorphTargetAttributeCreateInfo Attribute;
+    RadientMorphTargetAttributeDesc       Attribute;
+    RadientMorphTargetAttributeCreateInfo AttributeData;
     RadientMorphTargetCreateInfo          Target;
     Float32                               Weight = 0.f;
 
     Attribute.Semantic       = RadientMorphTargetPositionSemantic;
     Attribute.ComponentCount = 3;
+    AttributeData.pDeltas    = nullptr;
 
-    Target.pAttributes    = &Attribute;
-    Target.AttributeCount = 1;
+    Target.Desc.pAttributes    = &Attribute;
+    Target.Desc.AttributeCount = 1;
+    Target.pAttributeData      = &AttributeData;
 
     (void)pTargetWeights->GetMesh();
     (void)pTargetWeights->GetVersion();

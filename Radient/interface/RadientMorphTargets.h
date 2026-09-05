@@ -44,48 +44,73 @@ static DILIGENT_CONSTEXPR Char RadientMorphTargetNormalSemantic[] = "NORMAL";
 static DILIGENT_CONSTEXPR Char RadientMorphTargetTangentSemantic[] = "TANGENT";
 
 
-/// CPU-side data for one vertex attribute in a morph target.
+/// Immutable description of one vertex attribute in a morph target.
 ///
 /// Morph attributes are identified by case-sensitive semantic strings so that
 /// applications may define custom vertex attributes. Standard POSITION,
 /// NORMAL, and TANGENT attributes contain three components per vertex.
-struct RadientMorphTargetAttributeCreateInfo
+struct RadientMorphTargetAttributeDesc
 {
     /// Case-sensitive semantic of the destination vertex attribute. Radient
     /// copies the string during mesh creation.
     const Char* Semantic DEFAULT_INITIALIZER(nullptr);
 
-    /// Tightly packed canonical floating-point deltas. The array contains
-    /// RadientMeshCreateInfo::VertexCount * ComponentCount values. Radient
-    /// copies the data during mesh creation.
-    const Float32* pDeltas DEFAULT_INITIALIZER(nullptr);
-
     /// Number of components in each vertex delta. Must be in [1, 4]. Standard
     /// POSITION, NORMAL, and TANGENT semantics require three components.
     Uint32 ComponentCount DEFAULT_INITIALIZER(0);
 };
+typedef struct RadientMorphTargetAttributeDesc RadientMorphTargetAttributeDesc;
+
+
+/// Creation data for one morph-target vertex attribute.
+struct RadientMorphTargetAttributeCreateInfo
+{
+    /// Tightly packed canonical floating-point deltas. The array contains
+    /// RadientMeshCreateInfo::VertexCount times the corresponding attribute
+    /// description's ComponentCount values. Radient copies the data during
+    /// mesh creation.
+    const Float32* pDeltas DEFAULT_INITIALIZER(nullptr);
+};
 typedef struct RadientMorphTargetAttributeCreateInfo RadientMorphTargetAttributeCreateInfo;
 
 
-/// CPU-side data for one morph target.
+/// Immutable description of one mesh morph target.
 ///
 /// Attributes omitted from the array contribute zero deltas. Attribute
 /// semantics within one target must be unique. Morph target weights are not
 /// implicitly clamped to any range.
-struct RadientMorphTargetCreateInfo
+struct RadientMorphTargetDesc
 {
     /// Optional target name. Radient copies the string during mesh creation.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
     /// Array of AttributeCount morph-target attributes. Must not be null when
     /// AttributeCount is nonzero.
-    const RadientMorphTargetAttributeCreateInfo* pAttributes DEFAULT_INITIALIZER(nullptr);
+    const RadientMorphTargetAttributeDesc* pAttributes DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pAttributes.
     Uint32 AttributeCount DEFAULT_INITIALIZER(0);
 
-    /// Default weight used when creating mutable weights for the mesh.
+    /// Default weight used when creating mutable weights for the mesh. Must be
+    /// finite. The value is not otherwise clamped or restricted.
     Float32 DefaultWeight DEFAULT_INITIALIZER(0.f);
+};
+typedef struct RadientMorphTargetDesc RadientMorphTargetDesc;
+
+
+/// Morph-target creation attributes.
+///
+/// Radient copies Desc, all metadata it references, and the attribute creation
+/// data during mesh creation.
+struct RadientMorphTargetCreateInfo
+{
+    /// Complete immutable description of the target to create.
+    RadientMorphTargetDesc Desc DEFAULT_INITIALIZER({});
+
+    /// Array of Desc.AttributeCount creation-data records corresponding by
+    /// index to Desc.pAttributes. Must not be null when Desc.AttributeCount is
+    /// nonzero.
+    const RadientMorphTargetAttributeCreateInfo* pAttributeData DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientMorphTargetCreateInfo RadientMorphTargetCreateInfo;
 

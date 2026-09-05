@@ -53,6 +53,7 @@ typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
 typedef struct RadientSkinDesc                             RadientSkinDesc;
 typedef struct RadientSkeletonAnimationDesc                RadientSkeletonAnimationDesc;
 typedef struct RadientMorphTargetCreateInfo                RadientMorphTargetCreateInfo;
+typedef struct RadientMorphTargetDesc                      RadientMorphTargetDesc;
 
 // clang-format off
 
@@ -227,6 +228,20 @@ struct RadientMeshCreateInfo
     Uint32 PrimitiveCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientMeshCreateInfo RadientMeshCreateInfo;
+
+
+/// Immutable mesh asset description.
+struct RadientMeshAssetDesc
+{
+    /// Array of MorphTargetCount morph-target descriptions. The array, its
+    /// attribute descriptions, and all referenced strings remain valid while
+    /// the mesh asset is retained. May be null when MorphTargetCount is zero.
+    const RadientMorphTargetDesc* pMorphTargets DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pMorphTargets.
+    Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientMeshAssetDesc RadientMeshAssetDesc;
 
 
 /// Texture load attributes.
@@ -491,12 +506,43 @@ DILIGENT_END_INTERFACE
 
 #include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
 
-#if DILIGENT_CPP_INTERFACE
+#define DILIGENT_INTERFACE_NAME IRadientMeshAsset
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-/// Mesh asset.
-struct IRadientMeshAsset : public IRadientAsset
+#define IRadientMeshAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;        \
+    IRadientMeshAssetMethods RadientMeshAsset
+
+// clang-format off
+
+/// Immutable mesh asset and its morph-target schema.
+DILIGENT_BEGIN_INTERFACE(IRadientMeshAsset, IRadientAsset)
 {
+    /// Returns the immutable mesh description. The returned reference and all
+    /// data it references remain valid while the mesh asset is retained.
+    VIRTUAL const RadientMeshAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
+
+    /// Creates mutable weights initialized to the mesh morph-target defaults.
+    /// On success, ppWeights receives a strong reference. Meshes without morph
+    /// targets produce a valid zero-length weight object.
+    VIRTUAL RADIENT_STATUS METHOD(CreateMorphTargetWeights)(THIS_
+                                                            IRadientMorphTargetWeights** ppWeights) PURE;
 };
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientMeshAsset_GetDesc(This)                       CALL_IFACE_METHOD(RadientMeshAsset, GetDesc,                  This)
+#    define IRadientMeshAsset_CreateMorphTargetWeights(This, ...) CALL_IFACE_METHOD(RadientMeshAsset, CreateMorphTargetWeights, This, __VA_ARGS__)
+
+#endif
+
+// clang-format on
+
+
+#if DILIGENT_CPP_INTERFACE
 
 /// Texture asset.
 struct IRadientTextureAsset : public IRadientAsset

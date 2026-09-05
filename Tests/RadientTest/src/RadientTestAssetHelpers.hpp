@@ -92,8 +92,27 @@ private:
     RadientAssetReference m_Ref{};
 };
 
-using TestMeshAsset    = TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
 using TestTextureAsset = TestRadientAssetBase<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
+
+class TestMeshAsset final : public TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>
+{
+public:
+    using TBase = TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
+    using TBase::TBase;
+
+    virtual const RadientMeshAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientMeshAssetDesc Desc{};
+        return Desc;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
+    {
+        if (ppWeights != nullptr)
+            *ppWeights = nullptr;
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+};
 
 class TestSceneAsset final : public TestRadientAssetBase<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE>
 {

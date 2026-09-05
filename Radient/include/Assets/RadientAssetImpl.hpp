@@ -34,6 +34,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace Diligent
@@ -116,13 +117,15 @@ template <typename InterfaceType,
           const INTERFACE_ID& InterfaceID,
           const INTERFACE_ID& ImplID,
           RADIENT_ASSET_TYPE  AssetType,
-          typename PayloadType>
+          typename PayloadType,
+          typename ImplementationType = void>
 class RadientAssetImpl : public ObjectBase<InterfaceType>
 {
 public:
-    using TBase   = ObjectBase<InterfaceType>;
-    using Payload = PayloadType;
-    using Storage = typename PayloadType::Storage;
+    using TBase          = ObjectBase<InterfaceType>;
+    using Payload        = PayloadType;
+    using Storage        = typename PayloadType::Storage;
+    using Implementation = std::conditional_t<std::is_void<ImplementationType>::value, RadientAssetImpl, ImplementationType>;
 
     RadientAssetImpl(IReferenceCounters*          pRefCounters,
                      std::string&&                AssetURI,
@@ -137,11 +140,11 @@ public:
             SetPayload(std::move(pPayload));
     }
 
-    static RefCntAutoPtr<RadientAssetImpl> Create(std::string                  AssetURI,
-                                                  RefCntAutoPtr<PayloadType>&& pPayload = {})
+    static RefCntAutoPtr<Implementation> Create(std::string                  AssetURI,
+                                                RefCntAutoPtr<PayloadType>&& pPayload = {})
     {
-        return RefCntAutoPtr<RadientAssetImpl>{
-            MakeNewRCObj<RadientAssetImpl>()(std::move(AssetURI), std::move(pPayload))};
+        return RefCntAutoPtr<Implementation>{
+            MakeNewRCObj<Implementation>()(std::move(AssetURI), std::move(pPayload))};
     }
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
@@ -206,9 +209,9 @@ public:
         return m_pPayload;
     }
 
-    static RefCntAutoPtr<RadientAssetImpl> ResolveAsset(InterfaceType* pAsset)
+    static RefCntAutoPtr<Implementation> ResolveAsset(InterfaceType* pAsset)
     {
-        RefCntAutoPtr<RadientAssetImpl> pImpl{pAsset, ImplID};
+        RefCntAutoPtr<Implementation> pImpl{pAsset, ImplID};
         if (!pImpl || pImpl->GetPayloadStatus() != RADIENT_STATUS_OK)
             return {};
 

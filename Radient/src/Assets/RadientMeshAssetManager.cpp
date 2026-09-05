@@ -34,6 +34,7 @@
 #include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
+#include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
 #include "RadientMeshViewCreateInfoSnapshot.hpp"
@@ -284,8 +285,44 @@ public:
 namespace
 {
 
-using MeshAssetImpl =
-    RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshPayloadImpl>;
+class MeshAssetImpl;
+
+using MeshAssetBase =
+    RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshPayloadImpl, MeshAssetImpl>;
+
+class MeshAssetImpl final : public MeshAssetBase
+{
+public:
+    using TBase = MeshAssetBase;
+    using TBase::TBase;
+    using TBase::Create;
+    using TBase::ResolveAsset;
+
+    virtual const RadientMeshAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientMeshAssetDesc EmptyDesc{};
+        return m_pMorphTargetData != nullptr ? m_pMorphTargetData->GetDesc() : EmptyDesc;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
+    {
+        return CreateRadientMorphTargetWeights(this, GetDesc(), ppWeights);
+    }
+
+    void SetMorphTargetData(std::unique_ptr<RadientMorphTargetData>&& pData)
+    {
+        VERIFY_EXPR(m_pMorphTargetData == nullptr);
+        m_pMorphTargetData = std::move(pData);
+    }
+
+    const RadientMorphTargetData* GetMorphTargetData() const noexcept
+    {
+        return m_pMorphTargetData.get();
+    }
+
+private:
+    std::unique_ptr<RadientMorphTargetData> m_pMorphTargetData;
+};
 
 struct MeshIndexBufferWriteData
 {
@@ -768,6 +805,23 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (!ValidateMeshCreateInfo(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    std::unique_ptr<RadientMorphTargetData> pMorphTargetData;
+    if (MeshCI.MorphTargetCount != 0)
+    {
+        try
+        {
+            pMorphTargetData = std::make_unique<RadientMorphTargetData>(
+                MeshCI.pMorphTargets,
+                MeshCI.MorphTargetCount,
+                MeshCI.VertexCount);
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to copy Radient mesh morph targets: ", Error.what());
+            return RADIENT_STATUS_FAILED;
+        }
+    }
+
     const RadientMeshViewCreateInfo ViewCI{
         MeshCI.pPrimitives,
         MeshCI.PrimitiveCount};
@@ -787,7 +841,16 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
     const RadientMeshGeometryData GeometryData{pVertexData, pIndexData};
-    return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
+    Status = CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
+
+    if (*ppMesh != nullptr && pMorphTargetData != nullptr)
+    {
+        MeshAssetImpl* const pMeshImpl = ClassPtrCast<MeshAssetImpl>(*ppMesh);
+        VERIFY_EXPR(pMeshImpl != nullptr);
+        if (pMeshImpl != nullptr)
+            pMeshImpl->SetMorphTargetData(std::move(pMorphTargetData));
+    }
+    return Status;
 }
 
 RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&                            ThreadPool,
