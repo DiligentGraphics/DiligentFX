@@ -841,16 +841,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
     const RadientMeshGeometryData GeometryData{pVertexData, pIndexData};
-    Status = CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
-
-    if (*ppMesh != nullptr && pMorphTargetData != nullptr)
-    {
-        MeshAssetImpl* const pMeshImpl = ClassPtrCast<MeshAssetImpl>(*ppMesh);
-        VERIFY_EXPR(pMeshImpl != nullptr);
-        if (pMeshImpl != nullptr)
-            pMeshImpl->SetMorphTargetData(std::move(pMorphTargetData));
-    }
-    return Status;
+    return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh, std::move(pMorphTargetData));
 }
 
 RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&                            ThreadPool,
@@ -1025,11 +1016,12 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
     return TaskEnqueued ? RADIENT_STATUS_PENDING : RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&                     ThreadPool,
-                                                       const RadientMeshGeometryData*   pGeometryData,
-                                                       Uint32                           GeometryCount,
-                                                       const RadientMeshViewCreateInfo& ViewCI,
-                                                       IRadientMeshAsset**              ppMesh)
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&                            ThreadPool,
+                                                       const RadientMeshGeometryData*          pGeometryData,
+                                                       Uint32                                  GeometryCount,
+                                                       const RadientMeshViewCreateInfo&        ViewCI,
+                                                       IRadientMeshAsset**                     ppMesh,
+                                                       std::unique_ptr<RadientMorphTargetData> pMorphTargetData)
 {
     if (ppMesh == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1080,6 +1072,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
     VERIFY_EXPR(pMeshAsset != nullptr);
     if (!pMeshAsset)
         return RADIENT_STATUS_FAILED;
+
+    if (pMorphTargetData != nullptr)
+        pMeshAsset->SetMorphTargetData(std::move(pMorphTargetData));
 
     pMeshAsset->QueryInterface(IID_RadientMeshAsset, ppMesh);
 
@@ -1331,6 +1326,12 @@ const IRadientMeshVertexData* RadientMeshAssetManager::GetMeshVertexData(IRadien
         return nullptr;
 
     return Storage.Geometries.front().pVertexDataAsset;
+}
+
+const RadientMorphTargetData* RadientMeshAssetManager::GetMorphTargetData(IRadientMeshAsset* pMeshAsset)
+{
+    RefCntAutoPtr<MeshAssetImpl> pMesh = MeshAssetImpl::ResolveAsset(pMeshAsset);
+    return pMesh ? pMesh->GetMorphTargetData() : nullptr;
 }
 
 namespace

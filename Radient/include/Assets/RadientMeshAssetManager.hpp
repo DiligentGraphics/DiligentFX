@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Assets/RadientMorphTargetData.hpp"
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
@@ -103,11 +104,12 @@ public:
     // Creates a mesh handle and schedules mesh-view payload creation. When
     // vertex or index data is still loading, the view task depends on the
     // corresponding data tasks if they are still available.
-    RADIENT_STATUS CreateMeshView(IThreadPool&                     ThreadPool,
-                                  const RadientMeshGeometryData*   pGeometryData,
-                                  Uint32                           GeometryCount,
-                                  const RadientMeshViewCreateInfo& ViewCI,
-                                  IRadientMeshAsset**              ppMesh);
+    RADIENT_STATUS CreateMeshView(IThreadPool&                            ThreadPool,
+                                  const RadientMeshGeometryData*          pGeometryData,
+                                  Uint32                                  GeometryCount,
+                                  const RadientMeshViewCreateInfo&        ViewCI,
+                                  IRadientMeshAsset**                     ppMesh,
+                                  std::unique_ptr<RadientMorphTargetData> pMorphTargetData = nullptr);
 
     // Returns drawable mesh data when the mesh asset is ready. A pending status
     // means that any mesh dependency may still be unresolved: source/view
@@ -135,6 +137,8 @@ public:
     static const MeshVertexDataPayloadImpl* GetMeshVertexDataPayload(IRadientMeshAsset* pMeshAsset, Uint32 GeometryIndex);
     static const IRadientMeshIndexData*     GetMeshIndexData(IRadientMeshAsset* pMeshAsset);
     static const IRadientMeshVertexData*    GetMeshVertexData(IRadientMeshAsset* pMeshAsset);
+    // Returns packed morph deltas for a ready mesh asset.
+    static const RadientMorphTargetData* GetMorphTargetData(IRadientMeshAsset* pMeshAsset);
 
 private:
     explicit RadientMeshAssetManager(const CreateInfo& CI);

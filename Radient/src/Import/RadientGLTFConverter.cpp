@@ -30,6 +30,7 @@
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Import/RadientImportedScene.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientMorphTargets.h"
 #include "RadientSceneWriter.h"
 #include "RadientSkinning.h"
 
@@ -747,6 +748,44 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
         if (RADIENT_FAILED(Status))
             return Status;
 
+        const Uint32 MorphTargetCount = Node.pMesh->GetDesc().MorphTargetCount;
+        if (MorphTargetCount != 0)
+        {
+            RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+            Status = Node.pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty());
+            if (RADIENT_FAILED(Status) || pWeights == nullptr)
+                return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+
+            if (!Node.MorphWeights.empty())
+            {
+                if (Node.MorphWeights.size() != MorphTargetCount)
+                {
+                    LOG_WARNING_MESSAGE("Imported node '", NodeDesc.Name, "' provides ", Node.MorphWeights.size(),
+                                        " morph weights for a mesh with ", MorphTargetCount,
+                                        " targets; applying the available weights");
+                }
+
+                const Uint32 WeightCount = static_cast<Uint32>(std::min(
+                    Node.MorphWeights.size(),
+                    size_t{MorphTargetCount}));
+                if (WeightCount != 0)
+                {
+                    Status = pWeights->SetWeights(0, WeightCount, Node.MorphWeights.data());
+                    if (RADIENT_FAILED(Status))
+                        return Status;
+                }
+            }
+
+            Status = Writer.SetMorph(NodeEntity, RadientMorphComponent{pWeights});
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
+        else if (!Node.MorphWeights.empty())
+        {
+            LOG_WARNING_MESSAGE("Imported node '", NodeDesc.Name,
+                                "' provides morph weights for a mesh without imported morph targets; ignoring the weights");
+        }
+
         if (Node.SkinIndex != RadientImport::InvalidImportedSkinIndex)
         {
             if (Node.SkinIndex >= Scene.Skins.size() || Scene.Skins[Node.SkinIndex] == nullptr)
@@ -1113,6 +1152,8 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
             DstNode.pMesh = GetRadientMeshAsset(*SrcNode.pMesh);
             if (DstNode.pMesh == nullptr)
                 return RADIENT_STATUS_INVALID_DATA;
+
+            DstNode.MorphWeights = SrcNode.Weights;
         }
 
         if (SrcNode.pSkin != nullptr)

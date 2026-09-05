@@ -58,6 +58,10 @@ struct ImportedNode
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
 
+    /// Optional node-specific morph weights. An empty array uses the mesh
+    /// morph-target defaults.
+    std::vector<Float32> MorphWeights;
+
     /// Index in ImportedDocument::Skins, or InvalidImportedSkinIndex when the
     /// node does not use skinning.
     Uint32 SkinIndex = InvalidImportedSkinIndex;

@@ -31,6 +31,8 @@
 #include "RadientEngine.h"
 #include "RadientSkinning.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMeshAssetManager.hpp"
+#include "Assets/RadientMorphTargetData.hpp"
 #include "Math/RadientMath.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
@@ -178,6 +180,101 @@ std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
 })GLTF";
 
     return WriteGLTFFile(TempDir, "skin.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMorphFile(const TempDirectory& TempDir)
+{
+    const std::array<Float32, 9> PositionsA{
+        -1.f, 0.f, 0.f,
+        0.f, 1.f, 0.f,
+        1.f, 0.f, 0.f};
+    const std::array<Float32, 9> PositionsB{
+        -1.f, 0.f, 1.f,
+        0.f, 1.f, 1.f,
+        1.f, 0.f, 1.f};
+    const std::array<Float32, 9> Target0A{
+        0.1f, 0.f, 0.f,
+        0.2f, 0.f, 0.f,
+        0.3f, 0.f, 0.f};
+    const std::array<Float32, 9> Target1A{
+        0.f, 0.4f, 0.f,
+        0.f, 0.5f, 0.f,
+        0.f, 0.6f, 0.f};
+    const std::array<Float32, 9> Target0B{
+        1.1f, 0.f, 0.f,
+        1.2f, 0.f, 0.f,
+        1.3f, 0.f, 0.f};
+    const std::array<Float32, 9> Target1B{
+        0.f, 1.4f, 0.f,
+        0.f, 1.5f, 0.f,
+        0.f, 1.6f, 0.f};
+    const std::array<Uint16, 3> Indices{0, 1, 2};
+
+    std::vector<Uint8> Buffer;
+    const size_t       PositionsAOffset = AppendBytes(Buffer, PositionsA);
+    const size_t       PositionsBOffset = AppendBytes(Buffer, PositionsB);
+    const size_t       Target0AOffset   = AppendBytes(Buffer, Target0A);
+    const size_t       Target1AOffset   = AppendBytes(Buffer, Target1A);
+    const size_t       Target0BOffset   = AppendBytes(Buffer, Target0B);
+    const size_t       Target1BOffset   = AppendBytes(Buffer, Target1B);
+    const size_t       IndicesOffset    = AppendBytes(Buffer, Indices);
+    WriteBinaryFile(TempDir, "morph.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "Mesh defaults", "mesh": 0},
+        {"name": "Node overrides", "mesh": 0, "weights": [0.8, 0.2]}
+    ],
+    "meshes": [{
+        "weights": [0.25, 0.75],
+        "extras": {"targetNames": ["Smile", "Blink"]},
+        "primitives": [
+            {
+                "attributes": {"POSITION": 0},
+                "indices": 6,
+                "targets": [{"POSITION": 2}, {"POSITION": 3}]
+            },
+            {
+                "attributes": {"POSITION": 1},
+                "indices": 6,
+                "targets": [{"POSITION": 4}, {"POSITION": 5}]
+            }
+        ]
+    }],
+    "buffers": [{"uri": "morph.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionsAOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(PositionsA) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionsBOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(PositionsB) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Target0AOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Target0A) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Target1AOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Target1A) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Target0BOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Target0B) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << Target1BOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Target1B) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndicesOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [-1, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3", "min": [-1, 0, 1], "max": [1, 1, 1]},
+        {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 4, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 5, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 6, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "morph.gltf", GLTF.str().c_str());
 }
 
 struct ImportFixture
@@ -388,6 +485,90 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
 
     EXPECT_EQ(Fixture.pScene->GetLocalTransform(Children[1], Transform), RADIENT_STATUS_OK);
     ExpectFloat3Near(Transform.Scale, {2.f, 3.f, 4.f});
+}
+
+TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFMorphFile(TempDir);
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+    ASSERT_NE(Fixture.pWriter, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name = "Imported morph targets";
+
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const std::vector<RadientEntityID> Nodes = GetChildren(*Fixture.pScene, ImportResult.RootEntity);
+    ASSERT_EQ(Nodes.size(), 2u);
+
+    RadientMorphComponent DefaultMorph{};
+    RadientMorphComponent OverrideMorph{};
+    ASSERT_EQ(Fixture.pScene->GetMorph(Nodes[0], DefaultMorph), RADIENT_STATUS_OK);
+    ASSERT_EQ(Fixture.pScene->GetMorph(Nodes[1], OverrideMorph), RADIENT_STATUS_OK);
+    ASSERT_NE(DefaultMorph.pWeights, nullptr);
+    ASSERT_NE(OverrideMorph.pWeights, nullptr);
+    EXPECT_NE(DefaultMorph.pWeights, OverrideMorph.pWeights);
+    ASSERT_EQ(DefaultMorph.pWeights->GetWeightCount(), 2u);
+    ASSERT_EQ(OverrideMorph.pWeights->GetWeightCount(), 2u);
+    ASSERT_NE(DefaultMorph.pWeights->GetWeights(), nullptr);
+    ASSERT_NE(OverrideMorph.pWeights->GetWeights(), nullptr);
+    EXPECT_FLOAT_EQ(DefaultMorph.pWeights->GetWeights()[0], 0.25f);
+    EXPECT_FLOAT_EQ(DefaultMorph.pWeights->GetWeights()[1], 0.75f);
+    EXPECT_FLOAT_EQ(OverrideMorph.pWeights->GetWeights()[0], 0.8f);
+    EXPECT_FLOAT_EQ(OverrideMorph.pWeights->GetWeights()[1], 0.2f);
+
+    IRadientMeshAsset* const pMesh = DefaultMorph.pWeights->GetMesh();
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(OverrideMorph.pWeights->GetMesh(), pMesh);
+
+    const RadientMeshAssetDesc& MeshDesc = pMesh->GetDesc();
+    ASSERT_EQ(MeshDesc.MorphTargetCount, 2u);
+    ASSERT_NE(MeshDesc.pMorphTargets, nullptr);
+    EXPECT_STREQ(MeshDesc.pMorphTargets[0].Name, "Smile");
+    EXPECT_STREQ(MeshDesc.pMorphTargets[1].Name, "Blink");
+    EXPECT_FLOAT_EQ(MeshDesc.pMorphTargets[0].DefaultWeight, 0.25f);
+    EXPECT_FLOAT_EQ(MeshDesc.pMorphTargets[1].DefaultWeight, 0.75f);
+
+    const RadientMorphTargetData* const pMorphTargetData =
+        RadientMeshAssetManager::GetMorphTargetData(pMesh);
+    ASSERT_NE(pMorphTargetData, nullptr);
+
+    const std::array<std::array<Float32, 18>, 2> ExpectedDeltas{{
+        {{0.1f, 0.f, 0.f,
+          0.2f, 0.f, 0.f,
+          0.3f, 0.f, 0.f,
+          1.1f, 0.f, 0.f,
+          1.2f, 0.f, 0.f,
+          1.3f, 0.f, 0.f}},
+        {{0.f, 0.4f, 0.f,
+          0.f, 0.5f, 0.f,
+          0.f, 0.6f, 0.f,
+          0.f, 1.4f, 0.f,
+          0.f, 1.5f, 0.f,
+          0.f, 1.6f, 0.f}},
+    }};
+
+    for (Uint32 TargetIndex = 0; TargetIndex < MeshDesc.MorphTargetCount; ++TargetIndex)
+    {
+        const RadientMorphTargetDesc& Target = MeshDesc.pMorphTargets[TargetIndex];
+        ASSERT_EQ(Target.AttributeCount, 1u);
+        ASSERT_NE(Target.pAttributes, nullptr);
+        EXPECT_STREQ(Target.pAttributes[0].Semantic, RadientMorphTargetPositionSemantic);
+        EXPECT_EQ(Target.pAttributes[0].ComponentCount, 3u);
+        EXPECT_EQ(std::memcmp(pMorphTargetData->GetDeltas(TargetIndex, 0),
+                              ExpectedDeltas[TargetIndex].data(),
+                              sizeof(ExpectedDeltas[TargetIndex])),
+                  0);
+    }
 }
 
 TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
