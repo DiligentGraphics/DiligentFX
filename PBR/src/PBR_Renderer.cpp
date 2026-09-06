@@ -80,7 +80,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
     if (HasStaticShaderTextureIds)
         StaticShaderTextureIds = *_pStaticShaderTextureIds;
 
-    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{41}, "Please handle the new flag below, if necessary");
+    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{42}, "Please handle the new flag below, if necessary");
     static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please handle the new render pass type below, if necessary");
     if (Type == RenderPassType::Shadow)
     {
@@ -89,6 +89,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
             PSO_FLAG_USE_TEXCOORD0 |
             PSO_FLAG_USE_TEXCOORD1 |
             PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_MORPH_TARGETS |
             PSO_FLAG_USE_TEXTURE_ATLAS |
             PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
             PSO_FLAG_ALL_USER_DEFINED;
@@ -104,6 +105,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
             PSO_FLAG_USE_TEXCOORD0 |
             PSO_FLAG_USE_TEXCOORD1 |
             PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_MORPH_TARGETS |
             PSO_FLAG_USE_TEXTURE_ATLAS |
             PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
         Flags &= OITLayersFlags;
@@ -124,7 +126,11 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType                         _Type,
     {
         AlphaMode = ALPHA_MODE_OPAQUE;
 
-        constexpr PSO_FLAGS SupportedUnshadedFlags = PSO_FLAG_USE_JOINTS | PSO_FLAG_ALL_USER_DEFINED | PSO_FLAG_UNSHADED;
+        constexpr PSO_FLAGS SupportedUnshadedFlags =
+            PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_MORPH_TARGETS |
+            PSO_FLAG_ALL_USER_DEFINED |
+            PSO_FLAG_UNSHADED;
         Flags &= SupportedUnshadedFlags;
 
         DebugView = DebugViewType::None;
@@ -236,13 +242,14 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_UNSHADED:                  FlagsStr += "UNSHADED"; break;
             case PSO_FLAG_COMPUTE_MOTION_VECTORS:    FlagsStr += "MOTION_VECTORS"; break;
             case PSO_FLAG_ENABLE_SHADOWS:            FlagsStr += "SHADOWS"; break;
+            case PSO_FLAG_USE_MORPH_TARGETS:         FlagsStr += "MORPH_TARGETS"; break;
                 // clang-format on
 
             default:
                 FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
         }
     }
-    static_assert(PSO_FLAG_LAST == 1ull << 41ull, "Please update the switch above to handle the new flag");
+    static_assert(PSO_FLAG_LAST == 1ull << 42ull, "Please update the switch above to handle the new flag");
 
     return FlagsStr;
 }
@@ -309,6 +316,57 @@ static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap, const float* 
     });
 }
 
+Uint32 PBR_Renderer::SelectActiveMorphTargets(const Float32*     pWeights,
+                                              Uint32             WeightCount,
+                                              ActiveMorphTarget* pActiveTargets,
+                                              Uint32             MaxActiveTargetCount) noexcept
+{
+    if (WeightCount == 0 || MaxActiveTargetCount == 0)
+        return 0;
+
+    if (pWeights == nullptr || pActiveTargets == nullptr)
+    {
+        UNEXPECTED("Morph target weights and output palette must not be null");
+        return 0;
+    }
+
+    const auto HasHigherPriority = [](const ActiveMorphTarget& Lhs, const ActiveMorphTarget& Rhs) {
+        const Float32 LhsMagnitude = std::abs(Lhs.Weight);
+        const Float32 RhsMagnitude = std::abs(Rhs.Weight);
+        return LhsMagnitude > RhsMagnitude ||
+            (LhsMagnitude == RhsMagnitude && Lhs.TargetIndex < Rhs.TargetIndex);
+    };
+
+    Uint32 ActiveTargetCount = 0;
+    for (Uint32 TargetIndex = 0; TargetIndex < WeightCount; ++TargetIndex)
+    {
+        const Float32 Weight = pWeights[TargetIndex];
+        if (Weight == 0)
+            continue;
+
+        const ActiveMorphTarget Candidate{TargetIndex, Weight};
+        Uint32                  InsertPosition = ActiveTargetCount;
+        while (InsertPosition > 0 && HasHigherPriority(Candidate, pActiveTargets[InsertPosition - 1]))
+            --InsertPosition;
+
+        if (ActiveTargetCount < MaxActiveTargetCount)
+        {
+            for (Uint32 Index = ActiveTargetCount; Index > InsertPosition; --Index)
+                pActiveTargets[Index] = pActiveTargets[Index - 1];
+            pActiveTargets[InsertPosition] = Candidate;
+            ++ActiveTargetCount;
+        }
+        else if (InsertPosition < MaxActiveTargetCount)
+        {
+            for (Uint32 Index = MaxActiveTargetCount - 1; Index > InsertPosition; --Index)
+                pActiveTargets[Index] = pActiveTargets[Index - 1];
+            pActiveTargets[InsertPosition] = Candidate;
+        }
+    }
+
+    return ActiveTargetCount;
+}
+
 Uint32 PBR_Renderer::GetJointsDataSize(Uint32 MaxJointCount, bool UsePrevFrameTransforms)
 {
     return sizeof(float4x4) * MaxJointCount * (UsePrevFrameTransforms ? 2 : 1);
@@ -333,6 +391,11 @@ const char* PBR_Renderer::GetJointTransformsVarName() const
         "g_JointTransforms";
 }
 
+const char* PBR_Renderer::GetMorphTargetDeltasVarName()
+{
+    return "g_MorphTargetDeltas";
+}
+
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -347,7 +410,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB},
     m_PBRMaterialAttribsCB{CI.pMaterialAttribsCB},
-    m_JointsBuffer{CI.pJointsBuffer}
+    m_JointsBuffer{CI.pJointsBuffer},
+    m_MorphTargetBuffer{CI.pMorphTargetBuffer}
 {
     if (m_Settings.EnableIBL)
     {
@@ -456,6 +520,33 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                 DEV_CHECK_ERR(m_JointsBuffer->GetDesc().Size >= JointsBufferSize, "PBR joint transforms buffer is too small to hold ", m_Settings.MaxJointCount, " joints.");
             }
         }
+
+        if (m_Settings.MaxActiveMorphTargetCount > 0)
+        {
+            if (!m_MorphTargetBuffer && m_Settings.CreateDefaultMorphTargetBuffer)
+            {
+                BufferDesc MorphTargetBufferDesc;
+                MorphTargetBufferDesc.Name              = "PBR morph target deltas";
+                MorphTargetBufferDesc.Size              = sizeof(Float32);
+                MorphTargetBufferDesc.Usage             = USAGE_DEFAULT;
+                MorphTargetBufferDesc.BindFlags         = BIND_SHADER_RESOURCE;
+                MorphTargetBufferDesc.Mode              = BUFFER_MODE_STRUCTURED;
+                MorphTargetBufferDesc.ElementByteStride = sizeof(Float32);
+                pDevice->CreateBuffer(MorphTargetBufferDesc, nullptr, &m_MorphTargetBuffer);
+                VERIFY_EXPR(m_MorphTargetBuffer);
+            }
+            else if (m_MorphTargetBuffer)
+            {
+                const BufferDesc& MorphTargetBufferDesc = m_MorphTargetBuffer->GetDesc();
+                DEV_CHECK_ERR((MorphTargetBufferDesc.BindFlags & BIND_SHADER_RESOURCE) != 0,
+                              "PBR morph target buffer must have BIND_SHADER_RESOURCE flag.");
+                DEV_CHECK_ERR(MorphTargetBufferDesc.Mode == BUFFER_MODE_STRUCTURED,
+                              "PBR morph target buffer must use BUFFER_MODE_STRUCTURED mode.");
+                DEV_CHECK_ERR(MorphTargetBufferDesc.ElementByteStride == sizeof(Float32),
+                              "PBR morph target buffer element stride must be sizeof(Float32).");
+            }
+        }
+
         std::vector<StateTransitionDesc> Barriers;
         Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
         Barriers.emplace_back(m_PBRMaterialAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
@@ -466,6 +557,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                 RESOURCE_STATE_SHADER_RESOURCE;
             Barriers.emplace_back(m_JointsBuffer, RESOURCE_STATE_UNKNOWN, JointsBufferState, STATE_TRANSITION_FLAG_UPDATE_STATE);
         }
+        if (m_MorphTargetBuffer)
+            Barriers.emplace_back(m_MorphTargetBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
 
@@ -1015,24 +1108,47 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding*         pSRB,
                     Attribs.pJointsBuffer :
                     m_JointsBuffer.RawPtr();
 
-                if (pJointsBuffer == nullptr)
+                if (pJointsBuffer != nullptr)
                 {
-                    UNEXPECTED("Joints buffer is not initialized");
-                    return;
-                }
-
-                if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
-                {
-                    const Uint32 JointsBufferSize = GetJointsBufferSize();
-                    Var.SetBufferRange(pJointsBuffer, 0, JointsBufferSize);
-                }
-                else if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
-                {
-                    Var.Set(pJointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                    if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
+                    {
+                        const Uint32 JointsBufferSize = GetJointsBufferSize();
+                        Var.SetBufferRange(pJointsBuffer, 0, JointsBufferSize);
+                    }
+                    else if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
+                    {
+                        Var.Set(pJointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                    }
+                    else
+                    {
+                        UNEXPECTED("Unexpected joints buffer mode");
+                    }
                 }
                 else
                 {
-                    UNEXPECTED("Unexpected joints buffer mode");
+                    UNEXPECTED("Joints buffer is not initialized");
+                }
+            }
+        }
+    }
+
+    if (m_Settings.MaxActiveMorphTargetCount > 0)
+    {
+        if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_VERTEX, GetMorphTargetDeltasVarName()})
+        {
+            if (Var.Get() == nullptr)
+            {
+                IBuffer* const pMorphTargetBuffer = Attribs.pMorphTargetDeltas != nullptr ?
+                    Attribs.pMorphTargetDeltas :
+                    m_MorphTargetBuffer.RawPtr();
+
+                if (pMorphTargetBuffer != nullptr)
+                {
+                    Var.Set(pMorphTargetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                }
+                else
+                {
+                    UNEXPECTED("Morph target buffer is not initialized");
                 }
             }
         }
@@ -1202,6 +1318,11 @@ void PBR_Renderer::CreateSignature()
             SHADER_RESOURCE_TYPE_CONSTANT_BUFFER :
             SHADER_RESOURCE_TYPE_BUFFER_SRV;
         SignatureDesc.AddResource(SHADER_TYPE_VERTEX, GetJointTransformsVarName(), JointsBufferResType, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+    }
+
+    if (m_Settings.MaxActiveMorphTargetCount > 0)
+    {
+        SignatureDesc.AddResource(SHADER_TYPE_VERTEX, GetMorphTargetDeltasVarName(), SHADER_RESOURCE_TYPE_BUFFER_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
     }
 
     std::unordered_set<std::string> Samplers;
@@ -1421,6 +1542,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ? static_cast<int>(m_Settings.MaxJointCount) : INT_MAX);
+    Macros.Add("MAX_ACTIVE_MORPH_TARGET_COUNT", static_cast<int>(m_Settings.MaxActiveMorphTargetCount));
     Macros.Add("JOINTS_BUFFER_MODE_UNIFORM", static_cast<int>(JOINTS_BUFFER_MODE_UNIFORM));
     Macros.Add("JOINTS_BUFFER_MODE_STRUCTURED", static_cast<int>(JOINTS_BUFFER_MODE_STRUCTURED));
     Macros.Add("JOINTS_BUFFER_MODE", static_cast<int>(m_Settings.JointsBufferMode));
@@ -1550,7 +1672,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("LOADING_ANIMATION_TRANSITIONING", static_cast<int>(LoadingAnimationMode::Transitioning));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(41), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(42), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1578,6 +1700,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(USE_TEXCOORD0);
     ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
     ADD_PSO_FLAG_MACRO(USE_JOINTS);
+    ADD_PSO_FLAG_MACRO(USE_MORPH_TARGETS);
     ADD_PSO_FLAG_MACRO(ENABLE_CLEAR_COAT);
     ADD_PSO_FLAG_MACRO(ENABLE_SHEEN);
     ADD_PSO_FLAG_MACRO(ENABLE_ANISOTROPY);
@@ -1813,6 +1936,9 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             }
         }
     }
+
+    if ((PSOFlags & PSO_FLAG_USE_MORPH_TARGETS) != 0)
+        ss << "    uint VertexID : SV_VertexID;" << std::endl;
 
     if (m_Settings.PrimitiveArraySize > 0 && !m_Device.GetDeviceInfo().Features.NativeMultiDraw)
     {
@@ -2269,6 +2395,8 @@ PBR_Renderer::PSO_FLAGS PBR_Renderer::GetEnabledPSOFlags(const CreateInfo& Setti
         Flags &= ~PSO_FLAG_ENABLE_SHADOWS;
     if (Settings.MaxJointCount == 0)
         Flags &= ~PSO_FLAG_USE_JOINTS;
+    if (Settings.MaxActiveMorphTargetCount == 0)
+        Flags &= ~PSO_FLAG_USE_MORPH_TARGETS;
 
     return Flags;
 }
@@ -2583,6 +2711,17 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //        } Skinning;
     //    } Transforms;
     //
+    //    struct PBRMorphTargetsShaderAttribs // #if USE_MORPH_TARGETS
+    //    {
+    //        uint VertexOffset;
+    //        uint Padding0;
+    //        uint Padding1;
+    //        uint Padding2;
+    //
+    //        PBRMorphTargetShaderAttribs Targets[MAX_ACTIVE_MORPH_TARGET_COUNT];
+    //        PBRMorphTargetShaderAttribs PrevTargets[MAX_ACTIVE_MORPH_TARGET_COUNT]; // #if COMPUTE_MOTION_VECTORS
+    //    } MorphTargets;
+    //
     //    struct PBRVertexPositionUnpackShaderAttribs // #if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
     //    {
     //        float4 Bias;
@@ -2593,16 +2732,25 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //    UserDefined CustomData;
     //};
 
-    const bool UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
-    const bool UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
-    const bool UseJoints               = (Flags & PSO_FLAG_USE_JOINTS) != 0;
-    const bool UsePackedPosition       = m_Settings.VertexPosPackMode != VERTEX_POS_PACK_MODE_NONE;
+    const bool   UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
+    const bool   UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
+    const bool   UseJoints               = (Flags & PSO_FLAG_USE_JOINTS) != 0;
+    const bool   UseMorphTargets         = m_Settings.MaxActiveMorphTargetCount != 0 && (Flags & PSO_FLAG_USE_MORPH_TARGETS) != 0;
+    const bool   UsePackedPosition       = m_Settings.VertexPosPackMode != VERTEX_POS_PACK_MODE_NONE;
+    const Uint32 MorphTargetDataSize     = UseMorphTargets ?
+        sizeof(float4) +
+            m_Settings.MaxActiveMorphTargetCount * sizeof(MorphTargetShaderAttribs) *
+                ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0 ? 2u : 1u) :
+        0;
+
+    static_assert(sizeof(MorphTargetShaderAttribs) == sizeof(float4), "Unexpected morph target shader attributes size");
 
     return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
             ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
             (UseJoints ? sizeof(float4) : 0) +                                   // Transforms.Skinning.JointCount ... Padding
             (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.Skinning.PreTransform
             (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.Skinning.PrevPreTransform
+            MorphTargetDataSize +                                                // MorphTargets
             (UsePackedPosition ? sizeof(float4) * 2 : 0) +                       // PositionUnpack
 
             sizeof(float4) + // FallbackColor

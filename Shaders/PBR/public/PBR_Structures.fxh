@@ -79,6 +79,14 @@
 #   define USE_JOINTS 0
 #endif
 
+#ifndef USE_MORPH_TARGETS
+#   define USE_MORPH_TARGETS 0
+#endif
+
+#ifndef MAX_ACTIVE_MORPH_TARGET_COUNT
+#   define MAX_ACTIVE_MORPH_TARGET_COUNT 0
+#endif
+
 #ifndef USE_SKIN_PRE_TRANSFORM
 #   define USE_SKIN_PRE_TRANSFORM 0
 #endif
@@ -126,6 +134,35 @@ struct GLTFNodeShaderTransforms
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFNodeShaderTransforms);
+#endif
+
+struct PBRMorphTargetShaderAttribs
+{
+    float Weight;
+    uint  PositionDeltaOffset;
+    uint  NormalDeltaOffset;
+    uint  TangentDeltaOffset;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(PBRMorphTargetShaderAttribs);
+#endif
+
+#if USE_MORPH_TARGETS
+struct PBRMorphTargetsShaderAttribs
+{
+    uint VertexOffset; // Subtracted from SV_VertexID to address target-local deltas
+    uint Padding0;
+    uint Padding1;
+    uint Padding2;
+
+    PBRMorphTargetShaderAttribs Targets[MAX_ACTIVE_MORPH_TARGET_COUNT];
+#   if COMPUTE_MOTION_VECTORS
+        PBRMorphTargetShaderAttribs PrevTargets[MAX_ACTIVE_MORPH_TARGET_COUNT];
+#   endif
+};
+#   ifdef CHECK_STRUCT_ALIGNMENT
+        CHECK_STRUCT_ALIGNMENT(PBRMorphTargetsShaderAttribs);
+#   endif
 #endif
 
 struct LoadingAnimationShaderParameters

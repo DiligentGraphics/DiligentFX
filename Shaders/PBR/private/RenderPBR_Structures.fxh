@@ -31,6 +31,10 @@ struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
 
+#if USE_MORPH_TARGETS
+    PBRMorphTargetsShaderAttribs MorphTargets;
+#endif
+
 #if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
     PBRVertexPositionUnpackShaderAttribs PositionUnpack;
 #endif

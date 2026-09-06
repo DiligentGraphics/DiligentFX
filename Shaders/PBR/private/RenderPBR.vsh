@@ -14,6 +14,7 @@
 //    float4 Weight0 : ATTRIB5;
 //    float4 Color   : ATTRIB6; // May be float3
 //    float3 Tangent : ATTRIB7;
+//    uint VertexID  : SV_VertexID; // If USE_MORPH_TARGETS
 //};
 
 #include "VSOutputStruct.generated"
@@ -91,6 +92,22 @@ float4x4 GetJointMatrix(int JointIndex, int FirstJoint)
 #endif // JOINTS_BUFFER_MODE == JOINTS_BUFFER_MODE_STRUCTURED
 
 #endif // MAX_JOINT_COUNT > 0 && USE_JOINTS
+
+#if MAX_ACTIVE_MORPH_TARGET_COUNT > 0 && USE_MORPH_TARGETS
+
+StructuredBuffer<float> g_MorphTargetDeltas;
+
+#define INVALID_MORPH_TARGET_DATA_OFFSET 0xFFFFFFFFu
+
+float3 LoadMorphTargetDelta(uint Offset, uint VertexIndex)
+{
+    uint ElementIndex = Offset + VertexIndex * 3u;
+    return float3(g_MorphTargetDeltas[ElementIndex + 0u],
+                  g_MorphTargetDeltas[ElementIndex + 1u],
+                  g_MorphTargetDeltas[ElementIndex + 2u]);
+}
+
+#endif // MAX_ACTIVE_MORPH_TARGET_COUNT > 0 && USE_MORPH_TARGETS
 
 
 float4 GetVertexColor(float3 Color)
@@ -211,11 +228,52 @@ void main(in  VSInput  VSIn,
 
     float3 Pos = GetPosition(VSIn);
 
+#if COMPUTE_MOTION_VECTORS
+    float3 PrevPos = Pos;
+#endif
+
+#if USE_VERTEX_TANGENTS
+    float3 Tangent = VSIn.Tangent;
+#endif
+
+#if MAX_ACTIVE_MORPH_TARGET_COUNT > 0 && USE_MORPH_TARGETS
+    uint MorphVertexIndex = VSIn.VertexID - Primitive.MorphTargets.VertexOffset;
+    for (int MorphTargetIndex = 0; MorphTargetIndex < MAX_ACTIVE_MORPH_TARGET_COUNT; ++MorphTargetIndex)
+    {
+        PBRMorphTargetShaderAttribs MorphTarget = Primitive.MorphTargets.Targets[MorphTargetIndex];
+        if (MorphTarget.Weight == 0.0)
+            break;
+
+        if (MorphTarget.PositionDeltaOffset != INVALID_MORPH_TARGET_DATA_OFFSET)
+            Pos += LoadMorphTargetDelta(MorphTarget.PositionDeltaOffset, MorphVertexIndex) * MorphTarget.Weight;
+#   if USE_VERTEX_NORMALS
+        if (MorphTarget.NormalDeltaOffset != INVALID_MORPH_TARGET_DATA_OFFSET)
+            Normal += LoadMorphTargetDelta(MorphTarget.NormalDeltaOffset, MorphVertexIndex) * MorphTarget.Weight;
+#   endif
+#   if USE_VERTEX_TANGENTS
+        if (MorphTarget.TangentDeltaOffset != INVALID_MORPH_TARGET_DATA_OFFSET)
+            Tangent += LoadMorphTargetDelta(MorphTarget.TangentDeltaOffset, MorphVertexIndex) * MorphTarget.Weight;
+#   endif
+    }
+
+#   if COMPUTE_MOTION_VECTORS
+    for (int PrevMorphTargetIndex = 0; PrevMorphTargetIndex < MAX_ACTIVE_MORPH_TARGET_COUNT; ++PrevMorphTargetIndex)
+    {
+        PBRMorphTargetShaderAttribs PrevMorphTarget = Primitive.MorphTargets.PrevTargets[PrevMorphTargetIndex];
+        if (PrevMorphTarget.Weight == 0.0)
+            break;
+
+        if (PrevMorphTarget.PositionDeltaOffset != INVALID_MORPH_TARGET_DATA_OFFSET)
+            PrevPos += LoadMorphTargetDelta(PrevMorphTarget.PositionDeltaOffset, MorphVertexIndex) * PrevMorphTarget.Weight;
+    }
+#   endif
+#endif
+
     GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(Pos, Normal, Transform);    
     VSOut.ClipPos = mul(float4(TransformedVert.WorldPos, 1.0), g_Frame.Camera.mViewProj);
 
 #if COMPUTE_MOTION_VECTORS
-    GLTF_TransformedVertex PrevTransformedVert = GLTF_TransformVertex(Pos, Normal, PrevTransform);
+    GLTF_TransformedVertex PrevTransformedVert = GLTF_TransformVertex(PrevPos, Normal, PrevTransform);
     VSOut.PrevClipPos  = mul(float4(PrevTransformedVert.WorldPos, 1.0), g_Frame.PrevCamera.mViewProj);
 #endif  
     
@@ -238,7 +296,7 @@ void main(in  VSInput  VSIn,
 #endif
     
 #if USE_VERTEX_TANGENTS
-    VSOut.Tangent  = normalize(mul(VSIn.Tangent, float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz)));
+    VSOut.Tangent  = normalize(mul(Tangent, float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz)));
 #endif
 
 #ifdef USE_GL_POINT_SIZE

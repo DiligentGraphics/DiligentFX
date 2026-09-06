@@ -395,7 +395,8 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                     AttribsData,
                     !pRenderer->GetSettings().PackMatrixRowMajor,
                     pRenderer->GetSettings().UseSkinPreTransform,
-                    pRenderer->GetSettings().VertexPosPackMode);
+                    pRenderer->GetSettings().VertexPosPackMode,
+                    pRenderer->GetSettings().MaxActiveMorphTargetCount);
             const Uint32 PrimitiveAttribsSize =
                 static_cast<Uint32>(static_cast<Uint8*>(pPrimitiveAttribsEnd) - static_cast<Uint8*>(pPrimitiveAttribs));
             if (PrimitiveAttribsSize != Batch.PrimitiveAttribsSize || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)

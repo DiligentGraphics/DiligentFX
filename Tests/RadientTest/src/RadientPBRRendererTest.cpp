@@ -55,6 +55,46 @@ TEST(PBRRendererTest, ControlsSpecularFeature)
                  "SpecularColorFactor");
 }
 
+TEST(PBRRendererTest, SelectsHighestMagnitudeMorphTargets)
+{
+    constexpr std::array                           Weights{0.f, -0.75f, 0.5f, -0.5f, 1.25f, -0.f};
+    std::array<PBR_Renderer::ActiveMorphTarget, 6> ActiveTargets{};
+
+    const Uint32 ActiveTargetCount = PBR_Renderer::SelectActiveMorphTargets(
+        Weights.data(),
+        static_cast<Uint32>(Weights.size()),
+        ActiveTargets.data(),
+        3);
+
+    ASSERT_EQ(ActiveTargetCount, 3u);
+    EXPECT_EQ(ActiveTargets[0].TargetIndex, 4u);
+    EXPECT_FLOAT_EQ(ActiveTargets[0].Weight, 1.25f);
+    EXPECT_EQ(ActiveTargets[1].TargetIndex, 1u);
+    EXPECT_FLOAT_EQ(ActiveTargets[1].Weight, -0.75f);
+    EXPECT_EQ(ActiveTargets[2].TargetIndex, 2u);
+    EXPECT_FLOAT_EQ(ActiveTargets[2].Weight, 0.5f);
+
+    const Uint32 AllActiveTargetCount = PBR_Renderer::SelectActiveMorphTargets(
+        Weights.data(),
+        static_cast<Uint32>(Weights.size()),
+        ActiveTargets.data(),
+        static_cast<Uint32>(ActiveTargets.size()));
+    ASSERT_EQ(AllActiveTargetCount, 4u);
+    EXPECT_EQ(ActiveTargets[3].TargetIndex, 3u);
+    EXPECT_FLOAT_EQ(ActiveTargets[3].Weight, -0.5f);
+}
+
+TEST(PBRRendererTest, ZeroActiveMorphTargetsDisableFeature)
+{
+    PBR_Renderer::CreateInfo Settings{};
+    EXPECT_NE(PBR_Renderer::GetEnabledPSOFlags(Settings) & PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS,
+              PBR_Renderer::PSO_FLAG_NONE);
+
+    Settings.MaxActiveMorphTargetCount = 0;
+    EXPECT_EQ(PBR_Renderer::GetEnabledPSOFlags(Settings) & PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS,
+              PBR_Renderer::PSO_FLAG_NONE);
+}
+
 TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
 {
     struct LayoutCase
@@ -106,7 +146,8 @@ TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
             Attribs,
             false,
             TestCase.UseSkinPreTransform,
-            TestCase.VertexPosPackMode);
+            TestCase.VertexPosPackMode,
+            4);
 
         const Uint8* const pShaderData  = reinterpret_cast<const Uint8*>(ShaderData.data());
         Uint32             Offset       = 0;
@@ -149,6 +190,76 @@ TEST(PBRRendererTest, PacksOptionalPrimitiveTransformBlocks)
 
         EXPECT_EQ(pEnd, pShaderData + Offset);
     }
+}
+
+TEST(PBRRendererTest, PacksMorphTargetPalettes)
+{
+    using MorphTargetShaderAttribs = PBR_Renderer::MorphTargetShaderAttribs;
+    static_assert(sizeof(MorphTargetShaderAttribs) == sizeof(float4));
+
+    constexpr Uint32     MaxActiveMorphTargetCount = 4;
+    constexpr std::array CurrentTargets{
+        MorphTargetShaderAttribs{0.75f, 3u, 6u, 9u},
+        MorphTargetShaderAttribs{-0.25f, 12u, PBR_Renderer::InvalidMorphTargetDataOffset, 15u},
+    };
+    constexpr std::array PreviousTargets{
+        MorphTargetShaderAttribs{0.5f, 18u, 21u, PBR_Renderer::InvalidMorphTargetDataOffset},
+    };
+
+    const float4x4 NodeMatrix{1.f};
+    const float4x4 PrevNodeMatrix{2.f};
+
+    GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData Attribs;
+    Attribs.PSOFlags =
+        PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS |
+        PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+    Attribs.NodeMatrix                 = &NodeMatrix;
+    Attribs.PrevNodeMatrix             = &PrevNodeMatrix;
+    Attribs.MorphTargetVertexOffset    = 37;
+    Attribs.pActiveMorphTargets        = CurrentTargets.data();
+    Attribs.ActiveMorphTargetCount     = static_cast<Uint32>(CurrentTargets.size());
+    Attribs.pPrevActiveMorphTargets    = PreviousTargets.data();
+    Attribs.PrevActiveMorphTargetCount = static_cast<Uint32>(PreviousTargets.size());
+
+    std::array<float4, 32> ShaderData{};
+    void* const            pEnd = GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
+        ShaderData.data(),
+        Attribs,
+        false,
+        false,
+        PBR_Renderer::VERTEX_POS_PACK_MODE_NONE,
+        MaxActiveMorphTargetCount);
+
+    const Uint8* const pShaderData = reinterpret_cast<const Uint8*>(ShaderData.data());
+    Uint32             Offset      = sizeof(NodeMatrix) + sizeof(PrevNodeMatrix);
+
+    std::array<Uint32, 4> Header{};
+    std::memcpy(Header.data(), pShaderData + Offset, sizeof(Header));
+    EXPECT_EQ(Header, (std::array<Uint32, 4>{37u, 0u, 0u, 0u}));
+    Offset += sizeof(Header);
+
+    const auto ExpectPalette = [&](const MorphTargetShaderAttribs* pExpectedTargets, Uint32 ExpectedTargetCount) {
+        for (Uint32 TargetIndex = 0; TargetIndex < MaxActiveMorphTargetCount; ++TargetIndex)
+        {
+            MorphTargetShaderAttribs Actual{};
+            std::memcpy(&Actual, pShaderData + Offset, sizeof(Actual));
+            Offset += sizeof(Actual);
+
+            const MorphTargetShaderAttribs Expected = TargetIndex < ExpectedTargetCount ?
+                pExpectedTargets[TargetIndex] :
+                MorphTargetShaderAttribs{};
+            EXPECT_EQ(std::memcmp(&Actual, &Expected, sizeof(Actual)), 0);
+        }
+    };
+
+    ExpectPalette(CurrentTargets.data(), static_cast<Uint32>(CurrentTargets.size()));
+    ExpectPalette(PreviousTargets.data(), static_cast<Uint32>(PreviousTargets.size()));
+
+    const std::array<float, 4> ExpectedFallbackColor{1.f, 1.f, 1.f, 1.f};
+    EXPECT_EQ(std::memcmp(pShaderData + Offset, ExpectedFallbackColor.data(), sizeof(ExpectedFallbackColor)), 0);
+    Offset += sizeof(ExpectedFallbackColor);
+
+    EXPECT_EQ(pEnd, pShaderData + Offset);
 }
 
 TEST(RadientPBRRendererTest, ConvertsDebugVisualizations)

@@ -709,7 +709,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                                                                    AttribsData,
                                                                    !m_Settings.PackMatrixRowMajor,
                                                                    m_Settings.UseSkinPreTransform,
-                                                                   m_Settings.VertexPosPackMode);
+                                                                   m_Settings.VertexPosPackMode,
+                                                                   m_Settings.MaxActiveMorphTargetCount);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
@@ -791,7 +792,8 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                                                         const PBRPrimitiveShaderAttribsData& AttribsData,
                                                         bool                                 TransposeMatrices,
                                                         bool                                 UseSkinPreTransform,
-                                                        VERTEX_POS_PACK_MODE                 VertexPosPackMode)
+                                                        VERTEX_POS_PACK_MODE                 VertexPosPackMode,
+                                                        Uint32                               MaxActiveMorphTargetCount)
 {
     // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
 
@@ -813,6 +815,17 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //            float4x4 PrevPreTransform; // #if USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //        } Skinning;
     //    } Transforms;
+    //
+    //    struct PBRMorphTargetsShaderAttribs // #if USE_MORPH_TARGETS
+    //    {
+    //        uint VertexOffset;
+    //        uint Padding0;
+    //        uint Padding1;
+    //        uint Padding2;
+    //
+    //        PBRMorphTargetShaderAttribs Targets[MAX_ACTIVE_MORPH_TARGET_COUNT];
+    //        PBRMorphTargetShaderAttribs PrevTargets[MAX_ACTIVE_MORPH_TARGET_COUNT]; // #if COMPUTE_MOTION_VECTORS
+    //    } MorphTargets;
     //
     //    struct PBRVertexPositionUnpackShaderAttribs // #if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
     //    {
@@ -887,6 +900,44 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                     pDstPtr += sizeof(float4x4);
                 }
             }
+        }
+    }
+
+    if ((AttribsData.PSOFlags & PSO_FLAG_USE_MORPH_TARGETS) != 0 && MaxActiveMorphTargetCount != 0)
+    {
+        WriteValue(AttribsData.MorphTargetVertexOffset);
+        WriteValue(Uint32{0});
+        WriteValue(Uint32{0});
+        WriteValue(Uint32{0});
+
+        static_assert(sizeof(MorphTargetShaderAttribs) == sizeof(float4), "Unexpected morph target shader attributes size");
+        const auto WriteMorphTargetPalette = [&](const MorphTargetShaderAttribs* pTargets, Uint32 TargetCount) {
+            if (TargetCount > MaxActiveMorphTargetCount)
+            {
+                UNEXPECTED("Active morph target count (", TargetCount, ") exceeds the renderer limit (", MaxActiveMorphTargetCount, ')');
+                TargetCount = MaxActiveMorphTargetCount;
+            }
+            if (TargetCount != 0 && pTargets == nullptr)
+            {
+                UNEXPECTED("Active morph target palette must not be null");
+                TargetCount = 0;
+            }
+
+            const MorphTargetShaderAttribs EmptyTarget{};
+            for (Uint32 TargetIndex = 0; TargetIndex < MaxActiveMorphTargetCount; ++TargetIndex)
+            {
+                const MorphTargetShaderAttribs& Target = TargetIndex < TargetCount ?
+                    pTargets[TargetIndex] :
+                    EmptyTarget;
+                std::memcpy(pDstPtr, &Target, sizeof(Target));
+                pDstPtr += sizeof(Target);
+            }
+        };
+
+        WriteMorphTargetPalette(AttribsData.pActiveMorphTargets, AttribsData.ActiveMorphTargetCount);
+        if ((AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+        {
+            WriteMorphTargetPalette(AttribsData.pPrevActiveMorphTargets, AttribsData.PrevActiveMorphTargetCount);
         }
     }
 

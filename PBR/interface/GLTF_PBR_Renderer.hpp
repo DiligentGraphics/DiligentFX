@@ -221,25 +221,31 @@ public:
 
     struct PBRPrimitiveShaderAttribsData
     {
-        PSO_FLAGS       PSOFlags             = PSO_FLAG_NONE;
-        const float4x4* NodeMatrix           = nullptr;
-        const float4x4* PrevNodeMatrix       = nullptr; // #if COMPUTE_MOTION_VECTORS
-        Uint32          JointCount           = 0;
-        Uint32          FirstJoint           = 0; // #if USE_JOINTS
-        Uint32          PrevFirstJoint       = 0; // #if USE_JOINTS && COMPUTE_MOTION_VECTORS
-        const float3*   PosScale             = nullptr;
-        const float3*   PosBias              = nullptr;
-        const float4x4* SkinPreTransform     = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
-        const float4x4* PrevSkinPreTransform = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
-        const float4*   FallbackColor        = nullptr;
-        const void*     CustomData           = nullptr;
-        size_t          CustomDataSize       = 0;
+        PSO_FLAGS                       PSOFlags                   = PSO_FLAG_NONE;
+        const float4x4*                 NodeMatrix                 = nullptr;
+        const float4x4*                 PrevNodeMatrix             = nullptr; // #if COMPUTE_MOTION_VECTORS
+        Uint32                          JointCount                 = 0;
+        Uint32                          FirstJoint                 = 0; // #if USE_JOINTS
+        Uint32                          PrevFirstJoint             = 0; // #if USE_JOINTS && COMPUTE_MOTION_VECTORS
+        const float3*                   PosScale                   = nullptr;
+        const float3*                   PosBias                    = nullptr;
+        const float4x4*                 SkinPreTransform           = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
+        const float4x4*                 PrevSkinPreTransform       = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+        Uint32                          MorphTargetVertexOffset    = 0;       // #if USE_MORPH_TARGETS
+        const MorphTargetShaderAttribs* pActiveMorphTargets        = nullptr; // #if USE_MORPH_TARGETS
+        Uint32                          ActiveMorphTargetCount     = 0;
+        const MorphTargetShaderAttribs* pPrevActiveMorphTargets    = nullptr; // #if USE_MORPH_TARGETS && COMPUTE_MOTION_VECTORS
+        Uint32                          PrevActiveMorphTargetCount = 0;
+        const float4*                   FallbackColor              = nullptr;
+        const void*                     CustomData                 = nullptr;
+        size_t                          CustomDataSize             = 0;
     };
     static void* WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
                                                 const PBRPrimitiveShaderAttribsData& AttribsData,
                                                 bool                                 TransposeMatrices,
                                                 bool                                 UseSkinPreTransform,
-                                                VERTEX_POS_PACK_MODE                 VertexPosPackMode);
+                                                VERTEX_POS_PACK_MODE                 VertexPosPackMode,
+                                                Uint32                               MaxActiveMorphTargetCount);
 
     struct PBRMaterialShaderAttribsData
     {

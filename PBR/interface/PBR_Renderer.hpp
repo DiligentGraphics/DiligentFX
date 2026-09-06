@@ -141,6 +141,38 @@ public:
         VERTEX_POS_PACK_MODE_64_BIT,
     };
 
+    static constexpr Uint32 InvalidMorphTargetDataOffset = ~Uint32{0};
+
+    /// One morph target selected for the active target palette.
+    struct ActiveMorphTarget
+    {
+        Uint32  TargetIndex = 0;
+        Float32 Weight      = 0;
+    };
+
+    /// Shader-readable data for one active morph target.
+    ///
+    /// Each referenced stream contains one tightly packed Float32 triplet per
+    /// vertex. Delta offsets are measured in Float32 elements in the structured
+    /// morph target buffer. InvalidMorphTargetDataOffset indicates that the
+    /// target does not provide the corresponding attribute.
+    struct MorphTargetShaderAttribs
+    {
+        Float32 Weight              = 0;
+        Uint32  PositionDeltaOffset = InvalidMorphTargetDataOffset;
+        Uint32  NormalDeltaOffset   = InvalidMorphTargetDataOffset;
+        Uint32  TangentDeltaOffset  = InvalidMorphTargetDataOffset;
+    };
+
+    /// Selects up to MaxActiveTargetCount nonzero weights with the greatest
+    /// absolute magnitude. The result is sorted by descending magnitude, with
+    /// lower target indices ordered first when magnitudes are equal. Signed
+    /// weights are preserved.
+    static Uint32 SelectActiveMorphTargets(const Float32*     pWeights,
+                                           Uint32             WeightCount,
+                                           ActiveMorphTarget* pActiveTargets,
+                                           Uint32             MaxActiveTargetCount) noexcept;
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -200,6 +232,11 @@ public:
         /// Whether to create a default joints buffer when pJointsBuffer is null.
         /// Disable this when joint data is supplied through renderer-specific SRBs.
         bool CreateDefaultJointsBuffer = true;
+
+        /// Whether to create a default morph target buffer when
+        /// pMorphTargetBuffer is null. Disable this when morph target data is
+        /// supplied through renderer-specific SRBs.
+        bool CreateDefaultMorphTargetBuffer = true;
 
         /// Whether to enable shadows.
         /// A pipeline state can use shadows only if this flag is set to true.
@@ -304,6 +341,12 @@ public:
         /// If set to 0, the animation will be disabled.
         Uint32 MaxJointCount = 64;
 
+        /// Maximum number of morph targets blended by a draw.
+        ///
+        /// The value determines the size of the per-primitive morph palette
+        /// and bounds vertex shader work. Set to zero to disable morph targets.
+        Uint32 MaxActiveMorphTargetCount = 4;
+
         /// Joints buffer mode.
         JOINTS_BUFFER_MODE JointsBufferMode = JOINTS_BUFFER_MODE_UNIFORM;
 
@@ -324,6 +367,7 @@ public:
         ///                     float4 Weight0 : ATTRIB5; // If PSO_FLAG_USE_JOINTS is set
         ///                     float4 Color   : ATTRIB6; // If PSO_FLAG_USE_VERTEX_COLORS is set
         ///                     float3 Tangent : ATTRIB7; // If PSO_FLAG_USE_VERTEX_TANGENTS is set
+        ///                     uint VertexID  : SV_VertexID; // If PSO_FLAG_USE_MORPH_TARGETS is set
         ///                 };
         InputLayoutDesc InputLayout;
 
@@ -371,6 +415,11 @@ public:
         /// If null and CreateDefaultJointsBuffer is true, the renderer will
         /// allocate the buffer.
         IBuffer* pJointsBuffer = nullptr;
+
+        /// A pointer to the user-provided morph target buffer.
+        /// If null and CreateDefaultMorphTargetBuffer is true, the renderer
+        /// will allocate a minimal fallback buffer.
+        IBuffer* pMorphTargetBuffer = nullptr;
 
         /// Texture attribute index info
         std::array<int, TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices{};
@@ -482,6 +531,7 @@ public:
     IBuffer*      GetPBRPrimitiveAttribsCB() const   { return m_PBRPrimitiveAttribsCB; }
     IBuffer*      GetPBRMaterialAttribsCB() const    { return m_PBRMaterialAttribsCB; }
     IBuffer*      GetJointsBuffer() const            { return m_JointsBuffer; }
+    IBuffer*      GetMorphTargetBuffer() const       { return m_MorphTargetBuffer; }
     // clang-format on
 
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
@@ -655,8 +705,9 @@ public:
         PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(39),
         PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(40),
         PSO_FLAG_ENABLE_SHADOWS            = PSO_FLAG_BIT(41),
+        PSO_FLAG_USE_MORPH_TARGETS         = PSO_FLAG_BIT(42),
 
-        PSO_FLAG_LAST = PSO_FLAG_ENABLE_SHADOWS,
+        PSO_FLAG_LAST = PSO_FLAG_USE_MORPH_TARGETS,
 
         PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1ull,
 
@@ -878,6 +929,12 @@ public:
         /// Optional joints buffer. When null, the renderer-owned buffer is used.
         IBuffer* pJointsBuffer = nullptr;
 
+        /// Optional structured Float32 buffer containing morph target deltas.
+        /// When null, the renderer-owned buffer is used. A buffer containing
+        /// the referenced data must be provided when PSO_FLAG_USE_MORPH_TARGETS
+        /// is enabled.
+        IBuffer* pMorphTargetDeltas = nullptr;
+
         /// Optional shadow map view.
         ITextureView* pShadowMap = nullptr;
 
@@ -952,10 +1009,11 @@ public:
     static void* WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs, bool PackMatrixRowMajor, Uint32 MaxJointCount);
     void*        WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs);
 
-    static Uint32 GetJointsDataSize(Uint32 MaxJointCount, bool UsePrevFrameTransforms);
-    Uint32        GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const;
-    Uint32        GetJointsBufferSize() const;
-    const char*   GetJointTransformsVarName() const;
+    static Uint32      GetJointsDataSize(Uint32 MaxJointCount, bool UsePrevFrameTransforms);
+    Uint32             GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const;
+    Uint32             GetJointsBufferSize() const;
+    const char*        GetJointTransformsVarName() const;
+    static const char* GetMorphTargetDeltasVarName();
 
     /// Packs normal into a single 32-bit uint.
     ///
@@ -1113,6 +1171,7 @@ protected:
     RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
     RefCntAutoPtr<IBuffer> m_PBRMaterialAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
+    RefCntAutoPtr<IBuffer> m_MorphTargetBuffer;
 
     std::unordered_set<std::string> m_GeneratedIncludes;
 
