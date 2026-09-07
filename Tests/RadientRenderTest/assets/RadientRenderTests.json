@@ -283,6 +283,15 @@
       }
     },
     {
+      "name": "MorphPrimitivesTest",
+      "model": "Models/MorphPrimitivesTest/glTF-Binary/MorphPrimitivesTest.glb",
+      "camera": {
+        "eye": [1.12, 1.0, -1.12],
+        "target": [0.0, 0.03, 0.0],
+        "fov": 40.0
+      }
+    },
+    {
       "name": "MultiUVTest",
       "model": "Models/MultiUVTest/glTF-Binary/MultiUVTest.glb",
       "camera": {
