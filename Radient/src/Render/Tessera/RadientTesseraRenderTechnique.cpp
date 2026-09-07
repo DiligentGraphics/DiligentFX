@@ -177,6 +177,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
         const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
         pSceneState->SkinningPreparationStatus =
             pSceneState->DrawableCache.PrepareSkinningData(Context.RenderFrameID, PackJointMatricesRowMajor);
+        pSceneState->MorphPreparationStatus =
+            pSceneState->DrawableCache.PrepareMorphTargetData(Context.RenderFrameID);
         pSceneState->DeformationPreparationFrameID = Context.RenderFrameID;
     }
 
@@ -186,6 +188,10 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     const RADIENT_STATUS SkinningStatus = pSceneState->SkinningPreparationStatus;
     if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
         FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
+
+    const RADIENT_STATUS MorphStatus = pSceneState->MorphPreparationStatus;
+    if (RADIENT_SUCCEEDED(MorphStatus) && MorphStatus != RADIENT_STATUS_NO_CHANGE)
+        FrameStatus = CombineDependencyStatus(FrameStatus, MorphStatus);
 
     const RADIENT_STATUS GeometryRendererStatus =
         m_GeometryRenderer.Prepare(Context.pDevice,
@@ -501,7 +507,8 @@ RadientTesseraRenderTechnique::SceneRenderState& RadientTesseraRenderTechnique::
     m_SceneRenderStates.push_back(
         std::make_unique<SceneRenderState>(const_cast<IRadientScene*>(&Scene),
                                            m_EnableAsyncPipelineCompilation,
-                                           m_GeometryRenderer.GetJointBuffer()));
+                                           m_GeometryRenderer.GetJointBuffer(),
+                                           m_GeometryRenderer.GetMaxActiveMorphTargetCount()));
     return *m_SceneRenderStates.back();
 }
 

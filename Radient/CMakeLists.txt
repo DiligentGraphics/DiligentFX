@@ -53,6 +53,7 @@ set(SOURCE
     src/Render/Tessera/RadientTesseraGeometryRenderer.cpp
     src/Render/Tessera/RadientTesseraBufferSuballocator.cpp
     src/Render/Tessera/RadientTesseraMaterialCache.cpp
+    src/Render/Tessera/RadientTesseraMorphData.cpp
     src/Render/Tessera/RadientTesseraRenderTechnique.cpp
     src/Render/Tessera/RadientTesseraSkinData.cpp
     src/Scene/Components/RadientMaterialBindingsStorage.cpp
@@ -120,6 +121,7 @@ set(INCLUDE
     include/Render/Tessera/RadientTesseraGeometryRenderer.hpp
     include/Render/Tessera/RadientTesseraBufferSuballocator.hpp
     include/Render/Tessera/RadientTesseraMaterialCache.hpp
+    include/Render/Tessera/RadientTesseraMorphData.hpp
     include/Render/Tessera/RadientTesseraRenderTechnique.hpp
     include/Render/Tessera/RadientTesseraSkinData.hpp
     include/Scene/Components/RadientMorphComponentStorage.hpp

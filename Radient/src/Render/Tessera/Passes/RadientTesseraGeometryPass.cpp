@@ -251,7 +251,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    const Uint32 PrimitiveArraySize      = std::max(pRenderer->GetSettings().PrimitiveArraySize, 1u);
+    const PBR_Renderer::CreateInfo& Settings = pRenderer->GetSettings();
+
+    const Uint32 PrimitiveArraySize      = std::max(Settings.PrimitiveArraySize, 1u);
     const Uint32 PrimitiveAttribsMaxSize = pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
     const Uint64 PrimitiveAttribsRange   = Uint64{PrimitiveAttribsMaxSize} * PrimitiveArraySize;
     if (PrimitiveAttribsMaxSize == 0 || PrimitiveAttribsBufferDesc.Size < PrimitiveAttribsRange)
@@ -270,7 +272,10 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
-    const bool     UsePreviousJointPalette = FrameHistory.HasCameraHistory();
+    // DXBC/DXIL SV_VertexID is not affected by the draw's base vertex, while
+    // SPIR-V/GLSL vertex IDs include it.
+    const bool     ShaderVertexIDIncludesBaseVertex = !pDevice->GetDeviceInfo().IsD3DDevice();
+    const bool     UsePreviousDeformationData       = FrameHistory.HasCameraHistory();
     DrawState      State;
     RADIENT_STATUS Result = RADIENT_STATUS_OK;
 
@@ -335,6 +340,22 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 }
             }
 
+            const RadientTesseraMorphAttachment* pMorphAttachment = nullptr;
+            if ((Batch.PSOFlags & PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS) != 0)
+            {
+                pMorphAttachment                 = Drawable.pMorphAttachment;
+                const RADIENT_STATUS MorphStatus = pMorphAttachment != nullptr ?
+                    pMorphAttachment->MorphData.GetPreparationStatus() :
+                    RADIENT_STATUS_INVALID_OPERATION;
+                if (MorphStatus != RADIENT_STATUS_OK)
+                {
+                    // Morph failure does not prevent the undeformed primitive
+                    // or unrelated drawables from being rendered.
+                    Result           = CombineDependencyStatus(Result, MorphStatus);
+                    pMorphAttachment = nullptr;
+                }
+            }
+
             if (MultiDrawCount == PrimitiveArraySize)
                 MultiDrawCount = 0;
 
@@ -384,19 +405,29 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                 const RadientTesseraSkinData& SkinData = pSkinAttachment->SkinData;
                 AttribsData.JointCount                 = SkinData.GetJointCount();
                 AttribsData.FirstJoint                 = SkinData.GetFirstJoint();
-                AttribsData.PrevFirstJoint             = UsePreviousJointPalette ?
-                                SkinData.GetPreviousFirstJoint() :
-                                SkinData.GetFirstJoint();
+                AttribsData.PrevFirstJoint             = UsePreviousDeformationData ?
+                    SkinData.GetPreviousFirstJoint() :
+                    SkinData.GetFirstJoint();
+            }
+            if (pMorphAttachment != nullptr)
+            {
+                const RadientTesseraMorphData& MorphData     = pMorphAttachment->MorphData;
+                const Uint32                   GeometryIndex = pMorphAttachment->GeometryIndex;
+                AttribsData.MorphTargetVertexOffset          = ShaderVertexIDIncludesBaseVertex ? Drawable.BaseVertex : 0;
+                AttribsData.ActiveMorphTargetCount           = MorphData.GetActiveTargetCount(false);
+                AttribsData.pActiveMorphTargets              = MorphData.GetShaderAttribs(GeometryIndex, false);
+                AttribsData.PrevActiveMorphTargetCount       = MorphData.GetActiveTargetCount(UsePreviousDeformationData);
+                AttribsData.pPrevActiveMorphTargets          = MorphData.GetShaderAttribs(GeometryIndex, UsePreviousDeformationData);
             }
 
             void* const pPrimitiveAttribsEnd =
                 GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(
                     pPrimitiveAttribs,
                     AttribsData,
-                    !pRenderer->GetSettings().PackMatrixRowMajor,
-                    pRenderer->GetSettings().UseSkinPreTransform,
-                    pRenderer->GetSettings().VertexPosPackMode,
-                    pRenderer->GetSettings().MaxActiveMorphTargetCount);
+                    !Settings.PackMatrixRowMajor,
+                    Settings.UseSkinPreTransform,
+                    Settings.VertexPosPackMode,
+                    Settings.MaxActiveMorphTargetCount);
             const Uint32 PrimitiveAttribsSize =
                 static_cast<Uint32>(static_cast<Uint8*>(pPrimitiveAttribsEnd) - static_cast<Uint8*>(pPrimitiveAttribs));
             if (PrimitiveAttribsSize != Batch.PrimitiveAttribsSize || PrimitiveAttribsSize > PrimitiveAttribsMaxSize)
@@ -685,6 +716,13 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     {
         UNEXPECTED("A skinned drawable does not contain joint and weight vertex attributes");
     }
+
+    RadientTesseraMorphAttachment* pMorphAttachment = nullptr;
+    if (Drawable.pMorphAttachment != nullptr)
+    {
+        pMorphAttachment = Drawable.pMorphAttachment;
+        PSOFlags |= PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS;
+    }
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
@@ -775,13 +813,14 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         Drawable.pWorldMatrix,
         Drawable.pEffectiveVisible,
         pSkinAttachment,
+        pMorphAttachment,
         DrawableID,
         Drawable.Generation,
         Drawable.ElementCount,
         Drawable.IsIndexed ?
             Drawable.FirstIndexLocation + Drawable.FirstElement :
             Drawable.BaseVertex + Drawable.FirstElement,
-        Drawable.IsIndexed ? Drawable.BaseVertex : 0,
+        Drawable.BaseVertex,
     });
 }
 

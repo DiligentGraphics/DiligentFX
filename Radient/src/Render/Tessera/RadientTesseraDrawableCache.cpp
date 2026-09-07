@@ -87,9 +87,11 @@ IRadientDrawableMeshProvider& GetDefaultDrawableMeshProvider()
 
 RadientTesseraDrawableCache::RadientTesseraDrawableCache(
     RadientTesseraBufferSuballocator& JointBuffer,
-    IRadientDrawableMeshProvider*     pMeshProvider) :
+    IRadientDrawableMeshProvider*     pMeshProvider,
+    Uint32                            MaxActiveMorphTargetCount) :
     m_MeshProvider{pMeshProvider != nullptr ? *pMeshProvider : GetDefaultDrawableMeshProvider()},
-    m_JointBuffer{JointBuffer}
+    m_JointBuffer{JointBuffer},
+    m_MaxActiveMorphTargetCount{MaxActiveMorphTargetCount}
 {
 }
 
@@ -106,7 +108,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
 
     const bool UpdateRenderables = (m_SceneRevisions.Drawables != SceneRevisions.Drawables);
     const bool UpdateLights      = (m_SceneRevisions.Lights != SceneRevisions.Lights);
-    const bool UpdateSkinVisibility =
+    const bool UpdateDeformationVisibility =
         UpdateRenderables || m_SceneRevisions.Visibility != SceneRevisions.Visibility;
 
     const RadientSceneImpl*                            pSceneImpl     = ClassPtrCast<const RadientSceneImpl>(&Scene);
@@ -175,8 +177,9 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
             });
     }
 
-    if (UpdateSkinVisibility)
-        RebuildVisibleSkinDataList();
+    // Pending meshes can acquire geometry bindings without a scene revision change.
+    if (UpdateDeformationVisibility || !m_DrawableChanges.empty())
+        RebuildVisibleDeformationDataLists();
 
     m_SceneRevisions = SceneRevisions;
 
@@ -198,6 +201,21 @@ RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(RadientFrameID R
             HasChanges = true;
         else if (SkinStatus != RADIENT_STATUS_NO_CHANGE)
             Status = CombineDependencyStatus(Status, SkinStatus);
+    }
+    return Status == RADIENT_STATUS_OK && !HasChanges ? RADIENT_STATUS_NO_CHANGE : Status;
+}
+
+RADIENT_STATUS RadientTesseraDrawableCache::PrepareMorphTargetData(RadientFrameID RenderFrameID)
+{
+    RADIENT_STATUS Status     = RADIENT_STATUS_OK;
+    bool           HasChanges = false;
+    for (RadientTesseraMorphData* pMorphData : m_VisibleMorphData)
+    {
+        const RADIENT_STATUS MorphStatus = pMorphData->Prepare(RenderFrameID);
+        if (MorphStatus == RADIENT_STATUS_OK)
+            HasChanges = true;
+        else if (MorphStatus != RADIENT_STATUS_NO_CHANGE)
+            Status = CombineDependencyStatus(Status, MorphStatus);
     }
     return Status == RADIENT_STATUS_OK && !HasChanges ? RADIENT_STATUS_NO_CHANGE : Status;
 }
@@ -228,8 +246,20 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
     Record.pRenderer         = &Mesh.Renderer;
     Record.pWorldMatrix      = &Mesh.WorldMatrix;
     Record.pEffectiveVisible = &Mesh.EffectiveVisible;
+    Record.pMorphWeights     = m_MaxActiveMorphTargetCount != 0 && Mesh.pMorph != nullptr ? Mesh.pMorph->pWeights : nullptr;
 
     UpdateRenderableSkin(Record, Mesh.pSkin);
+    // A different weights object replaces the per-geometry attachments.
+    const bool MorphChanged = Record.pMorphWeights != nullptr ?
+        Record.pMorphState == nullptr || !Record.pMorphState->MorphData.Matches(Record.pMorphWeights) :
+        Record.pMorphState != nullptr;
+    if (MorphChanged)
+    {
+        RemoveRenderableDrawables(Record);
+        RemoveRenderableMorph(Record);
+    }
+    if (Record.pMorphState != nullptr)
+        Record.pMorphState->pEffectiveVisible = Record.pEffectiveVisible;
 
     if (Record.DrawableIDs.empty())
     {
@@ -261,6 +291,7 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID E
     RemoveRenderableDrawables(It->second);
     m_PendingMaterialData.erase(Entity);
     RemoveRenderableSkin(It->second);
+    RemoveRenderableMorph(It->second);
     m_Renderables.erase(It);
 }
 
@@ -350,7 +381,75 @@ void RadientTesseraDrawableCache::RemoveRenderableSkin(RenderableRecord& Record)
     Record.pSkinAttachment.reset();
 }
 
-void RadientTesseraDrawableCache::RebuildVisibleSkinDataList()
+void RadientTesseraDrawableCache::InitializeRenderableMorph(RenderableRecord&          Record,
+                                                            const RadientDrawableMesh& Mesh)
+{
+    if (Record.pMorphWeights == nullptr)
+        return;
+    if (Record.pMorphState == nullptr)
+    {
+        auto [It, Inserted]        = m_MorphDataCache.try_emplace(Record.pMorphWeights.RawPtr());
+        MorphDataCacheEntry& Entry = It->second;
+        if (Inserted)
+        {
+            Entry.pMorphData = std::make_unique<RadientTesseraMorphData>(
+                Record.pMorphWeights,
+                Mesh,
+                m_MaxActiveMorphTargetCount);
+        }
+
+        VERIFY(Entry.pMorphData != nullptr, "Morph data cache contains a null entry");
+        Record.pMorphState = std::make_unique<RenderableMorphState>(
+            RenderableMorphState{*Entry.pMorphData});
+        Record.pMorphState->CacheEntryIndex = Entry.Renderables.size();
+        Entry.Renderables.push_back(Record.pMorphState.get());
+    }
+
+    Record.pMorphState->pEffectiveVisible = Record.pEffectiveVisible;
+}
+
+void RadientTesseraDrawableCache::RemoveRenderableMorph(RenderableRecord& Record)
+{
+    if (Record.pMorphState == nullptr)
+        return;
+
+    RenderableMorphState&    State     = *Record.pMorphState;
+    RadientTesseraMorphData& MorphData = State.MorphData;
+    const auto              It        = m_MorphDataCache.find(MorphData.GetWeights());
+    if (It == m_MorphDataCache.end() || It->second.pMorphData.get() != &MorphData)
+    {
+        UNEXPECTED("Renderable references morph data missing from the cache");
+        Record.pMorphState.reset();
+        return;
+    }
+
+    MorphDataCacheEntry& Entry = It->second;
+    size_t              Index = State.CacheEntryIndex;
+    if (Index >= Entry.Renderables.size() || Entry.Renderables[Index] != &State)
+    {
+        UNEXPECTED("Morph renderable has an invalid cache entry index");
+
+        const auto RenderableIt = std::find(Entry.Renderables.begin(), Entry.Renderables.end(), &State);
+        if (RenderableIt == Entry.Renderables.end())
+        {
+            Record.pMorphState.reset();
+            return;
+        }
+        Index = static_cast<size_t>(RenderableIt - Entry.Renderables.begin());
+    }
+
+    RenderableMorphState* const pMovedState = Entry.Renderables.back();
+    VERIFY(pMovedState != nullptr, "Morph data cache contains a null renderable");
+    Entry.Renderables[Index]    = pMovedState;
+    pMovedState->CacheEntryIndex = Index;
+    Entry.Renderables.pop_back();
+
+    Record.pMorphState.reset();
+    if (Entry.Renderables.empty())
+        m_MorphDataCache.erase(It);
+}
+
+void RadientTesseraDrawableCache::RebuildVisibleDeformationDataLists()
 {
     m_VisibleSkinData.clear();
     m_VisibleSkinData.reserve(m_SkinDataCache.size());
@@ -370,6 +469,29 @@ void RadientTesseraDrawableCache::RebuildVisibleSkinDataList()
                 *pAttachment->pEffectiveVisible)
             {
                 m_VisibleSkinData.push_back(Entry.pSkinData.get());
+                break;
+            }
+        }
+    }
+
+    m_VisibleMorphData.clear();
+    m_VisibleMorphData.reserve(m_MorphDataCache.size());
+
+    for (const auto& CacheItem : m_MorphDataCache)
+    {
+        const MorphDataCacheEntry& Entry = CacheItem.second;
+        VERIFY(Entry.pMorphData != nullptr, "Morph data cache contains a null entry");
+        if (Entry.pMorphData == nullptr)
+            continue;
+
+        for (const RenderableMorphState* pState : Entry.Renderables)
+        {
+            VERIFY(pState != nullptr, "Morph data cache contains a null renderable");
+            if (pState != nullptr &&
+                pState->pEffectiveVisible != nullptr &&
+                *pState->pEffectiveVisible)
+            {
+                m_VisibleMorphData.push_back(Entry.pMorphData.get());
                 break;
             }
         }
@@ -510,6 +632,10 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
     m_PendingMaterialData.erase(Entity);
     RemoveRenderableDrawables(Record);
 
+    InitializeRenderableMorph(Record, Mesh);
+    if (Record.pMorphState != nullptr)
+        Record.pMorphState->GeometryAttachments.resize(Mesh.Geometries.size());
+
     Record.DrawableIDs.reserve(Mesh.Primitives.size());
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
     {
@@ -529,6 +655,16 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
 
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
+
+        if (Record.pMorphState != nullptr && Geometry.pMorphTargetData != nullptr)
+        {
+            auto& Attachment = Record.pMorphState->GeometryAttachments[Primitive.GeometryIndex];
+            if (!Attachment)
+            {
+                Attachment.emplace(RadientTesseraMorphAttachment{Record.pMorphState->MorphData, Primitive.GeometryIndex});
+            }
+            Slot.pMorphAttachment = &*Attachment;
+        }
 
         Slot.Entity             = Entity;
         Slot.pRenderer          = Record.pRenderer;
@@ -611,6 +747,8 @@ void RadientTesseraDrawableCache::RemoveRenderableDrawables(RenderableRecord& Re
     for (const RadientDrawableID DrawableID : Record.DrawableIDs)
         FreeDrawableID(DrawableID);
     Record.DrawableIDs.clear();
+    if (Record.pMorphState != nullptr)
+        Record.pMorphState->GeometryAttachments.clear();
 }
 
 void RadientTesseraDrawableCache::AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record)

@@ -64,9 +64,10 @@ private:
     {
         SceneRenderState(IRadientScene*                    pScene,
                          bool                              EnableAsyncPipelineCompilation,
-                         RadientTesseraBufferSuballocator& JointBuffer) :
+                         RadientTesseraBufferSuballocator& JointBuffer,
+                         Uint32                            MaxActiveMorphTargetCount) :
             WeakScene{pScene},
-            DrawableCache{JointBuffer},
+            DrawableCache{JointBuffer, nullptr, MaxActiveMorphTargetCount},
             GeometryPass{EnableAsyncPipelineCompilation}
         {}
 
@@ -81,6 +82,7 @@ private:
         // scene during a renderer frame. Later views reuse the same snapshot.
         RadientFrameID DeformationPreparationFrameID = InvalidRadientFrameID;
         RADIENT_STATUS SkinningPreparationStatus     = RADIENT_STATUS_NO_CHANGE;
+        RADIENT_STATUS MorphPreparationStatus        = RADIENT_STATUS_NO_CHANGE;
     };
 
     struct ViewRenderState

@@ -29,6 +29,8 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMorphTargetData.hpp"
+#include "Assets/RadientMorphTargetSource.hpp"
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
@@ -39,6 +41,7 @@
 #include "ThreadPool.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <unordered_map>
 #include <utility>
@@ -279,6 +282,59 @@ private:
     RadientTesseraBufferSuballocator             m_JointBuffer{GetTesseraJointBufferCreateInfo()};
     RefCntAutoPtr<IThreadPool>                   m_pThreadPool;
     std::unique_ptr<RadientTesseraMaterialCache> m_pMaterialCache;
+};
+
+class TestMorphMeshAsset final : public TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>
+{
+public:
+    using TBase = TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>;
+
+    TestMorphMeshAsset(IReferenceCounters* pRefCounters, const char* URI, Uint64 Version) :
+        TBase{pRefCounters, URI, Version}
+    {
+        for (Uint32 TargetIndex = 0; TargetIndex < m_Targets.size(); ++TargetIndex)
+        {
+            m_Attributes[TargetIndex].Semantic       = RadientMorphTargetPositionSemantic;
+            m_Attributes[TargetIndex].ComponentCount = 3;
+            m_Targets[TargetIndex].Name              = TargetIndex == 0 ? "First" : "Second";
+            m_Targets[TargetIndex].pAttributes       = &m_Attributes[TargetIndex];
+            m_Targets[TargetIndex].AttributeCount    = 1;
+            m_Targets[TargetIndex].DefaultWeight     = TargetIndex == 0 ? 0.25f : -0.5f;
+        }
+
+        m_Desc.pMorphTargets    = m_Targets.data();
+        m_Desc.MorphTargetCount = static_cast<Uint32>(m_Targets.size());
+    }
+
+    virtual const RadientMeshAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        return m_Desc;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
+    {
+        return CreateRadientMorphTargetWeights(this, m_Desc, ppWeights);
+    }
+
+    std::unique_ptr<RadientMorphTargetData> CreateGeometryData(Uint32 VertexCount) const
+    {
+        std::vector<Float32>                        Deltas(size_t{VertexCount} * 3);
+        const RadientMorphTargetAttributeCreateInfo AttributeData{Deltas.data()};
+        std::array<RadientMorphTargetCreateInfo, 2> Targets{};
+        for (size_t Index = 0; Index < Targets.size(); ++Index)
+        {
+            Targets[Index].Desc           = m_Targets[Index];
+            Targets[Index].pAttributeData = &AttributeData;
+        }
+        const RadientMorphTargetSource Source{Targets.data(), static_cast<Uint32>(Targets.size()), VertexCount};
+        EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+        return std::make_unique<RadientMorphTargetData>(Source);
+    }
+
+private:
+    std::array<RadientMorphTargetAttributeDesc, 2> m_Attributes{};
+    std::array<RadientMorphTargetDesc, 2>          m_Targets{};
+    RadientMeshAssetDesc                           m_Desc{};
 };
 
 GLTF::Primitive MakePrimitive(Uint32 FirstIndex,
@@ -763,6 +819,8 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
     EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).IsEmpty());
     EXPECT_TRUE(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).IsEmpty());
     EXPECT_TRUE(DrawableCache.GetLightList().IsEmpty());
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_NO_CHANGE);
 
     // The cache revision marker should match the empty scene.
     EXPECT_EQ(DrawableCache.GetSceneRevisions(), pScene->GetSceneRevisions());
@@ -797,6 +855,7 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
     EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_MASK).GetItemCount(), 2u);
     EXPECT_EQ(DrawableCache.GetDrawList(PBR_Renderer::ALPHA_MODE_BLEND).GetItemCount(), 2u);
     EXPECT_FALSE(DrawableCache.GetDrawLists().IsEmpty());
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(2), RADIENT_STATUS_NO_CHANGE);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity}, GLTF::Material::ALPHA_MODE_OPAQUE);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity}, GLTF::Material::ALPHA_MODE_MASK);
     ExpectDrawListMatchesPrimitives(DrawableCache, Model, {Entity}, GLTF::Material::ALPHA_MODE_BLEND);
@@ -1870,8 +1929,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
         EXPECT_FALSE(pSlot->pSkinAttachment->SkeletonToMeshTransform.has_value());
     }
 
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(0), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(0), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_NO_CHANGE);
     pScene->ClearPendingRenderChanges();
 
     const RadientEntityID SecondEntity =
@@ -1913,8 +1972,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
 
     // Advancing the frame with an unchanged shared pose does not prepare a
     // duplicate palette for the second entity.
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(1), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_NO_CHANGE);
     pScene->ClearPendingRenderChanges();
 
     RefCntAutoPtr<IRadientSkeletonPose> pSecondPose;
@@ -1945,8 +2004,8 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
         EXPECT_EQ(*pSlot->pSkinAttachment->SkeletonToMeshTransform, SecondSkin.SkeletonToMeshTransform);
     }
 
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(2), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_NO_CHANGE);
     pScene->ClearPendingRenderChanges();
 
     // A changed palette must produce OK even when another renderable remains
@@ -1956,11 +2015,11 @@ TEST(RadientTesseraDrawableCacheTest, SharesSkinDataAcrossRenderableEntitiesAndP
     const RadientTransform UpdatedJointTransform = MakeTranslation(2.f, 0.f, 0.f);
     ASSERT_EQ(pPoseWriter->SetJointLocalTransforms(0, 1, &UpdatedJointTransform), RADIENT_STATUS_OK);
     ASSERT_EQ(pPoseWriter->Commit(True), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_OK);
-    EXPECT_EQ(DrawableCache.PrepareSkinningData(3), RADIENT_STATUS_NO_CHANGE);
-    // The first stationary subsequent frame collapses previous onto current.
     EXPECT_EQ(DrawableCache.PrepareSkinningData(4), RADIENT_STATUS_OK);
     EXPECT_EQ(DrawableCache.PrepareSkinningData(4), RADIENT_STATUS_NO_CHANGE);
+    // The first stationary subsequent frame collapses previous onto current.
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(5), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareSkinningData(5), RADIENT_STATUS_NO_CHANGE);
 
     // Retargeting the first entity to the second pose reuses its existing
     // cache entry rather than allocating a third palette.
@@ -2125,6 +2184,355 @@ TEST(RadientTesseraDrawableCacheTest, PreparesOnlyEffectivelyVisibleSharedSkinDa
     ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
     pScene->ClearPendingRenderChanges();
     EXPECT_EQ(DrawableCache.PrepareSkinningData(6), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientTesseraDrawableCacheTest, SharesAndPreparesVisibleMorphWeights)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider, 1};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+
+    RefCntAutoPtr<TestMorphMeshAsset> pMorphMesh{
+        MakeNewRCObj<TestMorphMeshAsset>()("mesh://drawable-cache-morph", Uint64{1})};
+    RefCntAutoPtr<IRadientMeshAsset> pMesh{pMorphMesh};
+    ASSERT_NE(pMesh, nullptr);
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pWeights, nullptr);
+
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+    auto pGeometryData                                             = pMorphMesh->CreateGeometryData(3);
+    MeshProvider.Meshes[pMesh].Mesh.Geometries[0].pMorphTargetData = pGeometryData.get();
+    RefCntAutoPtr<IRadientSceneWriter> pWriter                     = RadientSceneWriterImpl::Create(pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    const RadientEntityID FirstEntity  = AddRenderableEntity(*pWriter, pMesh);
+    const RadientEntityID SecondEntity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_EQ(pWriter->SetMorph(FirstEntity, {pWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(SecondEntity, {pWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    const std::vector<const RadientDrawableSlot*> FirstSlots =
+        GetDrawableSlotsForEntity(DrawableCache, FirstEntity);
+    const std::vector<const RadientDrawableSlot*> SecondSlots =
+        GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(FirstSlots.size(), 1u);
+    ASSERT_EQ(SecondSlots.size(), 1u);
+    ASSERT_NE(FirstSlots.front()->pMorphAttachment, nullptr);
+    ASSERT_NE(SecondSlots.front()->pMorphAttachment, nullptr);
+    EXPECT_NE(FirstSlots.front()->pMorphAttachment, SecondSlots.front()->pMorphAttachment);
+
+    RadientTesseraMorphData& SharedMorphData = FirstSlots.front()->pMorphAttachment->MorphData;
+    EXPECT_EQ(&SecondSlots.front()->pMorphAttachment->MorphData, &SharedMorphData);
+    const Uint32 FirstGeometry  = FirstSlots.front()->pMorphAttachment->GeometryIndex;
+    const Uint32 SecondGeometry = SecondSlots.front()->pMorphAttachment->GeometryIndex;
+    EXPECT_EQ(FirstGeometry, SecondGeometry);
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_OK);
+    EXPECT_EQ(SharedMorphData.GetShaderAttribs(FirstGeometry, false), SharedMorphData.GetShaderAttribs(SecondGeometry, false));
+    EXPECT_EQ(SharedMorphData.GetActiveTargetCount(false), 1u);
+    EXPECT_EQ(SharedMorphData.GetPreparedWeightsVersion(), pWeights->GetVersion());
+
+    const std::array<Float32, 2> UpdatedWeights{1.f, 0.f};
+    ASSERT_EQ(pWeights->SetWeights(0, 2, UpdatedWeights.data()), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(2), RADIENT_STATUS_OK);
+    EXPECT_EQ(SharedMorphData.GetPreparedWeightsVersion(), pWeights->GetVersion());
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(2), RADIENT_STATUS_NO_CHANGE);
+
+    // A geometry stays active while any entity using it is visible. Hidden
+    // entities reference the same prepared records, not separate stale copies.
+    const auto* const pPreviousPalette = SharedMorphData.GetShaderAttribs(FirstGeometry, false);
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(FirstEntity, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    const std::array<Float32, 2> VisibleWeights{0.f, 0.5f};
+    ASSERT_EQ(pWeights->SetWeights(0, 2, VisibleWeights.data()), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(3), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(pPreviousPalette[0].Weight, 1.f);
+    EXPECT_EQ(SharedMorphData.GetPreparationStatus(), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(SharedMorphData.GetShaderAttribs(FirstGeometry, false)[0].Weight, 0.5f);
+    EXPECT_EQ(SharedMorphData.GetShaderAttribs(FirstGeometry, false), SharedMorphData.GetShaderAttribs(SecondGeometry, false));
+
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(FirstEntity, True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    // Showing another entity does not invalidate the shared geometry records.
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(3), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_FLOAT_EQ(SharedMorphData.GetShaderAttribs(FirstGeometry, false)[0].Weight, 0.5f);
+    EXPECT_FLOAT_EQ(SharedMorphData.GetShaderAttribs(FirstGeometry, true)[0].Weight, 1.f);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(3), RADIENT_STATUS_NO_CHANGE);
+
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(FirstEntity, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(SecondEntity, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    const Uint64                 HiddenPreparedVersion = SharedMorphData.GetPreparedWeightsVersion();
+    const std::array<Float32, 2> HiddenWeights{0.f, 0.75f};
+    ASSERT_EQ(pWeights->SetWeights(0, 2, HiddenWeights.data()), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(3), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(SharedMorphData.GetPreparedWeightsVersion(), HiddenPreparedVersion);
+
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(SecondEntity, True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(5), RADIENT_STATUS_OK);
+    EXPECT_EQ(SharedMorphData.GetPreparedWeightsVersion(), pWeights->GetVersion());
+    EXPECT_EQ(SharedMorphData.GetActiveTargetCount(true), SharedMorphData.GetActiveTargetCount(false));
+
+    ASSERT_EQ(pWriter->RemoveComponent(SecondEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    const std::vector<const RadientDrawableSlot*> UpdatedSecondSlots =
+        GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(UpdatedSecondSlots.size(), 1u);
+    EXPECT_EQ(UpdatedSecondSlots.front()->pMorphAttachment, nullptr);
+    pScene->ClearPendingRenderChanges();
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pReplacementWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pReplacementWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(FirstEntity, {pReplacementWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(SecondEntity, {pReplacementWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    const auto ReplacementSlots = GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(ReplacementSlots.size(), 1u);
+    ASSERT_NE(ReplacementSlots[0]->pMorphAttachment, nullptr);
+    EXPECT_EQ(ReplacementSlots[0]->pMorphAttachment->MorphData.GetWeights(), pReplacementWeights);
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(6), RADIENT_STATUS_OK);
+
+    // Removing the first association moves the second one in the shared cache.
+    ASSERT_EQ(pWriter->RemoveComponent(FirstEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    ASSERT_EQ(pWriter->RemoveComponent(SecondEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(7), RADIENT_STATUS_NO_CHANGE);
+}
+
+TEST(RadientTesseraDrawableCacheTest, GroupsVisibleMorphBindingsByWeightsObject)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider, 1};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+    RefCntAutoPtr<TestMorphMeshAsset> pMesh{
+        MakeNewRCObj<TestMorphMeshAsset>()("mesh://drawable-cache-independent-morph", Uint64{1})};
+    auto pGeometryData = pMesh->CreateGeometryData(3);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+    MeshProvider.Meshes[pMesh].Mesh.Geometries[0].pMorphTargetData = pGeometryData.get();
+
+    std::array<RefCntAutoPtr<IRadientMorphTargetWeights>, 2> Weights;
+    const std::array<Float32, 2>                             ExpectedWeights{0.5f, -0.75f};
+    for (size_t Index = 0; Index < Weights.size(); ++Index)
+    {
+        ASSERT_EQ(pMesh->CreateMorphTargetWeights(Weights[Index].GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        const std::array<Float32, 2> Values{ExpectedWeights[Index], 0.f};
+        ASSERT_EQ(Weights[Index]->SetWeights(0, 2, Values.data()), RADIENT_STATUS_OK);
+    }
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    std::array<RadientEntityID, 4>     Entities{};
+    for (size_t Index = 0; Index < Entities.size(); ++Index)
+    {
+        Entities[Index] = AddRenderableEntity(*pWriter, pMesh);
+        ASSERT_EQ(pWriter->SetMorph(Entities[Index], {Weights[Index % Weights.size()]}), RADIENT_STATUS_OK);
+    }
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_OK);
+
+    const auto ExpectWeights = [&] {
+        for (size_t Index = 0; Index < Entities.size(); ++Index)
+        {
+            const auto Slots = GetDrawableSlotsForEntity(DrawableCache, Entities[Index]);
+            ASSERT_EQ(Slots.size(), 1u);
+            ASSERT_NE(Slots[0]->pMorphAttachment, nullptr);
+            const auto& Attachment = *Slots[0]->pMorphAttachment;
+            ASSERT_EQ(Attachment.MorphData.GetPreparationStatus(), RADIENT_STATUS_OK);
+            EXPECT_EQ(Attachment.MorphData.GetWeights(), Weights[Index % Weights.size()]);
+            EXPECT_FLOAT_EQ(Attachment.MorphData.GetShaderAttribs(Attachment.GeometryIndex, false)[0].Weight, ExpectedWeights[Index % Weights.size()]);
+        }
+    };
+    ExpectWeights();
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_NO_CHANGE);
+
+    // Each weights object remains visible while at least one entity uses it.
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(Entities[0], False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetEntityOwnVisibility(Entities[1], False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(2), RADIENT_STATUS_NO_CHANGE);
+    ExpectWeights();
+}
+
+TEST(RadientTesseraDrawableCacheTest, PendingMorphSetupSurvivesUnrelatedComponentRemoval)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider, 1};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+    RefCntAutoPtr<TestMorphMeshAsset> pMesh{
+        MakeNewRCObj<TestMorphMeshAsset>()("mesh://drawable-cache-pending-morph", Uint64{1})};
+    auto pGeometryData = pMesh->CreateGeometryData(3);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
+    MeshProvider.Meshes[pMesh].Mesh.Geometries[0].pMorphTargetData = pGeometryData.get();
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter      = RadientSceneWriterImpl::Create(pScene);
+    const RadientEntityID              FirstEntity  = AddRenderableEntity(*pWriter, pMesh);
+    const RadientEntityID              SecondEntity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_EQ(pWriter->SetMorph(FirstEntity, {pWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(SecondEntity, {pWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_NO_CHANGE);
+    pScene->ClearPendingRenderChanges();
+
+    // Removing another component may relocate the second entity's storage.
+    // Pending setup must retain weights, not a pointer into that storage.
+    ASSERT_EQ(pWriter->RemoveComponent(FirstEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_FALSE(DrawableCache.HasPendingRenderables());
+    const auto FirstSlots  = GetDrawableSlotsForEntity(DrawableCache, FirstEntity);
+    const auto SecondSlots = GetDrawableSlotsForEntity(DrawableCache, SecondEntity);
+    ASSERT_EQ(FirstSlots.size(), 1u);
+    ASSERT_EQ(SecondSlots.size(), 1u);
+    EXPECT_EQ(FirstSlots[0]->pMorphAttachment, nullptr);
+    ASSERT_NE(SecondSlots[0]->pMorphAttachment, nullptr);
+    EXPECT_EQ(SecondSlots[0]->pMorphAttachment->MorphData.GetWeights(), pWeights);
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_OK);
+}
+
+TEST(RadientTesseraDrawableCacheTest, InitializesAllMorphGeometriesAfterMeshBecomesReady)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider, 1};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+    RefCntAutoPtr<TestMorphMeshAsset> pMesh{
+        MakeNewRCObj<TestMorphMeshAsset>()("mesh://drawable-cache-morph-geometries", Uint64{1})};
+    auto pFirstGeometry  = pMesh->CreateGeometryData(3);
+    auto pSecondGeometry = pMesh->CreateGeometryData(6);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_PENDING);
+
+    RadientDrawableMesh&              Mesh         = MeshProvider.Meshes[pMesh].Mesh;
+    const RadientDrawableMeshGeometry BaseGeometry = Mesh.Geometries[0];
+    Mesh.Geometries.resize(3, BaseGeometry);
+    Mesh.Geometries[0].pMorphTargetData          = pFirstGeometry.get();
+    Mesh.Geometries[0].MorphTargetDataOffset     = 64;
+    Mesh.Geometries[1].pMorphTargetData          = pSecondGeometry.get();
+    Mesh.Geometries[1].MorphTargetDataOffset     = 512;
+    const RadientDrawableMeshPrimitive Primitive = Mesh.Primitives[0];
+    Mesh.Primitives.resize(4, Primitive);
+    Mesh.Primitives[2].GeometryIndex = 1;
+    Mesh.Primitives[3].GeometryIndex = 2;
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    const RadientEntityID              Entity  = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_EQ(pWriter->SetMorph(Entity, {pWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+    EXPECT_TRUE(GetDrawableSlotsForEntity(DrawableCache, Entity).empty());
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_NO_CHANGE);
+    pScene->ClearPendingRenderChanges();
+
+    // Pending mesh resolution must use the latest scene component, without
+    // creating or preparing palettes for either weights object beforehand.
+    RefCntAutoPtr<IRadientMorphTargetWeights> pReplacementWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pReplacementWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(Entity, {pReplacementWeights}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+    EXPECT_TRUE(GetDrawableSlotsForEntity(DrawableCache, Entity).empty());
+    EXPECT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_NO_CHANGE);
+    pScene->ClearPendingRenderChanges();
+    pWeights = pReplacementWeights;
+
+    MeshProvider.SetMeshStatus(pMesh, RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_FALSE(DrawableCache.HasPendingRenderables());
+    pScene->ClearPendingRenderChanges();
+
+    const auto Slots = GetDrawableSlotsForEntity(DrawableCache, Entity);
+    ASSERT_EQ(Slots.size(), 4u);
+    ASSERT_NE(Slots[0]->pMorphAttachment, nullptr);
+    ASSERT_NE(Slots[2]->pMorphAttachment, nullptr);
+    EXPECT_EQ(Slots[0]->pMorphAttachment, Slots[1]->pMorphAttachment);
+    EXPECT_NE(Slots[0]->pMorphAttachment, Slots[2]->pMorphAttachment);
+    EXPECT_EQ(&Slots[0]->pMorphAttachment->MorphData, &Slots[2]->pMorphAttachment->MorphData);
+    EXPECT_EQ(Slots[0]->pMorphAttachment->MorphData.GetWeights(), pWeights);
+    EXPECT_EQ(Slots[3]->pMorphAttachment, nullptr);
+
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(1), RADIENT_STATUS_OK);
+    const auto ExpectOffsets = [&](const RadientTesseraMorphAttachment& Attachment,
+                                   bool Previous, Uint32 TargetIndex, Float32 Weight,
+                                   const RadientMorphTargetData& Geometry, Uint32 BaseOffset) {
+        ASSERT_EQ(Attachment.MorphData.GetPreparationStatus(), RADIENT_STATUS_OK);
+        ASSERT_EQ(Attachment.MorphData.GetActiveTargetCount(Previous), 1u);
+        const auto& Attribs = Attachment.MorphData.GetShaderAttribs(Attachment.GeometryIndex, Previous)[0];
+        EXPECT_FLOAT_EQ(Attribs.Weight, Weight);
+        EXPECT_EQ(Attribs.PositionDeltaOffset,
+                  (BaseOffset + Geometry.GetAttributeDataOffset(TargetIndex, 0)) / sizeof(Float32));
+    };
+    ExpectOffsets(*Slots[0]->pMorphAttachment, false, 1, -0.5f, *pFirstGeometry, 64);
+    ExpectOffsets(*Slots[2]->pMorphAttachment, false, 1, -0.5f, *pSecondGeometry, 512);
+
+    const std::array<Float32, 2> UpdatedWeights{1.f, 0.f};
+    ASSERT_EQ(pWeights->SetWeights(0, 2, UpdatedWeights.data()), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.PrepareMorphTargetData(2), RADIENT_STATUS_OK);
+    ExpectOffsets(*Slots[0]->pMorphAttachment, false, 0, 1.f, *pFirstGeometry, 64);
+    ExpectOffsets(*Slots[2]->pMorphAttachment, false, 0, 1.f, *pSecondGeometry, 512);
+    ExpectOffsets(*Slots[0]->pMorphAttachment, true, 1, -0.5f, *pFirstGeometry, 64);
+    ExpectOffsets(*Slots[2]->pMorphAttachment, true, 1, -0.5f, *pSecondGeometry, 512);
+
+    // Non-morph changes must preserve the resolved attachments and palette.
+    auto* const                  pFirstAttachment  = Slots[0]->pMorphAttachment;
+    auto* const                  pSecondAttachment = Slots[2]->pMorphAttachment;
+    RadientMeshRendererComponent Renderer;
+    Renderer.VisibilityMask = 0x1234u;
+    ASSERT_EQ(pWriter->SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(Slots[0]->pMorphAttachment, pFirstAttachment);
+    EXPECT_EQ(Slots[2]->pMorphAttachment, pSecondAttachment);
 }
 
 TEST(RadientTesseraDrawableCacheTest, WorldMatrixPointerTracksHierarchyWithoutDrawableUpdate)

@@ -30,6 +30,7 @@
 #include "Render/RadientDrawList.hpp"
 #include "Render/RadientLightList.hpp"
 #include "Render/Tessera/RadientTesseraMaterialCache.hpp"
+#include "Render/Tessera/RadientTesseraMorphData.hpp"
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 #include "RadientScene.h"
 #include "Scene/RadientSceneState.hpp"
@@ -97,10 +98,11 @@ struct RadientDrawableSlot
     const RadientMatrix4x4*             pWorldMatrix      = nullptr;
     const Bool*                         pEffectiveVisible = nullptr;
     RadientTesseraSkinAttachment*       pSkinAttachment   = nullptr;
+    RadientTesseraMorphAttachment*      pMorphAttachment  = nullptr;
 
-    // RenderableRecord keeps the mesh payload and skin attachment alive.
-    // m_SkinDataCache keeps shared palette data alive. MaterialData keeps the
-    // renderer-specific material state and its material asset alive.
+    // RenderableRecord keeps the mesh payload and deformation attachments
+    // alive. The deformation caches own shared palette data, while
+    // MaterialData retains renderer-specific material state and its asset.
     RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
     IVertexPool* pVertexPool = nullptr;
@@ -204,7 +206,8 @@ class RadientTesseraDrawableCache
 public:
     explicit RadientTesseraDrawableCache(
         RadientTesseraBufferSuballocator& JointBuffer,
-        IRadientDrawableMeshProvider*     pMeshProvider = nullptr);
+        IRadientDrawableMeshProvider*     pMeshProvider             = nullptr,
+        Uint32                            MaxActiveMorphTargetCount = 4);
 
     RADIENT_STATUS SyncScene(
         const IRadientScene&                        Scene,
@@ -257,6 +260,12 @@ public:
     /// from advancing motion history.
     RADIENT_STATUS PrepareSkinningData(RadientFrameID RenderFrameID, bool PackMatrixRowMajor = true);
 
+    /// Selects active morph targets for every visible unique weights object
+    /// and prepares the shader palettes for all its morph geometries together.
+    /// Direct weight edits are detected through the weights object's version
+    /// and do not require scene synchronization.
+    RADIENT_STATUS PrepareMorphTargetData(RadientFrameID RenderFrameID);
+
     const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const
     {
         if (DrawableID >= m_DrawableSlots.size())
@@ -271,6 +280,19 @@ public:
     }
 
 private:
+    struct RenderableMorphState
+    {
+        static constexpr size_t InvalidCacheEntryIndex = ~size_t{0};
+
+        RadientTesseraMorphData& MorphData;
+        const Bool*              pEffectiveVisible = nullptr;
+        size_t                   CacheEntryIndex   = InvalidCacheEntryIndex;
+
+        // Indexed by mesh geometry. Created once on drawable resolution;
+        // geometries without morph streams have no attachment.
+        std::vector<std::optional<RadientTesseraMorphAttachment>> GeometryAttachments = {};
+    };
+
     struct RenderableRecord
     {
         // Strong mesh asset reference kept while pending or expanded drawables still depend on it.
@@ -281,9 +303,16 @@ private:
         const RadientMatrix4x4*             pWorldMatrix      = nullptr;
         const Bool*                         pEffectiveVisible = nullptr;
 
+        // Retain the requested weights while morph setup waits for mesh resolution.
+        RefCntAutoPtr<IRadientMorphTargetWeights> pMorphWeights;
+
         // Allocated only for skinned renderables. The attachment points to
         // shared palette data and stores the per-renderable space correction.
         std::unique_ptr<RadientTesseraSkinAttachment> pSkinAttachment;
+
+        // Allocated only after the mesh resolves, when morph rendering is enabled
+        // and the entity has a morph component. Palettes are shared by weights.
+        std::unique_ptr<RenderableMorphState> pMorphState;
 
         // True while this entity is waiting for its mesh asset to become drawable.
         bool PendingResolution = false;
@@ -315,6 +344,13 @@ private:
         std::vector<RadientTesseraSkinAttachment*> Attachments;
     };
 
+    struct MorphDataCacheEntry
+    {
+        std::unique_ptr<RadientTesseraMorphData> pMorphData;
+        // One visibility association per entity, independent of geometry count.
+        std::vector<RenderableMorphState*> Renderables;
+    };
+
     struct LightListLocation
     {
         RADIENT_LIGHT_TYPE Type  = RADIENT_LIGHT_TYPE_DIRECTIONAL;
@@ -333,7 +369,11 @@ private:
 
     void RemoveRenderableSkin(RenderableRecord& Record);
 
-    void RebuildVisibleSkinDataList();
+    void InitializeRenderableMorph(RenderableRecord& Record, const RadientDrawableMesh& Mesh);
+
+    void RemoveRenderableMorph(RenderableRecord& Record);
+
+    void RebuildVisibleDeformationDataLists();
 
     void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
     void ProcessRenderableLightRemoved(RadientEntityID Entity);
@@ -357,6 +397,7 @@ private:
     IRadientDrawableMeshProvider& m_MeshProvider;
 
     RadientTesseraBufferSuballocator& m_JointBuffer;
+    Uint32                            m_MaxActiveMorphTargetCount = 0;
 
     using RenderableMap = std::unordered_map<RadientEntityID, RenderableRecord>;
     using LightMap      = std::unordered_map<RadientEntityID, LightListLocation>;
@@ -370,9 +411,16 @@ private:
     using SkinDataCache = absl::flat_hash_map<SkinDataKey, SkinDataCacheEntry, SkinDataKey::Hasher>;
     SkinDataCache m_SkinDataCache;
 
+    // One active-palette history per retained weights object. The entry owns a
+    // strong weights reference through pMorphData, keeping raw-pointer keys
+    // stable while they are present in the cache.
+    using MorphDataCache = absl::flat_hash_map<IRadientMorphTargetWeights*, MorphDataCacheEntry>;
+    MorphDataCache m_MorphDataCache;
+
     // Rebuilt only when drawable attachments or effective visibility change.
-    // Frame preparation therefore touches no completely hidden skin/pose pairs.
-    std::vector<RadientTesseraSkinData*> m_VisibleSkinData;
+    // Frame preparation touches no completely hidden skin/pose pairs or morph weights.
+    std::vector<RadientTesseraSkinData*>  m_VisibleSkinData;
+    std::vector<RadientTesseraMorphData*> m_VisibleMorphData;
 
     // Renderer-specific material data is retained only while an entity waits
     // for all of its primitive materials to become GPU-ready.
