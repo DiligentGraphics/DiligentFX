@@ -58,6 +58,11 @@ struct RadientTesseraCameraState
 class RadientTesseraFrameHistory
 {
 public:
+    /// Returns whether CurrentFrameID immediately follows PreviousFrameID,
+    /// including wraparound to 1. Invalid frame IDs never form a valid pair.
+    static bool IsContinuous(RadientFrameID PreviousFrameID,
+                             RadientFrameID CurrentFrameID) noexcept;
+
     /// Starts history tracking for a view rendered during RenderFrameID.
     /// Temporal history is reset unless the view was last rendered during the
     /// immediately preceding global render frame.

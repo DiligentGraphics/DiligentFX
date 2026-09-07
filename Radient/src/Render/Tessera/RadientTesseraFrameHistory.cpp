@@ -29,11 +29,8 @@
 namespace Diligent
 {
 
-namespace
-{
-
-bool IsImmediatelyFollowingFrame(RadientFrameID PreviousFrameID,
-                                 RadientFrameID CurrentFrameID) noexcept
+bool RadientTesseraFrameHistory::IsContinuous(RadientFrameID PreviousFrameID,
+                                              RadientFrameID CurrentFrameID) noexcept
 {
     if (PreviousFrameID == InvalidRadientFrameID || CurrentFrameID == InvalidRadientFrameID)
         return false;
@@ -45,13 +42,11 @@ bool IsImmediatelyFollowingFrame(RadientFrameID PreviousFrameID,
     return CurrentFrameID == NextFrameID;
 }
 
-} // namespace
-
 void RadientTesseraFrameHistory::BeginFrame(RadientFrameID RenderFrameID) noexcept
 {
     VERIFY(RenderFrameID != InvalidRadientFrameID, "The global render frame ID must be valid");
 
-    if (!IsImmediatelyFollowingFrame(m_LastRenderFrameID, RenderFrameID))
+    if (!IsContinuous(m_LastRenderFrameID, RenderFrameID))
         ResetTemporalHistory();
 
     m_CurrentRenderFrameID = RenderFrameID;
