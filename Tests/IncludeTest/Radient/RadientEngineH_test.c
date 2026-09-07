@@ -39,7 +39,8 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
     IRadientRenderer*          pRenderer          = 0;
     RADIENT_STATUS             Status             = RADIENT_STATUS_OK;
 
-    RendererDesc.MultiDrawBatchSize = 16;
+    RendererDesc.MultiDrawBatchSize        = 16;
+    RendererDesc.MaxActiveMorphTargetCount = 4;
 
     Status = IRadientEngine_GetBackend(pEngine, &pBackend);
     Status = IRadientEngine_GetAssetManager(pEngine, &pAssetManager);

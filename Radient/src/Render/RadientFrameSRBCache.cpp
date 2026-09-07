@@ -38,9 +38,9 @@ namespace Diligent
 class RadientFrameSRBCacheState final
 {
 public:
-    void Add(const RadientIBLResources* pResources,
-             IShaderResourceBinding*    pSRB,
-             Uint32                     ResourceVersion)
+    void Add(const RadientIBLResources*             pResources,
+             IShaderResourceBinding*                pSRB,
+             const RadientFrameSRBResourceVersions& ResourceVersions)
     {
         // Release a replaced SRB after unlocking because final object release
         // may invoke external code.
@@ -51,17 +51,17 @@ public:
             if (!Inserted)
                 pReplacedSRB = std::move(It->second.pSRB);
 
-            It->second.pSRB            = pSRB;
-            It->second.ResourceVersion = ResourceVersion;
+            It->second.pSRB             = pSRB;
+            It->second.ResourceVersions = ResourceVersions;
         }
     }
 
-    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources* pResources,
-                                              Uint32                     ResourceVersion) const noexcept
+    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources*             pResources,
+                                              const RadientFrameSRBResourceVersions& ResourceVersions) const noexcept
     {
         std::lock_guard<std::mutex> Lock{m_Mutex};
         const auto                  It = m_SRBs.find(pResources);
-        return It != m_SRBs.end() && It->second.ResourceVersion == ResourceVersion ?
+        return It != m_SRBs.end() && It->second.ResourceVersions == ResourceVersions ?
             It->second.pSRB :
             RefCntAutoPtr<IShaderResourceBinding>{};
     }
@@ -91,7 +91,7 @@ private:
     struct Entry
     {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
-        Uint32                                ResourceVersion = 0;
+        RadientFrameSRBResourceVersions       ResourceVersions;
     };
 
     mutable std::mutex m_Mutex;
@@ -133,21 +133,21 @@ RadientFrameSRBCache::~RadientFrameSRBCache()
 {
 }
 
-void RadientFrameSRBCache::Add(RadientIBLResources*    pResources,
-                               IShaderResourceBinding* pSRB,
-                               Uint32                  ResourceVersion)
+void RadientFrameSRBCache::Add(RadientIBLResources*                   pResources,
+                               IShaderResourceBinding*                pSRB,
+                               const RadientFrameSRBResourceVersions& ResourceVersions)
 {
     VERIFY_EXPR(pResources != nullptr);
     VERIFY_EXPR(pSRB != nullptr);
 
     pResources->SetCache(m_pState);
-    m_pState->Add(pResources, pSRB, ResourceVersion);
+    m_pState->Add(pResources, pSRB, ResourceVersions);
 }
 
-RefCntAutoPtr<IShaderResourceBinding> RadientFrameSRBCache::Get(const RadientIBLResources* pResources,
-                                                                Uint32                     ResourceVersion) const noexcept
+RefCntAutoPtr<IShaderResourceBinding> RadientFrameSRBCache::Get(const RadientIBLResources*             pResources,
+                                                                const RadientFrameSRBResourceVersions& ResourceVersions) const noexcept
 {
-    return pResources != nullptr ? m_pState->Get(pResources, ResourceVersion) : RefCntAutoPtr<IShaderResourceBinding>{};
+    return pResources != nullptr ? m_pState->Get(pResources, ResourceVersions) : RefCntAutoPtr<IShaderResourceBinding>{};
 }
 
 size_t RadientFrameSRBCache::GetSize() const noexcept

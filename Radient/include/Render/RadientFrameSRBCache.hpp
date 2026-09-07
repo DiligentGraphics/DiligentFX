@@ -37,6 +37,24 @@ namespace Diligent
 
 class RadientFrameSRBCacheState;
 
+/// Versions of renderer-wide buffers captured by an immutable frame SRB.
+struct RadientFrameSRBResourceVersions
+{
+    Uint32 JointsBuffer      = 0;
+    Uint32 MorphTargetBuffer = 0;
+
+    bool operator==(const RadientFrameSRBResourceVersions& Rhs) const noexcept
+    {
+        return JointsBuffer == Rhs.JointsBuffer &&
+            MorphTargetBuffer == Rhs.MorphTargetBuffer;
+    }
+
+    bool operator!=(const RadientFrameSRBResourceVersions& Rhs) const noexcept
+    {
+        return !(*this == Rhs);
+    }
+};
+
 /// View-owned IBL resources used as the identity of a cached frame SRB.
 /// The object address is stable for its lifetime and its destructor automatically
 /// removes the associated SRB from the renderer cache.
@@ -97,16 +115,16 @@ public:
     RadientFrameSRBCache& operator=(RadientFrameSRBCache&&)      = delete;
     // clang-format on
 
-    /// Adds or replaces the SRB for the specified resource version.
-    void Add(RadientIBLResources*    pResources,
-             IShaderResourceBinding* pSRB,
-             Uint32                  ResourceVersion = 0);
+    /// Adds or replaces the SRB for the specified resource versions.
+    void Add(RadientIBLResources*                   pResources,
+             IShaderResourceBinding*                pSRB,
+             const RadientFrameSRBResourceVersions& ResourceVersions = {});
 
     /// Returns a strong reference that remains valid if the cache entry is
     /// concurrently removed. Returns null when the cached entry has a
-    /// different resource version.
-    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources* pResources,
-                                              Uint32                     ResourceVersion = 0) const noexcept;
+    /// different resource versions.
+    RefCntAutoPtr<IShaderResourceBinding> Get(const RadientIBLResources*             pResources,
+                                              const RadientFrameSRBResourceVersions& ResourceVersions = {}) const noexcept;
 
     size_t GetSize() const noexcept;
 

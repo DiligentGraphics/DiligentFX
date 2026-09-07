@@ -144,19 +144,23 @@ void RadientPBRRenderer::InitMaterialSRBVars(IShaderResourceBinding* pSRB,
         pMaterialAttribs->SetBufferRange(pMaterialAttribsBuffer, 0, MaterialAttribsRange);
 }
 
-RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(RadientIBLResources* pResources,
-                                                                              IBuffer*             pJointsBuffer,
-                                                                              Uint32               JointsBufferVersion)
+RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(
+    RadientIBLResources*            pResources,
+    const RadientPBRFrameResources& Resources)
 {
     if (pResources == nullptr || m_pFrameAttribsCB == nullptr)
         return {};
 
-    if (RefCntAutoPtr<IShaderResourceBinding> pCachedSRB = m_FrameSRBCache.Get(pResources, JointsBufferVersion))
+    const RadientFrameSRBResourceVersions ResourceVersions{
+        Resources.JointsBufferVersion,
+        Resources.MorphTargetBufferVersion,
+    };
+    if (RefCntAutoPtr<IShaderResourceBinding> pCachedSRB = m_FrameSRBCache.Get(pResources, ResourceVersions))
         return pCachedSRB;
 
     if (GetSettings().MaxJointCount > 0 &&
         GetSettings().JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED &&
-        pJointsBuffer == nullptr)
+        Resources.pJointsBuffer == nullptr)
     {
         UNEXPECTED("Structured joint buffer is not initialized");
         return {};
@@ -168,17 +172,18 @@ RefCntAutoPtr<IShaderResourceBinding> RadientPBRRenderer::GetOrCreateFrameSRB(Ra
         return {};
 
     InitCommonSRBVarsAttribs Attribs;
-    Attribs.pFrameAttribs                  = m_pFrameAttribsCB;
-    Attribs.pJointsBuffer                  = pJointsBuffer;
-    Attribs.BindPrimitiveAttribsBuffer     = false;
-    Attribs.BindMaterialAttribsBuffer      = false;
+    Attribs.pFrameAttribs              = m_pFrameAttribsCB;
+    Attribs.pJointsBuffer              = Resources.pJointsBuffer;
+    Attribs.pMorphTargetDeltas         = Resources.pMorphTargetBuffer;
+    Attribs.BindPrimitiveAttribsBuffer = false;
+    Attribs.BindMaterialAttribsBuffer  = false;
     InitCommonSRBVars(pFrameSRB, Attribs);
     SetIBLResourceViews(pFrameSRB,
                         pResources->GetIrradianceCubeSRV(),
                         pResources->GetPrefilteredEnvMapSRV(),
                         pResources->GetPrefilteredSheenEnvMapSRV());
 
-    m_FrameSRBCache.Add(pResources, pFrameSRB, JointsBufferVersion);
+    m_FrameSRBCache.Add(pResources, pFrameSRB, ResourceVersions);
     return pFrameSRB;
 }
 
@@ -197,6 +202,8 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     FrameResources.emplace("g_ShadowMap_sampler");
     if (m_Settings.MaxJointCount > 0)
         FrameResources.emplace(GetJointTransformsVarName());
+    if (m_Settings.MaxActiveMorphTargetCount > 0)
+        FrameResources.emplace(GetMorphTargetDeltasVarName());
     // Only move separate samplers to the frame signature. Combined GL samplers
     // must remain in the same signature as their material textures.
     FrameResources.emplace("g_LinearClampSampler");

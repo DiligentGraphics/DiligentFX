@@ -96,7 +96,8 @@ RadientTesseraRenderTechnique::RadientTesseraRenderTechnique(IThreadPool*       
     m_pAssetManager{pAssetManager},
     m_GeometryRenderer{Desc.MaterialTextureSlotCount,
                        GetDefaultMaterialTextures(pAssetManager),
-                       Desc.MultiDrawBatchSize},
+                       Desc.MultiDrawBatchSize,
+                       Desc.MaxActiveMorphTargetCount},
     m_EnableAsyncPipelineCompilation{Desc.EnableAsyncPipelineCompilation == True},
     m_PostFXTransitionDuration{ValidatePostFXTransitionDuration(Desc.PostFXTransitionDuration)}
 {}
@@ -168,19 +169,20 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
     if (pSceneState == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    if (pSceneState->SkinningPreparationFrameID != Context.RenderFrameID)
+    if (pSceneState->DeformationPreparationFrameID != Context.RenderFrameID)
     {
-        // Structured-buffer matrices follow the same backend-specific packing
-        // as PBR_Renderer::WriteSkinningData(). The first view using this scene
-        // establishes the pose snapshot shared by all later views this frame.
+        // Joint matrices follow the same backend-specific packing as
+        // PBR_Renderer::WriteSkinningData(). The first view using this scene
+        // establishes both deformation snapshots shared by later views this frame.
         const bool PackJointMatricesRowMajor = Context.pDevice->GetDeviceInfo().IsWebGPUDevice();
         pSceneState->SkinningPreparationStatus =
             pSceneState->DrawableCache.PrepareSkinningData(Context.RenderFrameID, PackJointMatricesRowMajor);
-        pSceneState->SkinningPreparationFrameID = Context.RenderFrameID;
+        pSceneState->DeformationPreparationFrameID = Context.RenderFrameID;
     }
 
-    // Per-skin failures are deferred to geometry execution, which skips only
-    // drawables using unavailable palettes.
+    // Deformation failures are handled per drawable during geometry execution:
+    // unavailable skins skip their drawables, while unavailable morph data
+    // falls back to the undeformed mesh.
     const RADIENT_STATUS SkinningStatus = pSceneState->SkinningPreparationStatus;
     if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
         FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);
@@ -261,6 +263,8 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
 
     pViewState->FrameTargets.ClearGBuffer(Context.pContext, ViewDesc.ClearColor);
 
+    GLTF::ResourceManager* const pResourceManager = m_pAssetManager->GetResourceManager();
+
     if (HasDrawables)
     {
         RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
@@ -269,10 +273,18 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
 
         const RadientTesseraBufferSuballocator& JointBuffer = m_GeometryRenderer.GetJointBuffer();
 
+        RadientPBRFrameResources FrameResources;
+        FrameResources.pJointsBuffer       = JointBuffer.GetBuffer();
+        FrameResources.JointsBufferVersion = JointBuffer.GetVersion();
+        if (pResourceManager != nullptr)
+        {
+            FrameResources.pMorphTargetBuffer       = pResourceManager->GetMorphTargetBuffer();
+            FrameResources.MorphTargetBufferVersion = pResourceManager->GetMorphTargetBufferVersion();
+        }
+
         m_pFrameSRB = pPBRRenderer->GetOrCreateFrameSRB(
             pView->GetIBLResources(),
-            JointBuffer.GetBuffer(),
-            JointBuffer.GetVersion());
+            FrameResources);
         if (m_pFrameSRB == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
     }
@@ -290,7 +302,7 @@ RADIENT_STATUS RadientTesseraRenderTechnique::BeginView(const RadientRenderConte
         Context.pDevice,
         Context.pContext,
         pSceneState->DrawableCache.GetLightList(),
-        m_pAssetManager->GetResourceManager(),
+        pResourceManager,
         GeometryFrameAttribs,
         pViewState->FrameTargets,
         pViewState->FrameHistory);

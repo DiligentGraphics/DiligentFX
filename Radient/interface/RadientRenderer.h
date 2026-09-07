@@ -63,6 +63,11 @@ struct RadientRendererDesc
     /// primitive ID through native multi-draw or base-instance emulation.
     Uint32 MultiDrawBatchSize DEFAULT_INITIALIZER(16);
 
+    /// Maximum number of morph targets blended by one drawable. Targets with
+    /// the greatest absolute weights are selected. Zero disables morph-target
+    /// rendering.
+    Uint32 MaxActiveMorphTargetCount DEFAULT_INITIALIZER(4);
+
     /// Duration, in seconds, over which newly ready post-processing effects
     /// fade in. Zero applies effects immediately.
     Float32 PostFXTransitionDuration DEFAULT_INITIALIZER(1.f);

@@ -77,10 +77,10 @@ private:
         RadientTesseraDrawableCache DrawableCache;
         RadientTesseraGeometryPass  GeometryPass;
 
-        // Skinning is prepared lazily by the first view that uses this scene
-        // during a renderer frame. Later views reuse the same pose snapshot.
-        RadientFrameID SkinningPreparationFrameID = InvalidRadientFrameID;
-        RADIENT_STATUS SkinningPreparationStatus  = RADIENT_STATUS_NO_CHANGE;
+        // Deformation data is prepared lazily by the first view that uses this
+        // scene during a renderer frame. Later views reuse the same snapshot.
+        RadientFrameID DeformationPreparationFrameID = InvalidRadientFrameID;
+        RADIENT_STATUS SkinningPreparationStatus     = RADIENT_STATUS_NO_CHANGE;
     };
 
     struct ViewRenderState

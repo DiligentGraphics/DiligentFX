@@ -59,7 +59,8 @@ class RadientTesseraGeometryRenderer
 public:
     RadientTesseraGeometryRenderer(Uint32                                MaterialTextureSlotCount,
                                    const RadientMaterialDefaultTextures& DefaultTextures,
-                                   Uint32                                MultiDrawBatchSize = 16);
+                                   Uint32                                MultiDrawBatchSize        = 16,
+                                   Uint32                                MaxActiveMorphTargetCount = 4);
 
     /// Initializes renderer-global resources and retries dependencies that may
     /// have become ready since the previous frame.
@@ -94,6 +95,11 @@ public:
         return m_JointBuffer;
     }
 
+    Uint32 GetMaxActiveMorphTargetCount() const noexcept
+    {
+        return m_MaxActiveMorphTargetCount;
+    }
+
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice, IDeviceContext* pContext);
 
@@ -114,6 +120,7 @@ private:
     RadientMaterialDefaultTextureBindings m_DefaultMaterialTextureBindings;
     Uint32                                m_MaterialTextureSlotCount            = 8;
     Uint32                                m_MultiDrawBatchSize                  = 16;
+    Uint32                                m_MaxActiveMorphTargetCount           = 4;
     bool                                  m_DefaultMaterialTextureBindingsReady = false;
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;

@@ -83,6 +83,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_EQ(FrameDesc.BindingIndex, 0);
     EXPECT_TRUE(HasResource(FrameDesc, "cbFrameAttribs"));
     EXPECT_TRUE(HasResource(FrameDesc, "cbJointTransforms"));
+    EXPECT_TRUE(HasResource(FrameDesc, "g_MorphTargetDeltas"));
     EXPECT_TRUE(HasResource(FrameDesc, "g_ShadowMap"));
     EXPECT_TRUE(HasResource(FrameDesc, "g_PreintegratedSheen"));
     EXPECT_FALSE(HasResource(FrameDesc, "cbPrimitiveAttribs"));
@@ -93,6 +94,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
     EXPECT_EQ(MaterialDesc.BindingIndex, 1);
     EXPECT_FALSE(HasResource(MaterialDesc, "cbFrameAttribs"));
     EXPECT_FALSE(HasResource(MaterialDesc, "cbJointTransforms"));
+    EXPECT_FALSE(HasResource(MaterialDesc, "g_MorphTargetDeltas"));
     EXPECT_FALSE(HasResource(MaterialDesc, "g_ShadowMap"));
     EXPECT_FALSE(HasResource(MaterialDesc, "g_PreintegratedSheen"));
     EXPECT_TRUE(HasResource(MaterialDesc, "cbPrimitiveAttribs"));
@@ -105,7 +107,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
               Renderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_NONE) + sizeof(float4));
 }
 
-TEST(RadientPBRRendererGPUTest, RefreshesFrameSRBWhenJointBufferChanges)
+TEST(RadientPBRRendererGPUTest, RefreshesFrameSRBWhenRendererBuffersChange)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
 
@@ -115,24 +117,32 @@ TEST(RadientPBRRendererGPUTest, RefreshesFrameSRBWhenJointBufferChanges)
     ASSERT_NE(pDevice, nullptr);
     ASSERT_NE(pContext, nullptr);
 
-    const auto CreateJointBuffer = [pDevice](const char* Name) {
+    const auto CreateStructuredBuffer = [pDevice](const char* Name, Uint32 ElementByteStride) {
         BufferDesc Desc;
         Desc.Name              = Name;
-        Desc.Size              = 2 * sizeof(float4x4);
+        Desc.Size              = 2 * ElementByteStride;
         Desc.Usage             = USAGE_DEFAULT;
         Desc.BindFlags         = BIND_SHADER_RESOURCE;
         Desc.Mode              = BUFFER_MODE_STRUCTURED;
-        Desc.ElementByteStride = sizeof(float4x4);
+        Desc.ElementByteStride = ElementByteStride;
 
         RefCntAutoPtr<IBuffer> pBuffer;
         pDevice->CreateBuffer(Desc, nullptr, pBuffer.GetAddressOfEmpty());
         return pBuffer;
     };
 
-    RefCntAutoPtr<IBuffer> pFirstJointBuffer  = CreateJointBuffer("First Radient test joint buffer");
-    RefCntAutoPtr<IBuffer> pSecondJointBuffer = CreateJointBuffer("Second Radient test joint buffer");
+    RefCntAutoPtr<IBuffer> pFirstJointBuffer =
+        CreateStructuredBuffer("First Radient test joint buffer", sizeof(float4x4));
+    RefCntAutoPtr<IBuffer> pSecondJointBuffer =
+        CreateStructuredBuffer("Second Radient test joint buffer", sizeof(float4x4));
+    RefCntAutoPtr<IBuffer> pFirstMorphTargetBuffer =
+        CreateStructuredBuffer("First Radient test morph target buffer", sizeof(Float32));
+    RefCntAutoPtr<IBuffer> pSecondMorphTargetBuffer =
+        CreateStructuredBuffer("Second Radient test morph target buffer", sizeof(Float32));
     ASSERT_NE(pFirstJointBuffer, nullptr);
     ASSERT_NE(pSecondJointBuffer, nullptr);
+    ASSERT_NE(pFirstMorphTargetBuffer, nullptr);
+    ASSERT_NE(pSecondMorphTargetBuffer, nullptr);
 
     PBR_Renderer::CreateInfo RendererCI{};
     RendererCI.EnableIBL                 = false;
@@ -145,18 +155,35 @@ TEST(RadientPBRRendererGPUTest, RefreshesFrameSRBWhenJointBufferChanges)
     RadientIBLResources Resources{nullptr, nullptr, nullptr};
     EXPECT_EQ(Renderer.GetJointsBuffer(), nullptr);
 
+    const RadientPBRFrameResources FirstResources{
+        pFirstJointBuffer,
+        1,
+        pFirstMorphTargetBuffer,
+        1,
+    };
     RefCntAutoPtr<IShaderResourceBinding> pFirstSRB =
-        Renderer.GetOrCreateFrameSRB(&Resources, pFirstJointBuffer, 1);
+        Renderer.GetOrCreateFrameSRB(&Resources, FirstResources);
     ASSERT_NE(pFirstSRB, nullptr);
-    EXPECT_EQ(Renderer.GetOrCreateFrameSRB(&Resources, pFirstJointBuffer, 1).RawPtr(), pFirstSRB.RawPtr());
+    EXPECT_EQ(Renderer.GetOrCreateFrameSRB(&Resources, FirstResources).RawPtr(), pFirstSRB.RawPtr());
 
     IShaderResourceVariable* const pFirstJointsVar =
         pFirstSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_JointTransforms");
     ASSERT_NE(pFirstJointsVar, nullptr);
     EXPECT_EQ(pFirstJointsVar->Get(), pFirstJointBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 
+    IShaderResourceVariable* const pFirstMorphTargetsVar =
+        pFirstSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_MorphTargetDeltas");
+    ASSERT_NE(pFirstMorphTargetsVar, nullptr);
+    EXPECT_EQ(pFirstMorphTargetsVar->Get(), pFirstMorphTargetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+
+    const RadientPBRFrameResources SecondResources{
+        pSecondJointBuffer,
+        2,
+        pSecondMorphTargetBuffer,
+        2,
+    };
     RefCntAutoPtr<IShaderResourceBinding> pSecondSRB =
-        Renderer.GetOrCreateFrameSRB(&Resources, pSecondJointBuffer, 2);
+        Renderer.GetOrCreateFrameSRB(&Resources, SecondResources);
     ASSERT_NE(pSecondSRB, nullptr);
     EXPECT_NE(pSecondSRB, pFirstSRB);
 
@@ -164,6 +191,11 @@ TEST(RadientPBRRendererGPUTest, RefreshesFrameSRBWhenJointBufferChanges)
         pSecondSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_JointTransforms");
     ASSERT_NE(pSecondJointsVar, nullptr);
     EXPECT_EQ(pSecondJointsVar->Get(), pSecondJointBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+
+    IShaderResourceVariable* const pSecondMorphTargetsVar =
+        pSecondSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_MorphTargetDeltas");
+    ASSERT_NE(pSecondMorphTargetsVar, nullptr);
+    EXPECT_EQ(pSecondMorphTargetsVar->Get(), pSecondMorphTargetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 }
 
 TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)

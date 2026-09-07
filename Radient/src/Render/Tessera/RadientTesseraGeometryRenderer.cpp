@@ -380,11 +380,13 @@ bool InitializeMaterialTextureBinding(IRadientTextureAsset*          pTexture,
 RadientTesseraGeometryRenderer::RadientTesseraGeometryRenderer(
     Uint32                                MaterialTextureSlotCount,
     const RadientMaterialDefaultTextures& DefaultTextures,
-    Uint32                                MultiDrawBatchSize) :
+    Uint32                                MultiDrawBatchSize,
+    Uint32                                MaxActiveMorphTargetCount) :
     m_JointBuffer{GetTesseraJointBufferCreateInfo()},
     m_DefaultMaterialTextures{DefaultTextures},
     m_MaterialTextureSlotCount{MaterialTextureSlotCount != 0 ? MaterialTextureSlotCount : 8},
-    m_MultiDrawBatchSize{MultiDrawBatchSize != 0 ? MultiDrawBatchSize : 16}
+    m_MultiDrawBatchSize{MultiDrawBatchSize != 0 ? MultiDrawBatchSize : 16},
+    m_MaxActiveMorphTargetCount{MaxActiveMorphTargetCount}
 {}
 
 void RadientTesseraGeometryRenderer::PrepareDefaultMaterialTextureBindings()
@@ -611,6 +613,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     // enables skinning resources. Tessera manages the actual capacity through
     // its resizable renderer-wide joint buffer.
     RendererCI.MaxJointCount             = 1;
+    RendererCI.MaxActiveMorphTargetCount = m_MaxActiveMorphTargetCount;
     RendererCI.JointsBufferMode          = PBR_Renderer::JOINTS_BUFFER_MODE_STRUCTURED;
     RendererCI.CreateDefaultJointsBuffer = false;
     RendererCI.CreateDefaultTextures     = false;

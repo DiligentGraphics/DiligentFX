@@ -114,14 +114,16 @@ TEST(RadientFrameSRBCacheGPUTest, ReplacesEntriesForNewResourceVersions)
     RadientFrameSRBCache Cache;
     auto                 pResources = std::make_unique<RadientIBLResources>(nullptr, nullptr, nullptr);
 
-    Cache.Add(pResources.get(), pFirstSRB, 1);
-    EXPECT_EQ(Cache.Get(pResources.get(), 1).RawPtr(), pFirstSRB.RawPtr());
-    EXPECT_EQ(Cache.Get(pResources.get(), 2), nullptr);
+    const RadientFrameSRBResourceVersions FirstVersions{1, 2};
+    const RadientFrameSRBResourceVersions SecondVersions{1, 3};
+    Cache.Add(pResources.get(), pFirstSRB, FirstVersions);
+    EXPECT_EQ(Cache.Get(pResources.get(), FirstVersions).RawPtr(), pFirstSRB.RawPtr());
+    EXPECT_EQ(Cache.Get(pResources.get(), SecondVersions), nullptr);
 
-    Cache.Add(pResources.get(), pSecondSRB, 2);
+    Cache.Add(pResources.get(), pSecondSRB, SecondVersions);
     EXPECT_EQ(Cache.GetSize(), 1u);
-    EXPECT_EQ(Cache.Get(pResources.get(), 1), nullptr);
-    EXPECT_EQ(Cache.Get(pResources.get(), 2).RawPtr(), pSecondSRB.RawPtr());
+    EXPECT_EQ(Cache.Get(pResources.get(), FirstVersions), nullptr);
+    EXPECT_EQ(Cache.Get(pResources.get(), SecondVersions).RawPtr(), pSecondSRB.RawPtr());
 }
 
 } // namespace

@@ -34,6 +34,15 @@
 namespace Diligent
 {
 
+/// Renderer-wide resources captured by an immutable frame SRB.
+struct RadientPBRFrameResources
+{
+    IBuffer* pJointsBuffer            = nullptr;
+    Uint32   JointsBufferVersion      = 0;
+    IBuffer* pMorphTargetBuffer       = nullptr;
+    Uint32   MorphTargetBufferVersion = 0;
+};
+
 /// PBR renderer specialization that separates frame/global resources from
 /// draw/material resources into two pipeline resource signatures.
 class RadientPBRRenderer final : public PBR_Renderer
@@ -48,12 +57,11 @@ public:
     /// corresponding PBR renderer debug view.
     static DebugViewType GetDebugViewType(RADIENT_DEBUG_VISUALIZATION DebugVisualization) noexcept;
 
-    /// Returns the cached frame SRB for the IBL and joint-buffer resources,
-    /// creating it if necessary. JointsBufferVersion must change whenever
-    /// pJointsBuffer is replaced.
-    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources* pResources,
-                                                              IBuffer*             pJointsBuffer       = nullptr,
-                                                              Uint32               JointsBufferVersion = 0);
+    /// Returns the cached frame SRB for the IBL and renderer-wide buffers,
+    /// creating it if necessary. Each buffer version must change whenever the
+    /// corresponding buffer object is replaced.
+    RefCntAutoPtr<IShaderResourceBinding> GetOrCreateFrameSRB(RadientIBLResources*            pResources,
+                                                              const RadientPBRFrameResources& Resources = {});
 
     /// Initializes common material resources and binds the primitive and shared
     /// material attribute buffers so passes can select records through dynamic offsets.
