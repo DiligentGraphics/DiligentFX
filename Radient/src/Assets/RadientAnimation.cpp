@@ -26,6 +26,8 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
+#include "Core/RadientValidation.hpp"
+#include "Math/RadientMath.hpp"
 
 #include "RadientAnimation.h"
 
@@ -37,10 +39,8 @@
 #include "STDAllocator.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <exception>
-#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -52,6 +52,11 @@ namespace Diligent
 
 namespace
 {
+
+using RadientValidation::CheckedMultiply;
+using RadientValidation::IsAddressableArray;
+using RadientValidation::IsAddressableSize;
+using RadientValidation::IsSumRepresentable;
 
 struct AnimationValueTypeInfo
 {
@@ -119,22 +124,6 @@ AnimationValueTypeInfo GetAnimationValueTypeInfo(RADIENT_ANIMATION_VALUE_TYPE Ty
         default:
             return {};
     }
-}
-
-bool CheckedMultiply(Uint64 Lhs, Uint64 Rhs, Uint64& Result) noexcept
-{
-    if (Lhs != 0 && Rhs > std::numeric_limits<Uint64>::max() / Lhs)
-        return false;
-
-    Result = Lhs * Rhs;
-    return true;
-}
-
-bool IsAddressableArray(Uint32 Count, size_t ElementSize) noexcept
-{
-    Uint64 ByteSize = 0;
-    return CheckedMultiply(Count, ElementSize, ByteSize) &&
-        ByteSize <= std::numeric_limits<size_t>::max();
 }
 
 bool GetExpectedValueDataSize(const RadientAnimationSamplerDesc& Sampler,
@@ -222,7 +211,7 @@ bool HaveSameTargetProperty(const AnimationChannelRange& Lhs,
 
 RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
 {
-    if (!std::isfinite(Desc.Duration) || Desc.Duration < 0.f)
+    if (!RadientMath::IsFiniteNonNegative(Desc.Duration))
     {
         LOG_ERROR_MESSAGE("Radient animation clip duration must be finite and non-negative");
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -336,9 +325,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
-        Uint64 TimeDataSize = 0;
-        if (!CheckedMultiply(sizeof(Float32), Sampler.KeyframeCount, TimeDataSize) ||
-            TimeDataSize > std::numeric_limits<size_t>::max())
+        if (!IsAddressableArray(Sampler.KeyframeCount, sizeof(Float32)))
         {
             LOG_ERROR_MESSAGE("Radient animation clip sampler ", SamplerIndex, " time-data size overflows addressable memory");
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -346,7 +333,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
 
         Uint64 ExpectedValueDataSize = 0;
         if (!GetExpectedValueDataSize(Sampler, TypeInfo.NativeSize, ExpectedValueDataSize) ||
-            ExpectedValueDataSize > std::numeric_limits<size_t>::max())
+            !IsAddressableSize(ExpectedValueDataSize))
         {
             LOG_ERROR_MESSAGE("Radient animation clip sampler ", SamplerIndex, " value-data size overflows addressable memory");
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -362,7 +349,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
         for (Uint32 KeyIndex = 0; KeyIndex < Sampler.KeyframeCount; ++KeyIndex)
         {
             const Float32 Time = Sampler.pTimes[KeyIndex];
-            if (!std::isfinite(Time) || Time < 0.f || Time > Desc.Duration)
+            if (!RadientMath::IsFiniteNonNegative(Time) || Time > Desc.Duration)
             {
                 LOG_ERROR_MESSAGE("Radient animation clip sampler ", SamplerIndex,
                                   " keyframe ", KeyIndex, " has a time outside the clip duration");
@@ -397,7 +384,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
             {
                 Float32 Value = 0.f;
                 std::memcpy(&Value, pValueBytes + ComponentIndex * sizeof(Float32), sizeof(Value));
-                if (!std::isfinite(Value))
+                if (!RadientMath::IsFinite(Value))
                 {
                     LOG_ERROR_MESSAGE("Radient animation clip sampler ", SamplerIndex,
                                       " contains a non-finite floating-point component at index ", ComponentIndex);
@@ -431,7 +418,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
         }
 
         const RadientAnimationSamplerDesc& Sampler = Desc.pSamplers[Channel.SamplerIndex];
-        if (Channel.FirstArrayElement > std::numeric_limits<Uint32>::max() - Sampler.Value.ArraySize)
+        if (!IsSumRepresentable<Uint32>(Channel.FirstArrayElement, Sampler.Value.ArraySize))
         {
             LOG_ERROR_MESSAGE("Radient animation clip channel ", ChannelIndex, " array range overflows Uint32");
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -507,14 +494,14 @@ public:
             return true;
 
         const size_t Length = std::strlen(String);
-        return Length != std::numeric_limits<size_t>::max() && Add(Length + 1u, alignof(Char));
+        return IsSumRepresentable<size_t>(Length, 1u) && Add(Length + 1u, alignof(Char));
     }
 
     bool Add(Uint64 Size64, size_t Alignment) noexcept
     {
         if (Size64 == 0)
             return true;
-        if (Size64 > std::numeric_limits<size_t>::max())
+        if (!IsAddressableSize(Size64))
             return false;
 
         size_t Size = static_cast<size_t>(Size64);
@@ -529,7 +516,7 @@ public:
         m_CurrentAlignment = Alignment;
 
         const size_t AlignmentMask = Alignment - 1u;
-        if (Size > std::numeric_limits<size_t>::max() - AlignmentMask)
+        if (!IsSumRepresentable<size_t>(Size, AlignmentMask))
             return false;
         Size = (Size + AlignmentMask) & ~AlignmentMask;
         return CheckedAdd(Size);
@@ -538,7 +525,7 @@ public:
     bool Finish() noexcept
     {
         const size_t AlignmentMask = sizeof(void*) - 1u;
-        if (m_Size > std::numeric_limits<size_t>::max() - AlignmentMask)
+        if (!IsSumRepresentable<size_t>(m_Size, AlignmentMask))
             return false;
         m_Size = (m_Size + AlignmentMask) & ~AlignmentMask;
         return true;
@@ -547,7 +534,7 @@ public:
 private:
     bool CheckedAdd(size_t Size) noexcept
     {
-        if (Size > std::numeric_limits<size_t>::max() - m_Size)
+        if (!IsSumRepresentable<size_t>(m_Size, Size))
             return false;
         m_Size += Size;
         return true;

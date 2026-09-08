@@ -26,12 +26,12 @@
 
 #include "Assets/RadientMorphTargetSource.hpp"
 
+#include "Core/RadientValidation.hpp"
+#include "Math/RadientMath.hpp"
 #include "XXH128Hasher.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
-#include <limits>
 
 namespace Diligent
 {
@@ -71,7 +71,7 @@ RadientMorphTargetSource::RadientMorphTargetSource(const RadientMorphTargetCreat
     for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
     {
         const RadientMorphTargetCreateInfo& SourceTarget = pTargets[TargetIndex];
-        if (!std::isfinite(SourceTarget.Desc.DefaultWeight) ||
+        if (!RadientMath::IsFinite(SourceTarget.Desc.DefaultWeight) ||
             (SourceTarget.Desc.AttributeCount != 0 &&
              (SourceTarget.Desc.pAttributes == nullptr || SourceTarget.pAttributeData == nullptr)))
         {
@@ -104,7 +104,7 @@ RadientMorphTargetSource::RadientMorphTargetSource(const RadientMorphTargetCreat
 
             const Uint64 AttributeDataSize =
                 Uint64{VertexCount} * SourceAttribute.ComponentCount * sizeof(Float32);
-            if (DataSize + AttributeDataSize > (std::numeric_limits<Uint32>::max)())
+            if (!RadientValidation::IsSumRepresentable<Uint32>(DataSize, AttributeDataSize))
                 return;
 
             Attribute& AttributeData     = TargetData.Attributes.emplace_back();

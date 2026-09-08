@@ -26,6 +26,8 @@
 
 #include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 
+#include "Core/RadientValidation.hpp"
+
 #include "DebugUtilities.hpp"
 #include "DefaultRawMemoryAllocator.hpp"
 #include "DynamicBuffer.hpp"
@@ -169,17 +171,15 @@ RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
     while (!Allocation.IsValid())
     {
         const size_t CurrentSize = m_pImpl->RegionManager.GetMaxSize();
-        if (CurrentSize > (std::numeric_limits<size_t>::max)() / 2)
+        if (!RadientValidation::IsProductRepresentable<size_t>(CurrentSize, 2u))
             return {};
 
         m_pImpl->RegionManager.Extend(CurrentSize);
         Allocation = m_pImpl->RegionManager.Allocate(Size, m_pImpl->AllocationAlignment);
     }
 
-    const size_t     Offset           = AlignUp(Allocation.UnalignedOffset, size_t{m_pImpl->AllocationAlignment});
-    constexpr size_t MaxAllocationEnd = (std::numeric_limits<Uint32>::max)();
-    if (Offset > MaxAllocationEnd ||
-        Size > MaxAllocationEnd - Offset)
+    const size_t Offset = AlignUp(Allocation.UnalignedOffset, size_t{m_pImpl->AllocationAlignment});
+    if (!RadientValidation::IsSumRepresentable<Uint32>(Offset, size_t{Size}))
     {
         m_pImpl->RegionManager.Free(std::move(Allocation));
         return {};
@@ -189,7 +189,7 @@ RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
     // Ensure that range exists after every stable allocation offset without
     // reserving it exclusively in the CPU allocator.
     const size_t RequiredRange = std::max<size_t>(Size, m_pImpl->MinimumBoundRange);
-    if (RequiredRange > MaxAllocationEnd - Offset)
+    if (!RadientValidation::IsSumRepresentable<Uint32>(Offset, RequiredRange))
     {
         m_pImpl->RegionManager.Free(std::move(Allocation));
         return {};
@@ -197,7 +197,7 @@ RadientTesseraBufferAllocation RadientTesseraBufferSuballocator::Allocate(
 
     const size_t RequiredEnd  = Offset + RequiredRange;
     const size_t AlignmentPad = m_pImpl->AllocationAlignment - 1u;
-    if (RequiredEnd > MaxAllocationEnd - AlignmentPad)
+    if (!RadientValidation::IsSumRepresentable<Uint32>(RequiredEnd, AlignmentPad))
     {
         m_pImpl->RegionManager.Free(std::move(Allocation));
         return {};
@@ -252,16 +252,18 @@ RADIENT_STATUS RadientTesseraBufferSuballocator::Update(
 {
     const std::shared_ptr<RadientTesseraBufferAllocationState>& pState =
         Allocation.m_pState;
-    if (pState == nullptr || pState->pOwner != m_pImpl ||
-        RelativeOffset > pState->Size)
+    if (pState == nullptr || pState->pOwner != m_pImpl)
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
+    if (!RadientValidation::IsValidSubrange(RelativeOffset, Size, pState->Size))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     if (Size == 0)
         return RADIENT_STATUS_OK;
 
-    if (UpdateData == nullptr || Size > pState->Size - RelativeOffset)
+    if (UpdateData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     std::lock_guard<std::mutex> Lock{m_pImpl->Mutex};

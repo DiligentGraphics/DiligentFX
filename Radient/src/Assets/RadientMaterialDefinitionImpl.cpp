@@ -29,6 +29,7 @@
 #include "Assets/RadientMaterialAssetFactory.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "Core/RadientValidation.hpp"
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -110,7 +111,8 @@ bool GetMaterialParameterDataSize(const RadientMaterialParameterDesc& Desc, Uint
         return true;
 
     const Uint32 ElementSize = GetMaterialParameterElementSize(Desc.Type);
-    if (ElementSize == 0 || Desc.ArraySize > std::numeric_limits<Uint32>::max() / ElementSize)
+    if (ElementSize == 0 ||
+        !RadientValidation::IsProductRepresentable<Uint32>(Desc.ArraySize, ElementSize))
         return false;
 
     DataSize = ElementSize * Desc.ArraySize;
@@ -330,8 +332,7 @@ RADIENT_STATUS ValidateSurfaceMaterialShaderParameterPacking(
             LOG_ERROR_MESSAGE("Only surface material definitions may pack ", Article, ' ', Name);
             return false;
         }
-        if (Offset > ShaderDataLayout.Size ||
-            Size > ShaderDataLayout.Size - Offset)
+        if (!RadientValidation::IsValidSubrange(Offset, Size, ShaderDataLayout.Size))
         {
             LOG_ERROR_MESSAGE("Material ", Name, " byte range exceeds the shader data size ", ShaderDataLayout.Size);
             return false;
@@ -409,8 +410,7 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
                               " has zero size");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        if (Initialization.Offset > ShaderDataLayout.Size ||
-            Initialization.Size > ShaderDataLayout.Size - Initialization.Offset)
+        if (!RadientValidation::IsValidSubrange(Initialization.Offset, Initialization.Size, ShaderDataLayout.Size))
         {
             LOG_ERROR_MESSAGE("Material shader data initialization ", InitializationIndex,
                               " uses byte range [", Initialization.Offset, ", ",
@@ -444,8 +444,7 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
         VERIFY_EXPR(IsValidDataSize);
         (void)IsValidDataSize;
 
-        if (Mapping.Offset > ShaderDataLayout.Size ||
-            ParameterDataSize > ShaderDataLayout.Size - Mapping.Offset)
+        if (!RadientValidation::IsValidSubrange(Mapping.Offset, ParameterDataSize, ShaderDataLayout.Size))
         {
             LOG_ERROR_MESSAGE("Material shader data mapping ", MappingIndex, " for parameter '", Parameter.Name,
                               "' uses byte range [", Mapping.Offset, ", ",
@@ -509,8 +508,7 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
-        if (Packing.Offset > ShaderDataLayout.Size ||
-            ShaderTextureDataSize > ShaderDataLayout.Size - Packing.Offset)
+        if (!RadientValidation::IsValidSubrange(Packing.Offset, ShaderTextureDataSize, ShaderDataLayout.Size))
         {
             LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, " uses byte range [",
                               Packing.Offset, ", ", Uint64{Packing.Offset} + ShaderTextureDataSize,

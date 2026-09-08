@@ -92,6 +92,7 @@ set(INCLUDE
     include/Assets/RadientTextureSource.hpp
     include/Core/RadientBackendImpl.hpp
     include/Core/RadientEngineImpl.hpp
+    include/Core/RadientValidation.hpp
     include/Core/RadientViewImpl.hpp
     include/Import/RadientGLTFConverter.hpp
     include/Import/RadientImportedScene.hpp

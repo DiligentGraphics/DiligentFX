@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientMeshViewSource.hpp"
+#include "Core/RadientValidation.hpp"
 
 #include "XXH128Hasher.hpp"
 
@@ -92,8 +93,7 @@ bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = CI.pPrimitives[PrimitiveIndex];
         if (IndexCount == 0 ||
             PrimitiveCI.IndexCount == 0 ||
-            PrimitiveCI.FirstIndex >= IndexCount ||
-            PrimitiveCI.IndexCount > IndexCount - PrimitiveCI.FirstIndex)
+            !RadientValidation::IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, IndexCount))
         {
             return false;
         }

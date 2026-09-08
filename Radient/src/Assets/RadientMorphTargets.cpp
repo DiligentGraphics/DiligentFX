@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientMorphTargetSource.hpp"
+#include "Core/RadientValidation.hpp"
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
@@ -162,7 +163,7 @@ public:
                                                          const Float32* pWeights) override final
     {
         const Uint32 TotalWeightCount = static_cast<Uint32>(m_Weights.size());
-        if (FirstTarget > TotalWeightCount || WeightCount > TotalWeightCount - FirstTarget)
+        if (!RadientValidation::IsValidSubrange(FirstTarget, WeightCount, TotalWeightCount))
             return RADIENT_STATUS_INVALID_ARGUMENT;
         if (WeightCount == 0)
             return RADIENT_STATUS_NO_CHANGE;

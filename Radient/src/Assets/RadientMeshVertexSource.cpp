@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMeshVertexSource.hpp"
 
+#include "Core/RadientValidation.hpp"
+
 #include "GLTFVertexDataConverter.hpp"
 #include "GraphicsAccessories.hpp"
 #include "XXH128Hasher.hpp"
@@ -33,7 +35,6 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <limits>
 #include <utility>
 
 namespace Diligent
@@ -44,22 +45,14 @@ namespace
 
 constexpr Uint32 MeshVertexSourceCacheKeyVersion = 1;
 
-bool CheckByteSize(Uint32 Count, Uint32 Stride)
-{
-    return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
-}
-
-bool CheckByteOffset(Uint32 Offset, Uint32 Size)
-{
-    return Offset <= (std::numeric_limits<Uint32>::max)() - Size;
-}
+using RadientValidation::IsProductRepresentable;
 
 bool CheckStridedByteSize(Uint32 Count, Uint32 Stride, Uint32 ElementSize)
 {
     if (Count == 0)
         return true;
 
-    return Uint64{Count - 1} * Stride + ElementSize <= (std::numeric_limits<Uint32>::max)();
+    return RadientValidation::IsSumRepresentable<Uint32>(Uint64{Count - 1} * Stride, ElementSize);
 }
 
 bool GetSourceAttributeLayout(const RadientMeshVertexSource::SourceAttribute& Attribute,
@@ -78,14 +71,15 @@ bool GetSourceAttributeLayout(const RadientMeshVertexSource::SourceAttribute& At
     }
 
     const Uint32 ValueSize = GetValueSize(Attribute.Type);
-    if (ValueSize == 0 || !CheckByteSize(Attribute.NumComponents, ValueSize))
+    if (ValueSize == 0 ||
+        !IsProductRepresentable<Uint32>(Attribute.NumComponents, ValueSize))
         return false;
 
     ElementSize = ValueSize * Attribute.NumComponents;
     Stride      = Attribute.Stride != 0 ? Attribute.Stride : ElementSize;
 
     return Stride >= ElementSize &&
-        CheckByteSize(VertexCount, ElementSize) &&
+        IsProductRepresentable<Uint32>(VertexCount, ElementSize) &&
         CheckStridedByteSize(VertexCount, Stride, ElementSize);
 }
 
@@ -476,7 +470,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
             RelativeOffset = BufferStride;
 
         const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
-        if (!CheckByteOffset(RelativeOffset, DstAttribSize))
+        if (!RadientValidation::IsSumRepresentable<Uint32>(RelativeOffset, DstAttribSize))
         {
             LOG_ERROR_MESSAGE("Destination vertex attribute '", DstAttrib.Name,
                               "' range overflows 32-bit vertex buffer offset: offset=",
@@ -576,7 +570,8 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
             continue;
 
         const Uint32 VertexStride = VertexStrides[BufferIndex];
-        if (VertexStride == 0 || !CheckByteSize(m_VertexCount, VertexStride))
+        if (VertexStride == 0 ||
+            !IsProductRepresentable<Uint32>(m_VertexCount, VertexStride))
         {
             LOG_ERROR_MESSAGE("Invalid vertex buffer ", BufferIndex, " stride ",
                               VertexStride, " for ", m_VertexCount, " vertices.");

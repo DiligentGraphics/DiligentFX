@@ -29,6 +29,7 @@
 #include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Assets/RadientTextureFormat.hpp"
+#include "Core/RadientValidation.hpp"
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
 #include "ProxyDataBlob.hpp"
@@ -86,11 +87,11 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
     if (RowCount > 1)
     {
         const Uint64 RowStrideCount = Uint64{RowCount - 1};
-        if (Stride > (std::numeric_limits<Uint64>::max)() / RowStrideCount)
+        if (!RadientValidation::IsProductRepresentable<Uint64>(Stride, RowStrideCount))
             return false;
 
         const Uint64 PrefixSize = Uint64{Stride} * RowStrideCount;
-        if (PrefixSize > (std::numeric_limits<Uint64>::max)() - MipProps.RowSize)
+        if (!RadientValidation::IsSumRepresentable<Uint64>(PrefixSize, MipProps.RowSize))
             return false;
 
         DataSize = PrefixSize + MipProps.RowSize;
@@ -123,7 +124,7 @@ XXH128Hash ComputeTextureDataHash(const void* pData,
                                   Uint32      Stride)
 {
     if (pData == nullptr || ActiveRowSize == 0 || RowCount == 0 ||
-        ActiveRowSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        !RadientValidation::IsAddressableSize(ActiveRowSize))
     {
         return {};
     }
@@ -154,7 +155,7 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
 
         RadientTextureDataSpan Span;
         if (GetRadientTextureDataSpan(m_TextureData, Span) &&
-            Span.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+            RadientValidation::IsAddressableSize(Span.DataSize))
         {
             m_SourceType = SourceType::TextureData;
 
@@ -172,7 +173,7 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
     else if (LoadInfo.pData != nullptr)
     {
         m_pData = LoadInfo.pData;
-        if (LoadInfo.DataSize <= static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        if (RadientValidation::IsAddressableSize(LoadInfo.DataSize))
         {
             m_DataSize = static_cast<size_t>(LoadInfo.DataSize);
             if (m_DataSize != 0)

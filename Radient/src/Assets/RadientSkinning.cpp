@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
+#include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 
 #include "RadientSkinning.h"
@@ -74,11 +75,6 @@ bool IsFinite(const RadientMatrix4x4& Matrix) noexcept
             return false;
     }
     return true;
-}
-
-bool IsValidRange(Uint32 First, Uint32 Count, Uint32 Total) noexcept
-{
-    return First <= Total && Count <= Total - First;
 }
 
 RADIENT_STATUS ValidateSkeletonDesc(const RadientSkeletonDesc& Desc,
@@ -284,7 +280,7 @@ RADIENT_STATUS ValidateAnimationCurve(const RadientAnimationCurveDesc& Curve,
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
     if (Curve.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE &&
-        Curve.KeyframeCount > std::numeric_limits<Uint32>::max() / 3u)
+        !RadientValidation::IsProductRepresentable<Uint32>(Curve.KeyframeCount, 3u))
     {
         LOG_ERROR_MESSAGE("Animation track ", TrackIndex, ' ', CurveName, " curve contains too many keyframes");
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -830,7 +826,7 @@ public:
                                                                       Uint32            JointCount,
                                                                       RadientTransform* pTransforms) const override final
     {
-        if (!IsValidRange(FirstJoint, JointCount, static_cast<Uint32>(m_State.LocalTransforms.size())) ||
+        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_State.LocalTransforms.size())) ||
             (JointCount != 0 && pTransforms == nullptr))
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -849,7 +845,7 @@ public:
                                                                      Uint32            JointCount,
                                                                      RadientMatrix4x4* pMatrices) const override final
     {
-        if (!IsValidRange(FirstJoint, JointCount, static_cast<Uint32>(m_State.GlobalMatrices.size())) ||
+        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_State.GlobalMatrices.size())) ||
             (JointCount != 0 && pMatrices == nullptr))
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -990,7 +986,7 @@ public:
                                                                       Uint32                  JointCount,
                                                                       const RadientTransform* pTransforms) override final
     {
-        if (!IsValidRange(FirstJoint, JointCount, static_cast<Uint32>(m_LocalTransforms.size())) ||
+        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_LocalTransforms.size())) ||
             (JointCount != 0 && pTransforms == nullptr))
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;

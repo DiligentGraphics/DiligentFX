@@ -26,10 +26,9 @@
 
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 
+#include "Core/RadientValidation.hpp"
 #include "Render/Tessera/RadientTesseraFrameHistory.hpp"
 #include "DebugUtilities.hpp"
-
-#include <limits>
 
 namespace Diligent
 {
@@ -99,7 +98,7 @@ RadientTesseraSkinData::RadientTesseraSkinData(IRadientSkinAsset*               
     VERIFY_EXPR(SkinDesc.pSkeleton == m_pPose->GetSkeleton());
 
     if (SkinDesc.JointCount == 0 ||
-        SkinDesc.JointCount > (std::numeric_limits<Uint32>::max)() / (2u * JointMatrixSize))
+        !RadientValidation::IsProductRepresentable<Uint32>(SkinDesc.JointCount, 2u * JointMatrixSize))
     {
         UNEXPECTED("Invalid Tessera skin joint count");
         Fail();

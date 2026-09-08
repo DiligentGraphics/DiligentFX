@@ -28,10 +28,11 @@
 
 #include "Assets/RadientTextureFormat.hpp"
 #include "Assets/RadientTextureSource.hpp"
+#include "Core/RadientValidation.hpp"
+#include "Math/RadientMath.hpp"
 #include "Errors.hpp"
 #include "RadientMorphTargets.h"
 
-#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -44,6 +45,10 @@ namespace Diligent
 
 namespace
 {
+
+using RadientValidation::IsAddressableArray;
+using RadientValidation::IsAddressableSize;
+using RadientValidation::IsValidSubrange;
 
 template <typename... ArgsType>
 bool LogValidationError(const char* Type, ArgsType&&... Args)
@@ -86,7 +91,7 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     {
         const RadientMorphTargetCreateInfo& TargetCI = MeshCI.pMorphTargets[TargetIndex];
         const RadientMorphTargetDesc&       Target   = TargetCI.Desc;
-        if (!std::isfinite(Target.DefaultWeight))
+        if (!RadientMath::IsFinite(Target.DefaultWeight))
         {
             return LogValidationError("RadientMeshCreateInfo",
                                       "pMorphTargets[", TargetIndex, "].Desc.DefaultWeight must be finite.");
@@ -147,8 +152,7 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
                                           "].Desc contains duplicate attribute semantic '", Attribute.Semantic, "'.");
             }
 
-            const Uint64 ValueCount = Uint64{MeshCI.VertexCount} * Attribute.ComponentCount;
-            if (ValueCount > (std::numeric_limits<size_t>::max)() / sizeof(Float32))
+            if (!IsAddressableArray(MeshCI.VertexCount, Uint64{Attribute.ComponentCount} * sizeof(Float32)))
             {
                 return LogValidationError("RadientMeshCreateInfo",
                                           "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
@@ -186,7 +190,7 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
                                       ") must be less than IndexCount (", MeshCI.IndexCount, ").");
         }
 
-        if (PrimitiveCI.IndexCount > MeshCI.IndexCount - PrimitiveCI.FirstIndex)
+        if (!IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, MeshCI.IndexCount))
         {
             return LogValidationError("RadientMeshCreateInfo",
                                       "pPrimitives[", PrimitiveIndex,
@@ -240,7 +244,7 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         if (LoadInfo.DataSize == 0)
             return LogValidationError("RadientTextureLoadInfo", "DataSize must not be zero when pData is specified.");
 
-        if (LoadInfo.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        if (!IsAddressableSize(LoadInfo.DataSize))
         {
             return LogValidationError("RadientTextureLoadInfo",
                                       "DataSize (", LoadInfo.DataSize,
@@ -270,7 +274,7 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
                                       ") must be zero or at least the active row size and texture data size must not overflow.");
         }
 
-        if (Span.DataSize > static_cast<Uint64>((std::numeric_limits<size_t>::max)()))
+        if (!IsAddressableSize(Span.DataSize))
         {
             return LogValidationError("RadientTextureLoadInfo",
                                       "texture data size (", Span.DataSize,

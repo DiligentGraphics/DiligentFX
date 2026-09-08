@@ -28,6 +28,7 @@
 
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
+#include "Core/RadientValidation.hpp"
 #include "Import/RadientImportedScene.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientMorphTargets.h"
@@ -55,7 +56,6 @@
 #include "TinyGltfModelView.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
@@ -67,6 +67,8 @@ namespace Diligent
 
 namespace
 {
+
+using RadientValidation::IsAddressableArray;
 
 using SkeletonEntityMap = absl::flat_hash_map<IRadientSkeletonAsset*, std::vector<RadientEntityID>>;
 
@@ -355,7 +357,7 @@ RADIENT_STATUS GetAnimationTimeRange(const GLTF::Animation& Animation,
         for (size_t KeyIndex = 0; KeyIndex < Sampler.Inputs.size(); ++KeyIndex)
         {
             const Float32 Time = Sampler.Inputs[KeyIndex];
-            if (!std::isfinite(Time))
+            if (!RadientMath::IsFinite(Time))
             {
                 LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
                                   " contains a non-finite keyframe time");
@@ -386,7 +388,7 @@ RADIENT_STATUS GetAnimationTimeRange(const GLTF::Animation& Animation,
     }
 
     Duration = EndTime - StartTime;
-    if (!std::isfinite(Duration) || Duration < 0.f)
+    if (!RadientMath::IsFiniteNonNegative(Duration))
     {
         LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " has an invalid time range");
         return RADIENT_STATUS_INVALID_DATA;
@@ -486,7 +488,7 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
     }
 
     const size_t ValuesPerKey = Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
-    if (Sampler.Inputs.size() > std::numeric_limits<size_t>::max() / ValuesPerKey)
+    if (!IsAddressableArray(Sampler.Inputs.size(), ValuesPerKey))
     {
         LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
                           " has too many ", CurveName, " values");

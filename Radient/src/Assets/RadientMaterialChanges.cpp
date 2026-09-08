@@ -27,6 +27,7 @@
 #include "RadientMaterialChanges.hpp"
 
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Core/RadientValidation.hpp"
 #include "DebugUtilities.hpp"
 
 #include <algorithm>
@@ -62,7 +63,7 @@ RADIENT_STATUS MaterialParameterChanges::SetParameter(const MaterialStorage&    
         return RADIENT_STATUS_OK;
     }
 
-    if (m_ValueData.size() > std::numeric_limits<Uint32>::max() - ValueSize)
+    if (!RadientValidation::IsSumRepresentable<Uint32>(m_ValueData.size(), ValueSize))
     {
         LOG_ERROR_MESSAGE("Material writer value storage exceeds the supported size");
         return RADIENT_STATUS_FAILED;

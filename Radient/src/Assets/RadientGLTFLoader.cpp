@@ -33,12 +33,14 @@
 #include "Assets/RadientMeshViewSource.hpp"
 #include "Assets/RadientMorphTargetSource.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "Core/RadientValidation.hpp"
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
 #include "GLTFDocument.hpp"
 #include "GLTFLoader.hpp"
 #include "HashUtils.hpp"
 #include "Import/RadientGLTFConverter.hpp"
+#include "Math/RadientMath.hpp"
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -48,7 +50,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
@@ -495,7 +496,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                 Target.Name = Mesh.MorphTargetNames[TargetIndex];
             if (TargetIndex < Mesh.Weights.size())
             {
-                if (!std::isfinite(Mesh.Weights[TargetIndex]))
+                if (!RadientMath::IsFinite(Mesh.Weights[TargetIndex]))
                 {
                     LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                         "' because default weight ", TargetIndex, " is not finite");
@@ -572,7 +573,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                     AttributeDescs[TargetIndex][AttributeIndex].Semantic       = Attribute.Semantic.c_str();
                     AttributeDescs[TargetIndex][AttributeIndex].ComponentCount = Attribute.ComponentCount;
 
-                    if (Primitive.VertexCount > (std::numeric_limits<size_t>::max)() / Attribute.ComponentCount)
+                    if (!RadientValidation::IsAddressableArray(Primitive.VertexCount, Attribute.ComponentCount))
                     {
                         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                             "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
@@ -585,8 +586,9 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                         SourceTarget.FindAttribute(Attribute.Semantic.c_str());
                     if (pSourceAttribute != nullptr)
                     {
-                        if (pSourceAttribute->FirstValue > SourceTarget.Values.size() ||
-                            ValueCount > SourceTarget.Values.size() - pSourceAttribute->FirstValue)
+                        if (!RadientValidation::IsValidSubrange(pSourceAttribute->FirstValue,
+                                                                ValueCount,
+                                                                SourceTarget.Values.size()))
                         {
                             LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                                 "' because primitive ", PrimitiveIndex, " target ", TargetIndex,

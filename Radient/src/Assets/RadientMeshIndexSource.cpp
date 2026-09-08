@@ -26,11 +26,12 @@
 
 #include "Assets/RadientMeshIndexSource.hpp"
 
+#include "Core/RadientValidation.hpp"
+
 #include "GraphicsAccessories.hpp"
 #include "XXH128Hasher.hpp"
 
 #include <cstring>
-#include <limits>
 
 namespace Diligent
 {
@@ -40,10 +41,7 @@ namespace
 
 constexpr Uint32 MeshIndexSourceCacheKeyVersion = 1;
 
-bool CheckByteSize(Uint32 Count, Uint32 Stride)
-{
-    return Uint64{Count} * Stride <= (std::numeric_limits<Uint32>::max)();
-}
+using RadientValidation::IsProductRepresentable;
 
 VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
 {
@@ -75,7 +73,7 @@ bool GetSourceIndexLayout(const void* pData,
     if (ElementSize == 0)
         return false;
 
-    return CheckByteSize(IndexCount, ElementSize);
+    return IsProductRepresentable<Uint32>(IndexCount, ElementSize);
 }
 
 bool ValidateMeshIndexSourceCI(const RadientMeshIndexSource::CreateInfo& CI)
@@ -83,7 +81,7 @@ bool ValidateMeshIndexSourceCI(const RadientMeshIndexSource::CreateInfo& CI)
     if (CI.IndexCount == 0)
         return false;
 
-    if (!CheckByteSize(CI.IndexCount, sizeof(Uint32)))
+    if (!IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32)))
         return false;
 
     Uint32 IndexElementSize = 0;

@@ -30,11 +30,10 @@
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Core/RadientViewImpl.hpp"
+#include "Math/RadientMath.hpp"
 
 #include "Cast.hpp"
 #include "Errors.hpp"
-
-#include <cmath>
 
 namespace Diligent
 {
@@ -60,7 +59,7 @@ IThreadPool* ValidateThreadPool(IThreadPool* pThreadPool)
 
 float ValidatePostFXTransitionDuration(float Duration)
 {
-    if (!std::isfinite(Duration) || Duration < 0.f)
+    if (!RadientMath::IsFiniteNonNegative(Duration))
     {
         constexpr float DefaultDuration = 1.f;
         LOG_ERROR_MESSAGE("Radient post-FX transition duration must be finite and non-negative. Using the default value of ", DefaultDuration, " second.");
