@@ -28,43 +28,138 @@
 
 void RadientAnimation_C_UseTypes(void)
 {
-    RadientAnimationSchemaID      Schema     = {0};
-    RadientAnimationValueDesc     Value      = {0};
-    RadientAnimationSamplerDesc   Sampler    = {0};
-    RadientAnimationTargetDesc    ClipTarget = {0};
-    RadientAnimationChannelDesc   Channel    = {0};
-    RadientAnimationClipDesc      Clip       = {0};
-    RadientAnimationTarget        Target     = {0};
-    RadientAnimationRegistryEntry Entry      = {0};
-    RadientAnimationRegistryState State      = {0};
+    RadientAnimationSchemaID               Schema             = {0};
+    RadientAnimationPropertyID             Property           = 0;
+    RadientAnimationObjectID               Object             = 0;
+    RadientAnimationDestinationElement     DestinationElement = 0;
+    RADIENT_ANIMATION_VALUE_SEMANTIC       Semantic           = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+    RadientAnimationValueDesc              Value              = {0};
+    RadientAnimationSamplerDesc            Sampler            = {0};
+    RadientAnimationTargetDesc             ClipTarget         = {0};
+    RadientAnimationChannelDesc            Channel            = {0};
+    RadientAnimationClipDesc               Clip               = {0};
+    RadientAnimationPropertyBindingDesc    PropertyBinding    = {0};
+    RadientAnimationResolvedPropertyDesc   ResolvedProperty   = {0};
+    RadientAnimationPropertyUpdateDesc     PropertyUpdate     = {0};
+    RadientAnimationApplyInfo              ApplyInfo          = {0};
+    RadientAnimationDestinationMappingDesc DestinationMapping = {0};
+    RadientAnimationDestinationDesc        Destination        = {0};
+    RadientAnimationBindingDesc            Binding            = {0};
+    RadientAnimationEvaluateInfo           EvaluateInfo       = {0};
+    RadientAnimationTarget                 Target             = {0};
+    RadientAnimationRegistryEntry          Entry              = {0};
+    RadientAnimationRegistryState          State              = {0};
 
-    Schema                    = InvalidRadientAnimationSchemaID;
-    Value.Type                = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
-    Value.ArraySize           = 1;
-    Sampler.Value             = Value;
-    Sampler.Interpolation     = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
-    Sampler.ValueDataSize     = 0;
-    ClipTarget.Schema         = Schema;
-    ClipTarget.Object         = InvalidRadientAnimationObject;
-    ClipTarget.Name           = "Target";
-    Channel.TargetIndex       = InvalidRadientAnimationTargetIndex;
-    Channel.Property          = InvalidRadientAnimationPropertyID;
-    Channel.FirstArrayElement = 0;
-    Channel.SamplerIndex      = InvalidRadientAnimationSamplerIndex;
-    Clip.Name                 = "Clip";
+    Schema                                = InvalidRadientAnimationSchemaID;
+    Schema                                = RadientNodeAnimationSchemaID;
+    Property                              = RadientNodeTranslationProperty;
+    Property                              = RadientNodeRotationProperty;
+    Property                              = RadientNodeScaleProperty;
+    Schema                                = RadientMorphWeightsAnimationSchemaID;
+    Property                              = RadientMorphWeightsProperty;
+    Object                                = InvalidRadientAnimationObject;
+    DestinationElement                    = InvalidRadientAnimationDestinationElement;
+    Semantic                              = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
+    Semantic                              = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
+    Value.Type                            = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+    Value.ArraySize                       = 1;
+    Sampler.Value                         = Value;
+    Sampler.Interpolation                 = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    Sampler.ValueDataSize                 = 0;
+    ClipTarget.Schema                     = Schema;
+    ClipTarget.Object                     = Object;
+    ClipTarget.Name                       = "Target";
+    Channel.TargetIndex                   = InvalidRadientAnimationTargetIndex;
+    Channel.Property                      = InvalidRadientAnimationPropertyID;
+    Channel.FirstArrayElement             = 0;
+    Channel.SamplerIndex                  = InvalidRadientAnimationSamplerIndex;
+    Clip.Name                             = "Clip";
+    PropertyBinding.Schema                = Schema;
+    PropertyBinding.DestinationElement    = DestinationElement;
+    PropertyBinding.Property              = Property;
+    PropertyBinding.FirstArrayElement     = 0;
+    PropertyBinding.Value                 = Value;
+    ResolvedProperty.Semantic             = Semantic;
+    PropertyUpdate.pValue                 = 0;
+    PropertyUpdate.ValueDataSize          = 0;
+    ApplyInfo.pUpdates                    = &PropertyUpdate;
+    ApplyInfo.UpdateCount                 = 1;
+    ApplyInfo.UpdateDerivedState          = True;
+    DestinationMapping.ClipTargetIndex    = InvalidRadientAnimationTargetIndex;
+    DestinationMapping.DestinationElement = DestinationElement;
+    Destination.pDestination              = 0;
+    Destination.pMappings                 = &DestinationMapping;
+    Destination.MappingCount              = 1;
+    Binding.pDestinations                 = &Destination;
+    Binding.DestinationCount              = 1;
+    EvaluateInfo.Time                     = 0.0;
+    EvaluateInfo.UpdateDerivedState       = True;
 
+    (void)Schema;
+    (void)Property;
+    (void)Object;
+    (void)DestinationElement;
+    (void)Semantic;
     (void)Sampler;
     (void)ClipTarget;
     (void)Channel;
     (void)Clip;
+    (void)PropertyBinding;
+    (void)ResolvedProperty;
+    (void)ApplyInfo;
+    (void)Binding;
+    (void)EvaluateInfo;
     (void)Target;
     (void)Entry;
     (void)State;
 }
 
+void RadientAnimation_C_TestDestinationMacros(IRadientAnimationDestination* pDestination)
+{
+    RadientAnimationPropertyBindingDesc  Property            = {0};
+    RadientAnimationResolvedPropertyDesc ResolvedProperty    = {0};
+    IRadientAnimationDestinationBinding* pDestinationBinding = 0;
+    RADIENT_STATUS                       Status              = RADIENT_STATUS_OK;
+
+    Status = IRadientAnimationDestination_CreateBinding(pDestination, &Property, 1, &ResolvedProperty, &pDestinationBinding);
+
+    (void)Status;
+}
+
+void RadientAnimation_C_TestDestinationBindingMacros(IRadientAnimationDestinationBinding* pDestinationBinding)
+{
+    RadientAnimationPropertyUpdateDesc PropertyUpdate = {0};
+    RadientAnimationApplyInfo          ApplyInfo      = {0};
+    RADIENT_STATUS                     Status         = RADIENT_STATUS_OK;
+
+    ApplyInfo.pUpdates    = &PropertyUpdate;
+    ApplyInfo.UpdateCount = 1;
+    Status                = IRadientAnimationDestinationBinding_ApplyProperties(pDestinationBinding, &ApplyInfo);
+
+    (void)Status;
+}
+
 void RadientAnimation_C_TestClipMacros(IRadientAnimationClipAsset* pClip)
 {
+    RadientAnimationBindingDesc BindingDesc = {0};
+    IRadientAnimationBinding*   pBinding    = 0;
+    RADIENT_STATUS              Status      = RADIENT_STATUS_OK;
+
     (void)IRadientAnimationClipAsset_GetDesc(pClip);
+    Status = IRadientAnimationClipAsset_CreateBinding(pClip, &BindingDesc, &pBinding);
+
+    (void)Status;
+}
+
+void RadientAnimation_C_TestBindingMacros(IRadientAnimationBinding* pBinding)
+{
+    RadientAnimationEvaluateInfo EvaluateInfo = {0};
+    RADIENT_STATUS               Status       = RADIENT_STATUS_OK;
+
+    (void)IRadientAnimationBinding_GetClip(pBinding);
+    Status = IRadientAnimationBinding_Evaluate(pBinding, &EvaluateInfo);
+
+    (void)Status;
 }
 
 void RadientAnimation_C_TestMacros(IRadientAnimationRegistry*      pRegistry,

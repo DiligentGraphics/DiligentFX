@@ -27,7 +27,8 @@
 #pragma once
 
 /// \file
-/// Defines generic animation clip and legacy animation-to-pose registry interfaces.
+/// Defines generic animation clips, destinations, bindings, and the legacy
+/// animation-to-pose registry.
 
 #include "RadientScene.h"
 #include "RadientSkinning.h"
@@ -36,15 +37,22 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-typedef struct IRadientAnimationClipAsset IRadientAnimationClipAsset;
-typedef struct IRadientAnimationRegistry  IRadientAnimationRegistry;
+typedef struct IRadientAnimationDestination        IRadientAnimationDestination;
+typedef struct IRadientAnimationDestinationBinding IRadientAnimationDestinationBinding;
+typedef struct IRadientAnimationClipAsset          IRadientAnimationClipAsset;
+typedef struct IRadientAnimationBinding            IRadientAnimationBinding;
+typedef struct IRadientAnimationRegistry           IRadientAnimationRegistry;
 
 /// UUID-sized identifier of an animation target schema contract.
 ///
 /// Schema providers assign a stable, globally unique value to every published
 /// contract. The alias gives that value animation-specific meaning while
 /// reusing INTERFACE_ID storage, generation, and comparison conventions; it
-/// does not imply that a schema is an object interface.
+/// does not imply that a schema is an object interface. A glTF animation-pointer
+/// importer resolves every supported canonical pointer through a schema
+/// provider into (Schema, Object, Property, array range); unknown providers or
+/// properties are reported as unsupported rather than encoded as unstable
+/// process-local IDs.
 typedef INTERFACE_ID RadientAnimationSchemaID;
 
 /// Property identifier scoped by a Radient animation target schema.
@@ -59,6 +67,12 @@ typedef Uint64 RadientAnimationPropertyID;
 /// example, an importer may use a source node index and let each scene-instance
 /// binding resolve that index to its own runtime destination.
 typedef Uint64 RadientAnimationObjectID;
+
+/// Schema-specific runtime element within an animation destination.
+///
+/// For example, the node-animation schema uses a skeleton joint index in a
+/// skeleton-pose destination and a RadientEntityID in a scene destination.
+typedef Uint64 RadientAnimationDestinationElement;
 
 /// Invalid animation schema identifier. A target must use a schema ID other
 /// than this all-zero value.
@@ -79,6 +93,48 @@ static DILIGENT_CONSTEXPR Uint32 InvalidRadientAnimationTargetIndex = (Uint32)~0
 /// Invalid index into an animation clip sampler table. This value can never be
 /// a valid RadientAnimationChannelDesc::SamplerIndex.
 static DILIGENT_CONSTEXPR Uint32 InvalidRadientAnimationSamplerIndex = (Uint32)~0u;
+
+/// Invalid schema-specific runtime destination element. Schemas may reserve
+/// this value while allowing every smaller Uint64 value.
+static DILIGENT_CONSTEXPR RadientAnimationDestinationElement InvalidRadientAnimationDestinationElement = (Uint64)~0ull;
+
+/// Built-in schema for local properties of an authored scene node.
+///
+/// A target's Object is the authored node identity. A binding may resolve the
+/// same node to a skeleton joint, a scene entity, or another runtime node
+/// representation without changing the clip. Root animation is therefore
+/// represented by the same schema as every other node transform.
+// {E4ADD320-EECA-439F-A6C3-1D8A25AEFBC3}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientNodeAnimationSchemaID =
+    {0xe4add320, 0xeeca, 0x439f, {0xa6, 0xc3, 0x1d, 0x8a, 0x25, 0xae, 0xfb, 0xc3}};
+
+/// FLOAT3[1] local translation property in RadientNodeAnimationSchemaID.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeTranslationProperty = 1;
+
+/// FLOAT4[1] normalized quaternion local rotation property in
+/// RadientNodeAnimationSchemaID. LINEAR interpolation uses spherical
+/// interpolation; CUBIC_SPLINE results are normalized.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeRotationProperty = 2;
+
+/// FLOAT3[1] local scale property in RadientNodeAnimationSchemaID.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeScaleProperty = 3;
+
+/// Built-in schema for morph weights owned by an authored scene node.
+///
+/// A target's Object is the authored identity of the node whose mesh supplies
+/// the morph targets. Keeping morph weights in a separate schema lets the same
+/// source node bind its transform and weights to different destinations.
+// {8E3A3B5B-2267-4E06-B94A-316746AB9F61}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMorphWeightsAnimationSchemaID =
+    {0x8e3a3b5b, 0x2267, 0x4e06, {0xb9, 0x4a, 0x31, 0x67, 0x46, 0xab, 0x9f, 0x61}};
+
+/// FLOAT[N] weight property in RadientMorphWeightsAnimationSchemaID, where N
+/// is the number of morph targets used by the bound node. Channels may animate
+/// the complete array or disjoint ranges through FirstArrayElement. A scene
+/// destination uses the node's RadientEntityID as its destination element. A
+/// destination exposed directly by one IRadientMorphTargetWeights object uses
+/// element zero because that object owns exactly one weight array.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientMorphWeightsProperty = 1;
 
 
 // clang-format off
@@ -140,6 +196,26 @@ DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_VALUE_TYPE, Uint8)
     /// Sentinel equal to the number of animation value types. This is not a
     /// valid RadientAnimationValueDesc::Type.
     RADIENT_ANIMATION_VALUE_TYPE_COUNT
+};
+
+
+/// Semantic interpolation applied to a resolved property's native values.
+DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_VALUE_SEMANTIC, Uint8)
+{
+    /// Invalid or unspecified value semantic.
+    RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN = 0,
+
+    /// Interpolates every scalar component independently.
+    RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+
+    /// Treats each FLOAT4 element as a normalized quaternion. LINEAR uses
+    /// shortest-path spherical interpolation. CUBIC_SPLINE evaluates the
+    /// component-wise Hermite curve and normalizes each result.
+    RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION,
+
+    /// Sentinel equal to the number of value semantics. This is not a valid
+    /// RadientAnimationResolvedPropertyDesc::Semantic value.
+    RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT
 };
 
 // clang-format on
@@ -323,13 +399,12 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 /// ranges must not overlap and must use one native value type.
 /// Destination-schema compatibility is established when binding.
 ///
-/// The clip does not define playback behavior before the first key or after the
-/// last key. Clamp, loop, and other time policies belong to the player that
-/// samples the clip.
+/// Binding evaluation holds the nearest endpoint value outside each sampler's
+/// key interval. Looping, ping-pong, playback-rate handling, and time wrapping
+/// belong to the player.
 ///
-/// Example (C++): the node-animation schema provider publishes
-/// NodeAnimationSchemaID and NodeTranslationProperty. Object 17 is an
-/// authored node identity, while both zero indices refer to tables in Clip.
+/// Example (C++): Object 17 is an authored node identity, while both zero
+/// indices refer to tables in Clip.
 ///
 /// \code
 /// const Float32 Times[] = {0.f, 1.f};
@@ -337,7 +412,7 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 ///                                        {0.f, 2.f, 0.f}};
 ///
 /// RadientAnimationTargetDesc Target{};
-/// Target.Schema = NodeAnimationSchemaID;
+/// Target.Schema = RadientNodeAnimationSchemaID;
 /// Target.Object = 17;
 /// Target.Name   = "Root";
 ///
@@ -352,7 +427,7 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 ///
 /// RadientAnimationChannelDesc Channel{};
 /// Channel.TargetIndex       = 0; // Target above.
-/// Channel.Property          = NodeTranslationProperty;
+/// Channel.Property          = RadientNodeTranslationProperty;
 /// Channel.FirstArrayElement = 0;
 /// Channel.SamplerIndex      = 0; // Sampler above.
 ///
@@ -420,9 +495,380 @@ struct RadientAnimationClipDesc
 typedef struct RadientAnimationClipDesc RadientAnimationClipDesc;
 
 
+/// Property range that a binding asks one destination to resolve.
+///
+/// Bindings derive these records from clip channels and destination mappings;
+/// applications normally do not create them directly. For example, a node
+/// rotation channel mapped to skeleton joint 42 requests
+/// RadientNodeAnimationSchemaID, element 42,
+/// RadientNodeRotationProperty, FirstArrayElement 0, and FLOAT4[1].
+struct RadientAnimationPropertyBindingDesc
+{
+    /// Schema of the symbolic clip target that owns Property.
+    RadientAnimationSchemaID Schema DEFAULT_INITIALIZER(InvalidRadientAnimationSchemaID);
+
+    /// Schema-specific runtime element selected by the destination mapping.
+    RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
+
+    /// Property identifier in Schema's namespace.
+    RadientAnimationPropertyID Property DEFAULT_INITIALIZER(InvalidRadientAnimationPropertyID);
+
+    /// First complete array element written by this property range. Together
+    /// with Value.ArraySize, this identifies the half-open destination range.
+    Uint32 FirstArrayElement DEFAULT_INITIALIZER(0);
+
+    /// Native type and number of array elements written by the channel.
+    RadientAnimationValueDesc Value;
+};
+typedef struct RadientAnimationPropertyBindingDesc RadientAnimationPropertyBindingDesc;
+
+
+/// Destination result for one resolved property range.
+struct RadientAnimationResolvedPropertyDesc
+{
+    /// Semantic used to interpolate this property's native values. For
+    /// example, RadientNodeRotationProperty resolves to
+    /// RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION, while node
+    /// translation, scale, RadientMorphWeightsProperty, and ordinary numeric
+    /// properties resolve to RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
+    /// The same (Schema, Property) contract must resolve to the same semantic
+    /// for every element and destination implementation. UNKNOWN and COUNT are
+    /// invalid successful results. NORMALIZED_QUATERNION requires FLOAT4
+    /// storage; binding creation rejects incompatible semantic/type pairs.
+    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic DEFAULT_INITIALIZER(RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+};
+typedef struct RadientAnimationResolvedPropertyDesc RadientAnimationResolvedPropertyDesc;
+
+
+/// One concrete value range supplied to an animation destination.
+struct RadientAnimationPropertyUpdateDesc
+{
+    /// Pointer to one tightly packed native value range. Its position in the
+    /// update array corresponds to the property at the same position in the
+    /// array used to create the destination binding. The data is naturally
+    /// aligned for its native type, remains owned by the caller, and is valid
+    /// only for the duration of ApplyProperties().
+    const void* pValue DEFAULT_INITIALIZER(nullptr);
+
+    /// Exact byte size of pValue. This equals the native element size in the
+    /// corresponding property request multiplied by its array length.
+    Uint64 ValueDataSize DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientAnimationPropertyUpdateDesc RadientAnimationPropertyUpdateDesc;
+
+
+/// Parameters for one aggregate destination update.
+struct RadientAnimationApplyInfo
+{
+    /// Array of UpdateCount ordered property values. It must be non-null. The
+    /// destination binding consumes or copies every referenced value before
+    /// ApplyProperties() returns.
+    const RadientAnimationPropertyUpdateDesc* pUpdates DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pUpdates. It must equal the nonzero property count
+    /// used to create the destination binding.
+    Uint32 UpdateCount DEFAULT_INITIALIZER(0);
+
+    /// Requests one destination-specific derived-state update after every
+    /// primary property has been written. For a skeleton pose, true propagates
+    /// global transforms once for the complete joint batch. For a scene, it
+    /// requests one graph-wide transform propagation after the entity batch.
+    Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
+};
+typedef struct RadientAnimationApplyInfo RadientAnimationApplyInfo;
+
+
+/// Maps one symbolic clip target to an element of one aggregate destination.
+///
+/// ClipTargetIndex selects a RadientAnimationTargetDesc, while
+/// DestinationElement selects the corresponding runtime object inside the
+/// destination. Repeating ClipTargetIndex with different elements intentionally
+/// fans one authored target out to multiple runtime instances.
+struct RadientAnimationDestinationMappingDesc
+{
+    /// Zero-based index into the bound clip's target table. It must be less
+    /// than RadientAnimationClipDesc::TargetCount.
+    Uint32 ClipTargetIndex DEFAULT_INITIALIZER(InvalidRadientAnimationTargetIndex);
+
+    /// Schema-specific element within its containing pDestination. A node
+    /// target uses a zero-based joint index for a skeleton-pose destination or
+    /// a RadientEntityID for a scene destination.
+    RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
+};
+typedef struct RadientAnimationDestinationMappingDesc RadientAnimationDestinationMappingDesc;
+
+
+/// One aggregate runtime destination and all clip targets mapped into it.
+struct RadientAnimationDestinationDesc
+{
+    /// Aggregate object receiving the mapped property updates. A skeleton pose
+    /// exposes one destination for all of its joints; a scene exposes one for
+    /// all of its entities. On successful compilation, the returned destination
+    /// binding retains this interface. The pointer must not be null.
+    IRadientAnimationDestination* pDestination DEFAULT_INITIALIZER(nullptr);
+
+    /// Array of MappingCount symbolic-target-to-element mappings. It must not
+    /// be null and is copied by CreateBinding().
+    const RadientAnimationDestinationMappingDesc* pMappings DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pMappings. Destination descriptors with no
+    /// mappings are invalid; omit the complete descriptor instead.
+    Uint32 MappingCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
+
+
+/// Description used to compile an animation binding.
+///
+/// Creation copies both descriptor-array levels and asks every destination to
+/// create one compiled child binding. Each child retains its destination; the
+/// outer binding retains the children. Unmapped clip targets are ignored.
+/// Every mapped target contributes all of its channels; if the destination
+/// cannot resolve any one of them, binding creation fails instead of silently
+/// dropping that channel. A zero-destination binding is valid and evaluates to
+/// RADIENT_STATUS_NO_CHANGE.
+///
+/// Each pDestination must occur in exactly one destination descriptor. Exact
+/// duplicate mappings and overlapping writes to the same resolved property
+/// range are invalid. A clip target may appear in multiple mappings to support
+/// fanout. Different targets may map to one element when their property ranges
+/// do not overlap. Aliasing through two different destination interface
+/// pointers cannot be detected and is the caller's responsibility; evaluation
+/// applies destination descriptors in order.
+///
+/// Evaluation is a sparse overwrite: destination state outside the clip's
+/// channel ranges is preserved. A conversion that requires a complete base
+/// pose represents missing components as constant channels, while blending,
+/// additive animation, base-pose restoration, and root-motion extraction are
+/// handled by a player/mixer destination.
+///
+/// Example (C++): a 1,000-joint skeleton uses one destination descriptor, one
+/// retained pose destination, and a compact mapping array. Evaluation makes
+/// one ApplyProperties() call for the complete pose, not one virtual call per
+/// joint or transform component. ClipTargetForJoint is importer-produced data
+/// that maps the clip's authored node identities to skeleton joint indices.
+///
+/// \code
+/// std::vector<RadientAnimationDestinationMappingDesc> JointMappings(JointCount);
+/// for (Uint32 Joint = 0; Joint < JointCount; ++Joint)
+/// {
+///     JointMappings[Joint].ClipTargetIndex    = ClipTargetForJoint[Joint];
+///     JointMappings[Joint].DestinationElement = Joint;
+/// }
+///
+/// IRadientAnimationDestination* pPoseDestination = nullptr;
+/// pPose->QueryInterface(IID_RadientAnimationDestination, &pPoseDestination);
+///
+/// RadientAnimationDestinationDesc PoseDestination{};
+/// PoseDestination.pDestination = pPoseDestination;
+/// PoseDestination.pMappings    = JointMappings.data();
+/// PoseDestination.MappingCount = static_cast<Uint32>(JointMappings.size());
+///
+/// RadientAnimationBindingDesc BindingDesc{};
+/// BindingDesc.pDestinations    = &PoseDestination;
+/// BindingDesc.DestinationCount = 1;
+///
+/// IRadientAnimationBinding* pBinding = nullptr;
+/// const RADIENT_STATUS Status = pClip->CreateBinding(BindingDesc, &pBinding);
+/// pPoseDestination->Release(); // The binding retained it on success.
+/// \endcode
+///
+/// For a scene-node transform, the corresponding core fields are:
+///
+/// \code
+/// IRadientAnimationDestination* pSceneDestination = nullptr;
+/// pSceneWriter->QueryInterface(IID_RadientAnimationDestination,
+///                              &pSceneDestination);
+///
+/// RadientAnimationDestinationMappingDesc RootMapping{};
+/// RootMapping.ClipTargetIndex    = RootTargetIndex;
+/// RootMapping.DestinationElement = RootEntity;
+///
+/// RadientAnimationDestinationDesc SceneDestination{};
+/// SceneDestination.pDestination = pSceneDestination;
+/// SceneDestination.pMappings    = &RootMapping;
+/// SceneDestination.MappingCount = 1;
+/// \endcode
+///
+/// Root animation is the same mapping with the root joint or root entity;
+/// root-motion extraction and redirection are player/mixer policies rather
+/// than new clip or binding types.
+struct RadientAnimationBindingDesc
+{
+    /// Array of DestinationCount aggregate destinations. It must be null
+    /// exactly when DestinationCount is zero. CreateBinding() copies the array.
+    const RadientAnimationDestinationDesc* pDestinations DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pDestinations.
+    Uint32 DestinationCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientAnimationBindingDesc RadientAnimationBindingDesc;
+
+
+/// Parameters for evaluating a compiled animation binding.
+struct RadientAnimationEvaluateInfo
+{
+    /// Finite clip-local time in seconds. Each sampler holds its first value
+    /// before its first key and its last value after its last key. Looping,
+    /// ping-pong, playback-rate handling, and time wrapping belong to the
+    /// player.
+    Float64 Time DEFAULT_INITIALIZER(0.0);
+
+    /// Forwarded to each destination's single RadientAnimationApplyInfo after
+    /// all values for that destination have been sampled.
+    Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
+};
+typedef struct RadientAnimationEvaluateInfo RadientAnimationEvaluateInfo;
+
+
+// {65F04A12-2D6B-4313-9907-9F670A116244}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationDestination =
+    {0x65f04a12, 0x2d6b, 0x4313, {0x99, 0x7, 0x9f, 0x67, 0xa, 0x11, 0x62, 0x44}};
+
+// {5EFE5484-10DA-4899-8C74-B162C6D9ABD4}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationDestinationBinding =
+    {0x5efe5484, 0x10da, 0x4899, {0x8c, 0x74, 0xb1, 0x62, 0xc6, 0xd9, 0xab, 0xd4}};
+
 // {CF8BE652-BE67-46C8-AC57-F016048B46EA}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationClipAsset =
     {0xcf8be652, 0xbe67, 0x46c8, {0xac, 0x57, 0xf0, 0x16, 0x4, 0x8b, 0x46, 0xea}};
+
+// {F228417D-614D-4EAB-A51C-2EE97CB4AC20}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
+    {0xf228417d, 0x614d, 0x4eab, {0xa5, 0x1c, 0x2e, 0xe9, 0x7c, 0xb4, 0xac, 0x20}};
+
+
+#define DILIGENT_INTERFACE_NAME IRadientAnimationDestination
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientAnimationDestinationInclusiveMethods \
+    IObjectInclusiveMethods;                         \
+    IRadientAnimationDestinationMethods RadientAnimationDestination
+
+// clang-format off
+
+/// Factory for destination-specific compiled animation bindings.
+///
+/// This interface is the only runtime extension point required by the generic
+/// animation system. Built-in skeleton-pose, scene-writer, and morph-weight
+/// objects will expose it through QueryInterface(); custom destinations may
+/// implement it for material, light, camera, application, or extension
+/// properties. The interface is externally synchronized.
+///
+/// Destination binding creation is a cold operation. The returned object owns
+/// any optimized element/property lookup tables and releases them with ordinary
+/// IObject lifetime management. Applying values is one hot virtual call on that
+/// object per evaluation, never one call per element or property.
+DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
+{
+    /// Compiles a complete, ordered batch of property ranges.
+    ///
+    /// pProperties contains PropertyCount requests derived from every channel
+    /// mapped to this destination descriptor. pResolvedProperties contains the
+    /// same number of output records in corresponding order. PropertyCount must
+    /// be nonzero and both pointers must be non-null. ppBinding must be non-null
+    /// and *ppBinding must be null.
+    ///
+    /// On success, every output contains the semantic needed to interpolate the
+    /// corresponding property, and ppBinding receives a strong reference to an
+    /// IRadientAnimationDestinationBinding that retains this destination and
+    /// owns the compiled plan. The child binding preserves the property order
+    /// used here. This method does not retain either caller-owned array.
+    ///
+    /// The operation is all-or-nothing: an implementation must resolve every
+    /// request or return a failure without creating a binding. It rejects
+    /// requests that resolve to overlapping physical storage, even when
+    /// different schemas or property IDs alias that storage. Outputs are
+    /// unspecified on failure.
+    ///
+    /// Returns RADIENT_STATUS_NOT_FOUND when a referenced runtime element no
+    /// longer exists, RADIENT_STATUS_UNSUPPORTED when the destination does not
+    /// expose the requested schema/property or cannot animate the requested
+    /// layout, and RADIENT_STATUS_INVALID_ARGUMENT for malformed input.
+    ///
+    /// On failure, *ppBinding remains null. Implementations return only
+    /// RADIENT_STATUS_OK or a negative status; other nonnegative statuses are
+    /// not valid for this method.
+    ///
+    /// \return RADIENT_STATUS_OK when every request was compiled, or a negative
+    ///         RADIENT_STATUS value on failure.
+    VIRTUAL RADIENT_STATUS METHOD(CreateBinding)(THIS_
+                                                  const RadientAnimationPropertyBindingDesc* pProperties,
+                                                  Uint32                                     PropertyCount,
+                                                  RadientAnimationResolvedPropertyDesc*      pResolvedProperties,
+                                                  IRadientAnimationDestinationBinding**      ppBinding) PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientAnimationDestination_CreateBinding(This, ...) CALL_IFACE_METHOD(RadientAnimationDestination, CreateBinding, This, __VA_ARGS__)
+
+#endif
+
+// clang-format on
+
+
+#define DILIGENT_INTERFACE_NAME IRadientAnimationDestinationBinding
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientAnimationDestinationBindingInclusiveMethods \
+    IObjectInclusiveMethods;                                \
+    IRadientAnimationDestinationBindingMethods RadientAnimationDestinationBinding
+
+// clang-format off
+
+/// Destination-owned compiled plan for one ordered property batch.
+///
+/// The object retains its parent destination and owns every destination-specific
+/// lookup table or snapshot required by the plan. It is externally synchronized.
+/// If an element is destroyed after binding, it must never be silently replaced
+/// by a newly created element; ApplyProperties() returns RADIENT_STATUS_NOT_FOUND
+/// without applying any value, and the caller recreates the outer binding.
+DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
+{
+    /// Applies one complete ordered batch of concrete values.
+    ///
+    /// Info.pUpdates must contain exactly one entry for every property supplied
+    /// when this object was created, in the same order. The method validates the
+    /// complete batch and every referenced runtime element before modifying the
+    /// destination. A negative return value leaves both primary and derived
+    /// destination state unchanged. Every input value is consumed or copied
+    /// before this method returns.
+    ///
+    /// State outside the property ranges used to create this binding is
+    /// preserved. Applying several bindings to the same underlying state is
+    /// ordered overwrite, not blending. A player may instead bind clips to a
+    /// mixer or root-motion collector that implements IRadientAnimationDestination.
+    ///
+    /// When Info.UpdateDerivedState is true, any global pose, scene-graph,
+    /// material, or similar derived update is performed once after the complete
+    /// property batch has been written.
+    ///
+    /// Implementations return only RADIENT_STATUS_OK,
+    /// RADIENT_STATUS_NO_CHANGE, or a negative status; other nonnegative
+    /// statuses are not valid for this method.
+    ///
+    /// \return RADIENT_STATUS_OK for a successfully applied batch,
+    ///         RADIENT_STATUS_NO_CHANGE when an implementation elects to detect
+    ///         identical values, RADIENT_STATUS_NOT_FOUND when a bound element
+    ///         no longer exists, or another negative status on failure.
+    VIRTUAL RADIENT_STATUS METHOD(ApplyProperties)(THIS_
+                                                    const RadientAnimationApplyInfo REF Info) PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientAnimationDestinationBinding_ApplyProperties(This, ...) CALL_IFACE_METHOD(RadientAnimationDestinationBinding, ApplyProperties, This, __VA_ARGS__)
+
+#endif
+
+// clang-format on
 
 
 #define DILIGENT_INTERFACE_NAME IRadientAnimationClipAsset
@@ -444,6 +890,21 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationClipAsset, IRadientAsset)
     /// Returns the immutable clip description. The reference and all data it
     /// references remain valid for the lifetime of the clip asset.
     VIRTUAL const RadientAnimationClipDesc REF METHOD(GetDesc)(THIS) CONST PURE;
+
+    /// Compiles BindingDesc against this clip. The method invokes the
+    /// destination's CreateBinding() once for each destination descriptor. On
+    /// success, ppBinding receives a strong reference to a binding that retains
+    /// this clip and every compiled destination binding. The caller retains
+    /// ownership of BindingDesc and its arrays. ppBinding must not be null and
+    /// *ppBinding must be null. On failure, *ppBinding remains null and every
+    /// destination binding created earlier in the operation is released.
+    ///
+    /// \return RADIENT_STATUS_OK when the binding was compiled,
+    ///         RADIENT_STATUS_INVALID_ARGUMENT when the descriptor or output
+    ///         pointer is invalid, or the failure returned by a destination.
+    VIRTUAL RADIENT_STATUS METHOD(CreateBinding)(THIS_
+                                                  const RadientAnimationBindingDesc REF BindingDesc,
+                                                  IRadientAnimationBinding**            ppBinding) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -451,7 +912,62 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientAnimationClipAsset_GetDesc(This) CALL_IFACE_METHOD(RadientAnimationClipAsset, GetDesc, This)
+#    define IRadientAnimationClipAsset_GetDesc(This)            CALL_IFACE_METHOD(RadientAnimationClipAsset, GetDesc,       This)
+#    define IRadientAnimationClipAsset_CreateBinding(This, ...) CALL_IFACE_METHOD(RadientAnimationClipAsset, CreateBinding, This, __VA_ARGS__)
+
+#endif
+
+// clang-format on
+
+
+#define DILIGENT_INTERFACE_NAME IRadientAnimationBinding
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientAnimationBindingInclusiveMethods \
+    IObjectInclusiveMethods;                     \
+    IRadientAnimationBindingMethods RadientAnimationBinding
+
+// clang-format off
+
+/// Compiled connection between an immutable clip and runtime destinations.
+///
+/// A binding owns destination-specific sampling and write plans and may keep
+/// reusable scratch memory. Evaluate performs no schema, object, or property
+/// lookup and uses bulk destination updates. The binding and all of its
+/// destinations are externally synchronized and must not be accessed
+/// concurrently. If evaluation of a multi-destination binding fails, updates
+/// already applied to earlier destinations are not rolled back.
+DILIGENT_BEGIN_INTERFACE(IRadientAnimationBinding, IObject)
+{
+    /// Returns a borrowed pointer to the clip retained by this binding.
+    VIRTUAL IRadientAnimationClipAsset* METHOD(GetClip)(THIS) CONST PURE;
+
+    /// Samples the clip and writes all compiled destinations according to Info.
+    /// Each distinct (sampler, value-semantic) pair is sampled once, and each
+    /// compiled destination binding receives one ApplyProperties() call in
+    /// descriptor order.
+    /// No schema, object, property, or interface lookup occurs during this
+    /// method. Info.Time must be finite.
+    ///
+    /// Evaluation stops at the first destination failure. Updates already
+    /// applied to earlier destinations are not rolled back, and later
+    /// destinations are not called.
+    ///
+    /// \return RADIENT_STATUS_OK when at least one destination changed,
+    ///         RADIENT_STATUS_NO_CHANGE when the binding is empty or every
+    ///         destination reports no change, RADIENT_STATUS_INVALID_ARGUMENT
+    ///         when Info is invalid, or a destination failure.
+    VIRTUAL RADIENT_STATUS METHOD(Evaluate)(THIS_
+                                            const RadientAnimationEvaluateInfo REF Info) PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientAnimationBinding_GetClip(This)       CALL_IFACE_METHOD(RadientAnimationBinding, GetClip,  This)
+#    define IRadientAnimationBinding_Evaluate(This, ...) CALL_IFACE_METHOD(RadientAnimationBinding, Evaluate, This, __VA_ARGS__)
 
 #endif
 

@@ -720,6 +720,18 @@ public:
         return m_Data.GetDesc();
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateBinding(const RadientAnimationBindingDesc&,
+                                                            IRadientAnimationBinding** ppBinding) override final
+    {
+        if (ppBinding == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        DEV_CHECK_ERR(*ppBinding == nullptr, "Output animation binding pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+        *ppBinding = nullptr;
+        // Runtime binding construction is intentionally deferred until the public API is approved.
+        return RADIENT_STATUS_UNSUPPORTED;
+    }
+
 private:
     PackedAnimationClipData m_Data;
 };
