@@ -45,6 +45,7 @@ typedef struct IRadientSceneAsset              IRadientSceneAsset;
 typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
 typedef struct IRadientSkinAsset               IRadientSkinAsset;
 typedef struct IRadientSkeletonAnimationAsset  IRadientSkeletonAnimationAsset;
+typedef struct IRadientAnimationClipAsset      IRadientAnimationClipAsset;
 typedef struct IRadientMorphTargetWeights      IRadientMorphTargetWeights;
 typedef struct IDeviceContext                  IDeviceContext;
 
@@ -52,6 +53,7 @@ typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMateri
 typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
 typedef struct RadientSkinDesc                             RadientSkinDesc;
 typedef struct RadientSkeletonAnimationDesc                RadientSkeletonAnimationDesc;
+typedef struct RadientAnimationClipDesc                    RadientAnimationClipDesc;
 typedef struct RadientMorphTargetCreateInfo                RadientMorphTargetCreateInfo;
 typedef struct RadientMorphTargetDesc                      RadientMorphTargetDesc;
 
@@ -82,7 +84,10 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_SKIN,
 
     /// Immutable animation clip targeting a skeleton hierarchy.
-    RADIENT_ASSET_TYPE_SKELETON_ANIMATION
+    RADIENT_ASSET_TYPE_SKELETON_ANIMATION,
+
+    /// Immutable, unbound animation clip.
+    RADIENT_ASSET_TYPE_ANIMATION_CLIP
 };
 
 /// Authored scene/model source format.
@@ -677,6 +682,27 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// is executing.
     VIRTUAL RADIENT_STATUS METHOD(Stop)(THIS_
                                         IDeviceContext* pContext) PURE;
+
+    /// Creates an immutable, unbound animation clip.
+    ///
+    /// The manager validates structural and native-storage invariants and
+    /// copies the name, descriptor tables, target names, keyframe times, and
+    /// value bytes before returning. It does not resolve target schemas or
+    /// validate property-specific value compatibility; those checks occur when
+    /// the clip is bound to a runtime instance.
+    ///
+    /// \param [in] ClipDesc - Clip description to validate and copy. Its data
+    ///                        only needs to remain valid for this call.
+    /// \param [out] ppClip  - Address of a null pointer that receives a strong
+    ///                        reference on success. It remains null on failure.
+    ///
+    /// \return RADIENT_STATUS_OK on success, RADIENT_STATUS_INVALID_ARGUMENT
+    ///         for a malformed description or output pointer,
+    ///         RADIENT_STATUS_INVALID_OPERATION after Stop(), or
+    ///         RADIENT_STATUS_FAILED if storage creation fails.
+    VIRTUAL RADIENT_STATUS METHOD(CreateAnimationClip)(THIS_
+                                                       const RadientAnimationClipDesc REF ClipDesc,
+                                                       IRadientAnimationClipAsset**       ppClip) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -695,6 +721,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 #    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateAnimationClip(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateAnimationClip, This, __VA_ARGS__)
 
 #endif
 

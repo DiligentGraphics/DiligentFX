@@ -165,6 +165,12 @@ public:
         return RADIENT_STATUS_OK;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateAnimationClip(const RadientAnimationClipDesc&,
+                                                                  IRadientAnimationClipAsset**) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     Uint32                         VertexCount     = 0;
     bool                           HasVertexColors = false;
     std::vector<RadientColorRGBA8> CapturedVertexColors;

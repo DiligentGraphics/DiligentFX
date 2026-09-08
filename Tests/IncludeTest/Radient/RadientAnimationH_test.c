@@ -28,13 +28,43 @@
 
 void RadientAnimation_C_UseTypes(void)
 {
-    RadientAnimationTarget        Target = {0};
-    RadientAnimationRegistryEntry Entry  = {0};
-    RadientAnimationRegistryState State  = {0};
+    RadientAnimationSchemaID      Schema     = {0};
+    RadientAnimationValueDesc     Value      = {0};
+    RadientAnimationSamplerDesc   Sampler    = {0};
+    RadientAnimationTargetDesc    ClipTarget = {0};
+    RadientAnimationChannelDesc   Channel    = {0};
+    RadientAnimationClipDesc      Clip       = {0};
+    RadientAnimationTarget        Target     = {0};
+    RadientAnimationRegistryEntry Entry      = {0};
+    RadientAnimationRegistryState State      = {0};
 
+    Schema                    = InvalidRadientAnimationSchemaID;
+    Value.Type                = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+    Value.ArraySize           = 1;
+    Sampler.Value             = Value;
+    Sampler.Interpolation     = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    Sampler.ValueDataSize     = 0;
+    ClipTarget.Schema         = Schema;
+    ClipTarget.Object         = InvalidRadientAnimationObject;
+    ClipTarget.Name           = "Target";
+    Channel.TargetIndex       = InvalidRadientAnimationTargetIndex;
+    Channel.Property          = InvalidRadientAnimationPropertyID;
+    Channel.FirstArrayElement = 0;
+    Channel.SamplerIndex      = InvalidRadientAnimationSamplerIndex;
+    Clip.Name                 = "Clip";
+
+    (void)Sampler;
+    (void)ClipTarget;
+    (void)Channel;
+    (void)Clip;
     (void)Target;
     (void)Entry;
     (void)State;
+}
+
+void RadientAnimation_C_TestClipMacros(IRadientAnimationClipAsset* pClip)
+{
+    (void)IRadientAnimationClipAsset_GetDesc(pClip);
 }
 
 void RadientAnimation_C_TestMacros(IRadientAnimationRegistry*      pRegistry,

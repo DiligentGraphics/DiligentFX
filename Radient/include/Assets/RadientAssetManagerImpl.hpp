@@ -113,6 +113,9 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateAnimationClip(const RadientAnimationClipDesc& ClipDesc,
+                                                                  IRadientAnimationClipAsset**    ppClip) override final;
+
     // Must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);

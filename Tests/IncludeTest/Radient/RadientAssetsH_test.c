@@ -102,3 +102,10 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
     (void)pScene;
     (void)Status;
 }
+
+void RadientAssets_C_TestAnimationClipFactory(IRadientAssetManager*           pAssetManager,
+                                              const RadientAnimationClipDesc* pClipDesc,
+                                              IRadientAnimationClipAsset**    ppClip)
+{
+    (void)IRadientAssetManager_CreateAnimationClip(pAssetManager, pClipDesc, ppClip);
+}

@@ -4,6 +4,7 @@ project(Radient CXX)
 
 set(SOURCE
     src/Animation/RadientAnimationRegistryImpl.cpp
+    src/Assets/RadientAnimation.cpp
     src/Assets/RadientAssetManagerImpl.cpp
     src/Assets/RadientAssetResolver.cpp
     src/Assets/RadientAssetValidation.cpp

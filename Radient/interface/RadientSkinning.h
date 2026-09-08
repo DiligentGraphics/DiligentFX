@@ -123,14 +123,18 @@ DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_INTERPOLATION, Uint8)
     /// Holds the preceding keyframe value until the next keyframe.
     RADIENT_ANIMATION_INTERPOLATION_STEP = 0,
 
-    /// Linearly interpolates vectors and spherically interpolates rotations.
+    /// Applies the target property's linear interpolation semantics. Numeric
+    /// values are normally interpolated component-wise; a rotation property
+    /// may instead use spherical interpolation of quaternion storage.
     RADIENT_ANIMATION_INTERPOLATION_LINEAR,
 
     /// Evaluates a cubic Hermite spline using authored incoming and outgoing
-    /// tangents.
+    /// tangents. Tangents are derivatives per second; the target property's
+    /// schema defines any additional semantic interpretation.
     RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
 
-    /// Number of animation interpolation modes.
+    /// Sentinel equal to the number of animation interpolation modes. This is
+    /// not a valid interpolation mode.
     RADIENT_ANIMATION_INTERPOLATION_COUNT
 };
 

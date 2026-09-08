@@ -38,6 +38,7 @@ static_assert(RADIENT_ASSET_TYPE_MATERIAL_DEFINITION == 4, "Unexpected RADIENT_A
 static_assert(RADIENT_ASSET_TYPE_SKELETON == 5, "Unexpected RADIENT_ASSET_TYPE_SKELETON value");
 static_assert(RADIENT_ASSET_TYPE_SKIN == 6, "Unexpected RADIENT_ASSET_TYPE_SKIN value");
 static_assert(RADIENT_ASSET_TYPE_SKELETON_ANIMATION == 7, "Unexpected RADIENT_ASSET_TYPE_SKELETON_ANIMATION value");
+static_assert(RADIENT_ASSET_TYPE_ANIMATION_CLIP == 8, "Unexpected RADIENT_ASSET_TYPE_ANIMATION_CLIP value");
 
 static_assert(RADIENT_SCENE_FORMAT_AUTO == 0, "Unexpected RADIENT_SCENE_FORMAT_AUTO value");
 static_assert(RADIENT_SCENE_FORMAT_GLTF == 1, "Unexpected RADIENT_SCENE_FORMAT_GLTF value");
@@ -71,4 +72,11 @@ void RadientAssets_CPP_UseMeshAsset(IRadientMeshAsset* pMesh)
     (void)pMesh->CreateMorphTargetWeights(&pWeights);
     (void)Desc;
     (void)pWeights;
+}
+
+void RadientAssets_CPP_UseAnimationClipFactory(IRadientAssetManager*           pAssetManager,
+                                               const RadientAnimationClipDesc& ClipDesc,
+                                               IRadientAnimationClipAsset**    ppClip)
+{
+    (void)pAssetManager->CreateAnimationClip(ClipDesc, ppClip);
 }
