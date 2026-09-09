@@ -1392,4 +1392,715 @@ TEST_F(RadientAnimationBindingTest, RetainsClipDestinationAndChildBinding)
     EXPECT_TRUE(State->DestinationDestroyed);
 }
 
+class RadientSkeletonPoseAnimationDestinationTest : public RadientAnimationBindingTest
+{
+protected:
+    void SetUp() override
+    {
+        RadientAnimationBindingTest::SetUp();
+
+        m_Joints[0].LocalRestTransform.Position = {1.f, 2.f, 3.f};
+        m_Joints[0].LocalRestTransform.Scale    = {1.f, 2.f, 3.f};
+
+        m_Joints[1].ParentJointIndex            = 0;
+        m_Joints[1].LocalRestTransform.Position = {4.f, 5.f, 6.f};
+        m_Joints[1].LocalRestTransform.Scale    = {2.f, 3.f, 4.f};
+
+        m_Joints[2].LocalRestTransform.Position = {7.f, 8.f, 9.f};
+        m_Joints[2].LocalRestTransform.Rotation = {0.70710678f, 0.f, 0.f, 0.70710678f};
+        m_Joints[2].LocalRestTransform.Scale    = {3.f, 4.f, 5.f};
+
+        RadientSkeletonDesc SkeletonDesc;
+        SkeletonDesc.Name       = "Animation destination skeleton";
+        SkeletonDesc.pJoints    = m_Joints.data();
+        SkeletonDesc.JointCount = static_cast<Uint32>(m_Joints.size());
+        ASSERT_EQ(pAssetManager->CreateSkeleton(SkeletonDesc, m_pSkeleton.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        ASSERT_NE(m_pSkeleton, nullptr);
+        ASSERT_EQ(m_pSkeleton->CreatePose(m_pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_NE(m_pPose, nullptr);
+
+        m_pPose->QueryInterface(IID_RadientAnimationDestination, m_pDestination.GetAddressOfEmpty());
+        ASSERT_NE(m_pDestination, nullptr);
+    }
+
+    static RadientAnimationPropertyBindingDesc MakeNodeProperty(
+        RadientAnimationDestinationElement Element,
+        RadientAnimationPropertyID         Property,
+        RADIENT_ANIMATION_VALUE_TYPE       Type,
+        Uint32                             FirstArrayElement = 0,
+        Uint32                             ArraySize         = 1,
+        RadientAnimationSchemaID           Schema            = RadientNodeAnimationSchemaID)
+    {
+        RadientAnimationPropertyBindingDesc Desc;
+        Desc.Schema             = Schema;
+        Desc.DestinationElement = Element;
+        Desc.Property           = Property;
+        Desc.FirstArrayElement  = FirstArrayElement;
+        Desc.Value.Type         = Type;
+        Desc.Value.ArraySize    = ArraySize;
+        return Desc;
+    }
+
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> CreateDestinationBinding(
+        const std::vector<RadientAnimationPropertyBindingDesc>& Properties)
+    {
+        std::vector<RadientAnimationResolvedPropertyDesc>  Resolved(Properties.size());
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(
+                      Properties.data(),
+                      static_cast<Uint32>(Properties.size()),
+                      Resolved.data(),
+                      pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        return pBinding;
+    }
+
+    std::array<RadientTransform, 3> GetLocalTransforms() const
+    {
+        std::array<RadientTransform, 3> Transforms{};
+        EXPECT_EQ(m_pPose->GetJointLocalTransforms(
+                      0,
+                      static_cast<Uint32>(Transforms.size()),
+                      Transforms.data()),
+                  RADIENT_STATUS_OK);
+        return Transforms;
+    }
+
+protected:
+    std::array<RadientSkeletonJointDesc, 3>     m_Joints{};
+    RefCntAutoPtr<IRadientSkeletonAsset>        m_pSkeleton;
+    RefCntAutoPtr<IRadientSkeletonPose>         m_pPose;
+    RefCntAutoPtr<IRadientAnimationDestination> m_pDestination;
+};
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, PoseExposesAnimationDestination)
+{
+    RefCntAutoPtr<IObject> pPoseIdentity;
+    RefCntAutoPtr<IObject> pDestinationIdentity;
+    m_pPose->QueryInterface(IID_Unknown, pPoseIdentity.GetAddressOfEmpty());
+    m_pDestination->QueryInterface(IID_Unknown, pDestinationIdentity.GetAddressOfEmpty());
+    ASSERT_NE(pPoseIdentity, nullptr);
+    ASSERT_NE(pDestinationIdentity, nullptr);
+    EXPECT_EQ(pPoseIdentity, pDestinationIdentity);
+
+    RefCntAutoPtr<IRadientSkeletonPose> pRoundTripPose;
+    m_pDestination->QueryInterface(IID_RadientSkeletonPose, pRoundTripPose.GetAddressOfEmpty());
+    EXPECT_EQ(pRoundTripPose, m_pPose);
+    pRoundTripPose.Release();
+    pPoseIdentity.Release();
+    pDestinationIdentity.Release();
+
+    IRadientSkeletonPose* const pRawPose = m_pPose;
+    m_pPose.Release();
+    m_pSkeleton.Release();
+
+    RadientTransform Transform;
+    EXPECT_EQ(pRawPose->GetJointLocalTransforms(0, 1, &Transform), RADIENT_STATUS_OK);
+    EXPECT_EQ(Transform, m_Joints[0].LocalRestTransform);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesNodeTransformProperties)
+{
+    const std::array Properties = {
+        MakeNodeProperty(2, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+    ASSERT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, AppliesMappedJointPropertiesInOneBatch)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             TransformTarget    = Builder.AddTarget(12, RadientNodeAnimationSchemaID);
+    const Uint32             RotationTarget     = Builder.AddTarget(47, RadientNodeAnimationSchemaID);
+    const Uint32             TranslationSampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{10.f, 20.f, 30.f}, {20.f, 40.f, 60.f}});
+    const Uint32 ScaleSampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{2.f, 4.f, 6.f}, {4.f, 6.f, 8.f}});
+    const Uint32 RotationSampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 0.f}});
+    Builder.AddChannel(TransformTarget, RadientNodeTranslationProperty, TranslationSampler);
+    Builder.AddChannel(RotationTarget, RadientNodeRotationProperty, RotationSampler);
+    Builder.AddChannel(TransformTarget, RadientNodeScaleProperty, ScaleSampler);
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    std::array<RadientAnimationDestinationMappingDesc, 2> Mappings{};
+    Mappings[0].ClipTargetIndex                      = TransformTarget;
+    Mappings[0].DestinationElement                   = 2;
+    Mappings[1].ClipTargetIndex                      = RotationTarget;
+    Mappings[1].DestinationElement                   = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip, m_pDestination, {Mappings[0], Mappings[1]});
+    ASSERT_NE(pBinding, nullptr);
+
+    const Uint64                 InitialVersion = m_pPose->GetVersion();
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+
+    const std::array<RadientTransform, 3> Transforms = GetLocalTransforms();
+    EXPECT_EQ(Transforms[0].Position, m_Joints[0].LocalRestTransform.Position);
+    ExpectQuaternionNear(Transforms[0].Rotation, {0.f, 0.f, 0.70710678f, 0.70710678f});
+    EXPECT_EQ(Transforms[0].Scale, m_Joints[0].LocalRestTransform.Scale);
+    EXPECT_EQ(Transforms[1], m_Joints[1].LocalRestTransform);
+    ExpectFloat3Near(Transforms[2].Position, {15.f, 30.f, 45.f});
+    ExpectQuaternionNear(Transforms[2].Rotation, m_Joints[2].LocalRestTransform.Rotation);
+    ExpectFloat3Near(Transforms[2].Scale, {3.f, 5.f, 7.f});
+
+    std::array<RadientMatrix4x4, 3> GlobalMatrices{};
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(
+                  0,
+                  static_cast<Uint32>(GlobalMatrices.size()),
+                  GlobalMatrices.data()),
+              RADIENT_STATUS_OK);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, DefersDerivedStateUpdate)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(1, RadientNodeAnimationSchemaID);
+    const Uint32             Sampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{10.f, 0.f, 0.f}, {20.f, 0.f, 0.f}});
+    Builder.AddChannel(Target, RadientNodeTranslationProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 1;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    const Uint64                 InitialVersion = m_pPose->GetVersion();
+    RadientAnimationEvaluateInfo Info;
+    Info.Time               = 0.5f;
+    Info.UpdateDerivedState = False;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(1, 1, &Matrix), RADIENT_STATUS_PENDING);
+
+    Info.UpdateDerivedState = True;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(1, 1, &Matrix), RADIENT_STATUS_OK);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, AppliesIdenticalValuesWithoutChangeDetection)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(1, RadientNodeAnimationSchemaID);
+    const Uint32             Sampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f},
+        {{10.f, 20.f, 30.f}});
+    Builder.AddChannel(Target, RadientNodeTranslationProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 1;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    const Uint64                 InitialVersion = m_pPose->GetVersion();
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 2);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, PreservesExternalSparseChangesBetweenEvaluations)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(1, RadientNodeAnimationSchemaID);
+    const Uint32             Sampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{10.f, 0.f, 0.f}, {20.f, 0.f, 0.f}});
+    Builder.AddChannel(Target, RadientNodeTranslationProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+    ASSERT_EQ(m_pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    std::array<RadientTransform, 3> ExternalTransforms = GetLocalTransforms();
+    ExternalTransforms[0].Scale                        = {9.f, 8.f, 7.f};
+    ExternalTransforms[2].Position                     = {100.f, 200.f, 300.f};
+    ASSERT_EQ(pWriter->SetJointLocalTransforms(
+                  0,
+                  static_cast<Uint32>(ExternalTransforms.size()),
+                  ExternalTransforms.data()),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(True), RADIENT_STATUS_OK);
+
+    Info.Time = 1.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    const std::array<RadientTransform, 3> Transforms = GetLocalTransforms();
+    EXPECT_EQ(Transforms[0].Position, (RadientFloat3{20.f, 0.f, 0.f}));
+    EXPECT_EQ(Transforms[0].Scale, ExternalTransforms[0].Scale);
+    EXPECT_EQ(Transforms[2], ExternalTransforms[2]);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, BindingRetainsPoseAndClip)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(1, RadientNodeAnimationSchemaID);
+    const Uint32             Sampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{10.f, 0.f, 0.f}, {20.f, 0.f, 0.f}});
+    Builder.AddChannel(Target, RadientNodeTranslationProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    IRadientAnimationClipAsset* const pRawClip = pClip;
+    IRadientSkeletonPose* const       pRawPose = m_pPose;
+    pClip.Release();
+    m_pDestination.Release();
+    m_pPose.Release();
+    m_pSkeleton.Release();
+
+    EXPECT_EQ(pBinding->GetClip(), pRawClip);
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 1.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    RadientTransform Transform;
+    ASSERT_EQ(pRawPose->GetJointLocalTransforms(0, 1, &Transform), RADIENT_STATUS_OK);
+    EXPECT_EQ(Transform.Position, (RadientFloat3{20.f, 0.f, 0.f}));
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, DestinationBindingRetainsPose)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    IRadientSkeletonPose* const pRawPose = m_pPose;
+    m_pDestination.Release();
+    m_pPose.Release();
+    m_pSkeleton.Release();
+
+    const RadientFloat3                Value = {10.f, 20.f, 30.f};
+    RadientAnimationPropertyUpdateDesc Update;
+    Update.pValue        = &Value;
+    Update.ValueDataSize = sizeof(Value);
+    RadientAnimationApplyInfo Info;
+    Info.pUpdates    = &Update;
+    Info.UpdateCount = 1;
+    ASSERT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_OK);
+
+    RadientTransform Transform;
+    ASSERT_EQ(pRawPose->GetJointLocalTransforms(0, 1, &Transform), RADIENT_STATUS_OK);
+    EXPECT_EQ(Transform.Position, Value);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsEmptyPropertyBindingRequest)
+{
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(nullptr, 0, nullptr, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyBindingArray)
+{
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(nullptr, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullResolvedPropertyArray)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, nullptr, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullDestinationBindingOutput)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc Resolved;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, nullptr),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNonNullDestinationBindingOutputWithoutOverwritingIt)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    IRadientAnimationDestinationBinding* pOutput = pBinding;
+    RadientAnimationResolvedPropertyDesc Resolved;
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  &Resolved,
+                  &pOutput),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pOutput, pBinding.RawPtr());
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidSchemaIdentifier)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0,
+        RadientNodeTranslationProperty,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        0,
+        1,
+        InvalidRadientAnimationSchemaID);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidPropertyIdentifier)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, InvalidRadientAnimationPropertyID, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidAnimationValueType)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsEmptyAnimationValueArray)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 0);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnaddressablePropertyTableOnWin32)
+{
+    if (sizeof(size_t) != sizeof(Uint32))
+        GTEST_SKIP() << "The property-count boundary is specific to 32-bit address spaces";
+
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  &Property,
+                  std::numeric_limits<Uint32>::max(),
+                  &Resolved,
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnsupportedSchema)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0,
+        RadientNodeTranslationProperty,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        0,
+        1,
+        TestAnimationSchemaID);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnsupportedNodeProperty)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsOutOfRangeJointIndex)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        static_cast<Uint32>(m_Joints.size()),
+        RadientNodeTranslationProperty,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_NOT_FOUND);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNonRepresentableJointIndex)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        static_cast<Uint64>(std::numeric_limits<Uint32>::max()) + 1,
+        RadientNodeTranslationProperty,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_NOT_FOUND);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongNodePropertyValueType)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongRotationValueType)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongScaleValueType)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNodePropertyArrayOffset)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNodePropertyArraySize)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsDuplicatePhysicalWrites)
+{
+    const std::array Properties = {
+        MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateAtomically)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    const std::array<RadientTransform, 3>             Before        = GetLocalTransforms();
+    const Uint64                                      BeforeVersion = m_pPose->GetVersion();
+    const RadientFloat3                               Translation   = {10.f, 20.f, 30.f};
+    const RadientFloat3                               Scale         = {7.f, 8.f, 9.f};
+    std::array<RadientAnimationPropertyUpdateDesc, 2> Updates{};
+    Updates[0].pValue        = &Translation;
+    Updates[0].ValueDataSize = sizeof(Translation);
+    Updates[1].ValueDataSize = sizeof(Scale);
+
+    RadientAnimationApplyInfo Info;
+    Info.pUpdates    = Updates.data();
+    Info.UpdateCount = static_cast<Uint32>(Updates.size());
+    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(GetLocalTransforms(), Before);
+    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
+
+    Updates[1].pValue = &Scale;
+    ASSERT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_OK);
+    const std::array<RadientTransform, 3> After = GetLocalTransforms();
+    EXPECT_EQ(After[0].Position, Translation);
+    EXPECT_EQ(After[1].Scale, Scale);
+    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion + 1);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongPropertyUpdateSizeAtomically)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    const std::array<RadientTransform, 3>             Before        = GetLocalTransforms();
+    const Uint64                                      BeforeVersion = m_pPose->GetVersion();
+    const RadientFloat3                               Translation   = {10.f, 20.f, 30.f};
+    const RadientFloat3                               Scale         = {7.f, 8.f, 9.f};
+    std::array<RadientAnimationPropertyUpdateDesc, 2> Updates{};
+    Updates[0].pValue        = &Translation;
+    Updates[0].ValueDataSize = sizeof(Translation);
+    Updates[1].pValue        = &Scale;
+    Updates[1].ValueDataSize = sizeof(Scale) - 1;
+
+    RadientAnimationApplyInfo Info;
+    Info.pUpdates    = Updates.data();
+    Info.UpdateCount = static_cast<Uint32>(Updates.size());
+    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(GetLocalTransforms(), Before);
+    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateArrayAtomically)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    const std::array<RadientTransform, 3> Before        = GetLocalTransforms();
+    const Uint64                          BeforeVersion = m_pPose->GetVersion();
+    RadientAnimationApplyInfo             Info;
+    Info.UpdateCount = 1;
+    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(GetLocalTransforms(), Before);
+    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsMismatchedPropertyUpdateCountAtomically)
+{
+    const std::vector Properties = {
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
+    ASSERT_NE(pBinding, nullptr);
+
+    const std::array<RadientTransform, 3> Before        = GetLocalTransforms();
+    const Uint64                          BeforeVersion = m_pPose->GetVersion();
+    const RadientFloat3                   Value         = {10.f, 20.f, 30.f};
+    RadientAnimationPropertyUpdateDesc    Update;
+    Update.pValue        = &Value;
+    Update.ValueDataSize = sizeof(Value);
+    RadientAnimationApplyInfo Info;
+    Info.pUpdates = &Update;
+    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(GetLocalTransforms(), Before);
+    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
+}
+
 } // namespace

@@ -321,6 +321,13 @@ DILIGENT_END_INTERFACE
 ///
 /// The pose retains its skeleton. A pose and all writers created from it are not
 /// thread-safe and must not be accessed concurrently.
+///
+/// Radient-created poses expose the generic animation destination interface
+/// described by RadientAnimation.h. Applying an animation binding sparsely
+/// preserves all unmentioned joints and transform components. Direct animation
+/// property updates are copied without value validation or normalization; the
+/// caller is responsible for finite translations and scales and normalized
+/// rotations.
 DILIGENT_BEGIN_INTERFACE(IRadientSkeletonPose, IObject)
 {
     /// Returns a borrowed pointer to the skeleton retained by the pose.

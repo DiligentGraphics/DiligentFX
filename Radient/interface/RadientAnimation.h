@@ -750,10 +750,12 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// Factory for destination-specific compiled animation bindings.
 ///
 /// This interface is the only runtime extension point required by the generic
-/// animation system. Built-in skeleton-pose, scene-writer, and morph-weight
-/// objects will expose it through QueryInterface(); custom destinations may
-/// implement it for material, light, camera, application, or extension
-/// properties. The interface is externally synchronized.
+/// animation system. Radient-created skeleton poses expose it through
+/// QueryInterface() for the node translation, rotation, and scale properties;
+/// other built-in objects may expose it as their animation support is added.
+/// Custom destinations may implement it for material, light, camera,
+/// application, or extension properties. The interface is externally
+/// synchronized.
 ///
 /// Destination binding creation is a cold operation. The returned object owns
 /// any optimized element/property lookup tables and releases them with ordinary
@@ -833,10 +835,12 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     ///
     /// Info.pUpdates must contain exactly one entry for every property supplied
     /// when this object was created, in the same order. The method validates the
-    /// complete batch and every referenced runtime element before modifying the
-    /// destination. A negative return value leaves both primary and derived
-    /// destination state unchanged. Every input value is consumed or copied
-    /// before this method returns.
+    /// complete batch structure and every referenced runtime element before
+    /// modifying the destination. Update values must already satisfy the
+    /// resolved schema contract; implementations are not required to validate
+    /// or normalize individual values. A negative return value leaves both
+    /// primary and derived destination state unchanged. Every input value is
+    /// consumed or copied before this method returns.
     ///
     /// State outside the property ranges used to create this binding is
     /// preserved. Applying several bindings to the same underlying state is
@@ -953,10 +957,12 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationBinding, IObject)
     /// applied to earlier destinations are not rolled back, and later
     /// destinations are not called.
     ///
-    /// \return RADIENT_STATUS_OK when at least one destination changed,
+    /// \return RADIENT_STATUS_OK when at least one destination reports
+    ///         RADIENT_STATUS_OK,
     ///         RADIENT_STATUS_NO_CHANGE when the binding is empty or every
-    ///         destination reports no change, RADIENT_STATUS_INVALID_ARGUMENT
-    ///         when Info is invalid, or a destination failure.
+    ///         destination elects to report no change,
+    ///         RADIENT_STATUS_INVALID_ARGUMENT when Info is invalid, or a
+    ///         destination failure.
     VIRTUAL RADIENT_STATUS METHOD(Evaluate)(THIS_
                                             const RadientAnimationEvaluateInfo REF Info) PURE;
 };

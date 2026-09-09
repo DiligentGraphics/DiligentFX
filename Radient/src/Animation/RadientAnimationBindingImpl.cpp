@@ -620,7 +620,7 @@ public:
                                  pScratch + SampleJob.OutputOffset);
         }
 
-        bool AnyDestinationChanged = false;
+        bool AnyDestinationApplied = false;
         for (CompiledAnimationDestination& Destination : m_Destinations)
         {
             const RadientAnimationApplyInfo ApplyInfo{
@@ -634,7 +634,7 @@ public:
 
             if (Status == RADIENT_STATUS_OK)
             {
-                AnyDestinationChanged = true;
+                AnyDestinationApplied = true;
             }
             else if (Status != RADIENT_STATUS_NO_CHANGE)
             {
@@ -643,7 +643,7 @@ public:
             }
         }
 
-        return AnyDestinationChanged ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
+        return AnyDestinationApplied ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
     }
 
 private:

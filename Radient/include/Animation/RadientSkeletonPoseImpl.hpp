@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "RadientSkinning.h"
+#include "RadientAnimation.h"
 
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -36,7 +36,33 @@
 namespace Diligent
 {
 
+class RadientSkeletonPoseImpl;
+class RadientSkeletonPoseAnimationDestinationBindingImpl;
 class RadientSkeletonPoseWriterImpl;
+
+class RadientSkeletonPoseAnimationDestinationImpl final : public IRadientAnimationDestination
+{
+public:
+    explicit RadientSkeletonPoseAnimationDestinationImpl(RadientSkeletonPoseImpl& Pose) noexcept :
+        m_Pose{Pose}
+    {}
+
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final;
+    using IObject::QueryInterface;
+
+    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override final;
+    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final;
+    virtual IReferenceCounters* DILIGENT_CALL_TYPE       GetReferenceCounters() const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateBinding(
+        const RadientAnimationPropertyBindingDesc* pProperties,
+        Uint32                                     PropertyCount,
+        RadientAnimationResolvedPropertyDesc*      pResolvedProperties,
+        IRadientAnimationDestinationBinding**      ppBinding) override final;
+
+private:
+    RadientSkeletonPoseImpl& m_Pose;
+};
 
 class RadientSkeletonPoseImpl final : public ObjectBase<IRadientSkeletonPose>
 {
@@ -47,7 +73,8 @@ public:
                             IRadientSkeletonAsset* pSkeleton,
                             const Uint32*          pEvaluationOrder);
 
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSkeletonPose, TBase)
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final;
+    using IObject::QueryInterface;
 
     virtual IRadientSkeletonAsset* DILIGENT_CALL_TYPE GetSkeleton() const override final;
 
@@ -77,6 +104,8 @@ public:
     RADIENT_STATUS EndLegacyAnimationUpdate(Bool UpdateGlobals) noexcept;
 
 private:
+    friend class RadientSkeletonPoseAnimationDestinationBindingImpl;
+    friend class RadientSkeletonPoseAnimationDestinationImpl;
     friend class RadientSkeletonPoseWriterImpl;
 
     struct State
@@ -95,9 +124,10 @@ private:
     void ComputeGlobalMatrices() noexcept;
 
 private:
-    const RefCntAutoPtr<IRadientSkeletonAsset> m_pSkeleton;
-    const Uint32* const                        m_pEvaluationOrder;
-    State                                      m_State;
+    const RefCntAutoPtr<IRadientSkeletonAsset>  m_pSkeleton;
+    const Uint32* const                         m_pEvaluationOrder;
+    State                                       m_State;
+    RadientSkeletonPoseAnimationDestinationImpl m_AnimationDestination;
 };
 
 } // namespace Diligent
