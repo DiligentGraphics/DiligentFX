@@ -24,6 +24,8 @@
  *  of the possibility of such damages.
  */
 
+#include "Animation/RadientAnimationBindingImpl.hpp"
+#include "Animation/RadientAnimationValueType.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Core/RadientValidation.hpp"
@@ -39,11 +41,11 @@
 #include "STDAllocator.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <exception>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,74 +59,6 @@ using RadientValidation::CheckedMultiply;
 using RadientValidation::IsAddressableArray;
 using RadientValidation::IsAddressableSize;
 using RadientValidation::IsSumRepresentable;
-
-struct AnimationValueTypeInfo
-{
-    Uint32 NativeSize      = 0;
-    Uint32 NativeAlignment = 0;
-    bool   IsDiscrete      = false;
-    bool   IsFloatingPoint = false;
-};
-
-template <typename ValueType>
-constexpr AnimationValueTypeInfo MakeAnimationValueTypeInfo() noexcept
-{
-    using ComponentType = typename std::remove_all_extents<ValueType>::type;
-    static_assert(std::is_integral<ComponentType>::value || std::is_floating_point<ComponentType>::value,
-                  "Animation values must have integral or floating-point components");
-
-    return {
-        static_cast<Uint32>(sizeof(ValueType)),
-        static_cast<Uint32>(alignof(ValueType)),
-        std::is_integral<ComponentType>::value,
-        std::is_floating_point<ComponentType>::value,
-    };
-}
-
-AnimationValueTypeInfo GetAnimationValueTypeInfo(RADIENT_ANIMATION_VALUE_TYPE Type) noexcept
-{
-    switch (Type)
-    {
-        case RADIENT_ANIMATION_VALUE_TYPE_BOOL:
-            return MakeAnimationValueTypeInfo<Uint8>();
-
-        case RADIENT_ANIMATION_VALUE_TYPE_INT:
-            return MakeAnimationValueTypeInfo<Int32>();
-        case RADIENT_ANIMATION_VALUE_TYPE_INT2:
-            return MakeAnimationValueTypeInfo<Int32[2]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_INT3:
-            return MakeAnimationValueTypeInfo<Int32[3]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_INT4:
-            return MakeAnimationValueTypeInfo<Int32[4]>();
-
-        case RADIENT_ANIMATION_VALUE_TYPE_UINT:
-            return MakeAnimationValueTypeInfo<Uint32>();
-        case RADIENT_ANIMATION_VALUE_TYPE_UINT2:
-            return MakeAnimationValueTypeInfo<Uint32[2]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_UINT3:
-            return MakeAnimationValueTypeInfo<Uint32[3]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_UINT4:
-            return MakeAnimationValueTypeInfo<Uint32[4]>();
-
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT:
-            return MakeAnimationValueTypeInfo<Float32>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT2:
-            return MakeAnimationValueTypeInfo<Float32[2]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT3:
-            return MakeAnimationValueTypeInfo<Float32[3]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT4:
-            return MakeAnimationValueTypeInfo<Float32[4]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2:
-            return MakeAnimationValueTypeInfo<Float32[2][2]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT3X3:
-            return MakeAnimationValueTypeInfo<Float32[3][3]>();
-        case RADIENT_ANIMATION_VALUE_TYPE_FLOAT4X4:
-            return MakeAnimationValueTypeInfo<Float32[4][4]>();
-
-        default:
-            return {};
-    }
-}
 
 bool GetExpectedValueDataSize(const RadientAnimationSamplerDesc& Sampler,
                               Uint32                             NativeValueSize,
@@ -146,33 +80,21 @@ bool GetExpectedValueDataSize(const RadientAnimationSamplerDesc& Sampler,
     return true;
 }
 
-int CompareAnimationSchemaIDs(const RadientAnimationSchemaID& Lhs,
-                              const RadientAnimationSchemaID& Rhs) noexcept
-{
-    if (Lhs.Data1 != Rhs.Data1)
-        return Lhs.Data1 < Rhs.Data1 ? -1 : 1;
-    if (Lhs.Data2 != Rhs.Data2)
-        return Lhs.Data2 < Rhs.Data2 ? -1 : 1;
-    if (Lhs.Data3 != Rhs.Data3)
-        return Lhs.Data3 < Rhs.Data3 ? -1 : 1;
-    return std::memcmp(Lhs.Data4, Rhs.Data4, sizeof(Lhs.Data4));
-}
-
 struct AnimationTargetKey
 {
     RadientAnimationSchemaID Schema      = InvalidRadientAnimationSchemaID;
     RadientAnimationObjectID Object      = InvalidRadientAnimationObject;
     Uint32                   TargetIndex = InvalidRadientAnimationTargetIndex;
-};
 
-bool AnimationTargetKeyLess(const AnimationTargetKey& Lhs, const AnimationTargetKey& Rhs) noexcept
-{
-    const int SchemaComparison = CompareAnimationSchemaIDs(Lhs.Schema, Rhs.Schema);
-    return SchemaComparison < 0 ||
-        (SchemaComparison == 0 &&
-         (Lhs.Object < Rhs.Object ||
-          (Lhs.Object == Rhs.Object && Lhs.TargetIndex < Rhs.TargetIndex)));
-}
+    bool operator<(const AnimationTargetKey& Rhs) const noexcept
+    {
+        if (Schema != Rhs.Schema)
+            return Schema < Rhs.Schema;
+        if (Object != Rhs.Object)
+            return Object < Rhs.Object;
+        return TargetIndex < Rhs.TargetIndex;
+    }
+};
 
 bool HaveSameTargetIdentity(const AnimationTargetKey& Lhs, const AnimationTargetKey& Rhs) noexcept
 {
@@ -187,21 +109,20 @@ struct AnimationChannelRange
     Uint32                       First        = 0;
     Uint32                       End          = 0;
     Uint32                       ChannelIndex = 0;
-};
 
-bool AnimationChannelRangeLess(const AnimationChannelRange& Lhs,
-                               const AnimationChannelRange& Rhs) noexcept
-{
-    if (Lhs.TargetIndex != Rhs.TargetIndex)
-        return Lhs.TargetIndex < Rhs.TargetIndex;
-    if (Lhs.Property != Rhs.Property)
-        return Lhs.Property < Rhs.Property;
-    if (Lhs.First != Rhs.First)
-        return Lhs.First < Rhs.First;
-    if (Lhs.End != Rhs.End)
-        return Lhs.End < Rhs.End;
-    return Lhs.ChannelIndex < Rhs.ChannelIndex;
-}
+    bool operator<(const AnimationChannelRange& Rhs) const noexcept
+    {
+        if (TargetIndex != Rhs.TargetIndex)
+            return TargetIndex < Rhs.TargetIndex;
+        if (Property != Rhs.Property)
+            return Property < Rhs.Property;
+        if (First != Rhs.First)
+            return First < Rhs.First;
+        if (End != Rhs.End)
+            return End < Rhs.End;
+        return ChannelIndex < Rhs.ChannelIndex;
+    }
+};
 
 bool HaveSameTargetProperty(const AnimationChannelRange& Lhs,
                             const AnimationChannelRange& Rhs) noexcept
@@ -272,7 +193,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
         TargetKeys.push_back({Target.Schema, Target.Object, TargetIndex});
     }
 
-    std::sort(TargetKeys.begin(), TargetKeys.end(), AnimationTargetKeyLess);
+    std::sort(TargetKeys.begin(), TargetKeys.end());
     for (size_t Index = 1; Index < TargetKeys.size(); ++Index)
     {
         if (HaveSameTargetIdentity(TargetKeys[Index - 1], TargetKeys[Index]))
@@ -451,7 +372,7 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
         }
     }
 
-    std::sort(ChannelRanges.begin(), ChannelRanges.end(), AnimationChannelRangeLess);
+    std::sort(ChannelRanges.begin(), ChannelRanges.end());
     for (size_t Index = 1; Index < ChannelRanges.size(); ++Index)
     {
         const AnimationChannelRange& Previous = ChannelRanges[Index - 1];
@@ -707,16 +628,30 @@ public:
         return m_Data.GetDesc();
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateBinding(const RadientAnimationBindingDesc&,
-                                                            IRadientAnimationBinding** ppBinding) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateBinding(const RadientAnimationBindingDesc& BindingDesc,
+                                                            IRadientAnimationBinding**         ppBinding) override final
     {
         if (ppBinding == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         DEV_CHECK_ERR(*ppBinding == nullptr, "Output animation binding pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-        *ppBinding = nullptr;
-        // Runtime binding construction is intentionally deferred until the public API is approved.
-        return RADIENT_STATUS_UNSUPPORTED;
+        if (*ppBinding != nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        try
+        {
+            return CreateRadientAnimationBinding(this, BindingDesc, ppBinding);
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to create a Radient animation binding: ", Error.what());
+            return RADIENT_STATUS_FAILED;
+        }
+        catch (...)
+        {
+            LOG_ERROR_MESSAGE("Failed to create a Radient animation binding: unknown exception");
+            return RADIENT_STATUS_FAILED;
+        }
     }
 
 private:

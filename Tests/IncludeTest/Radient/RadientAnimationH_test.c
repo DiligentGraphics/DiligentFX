@@ -92,7 +92,7 @@ void RadientAnimation_C_UseTypes(void)
     Destination.MappingCount              = 1;
     Binding.pDestinations                 = &Destination;
     Binding.DestinationCount              = 1;
-    EvaluateInfo.Time                     = 0.0;
+    EvaluateInfo.Time                     = 0.f;
     EvaluateInfo.UpdateDerivedState       = True;
 
     (void)Schema;

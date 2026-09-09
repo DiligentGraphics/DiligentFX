@@ -221,7 +221,7 @@ static_assert(DefaultBinding.pDestinations == nullptr, "Unexpected RadientAnimat
 static_assert(DefaultBinding.DestinationCount == 0, "Unexpected RadientAnimationBindingDesc destination count default value");
 
 constexpr RadientAnimationEvaluateInfo DefaultEvaluateInfo{};
-static_assert(DefaultEvaluateInfo.Time == 0.0, "Unexpected RadientAnimationEvaluateInfo time default value");
+static_assert(DefaultEvaluateInfo.Time == 0.f, "Unexpected RadientAnimationEvaluateInfo time default value");
 static_assert(DefaultEvaluateInfo.UpdateDerivedState == True, "Unexpected RadientAnimationEvaluateInfo derived-state default value");
 
 constexpr RadientAnimationTarget DefaultTarget{};

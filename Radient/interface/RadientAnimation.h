@@ -712,7 +712,7 @@ struct RadientAnimationEvaluateInfo
     /// before its first key and its last value after its last key. Looping,
     /// ping-pong, playback-rate handling, and time wrapping belong to the
     /// player.
-    Float64 Time DEFAULT_INITIALIZER(0.0);
+    Float32 Time DEFAULT_INITIALIZER(0.f);
 
     /// Forwarded to each destination's single RadientAnimationApplyInfo after
     /// all values for that destination have been sampled.
