@@ -469,6 +469,49 @@ ValueType ReadCapturedValue(const CapturedAnimationUpdate& Update, Uint32 Proper
     return Value;
 }
 
+template <typename ValueType>
+ValueType MakeComponentWiseValue(Float32 Base)
+{
+    constexpr size_t ComponentCount = sizeof(ValueType) / sizeof(Float32);
+    static_assert(sizeof(ValueType) == ComponentCount * sizeof(Float32),
+                  "Test value must consist exclusively of Float32 components");
+
+    std::array<Float32, ComponentCount> Components{};
+    for (size_t Component = 0; Component < ComponentCount; ++Component)
+        Components[Component] = Base + static_cast<Float32>(Component);
+
+    ValueType Value{};
+    std::memcpy(&Value, Components.data(), sizeof(Value));
+    return Value;
+}
+
+template <typename ValueType>
+void ExpectComponentWiseValueNear(const ValueType& Value,
+                                  Float32          ExpectedBase,
+                                  Float32          Tolerance = 1e-5f)
+{
+    constexpr size_t                    ComponentCount = sizeof(ValueType) / sizeof(Float32);
+    std::array<Float32, ComponentCount> Components{};
+    std::memcpy(Components.data(), &Value, sizeof(Value));
+    for (size_t Component = 0; Component < ComponentCount; ++Component)
+    {
+        EXPECT_NEAR(Components[Component],
+                    ExpectedBase + static_cast<Float32>(Component),
+                    Tolerance)
+            << "component " << Component;
+    }
+}
+
+template <typename ValueType>
+void ExpectCapturedComponentWiseValueNear(const CapturedAnimationUpdate& Update,
+                                          Uint32                         PropertyIndex,
+                                          Float32                        ExpectedBase)
+{
+    SCOPED_TRACE(PropertyIndex);
+    ExpectComponentWiseValueNear(ReadCapturedValue<ValueType>(Update, PropertyIndex),
+                                 ExpectedBase);
+}
+
 void ExpectFloat3Near(const RadientFloat3& Value,
                       const RadientFloat3& Expected,
                       Float32              Tolerance = 1e-5f)
@@ -757,6 +800,179 @@ TEST_F(RadientAnimationBindingTest, UsesStepInterpolation)
     EXPECT_EQ(ReadCapturedValue<Uint32>(State->EndCalls[0], 0), 7u);
 }
 
+TEST_F(RadientAnimationBindingTest, StepQuaternionNormalizesTheSelectedKey)
+{
+    TestAnimationClipBuilder Builder;
+    Builder.Duration     = 2.f;
+    const Uint32 Target  = Builder.AddTarget(1);
+    const Uint32 Sampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f, 1.f, 2.f},
+        {
+            {0.f, 0.f, 0.f, 2.f},
+            {0.f, 0.f, 3.f, 0.f},
+            {0.f, 4.f, 0.f, 0.f},
+        });
+    Builder.AddChannel(Target, TestQuaternionProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State = std::make_shared<TestAnimationDestinationState>();
+    State->Semantics.emplace_back(TestQuaternionProperty,
+                                  RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+    RadientAnimationDestinationMappingDesc  Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 4;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    for (const Float32 Time : {-1.f, 0.5f, 1.f, 1.5f, 2.f})
+    {
+        Info.Time = Time;
+        ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    }
+
+    ASSERT_EQ(State->EndCalls.size(), 5u);
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 0),
+                         {0.f, 0.f, 0.f, 1.f});
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[1], 0),
+                         {0.f, 0.f, 0.f, 1.f});
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[2], 0),
+                         {0.f, 0.f, 1.f, 0.f});
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[3], 0),
+                         {0.f, 0.f, 1.f, 0.f});
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[4], 0),
+                         {0.f, 1.f, 0.f, 0.f});
+}
+
+TEST_F(RadientAnimationBindingTest, StepsAndLinearlyInterpolatesQuaternionArrays)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             StepTarget   = Builder.AddTarget(1);
+    const Uint32             LinearTarget = Builder.AddTarget(2);
+    const Uint32             StepSampler  = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f, 1.f},
+        {
+            {0.f, 0.f, 0.f, 2.f},
+            {3.f, 0.f, 0.f, 0.f},
+            {0.f, 0.f, 4.f, 0.f},
+            {0.f, 5.f, 0.f, 0.f},
+        },
+        2);
+    const Uint32 LinearSampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {
+            {0.f, 0.f, 0.f, 2.f},
+            {2.f, 0.f, 0.f, 0.f},
+            {0.f, 0.f, 2.f, 0.f},
+            {0.f, 2.f, 0.f, 0.f},
+        },
+        2);
+    Builder.AddChannel(StepTarget, TestQuaternionProperty, StepSampler);
+    Builder.AddChannel(LinearTarget, TestQuaternionProperty, LinearSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State = std::make_shared<TestAnimationDestinationState>();
+    State->Semantics.emplace_back(TestQuaternionProperty,
+                                  RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    RefCntAutoPtr<TestAnimationDestination>               pDestination = CreateTestDestination(State);
+    std::array<RadientAnimationDestinationMappingDesc, 2> Mappings{};
+    Mappings[0].ClipTargetIndex                      = StepTarget;
+    Mappings[0].DestinationElement                   = 10;
+    Mappings[1].ClipTargetIndex                      = LinearTarget;
+    Mappings[1].DestinationElement                   = 20;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip,
+        pDestination,
+        std::vector<RadientAnimationDestinationMappingDesc>{Mappings.begin(), Mappings.end()});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 2u);
+    const auto StepValues =
+        ReadCapturedValue<std::array<RadientQuaternion, 2>>(State->EndCalls[0], 0);
+    ExpectQuaternionNear(StepValues[0], {0.f, 0.f, 0.f, 1.f});
+    ExpectQuaternionNear(StepValues[1], {1.f, 0.f, 0.f, 0.f});
+
+    const auto LinearValues =
+        ReadCapturedValue<std::array<RadientQuaternion, 2>>(State->EndCalls[0], 1);
+    const Float32 HalfSqrt = std::sqrt(0.5f);
+    ExpectQuaternionNear(LinearValues[0], {0.f, 0.f, HalfSqrt, HalfSqrt});
+    ExpectQuaternionNear(LinearValues[1], {HalfSqrt, HalfSqrt, 0.f, 0.f});
+}
+
+
+TEST_F(RadientAnimationBindingTest, SamplesOneKeyForEveryInterpolationMode)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             StepTarget   = Builder.AddTarget(1);
+    const Uint32             LinearTarget = Builder.AddTarget(2);
+    const Uint32             CubicTarget  = Builder.AddTarget(3);
+    const Uint32             StepSampler  = Builder.AddSampler<Uint32>(
+        RADIENT_ANIMATION_VALUE_TYPE_UINT,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.5f},
+        {17u});
+    const Uint32 LinearSampler = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.5f},
+        {3.5f});
+    const Uint32 CubicSampler = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {0.5f},
+        {100.f, 7.f, -100.f});
+    Builder.AddChannel(StepTarget, TestPropertyA, StepSampler);
+    Builder.AddChannel(LinearTarget, TestPropertyB, LinearSampler);
+    Builder.AddChannel(CubicTarget, TestPropertyC, CubicSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto                                                  State        = std::make_shared<TestAnimationDestinationState>();
+    RefCntAutoPtr<TestAnimationDestination>               pDestination = CreateTestDestination(State);
+    std::array<RadientAnimationDestinationMappingDesc, 3> Mappings{};
+    Mappings[0].ClipTargetIndex                      = StepTarget;
+    Mappings[0].DestinationElement                   = 10;
+    Mappings[1].ClipTargetIndex                      = LinearTarget;
+    Mappings[1].DestinationElement                   = 20;
+    Mappings[2].ClipTargetIndex                      = CubicTarget;
+    Mappings[2].DestinationElement                   = 30;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip,
+        pDestination,
+        std::vector<RadientAnimationDestinationMappingDesc>{Mappings.begin(), Mappings.end()});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    for (const Float32 Time : {0.f, 1.f})
+    {
+        Info.Time = Time;
+        ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    }
+
+    ASSERT_EQ(State->EndCalls.size(), 2u);
+    for (const CapturedAnimationUpdate& Update : State->EndCalls)
+    {
+        ASSERT_EQ(Update.Values.size(), 3u);
+        EXPECT_EQ(ReadCapturedValue<Uint32>(Update, 0), 17u);
+        EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(Update, 1), 3.5f);
+        EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(Update, 2), 7.f);
+    }
+}
+
 TEST_F(RadientAnimationBindingTest, InterpolatesComponentsIndependently)
 {
     TestAnimationClipBuilder Builder;
@@ -855,6 +1071,97 @@ TEST_F(RadientAnimationBindingTest, ScalesCubicSplineTangentsByKeyInterval)
     // At u=0.5, Hermite interpolation uses tangents 3*2 and -1*2 because
     // the key interval is two seconds. Omitting that scale would produce 6.5.
     EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 7.f);
+}
+
+TEST_F(RadientAnimationBindingTest, SamplesFloat1ThroughFloat4ForEveryInterpolationMode)
+{
+    TestAnimationClipBuilder Builder;
+    Builder.Duration = 2.f;
+    std::vector<RadientAnimationDestinationMappingDesc> Mappings;
+
+    const auto AddKernelCases = [&](auto TypeTag, RADIENT_ANIMATION_VALUE_TYPE Type) {
+        using ValueType    = decltype(TypeTag);
+        const auto AddCase = [&](RADIENT_ANIMATION_INTERPOLATION Interpolation,
+                                 std::vector<ValueType>          Values) {
+            const Uint32 Target  = Builder.AddTarget(static_cast<Uint32>(Mappings.size() + 1));
+            const Uint32 Sampler = Builder.AddSampler<ValueType>(
+                Type,
+                Interpolation,
+                {0.f, 1.f, 2.f},
+                Values);
+            Builder.AddChannel(Target, TestPropertyA, Sampler);
+
+            RadientAnimationDestinationMappingDesc Mapping;
+            Mapping.ClipTargetIndex    = Target;
+            Mapping.DestinationElement = static_cast<Uint32>(Mappings.size() + 1);
+            Mappings.push_back(Mapping);
+        };
+
+        AddCase(RADIENT_ANIMATION_INTERPOLATION_STEP,
+                {
+                    MakeComponentWiseValue<ValueType>(10.f),
+                    MakeComponentWiseValue<ValueType>(30.f),
+                    MakeComponentWiseValue<ValueType>(50.f),
+                });
+        AddCase(RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+                {
+                    MakeComponentWiseValue<ValueType>(2.f),
+                    MakeComponentWiseValue<ValueType>(10.f),
+                    MakeComponentWiseValue<ValueType>(18.f),
+                });
+        AddCase(RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+                {
+                    MakeComponentWiseValue<ValueType>(100.f),
+                    MakeComponentWiseValue<ValueType>(0.f),
+                    MakeComponentWiseValue<ValueType>(4.f),
+                    MakeComponentWiseValue<ValueType>(-2.f),
+                    MakeComponentWiseValue<ValueType>(12.f),
+                    MakeComponentWiseValue<ValueType>(8.f),
+                    MakeComponentWiseValue<ValueType>(-6.f),
+                    MakeComponentWiseValue<ValueType>(24.f),
+                    MakeComponentWiseValue<ValueType>(-100.f),
+                });
+    };
+
+    AddKernelCases(Float32{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    AddKernelCases(RadientFloat2{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2);
+    AddKernelCases(RadientFloat3{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    AddKernelCases(RadientFloat4{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto                                    State        = std::make_shared<TestAnimationDestinationState>();
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding     = BindSingle(pClip, pDestination, Mappings);
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    Info.Time = 1.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 2u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 12u);
+    ASSERT_EQ(State->EndCalls[1].Values.size(), 12u);
+
+    Uint32     PropertyIndex     = 0;
+    const auto ExpectKernelCases = [&](auto TypeTag) {
+        using ValueType = decltype(TypeTag);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 10.f);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 30.f);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 6.f);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 10.f);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 6.75f);
+        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 12.f);
+    };
+
+    ExpectKernelCases(Float32{});
+    ExpectKernelCases(RadientFloat2{});
+    ExpectKernelCases(RadientFloat3{});
+    ExpectKernelCases(RadientFloat4{});
+    EXPECT_EQ(PropertyIndex, 12u);
 }
 
 TEST_F(RadientAnimationBindingTest, SamplesFloat3ArraysWithExactLayoutAndAlignment)
@@ -989,6 +1296,198 @@ TEST_F(RadientAnimationBindingTest, CubicInterpolatesAndNormalizesQuaternionValu
     const Float32 HalfSqrt = std::sqrt(0.5f);
     ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 0),
                          {0.f, 0.f, HalfSqrt, HalfSqrt});
+}
+
+TEST_F(RadientAnimationBindingTest, CubicInterpolationHoldsAndNormalizesEndpointValues)
+{
+    TestAnimationClipBuilder Builder;
+    Builder.Duration              = 3.f;
+    const Uint32 ComponentTarget  = Builder.AddTarget(1);
+    const Uint32 QuaternionTarget = Builder.AddTarget(2);
+    const Uint32 ComponentSampler = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {1.f, 3.f},
+        {
+            100.f,
+            2.f,
+            50.f,
+            -50.f,
+            10.f,
+            -100.f,
+        });
+    const Uint32 QuaternionSampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {1.f, 3.f},
+        {
+            {1.f, 2.f, 3.f, 4.f},
+            {0.f, 0.f, 0.f, 2.f},
+            {4.f, 3.f, 2.f, 1.f},
+            {-1.f, -2.f, -3.f, -4.f},
+            {0.f, 0.f, 3.f, 0.f},
+            {-4.f, -3.f, -2.f, -1.f},
+        });
+    Builder.AddChannel(ComponentTarget, TestPropertyA, ComponentSampler);
+    Builder.AddChannel(QuaternionTarget, TestQuaternionProperty, QuaternionSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State = std::make_shared<TestAnimationDestinationState>();
+    State->Semantics.emplace_back(TestQuaternionProperty,
+                                  RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    RefCntAutoPtr<TestAnimationDestination>               pDestination = CreateTestDestination(State);
+    std::array<RadientAnimationDestinationMappingDesc, 2> Mappings{};
+    Mappings[0].ClipTargetIndex                      = ComponentTarget;
+    Mappings[0].DestinationElement                   = 10;
+    Mappings[1].ClipTargetIndex                      = QuaternionTarget;
+    Mappings[1].DestinationElement                   = 20;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip,
+        pDestination,
+        std::vector<RadientAnimationDestinationMappingDesc>{Mappings.begin(), Mappings.end()});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = -2.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    Info.Time = 9.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 2u);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 2.f);
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 1),
+                         {0.f, 0.f, 0.f, 1.f});
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[1], 0), 10.f);
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[1], 1),
+                         {0.f, 0.f, 1.f, 0.f});
+}
+
+TEST_F(RadientAnimationBindingTest, OneKeyCubicNormalizesEveryQuaternionArrayElement)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(1);
+    const Uint32             Sampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {0.5f},
+        {
+            // Incoming tangents.
+            {1.f, 2.f, 3.f, 4.f},
+            {4.f, 3.f, 2.f, 1.f},
+            // Central values.
+            {0.f, 0.f, 0.f, 2.f},
+            {0.f, 0.f, 3.f, 0.f},
+            // Outgoing tangents.
+            {-1.f, -2.f, -3.f, -4.f},
+            {-4.f, -3.f, -2.f, -1.f},
+        },
+        2);
+    Builder.AddChannel(Target, TestQuaternionProperty, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State = std::make_shared<TestAnimationDestinationState>();
+    State->Semantics.emplace_back(TestQuaternionProperty,
+                                  RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+    RadientAnimationDestinationMappingDesc  Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 6;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.75f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    const auto Values = ReadCapturedValue<std::array<RadientQuaternion, 2>>(State->EndCalls[0], 0);
+    ExpectQuaternionNear(Values[0], {0.f, 0.f, 0.f, 1.f});
+    ExpectQuaternionNear(Values[1], {0.f, 0.f, 1.f, 0.f});
+}
+
+TEST_F(RadientAnimationBindingTest, CubicInterpolatesFloat3AndQuaternionArrays)
+{
+    TestAnimationClipBuilder Builder;
+    Builder.Duration              = 2.f;
+    const Uint32 Float3Target     = Builder.AddTarget(1);
+    const Uint32 QuaternionTarget = Builder.AddTarget(2);
+    const Uint32 Float3Sampler    = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {0.f, 2.f},
+        {
+            // Key 0 incoming tangents, central values, and outgoing tangents.
+            {0.f, 0.f, 0.f},
+            {0.f, 0.f, 0.f},
+            {0.f, 2.f, 4.f},
+            {10.f, 20.f, 30.f},
+            {2.f, 0.f, -2.f},
+            {-4.f, 2.f, 6.f},
+            // Key 1 incoming tangents, central values, and outgoing tangents.
+            {-2.f, 2.f, 0.f},
+            {8.f, -2.f, 4.f},
+            {4.f, 6.f, 8.f},
+            {14.f, 18.f, 22.f},
+            {0.f, 0.f, 0.f},
+            {0.f, 0.f, 0.f},
+        },
+        2);
+    const RadientQuaternion Zero              = {0.f, 0.f, 0.f, 0.f};
+    const Uint32            QuaternionSampler = Builder.AddSampler<RadientQuaternion>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {0.f, 2.f},
+        {
+            Zero,
+            Zero,
+            {0.f, 0.f, 0.f, 2.f},
+            {2.f, 0.f, 0.f, 0.f},
+            Zero,
+            Zero,
+            Zero,
+            Zero,
+            {0.f, 0.f, 2.f, 0.f},
+            {0.f, 2.f, 0.f, 0.f},
+            Zero,
+            Zero,
+        },
+        2);
+    Builder.AddChannel(Float3Target, TestPropertyA, Float3Sampler);
+    Builder.AddChannel(QuaternionTarget, TestQuaternionProperty, QuaternionSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State = std::make_shared<TestAnimationDestinationState>();
+    State->Semantics.emplace_back(TestQuaternionProperty,
+                                  RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    RefCntAutoPtr<TestAnimationDestination>               pDestination = CreateTestDestination(State);
+    std::array<RadientAnimationDestinationMappingDesc, 2> Mappings{};
+    Mappings[0].ClipTargetIndex                      = Float3Target;
+    Mappings[0].DestinationElement                   = 10;
+    Mappings[1].ClipTargetIndex                      = QuaternionTarget;
+    Mappings[1].DestinationElement                   = 20;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip,
+        pDestination,
+        std::vector<RadientAnimationDestinationMappingDesc>{Mappings.begin(), Mappings.end()});
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 1.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    const auto Float3Values =
+        ReadCapturedValue<std::array<RadientFloat3, 2>>(State->EndCalls[0], 0);
+    ExpectFloat3Near(Float3Values[0], {3.f, 3.5f, 5.5f});
+    ExpectFloat3Near(Float3Values[1], {9.f, 20.f, 26.5f});
+    const auto Quaternions =
+        ReadCapturedValue<std::array<RadientQuaternion, 2>>(State->EndCalls[0], 1);
+    const Float32 HalfSqrt = std::sqrt(0.5f);
+    ExpectQuaternionNear(Quaternions[0], {0.f, 0.f, HalfSqrt, HalfSqrt});
+    ExpectQuaternionNear(Quaternions[1], {HalfSqrt, HalfSqrt, 0.f, 0.f});
 }
 
 TEST_F(RadientAnimationBindingTest, SamplesSharedSamplerSeparatelyForDifferentSemantics)

@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -50,6 +51,31 @@ using RadientValidation::IsAddressableArray;
 using RadientValidation::IsAddressableSize;
 using RadientValidation::IsSumRepresentable;
 
+struct AnimationKeyInterval
+{
+    Uint32 StartKey = 0;
+    Uint32 EndKey   = 0;
+};
+
+AnimationKeyInterval FindAnimationKeyInterval(const RadientAnimationSamplerDesc& Sampler,
+                                              Float32                            Time) noexcept
+{
+    VERIFY_EXPR(Sampler.KeyframeCount != 0);
+    if (Sampler.KeyframeCount == 1 || Time <= Sampler.pTimes[0])
+        return {};
+
+    const Uint32 LastKey = Sampler.KeyframeCount - 1;
+    if (Time >= Sampler.pTimes[LastKey])
+        return {LastKey, LastKey};
+
+    const Float32* const pEndTime = std::upper_bound(Sampler.pTimes,
+                                                     Sampler.pTimes + Sampler.KeyframeCount,
+                                                     Time);
+
+    const Uint32 EndKey = static_cast<Uint32>(pEndTime - Sampler.pTimes);
+    return {EndKey - 1, EndKey};
+}
+
 struct AnimationSampleInterval
 {
     Uint32  StartKey = 0;
@@ -61,33 +87,28 @@ struct AnimationSampleInterval
 AnimationSampleInterval FindAnimationSampleInterval(const RadientAnimationSamplerDesc& Sampler,
                                                     Float32                            Time) noexcept
 {
-    VERIFY_EXPR(Sampler.KeyframeCount != 0);
-    if (Sampler.KeyframeCount == 1 || Time <= Sampler.pTimes[0])
-        return {};
+    const AnimationKeyInterval Keys = FindAnimationKeyInterval(Sampler, Time);
+    if (Keys.StartKey == Keys.EndKey)
+        return {Keys.StartKey, Keys.EndKey, 0.f, 0.f};
 
-    const Uint32 LastKey = Sampler.KeyframeCount - 1;
-    if (Time >= Sampler.pTimes[LastKey])
-        return {LastKey, LastKey, 0.f, 0.f};
-
-    const Float32* const pEndTime = std::upper_bound(Sampler.pTimes,
-                                                     Sampler.pTimes + Sampler.KeyframeCount,
-                                                     Time);
-
-    const Uint32  EndKey   = static_cast<Uint32>(pEndTime - Sampler.pTimes);
-    const Uint32  StartKey = EndKey - 1;
-    const Float32 Duration = Sampler.pTimes[EndKey] - Sampler.pTimes[StartKey];
-    const Float32 Factor   = (Time - Sampler.pTimes[StartKey]) / Duration;
-    return {StartKey, EndKey, Factor, Duration};
+    const Float32 Duration = Sampler.pTimes[Keys.EndKey] - Sampler.pTimes[Keys.StartKey];
+    const Float32 Factor   = (Time - Sampler.pTimes[Keys.StartKey]) / Duration;
+    return {Keys.StartKey, Keys.EndKey, Factor, Duration};
 }
 
 const Uint8* GetAnimationKeyValue(const RadientAnimationSamplerDesc& Sampler,
                                   size_t                             SampleSize,
-                                  Uint32                             KeyIndex,
-                                  Uint32                             CubicElement) noexcept
+                                  Uint32                             KeyIndex) noexcept
 {
-    const size_t ValueIndex = Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ?
-        static_cast<size_t>(KeyIndex) * 3u + CubicElement :
-        KeyIndex;
+    return static_cast<const Uint8*>(Sampler.pValues) + static_cast<size_t>(KeyIndex) * SampleSize;
+}
+
+const Uint8* GetCubicAnimationKeyValue(const RadientAnimationSamplerDesc& Sampler,
+                                       size_t                             SampleSize,
+                                       Uint32                             KeyIndex,
+                                       Uint32                             CubicElement) noexcept
+{
+    const size_t ValueIndex = static_cast<size_t>(KeyIndex) * 3u + CubicElement;
     return static_cast<const Uint8*>(Sampler.pValues) + ValueIndex * SampleSize;
 }
 
@@ -103,6 +124,26 @@ void StoreAnimationFloat(Uint8* pData, size_t ComponentIndex, Float32 Value) noe
     std::memcpy(pData + ComponentIndex * sizeof(Value), &Value, sizeof(Value));
 }
 
+template <typename ValueType>
+ValueType LoadAnimationValue(const Uint8* pData) noexcept
+{
+    static_assert(std::is_trivially_copyable<ValueType>::value,
+                  "Animation values must be trivially copyable");
+
+    ValueType Value;
+    std::memcpy(&Value, pData, sizeof(Value));
+    return Value;
+}
+
+template <typename ValueType>
+void StoreAnimationValue(void* pData, const ValueType& Value) noexcept
+{
+    static_assert(std::is_trivially_copyable<ValueType>::value,
+                  "Animation values must be trivially copyable");
+
+    std::memcpy(pData, &Value, sizeof(Value));
+}
+
 RadientQuaternion LoadAnimationQuaternion(const Uint8* pData, size_t ElementIndex) noexcept
 {
     RadientQuaternion Value;
@@ -115,112 +156,333 @@ void StoreAnimationQuaternion(Uint8* pData, size_t ElementIndex, const RadientQu
     std::memcpy(pData + ElementIndex * sizeof(RadientQuaternion), &Value, sizeof(RadientQuaternion));
 }
 
-void SampleAnimationComponentWise(const RadientAnimationSamplerDesc& Sampler,
-                                  const AnimationSampleInterval&     Interval,
-                                  size_t                             SampleSize,
-                                  Uint8*                             pOutput) noexcept
+template <typename ValueType>
+void SampleAnimationSingleValueStep(const RadientAnimationSamplerDesc& Sampler,
+                                    Float32                            Time,
+                                    size_t                             SampleSize,
+                                    void*                              pOutput) noexcept
 {
-    const Uint8* const pStartValue = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 1);
-    if (Interval.StartKey == Interval.EndKey || Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_STEP)
+    VERIFY_EXPR(SampleSize == sizeof(ValueType));
+
+    const Uint32 KeyIndex = FindAnimationKeyInterval(Sampler, Time).StartKey;
+    std::memcpy(pOutput, GetAnimationKeyValue(Sampler, sizeof(ValueType), KeyIndex), sizeof(ValueType));
+}
+
+void SampleAnimationComponentsStep(const RadientAnimationSamplerDesc& Sampler,
+                                   Float32                            Time,
+                                   size_t                             SampleSize,
+                                   void*                              pOutput) noexcept
+{
+    const Uint32 KeyIndex = FindAnimationKeyInterval(Sampler, Time).StartKey;
+    std::memcpy(pOutput, GetAnimationKeyValue(Sampler, SampleSize, KeyIndex), SampleSize);
+}
+
+template <typename ValueType>
+void SampleAnimationSingleValueLinear(const RadientAnimationSamplerDesc& Sampler,
+                                      Float32                            Time,
+                                      size_t                             SampleSize,
+                                      void*                              pOutput) noexcept
+{
+    VERIFY_EXPR(SampleSize == sizeof(ValueType));
+
+    const AnimationSampleInterval Interval    = FindAnimationSampleInterval(Sampler, Time);
+    const Uint8* const            pStartValue = GetAnimationKeyValue(Sampler, sizeof(ValueType), Interval.StartKey);
+    if (Interval.StartKey == Interval.EndKey)
+    {
+        std::memcpy(pOutput, pStartValue, sizeof(ValueType));
+        return;
+    }
+
+    const ValueType Start = LoadAnimationValue<ValueType>(pStartValue);
+    const ValueType End   = LoadAnimationValue<ValueType>(GetAnimationKeyValue(Sampler, sizeof(ValueType), Interval.EndKey));
+    StoreAnimationValue(pOutput, RadientMath::Lerp(Start, End, Interval.Factor));
+}
+
+void SampleAnimationComponentsLinear(const RadientAnimationSamplerDesc& Sampler,
+                                     Float32                            Time,
+                                     size_t                             SampleSize,
+                                     void*                              pOutput) noexcept
+{
+    const size_t                  ComponentCount = SampleSize / sizeof(Float32);
+    const AnimationSampleInterval Interval       = FindAnimationSampleInterval(Sampler, Time);
+    const Uint8* const            pStartValue    = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey);
+    if (Interval.StartKey == Interval.EndKey)
     {
         std::memcpy(pOutput, pStartValue, SampleSize);
         return;
     }
 
-    const Uint8* const pEndValue      = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 1);
-    const size_t       ComponentCount = SampleSize / sizeof(Float32);
-    if (Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_LINEAR)
-    {
-        for (size_t Component = 0; Component < ComponentCount; ++Component)
-        {
-            const Float32 Start = LoadAnimationFloat(pStartValue, Component);
-            const Float32 End   = LoadAnimationFloat(pEndValue, Component);
-            const Float32 Value = Start * (1.f - Interval.Factor) + End * Interval.Factor;
-            StoreAnimationFloat(pOutput, Component, Value);
-        }
-        return;
-    }
-
-    const Uint8* const pStartTangent = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 2);
-    const Uint8* const pEndTangent   = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 0);
-
-    const Float32 Factor             = Interval.Factor;
-    const Float32 Factor2            = Factor * Factor;
-    const Float32 Factor3            = Factor2 * Factor;
-    const Float32 StartWeight        = 2.f * Factor3 - 3.f * Factor2 + 1.f;
-    const Float32 StartTangentWeight = (Factor3 - 2.f * Factor2 + Factor) * Interval.Duration;
-    const Float32 EndWeight          = -2.f * Factor3 + 3.f * Factor2;
-    const Float32 EndTangentWeight   = (Factor3 - Factor2) * Interval.Duration;
+    const Uint8* const pEndValue = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey);
+    Uint8* const       pBytes    = static_cast<Uint8*>(pOutput);
     for (size_t Component = 0; Component < ComponentCount; ++Component)
     {
-        const Float32 Value =
-            LoadAnimationFloat(pStartValue, Component) * StartWeight +
-            LoadAnimationFloat(pStartTangent, Component) * StartTangentWeight +
-            LoadAnimationFloat(pEndValue, Component) * EndWeight +
-            LoadAnimationFloat(pEndTangent, Component) * EndTangentWeight;
-        StoreAnimationFloat(pOutput, Component, Value);
+        const Float32 Start = LoadAnimationFloat(pStartValue, Component);
+        const Float32 End   = LoadAnimationFloat(pEndValue, Component);
+        StoreAnimationFloat(pBytes, Component, RadientMath::Lerp(Start, End, Interval.Factor));
     }
 }
 
-void SampleAnimationQuaternions(const RadientAnimationSamplerDesc& Sampler,
-                                const AnimationSampleInterval&     Interval,
-                                size_t                             SampleSize,
-                                Uint8*                             pOutput) noexcept
+template <typename ValueType>
+void SampleAnimationSingleValueCubic(const RadientAnimationSamplerDesc& Sampler,
+                                     Float32                            Time,
+                                     size_t                             SampleSize,
+                                     void*                              pOutput) noexcept
 {
-    const Uint8* const pStartValue = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 1);
-    const Uint8* const pEndValue   = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 1);
+    static_assert(std::is_trivially_copyable<ValueType>::value,
+                  "Animation values must be trivially copyable");
+    VERIFY_EXPR(SampleSize == sizeof(ValueType));
 
-    const Uint8* pStartTangent = nullptr;
-    const Uint8* pEndTangent   = nullptr;
-    if (Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE &&
-        Interval.StartKey != Interval.EndKey)
+    const AnimationSampleInterval Interval    = FindAnimationSampleInterval(Sampler, Time);
+    const Uint8* const            pStartValue = GetCubicAnimationKeyValue(Sampler, sizeof(ValueType), Interval.StartKey, 1);
+    if (Interval.StartKey == Interval.EndKey)
     {
-        pStartTangent = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 2);
-        pEndTangent   = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 0);
+        std::memcpy(pOutput, pStartValue, sizeof(ValueType));
+        return;
     }
 
-    for (Uint32 Element = 0; Element < Sampler.Value.ArraySize; ++Element)
+    const Uint8* const pEndValue     = GetCubicAnimationKeyValue(Sampler, sizeof(ValueType), Interval.EndKey, 1);
+    const Uint8* const pStartTangent = GetCubicAnimationKeyValue(Sampler, sizeof(ValueType), Interval.StartKey, 2);
+    const Uint8* const pEndTangent   = GetCubicAnimationKeyValue(Sampler, sizeof(ValueType), Interval.EndKey, 0);
+
+    const ValueType Start        = LoadAnimationValue<ValueType>(pStartValue);
+    const ValueType StartTangent = LoadAnimationValue<ValueType>(pStartTangent);
+    const ValueType End          = LoadAnimationValue<ValueType>(pEndValue);
+    const ValueType EndTangent   = LoadAnimationValue<ValueType>(pEndTangent);
+    const ValueType Result       = RadientMath::CubicHermite(
+        Start, StartTangent, End, EndTangent, Interval.Factor, Interval.Duration);
+    StoreAnimationValue(pOutput, Result);
+}
+
+void SampleAnimationComponentsCubic(const RadientAnimationSamplerDesc& Sampler,
+                                    Float32                            Time,
+                                    size_t                             SampleSize,
+                                    void*                              pOutput) noexcept
+{
+    const size_t                  ComponentCount = SampleSize / sizeof(Float32);
+    const AnimationSampleInterval Interval       = FindAnimationSampleInterval(Sampler, Time);
+    const Uint8* const            pStartValue    = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 1);
+    if (Interval.StartKey == Interval.EndKey)
     {
-        const RadientQuaternion Start = LoadAnimationQuaternion(pStartValue, Element);
-        RadientQuaternion       Result;
-        if (Interval.StartKey == Interval.EndKey || Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_STEP)
-        {
-            Result = RadientMath::Normalize(Start);
-        }
-        else
-        {
-            const RadientQuaternion End = LoadAnimationQuaternion(pEndValue, Element);
-            if (Sampler.Interpolation == RADIENT_ANIMATION_INTERPOLATION_LINEAR)
-            {
-                Result = RadientMath::Slerp(Start, End, Interval.Factor);
-            }
-            else
-            {
-                Result = RadientMath::CubicHermite(
-                    Start,
-                    LoadAnimationQuaternion(pStartTangent, Element),
-                    End,
-                    LoadAnimationQuaternion(pEndTangent, Element),
-                    Interval.Factor,
-                    Interval.Duration);
-            }
-        }
+        std::memcpy(pOutput, pStartValue, SampleSize);
+        return;
+    }
+
+    const Uint8* const pEndValue     = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 1);
+    const Uint8* const pStartTangent = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 2);
+    const Uint8* const pEndTangent   = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 0);
+
+    Float32 StartValueWeight;
+    Float32 StartTangentWeight;
+    Float32 EndValueWeight;
+    Float32 EndTangentWeight;
+    RadientMath::GetCubicHermiteWeights(Interval.Factor,
+                                        Interval.Duration,
+                                        StartValueWeight,
+                                        StartTangentWeight,
+                                        EndValueWeight,
+                                        EndTangentWeight);
+
+    Uint8* const pBytes = static_cast<Uint8*>(pOutput);
+    for (size_t Component = 0; Component < ComponentCount; ++Component)
+    {
+        const Float32 Value =
+            LoadAnimationFloat(pStartValue, Component) * StartValueWeight +
+            LoadAnimationFloat(pStartTangent, Component) * StartTangentWeight +
+            LoadAnimationFloat(pEndValue, Component) * EndValueWeight +
+            LoadAnimationFloat(pEndTangent, Component) * EndTangentWeight;
+        StoreAnimationFloat(pBytes, Component, Value);
+    }
+}
+
+
+template <Uint32 FixedElementCount>
+Uint32 GetAnimationQuaternionElementCount(const RadientAnimationSamplerDesc& Sampler,
+                                          size_t                             SampleSize) noexcept
+{
+    const Uint32 ElementCount = FixedElementCount != 0 ? FixedElementCount : Sampler.Value.ArraySize;
+    VERIFY_EXPR(FixedElementCount == 0 || Sampler.Value.ArraySize == FixedElementCount);
+    VERIFY_EXPR(SampleSize == static_cast<size_t>(ElementCount) * sizeof(RadientQuaternion));
+    return ElementCount;
+}
+
+void NormalizeAnimationQuaternions(const Uint8* pSource,
+                                   Uint32       ElementCount,
+                                   Uint8*       pOutput) noexcept
+{
+    for (Uint32 Element = 0; Element < ElementCount; ++Element)
+    {
+        const RadientQuaternion Result = RadientMath::Normalize(LoadAnimationQuaternion(pSource, Element));
         StoreAnimationQuaternion(pOutput, Element, Result);
     }
 }
 
-void SampleAnimationValue(const RadientAnimationSamplerDesc& Sampler,
-                          RADIENT_ANIMATION_VALUE_SEMANTIC   Semantic,
-                          Float32                            Time,
-                          size_t                             SampleSize,
-                          void*                              pOutput) noexcept
+template <Uint32 FixedElementCount>
+void SampleAnimationQuaternionsStep(const RadientAnimationSamplerDesc& Sampler,
+                                    Float32                            Time,
+                                    size_t                             SampleSize,
+                                    void*                              pOutput) noexcept
 {
+    const Uint32 ElementCount = GetAnimationQuaternionElementCount<FixedElementCount>(Sampler, SampleSize);
+    const Uint32 KeyIndex     = FindAnimationKeyInterval(Sampler, Time).StartKey;
+    NormalizeAnimationQuaternions(GetAnimationKeyValue(Sampler, SampleSize, KeyIndex),
+                                  ElementCount,
+                                  static_cast<Uint8*>(pOutput));
+}
+
+template <Uint32 FixedElementCount>
+void SampleAnimationQuaternionsLinear(const RadientAnimationSamplerDesc& Sampler,
+                                      Float32                            Time,
+                                      size_t                             SampleSize,
+                                      void*                              pOutput) noexcept
+{
+    const Uint32 ElementCount =
+        GetAnimationQuaternionElementCount<FixedElementCount>(Sampler, SampleSize);
+    const AnimationSampleInterval Interval    = FindAnimationSampleInterval(Sampler, Time);
+    const Uint8* const            pStartValue = GetAnimationKeyValue(Sampler, SampleSize, Interval.StartKey);
+    Uint8* const                  pBytes      = static_cast<Uint8*>(pOutput);
+    if (Interval.StartKey == Interval.EndKey)
+    {
+        NormalizeAnimationQuaternions(pStartValue, ElementCount, pBytes);
+        return;
+    }
+
+    const Uint8* const pEndValue = GetAnimationKeyValue(Sampler, SampleSize, Interval.EndKey);
+    for (Uint32 Element = 0; Element < ElementCount; ++Element)
+    {
+        const RadientQuaternion Result = RadientMath::Slerp(
+            LoadAnimationQuaternion(pStartValue, Element),
+            LoadAnimationQuaternion(pEndValue, Element),
+            Interval.Factor);
+        StoreAnimationQuaternion(pBytes, Element, Result);
+    }
+}
+
+template <Uint32 FixedElementCount>
+void SampleAnimationQuaternionsCubic(const RadientAnimationSamplerDesc& Sampler,
+                                     Float32                            Time,
+                                     size_t                             SampleSize,
+                                     void*                              pOutput) noexcept
+{
+    const Uint32 ElementCount =
+        GetAnimationQuaternionElementCount<FixedElementCount>(Sampler, SampleSize);
     const AnimationSampleInterval Interval = FindAnimationSampleInterval(Sampler, Time);
-    Uint8* const                  pBytes   = static_cast<Uint8*>(pOutput);
+    const Uint8* const            pStartValue =
+        GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 1);
+    Uint8* const pBytes = static_cast<Uint8*>(pOutput);
+    if (Interval.StartKey == Interval.EndKey)
+    {
+        NormalizeAnimationQuaternions(pStartValue, ElementCount, pBytes);
+        return;
+    }
+
+    const Uint8* const pEndValue     = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 1);
+    const Uint8* const pStartTangent = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.StartKey, 2);
+    const Uint8* const pEndTangent   = GetCubicAnimationKeyValue(Sampler, SampleSize, Interval.EndKey, 0);
+
+    for (Uint32 Element = 0; Element < ElementCount; ++Element)
+    {
+        const RadientQuaternion Result = RadientMath::CubicHermite(
+            LoadAnimationQuaternion(pStartValue, Element),
+            LoadAnimationQuaternion(pStartTangent, Element),
+            LoadAnimationQuaternion(pEndValue, Element),
+            LoadAnimationQuaternion(pEndTangent, Element),
+            Interval.Factor,
+            Interval.Duration);
+        StoreAnimationQuaternion(pBytes, Element, Result);
+    }
+}
+
+using AnimationSampleKernel = void (*)(const RadientAnimationSamplerDesc& Sampler,
+                                       Float32                            Time,
+                                       size_t                             SampleSize,
+                                       void*                              pOutput) noexcept;
+
+template <typename ValueType>
+AnimationSampleKernel GetAnimationSingleValueSampleKernel(
+    RADIENT_ANIMATION_INTERPOLATION Interpolation) noexcept
+{
+    switch (Interpolation)
+    {
+        case RADIENT_ANIMATION_INTERPOLATION_STEP:
+            return &SampleAnimationSingleValueStep<ValueType>;
+
+        case RADIENT_ANIMATION_INTERPOLATION_LINEAR:
+            return &SampleAnimationSingleValueLinear<ValueType>;
+
+        case RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE:
+            return &SampleAnimationSingleValueCubic<ValueType>;
+
+        default:
+            return nullptr;
+    }
+}
+
+AnimationSampleKernel GetAnimationSampleKernel(const RadientAnimationSamplerDesc& Sampler,
+                                               RADIENT_ANIMATION_VALUE_SEMANTIC   Semantic) noexcept
+{
     if (Semantic == RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION)
-        SampleAnimationQuaternions(Sampler, Interval, SampleSize, pBytes);
-    else
-        SampleAnimationComponentWise(Sampler, Interval, SampleSize, pBytes);
+    {
+        const bool SingleQuaternion = Sampler.Value.ArraySize == 1;
+        switch (Sampler.Interpolation)
+        {
+            case RADIENT_ANIMATION_INTERPOLATION_STEP:
+                return SingleQuaternion ?
+                    &SampleAnimationQuaternionsStep<1> :
+                    &SampleAnimationQuaternionsStep<0>;
+
+            case RADIENT_ANIMATION_INTERPOLATION_LINEAR:
+                return SingleQuaternion ?
+                    &SampleAnimationQuaternionsLinear<1> :
+                    &SampleAnimationQuaternionsLinear<0>;
+
+            case RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE:
+                return SingleQuaternion ?
+                    &SampleAnimationQuaternionsCubic<1> :
+                    &SampleAnimationQuaternionsCubic<0>;
+
+            default:
+                return nullptr;
+        }
+    }
+
+    if (Semantic != RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE)
+        return nullptr;
+
+    if (Sampler.Value.ArraySize == 1)
+    {
+        switch (Sampler.Value.Type)
+        {
+            case RADIENT_ANIMATION_VALUE_TYPE_FLOAT:
+                return GetAnimationSingleValueSampleKernel<Float32>(Sampler.Interpolation);
+
+            case RADIENT_ANIMATION_VALUE_TYPE_FLOAT2:
+                return GetAnimationSingleValueSampleKernel<RadientFloat2>(Sampler.Interpolation);
+
+            case RADIENT_ANIMATION_VALUE_TYPE_FLOAT3:
+                return GetAnimationSingleValueSampleKernel<RadientFloat3>(Sampler.Interpolation);
+
+            case RADIENT_ANIMATION_VALUE_TYPE_FLOAT4:
+                return GetAnimationSingleValueSampleKernel<RadientFloat4>(Sampler.Interpolation);
+
+            default:
+                break;
+        }
+    }
+
+    switch (Sampler.Interpolation)
+    {
+        case RADIENT_ANIMATION_INTERPOLATION_STEP:
+            return &SampleAnimationComponentsStep;
+
+        case RADIENT_ANIMATION_INTERPOLATION_LINEAR:
+            return &SampleAnimationComponentsLinear;
+
+        case RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE:
+            return &SampleAnimationComponentsCubic;
+
+        default:
+            return nullptr;
+    }
 }
 
 struct PendingAnimationDestination
@@ -441,11 +703,17 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
 
 struct AnimationSampleJob
 {
-    Uint32                           SamplerIndex     = InvalidRadientAnimationSamplerIndex;
-    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic         = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
-    size_t                           OutputOffset     = 0;
-    size_t                           OutputSize       = 0;
-    Uint32                           DestinationCount = 0;
+    Uint32                SamplerIndex     = InvalidRadientAnimationSamplerIndex;
+    Uint32                DestinationCount = 0;
+    size_t                OutputOffset     = 0;
+    size_t                OutputSize       = 0;
+    AnimationSampleKernel pKernel          = nullptr;
+};
+
+struct AnimationSampleJobKey
+{
+    Uint32                           SamplerIndex = InvalidRadientAnimationSamplerIndex;
+    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
 };
 
 struct AnimationDestinationWriteJob
@@ -485,15 +753,18 @@ bool AppendAnimationScratchBlock(size_t  Size,
     return true;
 }
 
-RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&  Clip,
-                                             Uint32                           SamplerIndex,
-                                             RADIENT_ANIMATION_VALUE_SEMANTIC Semantic,
-                                             std::vector<AnimationSampleJob>& SampleJobs,
-                                             Uint32&                          SampleJobIndex)
+RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&     Clip,
+                                             Uint32                              SamplerIndex,
+                                             RADIENT_ANIMATION_VALUE_SEMANTIC    Semantic,
+                                             std::vector<AnimationSampleJobKey>& SampleJobKeys,
+                                             std::vector<AnimationSampleJob>&    SampleJobs,
+                                             Uint32&                             SampleJobIndex)
 {
-    for (size_t Index = 0; Index < SampleJobs.size(); ++Index)
+    VERIFY_EXPR(SampleJobKeys.size() == SampleJobs.size());
+
+    for (size_t Index = 0; Index < SampleJobKeys.size(); ++Index)
     {
-        if (SampleJobs[Index].SamplerIndex == SamplerIndex && SampleJobs[Index].Semantic == Semantic)
+        if (SampleJobKeys[Index].SamplerIndex == SamplerIndex && SampleJobKeys[Index].Semantic == Semantic)
         {
             SampleJobIndex = static_cast<Uint32>(Index);
             return RADIENT_STATUS_OK;
@@ -506,9 +777,16 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&  Cl
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    const RadientAnimationSamplerDesc& Sampler      = Clip.pSamplers[SamplerIndex];
-    const AnimationValueTypeInfo       TypeInfo     = GetAnimationValueTypeInfo(Sampler.Value.Type);
-    Uint64                             OutputSize64 = 0;
+    const RadientAnimationSamplerDesc& Sampler = Clip.pSamplers[SamplerIndex];
+    const AnimationSampleKernel        pKernel = GetAnimationSampleKernel(Sampler, Semantic);
+    if (pKernel == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Failed to compile a Radient animation sampling kernel");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    const AnimationValueTypeInfo TypeInfo     = GetAnimationValueTypeInfo(Sampler.Value.Type);
+    Uint64                       OutputSize64 = 0;
     if (!CheckedMultiply(TypeInfo.NativeSize, Sampler.Value.ArraySize, OutputSize64) ||
         !IsAddressableSize(OutputSize64))
     {
@@ -517,11 +795,12 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&  Cl
     }
 
     SampleJobIndex = static_cast<Uint32>(SampleJobs.size());
+    SampleJobKeys.push_back({SamplerIndex, Semantic});
     SampleJobs.push_back({SamplerIndex,
-                          Semantic,
+                          0,
                           0,
                           static_cast<size_t>(OutputSize64),
-                          0});
+                          pKernel});
     return RADIENT_STATUS_OK;
 }
 
@@ -606,11 +885,10 @@ public:
         {
             const AnimationSampleJob& SampleJob = m_SampleJobs[SampleJobIndex];
 
-            SampleAnimationValue(Clip.pSamplers[SampleJob.SamplerIndex],
-                                 SampleJob.Semantic,
-                                 Info.Time,
-                                 SampleJob.OutputSize,
-                                 pScratch + SampleJob.OutputOffset);
+            SampleJob.pKernel(Clip.pSamplers[SampleJob.SamplerIndex],
+                              Info.Time,
+                              SampleJob.OutputSize,
+                              pScratch + SampleJob.OutputOffset);
         }
 
         for (CompiledAnimationDestination& Destination : m_Destinations)
@@ -652,11 +930,10 @@ public:
                 }
                 else
                 {
-                    SampleAnimationValue(Clip.pSamplers[SampleJob.SamplerIndex],
-                                         SampleJob.Semantic,
-                                         Info.Time,
-                                         SampleJob.OutputSize,
-                                         pOutput);
+                    SampleJob.pKernel(Clip.pSamplers[SampleJob.SamplerIndex],
+                                      Info.Time,
+                                      SampleJob.OutputSize,
+                                      pOutput);
                 }
             }
 
@@ -700,6 +977,7 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
     if (DescriptorStatus != RADIENT_STATUS_OK)
         return DescriptorStatus;
 
+    std::vector<AnimationSampleJobKey>        SampleJobKeys;
     std::vector<AnimationSampleJob>           SampleJobs;
     std::vector<CompiledAnimationDestination> Destinations;
     std::vector<AnimationPropertySemantic>    PropertySemantics;
@@ -753,6 +1031,7 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
                 GetOrCreateAnimationSampleJob(Clip,
                                               Pending.SamplerIndices[PropertyIndex],
                                               Semantic,
+                                              SampleJobKeys,
                                               SampleJobs,
                                               SampleJobIndex);
             if (SampleJobStatus != RADIENT_STATUS_OK)

@@ -81,13 +81,6 @@ void MakeZRotation(Float32 Angle, RadientQuaternion& Rotation)
 namespace RadientMath
 {
 
-RadientFloat3 Lerp(const RadientFloat3& Start,
-                   const RadientFloat3& End,
-                   Float32              Factor) noexcept
-{
-    return Start * (1.f - Factor) + End * Factor;
-}
-
 RadientQuaternion Slerp(const RadientQuaternion& Start,
                         const RadientQuaternion& End,
                         Float32                  Factor) noexcept

@@ -224,10 +224,15 @@ inline RadientQuaternion Normalize(const RadientQuaternion& Value)
     };
 }
 
-/// Linearly interpolates between two three-component vectors.
-RadientFloat3 Lerp(const RadientFloat3& Start,
-                   const RadientFloat3& End,
-                   Float32              Factor) noexcept;
+/// Linearly interpolates between two values. Type may be any value that
+/// supports the arithmetic operations required by Diligent::lerp().
+template <typename Type>
+inline Type Lerp(const Type& Start,
+                 const Type& End,
+                 Float32     Factor) noexcept
+{
+    return Diligent::lerp(Start, End, Factor);
+}
 
 /// Spherically interpolates normalized rotations along the shortest path.
 RadientQuaternion Slerp(const RadientQuaternion& Start,
