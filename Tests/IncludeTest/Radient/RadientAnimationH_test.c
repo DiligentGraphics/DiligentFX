@@ -40,8 +40,6 @@ void RadientAnimation_C_UseTypes(void)
     RadientAnimationClipDesc               Clip               = {0};
     RadientAnimationPropertyBindingDesc    PropertyBinding    = {0};
     RadientAnimationResolvedPropertyDesc   ResolvedProperty   = {0};
-    RadientAnimationPropertyUpdateDesc     PropertyUpdate     = {0};
-    RadientAnimationApplyInfo              ApplyInfo          = {0};
     RadientAnimationDestinationMappingDesc DestinationMapping = {0};
     RadientAnimationDestinationDesc        Destination        = {0};
     RadientAnimationBindingDesc            Binding            = {0};
@@ -80,11 +78,6 @@ void RadientAnimation_C_UseTypes(void)
     PropertyBinding.FirstArrayElement     = 0;
     PropertyBinding.Value                 = Value;
     ResolvedProperty.Semantic             = Semantic;
-    PropertyUpdate.pValue                 = 0;
-    PropertyUpdate.ValueDataSize          = 0;
-    ApplyInfo.pUpdates                    = &PropertyUpdate;
-    ApplyInfo.UpdateCount                 = 1;
-    ApplyInfo.UpdateDerivedState          = True;
     DestinationMapping.ClipTargetIndex    = InvalidRadientAnimationTargetIndex;
     DestinationMapping.DestinationElement = DestinationElement;
     Destination.pDestination              = 0;
@@ -106,7 +99,6 @@ void RadientAnimation_C_UseTypes(void)
     (void)Clip;
     (void)PropertyBinding;
     (void)ResolvedProperty;
-    (void)ApplyInfo;
     (void)Binding;
     (void)EvaluateInfo;
     (void)Target;
@@ -128,14 +120,14 @@ void RadientAnimation_C_TestDestinationMacros(IRadientAnimationDestination* pDes
 
 void RadientAnimation_C_TestDestinationBindingMacros(IRadientAnimationDestinationBinding* pDestinationBinding)
 {
-    RadientAnimationPropertyUpdateDesc PropertyUpdate = {0};
-    RadientAnimationApplyInfo          ApplyInfo      = {0};
-    RADIENT_STATUS                     Status         = RADIENT_STATUS_OK;
+    void* const*   pOutputs = 0;
+    RADIENT_STATUS Status   = RADIENT_STATUS_OK;
 
-    ApplyInfo.pUpdates    = &PropertyUpdate;
-    ApplyInfo.UpdateCount = 1;
-    Status                = IRadientAnimationDestinationBinding_ApplyProperties(pDestinationBinding, &ApplyInfo);
+    Status = IRadientAnimationDestinationBinding_BeginUpdate(pDestinationBinding, &pOutputs);
+    if (Status == RADIENT_STATUS_OK)
+        Status = IRadientAnimationDestinationBinding_EndUpdate(pDestinationBinding, True);
 
+    (void)pOutputs;
     (void)Status;
 }
 

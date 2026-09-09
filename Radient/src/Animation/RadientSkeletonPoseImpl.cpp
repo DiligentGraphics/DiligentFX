@@ -133,29 +133,26 @@ public:
     using TBase = ObjectBase<IRadientAnimationDestinationBinding>;
 
     RadientSkeletonPoseAnimationDestinationBindingImpl(
-        IReferenceCounters*                            pRefCounters,
-        IRadientAnimationDestination*                  pDestination,
-        RadientSkeletonPoseImpl&                       Pose,
-        std::vector<SkeletonPoseAnimationBindingEntry> Entries) :
+        IReferenceCounters*           pRefCounters,
+        IRadientAnimationDestination* pDestination,
+        RadientSkeletonPoseImpl&      Pose,
+        std::vector<void*>            Outputs) :
         TBase{pRefCounters},
         m_pDestination{pDestination},
         m_Pose{Pose},
-        m_Entries{std::move(Entries)}
+        m_Outputs{std::move(Outputs)}
     {
         VERIFY_EXPR(m_pDestination != nullptr);
-        VERIFY_EXPR(!m_Entries.empty());
+        VERIFY_EXPR(!m_Outputs.empty());
     }
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAnimationDestinationBinding, TBase)
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ApplyProperties(
-        const RadientAnimationApplyInfo& Info) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE BeginUpdate(void* const** ppOutputs) override final
     {
-        if (Info.UpdateCount != static_cast<Uint32>(m_Entries.size()) ||
-            Info.pUpdates == nullptr)
-        {
+        if (ppOutputs == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
+        *ppOutputs = nullptr;
 
         if (m_Pose.m_State.Version == std::numeric_limits<Uint64>::max())
         {
@@ -163,41 +160,22 @@ public:
             return RADIENT_STATUS_INVALID_OPERATION;
         }
 
-        for (Uint32 PropertyIndex = 0; PropertyIndex < Info.UpdateCount; ++PropertyIndex)
-        {
-            const SkeletonPoseAnimationBindingEntry&  Entry     = m_Entries[PropertyIndex];
-            const RadientAnimationPropertyUpdateDesc& Update    = Info.pUpdates[PropertyIndex];
-            RadientTransform&                         Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
-            VERIFY_EXPR(Update.pValue != nullptr);
-            switch (Entry.Component)
-            {
-                case SkeletonPoseAnimationComponent::Translation:
-                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Position));
-                    std::memcpy(&Transform.Position, Update.pValue, sizeof(Transform.Position));
-                    break;
+        *ppOutputs = m_Outputs.data();
+        return RADIENT_STATUS_OK;
+    }
 
-                case SkeletonPoseAnimationComponent::Rotation:
-                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Rotation));
-                    std::memcpy(&Transform.Rotation, Update.pValue, sizeof(Transform.Rotation));
-                    break;
-
-                case SkeletonPoseAnimationComponent::Scale:
-                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Scale));
-                    std::memcpy(&Transform.Scale, Update.pValue, sizeof(Transform.Scale));
-                    break;
-            }
-        }
-
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE EndUpdate(Bool UpdateDerivedState) override final
+    {
         m_Pose.m_State.GlobalTransformsDirty = true;
-        return Info.UpdateDerivedState ?
+        return UpdateDerivedState ?
             m_Pose.UpdateGlobalTransforms() :
             RADIENT_STATUS_OK;
     }
 
 private:
-    const RefCntAutoPtr<IRadientAnimationDestination>    m_pDestination;
-    RadientSkeletonPoseImpl&                             m_Pose;
-    const std::vector<SkeletonPoseAnimationBindingEntry> m_Entries;
+    const RefCntAutoPtr<IRadientAnimationDestination> m_pDestination;
+    RadientSkeletonPoseImpl&                          m_Pose;
+    const std::vector<void*>                          m_Outputs;
 };
 
 void RadientSkeletonPoseAnimationDestinationImpl::QueryInterface(
@@ -277,11 +255,32 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
             }
         }
 
+        std::vector<void*> Outputs(PropertyCount);
+        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+        {
+            const SkeletonPoseAnimationBindingEntry& Entry     = Entries[PropertyIndex];
+            RadientTransform&                        Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
+            switch (Entry.Component)
+            {
+                case SkeletonPoseAnimationComponent::Translation:
+                    Outputs[PropertyIndex] = &Transform.Position;
+                    break;
+
+                case SkeletonPoseAnimationComponent::Rotation:
+                    Outputs[PropertyIndex] = &Transform.Rotation;
+                    break;
+
+                case SkeletonPoseAnimationComponent::Scale:
+                    Outputs[PropertyIndex] = &Transform.Scale;
+                    break;
+            }
+        }
+
         RefCntAutoPtr<RadientSkeletonPoseAnimationDestinationBindingImpl> pBinding{
             MakeNewRCObj<RadientSkeletonPoseAnimationDestinationBindingImpl>()(
                 static_cast<IRadientAnimationDestination*>(this),
                 m_Pose,
-                std::move(Entries))};
+                std::move(Outputs))};
 
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
             pResolvedProperties[PropertyIndex].Semantic = Semantics[PropertyIndex];

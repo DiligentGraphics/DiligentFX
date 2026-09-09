@@ -112,10 +112,6 @@ static_assert(std::is_standard_layout<RadientAnimationPropertyBindingDesc>::valu
 static_assert(std::is_trivially_copyable<RadientAnimationPropertyBindingDesc>::value, "RadientAnimationPropertyBindingDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationResolvedPropertyDesc>::value, "RadientAnimationResolvedPropertyDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationResolvedPropertyDesc>::value, "RadientAnimationResolvedPropertyDesc must be trivially copyable");
-static_assert(std::is_standard_layout<RadientAnimationPropertyUpdateDesc>::value, "RadientAnimationPropertyUpdateDesc must be a standard-layout type");
-static_assert(std::is_trivially_copyable<RadientAnimationPropertyUpdateDesc>::value, "RadientAnimationPropertyUpdateDesc must be trivially copyable");
-static_assert(std::is_standard_layout<RadientAnimationApplyInfo>::value, "RadientAnimationApplyInfo must be a standard-layout type");
-static_assert(std::is_trivially_copyable<RadientAnimationApplyInfo>::value, "RadientAnimationApplyInfo must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationDestinationMappingDesc>::value, "RadientAnimationDestinationMappingDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationDestinationMappingDesc>::value, "RadientAnimationDestinationMappingDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationDestinationDesc>::value, "RadientAnimationDestinationDesc must be a standard-layout type");
@@ -198,15 +194,6 @@ static_assert(DefaultPropertyBinding.Value.ArraySize == 1, "Unexpected RadientAn
 constexpr RadientAnimationResolvedPropertyDesc DefaultResolvedProperty{};
 static_assert(DefaultResolvedProperty.Semantic == RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN, "Unexpected RadientAnimationResolvedPropertyDesc semantic default value");
 
-constexpr RadientAnimationPropertyUpdateDesc DefaultPropertyUpdate{};
-static_assert(DefaultPropertyUpdate.pValue == nullptr, "Unexpected RadientAnimationPropertyUpdateDesc value pointer default value");
-static_assert(DefaultPropertyUpdate.ValueDataSize == 0, "Unexpected RadientAnimationPropertyUpdateDesc value-data size default value");
-
-constexpr RadientAnimationApplyInfo DefaultApplyInfo{};
-static_assert(DefaultApplyInfo.pUpdates == nullptr, "Unexpected RadientAnimationApplyInfo update pointer default value");
-static_assert(DefaultApplyInfo.UpdateCount == 0, "Unexpected RadientAnimationApplyInfo update count default value");
-static_assert(DefaultApplyInfo.UpdateDerivedState == True, "Unexpected RadientAnimationApplyInfo derived-state default value");
-
 constexpr RadientAnimationDestinationMappingDesc DefaultDestinationMapping{};
 static_assert(DefaultDestinationMapping.ClipTargetIndex == InvalidRadientAnimationTargetIndex, "Unexpected RadientAnimationDestinationMappingDesc target index default value");
 static_assert(DefaultDestinationMapping.DestinationElement == InvalidRadientAnimationDestinationElement, "Unexpected RadientAnimationDestinationMappingDesc destination element default value");
@@ -256,13 +243,12 @@ void RadientAnimation_CPP_UseDestinationBindingInterface(Diligent::IRadientAnima
 {
     using namespace Diligent;
 
-    RadientAnimationPropertyUpdateDesc PropertyUpdate{};
-    RadientAnimationApplyInfo          ApplyInfo{};
+    void* const*   pOutputs = nullptr;
+    RADIENT_STATUS Status   = pDestinationBinding->BeginUpdate(&pOutputs);
+    if (Status == RADIENT_STATUS_OK)
+        Status = pDestinationBinding->EndUpdate(True);
 
-    ApplyInfo.pUpdates          = &PropertyUpdate;
-    ApplyInfo.UpdateCount       = 1;
-    const RADIENT_STATUS Status = pDestinationBinding->ApplyProperties(ApplyInfo);
-
+    (void)pOutputs;
     (void)Status;
 }
 

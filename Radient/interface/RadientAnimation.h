@@ -540,45 +540,6 @@ struct RadientAnimationResolvedPropertyDesc
 typedef struct RadientAnimationResolvedPropertyDesc RadientAnimationResolvedPropertyDesc;
 
 
-/// One concrete value range supplied to an animation destination.
-struct RadientAnimationPropertyUpdateDesc
-{
-    /// Non-null pointer to one tightly packed native value range. Its position
-    /// in the update array corresponds to the property at the same position in
-    /// the array used to create the destination binding. The data is naturally
-    /// aligned for its native type, remains owned by the caller, and is valid
-    /// only for the duration of ApplyProperties().
-    const void* pValue DEFAULT_INITIALIZER(nullptr);
-
-    /// Exact byte size of pValue. The caller must set this to the native element
-    /// size in the corresponding property request multiplied by its array
-    /// length.
-    Uint64 ValueDataSize DEFAULT_INITIALIZER(0);
-};
-typedef struct RadientAnimationPropertyUpdateDesc RadientAnimationPropertyUpdateDesc;
-
-
-/// Parameters for one aggregate destination update.
-struct RadientAnimationApplyInfo
-{
-    /// Array of UpdateCount ordered property values. It must be non-null. Each
-    /// applied value is consumed or copied before ApplyProperties() returns;
-    /// neither the pointer nor referenced data is retained.
-    const RadientAnimationPropertyUpdateDesc* pUpdates DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of elements in pUpdates. It must equal the nonzero property count
-    /// used to create the destination binding.
-    Uint32 UpdateCount DEFAULT_INITIALIZER(0);
-
-    /// Requests one destination-specific derived-state update after every
-    /// primary property has been written. For a skeleton pose, true propagates
-    /// global transforms once for the complete joint batch. For a scene, it
-    /// requests one graph-wide transform propagation after the entity batch.
-    Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
-};
-typedef struct RadientAnimationApplyInfo RadientAnimationApplyInfo;
-
-
 /// Maps one symbolic clip target to an element of one aggregate destination.
 ///
 /// ClipTargetIndex selects a RadientAnimationTargetDesc, while
@@ -644,10 +605,11 @@ typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
 /// handled by a player/mixer destination.
 ///
 /// Example (C++): a 1,000-joint skeleton uses one destination descriptor, one
-/// retained pose destination, and a compact mapping array. Evaluation makes
-/// one ApplyProperties() call for the complete pose, not one virtual call per
-/// joint or transform component. ClipTargetForJoint is importer-produced data
-/// that maps the clip's authored node identities to skeleton joint indices.
+/// retained pose destination, and a compact mapping array. Evaluation brackets
+/// the complete pose with one BeginUpdate()/EndUpdate() pair, not one virtual
+/// call per joint or transform component. ClipTargetForJoint is
+/// importer-produced data that maps the clip's authored node identities to
+/// skeleton joint indices.
 ///
 /// \code
 /// std::vector<RadientAnimationDestinationMappingDesc> JointMappings(JointCount);
@@ -715,8 +677,11 @@ struct RadientAnimationEvaluateInfo
     /// player.
     Float32 Time DEFAULT_INITIALIZER(0.f);
 
-    /// Forwarded to each destination's single RadientAnimationApplyInfo after
-    /// all values for that destination have been sampled.
+    /// Passed to each destination binding's EndUpdate() after all values for
+    /// that destination have been sampled. True requests one
+    /// destination-specific derived-state update for the complete property
+    /// batch. For a skeleton pose, this propagates global transforms once; for
+    /// a scene, it requests one graph-wide transform propagation.
     Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
 };
 typedef struct RadientAnimationEvaluateInfo RadientAnimationEvaluateInfo;
@@ -760,8 +725,9 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 ///
 /// Destination binding creation is a cold operation. The returned object owns
 /// any optimized element/property lookup tables and releases them with ordinary
-/// IObject lifetime management. Applying values is one hot virtual call on that
-/// object per evaluation, never one call per element or property.
+/// IObject lifetime management. Applying values uses one hot
+/// BeginUpdate()/EndUpdate() virtual-call pair on that object per evaluation,
+/// never one call per element or property.
 DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
 {
     /// Compiles a complete, ordered batch of property ranges.
@@ -828,39 +794,70 @@ DILIGENT_END_INTERFACE
 /// The object retains its parent destination and owns every destination-specific
 /// lookup table or snapshot required by the plan. It is externally synchronized.
 /// If an element is destroyed after binding, it must never be silently replaced
-/// by a newly created element; ApplyProperties() returns RADIENT_STATUS_NOT_FOUND,
+/// by a newly created element; BeginUpdate() returns RADIENT_STATUS_NOT_FOUND,
 /// and the caller recreates the outer binding.
 DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
 {
-    /// Applies one complete ordered batch of concrete values.
+    /// Begins one direct-write update and returns its ordered output addresses.
     ///
-    /// Info.pUpdates must contain exactly one entry for every property supplied
-    /// when this object was created, in the same order. Update values must already
-    /// satisfy the resolved schema contract; implementations are not required to
-    /// validate or normalize individual values. Implementations may validate and
-    /// apply entries incrementally. A negative return value may leave earlier
-    /// entries applied; rollback is not required. On success, every input value
-    /// is consumed or copied before this method returns.
+    /// ppOutputs must be non-null. On success, *ppOutputs receives a borrowed,
+    /// non-null array containing exactly one writable address for every property
+    /// supplied when this object was created, in the same order. Each address is
+    /// non-null, naturally aligned for the property's native type, and exposes
+    /// the complete tightly packed byte range described by the corresponding
+    /// RadientAnimationPropertyBindingDesc::Value. Property ranges do not
+    /// overlap because CreateBinding() rejects aliases.
     ///
-    /// State outside the property ranges used to create this binding is
-    /// preserved. Applying several bindings to the same underlying state is
-    /// ordered overwrite, not blending. A player may instead bind clips to a
-    /// mixer or root-motion collector that implements IRadientAnimationDestination.
+    /// The caller writes one complete value to every returned address before
+    /// calling EndUpdate(). Values must satisfy the resolved schema contract;
+    /// the destination is not required to validate or normalize them. State
+    /// outside the bound property ranges is not writable through the returned
+    /// array and is preserved.
     ///
-    /// When Info.UpdateDerivedState is true, any global pose, scene-graph,
-    /// material, or similar derived update is performed once after the complete
-    /// property batch has been written.
+    /// Implementations may expose destination storage directly or return
+    /// destination-owned staging storage for properties that cannot be written
+    /// in place. They may refresh or pin relocatable storage during this call.
+    /// The output array and every address in it remain valid only until the
+    /// matching EndUpdate() returns and must not be retained by the caller.
     ///
-    /// Implementations return only RADIENT_STATUS_OK,
-    /// RADIENT_STATUS_NO_CHANGE, or a negative status; other nonnegative
-    /// statuses are not valid for this method.
+    /// A successful call opens an update bracket and must be followed by exactly
+    /// one EndUpdate() call before BeginUpdate() is called again. On failure, no
+    /// bracket is opened and *ppOutputs is set to null. Implementations return
+    /// only RADIENT_STATUS_OK or a negative status; other nonnegative statuses
+    /// are not valid for this method.
     ///
-    /// \return RADIENT_STATUS_OK for a successfully applied batch,
-    ///         RADIENT_STATUS_NO_CHANGE when an implementation elects to detect
-    ///         identical values, RADIENT_STATUS_NOT_FOUND when a bound element
-    ///         no longer exists, or another negative status on failure.
-    VIRTUAL RADIENT_STATUS METHOD(ApplyProperties)(THIS_
-                                                    const RadientAnimationApplyInfo REF Info) PURE;
+    /// \return RADIENT_STATUS_OK when writable outputs were acquired,
+    ///         RADIENT_STATUS_NOT_FOUND when a bound element no longer exists,
+    ///         or another negative status on failure.
+    VIRTUAL RADIENT_STATUS METHOD(BeginUpdate)(THIS_
+                                               void* const** ppOutputs) PURE;
+
+    /// Ends the active direct-write update.
+    ///
+    /// The caller must invoke this method exactly once after each successful
+    /// BeginUpdate(), after writing every output value. UpdateDerivedState
+    /// requests one destination-specific derived-state update after the complete
+    /// property batch has been written. For example, a skeleton-pose destination
+    /// propagates global transforms once for the complete joint batch when it is
+    /// true. When false, the destination must preserve the primary writes and may
+    /// leave derived state dirty for a later aggregate update.
+    ///
+    /// A destination that returned staging storage from BeginUpdate() publishes
+    /// those values during this call. Primary writes are not transactional: a
+    /// negative return value may leave some or all values applied, and rollback
+    /// is not required. The active bracket is closed and all output addresses
+    /// expire when this method returns, regardless of its status.
+    ///
+    /// Applying several bindings to the same underlying state is ordered
+    /// overwrite, not blending. A player may instead bind clips to a mixer or
+    /// root-motion collector that implements IRadientAnimationDestination.
+    /// Implementations return only RADIENT_STATUS_OK or a negative status;
+    /// other nonnegative statuses are not valid for this method.
+    ///
+    /// \return RADIENT_STATUS_OK when the update was completed, or a negative
+    ///         status on failure.
+    VIRTUAL RADIENT_STATUS METHOD(EndUpdate)(THIS_
+                                             Bool UpdateDerivedState) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -868,7 +865,8 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientAnimationDestinationBinding_ApplyProperties(This, ...) CALL_IFACE_METHOD(RadientAnimationDestinationBinding, ApplyProperties, This, __VA_ARGS__)
+#    define IRadientAnimationDestinationBinding_BeginUpdate(This, ...) CALL_IFACE_METHOD(RadientAnimationDestinationBinding, BeginUpdate, This, __VA_ARGS__)
+#    define IRadientAnimationDestinationBinding_EndUpdate(This, ...)   CALL_IFACE_METHOD(RadientAnimationDestinationBinding, EndUpdate,   This, __VA_ARGS__)
 
 #endif
 
@@ -936,11 +934,12 @@ DILIGENT_END_INTERFACE
 /// Compiled connection between an immutable clip and runtime destinations.
 ///
 /// A binding owns destination-specific sampling and write plans and may keep
-/// reusable scratch memory. Evaluate performs no schema, object, or property
-/// lookup and uses bulk destination updates. The binding and all of its
-/// destinations are externally synchronized and must not be accessed
-/// concurrently. If evaluation of a multi-destination binding fails, updates
-/// already applied to earlier destinations are not rolled back.
+/// reusable scratch memory for values shared by multiple destinations. Evaluate
+/// performs no schema, object, or property lookup and samples directly into
+/// destination outputs when possible. The binding and all of its destinations
+/// are externally synchronized and must not be accessed concurrently. If
+/// evaluation of a multi-destination binding fails, updates already applied to
+/// earlier destinations are not rolled back.
 DILIGENT_BEGIN_INTERFACE(IRadientAnimationBinding, IObject)
 {
     /// Returns a borrowed pointer to the clip retained by this binding.
@@ -948,8 +947,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationBinding, IObject)
 
     /// Samples the clip and writes all compiled destinations according to Info.
     /// Each distinct (sampler, value-semantic) pair is sampled once, and each
-    /// compiled destination binding receives one ApplyProperties() call in
-    /// descriptor order.
+    /// compiled destination binding receives one BeginUpdate()/EndUpdate() pair
+    /// in descriptor order. A successful BeginUpdate() is always paired with
+    /// EndUpdate(), and all of its outputs are written before EndUpdate().
     /// No schema, object, property, or interface lookup occurs during this
     /// method. Info.Time must be finite.
     ///
@@ -957,10 +957,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationBinding, IObject)
     /// applied to earlier destinations are not rolled back, and later
     /// destinations are not called.
     ///
-    /// \return RADIENT_STATUS_OK when at least one destination reports
-    ///         RADIENT_STATUS_OK,
-    ///         RADIENT_STATUS_NO_CHANGE when the binding is empty or every
-    ///         destination elects to report no change,
+    /// \return RADIENT_STATUS_OK when the nonempty binding was evaluated,
+    ///         RADIENT_STATUS_NO_CHANGE when the binding is empty,
     ///         RADIENT_STATUS_INVALID_ARGUMENT when Info is invalid, or a
     ///         destination failure.
     VIRTUAL RADIENT_STATUS METHOD(Evaluate)(THIS_

@@ -441,17 +441,23 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
 
 struct AnimationSampleJob
 {
-    Uint32                           SamplerIndex = InvalidRadientAnimationSamplerIndex;
-    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
-    size_t                           OutputOffset = 0;
-    size_t                           OutputSize   = 0;
+    Uint32                           SamplerIndex     = InvalidRadientAnimationSamplerIndex;
+    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic         = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+    size_t                           OutputOffset     = 0;
+    size_t                           OutputSize       = 0;
+    Uint32                           DestinationCount = 0;
+};
+
+struct AnimationDestinationWriteJob
+{
+    Uint32 SampleJobIndex   = InvalidRadientAnimationSamplerIndex;
+    Uint32 FirstOutputIndex = 0;
 };
 
 struct CompiledAnimationDestination
 {
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
-    std::vector<Uint32>                                SampleJobIndices;
-    std::vector<RadientAnimationPropertyUpdateDesc>    Updates;
+    std::vector<AnimationDestinationWriteJob>          WriteJobs;
 };
 
 struct AnimationPropertySemantic
@@ -483,7 +489,6 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&  Cl
                                              Uint32                           SamplerIndex,
                                              RADIENT_ANIMATION_VALUE_SEMANTIC Semantic,
                                              std::vector<AnimationSampleJob>& SampleJobs,
-                                             size_t&                          ScratchSize,
                                              Uint32&                          SampleJobIndex)
 {
     for (size_t Index = 0; Index < SampleJobs.size(); ++Index)
@@ -511,16 +516,12 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&  Cl
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    const size_t OutputSize   = static_cast<size_t>(OutputSize64);
-    size_t       OutputOffset = 0;
-    if (!AppendAnimationScratchBlock(OutputSize, TypeInfo.NativeAlignment, ScratchSize, OutputOffset))
-    {
-        LOG_ERROR_MESSAGE("Radient animation binding sampling scratch size overflows addressable memory");
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
     SampleJobIndex = static_cast<Uint32>(SampleJobs.size());
-    SampleJobs.push_back({SamplerIndex, Semantic, OutputOffset, OutputSize});
+    SampleJobs.push_back({SamplerIndex,
+                          Semantic,
+                          0,
+                          static_cast<size_t>(OutputSize64),
+                          0});
     return RADIENT_STATUS_OK;
 }
 
@@ -566,12 +567,14 @@ public:
     RadientAnimationBindingImpl(IReferenceCounters*                       pRefCounters,
                                 IRadientAnimationClipAsset*               pClip,
                                 std::vector<AnimationSampleJob>           SampleJobs,
+                                std::vector<Uint32>                       SharedSampleJobIndices,
                                 std::vector<CompiledAnimationDestination> Destinations,
                                 size_t                                    ScratchSize) :
         TBase{pRefCounters},
         m_pClip{pClip},
         m_pClipDesc{&m_pClip->GetDesc()},
         m_SampleJobs{std::move(SampleJobs)},
+        m_SharedSampleJobIndices{std::move(SharedSampleJobIndices)},
         m_Destinations{std::move(Destinations)}
     {
         VERIFY_EXPR(m_pClip != nullptr);
@@ -580,18 +583,6 @@ public:
             0 :
             1 + (ScratchSize - 1) / sizeof(std::max_align_t);
         m_Scratch.resize(ScratchWordCount);
-
-        Uint8* const pScratch = reinterpret_cast<Uint8*>(m_Scratch.data());
-        for (CompiledAnimationDestination& Destination : m_Destinations)
-        {
-            VERIFY_EXPR(Destination.Updates.size() == Destination.SampleJobIndices.size());
-            for (size_t UpdateIndex = 0; UpdateIndex < Destination.Updates.size(); ++UpdateIndex)
-            {
-                const AnimationSampleJob& SampleJob            = m_SampleJobs[Destination.SampleJobIndices[UpdateIndex]];
-                Destination.Updates[UpdateIndex].pValue        = pScratch + SampleJob.OutputOffset;
-                Destination.Updates[UpdateIndex].ValueDataSize = static_cast<Uint64>(SampleJob.OutputSize);
-            }
-        }
     }
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAnimationBinding, TBase)
@@ -611,8 +602,10 @@ public:
 
         const RadientAnimationClipDesc& Clip     = *m_pClipDesc;
         Uint8* const                    pScratch = reinterpret_cast<Uint8*>(m_Scratch.data());
-        for (const AnimationSampleJob& SampleJob : m_SampleJobs)
+        for (const Uint32 SampleJobIndex : m_SharedSampleJobIndices)
         {
+            const AnimationSampleJob& SampleJob = m_SampleJobs[SampleJobIndex];
+
             SampleAnimationValue(Clip.pSamplers[SampleJob.SamplerIndex],
                                  SampleJob.Semantic,
                                  Info.Time,
@@ -620,36 +613,72 @@ public:
                                  pScratch + SampleJob.OutputOffset);
         }
 
-        bool AnyDestinationApplied = false;
         for (CompiledAnimationDestination& Destination : m_Destinations)
         {
-            const RadientAnimationApplyInfo ApplyInfo{
-                Destination.Updates.data(),
-                static_cast<Uint32>(Destination.Updates.size()),
-                Info.UpdateDerivedState,
-            };
-            const RADIENT_STATUS Status = Destination.pBinding->ApplyProperties(ApplyInfo);
-            if (Status < 0)
-                return Status;
+            void* const*         ppOutputs   = nullptr;
+            const RADIENT_STATUS BeginStatus = Destination.pBinding->BeginUpdate(&ppOutputs);
+            if (BeginStatus != RADIENT_STATUS_OK)
+            {
+                if (BeginStatus < 0)
+                    return BeginStatus;
 
-            if (Status == RADIENT_STATUS_OK)
-            {
-                AnyDestinationApplied = true;
+                LOG_ERROR_MESSAGE("Radient animation destination binding returned an invalid success status from BeginUpdate");
+                return RADIENT_STATUS_INVALID_OPERATION;
             }
-            else if (Status != RADIENT_STATUS_NO_CHANGE)
+
+            VERIFY_EXPR(ppOutputs != nullptr);
+
+            for (Uint32 OutputIndex = 0; OutputIndex < static_cast<Uint32>(Destination.WriteJobs.size()); ++OutputIndex)
             {
-                LOG_ERROR_MESSAGE("Radient animation destination binding returned an invalid success status");
+                const AnimationDestinationWriteJob& WriteJob  = Destination.WriteJobs[OutputIndex];
+                const AnimationSampleJob&           SampleJob = m_SampleJobs[WriteJob.SampleJobIndex];
+                void* const                         pOutput   = ppOutputs[OutputIndex];
+                VERIFY_EXPR(pOutput != nullptr);
+
+                if (OutputIndex != WriteJob.FirstOutputIndex)
+                {
+                    const void* const pFirstOutput = ppOutputs[WriteJob.FirstOutputIndex];
+                    VERIFY_EXPR(pFirstOutput != nullptr);
+                    if (pOutput != pFirstOutput)
+                        std::memcpy(pOutput, pFirstOutput, SampleJob.OutputSize);
+                    continue;
+                }
+
+                if (SampleJob.DestinationCount > 1)
+                {
+                    std::memcpy(pOutput,
+                                pScratch + SampleJob.OutputOffset,
+                                SampleJob.OutputSize);
+                }
+                else
+                {
+                    SampleAnimationValue(Clip.pSamplers[SampleJob.SamplerIndex],
+                                         SampleJob.Semantic,
+                                         Info.Time,
+                                         SampleJob.OutputSize,
+                                         pOutput);
+                }
+            }
+
+            const RADIENT_STATUS EndStatus = Destination.pBinding->EndUpdate(Info.UpdateDerivedState);
+            if (EndStatus != RADIENT_STATUS_OK)
+            {
+                if (EndStatus < 0)
+                    return EndStatus;
+
+                LOG_ERROR_MESSAGE("Radient animation destination binding returned an invalid success status from EndUpdate");
                 return RADIENT_STATUS_INVALID_OPERATION;
             }
         }
 
-        return AnyDestinationApplied ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
+        return m_Destinations.empty() ? RADIENT_STATUS_NO_CHANGE : RADIENT_STATUS_OK;
     }
 
 private:
     const RefCntAutoPtr<IRadientAnimationClipAsset> m_pClip;
     const RadientAnimationClipDesc* const           m_pClipDesc;
     const std::vector<AnimationSampleJob>           m_SampleJobs;
+    const std::vector<Uint32>                       m_SharedSampleJobIndices;
     std::vector<CompiledAnimationDestination>       m_Destinations;
     std::vector<std::max_align_t>                   m_Scratch;
 };
@@ -674,7 +703,6 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
     std::vector<AnimationSampleJob>           SampleJobs;
     std::vector<CompiledAnimationDestination> Destinations;
     std::vector<AnimationPropertySemantic>    PropertySemantics;
-    size_t                                    ScratchSize = 0;
 
     Destinations.reserve(PendingDestinations.size());
     for (PendingAnimationDestination& Pending : PendingDestinations)
@@ -709,8 +737,7 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
 
         CompiledAnimationDestination Destination;
         Destination.pBinding = std::move(pDestinationBinding);
-        Destination.SampleJobIndices.reserve(Pending.Properties.size());
-        Destination.Updates.resize(Pending.Properties.size());
+        Destination.WriteJobs.reserve(Pending.Properties.size());
         for (size_t PropertyIndex = 0; PropertyIndex < Pending.Properties.size(); ++PropertyIndex)
         {
             const RadientAnimationPropertyBindingDesc& Property = Pending.Properties[PropertyIndex];
@@ -727,19 +754,58 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
                                               Pending.SamplerIndices[PropertyIndex],
                                               Semantic,
                                               SampleJobs,
-                                              ScratchSize,
                                               SampleJobIndex);
             if (SampleJobStatus != RADIENT_STATUS_OK)
                 return SampleJobStatus;
 
-            Destination.SampleJobIndices.push_back(SampleJobIndex);
+            const Uint32 OutputIndex      = static_cast<Uint32>(PropertyIndex);
+            Uint32       FirstOutputIndex = OutputIndex;
+            for (Uint32 PreviousOutputIndex = 0;
+                 PreviousOutputIndex < static_cast<Uint32>(Destination.WriteJobs.size());
+                 ++PreviousOutputIndex)
+            {
+                if (Destination.WriteJobs[PreviousOutputIndex].SampleJobIndex == SampleJobIndex)
+                {
+                    FirstOutputIndex = Destination.WriteJobs[PreviousOutputIndex].FirstOutputIndex;
+                    break;
+                }
+            }
+            if (FirstOutputIndex == OutputIndex)
+                ++SampleJobs[SampleJobIndex].DestinationCount;
+
+            Destination.WriteJobs.push_back({SampleJobIndex, FirstOutputIndex});
         }
 
         Destinations.emplace_back(std::move(Destination));
     }
 
+    std::vector<Uint32> SharedSampleJobIndices;
+    size_t              ScratchSize = 0;
+    for (Uint32 SampleJobIndex = 0; SampleJobIndex < static_cast<Uint32>(SampleJobs.size()); ++SampleJobIndex)
+    {
+        AnimationSampleJob& SampleJob = SampleJobs[SampleJobIndex];
+        if (SampleJob.DestinationCount <= 1)
+            continue;
+
+        SharedSampleJobIndices.push_back(SampleJobIndex);
+        const AnimationValueTypeInfo TypeInfo = GetAnimationValueTypeInfo(
+            Clip.pSamplers[SampleJob.SamplerIndex].Value.Type);
+        if (!AppendAnimationScratchBlock(SampleJob.OutputSize,
+                                         TypeInfo.NativeAlignment,
+                                         ScratchSize,
+                                         SampleJob.OutputOffset))
+        {
+            LOG_ERROR_MESSAGE("Radient animation binding shared sampling scratch size overflows addressable memory");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+    }
+
     RefCntAutoPtr<RadientAnimationBindingImpl> pBinding{MakeNewRCObj<RadientAnimationBindingImpl>()(
-        pClip, std::move(SampleJobs), std::move(Destinations), ScratchSize)};
+        pClip,
+        std::move(SampleJobs),
+        std::move(SharedSampleJobIndices),
+        std::move(Destinations),
+        ScratchSize)};
     *ppBinding = pBinding.Detach();
     return RADIENT_STATUS_OK;
 }
