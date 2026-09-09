@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientAssetURI.hpp"
+#include "Animation/RadientSkeletonPoseImpl.hpp"
 #include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 
@@ -40,12 +41,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -54,11 +53,6 @@ namespace Diligent
 
 namespace
 {
-
-static_assert(std::is_trivially_copyable<RadientTransform>::value,
-              "RadientTransform must support byte-wise copying");
-static_assert(std::is_trivially_copyable<RadientMatrix4x4>::value,
-              "RadientMatrix4x4 must support byte-wise copying");
 
 bool IsFinite(const RadientTransform& Transform) noexcept
 {
@@ -393,17 +387,7 @@ RADIENT_STATUS ValidateSkeletonAnimationDesc(const RadientSkeletonAnimationDesc&
 }
 
 class RadientSkeletonAssetImpl;
-class RadientSkeletonPoseImpl;
-class RadientSkeletonPoseWriterImpl;
 class RadientSkeletonAnimationAssetImpl;
-
-struct SkeletonPoseState
-{
-    std::vector<RadientTransform> LocalTransforms;
-    std::vector<RadientMatrix4x4> GlobalMatrices;
-    Uint64                        Version               = 1;
-    bool                          GlobalTransformsDirty = false;
-};
 
 using PackedMemory = std::unique_ptr<void, STDDeleterRawMem<void>>;
 
@@ -790,252 +774,6 @@ private:
     PackedSkeletonAnimationData m_Data;
 };
 
-class RadientSkeletonPoseImpl final : public ObjectBase<IRadientSkeletonPose>
-{
-public:
-    using TBase = ObjectBase<IRadientSkeletonPose>;
-
-    RadientSkeletonPoseImpl(IReferenceCounters*       pRefCounters,
-                            RadientSkeletonAssetImpl* pSkeleton) :
-        TBase{pRefCounters},
-        m_pSkeleton{pSkeleton}
-    {
-        VERIFY_EXPR(m_pSkeleton != nullptr);
-
-        const RadientSkeletonDesc& SkeletonDesc = m_pSkeleton->GetDesc();
-        m_State.LocalTransforms.reserve(SkeletonDesc.JointCount);
-        for (Uint32 JointIndex = 0; JointIndex < SkeletonDesc.JointCount; ++JointIndex)
-            m_State.LocalTransforms.push_back(SkeletonDesc.pJoints[JointIndex].LocalRestTransform);
-        m_State.GlobalMatrices.resize(m_State.LocalTransforms.size());
-        ComputeGlobalMatrices();
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSkeletonPose, TBase)
-
-    virtual IRadientSkeletonAsset* DILIGENT_CALL_TYPE GetSkeleton() const override final
-    {
-        return m_pSkeleton;
-    }
-
-    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
-    {
-        return m_State.Version;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetJointLocalTransforms(Uint32            FirstJoint,
-                                                                      Uint32            JointCount,
-                                                                      RadientTransform* pTransforms) const override final
-    {
-        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_State.LocalTransforms.size())) ||
-            (JointCount != 0 && pTransforms == nullptr))
-        {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-
-        if (JointCount != 0)
-        {
-            std::memcpy(pTransforms,
-                        m_State.LocalTransforms.data() + FirstJoint,
-                        sizeof(RadientTransform) * JointCount);
-        }
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetJointGlobalMatrices(Uint32            FirstJoint,
-                                                                     Uint32            JointCount,
-                                                                     RadientMatrix4x4* pMatrices) const override final
-    {
-        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_State.GlobalMatrices.size())) ||
-            (JointCount != 0 && pMatrices == nullptr))
-        {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-        if (JointCount == 0)
-            return RADIENT_STATUS_OK;
-        if (m_State.GlobalTransformsDirty)
-            return RADIENT_STATUS_PENDING;
-
-        std::memcpy(pMatrices,
-                    m_State.GlobalMatrices.data() + FirstJoint,
-                    sizeof(RadientMatrix4x4) * JointCount);
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ComputeSkinningMatrices(IRadientSkinAsset* pSkin,
-                                                                      RadientMatrix4x4*  pMatrices,
-                                                                      Bool               TransposeMatrices,
-                                                                      Bool               UpdateGlobalMatrices) override final
-    {
-        if (pSkin == nullptr || pMatrices == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        const RadientSkinDesc& SkinDesc = pSkin->GetDesc();
-        if (SkinDesc.pSkeleton != m_pSkeleton)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        if (m_State.GlobalTransformsDirty)
-        {
-            if (!UpdateGlobalMatrices)
-                return RADIENT_STATUS_PENDING;
-
-            const RADIENT_STATUS Status = UpdateGlobalTransforms();
-            if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
-                return Status;
-        }
-
-        for (Uint32 JointIndex = 0; JointIndex < SkinDesc.JointCount; ++JointIndex)
-        {
-            const RadientSkinJointBindingDesc& Joint = SkinDesc.pJoints[JointIndex];
-
-            const RadientMatrix4x4 Matrix = RadientMath::MultiplyMatrices(
-                Joint.InverseBindMatrix,
-                m_State.GlobalMatrices[Joint.SkeletonJointIndex]);
-
-            pMatrices[JointIndex] = TransposeMatrices ?
-                RadientMath::TransposeMatrix(Matrix) :
-                Matrix;
-        }
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE UpdateGlobalTransforms() override final
-    {
-        if (!m_State.GlobalTransformsDirty)
-            return RADIENT_STATUS_NO_CHANGE;
-        if (m_State.Version == std::numeric_limits<Uint64>::max())
-        {
-            LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        ComputeGlobalMatrices();
-        m_State.GlobalTransformsDirty = false;
-        ++m_State.Version;
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientSkeletonPoseWriter** ppWriter) override final;
-
-private:
-    friend class RadientSkeletonPoseWriterImpl;
-    friend class RadientSkeletonAnimationAssetImpl;
-
-    const std::vector<RadientTransform>& GetLocalTransforms() const noexcept
-    {
-        return m_State.LocalTransforms;
-    }
-
-    RADIENT_STATUS ApplyLocalTransforms(const std::vector<RadientTransform>& LocalTransforms,
-                                        Bool                                 UpdateGlobals) noexcept
-    {
-        VERIFY_EXPR(LocalTransforms.size() == m_State.LocalTransforms.size());
-        if (m_State.Version == std::numeric_limits<Uint64>::max())
-        {
-            LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-
-        std::memcpy(m_State.LocalTransforms.data(),
-                    LocalTransforms.data(),
-                    sizeof(RadientTransform) * LocalTransforms.size());
-        m_State.GlobalTransformsDirty = true;
-
-        return UpdateGlobals ?
-            UpdateGlobalTransforms() :
-            RADIENT_STATUS_OK;
-    }
-
-    void ComputeGlobalMatrices() noexcept
-    {
-        VERIFY_EXPR(m_State.GlobalMatrices.size() == m_State.LocalTransforms.size());
-        const RadientSkeletonDesc& SkeletonDesc     = m_pSkeleton->GetDesc();
-        const Uint32* const        pEvaluationOrder = m_pSkeleton->GetEvaluationOrder();
-        for (Uint32 OrderIndex = 0; OrderIndex < SkeletonDesc.JointCount; ++OrderIndex)
-        {
-            const Uint32           JointIndex  = pEvaluationOrder[OrderIndex];
-            const RadientMatrix4x4 LocalMatrix = RadientMath::TransformToMatrix(m_State.LocalTransforms[JointIndex]);
-            const Uint32           ParentIndex = SkeletonDesc.pJoints[JointIndex].ParentJointIndex;
-            m_State.GlobalMatrices[JointIndex] = ParentIndex == InvalidRadientJointIndex ?
-                LocalMatrix :
-                RadientMath::MultiplyMatrices(LocalMatrix, m_State.GlobalMatrices[ParentIndex]);
-        }
-    }
-
-private:
-    const RefCntAutoPtr<RadientSkeletonAssetImpl> m_pSkeleton;
-    SkeletonPoseState                             m_State;
-};
-
-class RadientSkeletonPoseWriterImpl final : public ObjectBase<IRadientSkeletonPoseWriter>
-{
-public:
-    using TBase = ObjectBase<IRadientSkeletonPoseWriter>;
-
-    RadientSkeletonPoseWriterImpl(IReferenceCounters*      pRefCounters,
-                                  RadientSkeletonPoseImpl* pPose) :
-        TBase{pRefCounters},
-        m_pPose{pPose},
-        m_LocalTransforms{pPose->GetLocalTransforms()}
-    {
-        VERIFY_EXPR(m_pPose != nullptr);
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSkeletonPoseWriter, TBase)
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetJointLocalTransforms(Uint32                  FirstJoint,
-                                                                      Uint32                  JointCount,
-                                                                      const RadientTransform* pTransforms) override final
-    {
-        if (!RadientValidation::IsValidSubrange(FirstJoint, JointCount, static_cast<Uint32>(m_LocalTransforms.size())) ||
-            (JointCount != 0 && pTransforms == nullptr))
-        {
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-
-        if (JointCount == 0)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        std::memcpy(m_LocalTransforms.data() + FirstJoint,
-                    pTransforms,
-                    sizeof(RadientTransform) * JointCount);
-        m_HasPendingChanges = true;
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResetToRestPose() override final
-    {
-        const RadientSkeletonDesc& SkeletonDesc = m_pPose->GetSkeleton()->GetDesc();
-
-        bool Changed = false;
-        for (Uint32 JointIndex = 0; JointIndex < SkeletonDesc.JointCount; ++JointIndex)
-        {
-            if (m_LocalTransforms[JointIndex] != SkeletonDesc.pJoints[JointIndex].LocalRestTransform)
-            {
-                m_LocalTransforms[JointIndex] = SkeletonDesc.pJoints[JointIndex].LocalRestTransform;
-                Changed                       = true;
-            }
-        }
-
-        m_HasPendingChanges |= Changed;
-        return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Commit(Bool UpdateGlobalTransforms) override final
-    {
-        if (!m_HasPendingChanges)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        const RADIENT_STATUS Status = m_pPose->ApplyLocalTransforms(m_LocalTransforms, UpdateGlobalTransforms);
-        if (RADIENT_SUCCEEDED(Status))
-            m_HasPendingChanges = false;
-        return Status;
-    }
-
-private:
-    const RefCntAutoPtr<RadientSkeletonPoseImpl> m_pPose;
-    std::vector<RadientTransform>                m_LocalTransforms;
-    bool                                         m_HasPendingChanges = false;
-};
 
 RADIENT_STATUS RadientSkeletonAssetImpl::CreatePose(IRadientSkeletonPose** ppPose)
 {
@@ -1046,33 +784,14 @@ RADIENT_STATUS RadientSkeletonAssetImpl::CreatePose(IRadientSkeletonPose** ppPos
 
     try
     {
-        RefCntAutoPtr<RadientSkeletonPoseImpl> pPose{MakeNewRCObj<RadientSkeletonPoseImpl>()(this)};
+        RefCntAutoPtr<RadientSkeletonPoseImpl> pPose{
+            MakeNewRCObj<RadientSkeletonPoseImpl>()(this, GetEvaluationOrder())};
         *ppPose = pPose.Detach();
         return RADIENT_STATUS_OK;
     }
     catch (const std::exception& Error)
     {
         LOG_ERROR_MESSAGE("Failed to create a Radient skeleton pose: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
-}
-
-RADIENT_STATUS RadientSkeletonPoseImpl::CreateWriter(IRadientSkeletonPoseWriter** ppWriter)
-{
-    if (ppWriter == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppWriter == nullptr, "Output skeleton pose writer pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppWriter = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientSkeletonPoseWriterImpl> pWriter{MakeNewRCObj<RadientSkeletonPoseWriterImpl>()(this)};
-        *ppWriter = pWriter.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create a Radient skeleton pose writer: ", Error.what());
         return RADIENT_STATUS_FAILED;
     }
 }
@@ -1172,17 +891,14 @@ RADIENT_STATUS RadientSkeletonAnimationAssetImpl::Evaluate(Float64              
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    RadientSkeletonPoseImpl* const pPoseImpl = ClassPtrCast<RadientSkeletonPoseImpl>(pPose);
-    if (pPoseImpl->m_State.Version == std::numeric_limits<Uint64>::max())
-    {
-        LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
+    RadientSkeletonPoseImpl* const pPoseImpl        = ClassPtrCast<RadientSkeletonPoseImpl>(pPose);
+    RadientTransform*              pLocalTransforms = nullptr;
+    const RADIENT_STATUS           BeginStatus      = pPoseImpl->BeginLegacyAnimationUpdate(pLocalTransforms);
+    if (BeginStatus != RADIENT_STATUS_OK)
+        return BeginStatus;
 
-    std::vector<RadientTransform>& LocalTransforms = pPoseImpl->m_State.LocalTransforms;
-    const RadientSkeletonDesc&     SkeletonDesc    = pSkeleton->GetDesc();
-    VERIFY_EXPR(LocalTransforms.size() == SkeletonDesc.JointCount);
-    const Float32 ClampedTime = static_cast<Float32>(std::clamp(Time, 0.0, static_cast<Float64>(AnimationDesc.Duration)));
+    const RadientSkeletonDesc& SkeletonDesc = pSkeleton->GetDesc();
+    const Float32              ClampedTime  = static_cast<Float32>(std::clamp(Time, 0.0, static_cast<Float64>(AnimationDesc.Duration)));
 
     const JointAnimationStart* const pJointsByStartTime = m_Data.GetJointsByStartTime();
     const auto                       FirstNotStarted    = std::upper_bound(
@@ -1194,7 +910,7 @@ RADIENT_STATUS RadientSkeletonAnimationAssetImpl::Evaluate(Float64              
          JointIt != pJointsByStartTime + SkeletonDesc.JointCount;
          ++JointIt)
     {
-        LocalTransforms[JointIt->JointIndex] =
+        pLocalTransforms[JointIt->JointIndex] =
             SkeletonDesc.pJoints[JointIt->JointIndex].LocalRestTransform;
     }
 
@@ -1210,13 +926,10 @@ RADIENT_STATUS RadientSkeletonAnimationAssetImpl::Evaluate(Float64              
         Transform.Position                                 = EvaluateAnimationCurve(Track.Translation, ClampedTime, Transform.Position);
         Transform.Rotation                                 = EvaluateAnimationCurve(Track.Rotation, ClampedTime, Transform.Rotation);
         Transform.Scale                                    = EvaluateAnimationCurve(Track.Scale, ClampedTime, Transform.Scale);
-        LocalTransforms[Track.SkeletonJointIndex]          = Transform;
+        pLocalTransforms[Track.SkeletonJointIndex]         = Transform;
     }
 
-    pPoseImpl->m_State.GlobalTransformsDirty = true;
-    return UpdateGlobalTransforms ?
-        pPoseImpl->UpdateGlobalTransforms() :
-        RADIENT_STATUS_OK;
+    return pPoseImpl->EndLegacyAnimationUpdate(UpdateGlobalTransforms);
 }
 
 } // namespace

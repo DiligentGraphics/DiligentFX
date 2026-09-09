@@ -5,6 +5,7 @@ project(Radient CXX)
 set(SOURCE
     src/Animation/RadientAnimationBindingImpl.cpp
     src/Animation/RadientAnimationRegistryImpl.cpp
+    src/Animation/RadientSkeletonPoseImpl.cpp
     src/Assets/RadientAnimationClipAsset.cpp
     src/Assets/RadientAssetManagerImpl.cpp
     src/Assets/RadientAssetResolver.cpp
@@ -70,6 +71,7 @@ set(SOURCE
 set(INCLUDE
     include/Animation/RadientAnimationBindingImpl.hpp
     include/Animation/RadientAnimationRegistryImpl.hpp
+    include/Animation/RadientSkeletonPoseImpl.hpp
     include/Animation/RadientAnimationValueType.hpp
     include/Assets/RadientAssetImpl.hpp
     include/Assets/RadientAssetCache.hpp
