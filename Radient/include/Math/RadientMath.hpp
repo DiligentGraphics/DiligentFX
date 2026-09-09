@@ -29,12 +29,27 @@
 #include "RadientAssets.h"
 #include "RadientMath.h"
 #include "RadientScene.h"
-#include "BasicMath.hpp"
+#include "AdvancedMath.hpp"
 
 #include <cmath>
 
 namespace Diligent
 {
+
+constexpr RadientFloat2 operator+(const RadientFloat2& Lhs, const RadientFloat2& Rhs)
+{
+    return RadientFloat2{Lhs.x + Rhs.x, Lhs.y + Rhs.y};
+}
+
+constexpr RadientFloat2 operator*(const RadientFloat2& Value, Float32 Scale)
+{
+    return RadientFloat2{Value.x * Scale, Value.y * Scale};
+}
+
+constexpr RadientFloat2 operator*(Float32 Scale, const RadientFloat2& Value)
+{
+    return Value * Scale;
+}
 
 constexpr RadientFloat3 operator+(const RadientFloat3& Lhs, const RadientFloat3& Rhs)
 {
@@ -53,7 +68,37 @@ constexpr RadientFloat3 operator*(const RadientFloat3& Value, Float32 Scale)
 
 constexpr RadientFloat3 operator*(Float32 Scale, const RadientFloat3& Value)
 {
-    return RadientFloat3{Value.x * Scale, Value.y * Scale, Value.z * Scale};
+    return Value * Scale;
+}
+
+constexpr RadientFloat4 operator+(const RadientFloat4& Lhs, const RadientFloat4& Rhs)
+{
+    return RadientFloat4{Lhs.x + Rhs.x, Lhs.y + Rhs.y, Lhs.z + Rhs.z, Lhs.w + Rhs.w};
+}
+
+constexpr RadientFloat4 operator*(const RadientFloat4& Value, Float32 Scale)
+{
+    return RadientFloat4{Value.x * Scale, Value.y * Scale, Value.z * Scale, Value.w * Scale};
+}
+
+constexpr RadientFloat4 operator*(Float32 Scale, const RadientFloat4& Value)
+{
+    return Value * Scale;
+}
+
+constexpr RadientQuaternion operator+(const RadientQuaternion& Lhs, const RadientQuaternion& Rhs)
+{
+    return RadientQuaternion{Lhs.x + Rhs.x, Lhs.y + Rhs.y, Lhs.z + Rhs.z, Lhs.w + Rhs.w};
+}
+
+constexpr RadientQuaternion operator*(const RadientQuaternion& Value, Float32 Scale)
+{
+    return RadientQuaternion{Value.x * Scale, Value.y * Scale, Value.z * Scale, Value.w * Scale};
+}
+
+constexpr RadientQuaternion operator*(Float32 Scale, const RadientQuaternion& Value)
+{
+    return Value * Scale;
 }
 
 namespace RadientMath
@@ -189,23 +234,54 @@ RadientQuaternion Slerp(const RadientQuaternion& Start,
                         const RadientQuaternion& End,
                         Float32                  Factor) noexcept;
 
-/// Evaluates a cubic Hermite vector segment. Tangents are derivatives per
-/// second and are scaled by Duration.
-RadientFloat3 CubicHermite(const RadientFloat3& Start,
-                           const RadientFloat3& StartTangent,
-                           const RadientFloat3& End,
-                           const RadientFloat3& EndTangent,
-                           Float32              Factor,
-                           Float32              Duration) noexcept;
+/// Computes cubic Hermite basis weights. Factor is not clamped. Tangent
+/// weights include Duration so that input tangents may be expressed as
+/// derivatives per second.
+inline void GetCubicHermiteWeights(Float32  Factor,
+                                   Float32  Duration,
+                                   Float32& StartValueWeight,
+                                   Float32& StartTangentWeight,
+                                   Float32& EndValueWeight,
+                                   Float32& EndTangentWeight) noexcept
+{
+    const Float32 Factor2 = Factor * Factor;
+    const Float32 Factor3 = Factor2 * Factor;
+    StartValueWeight      = 2.f * Factor3 - 3.f * Factor2 + 1.f;
+    StartTangentWeight    = (Factor3 - 2.f * Factor2 + Factor) * Duration;
+    EndValueWeight        = -2.f * Factor3 + 3.f * Factor2;
+    EndTangentWeight      = (Factor3 - Factor2) * Duration;
+}
 
-/// Evaluates a component-wise cubic Hermite quaternion segment and normalizes
-/// the result. Tangents are derivatives per second and are scaled by Duration.
-RadientQuaternion CubicHermite(const RadientQuaternion& Start,
-                               const RadientQuaternion& StartTangent,
-                               const RadientQuaternion& End,
-                               const RadientQuaternion& EndTangent,
-                               Float32                  Factor,
-                               Float32                  Duration) noexcept;
+/// Evaluates a cubic Hermite segment. Tangents are derivatives per second and
+/// are scaled by Duration. Type may be any value that supports the arithmetic
+/// operations required by HermiteSpline(). The result is not normalized.
+template <typename Type>
+inline Type CubicHermite(const Type& Start,
+                         const Type& StartTangent,
+                         const Type& End,
+                         const Type& EndTangent,
+                         Float32     Factor,
+                         Float32     Duration) noexcept
+{
+    return HermiteSpline(Start,
+                         End,
+                         StartTangent * Duration,
+                         EndTangent * Duration,
+                         Factor);
+}
+
+/// Evaluates a cubic Hermite quaternion segment and normalizes the result.
+/// Tangents are derivatives per second and are scaled by Duration.
+inline RadientQuaternion CubicHermite(const RadientQuaternion& Start,
+                                      const RadientQuaternion& StartTangent,
+                                      const RadientQuaternion& End,
+                                      const RadientQuaternion& EndTangent,
+                                      Float32                  Factor,
+                                      Float32                  Duration) noexcept
+{
+    return Normalize(CubicHermite<RadientQuaternion>(
+        Start, StartTangent, End, EndTangent, Factor, Duration));
+}
 
 inline QuaternionF ToQuaternion(const RadientQuaternion& Value)
 {

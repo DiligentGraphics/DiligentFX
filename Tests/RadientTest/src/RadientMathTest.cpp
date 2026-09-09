@@ -238,6 +238,51 @@ TEST(RadientMathTest, InterpolatesAnimationValues)
     ExpectQuaternionNear(CubicRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
 }
 
+TEST(RadientMathTest, ComputesCubicHermiteWeights)
+{
+    Float32 StartValueWeight;
+    Float32 StartTangentWeight;
+    Float32 EndValueWeight;
+    Float32 EndTangentWeight;
+    RadientMath::GetCubicHermiteWeights(
+        0.25f,
+        4.f,
+        StartValueWeight,
+        StartTangentWeight,
+        EndValueWeight,
+        EndTangentWeight);
+
+    EXPECT_FLOAT_EQ(StartValueWeight, 27.f / 32.f);
+    EXPECT_FLOAT_EQ(StartTangentWeight, 9.f / 16.f);
+    EXPECT_FLOAT_EQ(EndValueWeight, 5.f / 32.f);
+    EXPECT_FLOAT_EQ(EndTangentWeight, -3.f / 16.f);
+}
+
+TEST(RadientMathTest, CubicHermiteInterpolatesFloat2AndFloat4ComponentWise)
+{
+    const RadientFloat2 Float2Value = RadientMath::CubicHermite(
+        RadientFloat2{0.f, 4.f},
+        RadientFloat2{2.f, -2.f},
+        RadientFloat2{4.f, 8.f},
+        RadientFloat2{-2.f, 2.f},
+        0.5f,
+        2.f);
+    EXPECT_FLOAT_EQ(Float2Value.x, 3.f);
+    EXPECT_FLOAT_EQ(Float2Value.y, 5.f);
+
+    const RadientFloat4 Float4Value = RadientMath::CubicHermite(
+        RadientFloat4{0.f, 2.f, 4.f, 6.f},
+        RadientFloat4{0.f, 2.f, 0.f, -2.f},
+        RadientFloat4{2.f, 4.f, 6.f, 8.f},
+        RadientFloat4{0.f, -2.f, 0.f, 2.f},
+        0.5f,
+        2.f);
+    EXPECT_FLOAT_EQ(Float4Value.x, 1.f);
+    EXPECT_FLOAT_EQ(Float4Value.y, 4.f);
+    EXPECT_FLOAT_EQ(Float4Value.z, 5.f);
+    EXPECT_FLOAT_EQ(Float4Value.w, 6.f);
+}
+
 TEST(RadientMathTest, RoundTripsMatrixType)
 {
     // Matrix layout conversion should be lossless in both directions.

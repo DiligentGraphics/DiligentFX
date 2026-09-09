@@ -128,68 +128,6 @@ RadientQuaternion Slerp(const RadientQuaternion& Start,
     });
 }
 
-namespace
-{
-
-void GetCubicHermiteWeights(Float32  Factor,
-                            Float32  Duration,
-                            Float32& StartValueWeight,
-                            Float32& StartTangentWeight,
-                            Float32& EndValueWeight,
-                            Float32& EndTangentWeight) noexcept
-{
-    const Float32 Factor2 = Factor * Factor;
-    const Float32 Factor3 = Factor2 * Factor;
-    StartValueWeight      = 2.f * Factor3 - 3.f * Factor2 + 1.f;
-    StartTangentWeight    = (Factor3 - 2.f * Factor2 + Factor) * Duration;
-    EndValueWeight        = -2.f * Factor3 + 3.f * Factor2;
-    EndTangentWeight      = (Factor3 - Factor2) * Duration;
-}
-
-} // namespace
-
-RadientFloat3 CubicHermite(const RadientFloat3& Start,
-                           const RadientFloat3& StartTangent,
-                           const RadientFloat3& End,
-                           const RadientFloat3& EndTangent,
-                           Float32              Factor,
-                           Float32              Duration) noexcept
-{
-    Float32 StartValueWeight;
-    Float32 StartTangentWeight;
-    Float32 EndValueWeight;
-    Float32 EndTangentWeight;
-    GetCubicHermiteWeights(Factor, Duration,
-                           StartValueWeight, StartTangentWeight,
-                           EndValueWeight, EndTangentWeight);
-    return Start * StartValueWeight +
-        StartTangent * StartTangentWeight +
-        End * EndValueWeight +
-        EndTangent * EndTangentWeight;
-}
-
-RadientQuaternion CubicHermite(const RadientQuaternion& Start,
-                               const RadientQuaternion& StartTangent,
-                               const RadientQuaternion& End,
-                               const RadientQuaternion& EndTangent,
-                               Float32                  Factor,
-                               Float32                  Duration) noexcept
-{
-    Float32 StartValueWeight;
-    Float32 StartTangentWeight;
-    Float32 EndValueWeight;
-    Float32 EndTangentWeight;
-    GetCubicHermiteWeights(Factor, Duration,
-                           StartValueWeight, StartTangentWeight,
-                           EndValueWeight, EndTangentWeight);
-    return Normalize(RadientQuaternion{
-        Start.x * StartValueWeight + StartTangent.x * StartTangentWeight + End.x * EndValueWeight + EndTangent.x * EndTangentWeight,
-        Start.y * StartValueWeight + StartTangent.y * StartTangentWeight + End.y * EndValueWeight + EndTangent.y * EndTangentWeight,
-        Start.z * StartValueWeight + StartTangent.z * StartTangentWeight + End.z * EndValueWeight + EndTangent.z * EndTangentWeight,
-        Start.w * StartValueWeight + StartTangent.w * StartTangentWeight + End.w * EndValueWeight + EndTangent.w * EndTangentWeight,
-    });
-}
-
 CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
                                      float                         Aspect,
                                      bool                          NDCMinusOneToOne,
