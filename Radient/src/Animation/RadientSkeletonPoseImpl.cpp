@@ -63,13 +63,6 @@ struct SkeletonPoseAnimationBindingEntry
     SkeletonPoseAnimationComponent Component  = SkeletonPoseAnimationComponent::Translation;
 };
 
-Uint64 GetAnimationPropertyValueSize(SkeletonPoseAnimationComponent Component) noexcept
-{
-    return Component == SkeletonPoseAnimationComponent::Rotation ?
-        sizeof(RadientQuaternion) :
-        sizeof(RadientFloat3);
-}
-
 RADIENT_STATUS ResolveAnimationProperty(
     const RadientAnimationPropertyBindingDesc& Property,
     Uint32                                     JointCount,
@@ -159,20 +152,9 @@ public:
         const RadientAnimationApplyInfo& Info) override final
     {
         if (Info.UpdateCount != static_cast<Uint32>(m_Entries.size()) ||
-            Info.UpdateCount == 0 ||
             Info.pUpdates == nullptr)
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
-        }
-
-        for (Uint32 PropertyIndex = 0; PropertyIndex < Info.UpdateCount; ++PropertyIndex)
-        {
-            const RadientAnimationPropertyUpdateDesc& Update = Info.pUpdates[PropertyIndex];
-            if (Update.pValue == nullptr ||
-                Update.ValueDataSize != GetAnimationPropertyValueSize(m_Entries[PropertyIndex].Component))
-            {
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-            }
         }
 
         if (m_Pose.m_State.Version == std::numeric_limits<Uint64>::max())
@@ -186,17 +168,21 @@ public:
             const SkeletonPoseAnimationBindingEntry&  Entry     = m_Entries[PropertyIndex];
             const RadientAnimationPropertyUpdateDesc& Update    = Info.pUpdates[PropertyIndex];
             RadientTransform&                         Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
+            VERIFY_EXPR(Update.pValue != nullptr);
             switch (Entry.Component)
             {
                 case SkeletonPoseAnimationComponent::Translation:
+                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Position));
                     std::memcpy(&Transform.Position, Update.pValue, sizeof(Transform.Position));
                     break;
 
                 case SkeletonPoseAnimationComponent::Rotation:
+                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Rotation));
                     std::memcpy(&Transform.Rotation, Update.pValue, sizeof(Transform.Rotation));
                     break;
 
                 case SkeletonPoseAnimationComponent::Scale:
+                    VERIFY_EXPR(Update.ValueDataSize == sizeof(Transform.Scale));
                     std::memcpy(&Transform.Scale, Update.pValue, sizeof(Transform.Scale));
                     break;
             }

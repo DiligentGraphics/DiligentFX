@@ -543,15 +543,16 @@ typedef struct RadientAnimationResolvedPropertyDesc RadientAnimationResolvedProp
 /// One concrete value range supplied to an animation destination.
 struct RadientAnimationPropertyUpdateDesc
 {
-    /// Pointer to one tightly packed native value range. Its position in the
-    /// update array corresponds to the property at the same position in the
-    /// array used to create the destination binding. The data is naturally
+    /// Non-null pointer to one tightly packed native value range. Its position
+    /// in the update array corresponds to the property at the same position in
+    /// the array used to create the destination binding. The data is naturally
     /// aligned for its native type, remains owned by the caller, and is valid
     /// only for the duration of ApplyProperties().
     const void* pValue DEFAULT_INITIALIZER(nullptr);
 
-    /// Exact byte size of pValue. This equals the native element size in the
-    /// corresponding property request multiplied by its array length.
+    /// Exact byte size of pValue. The caller must set this to the native element
+    /// size in the corresponding property request multiplied by its array
+    /// length.
     Uint64 ValueDataSize DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientAnimationPropertyUpdateDesc RadientAnimationPropertyUpdateDesc;
@@ -560,9 +561,9 @@ typedef struct RadientAnimationPropertyUpdateDesc RadientAnimationPropertyUpdate
 /// Parameters for one aggregate destination update.
 struct RadientAnimationApplyInfo
 {
-    /// Array of UpdateCount ordered property values. It must be non-null. The
-    /// destination binding consumes or copies every referenced value before
-    /// ApplyProperties() returns.
+    /// Array of UpdateCount ordered property values. It must be non-null. Each
+    /// applied value is consumed or copied before ApplyProperties() returns;
+    /// neither the pointer nor referenced data is retained.
     const RadientAnimationPropertyUpdateDesc* pUpdates DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pUpdates. It must equal the nonzero property count
@@ -827,20 +828,19 @@ DILIGENT_END_INTERFACE
 /// The object retains its parent destination and owns every destination-specific
 /// lookup table or snapshot required by the plan. It is externally synchronized.
 /// If an element is destroyed after binding, it must never be silently replaced
-/// by a newly created element; ApplyProperties() returns RADIENT_STATUS_NOT_FOUND
-/// without applying any value, and the caller recreates the outer binding.
+/// by a newly created element; ApplyProperties() returns RADIENT_STATUS_NOT_FOUND,
+/// and the caller recreates the outer binding.
 DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
 {
     /// Applies one complete ordered batch of concrete values.
     ///
     /// Info.pUpdates must contain exactly one entry for every property supplied
-    /// when this object was created, in the same order. The method validates the
-    /// complete batch structure and every referenced runtime element before
-    /// modifying the destination. Update values must already satisfy the
-    /// resolved schema contract; implementations are not required to validate
-    /// or normalize individual values. A negative return value leaves both
-    /// primary and derived destination state unchanged. Every input value is
-    /// consumed or copied before this method returns.
+    /// when this object was created, in the same order. Update values must already
+    /// satisfy the resolved schema contract; implementations are not required to
+    /// validate or normalize individual values. Implementations may validate and
+    /// apply entries incrementally. A negative return value may leave earlier
+    /// entries applied; rollback is not required. On success, every input value
+    /// is consumed or copied before this method returns.
     ///
     /// State outside the property ranges used to create this binding is
     /// preserved. Applying several bindings to the same underlying state is

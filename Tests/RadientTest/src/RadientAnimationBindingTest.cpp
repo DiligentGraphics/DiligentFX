@@ -1993,73 +1993,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsDuplicatePhysicalWrit
     EXPECT_FALSE(pBinding);
 }
 
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateAtomically)
-{
-    const std::vector Properties = {
-        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-    };
-    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
-    ASSERT_NE(pBinding, nullptr);
-
-    const std::array<RadientTransform, 3>             Before        = GetLocalTransforms();
-    const Uint64                                      BeforeVersion = m_pPose->GetVersion();
-    const RadientFloat3                               Translation   = {10.f, 20.f, 30.f};
-    const RadientFloat3                               Scale         = {7.f, 8.f, 9.f};
-    std::array<RadientAnimationPropertyUpdateDesc, 2> Updates{};
-    Updates[0].pValue        = &Translation;
-    Updates[0].ValueDataSize = sizeof(Translation);
-    Updates[1].ValueDataSize = sizeof(Scale);
-
-    RadientAnimationApplyInfo Info;
-    Info.pUpdates    = Updates.data();
-    Info.UpdateCount = static_cast<Uint32>(Updates.size());
-    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(GetLocalTransforms(), Before);
-    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
-
-    RadientMatrix4x4 Matrix;
-    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
-
-    Updates[1].pValue = &Scale;
-    ASSERT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_OK);
-    const std::array<RadientTransform, 3> After = GetLocalTransforms();
-    EXPECT_EQ(After[0].Position, Translation);
-    EXPECT_EQ(After[1].Scale, Scale);
-    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion + 1);
-}
-
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongPropertyUpdateSizeAtomically)
-{
-    const std::vector Properties = {
-        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-    };
-    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(Properties);
-    ASSERT_NE(pBinding, nullptr);
-
-    const std::array<RadientTransform, 3>             Before        = GetLocalTransforms();
-    const Uint64                                      BeforeVersion = m_pPose->GetVersion();
-    const RadientFloat3                               Translation   = {10.f, 20.f, 30.f};
-    const RadientFloat3                               Scale         = {7.f, 8.f, 9.f};
-    std::array<RadientAnimationPropertyUpdateDesc, 2> Updates{};
-    Updates[0].pValue        = &Translation;
-    Updates[0].ValueDataSize = sizeof(Translation);
-    Updates[1].pValue        = &Scale;
-    Updates[1].ValueDataSize = sizeof(Scale) - 1;
-
-    RadientAnimationApplyInfo Info;
-    Info.pUpdates    = Updates.data();
-    Info.UpdateCount = static_cast<Uint32>(Updates.size());
-    EXPECT_EQ(pBinding->ApplyProperties(Info), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(GetLocalTransforms(), Before);
-    EXPECT_EQ(m_pPose->GetVersion(), BeforeVersion);
-
-    RadientMatrix4x4 Matrix;
-    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
-}
-
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateArrayAtomically)
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateArray)
 {
     const std::vector Properties = {
         MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
@@ -2079,7 +2013,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullPropertyUpdateArr
     EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
 }
 
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsMismatchedPropertyUpdateCountAtomically)
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsMismatchedPropertyUpdateCount)
 {
     const std::vector Properties = {
         MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
