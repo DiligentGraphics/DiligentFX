@@ -292,6 +292,18 @@
       }
     },
     {
+      "name": "MorphStressTestTheWave",
+      "model": "Models/MorphStressTest/glTF-Binary/MorphStressTest.glb",
+      "camera": {
+        "eye": [0.0, 0.7, 6.0],
+        "target": [0.0, 0.7, 0.0]
+      },
+      "animation": {
+        "name": "TheWave",
+        "time": 1.4
+      }
+    },
+    {
       "name": "MultiUVTest",
       "model": "Models/MultiUVTest/glTF-Binary/MultiUVTest.glb",
       "camera": {
