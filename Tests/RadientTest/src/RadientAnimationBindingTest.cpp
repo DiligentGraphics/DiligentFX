@@ -41,6 +41,8 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,6 +59,90 @@ static constexpr RadientAnimationPropertyID TestPropertyA          = 11;
 static constexpr RadientAnimationPropertyID TestPropertyB          = 12;
 static constexpr RadientAnimationPropertyID TestPropertyC          = 13;
 static constexpr RadientAnimationPropertyID TestQuaternionProperty = 14;
+
+enum class AnimationSamplingComponentType
+{
+    Boolean,
+    SignedInteger,
+    UnsignedInteger,
+    FloatingPoint,
+};
+
+struct AnimationSamplingValueTypeCase
+{
+    RADIENT_ANIMATION_VALUE_TYPE   Type;
+    AnimationSamplingComponentType ComponentType;
+    Uint32                         ComponentCount;
+    const char*                    Name;
+};
+
+static constexpr AnimationSamplingValueTypeCase AnimationSamplingValueTypeCases[] =
+    {
+        {RADIENT_ANIMATION_VALUE_TYPE_BOOL, AnimationSamplingComponentType::Boolean, 1, "Bool"},
+        {RADIENT_ANIMATION_VALUE_TYPE_INT, AnimationSamplingComponentType::SignedInteger, 1, "Int"},
+        {RADIENT_ANIMATION_VALUE_TYPE_INT2, AnimationSamplingComponentType::SignedInteger, 2, "Int2"},
+        {RADIENT_ANIMATION_VALUE_TYPE_INT3, AnimationSamplingComponentType::SignedInteger, 3, "Int3"},
+        {RADIENT_ANIMATION_VALUE_TYPE_INT4, AnimationSamplingComponentType::SignedInteger, 4, "Int4"},
+        {RADIENT_ANIMATION_VALUE_TYPE_UINT, AnimationSamplingComponentType::UnsignedInteger, 1, "Uint"},
+        {RADIENT_ANIMATION_VALUE_TYPE_UINT2, AnimationSamplingComponentType::UnsignedInteger, 2, "Uint2"},
+        {RADIENT_ANIMATION_VALUE_TYPE_UINT3, AnimationSamplingComponentType::UnsignedInteger, 3, "Uint3"},
+        {RADIENT_ANIMATION_VALUE_TYPE_UINT4, AnimationSamplingComponentType::UnsignedInteger, 4, "Uint4"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT, AnimationSamplingComponentType::FloatingPoint, 1, "Float"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT2, AnimationSamplingComponentType::FloatingPoint, 2, "Float2"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, AnimationSamplingComponentType::FloatingPoint, 3, "Float3"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, AnimationSamplingComponentType::FloatingPoint, 4, "Float4"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2, AnimationSamplingComponentType::FloatingPoint, 4, "Float2x2"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3X3, AnimationSamplingComponentType::FloatingPoint, 9, "Float3x3"},
+        {RADIENT_ANIMATION_VALUE_TYPE_FLOAT4X4, AnimationSamplingComponentType::FloatingPoint, 16, "Float4x4"},
+};
+static_assert(sizeof(AnimationSamplingValueTypeCases) / sizeof(AnimationSamplingValueTypeCases[0]) ==
+                  static_cast<size_t>(RADIENT_ANIMATION_VALUE_TYPE_COUNT - 1),
+              "Every native animation value type must have sampling coverage");
+
+struct AnimationSamplingCase
+{
+    AnimationSamplingValueTypeCase  ValueType;
+    RADIENT_ANIMATION_INTERPOLATION Interpolation;
+};
+
+const char* GetAnimationInterpolationName(RADIENT_ANIMATION_INTERPOLATION Interpolation)
+{
+    switch (Interpolation)
+    {
+        case RADIENT_ANIMATION_INTERPOLATION_STEP:
+            return "Step";
+
+        case RADIENT_ANIMATION_INTERPOLATION_LINEAR:
+            return "Linear";
+
+        case RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE:
+            return "CubicSpline";
+
+        default:
+            return "Unknown";
+    }
+}
+
+std::vector<AnimationSamplingCase> GetAnimationSamplingCases()
+{
+    std::vector<AnimationSamplingCase> Cases;
+    for (const AnimationSamplingValueTypeCase& ValueType : AnimationSamplingValueTypeCases)
+    {
+        Cases.push_back({ValueType, RADIENT_ANIMATION_INTERPOLATION_STEP});
+        if (ValueType.ComponentType == AnimationSamplingComponentType::FloatingPoint)
+        {
+            Cases.push_back({ValueType, RADIENT_ANIMATION_INTERPOLATION_LINEAR});
+            Cases.push_back({ValueType, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE});
+        }
+    }
+    return Cases;
+}
+
+std::string GetAnimationSamplingCaseName(const testing::TestParamInfo<AnimationSamplingCase>& Info)
+{
+    return std::string{Info.param.ValueType.Name} + "_" +
+        GetAnimationInterpolationName(Info.param.Interpolation);
+}
 
 class ErrorAllowanceScope
 {
@@ -469,47 +555,187 @@ ValueType ReadCapturedValue(const CapturedAnimationUpdate& Update, Uint32 Proper
     return Value;
 }
 
-template <typename ValueType>
-ValueType MakeComponentWiseValue(Float32 Base)
+template <typename ComponentType>
+ComponentType GetAnimationSamplingValue(Uint32 KeyIndex, Uint32 ComponentIndex)
 {
-    constexpr size_t ComponentCount = sizeof(ValueType) / sizeof(Float32);
-    static_assert(sizeof(ValueType) == ComponentCount * sizeof(Float32),
-                  "Test value must consist exclusively of Float32 components");
+    static_assert(std::is_same<ComponentType, Uint8>::value ||
+                      std::is_same<ComponentType, Int32>::value ||
+                      std::is_same<ComponentType, Uint32>::value ||
+                      std::is_same<ComponentType, Float32>::value,
+                  "Unexpected animation test component type");
 
-    std::array<Float32, ComponentCount> Components{};
-    for (size_t Component = 0; Component < ComponentCount; ++Component)
-        Components[Component] = Base + static_cast<Float32>(Component);
-
-    ValueType Value{};
-    std::memcpy(&Value, Components.data(), sizeof(Value));
-    return Value;
-}
-
-template <typename ValueType>
-void ExpectComponentWiseValueNear(const ValueType& Value,
-                                  Float32          ExpectedBase,
-                                  Float32          Tolerance = 1e-5f)
-{
-    constexpr size_t                    ComponentCount = sizeof(ValueType) / sizeof(Float32);
-    std::array<Float32, ComponentCount> Components{};
-    std::memcpy(Components.data(), &Value, sizeof(Value));
-    for (size_t Component = 0; Component < ComponentCount; ++Component)
+    if constexpr (std::is_same<ComponentType, Uint8>::value)
     {
-        EXPECT_NEAR(Components[Component],
-                    ExpectedBase + static_cast<Float32>(Component),
-                    Tolerance)
-            << "component " << Component;
+        return static_cast<Uint8>((KeyIndex + ComponentIndex) & 1u);
+    }
+    else if constexpr (std::is_same<ComponentType, Int32>::value)
+    {
+        constexpr Int32 Bases[] = {-100, 37, -401};
+        return Bases[KeyIndex] + static_cast<Int32>(ComponentIndex) * 13;
+    }
+    else if constexpr (std::is_same<ComponentType, Uint32>::value)
+    {
+        constexpr Uint32 Bases[] = {7u, 1003u, 0x80000000u};
+        return Bases[KeyIndex] + ComponentIndex * 11u;
+    }
+    else
+    {
+        constexpr Float32 Bases[] = {1.25f, 13.5f, -5.75f};
+        return Bases[KeyIndex] +
+            static_cast<Float32>(ComponentIndex) * (0.25f * static_cast<Float32>(KeyIndex + 1));
     }
 }
 
-template <typename ValueType>
-void ExpectCapturedComponentWiseValueNear(const CapturedAnimationUpdate& Update,
-                                          Uint32                         PropertyIndex,
-                                          Float32                        ExpectedBase)
+Float32 GetAnimationSamplingIncomingTangent(Uint32 KeyIndex, Uint32 ComponentIndex)
 {
-    SCOPED_TRACE(PropertyIndex);
-    ExpectComponentWiseValueNear(ReadCapturedValue<ValueType>(Update, PropertyIndex),
-                                 ExpectedBase);
+    // The first incoming tangent is unused and deliberately conspicuous.
+    constexpr Float32 Bases[] = {1000.f, -1.5f, 2.75f};
+    return Bases[KeyIndex] + static_cast<Float32>(ComponentIndex) * 0.125f;
+}
+
+Float32 GetAnimationSamplingOutgoingTangent(Uint32 KeyIndex, Uint32 ComponentIndex)
+{
+    // The last outgoing tangent is unused and deliberately conspicuous.
+    constexpr Float32 Bases[] = {1.25f, -2.5f, -1000.f};
+    return Bases[KeyIndex] - static_cast<Float32>(ComponentIndex) * 0.0625f;
+}
+
+template <typename ComponentType>
+std::vector<ComponentType> MakeAnimationSamplingData(const AnimationSamplingCase& Case,
+                                                     Uint32                       ArraySize)
+{
+    const Uint32 ComponentCount = Case.ValueType.ComponentCount * ArraySize;
+    const Uint32 CubicElementCount =
+        Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
+
+    std::vector<ComponentType> Values;
+    Values.reserve(3u * CubicElementCount * ComponentCount);
+    for (Uint32 KeyIndex = 0; KeyIndex < 3; ++KeyIndex)
+    {
+        if (Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE)
+        {
+            for (Uint32 ComponentIndex = 0; ComponentIndex < ComponentCount; ++ComponentIndex)
+            {
+                Values.push_back(static_cast<ComponentType>(
+                    GetAnimationSamplingIncomingTangent(KeyIndex, ComponentIndex)));
+            }
+        }
+
+        for (Uint32 ComponentIndex = 0; ComponentIndex < ComponentCount; ++ComponentIndex)
+            Values.push_back(GetAnimationSamplingValue<ComponentType>(KeyIndex, ComponentIndex));
+
+        if (Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE)
+        {
+            for (Uint32 ComponentIndex = 0; ComponentIndex < ComponentCount; ++ComponentIndex)
+            {
+                Values.push_back(static_cast<ComponentType>(
+                    GetAnimationSamplingOutgoingTangent(KeyIndex, ComponentIndex)));
+            }
+        }
+    }
+    return Values;
+}
+
+template <typename ComponentType>
+std::vector<ComponentType> GetExpectedAnimationSample(const AnimationSamplingCase& Case,
+                                                      Uint32                       ArraySize,
+                                                      Float32                      Time)
+{
+    static constexpr Float32 KeyTimes[]     = {1.f, 3.f, 7.f};
+    const Uint32             ComponentCount = Case.ValueType.ComponentCount * ArraySize;
+
+    Uint32 StartKey = 0;
+    Uint32 EndKey   = 0;
+    if (Time >= KeyTimes[2])
+    {
+        StartKey = 2;
+        EndKey   = 2;
+    }
+    else if (Time > KeyTimes[0])
+    {
+        StartKey = Time < KeyTimes[1] ? 0u : 1u;
+        EndKey   = StartKey + 1u;
+    }
+
+    if (Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_STEP)
+        EndKey = StartKey;
+
+    std::vector<ComponentType> Expected;
+    Expected.reserve(ComponentCount);
+    for (Uint32 ComponentIndex = 0; ComponentIndex < ComponentCount; ++ComponentIndex)
+    {
+        const ComponentType Start =
+            GetAnimationSamplingValue<ComponentType>(StartKey, ComponentIndex);
+        if (StartKey == EndKey)
+        {
+            Expected.push_back(Start);
+            continue;
+        }
+
+        const ComponentType End =
+            GetAnimationSamplingValue<ComponentType>(EndKey, ComponentIndex);
+        const Float32 Duration = KeyTimes[EndKey] - KeyTimes[StartKey];
+        const Float32 Factor   = (Time - KeyTimes[StartKey]) / Duration;
+        if (Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_LINEAR)
+        {
+            Expected.push_back(static_cast<ComponentType>(
+                Start + (End - Start) * Factor));
+            continue;
+        }
+
+        const Float32 Factor2            = Factor * Factor;
+        const Float32 Factor3            = Factor2 * Factor;
+        const Float32 StartValueWeight   = 2.f * Factor3 - 3.f * Factor2 + 1.f;
+        const Float32 StartTangentWeight = (Factor3 - 2.f * Factor2 + Factor) * Duration;
+        const Float32 EndValueWeight     = -2.f * Factor3 + 3.f * Factor2;
+        const Float32 EndTangentWeight   = (Factor3 - Factor2) * Duration;
+        const Float32 StartTangent =
+            GetAnimationSamplingOutgoingTangent(StartKey, ComponentIndex);
+        const Float32 EndTangent =
+            GetAnimationSamplingIncomingTangent(EndKey, ComponentIndex);
+        Expected.push_back(static_cast<ComponentType>(
+            Start * StartValueWeight +
+            StartTangent * StartTangentWeight +
+            End * EndValueWeight +
+            EndTangent * EndTangentWeight));
+    }
+    return Expected;
+}
+
+template <typename ComponentType>
+void ExpectCapturedAnimationComponents(const CapturedAnimationUpdate&    Update,
+                                       Uint32                            PropertyIndex,
+                                       const std::vector<ComponentType>& Expected,
+                                       bool                              Exact)
+{
+    ASSERT_LT(PropertyIndex, Update.Values.size());
+    const std::vector<Uint8>& ActualBytes = Update.Values[PropertyIndex];
+    ASSERT_EQ(ActualBytes.size(), Expected.size() * sizeof(ComponentType));
+
+    for (size_t ComponentIndex = 0; ComponentIndex < Expected.size(); ++ComponentIndex)
+    {
+        SCOPED_TRACE(ComponentIndex);
+        ComponentType Actual{};
+        std::memcpy(&Actual,
+                    ActualBytes.data() + ComponentIndex * sizeof(ComponentType),
+                    sizeof(ComponentType));
+        if constexpr (std::is_same<ComponentType, Float32>::value)
+        {
+            if (Exact)
+                EXPECT_EQ(Actual, Expected[ComponentIndex]);
+            else
+                EXPECT_NEAR(Actual, Expected[ComponentIndex], 1e-5f);
+        }
+        else if constexpr (std::is_same<ComponentType, Uint8>::value)
+        {
+            EXPECT_EQ(static_cast<Uint32>(Actual),
+                      static_cast<Uint32>(Expected[ComponentIndex]));
+        }
+        else
+        {
+            EXPECT_EQ(Actual, Expected[ComponentIndex]);
+        }
+    }
 }
 
 void ExpectFloat3Near(const RadientFloat3& Value,
@@ -584,6 +810,118 @@ protected:
 protected:
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
 };
+
+class RadientAnimationValueSamplingTest :
+    public RadientAnimationBindingTest,
+    public testing::WithParamInterface<AnimationSamplingCase>
+{
+protected:
+    template <typename ComponentType>
+    void RunSamplingCase(const AnimationSamplingCase& Case)
+    {
+        TestAnimationClipBuilder Builder;
+        Builder.Duration = 8.f;
+
+        std::vector<RadientAnimationDestinationMappingDesc> Mappings;
+        for (const Uint32 ArraySize : {1u, 2u})
+        {
+            const Uint32 Target  = Builder.AddTarget(ArraySize);
+            const Uint32 Sampler = Builder.AddSampler<ComponentType>(
+                Case.ValueType.Type,
+                Case.Interpolation,
+                {1.f, 3.f, 7.f},
+                MakeAnimationSamplingData<ComponentType>(Case, ArraySize),
+                ArraySize);
+            Builder.AddChannel(Target, TestPropertyA, Sampler);
+
+            RadientAnimationDestinationMappingDesc Mapping;
+            Mapping.ClipTargetIndex    = Target;
+            Mapping.DestinationElement = ArraySize;
+            Mappings.push_back(Mapping);
+        }
+
+        RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+        ASSERT_NE(pClip, nullptr);
+
+        auto                                    State        = std::make_shared<TestAnimationDestinationState>();
+        RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+        RefCntAutoPtr<IRadientAnimationBinding> pBinding =
+            BindSingle(pClip, pDestination, Mappings);
+        ASSERT_NE(pBinding, nullptr);
+
+        ASSERT_EQ(State->CreateRequests.size(), 1u);
+        ASSERT_EQ(State->CreateRequests[0].size(), 2u);
+        ExpectProperty(State->CreateRequests[0][0],
+                       1,
+                       TestPropertyA,
+                       Case.ValueType.Type,
+                       0,
+                       1);
+        ExpectProperty(State->CreateRequests[0][1],
+                       2,
+                       TestPropertyA,
+                       Case.ValueType.Type,
+                       0,
+                       2);
+
+        static constexpr std::array<Float32, 7> EvaluationTimes = {0.f, 1.f, 2.f, 3.f, 4.f, 7.f, 8.f};
+        for (const Float32 Time : EvaluationTimes)
+        {
+            RadientAnimationEvaluateInfo Info;
+            Info.Time = Time;
+            ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK) << "time " << Time;
+        }
+
+        ASSERT_EQ(State->EndCalls.size(), EvaluationTimes.size());
+        for (size_t EvaluationIndex = 0;
+             EvaluationIndex < EvaluationTimes.size();
+             ++EvaluationIndex)
+        {
+            const Float32 Time = EvaluationTimes[EvaluationIndex];
+            SCOPED_TRACE(Time);
+            const CapturedAnimationUpdate& Update = State->EndCalls[EvaluationIndex];
+            ASSERT_EQ(Update.Values.size(), 2u);
+            for (Uint32 ArraySize = 1; ArraySize <= 2; ++ArraySize)
+            {
+                SCOPED_TRACE(ArraySize);
+                ExpectCapturedAnimationComponents(
+                    Update,
+                    ArraySize - 1,
+                    GetExpectedAnimationSample<ComponentType>(Case, ArraySize, Time),
+                    Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_STEP);
+            }
+        }
+    }
+};
+
+TEST_P(RadientAnimationValueSamplingTest, SamplesSingleValuesAndArrays)
+{
+    const AnimationSamplingCase& Case = GetParam();
+    switch (Case.ValueType.ComponentType)
+    {
+        case AnimationSamplingComponentType::Boolean:
+            RunSamplingCase<Uint8>(Case);
+            break;
+
+        case AnimationSamplingComponentType::SignedInteger:
+            RunSamplingCase<Int32>(Case);
+            break;
+
+        case AnimationSamplingComponentType::UnsignedInteger:
+            RunSamplingCase<Uint32>(Case);
+            break;
+
+        case AnimationSamplingComponentType::FloatingPoint:
+            RunSamplingCase<Float32>(Case);
+            break;
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NativeValueTypes,
+    RadientAnimationValueSamplingTest,
+    testing::ValuesIn(GetAnimationSamplingCases()),
+    GetAnimationSamplingCaseName);
 
 TEST_F(RadientAnimationBindingTest, CompilesPropertiesAndBatchesInDescriptorOrder)
 {
@@ -1071,97 +1409,6 @@ TEST_F(RadientAnimationBindingTest, ScalesCubicSplineTangentsByKeyInterval)
     // At u=0.5, Hermite interpolation uses tangents 3*2 and -1*2 because
     // the key interval is two seconds. Omitting that scale would produce 6.5.
     EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 7.f);
-}
-
-TEST_F(RadientAnimationBindingTest, SamplesFloat1ThroughFloat4ForEveryInterpolationMode)
-{
-    TestAnimationClipBuilder Builder;
-    Builder.Duration = 2.f;
-    std::vector<RadientAnimationDestinationMappingDesc> Mappings;
-
-    const auto AddKernelCases = [&](auto TypeTag, RADIENT_ANIMATION_VALUE_TYPE Type) {
-        using ValueType    = decltype(TypeTag);
-        const auto AddCase = [&](RADIENT_ANIMATION_INTERPOLATION Interpolation,
-                                 std::vector<ValueType>          Values) {
-            const Uint32 Target  = Builder.AddTarget(static_cast<Uint32>(Mappings.size() + 1));
-            const Uint32 Sampler = Builder.AddSampler<ValueType>(
-                Type,
-                Interpolation,
-                {0.f, 1.f, 2.f},
-                Values);
-            Builder.AddChannel(Target, TestPropertyA, Sampler);
-
-            RadientAnimationDestinationMappingDesc Mapping;
-            Mapping.ClipTargetIndex    = Target;
-            Mapping.DestinationElement = static_cast<Uint32>(Mappings.size() + 1);
-            Mappings.push_back(Mapping);
-        };
-
-        AddCase(RADIENT_ANIMATION_INTERPOLATION_STEP,
-                {
-                    MakeComponentWiseValue<ValueType>(10.f),
-                    MakeComponentWiseValue<ValueType>(30.f),
-                    MakeComponentWiseValue<ValueType>(50.f),
-                });
-        AddCase(RADIENT_ANIMATION_INTERPOLATION_LINEAR,
-                {
-                    MakeComponentWiseValue<ValueType>(2.f),
-                    MakeComponentWiseValue<ValueType>(10.f),
-                    MakeComponentWiseValue<ValueType>(18.f),
-                });
-        AddCase(RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
-                {
-                    MakeComponentWiseValue<ValueType>(100.f),
-                    MakeComponentWiseValue<ValueType>(0.f),
-                    MakeComponentWiseValue<ValueType>(4.f),
-                    MakeComponentWiseValue<ValueType>(-2.f),
-                    MakeComponentWiseValue<ValueType>(12.f),
-                    MakeComponentWiseValue<ValueType>(8.f),
-                    MakeComponentWiseValue<ValueType>(-6.f),
-                    MakeComponentWiseValue<ValueType>(24.f),
-                    MakeComponentWiseValue<ValueType>(-100.f),
-                });
-    };
-
-    AddKernelCases(Float32{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
-    AddKernelCases(RadientFloat2{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2);
-    AddKernelCases(RadientFloat3{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
-    AddKernelCases(RadientFloat4{}, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
-
-    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
-    ASSERT_NE(pClip, nullptr);
-
-    auto                                    State        = std::make_shared<TestAnimationDestinationState>();
-    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
-    RefCntAutoPtr<IRadientAnimationBinding> pBinding     = BindSingle(pClip, pDestination, Mappings);
-    ASSERT_NE(pBinding, nullptr);
-
-    RadientAnimationEvaluateInfo Info;
-    Info.Time = 0.5f;
-    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
-    Info.Time = 1.f;
-    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
-
-    ASSERT_EQ(State->EndCalls.size(), 2u);
-    ASSERT_EQ(State->EndCalls[0].Values.size(), 12u);
-    ASSERT_EQ(State->EndCalls[1].Values.size(), 12u);
-
-    Uint32     PropertyIndex     = 0;
-    const auto ExpectKernelCases = [&](auto TypeTag) {
-        using ValueType = decltype(TypeTag);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 10.f);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 30.f);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 6.f);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 10.f);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[0], PropertyIndex, 6.75f);
-        ExpectCapturedComponentWiseValueNear<ValueType>(State->EndCalls[1], PropertyIndex++, 12.f);
-    };
-
-    ExpectKernelCases(Float32{});
-    ExpectKernelCases(RadientFloat2{});
-    ExpectKernelCases(RadientFloat3{});
-    ExpectKernelCases(RadientFloat4{});
-    EXPECT_EQ(PropertyIndex, 12u);
 }
 
 TEST_F(RadientAnimationBindingTest, SamplesFloat3ArraysWithExactLayoutAndAlignment)

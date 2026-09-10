@@ -81,15 +81,31 @@ std::string GetAnimationValueTypeCaseName(const testing::TestParamInfo<Animation
     return Info.param.Name;
 }
 
-std::vector<AnimationValueTypeCase> GetDiscreteAnimationValueTypeCases()
+struct DiscreteAnimationInterpolationCase
 {
-    std::vector<AnimationValueTypeCase> Cases;
-    for (const AnimationValueTypeCase& Case : AnimationValueTypeCases)
+    AnimationValueTypeCase          ValueType;
+    RADIENT_ANIMATION_INTERPOLATION Interpolation;
+    const char*                     InterpolationName;
+};
+
+std::vector<DiscreteAnimationInterpolationCase> GetDiscreteAnimationInterpolationCases()
+{
+    std::vector<DiscreteAnimationInterpolationCase> Cases;
+    for (const AnimationValueTypeCase& ValueType : AnimationValueTypeCases)
     {
-        if (Case.IsDiscrete)
-            Cases.push_back(Case);
+        if (!ValueType.IsDiscrete)
+            continue;
+
+        Cases.push_back({ValueType, RADIENT_ANIMATION_INTERPOLATION_LINEAR, "Linear"});
+        Cases.push_back({ValueType, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE, "CubicSpline"});
     }
     return Cases;
+}
+
+std::string GetDiscreteAnimationInterpolationCaseName(
+    const testing::TestParamInfo<DiscreteAnimationInterpolationCase>& Info)
+{
+    return std::string{Info.param.ValueType.Name} + "_" + Info.param.InterpolationName;
 }
 
 RefCntAutoPtr<RadientAssetManagerImpl> CreateAssetManager()
@@ -191,9 +207,9 @@ class RadientAnimationNativeValueTypeValidationTest :
     public testing::WithParamInterface<AnimationValueTypeCase>
 {};
 
-class RadientAnimationDiscreteValueTypeValidationTest :
+class RadientAnimationDiscreteInterpolationValidationTest :
     public RadientAnimationAssetValidationTest,
-    public testing::WithParamInterface<AnimationValueTypeCase>
+    public testing::WithParamInterface<DiscreteAnimationInterpolationCase>
 {};
 
 TEST(RadientAnimationAssetTest, CreatesEmptyClip)
@@ -394,25 +410,27 @@ INSTANTIATE_TEST_SUITE_P(
     testing::ValuesIn(AnimationValueTypeCases),
     GetAnimationValueTypeCaseName);
 
-TEST_P(RadientAnimationDiscreteValueTypeValidationTest, RejectsNonStepInterpolation)
+TEST_P(RadientAnimationDiscreteInterpolationValidationTest, RejectsInterpolation)
 {
-    const AnimationValueTypeCase&                              Case       = GetParam();
-    alignas(Float32) const std::array<Uint8, sizeof(Int32[4])> ZeroValues = {};
+    const DiscreteAnimationInterpolationCase& Case = GetParam();
 
-    Sampler.Value.Type      = Case.Type;
+    alignas(Float32) const std::array<Uint8, sizeof(Int32[4])* 3> ZeroValues = {};
+
+    Sampler.Value.Type      = Case.ValueType.Type;
     Sampler.Value.ArraySize = 1;
-    Sampler.Interpolation   = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    Sampler.Interpolation   = Case.Interpolation;
     Sampler.pValues         = ZeroValues.data();
-    Sampler.ValueDataSize   = Case.NativeSize;
-    Sampler.KeyframeCount   = 1;
+    Sampler.ValueDataSize   = Case.ValueType.NativeSize *
+        (Case.Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u);
+    Sampler.KeyframeCount = 1;
     ExpectInvalidSampler(Sampler, "must use STEP interpolation");
 }
 
 INSTANTIATE_TEST_SUITE_P(
     DiscreteValueTypes,
-    RadientAnimationDiscreteValueTypeValidationTest,
-    testing::ValuesIn(GetDiscreteAnimationValueTypeCases()),
-    GetAnimationValueTypeCaseName);
+    RadientAnimationDiscreteInterpolationValidationTest,
+    testing::ValuesIn(GetDiscreteAnimationInterpolationCases()),
+    GetDiscreteAnimationInterpolationCaseName);
 
 TEST_F(RadientAnimationAssetValidationTest, RejectsNullOutput)
 {
