@@ -30,6 +30,7 @@
 #include "Scene/RadientSceneState.hpp"
 
 #include "RadientSkinning.h"
+#include "RadientMathTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "RefCntAutoPtr.hpp"
@@ -56,16 +57,6 @@ RadientTransform Translation(Float32 X, Float32 Y = 0.f, Float32 Z = 0.f)
 RadientMatrix4x4 TranslationMatrix(Float32 X)
 {
     return RadientMath::TransformToMatrix(Translation(X));
-}
-
-void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
-                      const RadientMatrix4x4& Reference)
-{
-    for (Uint32 Element = 0; Element < 16; ++Element)
-    {
-        EXPECT_NEAR(Matrix.Data[Element], Reference.Data[Element], 1e-5f)
-            << "Matrix element " << Element;
-    }
 }
 
 std::array<RadientMatrix4x4, 2> MakeSentinelMatrices()

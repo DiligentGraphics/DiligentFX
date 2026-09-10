@@ -34,13 +34,13 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientTestDataHelpers.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 
 #include "BasicMath.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
-#include <fstream>
 #include <limits>
 #include <string>
 
@@ -49,17 +49,6 @@ using namespace Diligent::Testing;
 
 namespace
 {
-
-std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    File << Contents;
-
-    return Path;
-}
 
 std::string WriteBasicGLTFFile(const TempDirectory& TempDir)
 {

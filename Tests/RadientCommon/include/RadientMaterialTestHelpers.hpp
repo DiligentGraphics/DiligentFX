@@ -29,6 +29,7 @@
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
 #include "RefCntAutoPtr.hpp"
+#include "gtest/gtest.h"
 
 #include <utility>
 
@@ -37,6 +38,30 @@ namespace Diligent
 
 namespace Testing
 {
+
+template <typename ValueType>
+ValueType GetParameter(IRadientMaterialAsset&         Material,
+                       RadientMaterialParameterHandle Handle)
+{
+    ValueType Value{};
+    EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
+              RADIENT_STATUS_OK);
+    return Value;
+}
+
+template <typename ValueType>
+ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name)
+{
+    IRadientMaterialDefinitionAsset* const pDefinition = Material.GetDefinition();
+    EXPECT_NE(pDefinition, nullptr);
+    if (pDefinition == nullptr)
+        return {};
+
+    RadientMaterialParameterHandle Handle;
+    const RADIENT_STATUS           Status = pDefinition->FindParameter(Name, &Handle);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    return Status == RADIENT_STATUS_OK ? GetParameter<ValueType>(Material, Handle) : ValueType{};
+}
 
 namespace Detail
 {

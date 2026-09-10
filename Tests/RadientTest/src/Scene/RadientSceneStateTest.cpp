@@ -28,6 +28,7 @@
 #include "gtest/gtest.h"
 
 #include "Math/RadientMath.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "Scene/RadientSceneState.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
@@ -44,44 +45,18 @@ using namespace Diligent::Testing;
 namespace
 {
 
-static constexpr float EPSILON = 1e-5f;
-
 void ExpectTransformEq(const RadientTransform& Transform, const RadientTransform& Reference)
 {
-    EXPECT_EQ(Transform.Position.x, Reference.Position.x);
-    EXPECT_EQ(Transform.Position.y, Reference.Position.y);
-    EXPECT_EQ(Transform.Position.z, Reference.Position.z);
-
-    EXPECT_EQ(Transform.Rotation.x, Reference.Rotation.x);
-    EXPECT_EQ(Transform.Rotation.y, Reference.Rotation.y);
-    EXPECT_EQ(Transform.Rotation.z, Reference.Rotation.z);
-    EXPECT_EQ(Transform.Rotation.w, Reference.Rotation.w);
-
-    EXPECT_EQ(Transform.Scale.x, Reference.Scale.x);
-    EXPECT_EQ(Transform.Scale.y, Reference.Scale.y);
-    EXPECT_EQ(Transform.Scale.z, Reference.Scale.z);
+    ExpectFloat3Eq(Transform.Position, Reference.Position);
+    ExpectQuaternionEq(Transform.Rotation, Reference.Rotation);
+    ExpectFloat3Eq(Transform.Scale, Reference.Scale);
 }
 
 void ExpectTransformNear(const RadientTransform& Transform, const RadientTransform& Reference)
 {
-    EXPECT_NEAR(Transform.Position.x, Reference.Position.x, EPSILON);
-    EXPECT_NEAR(Transform.Position.y, Reference.Position.y, EPSILON);
-    EXPECT_NEAR(Transform.Position.z, Reference.Position.z, EPSILON);
-
-    EXPECT_NEAR(Transform.Rotation.x, Reference.Rotation.x, EPSILON);
-    EXPECT_NEAR(Transform.Rotation.y, Reference.Rotation.y, EPSILON);
-    EXPECT_NEAR(Transform.Rotation.z, Reference.Rotation.z, EPSILON);
-    EXPECT_NEAR(Transform.Rotation.w, Reference.Rotation.w, EPSILON);
-
-    EXPECT_NEAR(Transform.Scale.x, Reference.Scale.x, EPSILON);
-    EXPECT_NEAR(Transform.Scale.y, Reference.Scale.y, EPSILON);
-    EXPECT_NEAR(Transform.Scale.z, Reference.Scale.z, EPSILON);
-}
-
-void ExpectMatrixNear(const RadientMatrix4x4& Matrix, const RadientMatrix4x4& Reference)
-{
-    for (Uint32 i = 0; i < 16; ++i)
-        EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
+    ExpectFloat3Near(Transform.Position, Reference.Position);
+    ExpectQuaternionNear(Transform.Rotation, Reference.Rotation);
+    ExpectFloat3Near(Transform.Scale, Reference.Scale);
 }
 
 void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
@@ -110,13 +85,6 @@ void ExpectSceneRevisionDelta(const RadientSceneRevisions& Before,
     EXPECT_EQ(After.Visibility, Before.Visibility + Delta.Visibility);
     EXPECT_EQ(After.Cameras, Before.Cameras + Delta.Cameras);
     EXPECT_EQ(After.CustomComponents, Before.CustomComponents + Delta.CustomComponents);
-}
-
-RadientTransform MakeTranslation(float X, float Y, float Z)
-{
-    RadientTransform Transform;
-    Transform.Position = {X, Y, Z};
-    return Transform;
 }
 
 std::vector<RadientEntityID> CreateLinearChain(RadientSceneState& State, Uint32 NodeCount)

@@ -25,16 +25,16 @@
  */
 
 #include "Assets/RadientMeshIndexSource.hpp"
+#include "Assets/RadientMeshTestHelpers.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
 #include <cstring>
-#include <initializer_list>
 #include <memory>
-#include <vector>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
@@ -54,20 +54,6 @@ RadientMeshIndexSource MakeIndexSource(std::array<IndexType, 3>& Indices)
         CI.Type = VT_UINT32;
 
     return RadientMeshIndexSource{CI};
-}
-
-void ExpectPackedIndices(const RadientMeshIndexSource& Source,
-                         std::initializer_list<Uint32> ExpectedIndices)
-{
-    std::vector<Uint32> PackedIndices(Source.GetIndexCount(), 0xCDCDCDCDu);
-    ASSERT_EQ(PackedIndices.size(), ExpectedIndices.size());
-
-    ASSERT_EQ(Source.PackIndexData(RadientMeshIndexSource::PackDestination{
-                  PackedIndices.data(),
-                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
-              RADIENT_STATUS_OK);
-
-    EXPECT_EQ(PackedIndices, std::vector<Uint32>{ExpectedIndices});
 }
 
 } // namespace

@@ -37,6 +37,7 @@
 #include "GLTFLoader.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
@@ -53,8 +54,7 @@ using namespace Diligent::Testing;
 namespace
 {
 
-static constexpr float EPSILON        = 1e-5f;
-IVertexPool* const     TestVertexPool = reinterpret_cast<IVertexPool*>(size_t{1});
+IVertexPool* const TestVertexPool = reinterpret_cast<IVertexPool*>(size_t{1});
 
 std::unique_ptr<RadientTesseraMaterialCache> MakeDrawableMaterialCache();
 RADIENT_STATUS                               PrepareDrawableMaterialCache(RadientTesseraMaterialCache& Cache);
@@ -426,13 +426,6 @@ RadientEntityID AddRenderableEntity(IRadientSceneWriter& Writer,
     return Entity;
 }
 
-RadientTransform MakeTranslation(float X, float Y, float Z)
-{
-    RadientTransform Transform;
-    Transform.Position = {X, Y, Z};
-    return Transform;
-}
-
 struct TestSkinningObjects
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
@@ -476,13 +469,6 @@ TestSkinningObjects CreateTestSkinningObjects()
     EXPECT_EQ(Objects.pSkeleton->CreatePose(Objects.pPose.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     return Objects;
-}
-
-void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
-                      const RadientMatrix4x4& Reference)
-{
-    for (Uint32 i = 0; i < 16; ++i)
-        EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
 }
 
 void ExpectDrawableChangeCounts(const RadientTesseraDrawableCache& Cache,

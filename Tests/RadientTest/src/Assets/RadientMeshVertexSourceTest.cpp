@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMeshVertexSource.hpp"
 
+#include "RadientMathTestHelpers.hpp"
+#include "RadientTestDataHelpers.hpp"
 #include "TestingEnvironment.hpp"
 
 #include "gtest/gtest.h"
@@ -37,19 +39,10 @@
 #include <vector>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
-
-template <typename ValueType>
-ValueType ReadValue(const std::vector<Uint8>& Buffer, size_t Offset)
-{
-    ValueType Value{};
-    EXPECT_LE(Offset + sizeof(ValueType), Buffer.size());
-    if (Offset + sizeof(ValueType) <= Buffer.size())
-        std::memcpy(&Value, Buffer.data() + Offset, sizeof(ValueType));
-    return Value;
-}
 
 RadientMeshCreateInfo MakeVertexMeshCI(const std::array<RadientFloat3, 2>& Positions)
 {
@@ -57,27 +50,6 @@ RadientMeshCreateInfo MakeVertexMeshCI(const std::array<RadientFloat3, 2>& Posit
     MeshCI.pPositions  = Positions.data();
     MeshCI.VertexCount = static_cast<Uint32>(Positions.size());
     return MeshCI;
-}
-
-void ExpectFloat2Eq(const RadientFloat2& Actual, const RadientFloat2& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-}
-
-void ExpectFloat3Eq(const RadientFloat3& Actual, const RadientFloat3& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-    EXPECT_FLOAT_EQ(Actual.z, Expected.z);
-}
-
-void ExpectFloat4Eq(const RadientFloat4& Actual, const RadientFloat4& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-    EXPECT_FLOAT_EQ(Actual.z, Expected.z);
-    EXPECT_FLOAT_EQ(Actual.w, Expected.w);
 }
 
 const std::array<RadientFloat3, 2> DefaultPositions{

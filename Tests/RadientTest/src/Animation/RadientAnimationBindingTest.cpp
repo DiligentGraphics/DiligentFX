@@ -30,6 +30,7 @@
 #include "RadientSkinning.h"
 
 #include "ObjectBase.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
@@ -737,25 +738,6 @@ void ExpectCapturedAnimationComponents(const CapturedAnimationUpdate&    Update,
             EXPECT_EQ(Actual, Expected[ComponentIndex]);
         }
     }
-}
-
-void ExpectFloat3Near(const RadientFloat3& Value,
-                      const RadientFloat3& Expected,
-                      Float32              Tolerance = 1e-5f)
-{
-    EXPECT_NEAR(Value.x, Expected.x, Tolerance);
-    EXPECT_NEAR(Value.y, Expected.y, Tolerance);
-    EXPECT_NEAR(Value.z, Expected.z, Tolerance);
-}
-
-void ExpectQuaternionNear(const RadientQuaternion& Value,
-                          const RadientQuaternion& Expected,
-                          Float32                  Tolerance = 1e-5f)
-{
-    EXPECT_NEAR(Value.x, Expected.x, Tolerance);
-    EXPECT_NEAR(Value.y, Expected.y, Tolerance);
-    EXPECT_NEAR(Value.z, Expected.z, Tolerance);
-    EXPECT_NEAR(Value.w, Expected.w, Tolerance);
 }
 
 void ExpectProperty(const RadientAnimationPropertyBindingDesc& Property,

@@ -33,6 +33,7 @@
 #include "GLTF_PBR_Renderer.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
@@ -50,15 +51,6 @@ using namespace Diligent::Testing;
 
 namespace
 {
-
-template <typename ValueType>
-ValueType GetParameter(IRadientMaterialAsset&         Material,
-                       RadientMaterialParameterHandle Handle)
-{
-    ValueType Value{};
-    EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_OK);
-    return Value;
-}
 
 void ExpectInvalidStandardDefinition(RadientAssetManagerImpl&                           AssetManager,
                                      const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,

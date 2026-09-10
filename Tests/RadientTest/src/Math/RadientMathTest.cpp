@@ -28,6 +28,7 @@
 #include "gtest/gtest.h"
 
 #include "Math/RadientMath.hpp"
+#include "RadientMathTestHelpers.hpp"
 
 #include <cmath>
 
@@ -39,23 +40,8 @@ namespace
 
 static constexpr float EPSILON = 1e-5f;
 
-void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
-                      const RadientMatrix4x4& Reference)
-{
-    for (Uint32 i = 0; i < 16; ++i)
-        EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
-}
-
-void ExpectFloat3Near(const RadientFloat3& Value,
-                      const RadientFloat3& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
-}
-
-void ExpectQuaternionNear(const RadientQuaternion& Value,
-                          const RadientQuaternion& Reference)
+void ExpectRotationNear(const RadientQuaternion& Value,
+                        const RadientQuaternion& Reference)
 {
     const float Dot =
         Value.x * Reference.x +
@@ -211,11 +197,11 @@ TEST(RadientMathTest, InterpolatesAnimationValues)
 
     const RadientQuaternion HalfRotation =
         RadientMath::Slerp(RadientQuaternion{}, RadientQuaternion{0.f, 0.f, 1.f, 0.f}, 0.5f);
-    ExpectQuaternionNear(HalfRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
+    ExpectRotationNear(HalfRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
 
     const RadientQuaternion SameRotation =
         RadientMath::Slerp(RadientQuaternion{}, RadientQuaternion{0.f, 0.f, 0.f, -1.f}, 0.5f);
-    ExpectQuaternionNear(SameRotation, RadientQuaternion{});
+    ExpectRotationNear(SameRotation, RadientQuaternion{});
 
     ExpectFloat3Near(
         RadientMath::CubicHermite(
@@ -235,7 +221,7 @@ TEST(RadientMathTest, InterpolatesAnimationValues)
             RadientQuaternion{0.f, 0.f, 0.f, 0.f},
             0.5f,
             2.f);
-    ExpectQuaternionNear(CubicRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
+    ExpectRotationNear(CubicRotation, RadientQuaternion{0.f, 0.f, 0.70710678f, 0.70710678f});
 }
 
 TEST(RadientMathTest, ComputesCubicHermiteWeights)
@@ -475,7 +461,7 @@ TEST(RadientMathTest, DecomposesTransformMatrix)
     // Position, scale, and quaternion should round-trip within tolerance.
     ExpectFloat3Near(Decomposed.Position, Transform.Position);
     ExpectFloat3Near(Decomposed.Scale, Transform.Scale);
-    ExpectQuaternionNear(Decomposed.Rotation, Transform.Rotation);
+    ExpectRotationNear(Decomposed.Rotation, Transform.Rotation);
 }
 
 } // namespace

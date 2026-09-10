@@ -33,15 +33,19 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
+#include "Assets/RadientMeshTestHelpers.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "GLTFDocument.hpp"
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "RadientEngine.h"
+#include "RadientMaterialTestHelpers.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientSkinning.h"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientTestDataHelpers.hpp"
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -52,7 +56,6 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <initializer_list>
 #include <iterator>
 #include <limits>
@@ -191,25 +194,6 @@ static constexpr std::array<StandardMaterialTextureTestInfo, 17> StandardMateria
     {GLTF::DefaultTransmissionTextureAttribId, "TransmissionTexture"},
     {GLTF::DefaultThicknessTextureAttribId, "ThicknessTexture"},
 }};
-
-template <typename ValueType>
-ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name)
-{
-    ValueType                        Value{};
-    IRadientMaterialDefinitionAsset* pDefinition = Material.GetDefinition();
-    RadientMaterialParameterHandle   Handle;
-    EXPECT_NE(pDefinition, nullptr);
-    if (pDefinition != nullptr)
-    {
-        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
-        if (Handle)
-        {
-            EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
-                      RADIENT_STATUS_OK);
-        }
-    }
-    return Value;
-}
 
 RefCntAutoPtr<IRadientTextureAsset> GetMaterialTexture(IRadientMaterialAsset& Material,
                                                        const char*            Name)
@@ -369,66 +353,6 @@ const std::array<Uint8, 12> TestColors{
     0, 64, 128, 255,
     16, 32, 48, 64};
 
-template <typename ValueType>
-ValueType ReadValue(const std::vector<Uint8>& Buffer, size_t Offset)
-{
-    ValueType Value{};
-    EXPECT_LE(Offset + sizeof(ValueType), Buffer.size());
-    if (Offset + sizeof(ValueType) <= Buffer.size())
-        std::memcpy(&Value, Buffer.data() + Offset, sizeof(ValueType));
-    return Value;
-}
-
-template <typename ValueType, size_t Size>
-std::vector<Uint8> MakeBytes(const std::array<ValueType, Size>& Values)
-{
-    std::vector<Uint8> Bytes(sizeof(ValueType) * Values.size());
-    std::memcpy(Bytes.data(), Values.data(), Bytes.size());
-    return Bytes;
-}
-
-void ExpectFloat2Eq(const float2& Actual, const float2& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-}
-
-void ExpectFloat3Eq(const float3& Actual, const float3& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-    EXPECT_FLOAT_EQ(Actual.z, Expected.z);
-}
-
-void ExpectFloat4Eq(const float4& Actual, const float4& Expected)
-{
-    EXPECT_FLOAT_EQ(Actual.x, Expected.x);
-    EXPECT_FLOAT_EQ(Actual.y, Expected.y);
-    EXPECT_FLOAT_EQ(Actual.z, Expected.z);
-    EXPECT_FLOAT_EQ(Actual.w, Expected.w);
-}
-
-void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
-}
-
-void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-}
-
-void ExpectQuaternionNear(const RadientQuaternion& Value, const RadientQuaternion& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
-    EXPECT_NEAR(Value.w, Reference.w, EPSILON);
-}
-
 Uint32 FindAnimationTargetIndex(const RadientAnimationClipDesc& Clip,
                                 const RadientAnimationSchemaID& Schema,
                                 RadientAnimationObjectID        Object)
@@ -568,29 +492,6 @@ void AlignBuffer(std::vector<Uint8>& Buffer)
 {
     while ((Buffer.size() & 3u) != 0u)
         Buffer.push_back(0);
-}
-
-std::string WriteBinaryFile(const TempDirectory& TempDir, const char* FileName, const std::vector<Uint8>& Data)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    if (!Data.empty())
-        File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
-
-    return Path;
-}
-
-std::string WriteTextFile(const TempDirectory& TempDir, const char* FileName, const std::string& Contents)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    File << Contents;
-
-    return Path;
 }
 
 std::shared_ptr<GLTF::Document> LoadDocument(const std::string& GLTFPath)
@@ -771,20 +672,6 @@ void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, 
     const Uint32             BufferIndex = Attribute.Name == GLTF::PositionAttributeName ? 0u : 1u;
     const std::vector<Uint8> Buffer      = PackAttributeBuffer(*Result.pSource, BufferIndex);
     Validate(Buffer);
-}
-
-void ExpectPackedIndices(const RadientMeshIndexSource& Source,
-                         std::initializer_list<Uint32> ExpectedIndices)
-{
-    std::vector<Uint32> PackedIndices(Source.GetIndexCount(), 0xCDCDCDCDu);
-    ASSERT_EQ(PackedIndices.size(), ExpectedIndices.size());
-
-    ASSERT_EQ(Source.PackIndexData(RadientMeshIndexSource::PackDestination{
-                  PackedIndices.data(),
-                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
-              RADIENT_STATUS_OK);
-
-    EXPECT_EQ(PackedIndices, std::vector<Uint32>{ExpectedIndices});
 }
 
 template <typename IndexType, size_t Size>

@@ -35,28 +35,10 @@
 #include <array>
 
 using namespace Diligent;
+using Diligent::Testing::GetMaterialParameter;
 
 namespace
 {
-
-template <typename ValueType>
-ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name)
-{
-    ValueType                        Value{};
-    IRadientMaterialDefinitionAsset* pDefinition = Material.GetDefinition();
-    RadientMaterialParameterHandle   Handle;
-    EXPECT_NE(pDefinition, nullptr);
-    if (pDefinition != nullptr)
-    {
-        EXPECT_EQ(pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
-        if (Handle)
-        {
-            EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
-                      RADIENT_STATUS_OK);
-        }
-    }
-    return Value;
-}
 
 struct TestMaterialValues
 {

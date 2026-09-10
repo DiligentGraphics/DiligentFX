@@ -28,6 +28,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "GLTFLoader.hpp"
@@ -49,15 +50,6 @@ using namespace Diligent::Testing;
 
 namespace
 {
-
-template <typename ValueType>
-ValueType GetParameter(IRadientMaterialAsset&         Material,
-                       RadientMaterialParameterHandle Handle)
-{
-    ValueType Value{};
-    EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_OK);
-    return Value;
-}
 
 void ExpectInvalidHandle(const RadientMaterialParameterHandle& Handle)
 {

@@ -34,8 +34,10 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFDocument.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientTestDataHelpers.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
@@ -69,64 +71,6 @@ const std::array<float, 9> WideTrianglePositions{
 
 const std::array<Uint16, 3> TriangleIndices{0, 1, 2};
 const std::array<Uint16, 3> ReversedTriangleIndices{0, 2, 1};
-
-void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
-}
-
-template <typename ValueType>
-ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name)
-{
-    ValueType                              Value{};
-    RadientMaterialParameterHandle         Handle;
-    IRadientMaterialDefinitionAsset* const pDefinition = Material.GetDefinition();
-    EXPECT_NE(pDefinition, nullptr);
-    if (pDefinition != nullptr &&
-        pDefinition->FindParameter(Name, &Handle) == RADIENT_STATUS_OK)
-    {
-        EXPECT_EQ(Material.GetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))),
-                  RADIENT_STATUS_OK);
-    }
-    return Value;
-}
-
-void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-}
-
-template <typename ValueType, size_t Size>
-void AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& Values)
-{
-    const size_t OldSize = Buffer.size();
-    Buffer.resize(OldSize + sizeof(ValueType) * Values.size());
-    std::memcpy(Buffer.data() + OldSize, Values.data(), Buffer.size() - OldSize);
-}
-
-std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    File << Contents;
-
-    return Path;
-}
-
-void WriteBinaryFile(const TempDirectory& TempDir, const char* FileName, const std::vector<Uint8>& Data)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    if (!Data.empty())
-        File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
-}
 
 std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial)
 {

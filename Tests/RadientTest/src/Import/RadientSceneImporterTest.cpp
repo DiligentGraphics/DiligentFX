@@ -34,8 +34,10 @@
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientMathTestHelpers.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
+#include "RadientTestDataHelpers.hpp"
 
 #include "Cast.hpp"
 #include "ThreadPool.hpp"
@@ -45,7 +47,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -57,35 +58,6 @@ namespace
 {
 
 static constexpr float EPSILON = 1e-5f;
-
-std::string WriteGLTFFile(const TempDirectory& TempDir, const char* FileName, const char* Contents)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    File << Contents;
-
-    return Path;
-}
-
-void WriteBinaryFile(const TempDirectory& TempDir, const char* FileName, const std::vector<Uint8>& Data)
-{
-    const std::string Path = TempDir.Get() + "/" + FileName;
-
-    std::ofstream File{Path, std::ios::binary};
-    EXPECT_TRUE(File.is_open());
-    File.write(reinterpret_cast<const char*>(Data.data()), static_cast<std::streamsize>(Data.size()));
-}
-
-template <typename ValueType, size_t Size>
-size_t AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>& Values)
-{
-    const size_t Offset = Buffer.size();
-    Buffer.resize(Offset + sizeof(ValueType) * Values.size());
-    std::memcpy(Buffer.data() + Offset, Values.data(), sizeof(ValueType) * Values.size());
-    return Offset;
-}
 
 std::string WriteGLTFNodeAnimationFile(const TempDirectory& TempDir)
 {
@@ -487,28 +459,6 @@ std::vector<RadientEntityID> GetChildren(IRadientScene& Scene, RadientEntityID E
     }
 
     return Children;
-}
-
-void ExpectFloat3Near(const RadientFloat3& Value, const RadientFloat3& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
-}
-
-void ExpectFloat2Near(const RadientFloat2& Value, const RadientFloat2& Reference)
-{
-    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
-    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
-}
-
-void ExpectMatrixNear(const RadientMatrix4x4& Value, const RadientMatrix4x4& Reference)
-{
-    for (Uint32 Element = 0; Element < 16; ++Element)
-    {
-        EXPECT_NEAR(Value.Data[Element], Reference.Data[Element], EPSILON)
-            << "Matrix element " << Element;
-    }
 }
 
 struct CapturedRenderableLight
