@@ -542,9 +542,15 @@ bool HaveSameBoundAnimationProperty(const BoundAnimationPropertyRange& Lhs,
 }
 
 RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&           Clip,
+                                                 const RadientAnimationClipChannelIndex&   ChannelIndex,
                                                  const RadientAnimationBindingDesc&        Binding,
                                                  std::vector<PendingAnimationDestination>& PendingDestinations)
 {
+    VERIFY_EXPR(ChannelIndex.TargetCount == Clip.TargetCount);
+    VERIFY_EXPR(ChannelIndex.ChannelCount == Clip.ChannelCount);
+    VERIFY_EXPR(ChannelIndex.pTargetOffsets != nullptr);
+    VERIFY_EXPR(ChannelIndex.ChannelCount == 0 || ChannelIndex.pChannelIndices != nullptr);
+
     if ((Binding.DestinationCount == 0) != (Binding.pDestinations == nullptr))
     {
         LOG_ERROR_MESSAGE("Radient animation binding destination count and pointer do not form a valid pair");
@@ -603,19 +609,17 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
             }
 
             MappingKeys.push_back({Mapping.ClipTargetIndex, Mapping.DestinationElement, MappingIndex});
-            for (Uint32 ChannelIndex = 0; ChannelIndex < Clip.ChannelCount; ++ChannelIndex)
+            const Uint32 FirstChannel = ChannelIndex.pTargetOffsets[Mapping.ClipTargetIndex];
+            const Uint32 EndChannel   = ChannelIndex.pTargetOffsets[Mapping.ClipTargetIndex + 1u];
+            VERIFY_EXPR(FirstChannel <= EndChannel && EndChannel <= Clip.ChannelCount);
+            const Uint32 MappedChannelCount = EndChannel - FirstChannel;
+            if (!IsSumRepresentable<Uint32>(PropertyCount64, MappedChannelCount))
             {
-                if (Clip.pChannels[ChannelIndex].TargetIndex == Mapping.ClipTargetIndex)
-                {
-                    if (!IsSumRepresentable<Uint32>(PropertyCount64, 1u))
-                    {
-                        LOG_ERROR_MESSAGE("Radient animation binding destination ", DestinationIndex,
-                                          " contains too many mapped properties");
-                        return RADIENT_STATUS_INVALID_ARGUMENT;
-                    }
-                    ++PropertyCount64;
-                }
+                LOG_ERROR_MESSAGE("Radient animation binding destination ", DestinationIndex,
+                                  " contains too many mapped properties");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
             }
+            PropertyCount64 += MappedChannelCount;
         }
 
         std::sort(MappingKeys.begin(), MappingKeys.end());
@@ -655,11 +659,14 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
         {
             const RadientAnimationDestinationMappingDesc& Mapping = Destination.pMappings[MappingIndex];
             const RadientAnimationTargetDesc&             Target  = Clip.pTargets[Mapping.ClipTargetIndex];
-            for (Uint32 ChannelIndex = 0; ChannelIndex < Clip.ChannelCount; ++ChannelIndex)
+            const Uint32 FirstChannel = ChannelIndex.pTargetOffsets[Mapping.ClipTargetIndex];
+            const Uint32 EndChannel   = ChannelIndex.pTargetOffsets[Mapping.ClipTargetIndex + 1u];
+            for (Uint32 ChannelOffset = FirstChannel; ChannelOffset < EndChannel; ++ChannelOffset)
             {
-                const RadientAnimationChannelDesc& Channel = Clip.pChannels[ChannelIndex];
-                if (Channel.TargetIndex != Mapping.ClipTargetIndex)
-                    continue;
+                const Uint32 ChannelDescIndex = ChannelIndex.pChannelIndices[ChannelOffset];
+                VERIFY_EXPR(ChannelDescIndex < Clip.ChannelCount);
+                const RadientAnimationChannelDesc& Channel = Clip.pChannels[ChannelDescIndex];
+                VERIFY_EXPR(Channel.TargetIndex == Mapping.ClipTargetIndex);
 
                 const RadientAnimationSamplerDesc&  Sampler = Clip.pSamplers[Channel.SamplerIndex];
                 RadientAnimationPropertyBindingDesc Property;
@@ -710,15 +717,13 @@ struct AnimationSampleJob
     AnimationSampleKernel pKernel          = nullptr;
 };
 
-struct AnimationSampleJobKey
-{
-    Uint32                           SamplerIndex = InvalidRadientAnimationSamplerIndex;
-    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
-};
+constexpr Uint32 InvalidAnimationSampleJobIndex = ~Uint32{0};
+constexpr Uint32 ValidAnimationValueSemanticCount =
+    static_cast<Uint32>(RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT) - 1u;
 
 struct AnimationDestinationWriteJob
 {
-    Uint32 SampleJobIndex   = InvalidRadientAnimationSamplerIndex;
+    Uint32 SampleJobIndex   = InvalidAnimationSampleJobIndex;
     Uint32 FirstOutputIndex = 0;
 };
 
@@ -733,6 +738,12 @@ struct AnimationPropertySemantic
     RadientAnimationSchemaID         Schema   = InvalidRadientAnimationSchemaID;
     RadientAnimationPropertyID       Property = InvalidRadientAnimationPropertyID;
     RADIENT_ANIMATION_VALUE_SEMANTIC Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+};
+
+struct AnimationDestinationFirstOutput
+{
+    Uint32 Generation       = 0;
+    Uint32 FirstOutputIndex = 0;
 };
 
 bool AppendAnimationScratchBlock(size_t  Size,
@@ -756,19 +767,23 @@ bool AppendAnimationScratchBlock(size_t  Size,
 RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&     Clip,
                                              Uint32                              SamplerIndex,
                                              RADIENT_ANIMATION_VALUE_SEMANTIC    Semantic,
-                                             std::vector<AnimationSampleJobKey>& SampleJobKeys,
+                                             std::vector<Uint32>&                SampleJobLookup,
                                              std::vector<AnimationSampleJob>&    SampleJobs,
                                              Uint32&                             SampleJobIndex)
 {
-    VERIFY_EXPR(SampleJobKeys.size() == SampleJobs.size());
+    VERIFY_EXPR(SamplerIndex < Clip.SamplerCount);
+    VERIFY_EXPR(Semantic > RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN &&
+                Semantic < RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT);
+    const size_t LookupIndex = static_cast<size_t>(SamplerIndex) * ValidAnimationValueSemanticCount +
+        (static_cast<size_t>(Semantic) - 1u);
+    VERIFY_EXPR(LookupIndex < SampleJobLookup.size());
 
-    for (size_t Index = 0; Index < SampleJobKeys.size(); ++Index)
+    const Uint32 ExistingSampleJobIndex = SampleJobLookup[LookupIndex];
+    if (ExistingSampleJobIndex != InvalidAnimationSampleJobIndex)
     {
-        if (SampleJobKeys[Index].SamplerIndex == SamplerIndex && SampleJobKeys[Index].Semantic == Semantic)
-        {
-            SampleJobIndex = static_cast<Uint32>(Index);
-            return RADIENT_STATUS_OK;
-        }
+        VERIFY_EXPR(ExistingSampleJobIndex < SampleJobs.size());
+        SampleJobIndex = ExistingSampleJobIndex;
+        return RADIENT_STATUS_OK;
     }
 
     if (!IsSumRepresentable<Uint32>(SampleJobs.size(), 1u))
@@ -795,12 +810,12 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&    
     }
 
     SampleJobIndex = static_cast<Uint32>(SampleJobs.size());
-    SampleJobKeys.push_back({SamplerIndex, Semantic});
     SampleJobs.push_back({SamplerIndex,
                           0,
                           0,
                           static_cast<size_t>(OutputSize64),
                           pKernel});
+    SampleJobLookup[LookupIndex] = SampleJobIndex;
     return RADIENT_STATUS_OK;
 }
 
@@ -962,9 +977,10 @@ private:
 
 } // namespace
 
-RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        pClip,
-                                             const RadientAnimationBindingDesc& BindingDesc,
-                                             IRadientAnimationBinding**         ppBinding)
+RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*             pClip,
+                                             const RadientAnimationClipChannelIndex& ChannelIndex,
+                                             const RadientAnimationBindingDesc&      BindingDesc,
+                                             IRadientAnimationBinding**              ppBinding)
 {
     VERIFY_EXPR(pClip != nullptr);
     VERIFY_EXPR(ppBinding != nullptr && *ppBinding == nullptr);
@@ -973,18 +989,35 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
 
     std::vector<PendingAnimationDestination> PendingDestinations;
     const RADIENT_STATUS                     DescriptorStatus =
-        BuildPendingAnimationDestinations(Clip, BindingDesc, PendingDestinations);
+        BuildPendingAnimationDestinations(Clip, ChannelIndex, BindingDesc, PendingDestinations);
     if (DescriptorStatus != RADIENT_STATUS_OK)
         return DescriptorStatus;
 
-    std::vector<AnimationSampleJobKey>        SampleJobKeys;
-    std::vector<AnimationSampleJob>           SampleJobs;
-    std::vector<CompiledAnimationDestination> Destinations;
-    std::vector<AnimationPropertySemantic>    PropertySemantics;
+    Uint64 SampleJobLookupCount = 0;
+    if ((!PendingDestinations.empty() &&
+         !CheckedMultiply(Clip.SamplerCount,
+                          ValidAnimationValueSemanticCount,
+                          SampleJobLookupCount)) ||
+        !IsAddressableArray(SampleJobLookupCount, sizeof(Uint32)))
+    {
+        LOG_ERROR_MESSAGE("Radient animation binding sampling job lookup size overflows addressable memory");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    std::vector<Uint32> SampleJobLookup(static_cast<size_t>(SampleJobLookupCount),
+                                        InvalidAnimationSampleJobIndex);
+    std::vector<AnimationSampleJob>               SampleJobs;
+    std::vector<CompiledAnimationDestination>     Destinations;
+    std::vector<AnimationPropertySemantic>        PropertySemantics;
+    std::vector<AnimationDestinationFirstOutput> DestinationFirstOutputs;
 
     Destinations.reserve(PendingDestinations.size());
+    Uint32 DestinationGeneration = 0;
     for (PendingAnimationDestination& Pending : PendingDestinations)
     {
+        ++DestinationGeneration;
+        VERIFY_EXPR(DestinationGeneration != 0);
+
         std::vector<RadientAnimationResolvedPropertyDesc>  ResolvedProperties(Pending.Properties.size());
         RefCntAutoPtr<IRadientAnimationDestinationBinding> pDestinationBinding;
         const RADIENT_STATUS                               DestinationStatus = Pending.pDestination->CreateBinding(
@@ -1031,28 +1064,25 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
                 GetOrCreateAnimationSampleJob(Clip,
                                               Pending.SamplerIndices[PropertyIndex],
                                               Semantic,
-                                              SampleJobKeys,
+                                              SampleJobLookup,
                                               SampleJobs,
                                               SampleJobIndex);
             if (SampleJobStatus != RADIENT_STATUS_OK)
                 return SampleJobStatus;
 
-            const Uint32 OutputIndex      = static_cast<Uint32>(PropertyIndex);
-            Uint32       FirstOutputIndex = OutputIndex;
-            for (Uint32 PreviousOutputIndex = 0;
-                 PreviousOutputIndex < static_cast<Uint32>(Destination.WriteJobs.size());
-                 ++PreviousOutputIndex)
-            {
-                if (Destination.WriteJobs[PreviousOutputIndex].SampleJobIndex == SampleJobIndex)
-                {
-                    FirstOutputIndex = Destination.WriteJobs[PreviousOutputIndex].FirstOutputIndex;
-                    break;
-                }
-            }
-            if (FirstOutputIndex == OutputIndex)
-                ++SampleJobs[SampleJobIndex].DestinationCount;
+            const Uint32 OutputIndex = static_cast<Uint32>(PropertyIndex);
+            if (DestinationFirstOutputs.size() < SampleJobs.size())
+                DestinationFirstOutputs.resize(SampleJobs.size());
 
-            Destination.WriteJobs.push_back({SampleJobIndex, FirstOutputIndex});
+            AnimationDestinationFirstOutput& FirstOutput = DestinationFirstOutputs[SampleJobIndex];
+            if (FirstOutput.Generation != DestinationGeneration)
+            {
+                FirstOutput.Generation       = DestinationGeneration;
+                FirstOutput.FirstOutputIndex = OutputIndex;
+                ++SampleJobs[SampleJobIndex].DestinationCount;
+            }
+
+            Destination.WriteJobs.push_back({SampleJobIndex, FirstOutput.FirstOutputIndex});
         }
 
         Destinations.emplace_back(std::move(Destination));

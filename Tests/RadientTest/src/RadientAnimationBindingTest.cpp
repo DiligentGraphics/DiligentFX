@@ -1501,6 +1501,7 @@ TEST_F(RadientAnimationBindingTest, SamplesSharedSamplerSeparatelyForDifferentSe
         {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 0.f}});
     Builder.AddChannel(Target, TestPropertyA, Sampler);
     Builder.AddChannel(Target, TestQuaternionProperty, Sampler);
+    Builder.AddChannel(Target, TestPropertyB, Sampler);
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
     ASSERT_NE(pClip, nullptr);
 
@@ -1519,12 +1520,14 @@ TEST_F(RadientAnimationBindingTest, SamplesSharedSamplerSeparatelyForDifferentSe
     ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
 
     ASSERT_EQ(State->EndCalls.size(), 1u);
-    ASSERT_EQ(State->EndCalls[0].Values.size(), 2u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 3u);
     ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 0),
                          {0.f, 0.f, 0.5f, 0.5f});
     const Float32 HalfSqrt = std::sqrt(0.5f);
     ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 1),
                          {0.f, 0.f, HalfSqrt, HalfSqrt});
+    ExpectQuaternionNear(ReadCapturedValue<RadientQuaternion>(State->EndCalls[0], 2),
+                         {0.f, 0.f, 0.5f, 0.5f});
 }
 
 TEST_F(RadientAnimationBindingTest, FansOutSharedSampleToMultipleOutputsInOneDestination)
@@ -2127,6 +2130,29 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesNodeTransformPropert
     EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
 }
 
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesDistinctTransformComponentsPerJoint)
+{
+    const std::array Properties = {
+        MakeNodeProperty(1, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(0, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(1, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(1, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 4> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+    ASSERT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+}
+
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, UpdatesMappedJointPropertiesInOneBatch)
 {
     TestAnimationClipBuilder Builder;
@@ -2598,19 +2624,56 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNodePropertyArraySize
 
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsDuplicatePhysicalWrites)
 {
+    struct DuplicateCase
+    {
+        RadientAnimationPropertyID   Property;
+        RADIENT_ANIMATION_VALUE_TYPE Type;
+    };
+
+    const DuplicateCase Cases[] = {
+        {RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3},
+        {RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4},
+        {RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3},
+    };
+    for (const DuplicateCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.Property);
+        const std::array Properties = {
+            MakeNodeProperty(0, Case.Property, Case.Type),
+            MakeNodeProperty(0, Case.Property, Case.Type),
+        };
+        std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
+        RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(
+                      Properties.data(),
+                      static_cast<Uint32>(Properties.size()),
+                      Resolved.data(),
+                      pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_FALSE(pBinding);
+    }
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesAllPropertiesBeforeRejectingDuplicateWrites)
+{
     const std::array Properties = {
         MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
-    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
-    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+    std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved;
+    for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
+        Result.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(
                   Properties.data(),
                   static_cast<Uint32>(Properties.size()),
                   Resolved.data(),
                   pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_INVALID_ARGUMENT);
+              RADIENT_STATUS_UNSUPPORTED);
     EXPECT_FALSE(pBinding);
+    for (const RadientAnimationResolvedPropertyDesc& Result : Resolved)
+        EXPECT_EQ(Result.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT);
 }
 
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullBeginUpdateOutput)

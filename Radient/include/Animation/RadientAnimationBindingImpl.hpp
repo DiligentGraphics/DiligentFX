@@ -31,8 +31,25 @@
 namespace Diligent
 {
 
-RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        pClip,
-                                             const RadientAnimationBindingDesc& BindingDesc,
-                                             IRadientAnimationBinding**         ppBinding);
+struct RadientAnimationClipChannelIndex
+{
+    // TargetCount + 1 offsets into pChannelIndices. The range for target i is
+    // [pTargetOffsets[i], pTargetOffsets[i + 1]).
+    const Uint32* pTargetOffsets = nullptr;
+
+    // ChannelCount indices into RadientAnimationClipDesc::pChannels, grouped
+    // by target while preserving descriptor order within every target.
+    const Uint32* pChannelIndices = nullptr;
+
+    // The pointers borrow immutable packed storage owned by the clip and use
+    // these counts to verify that the index matches its descriptor.
+    Uint32 TargetCount  = 0;
+    Uint32 ChannelCount = 0;
+};
+
+RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*             pClip,
+                                             const RadientAnimationClipChannelIndex& ChannelIndex,
+                                             const RadientAnimationBindingDesc&      BindingDesc,
+                                             IRadientAnimationBinding**              ppBinding);
 
 } // namespace Diligent

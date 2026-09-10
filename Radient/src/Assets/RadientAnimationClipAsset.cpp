@@ -496,7 +496,10 @@ bool CanPackAnimationClip(const RadientAnimationClipDesc& Desc,
         }
     }
 
-    return Size.AddArray<RadientAnimationChannelDesc>(Desc.ChannelCount) && Size.Finish();
+    return Size.AddArray<RadientAnimationChannelDesc>(Desc.ChannelCount) &&
+        Size.AddArray<Uint32>(Uint64{Desc.TargetCount} + 1u) &&
+        Size.AddArray<Uint32>(Desc.ChannelCount) &&
+        Size.Finish();
 }
 
 using PackedMemory = std::unique_ptr<void, STDDeleterRawMem<void>>;
@@ -525,6 +528,8 @@ public:
             Allocator.AddSpace(static_cast<size_t>(Sampler.ValueDataSize), TypeInfo.NativeAlignment);
         }
         Allocator.AddSpace<RadientAnimationChannelDesc>(Desc.ChannelCount);
+        Allocator.AddSpace<Uint32>(static_cast<size_t>(Desc.TargetCount) + 1u);
+        Allocator.AddSpace<Uint32>(Desc.ChannelCount);
 
         Allocator.Reserve();
         const size_t MemorySize = Allocator.GetReservedSize();
@@ -565,6 +570,30 @@ public:
         m_Desc.SamplerCount = Desc.SamplerCount;
         m_Desc.pChannels    = Writer.CopyArray(Desc.pChannels, Desc.ChannelCount);
         m_Desc.ChannelCount = Desc.ChannelCount;
+
+        const size_t TargetOffsetCount = static_cast<size_t>(Desc.TargetCount) + 1u;
+        Uint32* const pTargetOffsets    = Writer.ConstructArray<Uint32>(TargetOffsetCount);
+        Uint32* const pChannelIndices   = Writer.ConstructArray<Uint32>(Desc.ChannelCount);
+        std::fill(pTargetOffsets, pTargetOffsets + TargetOffsetCount, 0u);
+
+        for (Uint32 ChannelIndex = 0; ChannelIndex < Desc.ChannelCount; ++ChannelIndex)
+            ++pTargetOffsets[Desc.pChannels[ChannelIndex].TargetIndex];
+        for (Uint32 TargetIndex = 1; TargetIndex < Desc.TargetCount; ++TargetIndex)
+            pTargetOffsets[TargetIndex] += pTargetOffsets[TargetIndex - 1];
+
+        // Scatter backwards so channels retain their original descriptor order within each target.
+        for (Uint32 ChannelIndex = Desc.ChannelCount; ChannelIndex > 0; --ChannelIndex)
+        {
+            const Uint32 SourceChannelIndex = ChannelIndex - 1;
+            const Uint32 TargetIndex        = Desc.pChannels[SourceChannelIndex].TargetIndex;
+            pChannelIndices[--pTargetOffsets[TargetIndex]] = SourceChannelIndex;
+        }
+        pTargetOffsets[Desc.TargetCount] = Desc.ChannelCount;
+
+        m_ChannelIndex.pTargetOffsets  = pTargetOffsets;
+        m_ChannelIndex.pChannelIndices = pChannelIndices;
+        m_ChannelIndex.TargetCount     = Desc.TargetCount;
+        m_ChannelIndex.ChannelCount    = Desc.ChannelCount;
         VERIFY_EXPR(Writer.GetCurrentSize() <= Writer.GetReservedSize());
     }
 
@@ -578,10 +607,16 @@ public:
         return m_Desc;
     }
 
+    const RadientAnimationClipChannelIndex& GetChannelIndex() const noexcept
+    {
+        return m_ChannelIndex;
+    }
+
 private:
-    PackedMemory             m_Memory;
-    RadientAssetReference    m_Reference;
-    RadientAnimationClipDesc m_Desc;
+    PackedMemory                     m_Memory;
+    RadientAssetReference            m_Reference;
+    RadientAnimationClipDesc         m_Desc;
+    RadientAnimationClipChannelIndex m_ChannelIndex;
 };
 
 class RadientAnimationClipAssetImpl final : public ObjectBase<IRadientAnimationClipAsset>
@@ -640,7 +675,7 @@ public:
 
         try
         {
-            return CreateRadientAnimationBinding(this, BindingDesc, ppBinding);
+            return CreateRadientAnimationBinding(this, m_Data.GetChannelIndex(), BindingDesc, ppBinding);
         }
         catch (const std::exception& Error)
         {

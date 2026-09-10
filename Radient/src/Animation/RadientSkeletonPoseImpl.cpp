@@ -31,7 +31,6 @@
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
 
-#include <algorithm>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -50,17 +49,17 @@ static_assert(std::is_trivially_copyable<RadientTransform>::value,
 static_assert(std::is_trivially_copyable<RadientMatrix4x4>::value,
               "RadientMatrix4x4 must support byte-wise copying");
 
-enum class SkeletonPoseAnimationComponent : Uint8
+enum class TransformField : Uint8
 {
-    Translation,
-    Rotation,
-    Scale,
+    Translation = 1u << 0,
+    Rotation    = 1u << 1,
+    Scale       = 1u << 2,
 };
 
 struct SkeletonPoseAnimationBindingEntry
 {
-    Uint32                         JointIndex = InvalidRadientJointIndex;
-    SkeletonPoseAnimationComponent Component  = SkeletonPoseAnimationComponent::Translation;
+    Uint32         JointIndex = InvalidRadientJointIndex;
+    TransformField Field      = TransformField::Translation;
 };
 
 RADIENT_STATUS ResolveAnimationProperty(
@@ -88,8 +87,8 @@ RADIENT_STATUS ResolveAnimationProperty(
     switch (Property.Property)
     {
         case RadientNodeTranslationProperty:
-            Entry.Component = SkeletonPoseAnimationComponent::Translation;
-            Semantic        = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
+            Entry.Field = TransformField::Translation;
+            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
             if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT3 ||
                 Property.Value.ArraySize != 1 ||
                 Property.FirstArrayElement != 0)
@@ -99,8 +98,8 @@ RADIENT_STATUS ResolveAnimationProperty(
             return RADIENT_STATUS_OK;
 
         case RadientNodeRotationProperty:
-            Entry.Component = SkeletonPoseAnimationComponent::Rotation;
-            Semantic        = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
+            Entry.Field = TransformField::Rotation;
+            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
             if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT4 ||
                 Property.Value.ArraySize != 1 ||
                 Property.FirstArrayElement != 0)
@@ -110,8 +109,8 @@ RADIENT_STATUS ResolveAnimationProperty(
             return RADIENT_STATUS_OK;
 
         case RadientNodeScaleProperty:
-            Entry.Component = SkeletonPoseAnimationComponent::Scale;
-            Semantic        = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
+            Entry.Field = TransformField::Scale;
+            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
             if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT3 ||
                 Property.Value.ArraySize != 1 ||
                 Property.FirstArrayElement != 0)
@@ -214,7 +213,7 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
 
     if (!RadientValidation::IsAddressableArray(PropertyCount, sizeof(RadientAnimationPropertyBindingDesc)) ||
         !RadientValidation::IsAddressableArray(PropertyCount, sizeof(RadientAnimationResolvedPropertyDesc)) ||
-        !RadientValidation::IsAddressableArray(PropertyCount, sizeof(SkeletonPoseAnimationBindingEntry)) ||
+        !RadientValidation::IsAddressableArray(PropertyCount, sizeof(void*)) ||
         !RadientValidation::IsAddressableArray(PropertyCount, sizeof(RADIENT_ANIMATION_VALUE_SEMANTIC)))
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -222,59 +221,47 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
 
     try
     {
-        std::vector<SkeletonPoseAnimationBindingEntry> Entries(PropertyCount);
-        std::vector<RADIENT_ANIMATION_VALUE_SEMANTIC>  Semantics(PropertyCount);
+        const Uint32 JointCount = static_cast<Uint32>(m_Pose.m_State.LocalTransforms.size());
+
+        std::vector<Uint8>                            JointTransformFieldMasks(JointCount, 0);
+        std::vector<RADIENT_ANIMATION_VALUE_SEMANTIC> Semantics(PropertyCount);
+        std::vector<void*>                            Outputs(PropertyCount);
+        bool                                          HasDuplicate = false;
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
         {
-            const RADIENT_STATUS Status = ResolveAnimationProperty(
+            SkeletonPoseAnimationBindingEntry Entry;
+            const RADIENT_STATUS              Status = ResolveAnimationProperty(
                 pProperties[PropertyIndex],
-                static_cast<Uint32>(m_Pose.m_State.LocalTransforms.size()),
-                Entries[PropertyIndex],
+                JointCount,
+                Entry,
                 Semantics[PropertyIndex]);
             if (Status != RADIENT_STATUS_OK)
                 return Status;
-        }
 
-        std::vector<SkeletonPoseAnimationBindingEntry> SortedEntries = Entries;
-        std::sort(
-            SortedEntries.begin(),
-            SortedEntries.end(),
-            [](const SkeletonPoseAnimationBindingEntry& Lhs, const SkeletonPoseAnimationBindingEntry& Rhs) {
-                return Lhs.JointIndex != Rhs.JointIndex ?
-                    Lhs.JointIndex < Rhs.JointIndex :
-                    Lhs.Component < Rhs.Component;
-            });
-        for (size_t EntryIndex = 1; EntryIndex < SortedEntries.size(); ++EntryIndex)
-        {
-            const SkeletonPoseAnimationBindingEntry& Previous = SortedEntries[EntryIndex - 1];
-            const SkeletonPoseAnimationBindingEntry& Current  = SortedEntries[EntryIndex];
-            if (Previous.JointIndex == Current.JointIndex &&
-                Previous.Component == Current.Component)
-            {
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-            }
-        }
+            const Uint8 TransformFieldMask = static_cast<Uint8>(Entry.Field);
+            Uint8&      JointMask          = JointTransformFieldMasks[Entry.JointIndex];
+            HasDuplicate                   = HasDuplicate || (JointMask & TransformFieldMask) != 0;
+            JointMask                      = static_cast<Uint8>(JointMask | TransformFieldMask);
 
-        std::vector<void*> Outputs(PropertyCount);
-        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
-        {
-            const SkeletonPoseAnimationBindingEntry& Entry     = Entries[PropertyIndex];
-            RadientTransform&                        Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
-            switch (Entry.Component)
+            RadientTransform& Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
+            switch (Entry.Field)
             {
-                case SkeletonPoseAnimationComponent::Translation:
+                case TransformField::Translation:
                     Outputs[PropertyIndex] = &Transform.Position;
                     break;
 
-                case SkeletonPoseAnimationComponent::Rotation:
+                case TransformField::Rotation:
                     Outputs[PropertyIndex] = &Transform.Rotation;
                     break;
 
-                case SkeletonPoseAnimationComponent::Scale:
+                case TransformField::Scale:
                     Outputs[PropertyIndex] = &Transform.Scale;
                     break;
             }
         }
+
+        if (HasDuplicate)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
 
         RefCntAutoPtr<RadientSkeletonPoseAnimationDestinationBindingImpl> pBinding{
             MakeNewRCObj<RadientSkeletonPoseAnimationDestinationBindingImpl>()(
