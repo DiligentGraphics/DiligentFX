@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "../../../Radient/src/Assets/RadientMeshViewCreateInfoSnapshot.hpp"
+#include "Assets/RadientMeshViewCreateInfoSnapshot.hpp"
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "RadientMaterialTestHelpers.hpp"

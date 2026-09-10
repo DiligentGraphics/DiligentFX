@@ -45,7 +45,7 @@
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
-#include "../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
+#include "../../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
 
 #include "TinyGltfModelView.hpp"
 

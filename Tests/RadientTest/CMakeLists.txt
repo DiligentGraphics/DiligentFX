@@ -13,7 +13,9 @@ set_common_target_properties(RadientTest)
 
 target_include_directories(RadientTest
 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ../../Radient/include
+    ../../Radient/src
     ../RadientCommon/include
 )
 
