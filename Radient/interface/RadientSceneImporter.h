@@ -59,14 +59,14 @@ struct RadientSceneInstantiateInfo
     Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientSceneIndex);
 
     /// Optional external animation registry associated with the destination
-    /// scene. When provided, the importer attempts to compile every clip/skin
-    /// intersection against the corresponding instantiated skeleton pose and
-    /// register the resulting bindings with their instance entities. Binding
-    /// and registration failures are logged and skipped, leaving the scene
-    /// usable without the affected animations. Unskinned and other currently
-    /// unsupported targets remain available through the scene asset's clip
-    /// catalog but are not registered. GetScene() must return the destination
-    /// scene; otherwise, instantiation fails with
+    /// scene. When provided, the importer attempts to compile each clip against
+    /// its corresponding instantiated skeleton poses and per-node morph-target
+    /// weight objects, then registers the resulting bindings with their instance
+    /// entities. Binding and registration failures are logged and skipped,
+    /// leaving the scene usable without the affected animations. Other
+    /// currently unsupported targets remain available through the scene asset's
+    /// clip catalog but are not registered. GetScene() must return the
+    /// destination scene; otherwise, instantiation fails with
     /// RADIENT_STATUS_INVALID_ARGUMENT. The importer retains the registry while
     /// an asynchronous instantiation is pending. The caller is responsible for
     /// removing associations after later scene changes.
@@ -90,6 +90,11 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneImporter =
 // clang-format off
 
 /// Imports external scene descriptions into a Radient scene.
+///
+/// Malformed or unsupported animation channels and clips are logged and
+/// omitted without preventing an otherwise valid scene from being imported.
+/// Caller-contract, cancellation, global-state, and storage failures are still
+/// reported to the caller.
 DILIGENT_BEGIN_INTERFACE(IRadientSceneImporter, IObject)
 {
     /// Loads a scene asset from a URI and instantiates its scene graph.

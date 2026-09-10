@@ -55,6 +55,7 @@
 #include <fstream>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -129,6 +130,41 @@ private:
     IRadientAnimationBinding*     m_pAddedBinding = nullptr;
     RadientAnimationRegistryState m_State;
 };
+
+RADIENT_STATUS ExtractSingleMorphAnimation(
+    Uint32                                     MorphTargetCount,
+    GLTF::AnimationSampler::INTERPOLATION_TYPE Interpolation,
+    Uint32                                     OutputComponentCount,
+    std::initializer_list<Float32>             Outputs,
+    RadientImport::ImportedDocument&           Scene,
+    std::initializer_list<Float32>             Inputs = {0.f, 1.f})
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    if (pAssetManager == nullptr)
+        return RADIENT_STATUS_FAILED;
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://animation-morph");
+    if (pMesh == nullptr)
+        return RADIENT_STATUS_FAILED;
+
+    GLTF::Model Model;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh.RawPtr(), IID_Unknown};
+    Model.Meshes[0].Primitives.emplace_back(0u, 0u, 0u, 1u, 0u, float3{}, float3{});
+    Model.Meshes[0].Primitives[0].MorphTargets.resize(MorphTargetCount);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].pMesh = &Model.Meshes[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(Interpolation);
+    Animation.Samplers[0].Inputs.assign(Inputs);
+    Animation.Samplers[0].OutputComponentCount = OutputComponentCount;
+    Animation.Samplers[0].Outputs.assign(Outputs);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
+
+    return RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager);
+}
 
 struct StandardMaterialTextureTestInfo
 {
@@ -1760,6 +1796,335 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     EXPECT_FLOAT_EQ(ScaleSampler.pTimes[1], 3.f);
 }
 
+TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://animation-morph");
+    ASSERT_NE(pMesh, nullptr);
+
+    GLTF::Model Model;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh.RawPtr(), IID_Unknown};
+    Model.Meshes[0].Primitives.emplace_back(0u, 0u, 0u, 1u, 0u, float3{}, float3{});
+    Model.Meshes[0].Primitives[0].MorphTargets.resize(3);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name  = "AnimatedMesh";
+    Model.Nodes[0].pMesh = &Model.Meshes[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Expression";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
+    Animation.Samplers[0].Inputs               = {2.f, 4.f};
+    Animation.Samplers[0].OutputComponentCount = 1;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        0.1f, 0.2f, 0.3f,
+        1.f, 2.f, 3.f,
+        4.f, 5.f, 6.f,
+        0.4f, 0.5f, 0.6f,
+        0.f, 0.f, 0.f};
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs               = {2.f, 4.f};
+    Animation.Samplers[1].OutputComponentCount = 3;
+    Animation.Samplers[1].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 2.f, 3.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0]};
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    EXPECT_TRUE(ImportedAnimation.SkinMappings.empty());
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Expression");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 2u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 2u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+
+    const Uint32 MorphTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientMorphWeightsAnimationSchemaID, 0u);
+    const Uint32 TransformTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(MorphTargetIndex, InvalidRadientAnimationTargetIndex);
+    ASSERT_NE(TransformTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_NE(MorphTargetIndex, TransformTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[MorphTargetIndex].Name, "AnimatedMesh");
+    EXPECT_STREQ(ClipDesc.pTargets[TransformTargetIndex].Name, "AnimatedMesh");
+
+    const RadientAnimationChannelDesc* const pWeightChannel =
+        FindAnimationChannel(ClipDesc, MorphTargetIndex, RadientMorphWeightsProperty);
+    ASSERT_NE(pWeightChannel, nullptr);
+    EXPECT_EQ(pWeightChannel->FirstArrayElement, 0u);
+    ASSERT_LT(pWeightChannel->SamplerIndex, ClipDesc.SamplerCount);
+
+    const RadientAnimationSamplerDesc& WeightSampler =
+        ClipDesc.pSamplers[pWeightChannel->SamplerIndex];
+    EXPECT_EQ(WeightSampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    EXPECT_EQ(WeightSampler.Value.ArraySize, 3u);
+    EXPECT_EQ(WeightSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+    ASSERT_EQ(WeightSampler.KeyframeCount, 2u);
+    EXPECT_EQ(WeightSampler.ValueDataSize, sizeof(Float32) * Animation.Samplers[0].Outputs.size());
+    ASSERT_NE(WeightSampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(WeightSampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(WeightSampler.pTimes[1], 2.f);
+    ASSERT_NE(WeightSampler.pValues, nullptr);
+    const auto* const pWeights = static_cast<const Float32*>(WeightSampler.pValues);
+    for (size_t ValueIndex = 0; ValueIndex < Animation.Samplers[0].Outputs.size(); ++ValueIndex)
+        EXPECT_FLOAT_EQ(pWeights[ValueIndex], Animation.Samplers[0].Outputs[ValueIndex]);
+
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, TransformTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    const RadientAnimationSamplerDesc& TranslationSampler =
+        ClipDesc.pSamplers[pTranslationChannel->SamplerIndex];
+    EXPECT_EQ(TranslationSampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(TranslationSampler.Value.ArraySize, 1u);
+}
+
+TEST(RadientGLTFConverterTest, NonFiniteMorphChannelDoesNotDiscardValidTransformChannel)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://animation-morph-invalid");
+    ASSERT_NE(pMesh, nullptr);
+
+    GLTF::Model Model;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh.RawPtr(), IID_Unknown};
+    Model.Meshes[0].Primitives.emplace_back(0u, 0u, 0u, 1u, 0u, float3{}, float3{});
+    Model.Meshes[0].Primitives[0].MorphTargets.resize(3);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name  = "AnimatedMesh";
+    Model.Nodes[0].pMesh = &Model.Meshes[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Valid transform and non-finite morph";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 1;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.1f, 0.2f,
+        0.3f, std::numeric_limits<Float32>::quiet_NaN(), 0.5f};
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs               = {0.f, 1.f};
+    Animation.Samplers[1].OutputComponentCount = 3;
+    Animation.Samplers[1].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 2.f, 3.f};
+
+    // Put the malformed channel first to verify that a partial morph-channel
+    // attempt does not leave an orphan target or sampler in the resulting clip.
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pTargets[0].Schema, RadientNodeAnimationSchemaID);
+    EXPECT_EQ(ClipDesc.pTargets[0].Object, 0u);
+
+    const RadientAnimationChannelDesc& Channel = ClipDesc.pChannels[0];
+    EXPECT_EQ(Channel.TargetIndex, 0u);
+    EXPECT_EQ(Channel.Property, RadientNodeTranslationProperty);
+    EXPECT_EQ(Channel.SamplerIndex, 0u);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 1u);
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNonFiniteWeightValue)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  2,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+                  1,
+                  {0.f, 0.25f,
+                   std::numeric_limits<Float32>::quiet_NaN(), 1.f},
+                  Scene),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNonFiniteKeyTime)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  2,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+                  1,
+                  {0.f, 0.25f,
+                   0.75f, 1.f},
+                  Scene,
+                  {0.f, std::numeric_limits<Float32>::infinity()}),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNonMonotonicKeyTimes)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  2,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+                  1,
+                  {0.f, 0.25f,
+                   0.75f, 1.f},
+                  Scene,
+                  {1.f, 0.f}),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsInvalidLinearWeightValueCount)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  3,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+                  1,
+                  {0.f, 0.1f, 0.2f, 0.3f, 0.4f},
+                  Scene),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsInvalidCubicWeightValueCount)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  3,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE,
+                  1,
+                  {0.f, 0.f, 0.f,
+                   0.1f, 0.2f, 0.3f,
+                   0.f, 0.f, 0.f,
+                   0.f, 0.f, 0.f,
+                   0.4f, 0.5f, 0.6f,
+                   0.f, 0.f},
+                  Scene),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNonScalarOutputAccessor)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  3,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+                  3,
+                  {0.f, 0.1f, 0.2f,
+                   0.3f, 0.4f, 0.5f},
+                  Scene),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNodeWithoutMorphTargets)
+{
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(ExtractSingleMorphAnimation(
+                  0,
+                  GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP,
+                  1,
+                  {0.f, 1.f},
+                  Scene),
+              RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsNodeWithoutMesh)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 1;
+    Animation.Samplers[0].Outputs              = {0.f, 1.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, MorphAnimationSkipsSharedSamplerWithIncompatibleArraySize)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh2 = MakeTestMeshAsset("mesh://animation-morph-two");
+    RefCntAutoPtr<IRadientMeshAsset> pMesh3 = MakeTestMeshAsset("mesh://animation-morph-three");
+    ASSERT_NE(pMesh2, nullptr);
+    ASSERT_NE(pMesh3, nullptr);
+
+    GLTF::Model Model;
+    Model.Meshes.resize(2);
+    Model.Meshes[0].pUserData = RefCntAutoPtr<IObject>{pMesh2.RawPtr(), IID_Unknown};
+    Model.Meshes[1].pUserData = RefCntAutoPtr<IObject>{pMesh3.RawPtr(), IID_Unknown};
+    Model.Meshes[0].Primitives.emplace_back(0u, 0u, 0u, 1u, 0u, float3{}, float3{});
+    Model.Meshes[1].Primitives.emplace_back(0u, 0u, 0u, 1u, 0u, float3{}, float3{});
+    Model.Meshes[0].Primitives[0].MorphTargets.resize(2);
+    Model.Meshes[1].Primitives[0].MorphTargets.resize(3);
+    Model.Nodes.reserve(2);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes[0].pMesh = &Model.Meshes[0];
+    Model.Nodes[1].pMesh = &Model.Meshes[1];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 1;
+    Animation.Samplers[0].Outputs              = {0.f, 0.25f, 0.5f, 0.75f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[1], 0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pTargets[0].Schema, RadientMorphWeightsAnimationSchemaID);
+    EXPECT_EQ(ClipDesc.pTargets[0].Object, 0u);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 2u);
+    EXPECT_EQ(ClipDesc.pChannels[0].TargetIndex, 0u);
+    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientMorphWeightsProperty);
+    EXPECT_EQ(ClipDesc.pChannels[0].SamplerIndex, 0u);
+}
+
 TEST(RadientGLTFConverterTest, GenericAnimationRetainsTargetsOutsideSkeletonMappings)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
@@ -1884,7 +2249,7 @@ TEST(RadientGLTFConverterTest, GenericAnimationReusesCompatibleSourceSamplerAcro
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 1u);
 }
 
-TEST(RadientGLTFConverterTest, GenericAnimationRejectsSourceSamplerSharedAcrossIncompatibleValueTypes)
+TEST(RadientGLTFConverterTest, GenericAnimationSkipsChannelWithIncompatibleSharedSamplerType)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
@@ -1904,8 +2269,124 @@ TEST(RadientGLTFConverterTest, GenericAnimationRejectsSourceSamplerSharedAcrossI
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[0], 0);
 
     RadientImport::ImportedDocument Scene;
-    TestingEnvironment::ErrorScope  ExpectedErrors{"shared by channels with incompatible value types"};
-    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_INVALID_DATA);
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+}
+
+TEST(RadientGLTFConverterTest, MalformedTransformOnlyAnimationDoesNotFailSceneConversion)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Malformed transform animation";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 2;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f,
+        1.f, 1.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+    EXPECT_TRUE(Scene.Animations.empty());
+}
+
+TEST(RadientGLTFConverterTest, InvalidAnimationTimeRangeDoesNotDiscardFollowingAnimation)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Animations.resize(2);
+
+    const Float32 MaxTime = (std::numeric_limits<Float32>::max)();
+
+    GLTF::Animation& InvalidAnimation = Model.Animations[0];
+    InvalidAnimation.Name             = "Overflowing time range";
+    InvalidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    InvalidAnimation.Samplers[0].Inputs               = {-MaxTime, -1.f};
+    InvalidAnimation.Samplers[0].OutputComponentCount = 3;
+    InvalidAnimation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f};
+    InvalidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    InvalidAnimation.Samplers[1].Inputs               = {1.f, MaxTime};
+    InvalidAnimation.Samplers[1].OutputComponentCount = 3;
+    InvalidAnimation.Samplers[1].Outputs              = {
+        1.f, 1.f, 1.f,
+        2.f, 2.f, 2.f};
+    InvalidAnimation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+    InvalidAnimation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 1);
+
+    GLTF::Animation& ValidAnimation = Model.Animations[1];
+    ValidAnimation.Name             = "Valid following animation";
+    ValidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    ValidAnimation.Samplers[0].Inputs               = {2.f, 4.f};
+    ValidAnimation.Samplers[0].OutputComponentCount = 3;
+    ValidAnimation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 2.f, 3.f};
+    ValidAnimation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Valid following animation");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    ASSERT_EQ(ClipDesc.pSamplers[0].KeyframeCount, 2u);
+    ASSERT_NE(ClipDesc.pSamplers[0].pTimes, nullptr);
+    EXPECT_FLOAT_EQ(ClipDesc.pSamplers[0].pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(ClipDesc.pSamplers[0].pTimes[1], 2.f);
+}
+
+TEST(RadientGLTFConverterTest, StoppedAssetManagerAnimationFailureRemainsFatal)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    ASSERT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Animations.resize(1);
+
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 2.f, 3.f};
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+
+    RadientImport::ImportedDocument Scene;
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager),
+              RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_TRUE(Scene.Animations.empty());
 }
 

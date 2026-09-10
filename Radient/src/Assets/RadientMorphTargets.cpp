@@ -26,18 +26,12 @@
 
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientMorphTargetSource.hpp"
-#include "Core/RadientValidation.hpp"
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
-#include "Errors.hpp"
 #include "FixedLinearAllocator.hpp"
-#include "ObjectBase.hpp"
-#include "RefCntAutoPtr.hpp"
 
-#include <cstring>
-#include <limits>
-#include <vector>
+#include <cstddef>
 
 namespace Diligent
 {
@@ -114,123 +108,6 @@ Uint32 RadientMorphTargetData::GetAttributeDataOffset(Uint32 TargetIndex, Uint32
     VERIFY_EXPR(AttributeIndex < Target.AttributeCount);
     const size_t DataIndex = static_cast<size_t>(Target.pAttributes - m_pAttributes) + AttributeIndex;
     return m_pAttributeLayouts[DataIndex].DataOffset;
-}
-
-namespace
-{
-
-class RadientMorphTargetWeightsImpl final : public ObjectBase<IRadientMorphTargetWeights>
-{
-public:
-    using TBase = ObjectBase<IRadientMorphTargetWeights>;
-
-    RadientMorphTargetWeightsImpl(IReferenceCounters*         pRefCounters,
-                                  IRadientMeshAsset*          pMesh,
-                                  const RadientMeshAssetDesc& MeshDesc) :
-        TBase{pRefCounters},
-        m_pMesh{pMesh},
-        m_Weights(MeshDesc.MorphTargetCount)
-    {
-        VERIFY_EXPR(m_pMesh != nullptr);
-        for (Uint32 TargetIndex = 0; TargetIndex < MeshDesc.MorphTargetCount; ++TargetIndex)
-            m_Weights[TargetIndex] = MeshDesc.pMorphTargets[TargetIndex].DefaultWeight;
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMorphTargetWeights, TBase)
-
-    virtual IRadientMeshAsset* DILIGENT_CALL_TYPE GetMesh() const override final
-    {
-        return m_pMesh;
-    }
-
-    virtual Uint64 DILIGENT_CALL_TYPE GetVersion() const override final
-    {
-        return m_Version;
-    }
-
-    virtual Uint32 DILIGENT_CALL_TYPE GetWeightCount() const override final
-    {
-        return static_cast<Uint32>(m_Weights.size());
-    }
-
-    virtual const Float32* DILIGENT_CALL_TYPE GetWeights() const override final
-    {
-        return m_Weights.empty() ? nullptr : m_Weights.data();
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetWeights(Uint32         FirstTarget,
-                                                         Uint32         WeightCount,
-                                                         const Float32* pWeights) override final
-    {
-        const Uint32 TotalWeightCount = static_cast<Uint32>(m_Weights.size());
-        if (!RadientValidation::IsValidSubrange(FirstTarget, WeightCount, TotalWeightCount))
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        if (WeightCount == 0)
-            return RADIENT_STATUS_NO_CHANGE;
-        if (pWeights == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-        if (!AdvanceVersion())
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        std::memcpy(m_Weights.data() + FirstTarget, pWeights, sizeof(*pWeights) * WeightCount);
-        return RADIENT_STATUS_OK;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ResetToDefaults() override final
-    {
-        if (m_Weights.empty())
-            return RADIENT_STATUS_NO_CHANGE;
-        if (!AdvanceVersion())
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        const RadientMeshAssetDesc& MeshDesc = m_pMesh->GetDesc();
-        VERIFY_EXPR(MeshDesc.MorphTargetCount == m_Weights.size());
-        for (Uint32 TargetIndex = 0; TargetIndex < MeshDesc.MorphTargetCount; ++TargetIndex)
-            m_Weights[TargetIndex] = MeshDesc.pMorphTargets[TargetIndex].DefaultWeight;
-        return RADIENT_STATUS_OK;
-    }
-
-private:
-    bool AdvanceVersion() noexcept
-    {
-        if (m_Version == (std::numeric_limits<Uint64>::max)())
-        {
-            LOG_ERROR_MESSAGE("Morph-target weight version is exhausted");
-            return false;
-        }
-        ++m_Version;
-        return true;
-    }
-
-private:
-    const RefCntAutoPtr<IRadientMeshAsset> m_pMesh;
-    std::vector<Float32>                   m_Weights;
-    Uint64                                 m_Version = 1;
-};
-
-} // namespace
-
-RADIENT_STATUS CreateRadientMorphTargetWeights(IRadientMeshAsset*           pMesh,
-                                               const RadientMeshAssetDesc&  MeshDesc,
-                                               IRadientMorphTargetWeights** ppWeights)
-{
-    if (ppWeights == nullptr || pMesh == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    DEV_CHECK_ERR(*ppWeights == nullptr, "Output morph-target weights pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
-    *ppWeights = nullptr;
-
-    try
-    {
-        RefCntAutoPtr<RadientMorphTargetWeightsImpl> pWeights{
-            MakeNewRCObj<RadientMorphTargetWeightsImpl>()(pMesh, MeshDesc)};
-        *ppWeights = pWeights.Detach();
-        return RADIENT_STATUS_OK;
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to create Radient morph-target weights: ", Error.what());
-        return RADIENT_STATUS_FAILED;
-    }
 }
 
 } // namespace Diligent

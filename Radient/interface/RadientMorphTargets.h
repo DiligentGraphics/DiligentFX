@@ -136,15 +136,18 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMorphTargetWeights =
 /// The weight count is fixed at creation. The object retains its mesh and is
 /// not thread-safe; callers must not read and write it concurrently. Weight
 /// values are copied without clamping or per-value validation. The caller is
-/// responsible for providing finite values.
+/// responsible for providing finite values. Querying
+/// IID_RadientAnimationDestination exposes RadientMorphWeightsProperty as
+/// component-wise FLOAT ranges on destination element zero.
 DILIGENT_BEGIN_INTERFACE(IRadientMorphTargetWeights, IObject)
 {
     /// Returns a borrowed pointer to the mesh that defines the targets.
     VIRTUAL IRadientMeshAsset* METHOD(GetMesh)(THIS) CONST PURE;
 
     /// Returns the monotonically increasing weight revision. Every successful
-    /// nonempty SetWeights() call advances the revision, including assignments
-    /// whose values happen to equal the current values.
+    /// nonempty SetWeights() call and every completed animation update batch
+    /// advances the revision, including assignments whose values happen to
+    /// equal the current values.
     VIRTUAL Uint64 METHOD(GetVersion)(THIS) CONST PURE;
 
     /// Returns the fixed number of weights and mesh morph targets.
@@ -152,7 +155,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMorphTargetWeights, IObject)
 
     /// Returns a borrowed pointer to GetWeightCount() values, or null when the
     /// count is zero. The pointer remains valid for the object lifetime, while
-    /// its contents may be changed by SetWeights().
+    /// its contents may be changed by SetWeights(), ResetToDefaults(), or an
+    /// animation destination binding.
     VIRTUAL const Float32* METHOD(GetWeights)(THIS) CONST PURE;
 
     /// Replaces WeightCount values beginning at FirstTarget. The input is

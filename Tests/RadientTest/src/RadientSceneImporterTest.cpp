@@ -248,16 +248,26 @@ std::string WriteGLTFMorphFile(const TempDirectory& TempDir)
         0.f, 1.4f, 0.f,
         0.f, 1.5f, 0.f,
         0.f, 1.6f, 0.f};
-    const std::array<Uint16, 3> Indices{0, 1, 2};
+    const std::array<Uint16, 3>   Indices{0, 1, 2};
+    const std::array<Float32, 2>  AnimationTimes{1.f, 3.f};
+    const std::array<Float32, 12> AnimationWeights{
+        0.f, 0.f,
+        0.f, 1.f,
+        0.f, 0.f,
+        0.f, 0.f,
+        1.f, 0.f,
+        0.f, 0.f};
 
     std::vector<Uint8> Buffer;
-    const size_t       PositionsAOffset = AppendBytes(Buffer, PositionsA);
-    const size_t       PositionsBOffset = AppendBytes(Buffer, PositionsB);
-    const size_t       Target0AOffset   = AppendBytes(Buffer, Target0A);
-    const size_t       Target1AOffset   = AppendBytes(Buffer, Target1A);
-    const size_t       Target0BOffset   = AppendBytes(Buffer, Target0B);
-    const size_t       Target1BOffset   = AppendBytes(Buffer, Target1B);
-    const size_t       IndicesOffset    = AppendBytes(Buffer, Indices);
+    const size_t       PositionsAOffset      = AppendBytes(Buffer, PositionsA);
+    const size_t       PositionsBOffset      = AppendBytes(Buffer, PositionsB);
+    const size_t       Target0AOffset        = AppendBytes(Buffer, Target0A);
+    const size_t       Target1AOffset        = AppendBytes(Buffer, Target1A);
+    const size_t       Target0BOffset        = AppendBytes(Buffer, Target0B);
+    const size_t       Target1BOffset        = AppendBytes(Buffer, Target1B);
+    const size_t       AnimationTimeOffset   = AppendBytes(Buffer, AnimationTimes);
+    const size_t       AnimationWeightOffset = AppendBytes(Buffer, AnimationWeights);
+    const size_t       IndicesOffset         = AppendBytes(Buffer, Indices);
     WriteBinaryFile(TempDir, "morph.bin", Buffer);
 
     std::ostringstream GLTF;
@@ -269,6 +279,11 @@ std::string WriteGLTFMorphFile(const TempDirectory& TempDir)
         {"name": "Mesh defaults", "mesh": 0},
         {"name": "Node overrides", "mesh": 0, "weights": [0.8, 0.2]}
     ],
+    "animations": [{
+        "name": "Morph weights",
+        "samplers": [{"input": 7, "output": 8, "interpolation": "CUBICSPLINE"}],
+        "channels": [{"sampler": 0, "target": {"node": 1, "path": "weights"}}]
+    }],
     "meshes": [{
         "weights": [0.25, 0.75],
         "extras": {"targetNames": ["Smile", "Blink"]},
@@ -301,7 +316,11 @@ std::string WriteGLTFMorphFile(const TempDirectory& TempDir)
         {"buffer": 0, "byteOffset": )GLTF"
          << Target1BOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Target1B) << R"GLTF(, "target": 34962},
         {"buffer": 0, "byteOffset": )GLTF"
-         << IndicesOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963}
+         << IndicesOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTimeOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTimes) << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationWeightOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationWeights) << R"GLTF(}
     ],
     "accessors": [
         {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [-1, 0, 0], "max": [1, 1, 0]},
@@ -310,11 +329,68 @@ std::string WriteGLTFMorphFile(const TempDirectory& TempDir)
         {"bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC3"},
         {"bufferView": 4, "componentType": 5126, "count": 3, "type": "VEC3"},
         {"bufferView": 5, "componentType": 5126, "count": 3, "type": "VEC3"},
-        {"bufferView": 6, "componentType": 5123, "count": 3, "type": "SCALAR"}
+        {"bufferView": 6, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 7, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [1], "max": [3]},
+        {"bufferView": 8, "componentType": 5126, "count": 12, "type": "SCALAR"}
     ]
 })GLTF";
 
     return WriteGLTFFile(TempDir, "morph.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMalformedMorphAnimationFile(const TempDirectory& TempDir)
+{
+    const std::array<Float32, 9> Positions{
+        0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f,
+        0.f, 1.f, 0.f};
+    const std::array<Float32, 2> AnimationTimes{0.f, 1.f};
+    const std::array<Float32, 2> AnimationWeights{0.f, 1.f};
+    const std::array<Uint16, 3>  Indices{0, 1, 2};
+
+    std::vector<Uint8> Buffer;
+    const size_t       PositionOffset        = AppendBytes(Buffer, Positions);
+    const size_t       AnimationTimeOffset   = AppendBytes(Buffer, AnimationTimes);
+    const size_t       AnimationWeightOffset = AppendBytes(Buffer, AnimationWeights);
+    const size_t       IndexOffset           = AppendBytes(Buffer, Indices);
+    WriteBinaryFile(TempDir, "malformed-morph-animation.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "Static mesh", "mesh": 0, "translation": [2, 3, 4]}],
+    "animations": [{
+        "name": "Invalid morph animation",
+        "samplers": [{"input": 2, "output": 3, "interpolation": "LINEAR"}],
+        "channels": [{"sampler": 0, "target": {"node": 0, "path": "weights"}}]
+    }],
+    "meshes": [{
+        "name": "Static triangle",
+        "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]
+    }],
+    "buffers": [{"uri": "malformed-morph-animation.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << PositionOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Positions) << R"GLTF(, "target": 34962},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << IndexOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(Indices) << R"GLTF(, "target": 34963},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTimeOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTimes) << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationWeightOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationWeights) << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 2, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [0], "max": [1]},
+        {"bufferView": 3, "componentType": 5126, "count": 2, "type": "SCALAR"}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "malformed-morph-animation.gltf", GLTF.str().c_str());
 }
 
 struct ImportFixture
@@ -630,6 +706,153 @@ TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
         EXPECT_STREQ(Target.pAttributes[0].Semantic, RadientMorphTargetPositionSemantic);
         EXPECT_EQ(Target.pAttributes[0].ComponentCount, 3u);
     }
+}
+
+TEST(RadientSceneImporterTest, RegistersAndEvaluatesMorphAnimationPerSceneInstance)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFMorphFile(TempDir);
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+    ASSERT_NE(Fixture.pWriter, nullptr);
+    ASSERT_NE(Fixture.pAnimationRegistry, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo FirstInstantiateInfo{};
+    FirstInstantiateInfo.Name               = "First morph instance";
+    FirstInstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+
+    const ImportSceneResult FirstImport = ImportSceneAndFinishPending(Fixture, LoadInfo, FirstInstantiateInfo);
+    ASSERT_EQ(FirstImport.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(FirstImport.pModel, nullptr);
+    ASSERT_NE(FirstImport.RootEntity, InvalidRadientEntityID);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneAssetDesc& SceneDesc = FirstImport.pModel->GetDesc();
+    ASSERT_EQ(SceneDesc.AnimationClipCount, 1u);
+    ASSERT_NE(SceneDesc.ppAnimationClips, nullptr);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip{SceneDesc.ppAnimationClips[0]};
+    ASSERT_NE(pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 2u);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+
+    const std::vector<RadientEntityID> FirstNodes = GetChildren(*Fixture.pScene, FirstImport.RootEntity);
+    ASSERT_EQ(FirstNodes.size(), 2u);
+
+    RadientMorphComponent FirstMorph{};
+    ASSERT_EQ(Fixture.pScene->GetMorph(FirstNodes[1], FirstMorph), RADIENT_STATUS_OK);
+    ASSERT_NE(FirstMorph.pWeights, nullptr);
+    ASSERT_EQ(FirstMorph.pWeights->GetWeightCount(), 2u);
+    ASSERT_NE(FirstMorph.pWeights->GetWeights(), nullptr);
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[0], 0.8f);
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[1], 0.2f);
+
+    const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
+        Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pRegistryEntry, nullptr);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 1u);
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+
+    const Uint64                 FirstVersion = FirstMorph.pWeights->GetVersion();
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    ASSERT_EQ(pRegistryEntry->ppBindings[0]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[0], 0.5f);
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[1], 0.5f);
+    EXPECT_EQ(FirstMorph.pWeights->GetVersion(), FirstVersion + 1u);
+
+    RadientSceneInstantiateInfo SecondInstantiateInfo{};
+    SecondInstantiateInfo.Name               = "Second morph instance";
+    SecondInstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+    RadientEntityID SecondRoot               = InvalidRadientEntityID;
+    ASSERT_EQ(Fixture.pImporter->InstantiateScene(FirstImport.pModel, SecondInstantiateInfo, SecondRoot),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(SecondRoot, InvalidRadientEntityID);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const std::vector<RadientEntityID> SecondNodes = GetChildren(*Fixture.pScene, SecondRoot);
+    ASSERT_EQ(SecondNodes.size(), 2u);
+
+    RadientMorphComponent SecondMorph{};
+    ASSERT_EQ(Fixture.pScene->GetMorph(SecondNodes[1], SecondMorph), RADIENT_STATUS_OK);
+    ASSERT_NE(SecondMorph.pWeights, nullptr);
+    EXPECT_NE(SecondMorph.pWeights, FirstMorph.pWeights);
+    ASSERT_EQ(SecondMorph.pWeights->GetWeightCount(), 2u);
+    ASSERT_NE(SecondMorph.pWeights->GetWeights(), nullptr);
+    EXPECT_FLOAT_EQ(SecondMorph.pWeights->GetWeights()[0], 0.8f);
+    EXPECT_FLOAT_EQ(SecondMorph.pWeights->GetWeights()[1], 0.2f);
+
+    pRegistryEntry = FindAnimationRegistryEntry(Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pRegistryEntry, nullptr);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 2u);
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+    ASSERT_NE(pRegistryEntry->ppBindings[1], nullptr);
+    EXPECT_NE(pRegistryEntry->ppBindings[0], pRegistryEntry->ppBindings[1]);
+
+    EvaluateInfo.Time = 2.f;
+    for (Uint32 BindingIndex = 0; BindingIndex < pRegistryEntry->BindingCount; ++BindingIndex)
+    {
+        ASSERT_EQ(pRegistryEntry->ppBindings[BindingIndex]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    }
+
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[0], 1.f);
+    EXPECT_FLOAT_EQ(FirstMorph.pWeights->GetWeights()[1], 0.f);
+    EXPECT_FLOAT_EQ(SecondMorph.pWeights->GetWeights()[0], 1.f);
+    EXPECT_FLOAT_EQ(SecondMorph.pWeights->GetWeights()[1], 0.f);
+}
+
+TEST(RadientSceneImporterTest, MalformedMorphAnimationLeavesSceneStatic)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFMalformedMorphAnimationFile(TempDir);
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+    ASSERT_NE(Fixture.pWriter, nullptr);
+    ASSERT_NE(Fixture.pAnimationRegistry, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name               = "Static fallback";
+    InstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(ImportResult.pModel, nullptr);
+    ASSERT_NE(ImportResult.RootEntity, InvalidRadientEntityID);
+    EXPECT_EQ(ImportResult.pModel->GetDesc().AnimationClipCount, 0u);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const std::vector<RadientEntityID> Nodes = GetChildren(*Fixture.pScene, ImportResult.RootEntity);
+    ASSERT_EQ(Nodes.size(), 1u);
+
+    RadientTransform Transform{};
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(Nodes[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {2.f, 3.f, 4.f});
+
+    Bool HasComponent = False;
+    ASSERT_EQ(Fixture.pScene->HasComponent(Nodes[0], RADIENT_COMPONENT_TYPE_MESH, HasComponent),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, True);
+    ASSERT_EQ(Fixture.pScene->HasComponent(Nodes[0], RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, True);
+    ASSERT_EQ(Fixture.pScene->HasComponent(Nodes[0], RADIENT_COMPONENT_TYPE_MORPH, HasComponent),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, False);
+
+    const RadientAnimationRegistryState& RegistryState = Fixture.pAnimationRegistry->GetState();
+    EXPECT_EQ(RegistryState.EntryCount, 0u);
 }
 
 TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)

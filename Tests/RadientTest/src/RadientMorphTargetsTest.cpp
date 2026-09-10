@@ -24,16 +24,19 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientMorphTargetSource.hpp"
 #include "Scene/Components/RadientMorphComponentStorage.hpp"
 #include "Scene/RadientSceneState.hpp"
+#include "RadientAnimation.h"
 #include "ThreadPool.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cstring>
 
 using namespace Diligent;
 
@@ -121,6 +124,61 @@ RefCntAutoPtr<IRadientMorphTargetWeights> CreateWeights(IRadientMeshAsset& Mesh)
     EXPECT_NE(pWeights, nullptr);
     return pWeights;
 }
+
+RadientAnimationPropertyBindingDesc MakeMorphWeightProperty(
+    Uint32                             FirstArrayElement,
+    Uint32                             ArraySize,
+    RadientAnimationDestinationElement DestinationElement = 0,
+    RadientAnimationSchemaID           Schema             = RadientMorphWeightsAnimationSchemaID,
+    RadientAnimationPropertyID         Property           = RadientMorphWeightsProperty,
+    RADIENT_ANIMATION_VALUE_TYPE       Type               = RADIENT_ANIMATION_VALUE_TYPE_FLOAT)
+{
+    RadientAnimationPropertyBindingDesc Desc;
+    Desc.Schema             = Schema;
+    Desc.DestinationElement = DestinationElement;
+    Desc.Property           = Property;
+    Desc.FirstArrayElement  = FirstArrayElement;
+    Desc.Value.Type         = Type;
+    Desc.Value.ArraySize    = ArraySize;
+    return Desc;
+}
+
+class RadientMorphTargetWeightsAnimationDestinationTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_pMesh = CreateMesh(m_Source.MakeCreateInfo());
+        ASSERT_NE(m_pMesh, nullptr);
+        m_pWeights = CreateWeights(*m_pMesh);
+        ASSERT_NE(m_pWeights, nullptr);
+        m_pWeights->QueryInterface(
+            IID_RadientAnimationDestination,
+            m_pDestination.GetAddressOfEmpty());
+        ASSERT_NE(m_pDestination, nullptr);
+    }
+
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> CreateDestinationBinding(
+        const RadientAnimationPropertyBindingDesc* pProperties,
+        Uint32                                     PropertyCount,
+        RadientAnimationResolvedPropertyDesc*      pResolvedProperties)
+    {
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(
+                      pProperties,
+                      PropertyCount,
+                      pResolvedProperties,
+                      pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        return pBinding;
+    }
+
+protected:
+    MorphMeshData                               m_Source;
+    RefCntAutoPtr<IRadientMeshAsset>            m_pMesh;
+    RefCntAutoPtr<IRadientMorphTargetWeights>   m_pWeights;
+    RefCntAutoPtr<IRadientAnimationDestination> m_pDestination;
+};
 
 } // namespace
 
@@ -268,6 +326,205 @@ TEST(RadientMorphTargetsTest, MeshWithoutTargetsCreatesEmptyWeights)
     EXPECT_EQ(pWeights->SetWeights(0, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWeights->ResetToDefaults(), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(pWeights->GetVersion(), 1u);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, WeightsExposeAnimationDestination)
+{
+    RefCntAutoPtr<IObject> pWeightsIdentity;
+    RefCntAutoPtr<IObject> pDestinationIdentity;
+    m_pWeights->QueryInterface(IID_Unknown, pWeightsIdentity.GetAddressOfEmpty());
+    m_pDestination->QueryInterface(IID_Unknown, pDestinationIdentity.GetAddressOfEmpty());
+    ASSERT_NE(pWeightsIdentity, nullptr);
+    ASSERT_NE(pDestinationIdentity, nullptr);
+    EXPECT_EQ(pWeightsIdentity, pDestinationIdentity);
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pRoundTripWeights;
+    m_pDestination->QueryInterface(
+        IID_RadientMorphTargetWeights,
+        pRoundTripWeights.GetAddressOfEmpty());
+    EXPECT_EQ(pRoundTripWeights, m_pWeights);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, ResolvesAndUpdatesDisjointWeightRangesInOneBatch)
+{
+    const std::array Properties = {
+        MakeMorphWeightProperty(1, 1),
+        MakeMorphWeightProperty(0, 1),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding = CreateDestinationBinding(
+        Properties.data(),
+        static_cast<Uint32>(Properties.size()),
+        Resolved.data());
+    ASSERT_NE(pBinding, nullptr);
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+
+    const Uint64 InitialVersion = m_pWeights->GetVersion();
+    void* const* pOutputs       = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    ASSERT_NE(pOutputs[1], nullptr);
+
+    *static_cast<Float32*>(pOutputs[0]) = 0.75f;
+    *static_cast<Float32*>(pOutputs[1]) = -0.25f;
+    ASSERT_EQ(pBinding->EndUpdate(False), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(m_pWeights->GetVersion(), InitialVersion + 1);
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[0], -0.25f);
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[1], 0.75f);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsOverlappingWeightRanges)
+{
+    const std::array Properties = {
+        MakeMorphWeightProperty(0, 2),
+        MakeMorphWeightProperty(1, 1),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsUnsupportedWeightPropertyLayouts)
+{
+    struct Case
+    {
+        RadientAnimationPropertyBindingDesc Property;
+        RADIENT_STATUS                      ExpectedStatus;
+    };
+
+    static constexpr RadientAnimationSchemaID UnsupportedSchema =
+        {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
+    const std::array Cases = {
+        Case{MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, RadientMorphWeightsProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(1, 2), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(0, 1, 1), RADIENT_STATUS_NOT_FOUND},
+    };
+
+    for (const Case& TestCase : Cases)
+    {
+        SCOPED_TRACE(TestCase.ExpectedStatus);
+        RadientAnimationResolvedPropertyDesc               Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(
+                      &TestCase.Property,
+                      1,
+                      &Resolved,
+                      pBinding.GetAddressOfEmpty()),
+                  TestCase.ExpectedStatus);
+        EXPECT_FALSE(pBinding);
+    }
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, GenericBindingSamplesDirectlyIntoWeights)
+{
+    constexpr RadientAnimationObjectID SourceNode = 17;
+    RadientAnimationTargetDesc         Target;
+    Target.Schema           = RadientMorphWeightsAnimationSchemaID;
+    Target.Object           = SourceNode;
+    const std::array Times  = {0.f, 1.f};
+    const std::array Values = {
+        0.f,
+        1.f,
+        1.f,
+        -1.f,
+    };
+    RadientAnimationSamplerDesc Sampler;
+    Sampler.Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+    Sampler.Value.ArraySize = 2;
+    Sampler.Interpolation   = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    Sampler.pTimes          = Times.data();
+    Sampler.pValues         = Values.data();
+    Sampler.ValueDataSize   = sizeof(Values);
+    Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
+
+    RadientAnimationChannelDesc Channel;
+    Channel.TargetIndex  = 0;
+    Channel.Property     = RadientMorphWeightsProperty;
+    Channel.SamplerIndex = 0;
+
+    RadientAnimationClipDesc ClipDesc;
+    ClipDesc.Name         = "Morph-weight destination test";
+    ClipDesc.Duration     = 1.f;
+    ClipDesc.pTargets     = &Target;
+    ClipDesc.TargetCount  = 1;
+    ClipDesc.pSamplers    = &Sampler;
+    ClipDesc.SamplerCount = 1;
+    ClipDesc.pChannels    = &Channel;
+    ClipDesc.ChannelCount = 1;
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, pClip.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex    = 0;
+    Mapping.DestinationElement = 0;
+    RadientAnimationDestinationDesc Destination;
+    Destination.pDestination = m_pDestination;
+    Destination.pMappings    = &Mapping;
+    Destination.MappingCount = 1;
+    RadientAnimationBindingDesc BindingDesc;
+    BindingDesc.pDestinations    = &Destination;
+    BindingDesc.DestinationCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+    ASSERT_EQ(pClip->CreateBinding(BindingDesc, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+
+    const Uint64                 InitialVersion = m_pWeights->GetVersion();
+    RadientAnimationEvaluateInfo Info;
+    Info.Time               = 0.25f;
+    Info.UpdateDerivedState = False;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pWeights->GetVersion(), InitialVersion + 1);
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[0], 0.25f);
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[1], 0.5f);
+
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pWeights->GetVersion(), InitialVersion + 2);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, DestinationBindingRetainsWeights)
+{
+    const RadientAnimationPropertyBindingDesc          Property = MakeMorphWeightProperty(0, 2);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
+        &Property,
+        1,
+        &Resolved);
+    ASSERT_NE(pBinding, nullptr);
+
+    IRadientMorphTargetWeights* const pRawWeights = m_pWeights;
+    m_pDestination.Release();
+    m_pWeights.Release();
+    m_pMesh.Release();
+
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    const std::array Values = {2.f, 3.f};
+    std::memcpy(pOutputs[0], Values.data(), sizeof(Values));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pRawWeights->GetWeightCount(), 2u);
+    EXPECT_FLOAT_EQ(pRawWeights->GetWeights()[0], 2.f);
+    EXPECT_FLOAT_EQ(pRawWeights->GetWeights()[1], 3.f);
+    EXPECT_EQ(pRawWeights->GetVersion(), 2u);
 }
 
 TEST(RadientMorphTargetsTest, MorphComponentStorageRetainsWeightsAndRepairsPointerAfterMove)

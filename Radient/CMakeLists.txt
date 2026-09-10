@@ -5,6 +5,7 @@ project(Radient CXX)
 set(SOURCE
     src/Animation/RadientAnimationBindingImpl.cpp
     src/Animation/RadientAnimationRegistryImpl.cpp
+    src/Animation/RadientMorphTargetWeightsImpl.cpp
     src/Animation/RadientSkeletonPoseImpl.cpp
     src/Assets/RadientAnimationClipAsset.cpp
     src/Assets/RadientAssetManagerImpl.cpp

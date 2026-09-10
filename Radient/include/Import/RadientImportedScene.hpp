@@ -91,8 +91,8 @@ struct ImportedAnimationSkinMapping
 
 struct ImportedAnimation
 {
-    /// Generic clip containing the imported node-transform channels from the
-    /// source animation. Target objects use source-document identities.
+    /// Generic clip containing the imported node-transform and morph-weight
+    /// channels. Target objects use source-document identities.
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
 
     /// Per-skin intersections between pClip targets and imported skeleton

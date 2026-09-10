@@ -722,10 +722,10 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 ///
 /// This interface is the only runtime extension point required by the generic
 /// animation system. Radient-created skeleton poses expose it through
-/// QueryInterface() for the node translation, rotation, and scale properties;
-/// other built-in objects may expose it as their animation support is added.
-/// Custom destinations may implement it for material, light, camera,
-/// application, or extension properties. The interface is externally
+/// QueryInterface() for node translation, rotation, and scale properties.
+/// Radient-created morph-target weight objects expose it for morph-weight
+/// array ranges. Custom destinations may implement it for material, light,
+/// camera, application, or extension properties. The interface is externally
 /// synchronized.
 ///
 /// Destination binding creation is a cold operation. The returned object owns
