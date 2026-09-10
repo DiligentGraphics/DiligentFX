@@ -44,7 +44,6 @@ typedef struct IRadientTextureAsset            IRadientTextureAsset;
 typedef struct IRadientSceneAsset              IRadientSceneAsset;
 typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
 typedef struct IRadientSkinAsset               IRadientSkinAsset;
-typedef struct IRadientSkeletonAnimationAsset  IRadientSkeletonAnimationAsset;
 typedef struct IRadientAnimationClipAsset      IRadientAnimationClipAsset;
 typedef struct IRadientMorphTargetWeights      IRadientMorphTargetWeights;
 typedef struct IDeviceContext                  IDeviceContext;
@@ -52,7 +51,6 @@ typedef struct IDeviceContext                  IDeviceContext;
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;
 typedef struct RadientSkeletonDesc                         RadientSkeletonDesc;
 typedef struct RadientSkinDesc                             RadientSkinDesc;
-typedef struct RadientSkeletonAnimationDesc                RadientSkeletonAnimationDesc;
 typedef struct RadientAnimationClipDesc                    RadientAnimationClipDesc;
 typedef struct RadientMorphTargetCreateInfo                RadientMorphTargetCreateInfo;
 typedef struct RadientMorphTargetDesc                      RadientMorphTargetDesc;
@@ -82,9 +80,6 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
 
     /// Immutable mapping from a mesh skin palette to skeleton joints.
     RADIENT_ASSET_TYPE_SKIN,
-
-    /// Immutable animation clip targeting a skeleton hierarchy.
-    RADIENT_ASSET_TYPE_SKELETON_ANIMATION,
 
     /// Immutable, unbound animation clip.
     RADIENT_ASSET_TYPE_ANIMATION_CLIP
@@ -420,51 +415,20 @@ struct RadientSceneLoadInfo
 typedef struct RadientSceneLoadInfo RadientSceneLoadInfo;
 
 
-/// Associates one skeleton-specific animation with a logical scene animation.
-/// The animation is retained by the scene asset and the pointer is borrowed by
-/// callers.
-struct RadientSceneSkeletonAnimationBinding
-{
-    IRadientSkeletonAnimationAsset* pAnimation DEFAULT_INITIALIZER(nullptr);
-};
-typedef struct RadientSceneSkeletonAnimationBinding RadientSceneSkeletonAnimationBinding;
-
-
-/// Immutable logical animation imported with a scene asset.
-///
-/// One source animation may contain SkeletonAnimationCount independent
-/// skeleton animations. Every skeleton animation identifies its target through
-/// IRadientSkeletonAnimationAsset::GetDesc().pSkeleton. Name may be empty or
-/// shared by multiple animations; the animation index is its stable identity
-/// within the scene asset.
-struct RadientSceneAnimationDesc
-{
-    /// Source animation name. The value returned by a scene asset is never null.
-    const Char* Name DEFAULT_INITIALIZER(nullptr);
-
-    /// Clip-local duration in seconds.
-    Float32 Duration DEFAULT_INITIALIZER(0.f);
-
-    /// Array of SkeletonAnimationCount skeleton-animation bindings. The array
-    /// and its pointers remain valid while the scene asset is retained.
-    const RadientSceneSkeletonAnimationBinding* pSkeletonAnimations DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of elements in pSkeletonAnimations.
-    Uint32 SkeletonAnimationCount DEFAULT_INITIALIZER(0);
-};
-typedef struct RadientSceneAnimationDesc RadientSceneAnimationDesc;
-
-
 /// Immutable description of an imported scene asset.
 struct RadientSceneAssetDesc
 {
-    /// Array of AnimationCount logical animations. The array and all data
-    /// referenced by its elements remain valid while the scene asset is
-    /// retained. May be null when AnimationCount is zero.
-    const RadientSceneAnimationDesc* pAnimations DEFAULT_INITIALIZER(nullptr);
+    /// Array of AnimationClipCount animation clips imported with the scene.
+    /// The array and its pointers remain valid while the scene asset is
+    /// retained. Clips preserve source-animation order, so the array index is
+    /// the stable identity within the scene even when names are empty or
+    /// duplicated. Individual clip name, duration, targets, and channels are
+    /// available through IRadientAnimationClipAsset::GetDesc(). May be null
+    /// when AnimationClipCount is zero.
+    IRadientAnimationClipAsset* const* ppAnimationClips DEFAULT_INITIALIZER(nullptr);
 
-    /// Number of elements in pAnimations.
-    Uint32 AnimationCount DEFAULT_INITIALIZER(0);
+    /// Number of elements in ppAnimationClips.
+    Uint32 AnimationClipCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientSceneAssetDesc RadientSceneAssetDesc;
 
@@ -625,12 +589,26 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                               const RadientSkinDesc REF SkinDesc,
                                               IRadientSkinAsset**       ppSkin) PURE;
 
-    /// Creates an immutable animation clip targeting a skeleton. The animation
-    /// retains the skeleton and copies all tracks, keyframe times, and values.
-    /// On success, ppAnimation receives a strong reference.
-    VIRTUAL RADIENT_STATUS METHOD(CreateSkeletonAnimation)(THIS_
-                                                           const RadientSkeletonAnimationDesc REF AnimationDesc,
-                                                           IRadientSkeletonAnimationAsset**       ppAnimation) PURE;
+    /// Creates an immutable, unbound animation clip.
+    ///
+    /// The manager validates structural and native-storage invariants and
+    /// copies the name, descriptor tables, target names, keyframe times, and
+    /// value bytes before returning. It does not resolve target schemas or
+    /// validate property-specific value compatibility; those checks occur when
+    /// the clip is bound to a runtime instance.
+    ///
+    /// \param [in] ClipDesc - Clip description to validate and copy. Its data
+    ///                        only needs to remain valid for this call.
+    /// \param [out] ppClip  - Address of a null pointer that receives a strong
+    ///                        reference on success. It remains null on failure.
+    ///
+    /// \return RADIENT_STATUS_OK on success, RADIENT_STATUS_INVALID_ARGUMENT
+    ///         for a malformed description or output pointer,
+    ///         RADIENT_STATUS_INVALID_OPERATION after Stop(), or
+    ///         RADIENT_STATUS_FAILED if storage creation fails.
+    VIRTUAL RADIENT_STATUS METHOD(CreateAnimationClip)(THIS_
+                                                       const RadientAnimationClipDesc REF ClipDesc,
+                                                       IRadientAnimationClipAsset**       ppClip) PURE;
 
     /// Creates or retrieves a cached built-in standard material definition asset.
     /// Compatible descriptions may return the same immutable asset. On success,
@@ -683,26 +661,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     VIRTUAL RADIENT_STATUS METHOD(Stop)(THIS_
                                         IDeviceContext* pContext) PURE;
 
-    /// Creates an immutable, unbound animation clip.
-    ///
-    /// The manager validates structural and native-storage invariants and
-    /// copies the name, descriptor tables, target names, keyframe times, and
-    /// value bytes before returning. It does not resolve target schemas or
-    /// validate property-specific value compatibility; those checks occur when
-    /// the clip is bound to a runtime instance.
-    ///
-    /// \param [in] ClipDesc - Clip description to validate and copy. Its data
-    ///                        only needs to remain valid for this call.
-    /// \param [out] ppClip  - Address of a null pointer that receives a strong
-    ///                        reference on success. It remains null on failure.
-    ///
-    /// \return RADIENT_STATUS_OK on success, RADIENT_STATUS_INVALID_ARGUMENT
-    ///         for a malformed description or output pointer,
-    ///         RADIENT_STATUS_INVALID_OPERATION after Stop(), or
-    ///         RADIENT_STATUS_FAILED if storage creation fails.
-    VIRTUAL RADIENT_STATUS METHOD(CreateAnimationClip)(THIS_
-                                                       const RadientAnimationClipDesc REF ClipDesc,
-                                                       IRadientAnimationClipAsset**       ppClip) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -714,14 +672,13 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateSkeleton(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateSkeleton, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateSkin(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateSkin,     This, __VA_ARGS__)
-#    define IRadientAssetManager_CreateSkeletonAnimation(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateSkeletonAnimation, This, __VA_ARGS__)
+#    define IRadientAssetManager_CreateAnimationClip(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateAnimationClip, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateStandardMaterialDefinition(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateStandardMaterialDefinition, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 #    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)
-#    define IRadientAssetManager_CreateAnimationClip(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateAnimationClip, This, __VA_ARGS__)
 
 #endif
 

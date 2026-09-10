@@ -28,6 +28,8 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
+#include "ObjectBase.hpp"
+
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMeshIndexSource.hpp"
@@ -66,6 +68,67 @@ namespace
 
 static constexpr Uint32 TestVertexCount = 3;
 static constexpr float  EPSILON         = 1e-5f;
+
+class FailingAnimationRegistry final : public ObjectBase<IRadientAnimationRegistry>
+{
+public:
+    using TBase = ObjectBase<IRadientAnimationRegistry>;
+
+    FailingAnimationRegistry(IReferenceCounters* pRefCounters, IRadientScene* pScene) :
+        TBase{pRefCounters},
+        m_pScene{pScene}
+    {}
+
+    virtual IRadientScene* DILIGENT_CALL_TYPE GetScene() const override final
+    {
+        return m_pScene;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE AddAnimationBinding(
+        IRadientAnimationBinding* pBinding,
+        const RadientEntityID*,
+        Uint32) override final
+    {
+        ++AddCallCount;
+        m_pAddedBinding = pBinding;
+        return RADIENT_STATUS_FAILED;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RemoveAnimationBinding(
+        IRadientAnimationBinding* pBinding,
+        const RadientEntityID*,
+        Uint32) override final
+    {
+        ++RemoveCallCount;
+        RemovedAddedBinding = pBinding == m_pAddedBinding;
+        return RADIENT_STATUS_NO_CHANGE;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RemoveEntity(RadientEntityID) override final
+    {
+        return RADIENT_STATUS_NO_CHANGE;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RemoveAnimationClip(
+        IRadientAnimationClipAsset*) override final
+    {
+        return RADIENT_STATUS_NO_CHANGE;
+    }
+
+    virtual const RadientAnimationRegistryState& DILIGENT_CALL_TYPE GetState() const override final
+    {
+        return m_State;
+    }
+
+    Uint32 AddCallCount        = 0;
+    Uint32 RemoveCallCount     = 0;
+    bool   RemovedAddedBinding = false;
+
+private:
+    RefCntAutoPtr<IRadientScene>  m_pScene;
+    IRadientAnimationBinding*     m_pAddedBinding = nullptr;
+    RadientAnimationRegistryState m_State;
+};
 
 struct StandardMaterialTextureTestInfo
 {
@@ -1528,9 +1591,6 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
 
     ASSERT_EQ(Scene.Animations.size(), 1u);
     const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
-    EXPECT_EQ(ImportedAnimation.Name, "Joint motion");
-    EXPECT_FLOAT_EQ(ImportedAnimation.Duration, 2.f);
-
     ASSERT_NE(ImportedAnimation.pClip, nullptr);
     const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
     EXPECT_STREQ(ClipDesc.Name, "Joint motion");
@@ -1623,29 +1683,6 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     ASSERT_NE(pJointBMapping, nullptr);
     EXPECT_EQ(pJointAMapping->DestinationElement, 2u);
     EXPECT_EQ(pJointBMapping->DestinationElement, 3u);
-
-    ASSERT_EQ(ImportedAnimation.SkeletonAnimationBindings.size(), 1u);
-    ASSERT_NE(ImportedAnimation.SkeletonAnimationBindings[0].pAnimation, nullptr);
-
-    const RadientSkeletonAnimationDesc& AnimationDesc =
-        ImportedAnimation.SkeletonAnimationBindings[0].pAnimation->GetDesc();
-    EXPECT_EQ(AnimationDesc.pSkeleton, SkinDesc.pSkeleton);
-    EXPECT_FLOAT_EQ(AnimationDesc.Duration, 2.f);
-    ASSERT_EQ(AnimationDesc.TrackCount, 2u);
-
-    const RadientSkeletonAnimationTrackDesc& JointATrack = AnimationDesc.pTracks[0];
-    EXPECT_EQ(JointATrack.SkeletonJointIndex, 2u);
-    EXPECT_EQ(JointATrack.Translation.Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
-    ASSERT_EQ(JointATrack.Translation.KeyframeCount, 2u);
-    EXPECT_FLOAT_EQ(JointATrack.Translation.pTimes[0], 0.f);
-    EXPECT_FLOAT_EQ(JointATrack.Translation.pTimes[1], 2.f);
-
-    const RadientSkeletonAnimationTrackDesc& JointBTrack = AnimationDesc.pTracks[1];
-    EXPECT_EQ(JointBTrack.SkeletonJointIndex, 3u);
-    EXPECT_EQ(JointBTrack.Rotation.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
-    EXPECT_EQ(JointBTrack.Scale.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
-    ASSERT_EQ(JointBTrack.Rotation.KeyframeCount, 2u);
-    ASSERT_EQ(JointBTrack.Scale.KeyframeCount, 2u);
 }
 
 TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSkins)
@@ -1684,10 +1721,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     EXPECT_TRUE(Scene.Skins.empty());
     ASSERT_EQ(Scene.Animations.size(), 1u);
     const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
-    EXPECT_EQ(ImportedAnimation.Name, "Node motion");
-    EXPECT_FLOAT_EQ(ImportedAnimation.Duration, 3.f);
     EXPECT_TRUE(ImportedAnimation.SkinMappings.empty());
-    EXPECT_TRUE(ImportedAnimation.SkeletonAnimationBindings.empty());
 
     ASSERT_NE(ImportedAnimation.pClip, nullptr);
     const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
@@ -1797,9 +1831,6 @@ TEST(RadientGLTFConverterTest, GenericAnimationRetainsTargetsOutsideSkeletonMapp
     ASSERT_NE(pRootMapping, nullptr);
     EXPECT_EQ(pRootMapping->DestinationElement, 0u);
     EXPECT_EQ(FindJointMapping(*pSkinMapping, LooseTargetIndex), nullptr);
-
-    ASSERT_EQ(ImportedAnimation.SkeletonAnimationBindings.size(), 1u);
-    ASSERT_NE(ImportedAnimation.SkeletonAnimationBindings[0].pAnimation, nullptr);
 }
 
 TEST(RadientGLTFConverterTest, GenericAnimationReusesCompatibleSourceSamplerAcrossProperties)
@@ -1915,7 +1946,6 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
 
     ASSERT_EQ(Scene.Skins.size(), 2u);
     ASSERT_EQ(Scene.Animations.size(), 1u);
-    ASSERT_EQ(Scene.Animations[0].SkeletonAnimationBindings.size(), 2u);
 
     const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
     ASSERT_NE(ImportedAnimation.pClip, nullptr);
@@ -1946,17 +1976,10 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
         EXPECT_EQ(pJointMapping->DestinationElement, 1u);
     }
 
-    for (Uint32 SkinIndex = 0; SkinIndex < 2; ++SkinIndex)
-    {
-        IRadientSkeletonAnimationAsset* const pAnimation =
-            Scene.Animations[0].SkeletonAnimationBindings[SkinIndex].pAnimation;
-        ASSERT_NE(pAnimation, nullptr);
-        EXPECT_EQ(pAnimation->GetDesc().pSkeleton, Scene.Skins[SkinIndex]->GetDesc().pSkeleton);
-    }
     EXPECT_NE(Scene.Skins[0]->GetDesc().pSkeleton, Scene.Skins[1]->GetDesc().pSkeleton);
 }
 
-TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphRegistersGenericAnimationBinding)
 {
     RefCntAutoPtr<IRadientEngine> pEngine;
     ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -1970,7 +1993,7 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
     Joint.Name = "Root";
 
     RadientSkeletonDesc SkeletonDesc{};
-    SkeletonDesc.Name       = "Null animation binding skeleton";
+    SkeletonDesc.Name       = "Generic animation binding skeleton";
     SkeletonDesc.pJoints    = &Joint;
     SkeletonDesc.JointCount = 1;
 
@@ -1982,7 +2005,7 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
     JointBinding.SkeletonJointIndex = 0;
 
     RadientSkinDesc SkinDesc{};
-    SkinDesc.Name       = "Null animation binding skin";
+    SkinDesc.Name       = "Generic animation binding skin";
     SkinDesc.pSkeleton  = pSkeleton;
     SkinDesc.pJoints    = &JointBinding;
     SkinDesc.JointCount = 1;
@@ -1990,16 +2013,40 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
     RefCntAutoPtr<IRadientSkinAsset> pSkin;
     ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
-    RadientSkeletonAnimationDesc AnimationDesc{};
-    AnimationDesc.Name      = "Valid animation";
-    AnimationDesc.pSkeleton = pSkeleton;
-    AnimationDesc.Duration  = 1.f;
+    const std::array<Float32, 2>       Times  = {0.f, 1.f};
+    const std::array<RadientFloat3, 2> Values = {RadientFloat3{}, RadientFloat3{1.f, 2.f, 3.f}};
 
-    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation;
-    ASSERT_EQ(pAssetManager->CreateSkeletonAnimation(AnimationDesc, pAnimation.GetAddressOfEmpty()),
-              RADIENT_STATUS_OK);
+    RadientAnimationTargetDesc Target{};
+    Target.Schema = RadientNodeAnimationSchemaID;
+    Target.Object = 0;
 
-    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://null-animation-binding", 1);
+    RadientAnimationSamplerDesc Sampler{};
+    Sampler.Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+    Sampler.Value.ArraySize = 1;
+    Sampler.pTimes          = Times.data();
+    Sampler.pValues         = Values.data();
+    Sampler.ValueDataSize   = sizeof(Values);
+    Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
+
+    RadientAnimationChannelDesc Channel{};
+    Channel.TargetIndex  = 0;
+    Channel.Property     = RadientNodeTranslationProperty;
+    Channel.SamplerIndex = 0;
+
+    RadientAnimationClipDesc ClipDesc{};
+    ClipDesc.Name         = "Generic animation";
+    ClipDesc.Duration     = 1.f;
+    ClipDesc.pTargets     = &Target;
+    ClipDesc.TargetCount  = 1;
+    ClipDesc.pSamplers    = &Sampler;
+    ClipDesc.SamplerCount = 1;
+    ClipDesc.pChannels    = &Channel;
+    ClipDesc.ChannelCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, pClip.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://generic-animation-binding", 1);
     ASSERT_NE(pMesh, nullptr);
 
     RadientImport::ImportedDocument ImportedScene;
@@ -2011,10 +2058,11 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
 
     ImportedScene.Scenes.emplace_back().RootNodes.push_back(0);
 
-    RadientImport::ImportedAnimation& ImportedAnimation = ImportedScene.Animations.emplace_back();
-    ImportedAnimation.Name                              = "Imported animation";
-    ImportedAnimation.AddSkeletonAnimation(pAnimation);
-    ImportedAnimation.SkeletonAnimationBindings.push_back({nullptr});
+    RadientImport::ImportedAnimation&            ImportedAnimation = ImportedScene.Animations.emplace_back();
+    RadientImport::ImportedAnimationSkinMapping& SkinMapping       = ImportedAnimation.SkinMappings.emplace_back();
+    ImportedAnimation.pClip                                        = pClip;
+    SkinMapping.SkinIndex                                          = 0;
+    SkinMapping.JointMappings.push_back({0, 0});
 
     RefCntAutoPtr<IRadientScene> pScene;
     ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -2033,8 +2081,164 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsNullAnimationBindings)
 
     const RadientAnimationRegistryState& RegistryState = pRegistry->GetState();
     ASSERT_EQ(RegistryState.EntryCount, 1u);
-    EXPECT_EQ(RegistryState.pEntries[0].pAnimation, pAnimation);
-    EXPECT_EQ(RegistryState.pEntries[0].TargetCount, 1u);
+    EXPECT_EQ(RegistryState.pEntries[0].pClip, pClip);
+    EXPECT_EQ(RegistryState.pEntries[0].BindingCount, 1u);
+    ASSERT_NE(RegistryState.pEntries[0].ppBindings[0], nullptr);
+    EXPECT_EQ(RegistryState.pEntries[0].ppBindings[0]->GetClip(), pClip);
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsAnimationBindingFailures)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientSkeletonJointDesc Joint{};
+    Joint.Name = "Root";
+
+    RadientSkeletonDesc SkeletonDesc{};
+    SkeletonDesc.Name       = "Static fallback skeleton";
+    SkeletonDesc.pJoints    = &Joint;
+    SkeletonDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton;
+    ASSERT_EQ(pAssetManager->CreateSkeleton(SkeletonDesc, pSkeleton.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+
+    RadientSkinJointBindingDesc JointBinding{};
+    JointBinding.SkeletonJointIndex = 0;
+
+    RadientSkinDesc SkinDesc{};
+    SkinDesc.Name       = "Static fallback skin";
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = &JointBinding;
+    SkinDesc.JointCount = 1;
+
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    const std::array<Float32, 2>       Times  = {0.f, 1.f};
+    const std::array<RadientFloat3, 2> Values = {RadientFloat3{}, RadientFloat3{1.f, 2.f, 3.f}};
+
+    RadientAnimationTargetDesc Target{};
+    Target.Schema = RadientNodeAnimationSchemaID;
+    Target.Object = 0;
+
+    RadientAnimationSamplerDesc Sampler{};
+    Sampler.Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+    Sampler.Value.ArraySize = 1;
+    Sampler.pTimes          = Times.data();
+    Sampler.pValues         = Values.data();
+    Sampler.ValueDataSize   = sizeof(Values);
+    Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
+
+    RadientAnimationChannelDesc Channel{};
+    Channel.TargetIndex  = 0;
+    Channel.Property     = RadientNodeTranslationProperty;
+    Channel.SamplerIndex = 0;
+
+    RadientAnimationClipDesc ClipDesc{};
+    ClipDesc.Name         = "Static fallback animation";
+    ClipDesc.Duration     = 1.f;
+    ClipDesc.pTargets     = &Target;
+    ClipDesc.TargetCount  = 1;
+    ClipDesc.pSamplers    = &Sampler;
+    ClipDesc.SamplerCount = 1;
+    ClipDesc.pChannels    = &Channel;
+    ClipDesc.ChannelCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, pClip.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://static-animation-fallback", 1);
+    ASSERT_NE(pMesh, nullptr);
+
+    const auto Instantiate = [&](std::initializer_list<RadientAnimationDestinationElement> DestinationElements,
+                                 Uint32                                                    ExpectedBindingCount,
+                                 bool                                                      FailRegistration) {
+        RadientImport::ImportedDocument ImportedScene;
+        ImportedScene.Skins.emplace_back(pSkin);
+
+        RadientImport::ImportedNode& Node = ImportedScene.Nodes.emplace_back();
+        Node.pMesh                        = pMesh;
+        Node.SkinIndex                    = 0;
+        ImportedScene.Scenes.emplace_back().RootNodes.push_back(0);
+
+        RadientImport::ImportedAnimation& ImportedAnimation = ImportedScene.Animations.emplace_back();
+        ImportedAnimation.pClip                             = pClip;
+        for (const RadientAnimationDestinationElement DestinationElement : DestinationElements)
+        {
+            RadientImport::ImportedAnimationSkinMapping& Mapping = ImportedAnimation.SkinMappings.emplace_back();
+            Mapping.SkinIndex                                    = 0;
+            Mapping.JointMappings.push_back({0, DestinationElement});
+        }
+
+        RefCntAutoPtr<IRadientScene> pScene;
+        ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+        RefCntAutoPtr<IRadientSceneWriter> pWriter;
+        ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+        RefCntAutoPtr<IRadientAnimationRegistry> pRegistry;
+        RefCntAutoPtr<FailingAnimationRegistry>  pFailingRegistry;
+        IRadientAnimationRegistry*               pRegistryInterface = nullptr;
+        if (FailRegistration)
+        {
+            pFailingRegistry = RefCntAutoPtr<FailingAnimationRegistry>{
+                MakeNewRCObj<FailingAnimationRegistry>()(pScene)};
+            pRegistryInterface = pFailingRegistry;
+        }
+        else
+        {
+            ASSERT_EQ(pEngine->CreateAnimationRegistry(pScene, pRegistry.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+            pRegistryInterface = pRegistry;
+        }
+        ASSERT_NE(pRegistryInterface, nullptr);
+
+        RadientEntityID RootEntity = InvalidRadientEntityID;
+        ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
+                      ImportedScene, 0, *pWriter, RootEntity, pRegistryInterface),
+                  RADIENT_STATUS_OK);
+
+        const RadientAnimationRegistryState& RegistryState = pRegistryInterface->GetState();
+        if (ExpectedBindingCount == 0)
+        {
+            EXPECT_EQ(RegistryState.EntryCount, 0u);
+        }
+        else
+        {
+            ASSERT_EQ(RegistryState.EntryCount, 1u);
+            ASSERT_EQ(RegistryState.pEntries[0].pClip, pClip);
+            EXPECT_EQ(RegistryState.pEntries[0].BindingCount, ExpectedBindingCount);
+        }
+
+        if (FailRegistration)
+        {
+            EXPECT_EQ(pFailingRegistry->AddCallCount, 1u);
+            EXPECT_EQ(pFailingRegistry->RemoveCallCount, 1u);
+            EXPECT_TRUE(pFailingRegistry->RemovedAddedBinding);
+        }
+
+        EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+        Uint32 ChildCount = 0;
+        EXPECT_EQ(pScene->GetChildCount(RootEntity, ChildCount), RADIENT_STATUS_OK);
+        EXPECT_EQ(ChildCount, 1u);
+    };
+
+    // A lone invalid binding leaves a usable static scene.
+    Instantiate({1}, 0, false);
+
+    // A later invalid binding does not discard an earlier valid binding.
+    Instantiate({0, 1}, 1, false);
+
+    // A registry failure is non-fatal and cleans up only the failed binding.
+    Instantiate({0}, 0, true);
 }
 
 TEST(RadientGLTFConverterTest, InstantiateSceneGraphRendersMeshWithoutAvailableSkin)

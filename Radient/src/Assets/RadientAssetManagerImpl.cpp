@@ -84,23 +84,15 @@ struct ImportedSceneStorage
     {
         Scene = std::move(ImportedScene);
 
-        AnimationDescs.clear();
-        AnimationDescs.reserve(Scene.Animations.size());
+        AnimationClips.clear();
+        AnimationClips.reserve(Scene.Animations.size());
         for (const RadientImport::ImportedAnimation& Animation : Scene.Animations)
         {
-            // Generic-only clips remain internal until the public scene
-            // animation catalog exposes IRadientAnimationClipAsset.
-            if (Animation.SkeletonAnimationBindings.empty())
-                continue;
-
-            RadientSceneAnimationDesc& AnimationDesc = AnimationDescs.emplace_back();
-            AnimationDesc.Name                       = Animation.Name.c_str();
-            AnimationDesc.Duration                   = Animation.Duration;
-            AnimationDesc.pSkeletonAnimations        = Animation.SkeletonAnimationBindings.data();
-            AnimationDesc.SkeletonAnimationCount     = static_cast<Uint32>(Animation.SkeletonAnimationBindings.size());
+            if (Animation.pClip != nullptr)
+                AnimationClips.push_back(Animation.pClip);
         }
-        AssetDesc.pAnimations    = AnimationDescs.empty() ? nullptr : AnimationDescs.data();
-        AssetDesc.AnimationCount = static_cast<Uint32>(AnimationDescs.size());
+        AssetDesc.ppAnimationClips   = AnimationClips.empty() ? nullptr : AnimationClips.data();
+        AssetDesc.AnimationClipCount = static_cast<Uint32>(AnimationClips.size());
 
         GPUResourceStatus.store(InitialGPUStatus, std::memory_order_relaxed);
         LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_relaxed);
@@ -195,12 +187,12 @@ struct ImportedSceneStorage
         return Status;
     }
 
-    RadientImport::ImportedDocument        Scene;
-    std::vector<RadientSceneAnimationDesc> AnimationDescs;
-    RadientSceneAssetDesc                  AssetDesc;
-    std::atomic_bool                       SceneDataReady{false};
-    mutable std::atomic<RADIENT_STATUS>    LoadStatus{RADIENT_STATUS_OK};
-    mutable std::atomic<RADIENT_STATUS>    GPUResourceStatus{RADIENT_STATUS_OK};
+    RadientImport::ImportedDocument          Scene;
+    std::vector<IRadientAnimationClipAsset*> AnimationClips;
+    RadientSceneAssetDesc                    AssetDesc;
+    std::atomic_bool                         SceneDataReady{false};
+    mutable std::atomic<RADIENT_STATUS>      LoadStatus{RADIENT_STATUS_OK};
+    mutable std::atomic<RADIENT_STATUS>      GPUResourceStatus{RADIENT_STATUS_OK};
 };
 
 GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
@@ -804,7 +796,6 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
 
         case RADIENT_ASSET_TYPE_SKELETON:
         case RADIENT_ASSET_TYPE_SKIN:
-        case RADIENT_ASSET_TYPE_SKELETON_ANIMATION:
         case RADIENT_ASSET_TYPE_ANIMATION_CLIP:
             return RADIENT_STATUS_OK;
 

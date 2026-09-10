@@ -27,6 +27,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 
 #include "RadientAnimation.h"
+#include "RadientSkinning.h"
 
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"

@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAnimation.h"
+#include "RadientSkinning.h"
 
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -96,12 +97,6 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE UpdateGlobalTransforms() override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientSkeletonPoseWriter** ppWriter) override final;
-
-    // Temporary allocation-free bridge for IRadientSkeletonAnimationAsset::Evaluate().
-    // Remove it together with the legacy skeleton animation API.
-    RADIENT_STATUS BeginLegacyAnimationUpdate(RadientTransform*& pLocalTransforms) noexcept;
-
-    RADIENT_STATUS EndLegacyAnimationUpdate(Bool UpdateGlobals) noexcept;
 
 private:
     friend class RadientSkeletonPoseAnimationDestinationBindingImpl;

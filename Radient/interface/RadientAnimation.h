@@ -27,11 +27,10 @@
 #pragma once
 
 /// \file
-/// Defines generic animation clips, destinations, bindings, and the legacy
-/// animation-to-pose registry.
+/// Defines generic animation clips, destinations, bindings, and their runtime
+/// registry.
 
-#include "RadientScene.h"
-#include "RadientSkinning.h"
+#include "RadientAssets.h"
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
@@ -42,6 +41,7 @@ typedef struct IRadientAnimationDestinationBinding IRadientAnimationDestinationB
 typedef struct IRadientAnimationClipAsset          IRadientAnimationClipAsset;
 typedef struct IRadientAnimationBinding            IRadientAnimationBinding;
 typedef struct IRadientAnimationRegistry           IRadientAnimationRegistry;
+typedef struct IRadientScene                       IRadientScene;
 
 /// UUID-sized identifier of an animation target schema contract.
 ///
@@ -71,7 +71,8 @@ typedef Uint64 RadientAnimationObjectID;
 /// Schema-specific runtime element within an animation destination.
 ///
 /// For example, the node-animation schema uses a skeleton joint index in a
-/// skeleton-pose destination and a RadientEntityID in a scene destination.
+/// skeleton-pose destination. A future scene destination may use a
+/// RadientEntityID instead.
 typedef Uint64 RadientAnimationDestinationElement;
 
 /// Invalid animation schema identifier. A target must use a schema ID other
@@ -131,13 +132,35 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMorphWeightsAnimationS
 /// FLOAT[N] weight property in RadientMorphWeightsAnimationSchemaID, where N
 /// is the number of morph targets used by the bound node. Channels may animate
 /// the complete array or disjoint ranges through FirstArrayElement. A scene
-/// destination uses the node's RadientEntityID as its destination element. A
-/// destination exposed directly by one IRadientMorphTargetWeights object uses
-/// element zero because that object owns exactly one weight array.
+/// destination that addresses scene nodes may use the node's RadientEntityID as
+/// its destination element. A destination wrapping exactly one weight array may
+/// instead use element zero.
 static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientMorphWeightsProperty = 1;
 
 
 // clang-format off
+
+/// Interpolation applied between animation keyframes.
+DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_INTERPOLATION, Uint8)
+{
+    /// Holds the preceding keyframe value until the next keyframe.
+    RADIENT_ANIMATION_INTERPOLATION_STEP = 0,
+
+    /// Applies the target property's linear interpolation semantics. Numeric
+    /// values are normally interpolated component-wise; a rotation property
+    /// may instead use spherical interpolation of quaternion storage.
+    RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+
+    /// Evaluates a cubic Hermite spline using authored incoming and outgoing
+    /// tangents. Tangents are derivatives per second; the target property's
+    /// schema defines any additional semantic interpretation.
+    RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+
+    /// Sentinel equal to the number of animation interpolation modes. This is
+    /// not a valid interpolation mode.
+    RADIENT_ANIMATION_INTERPOLATION_COUNT
+};
+
 
 /// Native type of one animation value array element.
 DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_VALUE_TYPE, Uint8)
@@ -401,7 +424,7 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 ///
 /// Binding evaluation holds the nearest endpoint value outside each sampler's
 /// key interval. Looping, ping-pong, playback-rate handling, and time wrapping
-/// belong to the player.
+/// belong to the caller or a future player.
 ///
 /// Example (C++): Object 17 is an authored node identity, while both zero
 /// indices refer to tables in Clip.
@@ -552,9 +575,9 @@ struct RadientAnimationDestinationMappingDesc
     /// than RadientAnimationClipDesc::TargetCount.
     Uint32 ClipTargetIndex DEFAULT_INITIALIZER(InvalidRadientAnimationTargetIndex);
 
-    /// Schema-specific element within its containing pDestination. A node
-    /// target uses a zero-based joint index for a skeleton-pose destination or
-    /// a RadientEntityID for a scene destination.
+    /// Schema-specific element within its containing pDestination. The current
+    /// skeleton-pose destination uses a zero-based joint index. Other
+    /// destinations define their own element identities.
     RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
 };
 typedef struct RadientAnimationDestinationMappingDesc RadientAnimationDestinationMappingDesc;
@@ -564,9 +587,9 @@ typedef struct RadientAnimationDestinationMappingDesc RadientAnimationDestinatio
 struct RadientAnimationDestinationDesc
 {
     /// Aggregate object receiving the mapped property updates. A skeleton pose
-    /// exposes one destination for all of its joints; a scene exposes one for
-    /// all of its entities. On successful compilation, the returned destination
-    /// binding retains this interface. The pointer must not be null.
+    /// exposes one destination for all of its joints. On successful
+    /// compilation, the returned destination binding retains this interface.
+    /// The pointer must not be null.
     IRadientAnimationDestination* pDestination DEFAULT_INITIALIZER(nullptr);
 
     /// Array of MappingCount symbolic-target-to-element mappings. It must not
@@ -599,10 +622,9 @@ typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
 /// applies destination descriptors in order.
 ///
 /// Evaluation is a sparse overwrite: destination state outside the clip's
-/// channel ranges is preserved. A conversion that requires a complete base
-/// pose represents missing components as constant channels, while blending,
-/// additive animation, base-pose restoration, and root-motion extraction are
-/// handled by a player/mixer destination.
+/// channel ranges is preserved. Blending, additive animation, base-pose
+/// restoration, and root-motion extraction are outside the binding contract
+/// and are handled by the caller or a future player/mixer.
 ///
 /// Example (C++): a 1,000-joint skeleton uses one destination descriptor, one
 /// retained pose destination, and a compact mapping array. Evaluation brackets
@@ -636,26 +658,10 @@ typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
 /// pPoseDestination->Release(); // The binding retained it on success.
 /// \endcode
 ///
-/// For a scene-node transform, the corresponding core fields are:
-///
-/// \code
-/// IRadientAnimationDestination* pSceneDestination = nullptr;
-/// pSceneWriter->QueryInterface(IID_RadientAnimationDestination,
-///                              &pSceneDestination);
-///
-/// RadientAnimationDestinationMappingDesc RootMapping{};
-/// RootMapping.ClipTargetIndex    = RootTargetIndex;
-/// RootMapping.DestinationElement = RootEntity;
-///
-/// RadientAnimationDestinationDesc SceneDestination{};
-/// SceneDestination.pDestination = pSceneDestination;
-/// SceneDestination.pMappings    = &RootMapping;
-/// SceneDestination.MappingCount = 1;
-/// \endcode
-///
-/// Root animation is the same mapping with the root joint or root entity;
-/// root-motion extraction and redirection are player/mixer policies rather
-/// than new clip or binding types.
+/// Root-joint animation uses the same mapping as any other skeleton joint.
+/// A future scene destination can bind the same authored node target to a scene
+/// entity without adding another clip or binding type. Root-motion extraction
+/// and redirection remain caller or future player/mixer policies.
 struct RadientAnimationBindingDesc
 {
     /// Array of DestinationCount aggregate destinations. It must be null
@@ -674,14 +680,13 @@ struct RadientAnimationEvaluateInfo
     /// Finite clip-local time in seconds. Each sampler holds its first value
     /// before its first key and its last value after its last key. Looping,
     /// ping-pong, playback-rate handling, and time wrapping belong to the
-    /// player.
+    /// caller or a future player.
     Float32 Time DEFAULT_INITIALIZER(0.f);
 
     /// Passed to each destination binding's EndUpdate() after all values for
     /// that destination have been sampled. True requests one
     /// destination-specific derived-state update for the complete property
-    /// batch. For a skeleton pose, this propagates global transforms once; for
-    /// a scene, it requests one graph-wide transform propagation.
+    /// batch. For a skeleton pose, this propagates global transforms once.
     Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
 };
 typedef struct RadientAnimationEvaluateInfo RadientAnimationEvaluateInfo;
@@ -849,8 +854,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     /// expire when this method returns, regardless of its status.
     ///
     /// Applying several bindings to the same underlying state is ordered
-    /// overwrite, not blending. A player may instead bind clips to a mixer or
-    /// root-motion collector that implements IRadientAnimationDestination.
+    /// overwrite, not blending. A future player may instead bind clips to a
+    /// mixer or root-motion collector that implements
+    /// IRadientAnimationDestination.
     /// Implementations return only RADIENT_STATUS_OK or a negative status;
     /// other nonnegative statuses are not valid for this method.
     ///
@@ -978,30 +984,21 @@ DILIGENT_END_INTERFACE
 // clang-format on
 
 
-/// One unique skeleton pose targeted by an animation.
-struct RadientAnimationTarget
-{
-    /// Pose resolved from the registered entities' RadientSkinComponent data.
-    /// The registry retains the pose; this pointer is borrowed and is never
-    /// null in a registry state entry.
-    IRadientSkeletonPose* pPose DEFAULT_INITIALIZER(nullptr);
-};
-typedef struct RadientAnimationTarget RadientAnimationTarget;
-
-
-/// One animation and the unique poses to which it may be applied.
+/// One animation clip and its unique compiled bindings.
 struct RadientAnimationRegistryEntry
 {
-    /// Animation shared by every target in pTargets. The registry retains the
-    /// animation; this pointer is borrowed and is never null.
-    IRadientSkeletonAnimationAsset* pAnimation DEFAULT_INITIALIZER(nullptr);
+    /// Clip shared by every binding in ppBindings. The registry retains the
+    /// clip; this pointer is borrowed and is never null.
+    IRadientAnimationClipAsset* pClip DEFAULT_INITIALIZER(nullptr);
 
-    /// Array of TargetCount unique pose targets. The pointer and its elements
-    /// remain valid until the registry is modified.
-    const RadientAnimationTarget* pTargets DEFAULT_INITIALIZER(nullptr);
+    /// Array of BindingCount unique compiled bindings. The registry retains
+    /// every binding; the array and its borrowed pointers remain valid until
+    /// the registry is modified.
+    IRadientAnimationBinding* const* ppBindings DEFAULT_INITIALIZER(nullptr);
 
-    /// Number of elements in pTargets. Registry entries never have zero targets.
-    Uint32 TargetCount DEFAULT_INITIALIZER(0);
+    /// Number of elements in ppBindings. Registry entries never have zero
+    /// bindings.
+    Uint32 BindingCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientAnimationRegistryEntry RadientAnimationRegistryEntry;
 
@@ -1009,7 +1006,8 @@ typedef struct RadientAnimationRegistryEntry RadientAnimationRegistryEntry;
 /// Current animation registry contents.
 struct RadientAnimationRegistryState
 {
-    /// Monotonic revision incremented whenever the registry contents change.
+    /// Revision incremented whenever the registry contents change. Like other
+    /// Radient revision counters, it wraps to zero after its maximum value.
     RadientRevision Revision DEFAULT_INITIALIZER(0);
 
     /// Array of EntryCount animation entries. The pointer and all transitively
@@ -1037,12 +1035,21 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationRegistry =
 
 // clang-format off
 
-/// Externally owned mapping from skeleton animations to unique skeleton poses.
+/// Externally owned mapping from animation clips to compiled bindings.
 ///
 /// A registry is associated with one scene and retains that scene. It does not
 /// modify the scene or automatically observe entity destruction. The code that
-/// adds or removes scene content is responsible for updating its private entity
-/// associations.
+/// adds or removes scene content is responsible for updating the registry's
+/// private entity associations.
+///
+/// Entity associations are lifetime tags, not animation destinations. The
+/// registry never inspects a binding's compiled destinations or assumes that
+/// an entity owns them. For example, one skeleton-pose binding may be associated
+/// with every mesh entity that shares the pose. The binding remains registered
+/// until its last entity association is removed.
+/// Public state is intentionally a bulk-playback view: it enumerates every
+/// instantiated binding for a clip but does not expose the private lifetime
+/// associations or identify a particular scene instance.
 ///
 /// The interface is externally synchronized. Applications must not call its
 /// methods concurrently without their own synchronization.
@@ -1052,30 +1059,29 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationRegistry, IObject)
     /// borrowed and remains valid for the registry lifetime.
     VIRTUAL IRadientScene* METHOD(GetScene)(THIS) CONST PURE;
 
-    /// Adds unique animation-to-entity associations.
+    /// Adds unique binding-to-entity associations.
     ///
-    /// The registry resolves each entity's RadientSkinComponent once, retains
-    /// its pose, and verifies that the pose and pAnimation target the same
-    /// skeleton. Entities sharing a pose produce one public animation target;
-    /// the target remains registered until its last entity association is
-    /// removed. The operation is atomic: no associations are added if any
-    /// entity is invalid, has no skin component or pose, or targets another
-    /// skeleton. Existing associations are ignored. Returns
-    /// RADIENT_STATUS_NO_CHANGE when EntityCount is zero or every association
-    /// already exists.
-    VIRTUAL RADIENT_STATUS METHOD(AddAnimatedEntities)(THIS_
-                                                       IRadientSkeletonAnimationAsset* pAnimation,
-                                                       const RadientEntityID*          pEntities,
-                                                       Uint32                          EntityCount) PURE;
+    /// pBinding must be non-null and return a non-null clip. Every entity must
+    /// belong to the registry's scene. The operation is atomic with respect to
+    /// argument validation: no association is added if any new entity does not
+    /// exist. Repeated entities and existing associations are ignored. The
+    /// registry retains pBinding and the clip returned by pBinding->GetClip().
+    /// Returns RADIENT_STATUS_NO_CHANGE when EntityCount is zero or every
+    /// association already exists.
+    VIRTUAL RADIENT_STATUS METHOD(AddAnimationBinding)(THIS_
+                                                       IRadientAnimationBinding* pBinding,
+                                                       const RadientEntityID*    pEntities,
+                                                       Uint32                    EntityCount) PURE;
 
-    /// Removes the specified animation-to-entity associations. Missing
+    /// Removes the specified binding-to-entity associations. Missing
     /// associations are ignored. Returns RADIENT_STATUS_NO_CHANGE when the
-    /// registry is not modified. An animation entry is removed when its last
-    /// target is removed.
-    VIRTUAL RADIENT_STATUS METHOD(RemoveAnimatedEntities)(THIS_
-                                                          IRadientSkeletonAnimationAsset* pAnimation,
-                                                          const RadientEntityID*          pEntities,
-                                                          Uint32                          EntityCount) PURE;
+    /// registry is not modified. A binding is removed when its last
+    /// entity association is removed; a clip entry is removed when its last
+    /// binding is removed.
+    VIRTUAL RADIENT_STATUS METHOD(RemoveAnimationBinding)(THIS_
+                                                          IRadientAnimationBinding* pBinding,
+                                                          const RadientEntityID*    pEntities,
+                                                          Uint32                    EntityCount) PURE;
 
     /// Removes an entity from every animation entry. This method only updates
     /// the registry and never destroys or otherwise modifies the scene entity.
@@ -1083,10 +1089,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationRegistry, IObject)
     VIRTUAL RADIENT_STATUS METHOD(RemoveEntity)(THIS_
                                                 RadientEntityID Entity) PURE;
 
-    /// Removes an animation and all of its target associations. Returns
-    /// RADIENT_STATUS_NO_CHANGE when the animation is not registered.
-    VIRTUAL RADIENT_STATUS METHOD(RemoveAnimation)(THIS_
-                                                   IRadientSkeletonAnimationAsset* pAnimation) PURE;
+    /// Removes a clip and all binding-to-entity associations grouped under it.
+    /// Returns RADIENT_STATUS_NO_CHANGE when the clip is not registered.
+    VIRTUAL RADIENT_STATUS METHOD(RemoveAnimationClip)(THIS_
+                                                       IRadientAnimationClipAsset* pClip) PURE;
 
     /// Returns the current registry contents. The returned reference remains
     /// valid for the registry lifetime. Its arrays are invalidated by the next
@@ -1099,12 +1105,12 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientAnimationRegistry_GetScene(This)                    CALL_IFACE_METHOD(RadientAnimationRegistry, GetScene,               This)
-#    define IRadientAnimationRegistry_AddAnimatedEntities(This, ...)    CALL_IFACE_METHOD(RadientAnimationRegistry, AddAnimatedEntities,    This, __VA_ARGS__)
-#    define IRadientAnimationRegistry_RemoveAnimatedEntities(This, ...) CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveAnimatedEntities, This, __VA_ARGS__)
-#    define IRadientAnimationRegistry_RemoveEntity(This, ...)           CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveEntity,           This, __VA_ARGS__)
-#    define IRadientAnimationRegistry_RemoveAnimation(This, ...)        CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveAnimation,        This, __VA_ARGS__)
-#    define IRadientAnimationRegistry_GetState(This)                    CALL_IFACE_METHOD(RadientAnimationRegistry, GetState,               This)
+#    define IRadientAnimationRegistry_GetScene(This)                    CALL_IFACE_METHOD(RadientAnimationRegistry, GetScene,                  This)
+#    define IRadientAnimationRegistry_AddAnimationBinding(This, ...)    CALL_IFACE_METHOD(RadientAnimationRegistry, AddAnimationBinding,       This, __VA_ARGS__)
+#    define IRadientAnimationRegistry_RemoveAnimationBinding(This, ...) CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveAnimationBinding,    This, __VA_ARGS__)
+#    define IRadientAnimationRegistry_RemoveEntity(This, ...)           CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveEntity,              This, __VA_ARGS__)
+#    define IRadientAnimationRegistry_RemoveAnimationClip(This, ...)    CALL_IFACE_METHOD(RadientAnimationRegistry, RemoveAnimationClip,       This, __VA_ARGS__)
+#    define IRadientAnimationRegistry_GetState(This)                    CALL_IFACE_METHOD(RadientAnimationRegistry, GetState,                  This)
 
 #endif
 

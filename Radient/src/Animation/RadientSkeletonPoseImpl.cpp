@@ -560,25 +560,4 @@ RADIENT_STATUS RadientSkeletonPoseImpl::CreateWriter(IRadientSkeletonPoseWriter*
     }
 }
 
-RADIENT_STATUS RadientSkeletonPoseImpl::BeginLegacyAnimationUpdate(RadientTransform*& pLocalTransforms) noexcept
-{
-    if (m_State.Version == std::numeric_limits<Uint64>::max())
-    {
-        LOG_ERROR_MESSAGE("Skeleton pose version is exhausted");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    VERIFY_EXPR(m_State.LocalTransforms.size() == m_pSkeleton->GetDesc().JointCount);
-    pLocalTransforms = m_State.LocalTransforms.data();
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS RadientSkeletonPoseImpl::EndLegacyAnimationUpdate(Bool UpdateGlobals) noexcept
-{
-    m_State.GlobalTransformsDirty = true;
-    return UpdateGlobals ?
-        UpdateGlobalTransforms() :
-        RADIENT_STATUS_OK;
-}
-
 } // namespace Diligent

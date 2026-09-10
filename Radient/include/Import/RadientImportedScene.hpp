@@ -91,15 +91,6 @@ struct ImportedAnimationSkinMapping
 
 struct ImportedAnimation
 {
-    void AddSkeletonAnimation(RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation)
-    {
-        SkeletonAnimationAssets.emplace_back(std::move(pAnimation));
-        SkeletonAnimationBindings.push_back({SkeletonAnimationAssets.back().RawPtr()});
-    }
-
-    std::string Name;
-    Float32     Duration = 0.f;
-
     /// Generic clip containing the imported node-transform channels from the
     /// source animation. Target objects use source-document identities.
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
@@ -107,9 +98,6 @@ struct ImportedAnimation
     /// Per-skin intersections between pClip targets and imported skeleton
     /// joints. Skins that are not affected by this clip are omitted.
     std::vector<ImportedAnimationSkinMapping> SkinMappings;
-
-    std::vector<RefCntAutoPtr<IRadientSkeletonAnimationAsset>> SkeletonAnimationAssets;
-    std::vector<RadientSceneSkeletonAnimationBinding>          SkeletonAnimationBindings;
 };
 
 /// Radient-native data produced by an asset importer. Source-format documents

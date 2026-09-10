@@ -87,6 +87,46 @@ size_t AppendBytes(std::vector<Uint8>& Buffer, const std::array<ValueType, Size>
     return Offset;
 }
 
+std::string WriteGLTFNodeAnimationFile(const TempDirectory& TempDir)
+{
+    const std::array<Float32, 2> AnimationTimes{2.f, 4.f};
+    const std::array<Float32, 6> AnimationTranslations{
+        1.f, 2.f, 3.f,
+        5.f, 6.f, 7.f};
+
+    std::vector<Uint8> Buffer;
+    const size_t       AnimationTimeOffset        = AppendBytes(Buffer, AnimationTimes);
+    const size_t       AnimationTranslationOffset = AppendBytes(Buffer, AnimationTranslations);
+    WriteBinaryFile(TempDir, "node-animation.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "Animated node"}],
+    "animations": [{
+        "name": "Node motion",
+        "samplers": [{"input": 0, "output": 1, "interpolation": "LINEAR"}],
+        "channels": [{"sampler": 0, "target": {"node": 0, "path": "translation"}}]
+    }],
+    "buffers": [{"uri": "node-animation.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTimeOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTimes) << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTranslationOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTranslations) << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [2], "max": [4]},
+        {"bufferView": 1, "componentType": 5126, "count": 2, "type": "VEC3"}
+    ]
+})GLTF";
+
+    return WriteGLTFFile(TempDir, "node-animation.gltf", GLTF.str().c_str());
+}
+
 std::string WriteGLTFSkinFile(const TempDirectory& TempDir)
 {
     const std::array<Float32, 9> Positions{
@@ -415,11 +455,11 @@ const CapturedRenderableLight* FindLight(const std::vector<CapturedRenderableLig
 
 const RadientAnimationRegistryEntry* FindAnimationRegistryEntry(
     const RadientAnimationRegistryState& State,
-    IRadientSkeletonAnimationAsset*      pAnimation)
+    IRadientAnimationClipAsset*          pClip)
 {
     for (Uint32 EntryIndex = 0; EntryIndex < State.EntryCount; ++EntryIndex)
     {
-        if (State.pEntries[EntryIndex].pAnimation == pAnimation)
+        if (State.pEntries[EntryIndex].pClip == pClip)
             return &State.pEntries[EntryIndex];
     }
 
@@ -485,6 +525,36 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
 
     EXPECT_EQ(Fixture.pScene->GetLocalTransform(Children[1], Transform), RADIENT_STATUS_OK);
     ExpectFloat3Near(Transform.Scale, {2.f, 3.f, 4.f});
+}
+
+TEST(RadientSceneImporterTest, ExposesUnskinnedAnimationClip)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFNodeAnimationFile(TempDir);
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, {});
+    ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(ImportResult.pModel, nullptr);
+
+    const RadientSceneAssetDesc& SceneDesc = ImportResult.pModel->GetDesc();
+    ASSERT_EQ(SceneDesc.AnimationClipCount, 1u);
+    ASSERT_NE(SceneDesc.ppAnimationClips, nullptr);
+    ASSERT_NE(SceneDesc.ppAnimationClips[0], nullptr);
+
+    const RadientAnimationClipDesc& ClipDesc = SceneDesc.ppAnimationClips[0]->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Node motion");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    EXPECT_EQ(ClipDesc.pTargets[0].Schema, RadientNodeAnimationSchemaID);
+    EXPECT_EQ(ClipDesc.pTargets[0].Object, 0u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
 }
 
 TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
@@ -1072,16 +1142,14 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ASSERT_NE(ImportResult.pModel, nullptr);
 
     const RadientSceneAssetDesc& SceneAssetDesc = ImportResult.pModel->GetDesc();
-    ASSERT_EQ(SceneAssetDesc.AnimationCount, 1u);
-    ASSERT_NE(SceneAssetDesc.pAnimations, nullptr);
-    const RadientSceneAnimationDesc& SceneAnimation = SceneAssetDesc.pAnimations[0];
-    EXPECT_STREQ(SceneAnimation.Name, "Joint motion");
-    EXPECT_FLOAT_EQ(SceneAnimation.Duration, 2.f);
-    ASSERT_EQ(SceneAnimation.SkeletonAnimationCount, 1u);
-    ASSERT_NE(SceneAnimation.pSkeletonAnimations, nullptr);
-    ASSERT_NE(SceneAnimation.pSkeletonAnimations[0].pAnimation, nullptr);
-    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pImportedAnimation{
-        SceneAnimation.pSkeletonAnimations[0].pAnimation};
+    ASSERT_EQ(SceneAssetDesc.AnimationClipCount, 1u);
+    ASSERT_NE(SceneAssetDesc.ppAnimationClips, nullptr);
+    ASSERT_NE(SceneAssetDesc.ppAnimationClips[0], nullptr);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pImportedAnimation{
+        SceneAssetDesc.ppAnimationClips[0]};
+    const RadientAnimationClipDesc& AnimationDesc = pImportedAnimation->GetDesc();
+    EXPECT_STREQ(AnimationDesc.Name, "Joint motion");
+    EXPECT_FLOAT_EQ(AnimationDesc.Duration, 2.f);
 
     ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
@@ -1126,7 +1194,7 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
-    ASSERT_EQ(pRegistryEntry->TargetCount, 1u);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 1u);
 
     std::vector<CapturedSkin> Skins = CaptureSkins(ImportResult.RootEntity);
     ASSERT_EQ(Skins.size(), 2u);
@@ -1134,7 +1202,8 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ASSERT_NE(Skins[0].pPose, nullptr);
     EXPECT_EQ(Skins[1].pSkin, Skins[0].pSkin);
     EXPECT_EQ(Skins[1].pPose, Skins[0].pPose);
-    EXPECT_EQ(pRegistryEntry->pTargets[0].pPose, Skins[0].pPose);
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+    EXPECT_EQ(pRegistryEntry->ppBindings[0]->GetClip(), pImportedAnimation);
 
     std::array<Float32, 2> SkeletonToMeshTranslations{
         Skins[0].SkeletonToMeshTransform.Data[12],
@@ -1184,7 +1253,6 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
 
     const RadientSkinDesc& SkinDesc = Skins[0].pSkin->GetDesc();
     ASSERT_NE(SkinDesc.pSkeleton, nullptr);
-    EXPECT_EQ(pImportedAnimation->GetDesc().pSkeleton, SkinDesc.pSkeleton);
     ASSERT_EQ(SkinDesc.JointCount, 2u);
     EXPECT_EQ(SkinDesc.pJoints[0].SkeletonJointIndex, 2u);
     EXPECT_EQ(SkinDesc.pJoints[1].SkeletonJointIndex, 3u);
@@ -1215,7 +1283,9 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ExpectFloat3Near(LocalTransforms[3].Scale, {2.f, 3.f, 4.f});
 
     RefCntAutoPtr<IRadientSkeletonPose> pFirstInstancePose = Skins[0].pPose;
-    ASSERT_EQ(pImportedAnimation->Evaluate(1.0, Skins[0].pPose, True), RADIENT_STATUS_OK);
+    RadientAnimationEvaluateInfo        EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    ASSERT_EQ(pRegistryEntry->ppBindings[0]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
     ASSERT_EQ(Skins[0].pPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
     ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
 
@@ -1231,7 +1301,7 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
-    ASSERT_EQ(pRegistryEntry->TargetCount, 2u);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 2u);
     Skins                                         = CaptureSkins(ImportResult.RootEntity);
     std::vector<CapturedSkin> SecondInstanceSkins = CaptureSkins(SecondRoot);
     Skins.insert(Skins.end(), SecondInstanceSkins.begin(), SecondInstanceSkins.end());
@@ -1261,18 +1331,19 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     EXPECT_EQ(FirstPoseUseCount, 2u);
     EXPECT_EQ(SecondPoseUseCount, 2u);
 
-    bool FoundFirstPoseTarget  = false;
-    bool FoundSecondPoseTarget = false;
-    for (Uint32 TargetIndex = 0; TargetIndex < pRegistryEntry->TargetCount; ++TargetIndex)
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+    ASSERT_NE(pRegistryEntry->ppBindings[1], nullptr);
+    EXPECT_NE(pRegistryEntry->ppBindings[0], pRegistryEntry->ppBindings[1]);
+    for (Uint32 BindingIndex = 0; BindingIndex < pRegistryEntry->BindingCount; ++BindingIndex)
     {
-        FoundFirstPoseTarget |= pRegistryEntry->pTargets[TargetIndex].pPose == pFirstInstancePose;
-        FoundSecondPoseTarget |= pRegistryEntry->pTargets[TargetIndex].pPose == pSecondPose;
+        IRadientAnimationBinding* const pBinding = pRegistryEntry->ppBindings[BindingIndex];
+        ASSERT_NE(pBinding, nullptr);
+        EXPECT_EQ(pBinding->GetClip(), pImportedAnimation);
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
     }
-    EXPECT_TRUE(FoundFirstPoseTarget);
-    EXPECT_TRUE(FoundSecondPoseTarget);
 
     ASSERT_EQ(pSecondPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
-    ExpectFloat3Near(LocalTransforms[2].Position, {0.f, 0.f, 3.f});
+    ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
 }
 
 } // namespace

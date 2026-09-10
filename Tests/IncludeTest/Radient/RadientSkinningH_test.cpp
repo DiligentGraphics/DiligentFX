@@ -19,24 +19,18 @@
 using namespace Diligent;
 
 static_assert(InvalidRadientJointIndex == ~Uint32{0}, "Unexpected invalid joint index");
-static_assert(RADIENT_ANIMATION_INTERPOLATION_STEP == 0, "Unexpected step interpolation value");
-static_assert(RADIENT_ANIMATION_INTERPOLATION_LINEAR == 1, "Unexpected linear interpolation value");
-static_assert(RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE == 2, "Unexpected cubic-spline interpolation value");
 
-void RadientSkinning_CPP_UseInterfaces(IRadientAssetManager*           pAssetManager,
-                                       IRadientSkeletonAsset*          pSkeleton,
-                                       IRadientSkinAsset*              pSkin,
-                                       IRadientSkeletonAnimationAsset* pAnimation)
+void RadientSkinning_CPP_UseInterfaces(IRadientAssetManager*  pAssetManager,
+                                       IRadientSkeletonAsset* pSkeleton,
+                                       IRadientSkinAsset*     pSkin)
 {
-    RadientSkeletonDesc          SkeletonDesc;
-    RadientSkinDesc              SkinDesc;
-    RadientSkeletonAnimationDesc AnimationDesc;
-    IRadientSkeletonPose*        pPose   = nullptr;
-    IRadientSkeletonPoseWriter*  pWriter = nullptr;
+    RadientSkeletonDesc         SkeletonDesc;
+    RadientSkinDesc             SkinDesc;
+    IRadientSkeletonPose*       pPose   = nullptr;
+    IRadientSkeletonPoseWriter* pWriter = nullptr;
 
     RADIENT_STATUS Status = pAssetManager->CreateSkeleton(SkeletonDesc, &pSkeleton);
     Status                = pAssetManager->CreateSkin(SkinDesc, &pSkin);
-    Status                = pAssetManager->CreateSkeletonAnimation(AnimationDesc, &pAnimation);
     Status                = pSkeleton->CreatePose(&pPose);
     Status                = pPose->CreateWriter(&pWriter);
 
@@ -46,7 +40,5 @@ void RadientSkinning_CPP_UseInterfaces(IRadientAssetManager*           pAssetMan
     (void)pPose->GetVersion();
     Status = pPose->UpdateGlobalTransforms();
     Status = pWriter->Commit(True);
-    (void)pAnimation->GetDesc();
-    Status = pAnimation->Evaluate(0.0, pPose, True);
     (void)Status;
 }

@@ -59,9 +59,14 @@ struct RadientSceneInstantiateInfo
     Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientSceneIndex);
 
     /// Optional external animation registry associated with the destination
-    /// scene. When provided, the importer registers the instantiated entities
-    /// targeted by each imported skeleton animation. GetScene() must return the
-    /// destination scene; otherwise, instantiation fails with
+    /// scene. When provided, the importer attempts to compile every clip/skin
+    /// intersection against the corresponding instantiated skeleton pose and
+    /// register the resulting bindings with their instance entities. Binding
+    /// and registration failures are logged and skipped, leaving the scene
+    /// usable without the affected animations. Unskinned and other currently
+    /// unsupported targets remain available through the scene asset's clip
+    /// catalog but are not registered. GetScene() must return the destination
+    /// scene; otherwise, instantiation fails with
     /// RADIENT_STATUS_INVALID_ARGUMENT. The importer retains the registry while
     /// an asynchronous instantiation is pending. The caller is responsible for
     /// removing associations after later scene changes.

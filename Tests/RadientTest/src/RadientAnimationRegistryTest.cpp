@@ -12,16 +12,6 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
- *  In no event and under no legal theory, whether in tort (including negligence),
- *  contract, or otherwise, unless required by applicable law (such as deliberate
- *  and grossly negligent acts) or agreed to in writing, shall any Contributor be
- *  liable for any damages, including any direct, indirect, special, incidental,
- *  or consequential damages of any character arising as a result of this License or
- *  out of the use or inability to use the software (including but not limited to damages
- *  for loss of goodwill, work stoppage, computer failure or malfunction, or any and
- *  all other commercial damages or losses), even if such Contributor has been advised
- *  of the possibility of such damages.
  */
 
 #include "gtest/gtest.h"
@@ -37,23 +27,23 @@ namespace
 {
 
 const RadientAnimationRegistryEntry* FindEntry(const RadientAnimationRegistryState& State,
-                                               IRadientSkeletonAnimationAsset*      pAnimation)
+                                               IRadientAnimationClipAsset*          pClip)
 {
     for (Uint32 EntryIndex = 0; EntryIndex < State.EntryCount; ++EntryIndex)
     {
-        if (State.pEntries[EntryIndex].pAnimation == pAnimation)
+        if (State.pEntries[EntryIndex].pClip == pClip)
             return &State.pEntries[EntryIndex];
     }
     return nullptr;
 }
 
-const RadientAnimationTarget* FindTarget(const RadientAnimationRegistryEntry& Entry,
-                                         IRadientSkeletonPose*                pPose)
+IRadientAnimationBinding* FindBinding(const RadientAnimationRegistryEntry& Entry,
+                                      IRadientAnimationBinding*            pBinding)
 {
-    for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
+    for (Uint32 BindingIndex = 0; BindingIndex < Entry.BindingCount; ++BindingIndex)
     {
-        if (Entry.pTargets[TargetIndex].pPose == pPose)
-            return &Entry.pTargets[TargetIndex];
+        if (Entry.ppBindings[BindingIndex] == pBinding)
+            return Entry.ppBindings[BindingIndex];
     }
     return nullptr;
 }
@@ -61,12 +51,10 @@ const RadientAnimationTarget* FindTarget(const RadientAnimationRegistryEntry& En
 class RadientAnimationRegistryTest : public testing::Test
 {
 protected:
-    struct Rig
+    struct Animation
     {
-        RefCntAutoPtr<IRadientSkeletonAsset>          pSkeleton;
-        RefCntAutoPtr<IRadientSkinAsset>              pSkin;
-        RefCntAutoPtr<IRadientSkeletonPose>           pPose;
-        RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation;
+        RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+        RefCntAutoPtr<IRadientAnimationBinding>   pBinding;
     };
 
     void SetUp() override
@@ -86,63 +74,29 @@ protected:
         ASSERT_NE(pRegistry, nullptr);
     }
 
-    RefCntAutoPtr<IRadientSkeletonAnimationAsset> CreateAnimation(IRadientSkeletonAsset* pSkeleton,
-                                                                  const Char*            Name)
+    RefCntAutoPtr<IRadientAnimationBinding> CreateBinding(IRadientAnimationClipAsset* pClip)
     {
-        RadientSkeletonAnimationDesc AnimationDesc{};
-        AnimationDesc.Name      = Name;
-        AnimationDesc.pSkeleton = pSkeleton;
-        AnimationDesc.Duration  = 1.f;
-
-        RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation;
-        EXPECT_EQ(pAssetManager->CreateSkeletonAnimation(AnimationDesc, pAnimation.GetAddressOfEmpty()),
-                  RADIENT_STATUS_OK);
-        return pAnimation;
+        RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+        EXPECT_EQ(pClip->CreateBinding({}, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        return pBinding;
     }
 
-    Rig CreateRig(const Char* Name)
+    Animation CreateAnimation(const Char* Name)
     {
-        Rig Result;
-
-        RadientSkeletonJointDesc Joint{};
-        Joint.Name = "Root";
-
-        RadientSkeletonDesc SkeletonDesc{};
-        SkeletonDesc.Name       = Name;
-        SkeletonDesc.pJoints    = &Joint;
-        SkeletonDesc.JointCount = 1;
-        EXPECT_EQ(pAssetManager->CreateSkeleton(SkeletonDesc, Result.pSkeleton.GetAddressOfEmpty()),
+        Animation                Result;
+        RadientAnimationClipDesc ClipDesc{};
+        ClipDesc.Name = Name;
+        EXPECT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, Result.pClip.GetAddressOfEmpty()),
                   RADIENT_STATUS_OK);
-        if (Result.pSkeleton == nullptr)
-            return Result;
-
-        RadientSkinJointBindingDesc JointBinding{};
-        JointBinding.SkeletonJointIndex = 0;
-
-        RadientSkinDesc SkinDesc{};
-        SkinDesc.Name       = Name;
-        SkinDesc.pSkeleton  = Result.pSkeleton;
-        SkinDesc.pJoints    = &JointBinding;
-        SkinDesc.JointCount = 1;
-        EXPECT_EQ(pAssetManager->CreateSkin(SkinDesc, Result.pSkin.GetAddressOfEmpty()),
-                  RADIENT_STATUS_OK);
-        EXPECT_EQ(Result.pSkeleton->CreatePose(Result.pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-        Result.pAnimation = CreateAnimation(Result.pSkeleton, Name);
+        if (Result.pClip != nullptr)
+            Result.pBinding = CreateBinding(Result.pClip);
         return Result;
     }
 
-    RadientEntityID CreateSkinnedEntity(const Rig&            RigData,
-                                        IRadientSkeletonPose* pPose = nullptr)
+    RadientEntityID CreateEntity()
     {
         RadientEntityID Entity = InvalidRadientEntityID;
         EXPECT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
-        if (Entity == InvalidRadientEntityID)
-            return Entity;
-
-        RadientSkinComponent Skin{};
-        Skin.pSkin = RigData.pSkin;
-        Skin.pPose = pPose != nullptr ? pPose : RigData.pPose.RawPtr();
-        EXPECT_EQ(pWriter->SetSkin(Entity, Skin), RADIENT_STATUS_OK);
         return Entity;
     }
 
@@ -178,252 +132,202 @@ TEST_F(RadientAnimationRegistryTest, CreatesEmptyRegistryAndRetainsScene)
     EXPECT_NE(pRetainedSceneWriter, nullptr);
 }
 
-TEST_F(RadientAnimationRegistryTest, CoalescesEntitiesSharingPoseAndRetainsAnimationData)
+TEST_F(RadientAnimationRegistryTest, GroupsUniqueBindingsByClipAndRetainsThem)
 {
-    Rig RigData = CreateRig("Retained animation");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-    ASSERT_NE(RigData.pPose, nullptr);
+    Animation AnimationData = CreateAnimation("Retained clip");
+    ASSERT_NE(AnimationData.pClip, nullptr);
+    ASSERT_NE(AnimationData.pBinding, nullptr);
+    RefCntAutoPtr<IRadientAnimationBinding> pSecondBinding = CreateBinding(AnimationData.pClip);
+    ASSERT_NE(pSecondBinding, nullptr);
 
-    const RadientEntityID FirstEntity  = CreateSkinnedEntity(RigData);
-    const RadientEntityID SecondEntity = CreateSkinnedEntity(RigData);
-    ASSERT_NE(FirstEntity, InvalidRadientEntityID);
-    ASSERT_NE(SecondEntity, InvalidRadientEntityID);
+    const RadientEntityID                FirstEntity   = CreateEntity();
+    const RadientEntityID                SecondEntity  = CreateEntity();
+    const RadientEntityID                ThirdEntity   = CreateEntity();
+    const std::array<RadientEntityID, 3> FirstEntities = {FirstEntity, SecondEntity, FirstEntity};
 
-    const std::array<RadientEntityID, 3> Entities = {FirstEntity, SecondEntity, FirstEntity};
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, Entities.data(), static_cast<Uint32>(Entities.size())),
+    ASSERT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, FirstEntities.data(),
+                                             static_cast<Uint32>(FirstEntities.size())),
               RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(pSecondBinding, &ThirdEntity, 1), RADIENT_STATUS_OK);
 
     const RadientAnimationRegistryState& State = pRegistry->GetState();
-    ASSERT_EQ(State.Revision, 1u);
-    ASSERT_EQ(State.EntryCount, 1u);
-    const RadientAnimationRegistryEntry* pEntry = FindEntry(State, RigData.pAnimation);
-    ASSERT_NE(pEntry, nullptr);
-    ASSERT_EQ(pEntry->TargetCount, 1u);
-    ASSERT_NE(FindTarget(*pEntry, RigData.pPose), nullptr);
-
-    const RadientEntityID ThirdEntity = CreateSkinnedEntity(RigData);
-    ASSERT_NE(ThirdEntity, InvalidRadientEntityID);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, &ThirdEntity, 1), RADIENT_STATUS_OK);
     ASSERT_EQ(State.Revision, 2u);
-    pEntry = FindEntry(State, RigData.pAnimation);
+    ASSERT_EQ(State.EntryCount, 1u);
+    const RadientAnimationRegistryEntry* pEntry = FindEntry(State, AnimationData.pClip);
     ASSERT_NE(pEntry, nullptr);
-    ASSERT_EQ(pEntry->TargetCount, 1u);
-    EXPECT_EQ(pEntry->pTargets[0].pPose, RigData.pPose);
+    ASSERT_EQ(pEntry->BindingCount, 2u);
+    ASSERT_NE(FindBinding(*pEntry, AnimationData.pBinding), nullptr);
+    ASSERT_NE(FindBinding(*pEntry, pSecondBinding), nullptr);
 
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, Entities.data(), static_cast<Uint32>(Entities.size())),
+    EXPECT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, FirstEntities.data(),
+                                             static_cast<Uint32>(FirstEntities.size())),
               RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, nullptr, 0), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, nullptr, 0),
+              RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.Revision, 2u);
 
-    IRadientSkeletonAnimationAsset* const pRetainedAnimation = RigData.pAnimation;
-    IRadientSkeletonPose* const           pRetainedPose      = RigData.pPose;
-    ASSERT_EQ(pWriter->RemoveComponent(FirstEntity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->RemoveComponent(SecondEntity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->RemoveComponent(ThirdEntity, RADIENT_COMPONENT_TYPE_SKIN), RADIENT_STATUS_OK);
-    RigData.pAnimation.Release();
-    RigData.pPose.Release();
+    IRadientAnimationClipAsset* const pRetainedClip    = AnimationData.pClip;
+    IRadientAnimationBinding* const   pRetainedBinding = AnimationData.pBinding;
+    IRadientAnimationBinding* const   pRetainedSecond  = pSecondBinding;
+    AnimationData.pBinding.Release();
+    pSecondBinding.Release();
+    AnimationData.pClip.Release();
 
-    ASSERT_EQ(State.pEntries[0].pAnimation, pRetainedAnimation);
-    EXPECT_EQ(State.pEntries[0].pAnimation->GetDesc().Duration, 1.f);
-    ASSERT_NE(FindTarget(State.pEntries[0], pRetainedPose), nullptr);
-    EXPECT_EQ(pRetainedPose->GetSkeleton(), RigData.pSkeleton);
+    pEntry = FindEntry(State, pRetainedClip);
+    ASSERT_NE(pEntry, nullptr);
+    EXPECT_STREQ(pEntry->pClip->GetDesc().Name, "Retained clip");
+    EXPECT_EQ(FindBinding(*pEntry, pRetainedBinding)->GetClip(), pRetainedClip);
+    EXPECT_EQ(FindBinding(*pEntry, pRetainedSecond)->GetClip(), pRetainedClip);
 }
 
 TEST_F(RadientAnimationRegistryTest, RejectsInvalidBatchAtomically)
 {
-    Rig RigData = CreateRig("Atomic validation");
-    ASSERT_NE(RigData.pAnimation, nullptr);
+    Animation AnimationData = CreateAnimation("Atomic validation");
+    ASSERT_NE(AnimationData.pBinding, nullptr);
 
-    const RadientEntityID ExistingEntity = CreateSkinnedEntity(RigData);
-    const RadientEntityID NewEntity      = CreateSkinnedEntity(RigData);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, &ExistingEntity, 1), RADIENT_STATUS_OK);
+    const RadientEntityID ExistingEntity = CreateEntity();
+    const RadientEntityID NewEntity      = CreateEntity();
+    ASSERT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, &ExistingEntity, 1),
+              RADIENT_STATUS_OK);
 
-    RadientEntityID EmptyEntity = InvalidRadientEntityID;
-    ASSERT_EQ(pWriter->CreateEntity({}, EmptyEntity), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRegistry->AddAnimationBinding(nullptr, &NewEntity, 1), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, nullptr, 1), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(nullptr, &NewEntity, 1), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, nullptr, 1), RADIENT_STATUS_INVALID_ARGUMENT);
-
-    const std::array<RadientEntityID, 2> Entities = {NewEntity, EmptyEntity};
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, Entities.data(), static_cast<Uint32>(Entities.size())),
+    const std::array<RadientEntityID, 2> Entities = {NewEntity, InvalidRadientEntityID};
+    EXPECT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, Entities.data(),
+                                             static_cast<Uint32>(Entities.size())),
               RADIENT_STATUS_NOT_FOUND);
 
     const RadientAnimationRegistryState& State = pRegistry->GetState();
     EXPECT_EQ(State.Revision, 1u);
     ASSERT_EQ(State.EntryCount, 1u);
-    const RadientAnimationRegistryEntry* pEntry = FindEntry(State, RigData.pAnimation);
+    const RadientAnimationRegistryEntry* pEntry = FindEntry(State, AnimationData.pClip);
     ASSERT_NE(pEntry, nullptr);
-    ASSERT_EQ(pEntry->TargetCount, 1u);
-    EXPECT_EQ(pEntry->pTargets[0].pPose, RigData.pPose);
+    ASSERT_EQ(pEntry->BindingCount, 1u);
+    EXPECT_EQ(pEntry->ppBindings[0], AnimationData.pBinding);
 }
 
-TEST_F(RadientAnimationRegistryTest, RejectsSkeletonMismatchAtomically)
+TEST_F(RadientAnimationRegistryTest, AssociatesOneEntityWithMultipleBindingsForTheSameClip)
 {
-    Rig FirstRig  = CreateRig("First skeleton");
-    Rig SecondRig = CreateRig("Second skeleton");
-    ASSERT_NE(FirstRig.pAnimation, nullptr);
-    ASSERT_NE(SecondRig.pAnimation, nullptr);
+    Animation                               AnimationData  = CreateAnimation("Multiple bindings");
+    RefCntAutoPtr<IRadientAnimationBinding> pSecondBinding = CreateBinding(AnimationData.pClip);
+    ASSERT_NE(pSecondBinding, nullptr);
+    const RadientEntityID Entity = CreateEntity();
 
-    const std::array<RadientEntityID, 2> Entities = {
-        CreateSkinnedEntity(FirstRig),
-        CreateSkinnedEntity(SecondRig),
-    };
-    ASSERT_NE(Entities[0], InvalidRadientEntityID);
-    ASSERT_NE(Entities[1], InvalidRadientEntityID);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, &Entity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(pSecondBinding, &Entity, 1), RADIENT_STATUS_OK);
 
-    EXPECT_EQ(pRegistry->AddAnimatedEntities(FirstRig.pAnimation, Entities.data(), static_cast<Uint32>(Entities.size())),
-              RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pRegistry->GetState().Revision, 0u);
-    EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
+    const RadientAnimationRegistryEntry* pEntry = FindEntry(pRegistry->GetState(), AnimationData.pClip);
+    ASSERT_NE(pEntry, nullptr);
+    ASSERT_EQ(pEntry->BindingCount, 2u);
+    EXPECT_NE(FindBinding(*pEntry, AnimationData.pBinding), nullptr);
+    EXPECT_NE(FindBinding(*pEntry, pSecondBinding), nullptr);
 }
 
-TEST_F(RadientAnimationRegistryTest, RemovesSelectedTargets)
+TEST_F(RadientAnimationRegistryTest, RemovesSelectedBindingAssociations)
 {
-    Rig RigData = CreateRig("Selected removal");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-
-    const RadientEntityID                FirstEntity  = CreateSkinnedEntity(RigData);
-    const RadientEntityID                SecondEntity = CreateSkinnedEntity(RigData);
-    const std::array<RadientEntityID, 2> Entities     = {FirstEntity, SecondEntity};
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, Entities.data(), static_cast<Uint32>(Entities.size())),
+    Animation                            AnimationData = CreateAnimation("Selected removal");
+    const RadientEntityID                FirstEntity   = CreateEntity();
+    const RadientEntityID                SecondEntity  = CreateEntity();
+    const std::array<RadientEntityID, 2> Entities      = {FirstEntity, SecondEntity};
+    ASSERT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, Entities.data(),
+                                             static_cast<Uint32>(Entities.size())),
               RADIENT_STATUS_OK);
 
     const RadientEntityID MissingEntity = InvalidRadientEntityID;
-    EXPECT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, &MissingEntity, 1),
+    EXPECT_EQ(pRegistry->RemoveAnimationBinding(AnimationData.pBinding, &MissingEntity, 1),
               RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pRegistry->RemoveAnimatedEntities(nullptr, &FirstEntity, 1), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, nullptr, 1), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, nullptr, 0), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pRegistry->GetState().Revision, 1u);
+    EXPECT_EQ(pRegistry->RemoveAnimationBinding(nullptr, &FirstEntity, 1), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pRegistry->RemoveAnimationBinding(AnimationData.pBinding, nullptr, 1), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pRegistry->RemoveAnimationBinding(AnimationData.pBinding, nullptr, 0), RADIENT_STATUS_NO_CHANGE);
 
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, &FirstEntity, 1), RADIENT_STATUS_OK);
-    const RadientAnimationRegistryEntry* pEntry = FindEntry(pRegistry->GetState(), RigData.pAnimation);
+    ASSERT_EQ(pRegistry->RemoveAnimationBinding(AnimationData.pBinding, &FirstEntity, 1), RADIENT_STATUS_OK);
+    const RadientAnimationRegistryEntry* pEntry = FindEntry(pRegistry->GetState(), AnimationData.pClip);
     ASSERT_NE(pEntry, nullptr);
-    EXPECT_EQ(pRegistry->GetState().Revision, 2u);
-    EXPECT_EQ(pEntry->TargetCount, 1u);
-    EXPECT_EQ(pEntry->pTargets[0].pPose, RigData.pPose);
+    EXPECT_EQ(pEntry->BindingCount, 1u);
+    EXPECT_EQ(pEntry->ppBindings[0], AnimationData.pBinding);
 
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, &SecondEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->RemoveAnimationBinding(AnimationData.pBinding, &SecondEntity, 1), RADIENT_STATUS_OK);
     EXPECT_EQ(pRegistry->GetState().Revision, 3u);
     EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
     EXPECT_EQ(pRegistry->GetState().pEntries, nullptr);
 }
 
-TEST_F(RadientAnimationRegistryTest, RemovesEntityFromEveryAnimation)
+TEST_F(RadientAnimationRegistryTest, RemovesEntityFromEveryBinding)
 {
-    Rig RigData = CreateRig("Shared skeleton");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pSecondAnimation =
-        CreateAnimation(RigData.pSkeleton, "Second animation");
-    ASSERT_NE(pSecondAnimation, nullptr);
-
-    const RadientEntityID                SharedEntity = CreateSkinnedEntity(RigData);
-    const RadientEntityID                OtherEntity  = CreateSkinnedEntity(RigData);
-    const std::array<RadientEntityID, 2> FirstTargets = {SharedEntity, OtherEntity};
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, FirstTargets.data(), static_cast<Uint32>(FirstTargets.size())),
+    Animation                            FirstAnimation  = CreateAnimation("First clip");
+    Animation                            SecondAnimation = CreateAnimation("Second clip");
+    const RadientEntityID                SharedEntity    = CreateEntity();
+    const RadientEntityID                OtherEntity     = CreateEntity();
+    const std::array<RadientEntityID, 2> FirstEntities   = {SharedEntity, OtherEntity};
+    ASSERT_EQ(pRegistry->AddAnimationBinding(FirstAnimation.pBinding, FirstEntities.data(),
+                                             static_cast<Uint32>(FirstEntities.size())),
               RADIENT_STATUS_OK);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(pSecondAnimation, &SharedEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(SecondAnimation.pBinding, &SharedEntity, 1),
+              RADIENT_STATUS_OK);
 
     ASSERT_EQ(pRegistry->RemoveEntity(SharedEntity), RADIENT_STATUS_OK);
     const RadientAnimationRegistryState& State = pRegistry->GetState();
     EXPECT_EQ(State.Revision, 3u);
     ASSERT_EQ(State.EntryCount, 1u);
-    const RadientAnimationRegistryEntry* pRemainingEntry = FindEntry(State, RigData.pAnimation);
+    const RadientAnimationRegistryEntry* pRemainingEntry = FindEntry(State, FirstAnimation.pClip);
     ASSERT_NE(pRemainingEntry, nullptr);
-    ASSERT_EQ(pRemainingEntry->TargetCount, 1u);
-    EXPECT_EQ(pRemainingEntry->pTargets[0].pPose, RigData.pPose);
-    EXPECT_EQ(FindEntry(State, pSecondAnimation), nullptr);
+    ASSERT_EQ(pRemainingEntry->BindingCount, 1u);
+    EXPECT_EQ(pRemainingEntry->ppBindings[0], FirstAnimation.pBinding);
+    EXPECT_EQ(FindEntry(State, SecondAnimation.pClip), nullptr);
     EXPECT_EQ(pRegistry->RemoveEntity(SharedEntity), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.Revision, 3u);
-
-    RadientSkinComponent Skin{};
-    EXPECT_EQ(pScene->GetSkin(SharedEntity, Skin), RADIENT_STATUS_OK);
-    EXPECT_EQ(Skin.pPose, RigData.pPose);
+    EXPECT_EQ(pScene->IsEntityAlive(SharedEntity), RADIENT_STATUS_OK);
 }
 
-TEST_F(RadientAnimationRegistryTest, RemovesAnimationAndAllTargets)
+TEST_F(RadientAnimationRegistryTest, RemovesClipAndAllBindings)
 {
-    Rig RigData = CreateRig("Animation removal");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-    const RadientEntityID Entity = CreateSkinnedEntity(RigData);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, &Entity, 1), RADIENT_STATUS_OK);
+    Animation                               AnimationData  = CreateAnimation("Clip removal");
+    RefCntAutoPtr<IRadientAnimationBinding> pSecondBinding = CreateBinding(AnimationData.pClip);
+    const RadientEntityID                   FirstEntity    = CreateEntity();
+    const RadientEntityID                   SecondEntity   = CreateEntity();
+    ASSERT_EQ(pRegistry->AddAnimationBinding(AnimationData.pBinding, &FirstEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(pSecondBinding, &SecondEntity, 1), RADIENT_STATUS_OK);
 
-    EXPECT_EQ(pRegistry->RemoveAnimation(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    ASSERT_EQ(pRegistry->RemoveAnimation(RigData.pAnimation), RADIENT_STATUS_OK);
-    EXPECT_EQ(pRegistry->GetState().Revision, 2u);
+    EXPECT_EQ(pRegistry->RemoveAnimationClip(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    ASSERT_EQ(pRegistry->RemoveAnimationClip(AnimationData.pClip), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRegistry->GetState().Revision, 3u);
     EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
-    EXPECT_EQ(pRegistry->RemoveAnimation(RigData.pAnimation), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(pRegistry->GetState().Revision, 2u);
+    EXPECT_EQ(pRegistry->RemoveAnimationClip(AnimationData.pClip), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST_F(RadientAnimationRegistryTest, MaintainsIndicesAcrossSwapErase)
 {
-    Rig RigData = CreateRig("Indexed removal");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-    RefCntAutoPtr<IRadientSkeletonAnimationAsset> pSecondAnimation =
-        CreateAnimation(RigData.pSkeleton, "Second indexed animation");
-    ASSERT_NE(pSecondAnimation, nullptr);
+    Animation                               FirstAnimation       = CreateAnimation("Indexed first clip");
+    Animation                               SecondAnimation      = CreateAnimation("Indexed second clip");
+    RefCntAutoPtr<IRadientAnimationBinding> pFirstSecondBinding  = CreateBinding(FirstAnimation.pClip);
+    RefCntAutoPtr<IRadientAnimationBinding> pSecondSecondBinding = CreateBinding(SecondAnimation.pClip);
 
-    RefCntAutoPtr<IRadientSkeletonPose> pFirstOnlyPose;
-    RefCntAutoPtr<IRadientSkeletonPose> pSecondOnlyPose;
-    ASSERT_EQ(RigData.pSkeleton->CreatePose(pFirstOnlyPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(RigData.pSkeleton->CreatePose(pSecondOnlyPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    const RadientEntityID SharedEntity     = CreateEntity();
+    const RadientEntityID FirstOnlyEntity  = CreateEntity();
+    const RadientEntityID SecondOnlyEntity = CreateEntity();
+    ASSERT_EQ(pRegistry->AddAnimationBinding(FirstAnimation.pBinding, &SharedEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(pFirstSecondBinding, &FirstOnlyEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(SecondAnimation.pBinding, &SharedEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->AddAnimationBinding(pSecondSecondBinding, &SecondOnlyEntity, 1), RADIENT_STATUS_OK);
 
-    const RadientEntityID                SharedEntity     = CreateSkinnedEntity(RigData);
-    const RadientEntityID                FirstOnlyEntity  = CreateSkinnedEntity(RigData, pFirstOnlyPose);
-    const RadientEntityID                SecondOnlyEntity = CreateSkinnedEntity(RigData, pSecondOnlyPose);
-    const std::array<RadientEntityID, 2> FirstTargets     = {SharedEntity, FirstOnlyEntity};
-    const std::array<RadientEntityID, 2> SecondTargets    = {SharedEntity, SecondOnlyEntity};
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, FirstTargets.data(), static_cast<Uint32>(FirstTargets.size())),
-              RADIENT_STATUS_OK);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(pSecondAnimation, SecondTargets.data(), static_cast<Uint32>(SecondTargets.size())),
-              RADIENT_STATUS_OK);
+    // Removing these associations swap-erases both a binding and an
+    // entry in the entity's reverse index.
+    ASSERT_EQ(pRegistry->RemoveAnimationBinding(FirstAnimation.pBinding, &SharedEntity, 1), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->RemoveAnimationBinding(SecondAnimation.pBinding, &SharedEntity, 1), RADIENT_STATUS_OK);
 
-    // Removing the shared association moves both another pose target in the
-    // animation entry and another animation in the entity's reverse index.
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, &SharedEntity, 1), RADIENT_STATUS_OK);
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(pSecondAnimation, &SharedEntity, 1), RADIENT_STATUS_OK);
-
-    const RadientAnimationRegistryEntry* pFirstEntry = FindEntry(pRegistry->GetState(), RigData.pAnimation);
+    const RadientAnimationRegistryEntry* pFirstEntry = FindEntry(pRegistry->GetState(), FirstAnimation.pClip);
     ASSERT_NE(pFirstEntry, nullptr);
-    ASSERT_EQ(pFirstEntry->TargetCount, 1u);
-    EXPECT_EQ(pFirstEntry->pTargets[0].pPose, pFirstOnlyPose);
-    const RadientAnimationRegistryEntry* pSecondEntry = FindEntry(pRegistry->GetState(), pSecondAnimation);
+    ASSERT_EQ(pFirstEntry->BindingCount, 1u);
+    EXPECT_EQ(pFirstEntry->ppBindings[0], pFirstSecondBinding);
+    const RadientAnimationRegistryEntry* pSecondEntry = FindEntry(pRegistry->GetState(), SecondAnimation.pClip);
     ASSERT_NE(pSecondEntry, nullptr);
-    ASSERT_EQ(pSecondEntry->TargetCount, 1u);
-    EXPECT_EQ(pSecondEntry->pTargets[0].pPose, pSecondOnlyPose);
+    ASSERT_EQ(pSecondEntry->BindingCount, 1u);
+    EXPECT_EQ(pSecondEntry->ppBindings[0], pSecondSecondBinding);
 
-    // Removing the first entry moves the second entry and must repair the
-    // animation-to-entry index used by the following operation.
-    ASSERT_EQ(pRegistry->RemoveAnimation(RigData.pAnimation), RADIENT_STATUS_OK);
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(pSecondAnimation, &SecondOnlyEntity, 1), RADIENT_STATUS_OK);
+    // Removing the first entry moves the second and repairs the clip index.
+    ASSERT_EQ(pRegistry->RemoveAnimationClip(FirstAnimation.pClip), RADIENT_STATUS_OK);
+    ASSERT_EQ(pRegistry->RemoveAnimationBinding(pSecondSecondBinding, &SecondOnlyEntity, 1), RADIENT_STATUS_OK);
     EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
-}
-
-TEST_F(RadientAnimationRegistryTest, ResolvesPoseWhenAssociationIsAdded)
-{
-    Rig RigData = CreateRig("Pose replacement");
-    ASSERT_NE(RigData.pAnimation, nullptr);
-    ASSERT_NE(RigData.pPose, nullptr);
-    const RadientEntityID Entity = CreateSkinnedEntity(RigData);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, &Entity, 1), RADIENT_STATUS_OK);
-
-    RefCntAutoPtr<IRadientSkeletonPose> pReplacementPose;
-    ASSERT_EQ(RigData.pSkeleton->CreatePose(pReplacementPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
-    ASSERT_EQ(pWriter->SetSkin(Entity, {RigData.pSkin, pReplacementPose}), RADIENT_STATUS_OK);
-
-    const RadientAnimationRegistryEntry* pEntry = FindEntry(pRegistry->GetState(), RigData.pAnimation);
-    ASSERT_NE(pEntry, nullptr);
-    ASSERT_EQ(pEntry->TargetCount, 1u);
-    EXPECT_EQ(pEntry->pTargets[0].pPose, RigData.pPose);
-
-    ASSERT_EQ(pRegistry->RemoveAnimatedEntities(RigData.pAnimation, &Entity, 1), RADIENT_STATUS_OK);
-    ASSERT_EQ(pRegistry->AddAnimatedEntities(RigData.pAnimation, &Entity, 1), RADIENT_STATUS_OK);
-    pEntry = FindEntry(pRegistry->GetState(), RigData.pAnimation);
-    ASSERT_NE(pEntry, nullptr);
-    ASSERT_EQ(pEntry->TargetCount, 1u);
-    EXPECT_EQ(pEntry->pTargets[0].pPose, pReplacementPose);
-    EXPECT_EQ(pRegistry->GetState().Revision, 3u);
 }
 
 } // namespace

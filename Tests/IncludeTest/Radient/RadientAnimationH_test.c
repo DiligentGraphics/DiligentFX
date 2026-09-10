@@ -44,7 +44,6 @@ void RadientAnimation_C_UseTypes(void)
     RadientAnimationDestinationDesc        Destination        = {0};
     RadientAnimationBindingDesc            Binding            = {0};
     RadientAnimationEvaluateInfo           EvaluateInfo       = {0};
-    RadientAnimationTarget                 Target             = {0};
     RadientAnimationRegistryEntry          Entry              = {0};
     RadientAnimationRegistryState          State              = {0};
 
@@ -101,7 +100,6 @@ void RadientAnimation_C_UseTypes(void)
     (void)ResolvedProperty;
     (void)Binding;
     (void)EvaluateInfo;
-    (void)Target;
     (void)Entry;
     (void)State;
 }
@@ -154,17 +152,18 @@ void RadientAnimation_C_TestBindingMacros(IRadientAnimationBinding* pBinding)
     (void)Status;
 }
 
-void RadientAnimation_C_TestMacros(IRadientAnimationRegistry*      pRegistry,
-                                   IRadientSkeletonAnimationAsset* pAnimation)
+void RadientAnimation_C_TestMacros(IRadientAnimationRegistry*  pRegistry,
+                                   IRadientAnimationBinding*   pBinding,
+                                   IRadientAnimationClipAsset* pClip)
 {
     RadientEntityID Entities[1] = {0};
     RADIENT_STATUS  Status      = RADIENT_STATUS_OK;
 
     (void)IRadientAnimationRegistry_GetScene(pRegistry);
-    Status = IRadientAnimationRegistry_AddAnimatedEntities(pRegistry, pAnimation, Entities, 1);
-    Status = IRadientAnimationRegistry_RemoveAnimatedEntities(pRegistry, pAnimation, Entities, 1);
+    Status = IRadientAnimationRegistry_AddAnimationBinding(pRegistry, pBinding, Entities, 1);
+    Status = IRadientAnimationRegistry_RemoveAnimationBinding(pRegistry, pBinding, Entities, 1);
     Status = IRadientAnimationRegistry_RemoveEntity(pRegistry, Entities[0]);
-    Status = IRadientAnimationRegistry_RemoveAnimation(pRegistry, pAnimation);
+    Status = IRadientAnimationRegistry_RemoveAnimationClip(pRegistry, pClip);
     (void)IRadientAnimationRegistry_GetState(pRegistry);
 
     (void)Status;

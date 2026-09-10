@@ -94,8 +94,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSkin(const RadientSkinDesc& SkinDesc,
                                                          IRadientSkinAsset**    ppSkin) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSkeletonAnimation(const RadientSkeletonAnimationDesc& AnimationDesc,
-                                                                      IRadientSkeletonAnimationAsset**       ppAnimation) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateAnimationClip(const RadientAnimationClipDesc& ClipDesc,
+                                                                  IRadientAnimationClipAsset**    ppClip) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateStandardMaterialDefinition(const RadientStandardMaterialDefinitionCreateInfo& DefinitionCI,
                                                                                IRadientMaterialDefinitionAsset**                  ppDefinition) override final;
@@ -112,9 +112,6 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset* pAsset) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateAnimationClip(const RadientAnimationClipDesc& ClipDesc,
-                                                                  IRadientAnimationClipAsset**    ppClip) override final;
 
     // Must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,

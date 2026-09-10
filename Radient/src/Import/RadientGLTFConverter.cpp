@@ -41,15 +41,6 @@
 #include "GLTFLoader.hpp"
 #include "GraphicsAccessories.hpp"
 
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/flat_hash_map.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
-
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include "../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
@@ -72,7 +63,7 @@ namespace
 using RadientValidation::CheckedMultiply;
 using RadientValidation::IsAddressableArray;
 
-using SkeletonEntityMap = absl::flat_hash_map<IRadientSkeletonAsset*, std::vector<RadientEntityID>>;
+using SkinEntityLists = std::vector<std::vector<RadientEntityID>>;
 
 struct MeshSourceDataOwner
 {
@@ -464,85 +455,6 @@ RADIENT_STATUS GetAnimationSamplerLayout(const GLTF::AnimationSampler&    Sample
     return RADIENT_STATUS_OK;
 }
 
-template <typename ValueType>
-struct AnimationCurveStorage
-{
-    RadientAnimationCurveDesc GetDesc() const
-    {
-        RadientAnimationCurveDesc Desc{};
-        if (Times.empty())
-            return Desc;
-
-        Desc.Interpolation = Interpolation;
-        Desc.pTimes        = Times.data();
-        Desc.pValues       = Values.data();
-        Desc.KeyframeCount = static_cast<Uint32>(Times.size());
-        return Desc;
-    }
-
-    bool IsPresent() const
-    {
-        return !Times.empty();
-    }
-
-    RADIENT_ANIMATION_INTERPOLATION Interpolation = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
-    std::vector<Float32>            Times;
-    std::vector<ValueType>          Values;
-};
-
-struct AnimationTrackStorage
-{
-    bool HasCurves() const
-    {
-        return Translation.IsPresent() || Rotation.IsPresent() || Scale.IsPresent();
-    }
-
-    AnimationCurveStorage<RadientFloat3>     Translation;
-    AnimationCurveStorage<RadientQuaternion> Rotation;
-    AnimationCurveStorage<RadientFloat3>     Scale;
-};
-
-template <typename ValueType, typename ConvertValueType>
-RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sampler,
-                                        Float32                           AnimationStart,
-                                        Uint32                            AnimationIndex,
-                                        Uint32                            SamplerIndex,
-                                        const char*                       CurveName,
-                                        Uint32                            ComponentCount,
-                                        AnimationCurveStorage<ValueType>& Curve,
-                                        ConvertValueType&&                ConvertValue)
-{
-    if (Curve.IsPresent())
-    {
-        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " contains duplicate ", CurveName,
-                          " channels for one skeleton joint");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
-    RADIENT_ANIMATION_INTERPOLATION Interpolation;
-    size_t                          ValueCount   = 0;
-    const RADIENT_STATUS            LayoutStatus = GetAnimationSamplerLayout(
-        Sampler,
-        AnimationIndex,
-        SamplerIndex,
-        CurveName,
-        ComponentCount,
-        Interpolation,
-        ValueCount);
-    if (RADIENT_FAILED(LayoutStatus))
-        return LayoutStatus;
-
-    Curve.Interpolation = Interpolation;
-    Curve.Times.resize(Sampler.Inputs.size());
-    std::transform(Sampler.Inputs.begin(), Sampler.Inputs.end(), Curve.Times.begin(),
-                   [AnimationStart](Float32 Time) { return Time - AnimationStart; });
-
-    Curve.Values.reserve(ValueCount);
-    for (size_t ValueIndex = 0; ValueIndex < ValueCount; ++ValueIndex)
-        Curve.Values.push_back(ConvertValue(Sampler.GetOutputElement(ValueIndex)));
-
-    return RADIENT_STATUS_OK;
-}
-
 struct AnimationClipSamplerStorage
 {
     Uint32                          SourceSamplerIndex = InvalidRadientAnimationSamplerIndex;
@@ -817,115 +729,6 @@ RADIENT_STATUS CreateImportedAnimationClip(
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS CreateImportedSkeletonAnimation(const GLTF::Model&                             Model,
-                                               const GLTF::Animation&                         Animation,
-                                               Uint32                                         AnimationIndex,
-                                               Float32                                        AnimationStart,
-                                               Float32                                        Duration,
-                                               const SkinImportContext&                       SkinContext,
-                                               IRadientSkinAsset&                             Skin,
-                                               IRadientAssetManager&                          AssetManager,
-                                               RefCntAutoPtr<IRadientSkeletonAnimationAsset>& pResult)
-{
-    pResult.Release();
-
-    IRadientSkeletonAsset* const pSkeleton = Skin.GetDesc().pSkeleton;
-    if (pSkeleton == nullptr)
-        return RADIENT_STATUS_INVALID_DATA;
-
-    std::vector<AnimationTrackStorage> Tracks(pSkeleton->GetDesc().JointCount);
-    for (const GLTF::AnimationChannel& Channel : Animation.Channels)
-    {
-        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::WEIGHTS)
-            continue;
-        if (Channel.SamplerIndex >= Animation.Samplers.size())
-        {
-            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " references invalid sampler ", Channel.SamplerIndex);
-            return RADIENT_STATUS_INVALID_DATA;
-        }
-
-        Uint32 NodeIndex;
-        if (!GetNodeIndex(Model, Channel.pNode, NodeIndex))
-        {
-            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " references an invalid target node");
-            return RADIENT_STATUS_INVALID_DATA;
-        }
-        if (NodeIndex >= SkinContext.NodeToSkeletonJoint.size())
-            return RADIENT_STATUS_INVALID_DATA;
-
-        const Uint32 JointIndex = SkinContext.NodeToSkeletonJoint[NodeIndex];
-        if (JointIndex == InvalidRadientJointIndex)
-            continue;
-        if (JointIndex >= Tracks.size())
-            return RADIENT_STATUS_INVALID_DATA;
-
-        const GLTF::AnimationSampler& Sampler = Animation.Samplers[Channel.SamplerIndex];
-        RADIENT_STATUS                Status;
-        switch (Channel.PathType)
-        {
-            case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
-                Status = InitializeAnimationCurve(
-                    Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "translation",
-                    3,
-                    Tracks[JointIndex].Translation,
-                    [](const float* pValue) { return RadientFloat3{pValue[0], pValue[1], pValue[2]}; });
-                break;
-
-            case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
-                Status = InitializeAnimationCurve(
-                    Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "rotation",
-                    4,
-                    Tracks[JointIndex].Rotation,
-                    [](const float* pValue) { return RadientQuaternion{pValue[0], pValue[1], pValue[2], pValue[3]}; });
-                break;
-
-            case GLTF::AnimationChannel::PATH_TYPE::SCALE:
-                Status = InitializeAnimationCurve(
-                    Sampler, AnimationStart, AnimationIndex, Channel.SamplerIndex, "scale",
-                    3,
-                    Tracks[JointIndex].Scale,
-                    [](const float* pValue) { return RadientFloat3{pValue[0], pValue[1], pValue[2]}; });
-                break;
-
-            default:
-                continue;
-        }
-
-        if (RADIENT_FAILED(Status))
-            return Status;
-    }
-
-    std::vector<RadientSkeletonAnimationTrackDesc> TrackDescs;
-    TrackDescs.reserve(Tracks.size());
-    for (Uint32 JointIndex = 0; JointIndex < static_cast<Uint32>(Tracks.size()); ++JointIndex)
-    {
-        const AnimationTrackStorage& Track = Tracks[JointIndex];
-        if (!Track.HasCurves())
-            continue;
-
-        RadientSkeletonAnimationTrackDesc& Desc = TrackDescs.emplace_back();
-        Desc.SkeletonJointIndex                 = JointIndex;
-        Desc.Translation                        = Track.Translation.GetDesc();
-        Desc.Rotation                           = Track.Rotation.GetDesc();
-        Desc.Scale                              = Track.Scale.GetDesc();
-    }
-
-    if (TrackDescs.empty())
-        return RADIENT_STATUS_NO_CHANGE;
-
-    RadientSkeletonAnimationDesc AnimationDesc{};
-    AnimationDesc.Name       = Animation.Name.c_str();
-    AnimationDesc.pSkeleton  = pSkeleton;
-    AnimationDesc.pTracks    = TrackDescs.data();
-    AnimationDesc.TrackCount = static_cast<Uint32>(TrackDescs.size());
-    AnimationDesc.Duration   = Duration;
-
-    const RADIENT_STATUS Status = AssetManager.CreateSkeletonAnimation(AnimationDesc, pResult.GetAddressOfEmpty());
-    return RADIENT_FAILED(Status) || pResult == nullptr ?
-        (RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED) :
-        RADIENT_STATUS_OK;
-}
-
 RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
                                  IRadientAssetManager*                 pAssetManager,
                                  const std::vector<SkinImportContext>& SkinContexts,
@@ -953,8 +756,6 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
             return TimeStatus;
 
         RadientImport::ImportedAnimation ImportedAnimation;
-        ImportedAnimation.Name     = Animation.Name;
-        ImportedAnimation.Duration = Duration;
 
         const RADIENT_STATUS ClipStatus = CreateImportedAnimationClip(
             Model,
@@ -966,39 +767,19 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
             *pAssetManager,
             ImportedAnimation.pClip,
             ImportedAnimation.SkinMappings);
+        if (ClipStatus == RADIENT_STATUS_NO_CHANGE)
+        {
+            if (!Animation.Channels.empty())
+            {
+                LOG_WARNING_MESSAGE("GLTF animation '", Animation.Name,
+                                    "' does not contain supported channels and was not imported");
+            }
+            continue;
+        }
         if (RADIENT_FAILED(ClipStatus))
             return ClipStatus;
-
-        for (Uint32 SkinIndex = 0; SkinIndex < static_cast<Uint32>(Scene.Skins.size()); ++SkinIndex)
-        {
-            RefCntAutoPtr<IRadientSkeletonAnimationAsset> pSkeletonAnimation;
-            const RADIENT_STATUS                          Status = CreateImportedSkeletonAnimation(
-                Model,
-                Animation,
-                AnimationIndex,
-                AnimationStart,
-                Duration,
-                SkinContexts[SkinIndex],
-                *Scene.Skins[SkinIndex],
-                *pAssetManager,
-                pSkeletonAnimation);
-            if (Status == RADIENT_STATUS_NO_CHANGE)
-                continue;
-            if (RADIENT_FAILED(Status))
-                return Status;
-
-            ImportedAnimation.AddSkeletonAnimation(std::move(pSkeletonAnimation));
-        }
-
-        if (ImportedAnimation.pClip != nullptr || !ImportedAnimation.SkeletonAnimationBindings.empty())
-        {
-            Scene.Animations.emplace_back(std::move(ImportedAnimation));
-        }
-        else if (!Animation.Channels.empty())
-        {
-            LOG_WARNING_MESSAGE("GLTF animation '", Animation.Name,
-                                "' does not contain supported node-transform channels and was not imported");
-        }
+        VERIFY_EXPR(ImportedAnimation.pClip != nullptr);
+        Scene.Animations.emplace_back(std::move(ImportedAnimation));
     }
 
     return RADIENT_STATUS_OK;
@@ -1021,7 +802,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                           RadientEntityID                                   Parent,
                           const RadientMatrix4x4&                           ParentDocumentMatrix,
                           std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
-                          SkeletonEntityMap*                                pSkeletonEntities)
+                          SkinEntityLists*                                  pSkinEntities)
 {
     if (NodeIndex >= Scene.Nodes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1145,8 +926,11 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                         if (RADIENT_FAILED(Status))
                             return Status;
 
-                        if (pSkeletonEntities != nullptr)
-                            (*pSkeletonEntities)[pSkeleton].push_back(NodeEntity);
+                        if (pSkinEntities != nullptr)
+                        {
+                            VERIFY_EXPR(Node.SkinIndex < pSkinEntities->size());
+                            (*pSkinEntities)[Node.SkinIndex].push_back(NodeEntity);
+                        }
                     }
                 }
             }
@@ -1166,7 +950,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     for (Uint32 ChildIndex : Node.Children)
     {
         Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, NodeDocumentMatrix,
-                            SkinPoses, pSkeletonEntities);
+                            SkinPoses, pSkinEntities);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -1174,81 +958,85 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RegisterSceneAnimations(
+void RegisterSceneAnimations(
     const RadientImport::ImportedDocument& Scene,
-    const SkeletonEntityMap&               SkeletonEntities,
+    const std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
+    const SkinEntityLists&                  SkinEntities,
     IRadientAnimationRegistry&             Registry)
 {
-    struct AppliedRegistration
-    {
-        IRadientSkeletonAnimationAsset*     pAnimation = nullptr;
-        const std::vector<RadientEntityID>* pEntities  = nullptr;
-    };
-
-    std::vector<AppliedRegistration> AppliedRegistrations;
-
-    // A registry mutation failure aborts scene instantiation. Undo only the
-    // registrations made by this call so the registry does not retain targets
-    // for the scene subtree that the importer will destroy.
-    const auto Rollback = [&Registry, &AppliedRegistrations]() {
-        for (auto It = AppliedRegistrations.rbegin(); It != AppliedRegistrations.rend(); ++It)
-        {
-            Registry.RemoveAnimatedEntities(
-                It->pAnimation, It->pEntities->data(), static_cast<Uint32>(It->pEntities->size()));
-        }
-    };
-
     for (const RadientImport::ImportedAnimation& ImportedAnimation : Scene.Animations)
     {
-        for (const RadientSceneSkeletonAnimationBinding& Binding : ImportedAnimation.SkeletonAnimationBindings)
+        if (ImportedAnimation.pClip == nullptr)
         {
-            IRadientSkeletonAnimationAsset* const pAnimation = Binding.pAnimation;
-            if (pAnimation == nullptr)
+            LOG_WARNING_MESSAGE("Skipping a null imported animation clip");
+            continue;
+        }
+
+        const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+        for (const RadientImport::ImportedAnimationSkinMapping& SkinMapping : ImportedAnimation.SkinMappings)
+        {
+            if (SkinMapping.SkinIndex >= SkinPoses.size() || SkinMapping.SkinIndex >= SkinEntities.size())
             {
-                LOG_WARNING_MESSAGE("Skipping a null skeleton animation in imported animation '",
-                                    ImportedAnimation.Name, "'");
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' because its skin mapping is invalid");
                 continue;
             }
 
-            IRadientSkeletonAsset* const pAnimationSkeleton = pAnimation->GetDesc().pSkeleton;
-            if (pAnimationSkeleton == nullptr)
+            IRadientSkeletonPose* const         pPose     = SkinPoses[SkinMapping.SkinIndex];
+            const std::vector<RadientEntityID>& Entities = SkinEntities[SkinMapping.SkinIndex];
+            if (pPose == nullptr || Entities.empty())
+                continue;
+
+            RefCntAutoPtr<IRadientAnimationDestination> pDestination;
+            pPose->QueryInterface(IID_RadientAnimationDestination, pDestination.GetAddressOfEmpty());
+            if (pDestination == nullptr)
             {
-                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
-                                    "' because it does not reference a skeleton");
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' because the skeleton pose does not expose an animation destination");
                 continue;
             }
 
-            const auto EntitiesIt = SkeletonEntities.find(pAnimationSkeleton);
-            if (EntitiesIt == SkeletonEntities.end())
+            RadientAnimationDestinationDesc DestinationDesc{};
+            DestinationDesc.pDestination = pDestination;
+            DestinationDesc.pMappings    = SkinMapping.JointMappings.data();
+            DestinationDesc.MappingCount = static_cast<Uint32>(SkinMapping.JointMappings.size());
+
+            RadientAnimationBindingDesc BindingDesc{};
+            BindingDesc.pDestinations    = &DestinationDesc;
+            BindingDesc.DestinationCount = 1;
+
+            RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+            RADIENT_STATUS Status = ImportedAnimation.pClip->CreateBinding(
+                BindingDesc, pBinding.GetAddressOfEmpty());
+            if (Status != RADIENT_STATUS_OK || pBinding == nullptr)
             {
-                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
-                                    "' because its skeleton is not instantiated in the scene");
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' because it could not be bound to an instantiated skeleton pose");
                 continue;
             }
 
-            const std::vector<RadientEntityID>& Entities = EntitiesIt->second;
-            const RADIENT_STATUS                Status   = Registry.AddAnimatedEntities(
-                pAnimation, Entities.data(), static_cast<Uint32>(Entities.size()));
-            if (Status == RADIENT_STATUS_NOT_FOUND)
+            Status = Registry.AddAnimationBinding(
+                pBinding,
+                Entities.data(),
+                static_cast<Uint32>(Entities.size()));
+            if (Status != RADIENT_STATUS_OK && Status != RADIENT_STATUS_NO_CHANGE)
             {
-                // AddAnimatedEntities validates the complete batch before
-                // changing the registry, so there is nothing to undo.
-                LOG_WARNING_MESSAGE("Skipping skeleton animation '", pAnimation->GetDesc().Name,
-                                    "' because a target entity does not have a skin component");
-                continue;
-            }
-            if (RADIENT_FAILED(Status))
-            {
-                Rollback();
-                return Status;
-            }
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' because its binding could not be registered");
 
-            if (Status == RADIENT_STATUS_OK)
-                AppliedRegistrations.push_back({pAnimation, &Entities});
+                // AddAnimationBinding implementations may have changed part of
+                // the registry before reporting a failure. Remove this binding
+                // as a best-effort cleanup without disturbing earlier bindings.
+                const RADIENT_STATUS CleanupStatus = Registry.RemoveAnimationBinding(
+                    pBinding, Entities.data(), static_cast<Uint32>(Entities.size()));
+                if (CleanupStatus != RADIENT_STATUS_OK && CleanupStatus != RADIENT_STATUS_NO_CHANGE)
+                {
+                    LOG_WARNING_MESSAGE("Unable to clean up the failed animation binding for clip '",
+                                        ClipDesc.Name, "'");
+                }
+            }
         }
     }
-
-    return RADIENT_STATUS_OK;
 }
 
 Uint32 GetDefaultSceneIndex(const GLTF::Model& Model)
@@ -1550,24 +1338,20 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
     if (ResolvedSceneIndex < Scene.Scenes.size())
     {
         std::vector<RefCntAutoPtr<IRadientSkeletonPose>> SkinPoses(Scene.Skins.size());
-        SkeletonEntityMap                                SkeletonEntities;
+        SkinEntityLists                                  SkinEntities;
         if (pAnimationRegistry != nullptr)
-            SkeletonEntities.reserve(Scene.Skins.size());
+            SkinEntities.resize(Scene.Skins.size());
 
         for (Uint32 NodeIndex : Scene.Scenes[ResolvedSceneIndex].RootNodes)
         {
             Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, RadientMatrix4x4{}, SkinPoses,
-                                pAnimationRegistry != nullptr ? &SkeletonEntities : nullptr);
+                                pAnimationRegistry != nullptr ? &SkinEntities : nullptr);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
 
         if (pAnimationRegistry != nullptr)
-        {
-            Status = RegisterSceneAnimations(Scene, SkeletonEntities, *pAnimationRegistry);
-            if (RADIENT_FAILED(Status))
-                return Status;
-        }
+            RegisterSceneAnimations(Scene, SkinPoses, SkinEntities, *pAnimationRegistry);
     }
 
     return RADIENT_STATUS_OK;

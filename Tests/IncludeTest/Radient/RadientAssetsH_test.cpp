@@ -37,8 +37,7 @@ static_assert(RADIENT_ASSET_TYPE_SCENE == 3, "Unexpected RADIENT_ASSET_TYPE_SCEN
 static_assert(RADIENT_ASSET_TYPE_MATERIAL_DEFINITION == 4, "Unexpected RADIENT_ASSET_TYPE_MATERIAL_DEFINITION value");
 static_assert(RADIENT_ASSET_TYPE_SKELETON == 5, "Unexpected RADIENT_ASSET_TYPE_SKELETON value");
 static_assert(RADIENT_ASSET_TYPE_SKIN == 6, "Unexpected RADIENT_ASSET_TYPE_SKIN value");
-static_assert(RADIENT_ASSET_TYPE_SKELETON_ANIMATION == 7, "Unexpected RADIENT_ASSET_TYPE_SKELETON_ANIMATION value");
-static_assert(RADIENT_ASSET_TYPE_ANIMATION_CLIP == 8, "Unexpected RADIENT_ASSET_TYPE_ANIMATION_CLIP value");
+static_assert(RADIENT_ASSET_TYPE_ANIMATION_CLIP == 7, "Unexpected RADIENT_ASSET_TYPE_ANIMATION_CLIP value");
 
 static_assert(RADIENT_SCENE_FORMAT_AUTO == 0, "Unexpected RADIENT_SCENE_FORMAT_AUTO value");
 static_assert(RADIENT_SCENE_FORMAT_GLTF == 1, "Unexpected RADIENT_SCENE_FORMAT_GLTF value");
@@ -79,4 +78,14 @@ void RadientAssets_CPP_UseAnimationClipFactory(IRadientAssetManager*           p
                                                IRadientAnimationClipAsset**    ppClip)
 {
     (void)pAssetManager->CreateAnimationClip(ClipDesc, ppClip);
+}
+
+void RadientAssets_CPP_UseSceneAnimationClips(IRadientSceneAsset* pScene)
+{
+    const RadientSceneAssetDesc& Desc = pScene->GetDesc();
+    if (Desc.AnimationClipCount != 0)
+    {
+        IRadientAnimationClipAsset* pClip = Desc.ppAnimationClips[0];
+        (void)pClip;
+    }
 }

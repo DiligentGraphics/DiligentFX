@@ -33,6 +33,11 @@ namespace
 
 using namespace Diligent;
 
+static_assert(sizeof(RADIENT_ANIMATION_INTERPOLATION) == sizeof(Uint8), "Unexpected RADIENT_ANIMATION_INTERPOLATION size");
+static_assert(RADIENT_ANIMATION_INTERPOLATION_STEP == 0, "Unexpected STEP animation interpolation value");
+static_assert(RADIENT_ANIMATION_INTERPOLATION_LINEAR == 1, "Unexpected LINEAR animation interpolation value");
+static_assert(RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE == 2, "Unexpected CUBIC_SPLINE animation interpolation value");
+static_assert(RADIENT_ANIMATION_INTERPOLATION_COUNT == 3, "Unexpected animation interpolation count");
 static_assert(sizeof(RADIENT_ANIMATION_VALUE_TYPE) == sizeof(Uint8), "Unexpected RADIENT_ANIMATION_VALUE_TYPE size");
 static_assert(RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN == 0, "Unexpected UNKNOWN animation value type");
 static_assert(RADIENT_ANIMATION_VALUE_TYPE_BOOL == 1, "Unexpected BOOL animation value type");
@@ -120,8 +125,6 @@ static_assert(std::is_standard_layout<RadientAnimationBindingDesc>::value, "Radi
 static_assert(std::is_trivially_copyable<RadientAnimationBindingDesc>::value, "RadientAnimationBindingDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationEvaluateInfo>::value, "RadientAnimationEvaluateInfo must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationEvaluateInfo>::value, "RadientAnimationEvaluateInfo must be trivially copyable");
-static_assert(std::is_standard_layout<RadientAnimationTarget>::value, "RadientAnimationTarget must be a standard-layout type");
-static_assert(std::is_trivially_copyable<RadientAnimationTarget>::value, "RadientAnimationTarget must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationRegistryEntry>::value, "RadientAnimationRegistryEntry must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationRegistryEntry>::value, "RadientAnimationRegistryEntry must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationRegistryState>::value, "RadientAnimationRegistryState must be a standard-layout type");
@@ -211,13 +214,10 @@ constexpr RadientAnimationEvaluateInfo DefaultEvaluateInfo{};
 static_assert(DefaultEvaluateInfo.Time == 0.f, "Unexpected RadientAnimationEvaluateInfo time default value");
 static_assert(DefaultEvaluateInfo.UpdateDerivedState == True, "Unexpected RadientAnimationEvaluateInfo derived-state default value");
 
-constexpr RadientAnimationTarget DefaultTarget{};
-static_assert(DefaultTarget.pPose == nullptr, "Unexpected RadientAnimationTarget pose default value");
-
 constexpr RadientAnimationRegistryEntry DefaultEntry{};
-static_assert(DefaultEntry.pAnimation == nullptr, "Unexpected RadientAnimationRegistryEntry animation default value");
-static_assert(DefaultEntry.pTargets == nullptr, "Unexpected RadientAnimationRegistryEntry targets default value");
-static_assert(DefaultEntry.TargetCount == 0, "Unexpected RadientAnimationRegistryEntry target count default value");
+static_assert(DefaultEntry.pClip == nullptr, "Unexpected RadientAnimationRegistryEntry clip default value");
+static_assert(DefaultEntry.ppBindings == nullptr, "Unexpected RadientAnimationRegistryEntry bindings default value");
+static_assert(DefaultEntry.BindingCount == 0, "Unexpected RadientAnimationRegistryEntry binding count default value");
 
 constexpr RadientAnimationRegistryState DefaultState{};
 static_assert(DefaultState.Revision == 0, "Unexpected RadientAnimationRegistryState revision default value");
@@ -276,17 +276,18 @@ void RadientAnimation_CPP_UseBindingInterface(Diligent::IRadientAnimationBinding
     (void)Status;
 }
 
-void RadientAnimation_CPP_UseInterface(Diligent::IRadientAnimationRegistry*      pRegistry,
-                                       Diligent::IRadientSkeletonAnimationAsset* pAnimation)
+void RadientAnimation_CPP_UseInterface(Diligent::IRadientAnimationRegistry*  pRegistry,
+                                       Diligent::IRadientAnimationBinding*   pBinding,
+                                       Diligent::IRadientAnimationClipAsset* pClip)
 {
     using namespace Diligent;
 
     const RadientEntityID Entity = 1;
     (void)pRegistry->GetScene();
-    RADIENT_STATUS Status = pRegistry->AddAnimatedEntities(pAnimation, &Entity, 1);
-    Status                = pRegistry->RemoveAnimatedEntities(pAnimation, &Entity, 1);
+    RADIENT_STATUS Status = pRegistry->AddAnimationBinding(pBinding, &Entity, 1);
+    Status                = pRegistry->RemoveAnimationBinding(pBinding, &Entity, 1);
     Status                = pRegistry->RemoveEntity(Entity);
-    Status                = pRegistry->RemoveAnimation(pAnimation);
+    Status                = pRegistry->RemoveAnimationClip(pClip);
     (void)pRegistry->GetState();
 
     (void)Status;

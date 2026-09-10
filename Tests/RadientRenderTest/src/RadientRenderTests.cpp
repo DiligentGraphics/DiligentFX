@@ -38,7 +38,6 @@
 #include "GraphicsAccessories.hpp"
 #include "Render/RadientPBRRenderer.hpp"
 #include "RadientEngine.h"
-#include "RadientSkinning.h"
 #include "RefCntAutoPtr.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "gtest/gtest.h"
@@ -328,26 +327,29 @@ public:
         for (Uint32 EntryIndex = 0; EntryIndex < RegistryState.EntryCount; ++EntryIndex)
         {
             const RadientAnimationRegistryEntry& Entry = RegistryState.pEntries[EntryIndex];
-            if (Entry.pAnimation == nullptr)
+            if (Entry.pClip == nullptr)
                 return RADIENT_STATUS_INVALID_OPERATION;
 
-            const RadientSkeletonAnimationDesc& AnimationDesc = Entry.pAnimation->GetDesc();
+            const RadientAnimationClipDesc& AnimationDesc = Entry.pClip->GetDesc();
             if (std::strcmp(AnimationDesc.Name, AnimationSettings.Name.c_str()) != 0)
                 continue;
 
             AnimationFound = true;
             if (AnimationSettings.Time > AnimationDesc.Duration)
                 return RADIENT_STATUS_INVALID_ARGUMENT;
-            if (Entry.TargetCount == 0)
+            if (Entry.BindingCount == 0)
                 return RADIENT_STATUS_INVALID_OPERATION;
 
-            for (Uint32 TargetIndex = 0; TargetIndex < Entry.TargetCount; ++TargetIndex)
+            for (Uint32 BindingIndex = 0; BindingIndex < Entry.BindingCount; ++BindingIndex)
             {
-                IRadientSkeletonPose* const pPose = Entry.pTargets[TargetIndex].pPose;
-                if (pPose == nullptr)
+                IRadientAnimationBinding* const pBinding = Entry.ppBindings[BindingIndex];
+                if (pBinding == nullptr || pBinding->GetClip() != Entry.pClip)
                     return RADIENT_STATUS_INVALID_OPERATION;
 
-                const RADIENT_STATUS Status = Entry.pAnimation->Evaluate(AnimationSettings.Time, pPose, True);
+                RadientAnimationEvaluateInfo EvaluateInfo{};
+                EvaluateInfo.Time               = AnimationSettings.Time;
+                EvaluateInfo.UpdateDerivedState = True;
+                const RADIENT_STATUS Status     = pBinding->Evaluate(EvaluateInfo);
                 if (RADIENT_FAILED(Status))
                     return Status;
             }

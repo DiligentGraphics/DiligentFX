@@ -28,22 +28,20 @@
 
 void RadientAssets_C_UseTypes(void)
 {
-    RadientAssetManagerDesc              AssetManagerDesc    = {0};
-    RadientAssetManagerCreateInfo        AssetManagerCI      = {0};
-    RadientMeshPrimitiveCreateInfo       Primitive           = {0};
-    RadientMeshCreateInfo                MeshCI              = {0};
-    RadientMeshAssetDesc                 MeshDesc            = {0};
-    RadientTextureLoadInfo               TextureLoadInfo     = {0};
-    RadientSceneLoadInfo                 SceneLoadInfo       = {0};
-    RadientSceneAssetDesc                SceneAssetDesc      = {0};
-    RadientSceneAnimationDesc            SceneAnimation      = {0};
-    RadientSceneSkeletonAnimationBinding SkeletonAnimation   = {0};
-    RadientAssetReference                Asset               = {0};
-    IRadientMeshAsset*                   pMesh               = 0;
-    IRadientMaterialDefinitionAsset*     pMaterialDefinition = 0;
-    IRadientMaterialAsset*               pMaterial           = 0;
-    IRadientTextureAsset*                pTexture            = 0;
-    IRadientSceneAsset*                  pScene              = 0;
+    RadientAssetManagerDesc          AssetManagerDesc    = {0};
+    RadientAssetManagerCreateInfo    AssetManagerCI      = {0};
+    RadientMeshPrimitiveCreateInfo   Primitive           = {0};
+    RadientMeshCreateInfo            MeshCI              = {0};
+    RadientMeshAssetDesc             MeshDesc            = {0};
+    RadientTextureLoadInfo           TextureLoadInfo     = {0};
+    RadientSceneLoadInfo             SceneLoadInfo       = {0};
+    RadientSceneAssetDesc            SceneAssetDesc      = {0};
+    RadientAssetReference            Asset               = {0};
+    IRadientMeshAsset*               pMesh               = 0;
+    IRadientMaterialDefinitionAsset* pMaterialDefinition = 0;
+    IRadientMaterialAsset*           pMaterial           = 0;
+    IRadientTextureAsset*            pTexture            = 0;
+    IRadientSceneAsset*              pScene              = 0;
 
     (void)AssetManagerDesc;
     (void)AssetManagerCI;
@@ -53,8 +51,6 @@ void RadientAssets_C_UseTypes(void)
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
     (void)SceneAssetDesc;
-    (void)SceneAnimation;
-    (void)SkeletonAnimation;
     (void)Asset;
     (void)pMesh;
     (void)pMaterialDefinition;
@@ -92,6 +88,11 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
     if (pScene != 0)
     {
         const RadientSceneAssetDesc* pSceneDesc = IRadientSceneAsset_GetDesc(pScene);
+        if (pSceneDesc->AnimationClipCount != 0)
+        {
+            IRadientAnimationClipAsset* pClip = pSceneDesc->ppAnimationClips[0];
+            (void)pClip;
+        }
         (void)pSceneDesc;
     }
 
