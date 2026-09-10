@@ -122,8 +122,8 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
                                             const std::shared_ptr<const GLTF::Document>& pDocument,
                                             Uint32                                       VertexCount);
 
-/// Converts GLTF scene metadata and immutable skin resources. pAssetManager is
-/// required when GLTFModel contains skins.
+/// Converts GLTF scene metadata and immutable animation and skin resources.
+/// pAssetManager is required when GLTFModel contains animations or skins.
 RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                                  RadientImport::ImportedDocument& Scene,
                                  IRadientAssetManager*            pAssetManager = nullptr);

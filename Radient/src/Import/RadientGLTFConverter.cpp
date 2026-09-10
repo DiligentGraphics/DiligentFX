@@ -31,6 +31,7 @@
 #include "Core/RadientValidation.hpp"
 #include "Import/RadientImportedScene.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientAnimation.h"
 #include "RadientMorphTargets.h"
 #include "RadientSceneWriter.h"
 #include "RadientSkinning.h"
@@ -68,6 +69,7 @@ namespace Diligent
 namespace
 {
 
+using RadientValidation::CheckedMultiply;
 using RadientValidation::IsAddressableArray;
 
 using SkeletonEntityMap = absl::flat_hash_map<IRadientSkeletonAsset*, std::vector<RadientEntityID>>;
@@ -418,6 +420,50 @@ RADIENT_STATUS GetRadientAnimationInterpolation(const GLTF::AnimationSampler&   
     }
 }
 
+RADIENT_STATUS GetAnimationSamplerLayout(const GLTF::AnimationSampler&    Sampler,
+                                         Uint32                           AnimationIndex,
+                                         Uint32                           SamplerIndex,
+                                         const char*                      ValueName,
+                                         Uint32                           ComponentCount,
+                                         RADIENT_ANIMATION_INTERPOLATION& Interpolation,
+                                         size_t&                          ValueCount)
+{
+    ValueCount = 0;
+    if (Sampler.Inputs.empty() || Sampler.Inputs.size() > std::numeric_limits<Uint32>::max())
+    {
+        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
+                          " has an invalid keyframe count");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    if (RADIENT_FAILED(GetRadientAnimationInterpolation(Sampler, Interpolation)))
+    {
+        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
+                          " uses an unsupported interpolation mode");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    const size_t ValuesPerKey = Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
+    if (!IsAddressableArray(Sampler.Inputs.size(), ValuesPerKey))
+    {
+        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
+                          " has too many ", ValueName, " values");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    ValueCount = Sampler.Inputs.size() * ValuesPerKey;
+    if (Sampler.OutputComponentCount != ComponentCount ||
+        Sampler.Outputs.size() % ComponentCount != 0 ||
+        Sampler.Outputs.size() / ComponentCount != ValueCount)
+    {
+        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
+                          " has an invalid number of ", ValueName, " values");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
 template <typename ValueType>
 struct AnimationCurveStorage
 {
@@ -472,38 +518,18 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
                           " channels for one skeleton joint");
         return RADIENT_STATUS_INVALID_DATA;
     }
-    if (Sampler.Inputs.empty() || Sampler.Inputs.size() > std::numeric_limits<Uint32>::max())
-    {
-        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
-                          " has an invalid keyframe count");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
-
     RADIENT_ANIMATION_INTERPOLATION Interpolation;
-    if (RADIENT_FAILED(GetRadientAnimationInterpolation(Sampler, Interpolation)))
-    {
-        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
-                          " uses an unsupported interpolation mode");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
-
-    const size_t ValuesPerKey = Interpolation == RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
-    if (!IsAddressableArray(Sampler.Inputs.size(), ValuesPerKey))
-    {
-        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
-                          " has too many ", CurveName, " values");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
-
-    const size_t ValueCount = Sampler.Inputs.size() * ValuesPerKey;
-    if (Sampler.OutputComponentCount != ComponentCount ||
-        Sampler.Outputs.size() % ComponentCount != 0 ||
-        Sampler.Outputs.size() / ComponentCount != ValueCount)
-    {
-        LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
-                          " has an invalid number of ", CurveName, " values");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
+    size_t                          ValueCount   = 0;
+    const RADIENT_STATUS            LayoutStatus = GetAnimationSamplerLayout(
+        Sampler,
+        AnimationIndex,
+        SamplerIndex,
+        CurveName,
+        ComponentCount,
+        Interpolation,
+        ValueCount);
+    if (RADIENT_FAILED(LayoutStatus))
+        return LayoutStatus;
 
     Curve.Interpolation = Interpolation;
     Curve.Times.resize(Sampler.Inputs.size());
@@ -514,6 +540,280 @@ RADIENT_STATUS InitializeAnimationCurve(const GLTF::AnimationSampler&     Sample
     for (size_t ValueIndex = 0; ValueIndex < ValueCount; ++ValueIndex)
         Curve.Values.push_back(ConvertValue(Sampler.GetOutputElement(ValueIndex)));
 
+    return RADIENT_STATUS_OK;
+}
+
+struct AnimationClipSamplerStorage
+{
+    Uint32                          SourceSamplerIndex = InvalidRadientAnimationSamplerIndex;
+    RADIENT_ANIMATION_VALUE_TYPE    ValueType          = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
+    RADIENT_ANIMATION_INTERPOLATION Interpolation      = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
+    std::vector<Float32>            Times;
+};
+
+struct SourceAnimationSamplerMapping
+{
+    Uint32                       ClipSamplerIndex = InvalidRadientAnimationSamplerIndex;
+    RADIENT_ANIMATION_VALUE_TYPE ValueType        = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
+};
+
+RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&                      Animation,
+                                               Uint32                                      AnimationIndex,
+                                               Uint32                                      SourceSamplerIndex,
+                                               const char*                                 ValueName,
+                                               RADIENT_ANIMATION_VALUE_TYPE                ValueType,
+                                               Uint32                                      ComponentCount,
+                                               Float32                                     AnimationStart,
+                                               std::vector<SourceAnimationSamplerMapping>& SourceMappings,
+                                               std::vector<AnimationClipSamplerStorage>&   Samplers,
+                                               Uint32&                                     ClipSamplerIndex)
+{
+    VERIFY_EXPR(SourceSamplerIndex < Animation.Samplers.size());
+    VERIFY_EXPR(SourceSamplerIndex < SourceMappings.size());
+
+    SourceAnimationSamplerMapping& Mapping = SourceMappings[SourceSamplerIndex];
+    if (Mapping.ClipSamplerIndex != InvalidRadientAnimationSamplerIndex)
+    {
+        if (Mapping.ValueType != ValueType)
+        {
+            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
+                              " is shared by channels with incompatible value types");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        ClipSamplerIndex = Mapping.ClipSamplerIndex;
+        return RADIENT_STATUS_OK;
+    }
+
+    if (Samplers.size() >= std::numeric_limits<Uint32>::max())
+        return RADIENT_STATUS_INVALID_DATA;
+
+    const GLTF::AnimationSampler&   Sampler = Animation.Samplers[SourceSamplerIndex];
+    RADIENT_ANIMATION_INTERPOLATION Interpolation;
+    size_t                          ValueCount   = 0;
+    const RADIENT_STATUS            LayoutStatus = GetAnimationSamplerLayout(
+        Sampler,
+        AnimationIndex,
+        SourceSamplerIndex,
+        ValueName,
+        ComponentCount,
+        Interpolation,
+        ValueCount);
+    if (RADIENT_FAILED(LayoutStatus))
+        return LayoutStatus;
+    VERIFY_EXPR(ValueCount != 0);
+
+    ClipSamplerIndex                     = static_cast<Uint32>(Samplers.size());
+    AnimationClipSamplerStorage& Storage = Samplers.emplace_back();
+    Storage.SourceSamplerIndex           = SourceSamplerIndex;
+    Storage.ValueType                    = ValueType;
+    Storage.Interpolation                = Interpolation;
+    Storage.Times.resize(Sampler.Inputs.size());
+    std::transform(Sampler.Inputs.begin(), Sampler.Inputs.end(), Storage.Times.begin(),
+                   [AnimationStart](Float32 Time) { return Time - AnimationStart; });
+
+    Mapping.ClipSamplerIndex = ClipSamplerIndex;
+    Mapping.ValueType        = ValueType;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS CreateImportedAnimationClip(
+    const GLTF::Model&                                        Model,
+    const GLTF::Animation&                                    Animation,
+    Uint32                                                    AnimationIndex,
+    Float32                                                   AnimationStart,
+    Float32                                                   Duration,
+    const std::vector<SkinImportContext>&                     SkinContexts,
+    IRadientAssetManager&                                     AssetManager,
+    RefCntAutoPtr<IRadientAnimationClipAsset>&                pResult,
+    std::vector<RadientImport::ImportedAnimationSkinMapping>& SkinMappings)
+{
+    pResult.Release();
+    SkinMappings.clear();
+
+    for (const SkinImportContext& SkinContext : SkinContexts)
+    {
+        if (SkinContext.NodeToSkeletonJoint.size() != Model.Nodes.size())
+            return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    std::vector<Uint32>                        NodeToTransformTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
+    std::vector<RadientAnimationTargetDesc>    Targets;
+    std::vector<Uint8>                         TargetPropertyMasks;
+    std::vector<AnimationClipSamplerStorage>   SamplerStorage;
+    std::vector<RadientAnimationChannelDesc>   Channels;
+    std::vector<SourceAnimationSamplerMapping> SourceSamplerMappings(Animation.Samplers.size());
+    Targets.reserve(Animation.Channels.size());
+    TargetPropertyMasks.reserve(Animation.Channels.size());
+    SamplerStorage.reserve(Animation.Samplers.size());
+    Channels.reserve(Animation.Channels.size());
+
+    for (const GLTF::AnimationChannel& Channel : Animation.Channels)
+    {
+        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::WEIGHTS)
+            continue;
+        if (Channel.SamplerIndex >= Animation.Samplers.size())
+        {
+            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " references invalid sampler ", Channel.SamplerIndex);
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        Uint32 NodeIndex;
+        if (!GetNodeIndex(Model, Channel.pNode, NodeIndex))
+        {
+            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " references an invalid target node");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        RadientAnimationPropertyID   Property;
+        RADIENT_ANIMATION_VALUE_TYPE ValueType;
+        Uint32                       ComponentCount;
+        Uint8                        PropertyMask;
+        const char*                  ValueName;
+        switch (Channel.PathType)
+        {
+            case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
+                Property       = RadientNodeTranslationProperty;
+                ValueType      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+                ComponentCount = 3;
+                PropertyMask   = 1u << 0u;
+                ValueName      = "translation";
+                break;
+
+            case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
+                Property       = RadientNodeRotationProperty;
+                ValueType      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
+                ComponentCount = 4;
+                PropertyMask   = 1u << 1u;
+                ValueName      = "rotation";
+                break;
+
+            case GLTF::AnimationChannel::PATH_TYPE::SCALE:
+                Property       = RadientNodeScaleProperty;
+                ValueType      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+                ComponentCount = 3;
+                PropertyMask   = 1u << 2u;
+                ValueName      = "scale";
+                break;
+
+            default:
+                continue;
+        }
+
+        Uint32& ClipTargetIndex = NodeToTransformTarget[NodeIndex];
+        if (ClipTargetIndex == InvalidRadientAnimationTargetIndex)
+        {
+            if (Targets.size() >= std::numeric_limits<Uint32>::max())
+                return RADIENT_STATUS_INVALID_DATA;
+
+            ClipTargetIndex                    = static_cast<Uint32>(Targets.size());
+            RadientAnimationTargetDesc& Target = Targets.emplace_back();
+            Target.Schema                      = RadientNodeAnimationSchemaID;
+            Target.Object                      = static_cast<RadientAnimationObjectID>(NodeIndex);
+            Target.Name                        = Model.Nodes[NodeIndex].Name.c_str();
+            TargetPropertyMasks.push_back(0);
+        }
+
+        Uint8& ExistingProperties = TargetPropertyMasks[ClipTargetIndex];
+        if ((ExistingProperties & PropertyMask) != 0)
+        {
+            LOG_ERROR_MESSAGE("GLTF animation ", AnimationIndex, " contains duplicate ", ValueName,
+                              " channels for one node");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+        ExistingProperties = static_cast<Uint8>(ExistingProperties | PropertyMask);
+
+        Uint32               ClipSamplerIndex = InvalidRadientAnimationSamplerIndex;
+        const RADIENT_STATUS SamplerStatus    = GetOrCreateAnimationClipSampler(
+            Animation,
+            AnimationIndex,
+            Channel.SamplerIndex,
+            ValueName,
+            ValueType,
+            ComponentCount,
+            AnimationStart,
+            SourceSamplerMappings,
+            SamplerStorage,
+            ClipSamplerIndex);
+        if (RADIENT_FAILED(SamplerStatus))
+            return SamplerStatus;
+
+        if (Channels.size() >= std::numeric_limits<Uint32>::max())
+            return RADIENT_STATUS_INVALID_DATA;
+
+        RadientAnimationChannelDesc& ChannelDesc = Channels.emplace_back();
+        ChannelDesc.TargetIndex                  = ClipTargetIndex;
+        ChannelDesc.Property                     = Property;
+        ChannelDesc.FirstArrayElement            = 0;
+        ChannelDesc.SamplerIndex                 = ClipSamplerIndex;
+    }
+
+    if (Channels.empty())
+        return RADIENT_STATUS_NO_CHANGE;
+
+    std::vector<RadientAnimationSamplerDesc> Samplers(SamplerStorage.size());
+    for (Uint32 SamplerIndex = 0; SamplerIndex < static_cast<Uint32>(SamplerStorage.size()); ++SamplerIndex)
+    {
+        const AnimationClipSamplerStorage& Storage = SamplerStorage[SamplerIndex];
+        const GLTF::AnimationSampler&      Source  = Animation.Samplers[Storage.SourceSamplerIndex];
+
+        Uint64 ValueDataSize = 0;
+        if (!CheckedMultiply(static_cast<Uint64>(Source.Outputs.size()), sizeof(Float32), ValueDataSize))
+            return RADIENT_STATUS_INVALID_DATA;
+
+        RadientAnimationSamplerDesc& Desc = Samplers[SamplerIndex];
+        Desc.Value.Type                   = Storage.ValueType;
+        Desc.Value.ArraySize              = 1;
+        Desc.Interpolation                = Storage.Interpolation;
+        Desc.pTimes                       = Storage.Times.data();
+        Desc.pValues                      = Source.Outputs.data();
+        Desc.ValueDataSize                = ValueDataSize;
+        Desc.KeyframeCount                = static_cast<Uint32>(Storage.Times.size());
+    }
+
+    RadientAnimationClipDesc ClipDesc{};
+    ClipDesc.Name         = Animation.Name.c_str();
+    ClipDesc.Duration     = Duration;
+    ClipDesc.pTargets     = Targets.data();
+    ClipDesc.TargetCount  = static_cast<Uint32>(Targets.size());
+    ClipDesc.pSamplers    = Samplers.data();
+    ClipDesc.SamplerCount = static_cast<Uint32>(Samplers.size());
+    ClipDesc.pChannels    = Channels.data();
+    ClipDesc.ChannelCount = static_cast<Uint32>(Channels.size());
+
+    const RADIENT_STATUS ClipStatus = AssetManager.CreateAnimationClip(ClipDesc, pResult.GetAddressOfEmpty());
+    if (RADIENT_FAILED(ClipStatus) || pResult == nullptr)
+        return RADIENT_FAILED(ClipStatus) ? ClipStatus : RADIENT_STATUS_FAILED;
+
+    std::vector<RadientImport::ImportedAnimationSkinMapping> PendingSkinMappings;
+    PendingSkinMappings.reserve(SkinContexts.size());
+    for (Uint32 SkinIndex = 0; SkinIndex < static_cast<Uint32>(SkinContexts.size()); ++SkinIndex)
+    {
+        const SkinImportContext&                    SkinContext = SkinContexts[SkinIndex];
+        RadientImport::ImportedAnimationSkinMapping Mapping;
+        Mapping.SkinIndex = SkinIndex;
+        Mapping.JointMappings.reserve(Targets.size());
+        for (Uint32 ClipTargetIndex = 0; ClipTargetIndex < static_cast<Uint32>(Targets.size()); ++ClipTargetIndex)
+        {
+            const RadientAnimationTargetDesc& Target = Targets[ClipTargetIndex];
+            if (Target.Schema != RadientNodeAnimationSchemaID)
+                continue;
+
+            const Uint32 NodeIndex  = static_cast<Uint32>(Target.Object);
+            const Uint32 JointIndex = SkinContext.NodeToSkeletonJoint[NodeIndex];
+            if (JointIndex == InvalidRadientJointIndex)
+                continue;
+
+            RadientAnimationDestinationMappingDesc& JointMapping = Mapping.JointMappings.emplace_back();
+            JointMapping.ClipTargetIndex                         = ClipTargetIndex;
+            JointMapping.DestinationElement                      = JointIndex;
+        }
+
+        if (!Mapping.JointMappings.empty())
+            PendingSkinMappings.emplace_back(std::move(Mapping));
+    }
+
+    SkinMappings = std::move(PendingSkinMappings);
     return RADIENT_STATUS_OK;
 }
 
@@ -632,7 +932,7 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
                                  RadientImport::ImportedDocument&      Scene)
 {
     Scene.Animations.clear();
-    if (Model.Animations.empty() || Model.Skins.empty())
+    if (Model.Animations.empty())
         return RADIENT_STATUS_OK;
     if (pAssetManager == nullptr || SkinContexts.size() != Model.Skins.size() || Scene.Skins.size() != Model.Skins.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -656,6 +956,19 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
         ImportedAnimation.Name     = Animation.Name;
         ImportedAnimation.Duration = Duration;
 
+        const RADIENT_STATUS ClipStatus = CreateImportedAnimationClip(
+            Model,
+            Animation,
+            AnimationIndex,
+            AnimationStart,
+            Duration,
+            SkinContexts,
+            *pAssetManager,
+            ImportedAnimation.pClip,
+            ImportedAnimation.SkinMappings);
+        if (RADIENT_FAILED(ClipStatus))
+            return ClipStatus;
+
         for (Uint32 SkinIndex = 0; SkinIndex < static_cast<Uint32>(Scene.Skins.size()); ++SkinIndex)
         {
             RefCntAutoPtr<IRadientSkeletonAnimationAsset> pSkeletonAnimation;
@@ -677,14 +990,14 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
             ImportedAnimation.AddSkeletonAnimation(std::move(pSkeletonAnimation));
         }
 
-        if (!ImportedAnimation.SkeletonAnimationBindings.empty())
+        if (ImportedAnimation.pClip != nullptr || !ImportedAnimation.SkeletonAnimationBindings.empty())
         {
             Scene.Animations.emplace_back(std::move(ImportedAnimation));
         }
         else if (!Animation.Channels.empty())
         {
             LOG_WARNING_MESSAGE("GLTF animation '", Animation.Name,
-                                "' does not target an imported skeleton and was not imported");
+                                "' does not contain supported node-transform channels and was not imported");
         }
     }
 

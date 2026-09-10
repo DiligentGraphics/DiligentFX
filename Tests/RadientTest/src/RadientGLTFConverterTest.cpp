@@ -25,6 +25,7 @@
  */
 
 #include "TempDirectory.hpp"
+#include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
 #include "Assets/RadientMaterialAssetManager.hpp"
@@ -327,6 +328,60 @@ void ExpectQuaternionNear(const RadientQuaternion& Value, const RadientQuaternio
     EXPECT_NEAR(Value.y, Reference.y, EPSILON);
     EXPECT_NEAR(Value.z, Reference.z, EPSILON);
     EXPECT_NEAR(Value.w, Reference.w, EPSILON);
+}
+
+Uint32 FindAnimationTargetIndex(const RadientAnimationClipDesc& Clip,
+                                const RadientAnimationSchemaID& Schema,
+                                RadientAnimationObjectID        Object)
+{
+    for (Uint32 TargetIndex = 0; TargetIndex < Clip.TargetCount; ++TargetIndex)
+    {
+        const RadientAnimationTargetDesc& Target = Clip.pTargets[TargetIndex];
+        if (Target.Schema == Schema && Target.Object == Object)
+            return TargetIndex;
+    }
+
+    return InvalidRadientAnimationTargetIndex;
+}
+
+const RadientAnimationChannelDesc* FindAnimationChannel(const RadientAnimationClipDesc& Clip,
+                                                        Uint32                          TargetIndex,
+                                                        RadientAnimationPropertyID      Property)
+{
+    for (Uint32 ChannelIndex = 0; ChannelIndex < Clip.ChannelCount; ++ChannelIndex)
+    {
+        const RadientAnimationChannelDesc& Channel = Clip.pChannels[ChannelIndex];
+        if (Channel.TargetIndex == TargetIndex && Channel.Property == Property)
+            return &Channel;
+    }
+
+    return nullptr;
+}
+
+const RadientImport::ImportedAnimationSkinMapping* FindAnimationSkinMapping(
+    const RadientImport::ImportedAnimation& Animation,
+    Uint32                                  SkinIndex)
+{
+    for (const RadientImport::ImportedAnimationSkinMapping& SkinMapping : Animation.SkinMappings)
+    {
+        if (SkinMapping.SkinIndex == SkinIndex)
+            return &SkinMapping;
+    }
+
+    return nullptr;
+}
+
+const RadientAnimationDestinationMappingDesc* FindJointMapping(
+    const RadientImport::ImportedAnimationSkinMapping& SkinMapping,
+    Uint32                                             ClipTargetIndex)
+{
+    for (const RadientAnimationDestinationMappingDesc& JointMapping : SkinMapping.JointMappings)
+    {
+        if (JointMapping.ClipTargetIndex == ClipTargetIndex)
+            return &JointMapping;
+    }
+
+    return nullptr;
 }
 
 void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexSourceResult& Result)
@@ -1475,6 +1530,100 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
     EXPECT_EQ(ImportedAnimation.Name, "Joint motion");
     EXPECT_FLOAT_EQ(ImportedAnimation.Duration, 2.f);
+
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Joint motion");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 2u);
+    ASSERT_NE(ClipDesc.pTargets, nullptr);
+    ASSERT_EQ(ClipDesc.SamplerCount, 3u);
+    ASSERT_NE(ClipDesc.pSamplers, nullptr);
+    ASSERT_EQ(ClipDesc.ChannelCount, 3u);
+    ASSERT_NE(ClipDesc.pChannels, nullptr);
+
+    const Uint32 JointATargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 2u);
+    const Uint32 JointBTargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 3u);
+    ASSERT_NE(JointATargetIndex, InvalidRadientAnimationTargetIndex);
+    ASSERT_NE(JointBTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[JointATargetIndex].Name, "JointA");
+    EXPECT_STREQ(ClipDesc.pTargets[JointBTargetIndex].Name, "JointB");
+
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, JointATargetIndex, RadientNodeTranslationProperty);
+    const RadientAnimationChannelDesc* const pRotationChannel =
+        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeRotationProperty);
+    const RadientAnimationChannelDesc* const pScaleChannel =
+        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeScaleProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_NE(pRotationChannel, nullptr);
+    ASSERT_NE(pScaleChannel, nullptr);
+    EXPECT_EQ(pTranslationChannel->FirstArrayElement, 0u);
+    EXPECT_EQ(pRotationChannel->FirstArrayElement, 0u);
+    EXPECT_EQ(pScaleChannel->FirstArrayElement, 0u);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    ASSERT_LT(pRotationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    ASSERT_LT(pScaleChannel->SamplerIndex, ClipDesc.SamplerCount);
+
+    const RadientAnimationSamplerDesc& TranslationSampler =
+        ClipDesc.pSamplers[pTranslationChannel->SamplerIndex];
+    EXPECT_EQ(TranslationSampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(TranslationSampler.Value.ArraySize, 1u);
+    EXPECT_EQ(TranslationSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+    ASSERT_EQ(TranslationSampler.KeyframeCount, 2u);
+    EXPECT_EQ(TranslationSampler.ValueDataSize, sizeof(RadientFloat3) * 2u);
+    ASSERT_NE(TranslationSampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(TranslationSampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(TranslationSampler.pTimes[1], 2.f);
+    ASSERT_NE(TranslationSampler.pValues, nullptr);
+    const auto* const pTranslations = static_cast<const RadientFloat3*>(TranslationSampler.pValues);
+    ExpectFloat3Near(pTranslations[0], {0.f, 0.f, 3.f});
+    ExpectFloat3Near(pTranslations[1], {2.f, 0.f, 3.f});
+
+    const RadientAnimationSamplerDesc& RotationSampler =
+        ClipDesc.pSamplers[pRotationChannel->SamplerIndex];
+    EXPECT_EQ(RotationSampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+    EXPECT_EQ(RotationSampler.Value.ArraySize, 1u);
+    EXPECT_EQ(RotationSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+    ASSERT_EQ(RotationSampler.KeyframeCount, 2u);
+    EXPECT_EQ(RotationSampler.ValueDataSize, sizeof(RadientQuaternion) * 6u);
+    ASSERT_NE(RotationSampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(RotationSampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(RotationSampler.pTimes[1], 2.f);
+    ASSERT_NE(RotationSampler.pValues, nullptr);
+    const auto* const pRotations = static_cast<const RadientQuaternion*>(RotationSampler.pValues);
+    ExpectQuaternionNear(pRotations[1], {0.f, 0.f, 0.f, 1.f});
+    ExpectQuaternionNear(pRotations[4], {0.f, 0.f, 1.f, 0.f});
+
+    const RadientAnimationSamplerDesc& ScaleSampler =
+        ClipDesc.pSamplers[pScaleChannel->SamplerIndex];
+    EXPECT_EQ(ScaleSampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(ScaleSampler.Value.ArraySize, 1u);
+    EXPECT_EQ(ScaleSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    ASSERT_EQ(ScaleSampler.KeyframeCount, 2u);
+    EXPECT_EQ(ScaleSampler.ValueDataSize, sizeof(RadientFloat3) * 2u);
+    ASSERT_NE(ScaleSampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(ScaleSampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(ScaleSampler.pTimes[1], 2.f);
+    ASSERT_NE(ScaleSampler.pValues, nullptr);
+    const auto* const pScales = static_cast<const RadientFloat3*>(ScaleSampler.pValues);
+    ExpectFloat3Near(pScales[0], {2.f, 3.f, 4.f});
+    ExpectFloat3Near(pScales[1], {5.f, 6.f, 7.f});
+
+    ASSERT_EQ(ImportedAnimation.SkinMappings.size(), 1u);
+    const RadientImport::ImportedAnimationSkinMapping* const pSkinMapping =
+        FindAnimationSkinMapping(ImportedAnimation, 0u);
+    ASSERT_NE(pSkinMapping, nullptr);
+    ASSERT_EQ(pSkinMapping->JointMappings.size(), 2u);
+    const RadientAnimationDestinationMappingDesc* const pJointAMapping =
+        FindJointMapping(*pSkinMapping, JointATargetIndex);
+    const RadientAnimationDestinationMappingDesc* const pJointBMapping =
+        FindJointMapping(*pSkinMapping, JointBTargetIndex);
+    ASSERT_NE(pJointAMapping, nullptr);
+    ASSERT_NE(pJointBMapping, nullptr);
+    EXPECT_EQ(pJointAMapping->DestinationElement, 2u);
+    EXPECT_EQ(pJointBMapping->DestinationElement, 3u);
+
     ASSERT_EQ(ImportedAnimation.SkeletonAnimationBindings.size(), 1u);
     ASSERT_NE(ImportedAnimation.SkeletonAnimationBindings[0].pAnimation, nullptr);
 
@@ -1497,6 +1646,236 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     EXPECT_EQ(JointBTrack.Scale.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
     ASSERT_EQ(JointBTrack.Rotation.KeyframeCount, 2u);
     ASSERT_EQ(JointBTrack.Scale.KeyframeCount, 2u);
+}
+
+TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSkins)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Node motion";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {2.f, 4.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        1.f, 2.f, 3.f,
+        4.f, 5.f, 6.f};
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[1].Inputs               = {3.f, 5.f};
+    Animation.Samplers[1].OutputComponentCount = 3;
+    Animation.Samplers[1].Outputs              = {
+        1.f, 1.f, 1.f,
+        2.f, 2.f, 2.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 1);
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0]};
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    EXPECT_TRUE(Scene.Skins.empty());
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    EXPECT_EQ(ImportedAnimation.Name, "Node motion");
+    EXPECT_FLOAT_EQ(ImportedAnimation.Duration, 3.f);
+    EXPECT_TRUE(ImportedAnimation.SkinMappings.empty());
+    EXPECT_TRUE(ImportedAnimation.SkeletonAnimationBindings.empty());
+
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Node motion");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 3.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 2u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[NodeTargetIndex].Name, "AnimatedNode");
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+
+    const RadientAnimationSamplerDesc& Sampler = ClipDesc.pSamplers[pTranslationChannel->SamplerIndex];
+    EXPECT_EQ(Sampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(Sampler.Value.ArraySize, 1u);
+    EXPECT_EQ(Sampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+    ASSERT_EQ(Sampler.KeyframeCount, 2u);
+    ASSERT_NE(Sampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(Sampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(Sampler.pTimes[1], 2.f);
+
+    const RadientAnimationChannelDesc* const pScaleChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScaleProperty);
+    ASSERT_NE(pScaleChannel, nullptr);
+    ASSERT_LT(pScaleChannel->SamplerIndex, ClipDesc.SamplerCount);
+    const RadientAnimationSamplerDesc& ScaleSampler = ClipDesc.pSamplers[pScaleChannel->SamplerIndex];
+    EXPECT_EQ(ScaleSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    ASSERT_EQ(ScaleSampler.KeyframeCount, 2u);
+    ASSERT_NE(ScaleSampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(ScaleSampler.pTimes[0], 1.f);
+    EXPECT_FLOAT_EQ(ScaleSampler.pTimes[1], 3.f);
+}
+
+TEST(RadientGLTFConverterTest, GenericAnimationRetainsTargetsOutsideSkeletonMappings)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.reserve(3);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes.emplace_back(2);
+    Model.Nodes[0].Name     = "LooseNode";
+    Model.Nodes[1].Name     = "SkeletonRoot";
+    Model.Nodes[1].Children = {&Model.Nodes[2]};
+    Model.Nodes[2].Name     = "Joint";
+    Model.Nodes[2].Parent   = &Model.Nodes[1];
+
+    Model.Skins.resize(1);
+    Model.Skins[0].pSkeletonRoot = &Model.Nodes[1];
+    Model.Skins[0].Joints        = {&Model.Nodes[2]};
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Mixed motion";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f};
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[1].Inputs               = {0.f, 1.f};
+    Animation.Samplers[1].OutputComponentCount = 3;
+    Animation.Samplers[1].Outputs              = {
+        1.f, 1.f, 1.f,
+        2.f, 2.f, 2.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[1], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 1);
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[1]};
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 2u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 2u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+
+    const Uint32 RootTargetIndex  = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 1u);
+    const Uint32 LooseTargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(RootTargetIndex, InvalidRadientAnimationTargetIndex);
+    ASSERT_NE(LooseTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[RootTargetIndex].Name, "SkeletonRoot");
+    EXPECT_STREQ(ClipDesc.pTargets[LooseTargetIndex].Name, "LooseNode");
+    EXPECT_NE(FindAnimationChannel(ClipDesc, RootTargetIndex, RadientNodeTranslationProperty), nullptr);
+    EXPECT_NE(FindAnimationChannel(ClipDesc, LooseTargetIndex, RadientNodeScaleProperty), nullptr);
+
+    ASSERT_EQ(ImportedAnimation.SkinMappings.size(), 1u);
+    const RadientImport::ImportedAnimationSkinMapping* const pSkinMapping =
+        FindAnimationSkinMapping(ImportedAnimation, 0u);
+    ASSERT_NE(pSkinMapping, nullptr);
+    ASSERT_EQ(pSkinMapping->JointMappings.size(), 1u);
+    const RadientAnimationDestinationMappingDesc* const pRootMapping =
+        FindJointMapping(*pSkinMapping, RootTargetIndex);
+    ASSERT_NE(pRootMapping, nullptr);
+    EXPECT_EQ(pRootMapping->DestinationElement, 0u);
+    EXPECT_EQ(FindJointMapping(*pSkinMapping, LooseTargetIndex), nullptr);
+
+    ASSERT_EQ(ImportedAnimation.SkeletonAnimationBindings.size(), 1u);
+    ASSERT_NE(ImportedAnimation.SkeletonAnimationBindings[0].pAnimation, nullptr);
+}
+
+TEST(RadientGLTFConverterTest, GenericAnimationReusesCompatibleSourceSamplerAcrossProperties)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Shared sampler";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        1.f, 2.f, 3.f,
+        4.f, 5.f, 6.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 0);
+
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0]};
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+    EXPECT_TRUE(ImportedAnimation.SkinMappings.empty());
+
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+    const RadientAnimationChannelDesc* const pScaleChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScaleProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_NE(pScaleChannel, nullptr);
+    EXPECT_EQ(pTranslationChannel->SamplerIndex, pScaleChannel->SamplerIndex);
+    EXPECT_EQ(pTranslationChannel->SamplerIndex, 0u);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 1u);
+}
+
+TEST(RadientGLTFConverterTest, GenericAnimationRejectsSourceSamplerSharedAcrossIncompatibleValueTypes)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs               = {0.f, 1.f};
+    Animation.Samplers[0].OutputComponentCount = 3;
+    Animation.Samplers[0].Outputs              = {
+        0.f, 0.f, 0.f,
+        1.f, 1.f, 1.f};
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[0], 0);
+
+    RadientImport::ImportedDocument Scene;
+    TestingEnvironment::ErrorScope  ExpectedErrors{"shared by channels with incompatible value types"};
+    EXPECT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_INVALID_DATA);
+    EXPECT_TRUE(Scene.Animations.empty());
 }
 
 TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
@@ -1537,6 +1916,35 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
     ASSERT_EQ(Scene.Skins.size(), 2u);
     ASSERT_EQ(Scene.Animations.size(), 1u);
     ASSERT_EQ(Scene.Animations[0].SkeletonAnimationBindings.size(), 2u);
+
+    const RadientImport::ImportedAnimation& ImportedAnimation = Scene.Animations[0];
+    ASSERT_NE(ImportedAnimation.pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = ImportedAnimation.pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Shared motion");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 1.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+
+    const Uint32 JointTargetIndex = FindAnimationTargetIndex(ClipDesc, RadientNodeAnimationSchemaID, 1u);
+    ASSERT_NE(JointTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[JointTargetIndex].Name, "Joint");
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, JointTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+
+    ASSERT_EQ(ImportedAnimation.SkinMappings.size(), 2u);
+    for (Uint32 SkinIndex = 0; SkinIndex < 2; ++SkinIndex)
+    {
+        const RadientImport::ImportedAnimationSkinMapping* const pSkinMapping =
+            FindAnimationSkinMapping(ImportedAnimation, SkinIndex);
+        ASSERT_NE(pSkinMapping, nullptr);
+        ASSERT_EQ(pSkinMapping->JointMappings.size(), 1u);
+        const RadientAnimationDestinationMappingDesc* const pJointMapping =
+            FindJointMapping(*pSkinMapping, JointTargetIndex);
+        ASSERT_NE(pJointMapping, nullptr);
+        EXPECT_EQ(pJointMapping->DestinationElement, 1u);
+    }
 
     for (Uint32 SkinIndex = 0; SkinIndex < 2; ++SkinIndex)
     {

@@ -84,15 +84,20 @@ struct ImportedSceneStorage
     {
         Scene = std::move(ImportedScene);
 
-        AnimationDescs.resize(Scene.Animations.size());
-        for (size_t AnimationIndex = 0; AnimationIndex < Scene.Animations.size(); ++AnimationIndex)
+        AnimationDescs.clear();
+        AnimationDescs.reserve(Scene.Animations.size());
+        for (const RadientImport::ImportedAnimation& Animation : Scene.Animations)
         {
-            const RadientImport::ImportedAnimation& Animation     = Scene.Animations[AnimationIndex];
-            RadientSceneAnimationDesc&              AnimationDesc = AnimationDescs[AnimationIndex];
-            AnimationDesc.Name                                    = Animation.Name.c_str();
-            AnimationDesc.Duration                                = Animation.Duration;
-            AnimationDesc.pSkeletonAnimations                     = Animation.SkeletonAnimationBindings.empty() ? nullptr : Animation.SkeletonAnimationBindings.data();
-            AnimationDesc.SkeletonAnimationCount                  = static_cast<Uint32>(Animation.SkeletonAnimationBindings.size());
+            // Generic-only clips remain internal until the public scene
+            // animation catalog exposes IRadientAnimationClipAsset.
+            if (Animation.SkeletonAnimationBindings.empty())
+                continue;
+
+            RadientSceneAnimationDesc& AnimationDesc = AnimationDescs.emplace_back();
+            AnimationDesc.Name                       = Animation.Name.c_str();
+            AnimationDesc.Duration                   = Animation.Duration;
+            AnimationDesc.pSkeletonAnimations        = Animation.SkeletonAnimationBindings.data();
+            AnimationDesc.SkeletonAnimationCount     = static_cast<Uint32>(Animation.SkeletonAnimationBindings.size());
         }
         AssetDesc.pAnimations    = AnimationDescs.empty() ? nullptr : AnimationDescs.data();
         AssetDesc.AnimationCount = static_cast<Uint32>(AnimationDescs.size());

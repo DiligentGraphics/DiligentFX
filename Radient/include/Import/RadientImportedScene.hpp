@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "RadientAnimation.h"
 #include "RadientAssets.h"
 #include "RadientMaterials.h"
 #include "RadientScene.h"
@@ -78,6 +79,16 @@ struct ImportedScene
     std::vector<Uint32> RootNodes;
 };
 
+struct ImportedAnimationSkinMapping
+{
+    /// Index in ImportedDocument::Skins.
+    Uint32 SkinIndex = InvalidImportedSkinIndex;
+
+    /// Maps clip targets to skeleton joint indices. DestinationElement stores
+    /// the joint index used by the skin's skeleton-pose destination.
+    std::vector<RadientAnimationDestinationMappingDesc> JointMappings;
+};
+
 struct ImportedAnimation
 {
     void AddSkeletonAnimation(RefCntAutoPtr<IRadientSkeletonAnimationAsset> pAnimation)
@@ -88,6 +99,14 @@ struct ImportedAnimation
 
     std::string Name;
     Float32     Duration = 0.f;
+
+    /// Generic clip containing the imported node-transform channels from the
+    /// source animation. Target objects use source-document identities.
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+
+    /// Per-skin intersections between pClip targets and imported skeleton
+    /// joints. Skins that are not affected by this clip are omitted.
+    std::vector<ImportedAnimationSkinMapping> SkinMappings;
 
     std::vector<RefCntAutoPtr<IRadientSkeletonAnimationAsset>> SkeletonAnimationAssets;
     std::vector<RadientSceneSkeletonAnimationBinding>          SkeletonAnimationBindings;
