@@ -60,13 +60,13 @@ struct RadientSceneInstantiateInfo
 
     /// Optional external animation registry associated with the destination
     /// scene. When provided, the importer attempts to compile each clip against
-    /// its corresponding instantiated skeleton poses and per-node morph-target
-    /// weight objects, then registers the resulting bindings with their instance
-    /// entities. Binding and registration failures are logged and skipped,
-    /// leaving the scene usable without the affected animations. Other
-    /// currently unsupported targets remain available through the scene asset's
-    /// clip catalog but are not registered. GetScene() must return the
-    /// destination scene; otherwise, instantiation fails with
+    /// its instantiated scene-node transforms, corresponding skeleton poses,
+    /// and per-node morph-target weight objects, then registers the resulting
+    /// bindings with their scene instance. Binding and registration failures
+    /// are logged and skipped, leaving the scene usable without the affected
+    /// animations. Other currently unsupported targets remain available through
+    /// the scene asset's clip catalog but are not registered. GetScene() must
+    /// return the destination scene; otherwise, instantiation fails with
     /// RADIENT_STATUS_INVALID_ARGUMENT. The importer retains the registry while
     /// an asynchronous instantiation is pending. The caller is responsible for
     /// removing associations after later scene changes.

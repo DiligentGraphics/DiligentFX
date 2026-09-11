@@ -35,11 +35,33 @@ namespace Diligent
 RadientSceneWriterImpl::RadientSceneWriterImpl(IReferenceCounters* pRefCounters, RadientSceneImpl* pScene) :
     TBase{pRefCounters},
     m_pScene{pScene},
-    m_pState{pScene != nullptr ? pScene->m_pState : nullptr}
+    m_pState{pScene != nullptr ? pScene->m_pState : nullptr},
+    m_AnimationDestination{*this}
 {}
 
 RadientSceneWriterImpl::~RadientSceneWriterImpl()
 {
+}
+
+void RadientSceneWriterImpl::QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface)
+{
+    if (ppInterface == nullptr)
+        return;
+
+    if (IID == IID_RadientSceneWriter)
+    {
+        *ppInterface = static_cast<IRadientSceneWriter*>(this);
+        (*ppInterface)->AddRef();
+    }
+    else if (IID == IID_RadientAnimationDestination)
+    {
+        *ppInterface = static_cast<IRadientAnimationDestination*>(&m_AnimationDestination);
+        (*ppInterface)->AddRef();
+    }
+    else
+    {
+        TBase::QueryInterface(IID, ppInterface);
+    }
 }
 
 RefCntAutoPtr<IRadientSceneWriter> RadientSceneWriterImpl::Create(RadientSceneImpl* pScene)

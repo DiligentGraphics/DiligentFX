@@ -71,8 +71,8 @@ typedef Uint64 RadientAnimationObjectID;
 /// Schema-specific runtime element within an animation destination.
 ///
 /// For example, the node-animation schema uses a skeleton joint index in a
-/// skeleton-pose destination. A future scene destination may use a
-/// RadientEntityID instead.
+/// skeleton-pose destination and a RadientEntityID in a scene-writer
+/// destination.
 typedef Uint64 RadientAnimationDestinationElement;
 
 /// Invalid animation schema identifier. A target must use a schema ID other
@@ -579,8 +579,9 @@ struct RadientAnimationDestinationMappingDesc
     /// than RadientAnimationClipDesc::TargetCount.
     Uint32 ClipTargetIndex DEFAULT_INITIALIZER(InvalidRadientAnimationTargetIndex);
 
-    /// Schema-specific element within its containing pDestination. The current
-    /// skeleton-pose destination uses a zero-based joint index. Other
+    /// Schema-specific element within its containing pDestination. A node
+    /// target uses a zero-based joint index for a skeleton-pose destination or
+    /// a RadientEntityID for a scene-writer destination. Other schemas and
     /// destinations define their own element identities. Must not equal
     /// InvalidRadientAnimationDestinationElement.
     RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
@@ -592,9 +593,10 @@ typedef struct RadientAnimationDestinationMappingDesc RadientAnimationDestinatio
 struct RadientAnimationDestinationDesc
 {
     /// Aggregate object receiving the mapped property updates. A skeleton pose
-    /// exposes one destination for all of its joints. On successful
-    /// compilation, the returned destination binding retains this interface.
-    /// The pointer must not be null.
+    /// exposes one destination for all of its joints; a scene writer exposes
+    /// one for all entities in its scene. On successful compilation, the
+    /// returned destination binding retains this interface. The pointer must
+    /// not be null.
     IRadientAnimationDestination* pDestination DEFAULT_INITIALIZER(nullptr);
 
     /// Array of MappingCount symbolic-target-to-element mappings. It must not
@@ -665,10 +667,30 @@ typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
 /// pPoseDestination->Release(); // The binding retained it on success.
 /// \endcode
 ///
-/// Root-joint animation uses the same mapping as any other skeleton joint.
-/// A future scene destination can bind the same authored node target to a scene
-/// entity without adding another clip or binding type. Root-motion extraction
-/// and redirection remain caller or future player/mixer policies.
+/// For a scene-node transform, the corresponding core fields are:
+///
+/// \code
+/// IRadientAnimationDestination* pSceneDestination = nullptr;
+/// pSceneWriter->QueryInterface(IID_RadientAnimationDestination,
+///                              &pSceneDestination);
+///
+/// RadientAnimationDestinationMappingDesc RootMapping{};
+/// RootMapping.ClipTargetIndex    = RootTargetIndex;
+/// RootMapping.DestinationElement = RootEntity;
+///
+/// RadientAnimationDestinationDesc SceneDestination{};
+/// SceneDestination.pDestination = pSceneDestination;
+/// SceneDestination.pMappings    = &RootMapping;
+/// SceneDestination.MappingCount = 1;
+/// \endcode
+///
+/// SceneDestination replaces PoseDestination in the complete binding example
+/// above. Release pSceneDestination after CreateBinding() returns, just like
+/// pPoseDestination.
+///
+/// Root animation is the same mapping with the root joint or root entity;
+/// root-motion extraction and redirection remain caller or future player/mixer
+/// policies.
 struct RadientAnimationBindingDesc
 {
     /// Array of DestinationCount aggregate destinations. It must be null
@@ -693,7 +715,8 @@ struct RadientAnimationEvaluateInfo
     /// Passed to each destination binding's EndUpdate() after all values for
     /// that destination have been sampled. True requests one
     /// destination-specific derived-state update for the complete property
-    /// batch. For a skeleton pose, this propagates global transforms once.
+    /// batch. For a skeleton pose, this propagates global transforms once; for
+    /// a scene writer, it commits pending derived scene state once.
     Bool UpdateDerivedState DEFAULT_INITIALIZER(True);
 };
 typedef struct RadientAnimationEvaluateInfo RadientAnimationEvaluateInfo;
@@ -730,6 +753,7 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// This interface is the only runtime extension point required by the generic
 /// animation system. Radient-created skeleton poses expose it through
 /// QueryInterface() for node translation, rotation, and scale properties.
+/// Radient-created scene writers expose the same properties for scene entities.
 /// Radient-created morph-target weight objects expose it for morph-weight
 /// array ranges. Custom destinations may implement it for material, light,
 /// camera, application, or extension properties. The interface is externally
@@ -844,6 +868,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     /// this call. The output array and every address in it remain valid only
     /// until the matching EndUpdate() returns and must not be retained by the
     /// caller.
+    /// While the bracket is open, the caller must not mutate the underlying
+    /// destination except by writing the returned property ranges; in particular,
+    /// it must not destroy elements or perform operations that may relocate the
+    /// exposed storage.
     ///
     /// A successful call opens an update bracket and must be followed by exactly
     /// one EndUpdate() call before BeginUpdate() is called again. On failure, no
@@ -864,7 +892,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     /// requests one destination-specific derived-state update after the complete
     /// property batch has been written. For example, a skeleton-pose destination
     /// propagates global transforms once for the complete joint batch when it is
-    /// true. When false, the destination must preserve the primary writes and may
+    /// true, while a scene-writer destination commits pending scene-derived state
+    /// once. When false, the destination must preserve the primary writes and may
     /// leave derived state dirty for a later aggregate update.
     ///
     /// A destination that returned staging storage from BeginUpdate() publishes

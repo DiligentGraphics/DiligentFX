@@ -2347,7 +2347,7 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
     EXPECT_NE(Scene.Skins[0]->GetDesc().pSkeleton, Scene.Skins[1]->GetDesc().pSkeleton);
 }
 
-TEST(RadientGLTFConverterTest, InstantiateSceneGraphRegistersGenericAnimationBinding)
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphAnimatesSceneNodeAndSkeletonPose)
 {
     RefCntAutoPtr<IRadientEngine> pEngine;
     ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -2446,13 +2446,111 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphRegistersGenericAnimationBin
     ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
                   ImportedScene, 0, *pWriter, RootEntity, pRegistry),
               RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 ChildCount = 0;
+    ASSERT_EQ(pScene->GetChildCount(RootEntity, ChildCount), RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildCount, 1u);
+    RadientEntityID AnimatedEntity    = InvalidRadientEntityID;
+    Uint32          ChildrenRetrieved = 0;
+    ASSERT_EQ(pScene->GetChildren(RootEntity, 0, 1, &AnimatedEntity, ChildrenRetrieved), RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildrenRetrieved, 1u);
+    ASSERT_NE(AnimatedEntity, InvalidRadientEntityID);
 
     const RadientAnimationRegistryState& RegistryState = pRegistry->GetState();
     ASSERT_EQ(RegistryState.EntryCount, 1u);
     EXPECT_EQ(RegistryState.pEntries[0].pClip, pClip);
-    EXPECT_EQ(RegistryState.pEntries[0].BindingCount, 1u);
-    ASSERT_NE(RegistryState.pEntries[0].ppBindings[0], nullptr);
-    EXPECT_EQ(RegistryState.pEntries[0].ppBindings[0]->GetClip(), pClip);
+    ASSERT_EQ(RegistryState.pEntries[0].BindingCount, 2u);
+
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    for (Uint32 BindingIndex = 0; BindingIndex < RegistryState.pEntries[0].BindingCount; ++BindingIndex)
+    {
+        IRadientAnimationBinding* const pBinding = RegistryState.pEntries[0].ppBindings[BindingIndex];
+        ASSERT_NE(pBinding, nullptr);
+        EXPECT_EQ(pBinding->GetClip(), pClip);
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    }
+
+    RadientTransform SceneTransform{};
+    ASSERT_EQ(pScene->GetLocalTransform(AnimatedEntity, SceneTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(SceneTransform.Position, {1.f, 2.f, 3.f});
+
+    RadientSkinComponent Skin{};
+    ASSERT_EQ(pScene->GetSkin(AnimatedEntity, Skin), RADIENT_STATUS_OK);
+    ASSERT_NE(Skin.pPose, nullptr);
+    RadientTransform PoseTransform{};
+    ASSERT_EQ(Skin.pPose->GetJointLocalTransforms(0, 1, &PoseTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(PoseTransform.Position, {1.f, 2.f, 3.f});
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphDoesNotRegisterUnsupportedOnlyNodeAnimation)
+{
+    constexpr RadientAnimationPropertyID UnsupportedNodeProperty = 1000;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    const std::array<Float32, 2> Times  = {0.f, 1.f};
+    const std::array<Float32, 2> Values = {0.f, 1.f};
+
+    RadientAnimationTargetDesc Target{};
+    Target.Schema = RadientNodeAnimationSchemaID;
+    Target.Object = 0;
+
+    RadientAnimationSamplerDesc Sampler{};
+    Sampler.Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+    Sampler.Value.ArraySize = 1;
+    Sampler.pTimes          = Times.data();
+    Sampler.pValues         = Values.data();
+    Sampler.ValueDataSize   = sizeof(Values);
+    Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
+
+    RadientAnimationChannelDesc Channel{};
+    Channel.TargetIndex  = 0;
+    Channel.Property     = UnsupportedNodeProperty;
+    Channel.SamplerIndex = 0;
+
+    RadientAnimationClipDesc ClipDesc{};
+    ClipDesc.Name         = "Unsupported node animation";
+    ClipDesc.Duration     = 1.f;
+    ClipDesc.pTargets     = &Target;
+    ClipDesc.TargetCount  = 1;
+    ClipDesc.pSamplers    = &Sampler;
+    ClipDesc.SamplerCount = 1;
+    ClipDesc.pChannels    = &Channel;
+    ClipDesc.ChannelCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, pClip.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientImport::ImportedDocument ImportedScene;
+    ImportedScene.Nodes.emplace_back();
+    ImportedScene.Scenes.emplace_back().RootNodes.push_back(0);
+    ImportedScene.Animations.emplace_back().pClip = pClip;
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAnimationRegistry> pRegistry;
+    ASSERT_EQ(pEngine->CreateAnimationRegistry(pScene, pRegistry.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
+                  ImportedScene, 0, *pWriter, RootEntity, pRegistry),
+              RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
 }
 
 TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsAnimationBindingFailures)
@@ -2587,8 +2685,8 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsAnimationBindingFailure
 
         if (FailRegistration)
         {
-            EXPECT_EQ(pFailingRegistry->AddCallCount, 1u);
-            EXPECT_EQ(pFailingRegistry->RemoveCallCount, 1u);
+            EXPECT_EQ(pFailingRegistry->AddCallCount, 2u);
+            EXPECT_EQ(pFailingRegistry->RemoveCallCount, 2u);
             EXPECT_TRUE(pFailingRegistry->RemovedAddedBinding);
         }
 
@@ -2599,13 +2697,13 @@ TEST(RadientGLTFConverterTest, InstantiateSceneGraphSkipsAnimationBindingFailure
         EXPECT_EQ(ChildCount, 1u);
     };
 
-    // A lone invalid binding leaves a usable static scene.
-    Instantiate({1}, 0, false);
+    // An invalid skeleton mapping does not discard the valid scene-node binding.
+    Instantiate({1}, 1, false);
 
-    // A later invalid binding does not discard an earlier valid binding.
-    Instantiate({0, 1}, 1, false);
+    // A valid skeleton mapping and the scene-node mapping are both registered.
+    Instantiate({0, 1}, 2, false);
 
-    // A registry failure is non-fatal and cleans up only the failed binding.
+    // Registry failures are non-fatal and clean up each failed binding.
     Instantiate({0}, 0, true);
 }
 

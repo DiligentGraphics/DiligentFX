@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Animation/RadientSceneAnimationDestinationImpl.hpp"
 #include "RadientSceneWriter.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -46,7 +47,8 @@ public:
     RadientSceneWriterImpl(IReferenceCounters* pRefCounters, RadientSceneImpl* pScene);
     ~RadientSceneWriterImpl();
 
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneWriter, TBase)
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final;
+    using IObject::QueryInterface;
 
     static RefCntAutoPtr<IRadientSceneWriter> Create(RadientSceneImpl* pScene);
 
@@ -100,8 +102,11 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CommitChanges() override final;
 
 private:
-    RefCntAutoPtr<IRadientScene>       m_pScene;
-    std::shared_ptr<RadientSceneState> m_pState;
+    friend class RadientSceneAnimationDestinationImpl;
+
+    RefCntAutoPtr<IRadientScene>         m_pScene;
+    std::shared_ptr<RadientSceneState>   m_pState;
+    RadientSceneAnimationDestinationImpl m_AnimationDestination;
 };
 
 } // namespace Diligent

@@ -25,6 +25,7 @@
  */
 
 #include "Animation/RadientSkeletonPoseImpl.hpp"
+#include "Animation/RadientNodeAnimationProperty.hpp"
 #include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 
@@ -49,78 +50,11 @@ static_assert(std::is_trivially_copyable<RadientTransform>::value,
 static_assert(std::is_trivially_copyable<RadientMatrix4x4>::value,
               "RadientMatrix4x4 must support byte-wise copying");
 
-enum class TransformField : Uint8
-{
-    Translation = 1u << 0,
-    Rotation    = 1u << 1,
-    Scale       = 1u << 2,
-};
-
 struct SkeletonPoseAnimationBindingEntry
 {
-    Uint32         JointIndex = InvalidRadientJointIndex;
-    TransformField Field      = TransformField::Translation;
+    Uint32                    JointIndex = InvalidRadientJointIndex;
+    RadientNodeTransformField Field      = RadientNodeTransformField::Translation;
 };
-
-RADIENT_STATUS ResolveAnimationProperty(
-    const RadientAnimationPropertyBindingDesc& Property,
-    Uint32                                     JointCount,
-    SkeletonPoseAnimationBindingEntry&         Entry,
-    RADIENT_ANIMATION_VALUE_SEMANTIC&          Semantic) noexcept
-{
-    Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
-
-    if (Property.Schema == InvalidRadientAnimationSchemaID ||
-        Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
-        Property.Property == InvalidRadientAnimationPropertyID ||
-        Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
-        Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
-        Property.Value.ArraySize == 0)
-    {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    if (Property.Schema != RadientNodeAnimationSchemaID)
-        return RADIENT_STATUS_UNSUPPORTED;
-
-    RADIENT_ANIMATION_VALUE_TYPE ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
-    switch (Property.Property)
-    {
-        case RadientNodeTranslationProperty:
-            Entry.Field  = TransformField::Translation;
-            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-            break;
-
-        case RadientNodeRotationProperty:
-            Entry.Field  = TransformField::Rotation;
-            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
-            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
-            break;
-
-        case RadientNodeScaleProperty:
-            Entry.Field  = TransformField::Scale;
-            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-            break;
-
-        default:
-            return RADIENT_STATUS_UNSUPPORTED;
-    }
-
-    if (Property.DestinationElement >= JointCount)
-        return RADIENT_STATUS_NOT_FOUND;
-
-    if (Property.Value.Type != ExpectedType ||
-        Property.Value.ArraySize != 1 ||
-        Property.FirstArrayElement != 0)
-    {
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    Entry.JointIndex = static_cast<Uint32>(Property.DestinationElement);
-    return RADIENT_STATUS_OK;
-}
 
 } // namespace
 
@@ -229,17 +163,19 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
         bool HasDuplicate = false;
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
         {
-            SkeletonPoseAnimationBindingEntry Entry;
-            RADIENT_ANIMATION_VALUE_SEMANTIC  Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
-            const RADIENT_STATUS              Status   = ResolveAnimationProperty(
-                pProperties[PropertyIndex],
-                JointCount,
-                Entry,
-                Semantic);
+            const RadientAnimationPropertyBindingDesc& Property = pProperties[PropertyIndex];
+            RadientNodeAnimationPropertyResolution     Resolution;
+            const RADIENT_STATUS                       Status = ResolveRadientNodeAnimationProperty(Property, Resolution);
             if (Status == RADIENT_STATUS_UNSUPPORTED)
                 continue;
             if (Status != RADIENT_STATUS_OK)
                 return Status;
+            if (Property.DestinationElement >= JointCount)
+                return RADIENT_STATUS_NOT_FOUND;
+
+            SkeletonPoseAnimationBindingEntry Entry;
+            Entry.JointIndex = static_cast<Uint32>(Property.DestinationElement);
+            Entry.Field      = Resolution.Field;
 
             const Uint8 TransformFieldMask = static_cast<Uint8>(Entry.Field);
             Uint8&      JointMask          = JointTransformFieldMasks[Entry.JointIndex];
@@ -247,24 +183,9 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
             JointMask                      = static_cast<Uint8>(JointMask | TransformFieldMask);
 
             RadientTransform& Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
-            void*             pOutput   = nullptr;
-            switch (Entry.Field)
-            {
-                case TransformField::Translation:
-                    pOutput = &Transform.Position;
-                    break;
-
-                case TransformField::Rotation:
-                    pOutput = &Transform.Rotation;
-                    break;
-
-                case TransformField::Scale:
-                    pOutput = &Transform.Scale;
-                    break;
-            }
-
+            void* const       pOutput   = GetRadientNodeTransformFieldAddress(Transform, Entry.Field);
             VERIFY_EXPR(pOutput != nullptr);
-            pResolvedProperties[PropertyIndex].Semantic = Semantic;
+            pResolvedProperties[PropertyIndex].Semantic = Resolution.Semantic;
             Outputs.push_back(pOutput);
         }
 

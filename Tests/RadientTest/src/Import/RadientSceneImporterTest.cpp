@@ -583,6 +583,75 @@ TEST(RadientSceneImporterTest, ExposesUnskinnedAnimationClip)
     EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
 }
 
+TEST(RadientSceneImporterTest, RegistersAndEvaluatesUnskinnedRootNodeAnimation)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFNodeAnimationFile(TempDir);
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+    ASSERT_NE(Fixture.pWriter, nullptr);
+    ASSERT_NE(Fixture.pAnimationRegistry, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name                     = "Animated scene instance";
+    InstantiateInfo.RootTransform.Position.x = 10.f;
+    InstantiateInfo.pAnimationRegistry       = Fixture.pAnimationRegistry;
+
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(ImportResult.pModel, nullptr);
+    ASSERT_NE(ImportResult.RootEntity, InvalidRadientEntityID);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneAssetDesc& SceneDesc = ImportResult.pModel->GetDesc();
+    ASSERT_EQ(SceneDesc.AnimationClipCount, 1u);
+    ASSERT_NE(SceneDesc.ppAnimationClips, nullptr);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip{SceneDesc.ppAnimationClips[0]};
+    ASSERT_NE(pClip, nullptr);
+
+    const std::vector<RadientEntityID> Nodes = GetChildren(*Fixture.pScene, ImportResult.RootEntity);
+    ASSERT_EQ(Nodes.size(), 1u);
+    const RadientEntityID AnimatedNode = Nodes[0];
+
+    RadientTransform Transform{};
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(ImportResult.RootEntity, Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {10.f, 0.f, 0.f});
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(AnimatedNode, Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {0.f, 0.f, 0.f});
+
+    const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
+        Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pRegistryEntry, nullptr);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 1u);
+    ASSERT_NE(pRegistryEntry->ppBindings, nullptr);
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+    EXPECT_EQ(pRegistryEntry->ppBindings[0]->GetClip(), pClip);
+
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    ASSERT_EQ(pRegistryEntry->ppBindings[0]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+
+    // The clip targets source node zero, which is the child below Radient's
+    // synthetic instance root. The instance transform must remain independent.
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(ImportResult.RootEntity, Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {10.f, 0.f, 0.f});
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(AnimatedNode, Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {3.f, 4.f, 5.f});
+    ExpectQuaternionNear(Transform.Rotation, RadientQuaternion{});
+    ExpectFloat3Near(Transform.Scale, {1.f, 1.f, 1.f});
+
+    RadientTransform ExpectedWorldTransform{};
+    ExpectedWorldTransform.Position = {13.f, 4.f, 5.f};
+    RadientMatrix4x4 WorldMatrix;
+    ASSERT_EQ(Fixture.pScene->GetCachedWorldMatrix(AnimatedNode, WorldMatrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(WorldMatrix, RadientMath::TransformToMatrix(ExpectedWorldTransform));
+}
+
 TEST(RadientSceneImporterTest, ImportsMorphTargetsAndNodeWeights)
 {
     TempDirectory     TempDir{"RadientSceneImporterTest"};
@@ -1364,10 +1433,28 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
         return Skins;
     };
 
+    const auto FindAnimatedSceneJoint = [&Fixture](RadientEntityID RootEntity) {
+        for (const RadientEntityID SourceRoot : GetChildren(*Fixture.pScene, RootEntity))
+        {
+            const std::vector<RadientEntityID> SourceRootChildren = GetChildren(*Fixture.pScene, SourceRoot);
+            if (SourceRootChildren.size() != 1u)
+                continue;
+
+            const std::vector<RadientEntityID> AncestorChildren =
+                GetChildren(*Fixture.pScene, SourceRootChildren[0]);
+            if (AncestorChildren.size() != 1u)
+                continue;
+
+            if (!GetChildren(*Fixture.pScene, AncestorChildren[0]).empty())
+                return AncestorChildren[0];
+        }
+        return InvalidRadientEntityID;
+    };
+
     const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
-    ASSERT_EQ(pRegistryEntry->BindingCount, 1u);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 2u);
 
     std::vector<CapturedSkin> Skins = CaptureSkins(ImportResult.RootEntity);
     ASSERT_EQ(Skins.size(), 2u);
@@ -1455,12 +1542,24 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ExpectFloat3Near(LocalTransforms[2].Position, {0.f, 0.f, 3.f});
     ExpectFloat3Near(LocalTransforms[3].Scale, {2.f, 3.f, 4.f});
 
+    const RadientEntityID FirstAnimatedSceneJoint = FindAnimatedSceneJoint(ImportResult.RootEntity);
+    ASSERT_NE(FirstAnimatedSceneJoint, InvalidRadientEntityID);
+    RadientTransform SceneJointTransform{};
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(FirstAnimatedSceneJoint, SceneJointTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(SceneJointTransform.Position, {0.f, 0.f, 3.f});
+
     RefCntAutoPtr<IRadientSkeletonPose> pFirstInstancePose = Skins[0].pPose;
     RadientAnimationEvaluateInfo        EvaluateInfo{};
     EvaluateInfo.Time = 1.f;
-    ASSERT_EQ(pRegistryEntry->ppBindings[0]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    for (Uint32 BindingIndex = 0; BindingIndex < pRegistryEntry->BindingCount; ++BindingIndex)
+    {
+        ASSERT_NE(pRegistryEntry->ppBindings[BindingIndex], nullptr);
+        ASSERT_EQ(pRegistryEntry->ppBindings[BindingIndex]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    }
     ASSERT_EQ(Skins[0].pPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
     ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(FirstAnimatedSceneJoint, SceneJointTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(SceneJointTransform.Position, {1.f, 0.f, 3.f});
 
     RadientSceneInstantiateInfo SecondInstantiateInfo{};
     SecondInstantiateInfo.Name               = "Second skinned instance";
@@ -1471,10 +1570,15 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     ASSERT_NE(SecondRoot, InvalidRadientEntityID);
     ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
+    const RadientEntityID SecondAnimatedSceneJoint = FindAnimatedSceneJoint(SecondRoot);
+    ASSERT_NE(SecondAnimatedSceneJoint, InvalidRadientEntityID);
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(SecondAnimatedSceneJoint, SceneJointTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(SceneJointTransform.Position, {0.f, 0.f, 3.f});
+
     pRegistryEntry = FindAnimationRegistryEntry(
         Fixture.pAnimationRegistry->GetState(), pImportedAnimation);
     ASSERT_NE(pRegistryEntry, nullptr);
-    ASSERT_EQ(pRegistryEntry->BindingCount, 2u);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 4u);
     Skins                                         = CaptureSkins(ImportResult.RootEntity);
     std::vector<CapturedSkin> SecondInstanceSkins = CaptureSkins(SecondRoot);
     Skins.insert(Skins.end(), SecondInstanceSkins.begin(), SecondInstanceSkins.end());
@@ -1504,9 +1608,6 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
     EXPECT_EQ(FirstPoseUseCount, 2u);
     EXPECT_EQ(SecondPoseUseCount, 2u);
 
-    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
-    ASSERT_NE(pRegistryEntry->ppBindings[1], nullptr);
-    EXPECT_NE(pRegistryEntry->ppBindings[0], pRegistryEntry->ppBindings[1]);
     for (Uint32 BindingIndex = 0; BindingIndex < pRegistryEntry->BindingCount; ++BindingIndex)
     {
         IRadientAnimationBinding* const pBinding = pRegistryEntry->ppBindings[BindingIndex];
@@ -1517,6 +1618,8 @@ TEST(RadientSceneImporterTest, RegistersSkinnedSceneInstancesForAnimation)
 
     ASSERT_EQ(pSecondPose->GetJointLocalTransforms(0, 4, LocalTransforms.data()), RADIENT_STATUS_OK);
     ExpectFloat3Near(LocalTransforms[2].Position, {1.f, 0.f, 3.f});
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(SecondAnimatedSceneJoint, SceneJointTransform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(SceneJointTransform.Position, {1.f, 0.f, 3.f});
 }
 
 } // namespace

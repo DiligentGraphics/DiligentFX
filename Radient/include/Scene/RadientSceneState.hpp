@@ -57,6 +57,8 @@
 namespace Diligent
 {
 
+class RadientSceneAnimationDestinationBindingImpl;
+
 // RadientSceneState is not internally synchronized. Access from multiple threads must be externally synchronized.
 // Enumeration callbacks must not mutate the scene or call methods that may update cached derived state.
 // Renderable data passed to enumeration callbacks references registry-owned storage and is valid only
@@ -189,6 +191,8 @@ public:
     RADIENT_STATUS CommitChanges();
 
 private:
+    friend class RadientSceneAnimationDestinationBindingImpl;
+
     enum DIRTY_FLAGS : Uint32
     {
         DIRTY_FLAG_NONE = 0u,

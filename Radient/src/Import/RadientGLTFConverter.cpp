@@ -64,6 +64,7 @@ using RadientValidation::CheckedMultiply;
 using RadientValidation::IsAddressableArray;
 
 using SkinEntityLists = std::vector<std::vector<RadientEntityID>>;
+using NodeEntityLists = std::vector<std::vector<RadientEntityID>>;
 
 struct MorphAnimationDestinationInstance
 {
@@ -879,6 +880,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
                           RadientEntityID                                   Parent,
                           const RadientMatrix4x4&                           ParentDocumentMatrix,
                           std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
+                          NodeEntityLists*                                  pNodeEntities,
                           SkinEntityLists*                                  pSkinEntities,
                           MorphAnimationDestinationLists*                   pMorphAnimationDestinations)
 {
@@ -899,6 +901,12 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     RADIENT_STATUS  Status     = Writer.CreateEntity(NodeDesc, NodeEntity);
     if (RADIENT_FAILED(Status))
         return Status;
+
+    if (pNodeEntities != nullptr)
+    {
+        VERIFY_EXPR(NodeIndex < pNodeEntities->size());
+        (*pNodeEntities)[NodeIndex].push_back(NodeEntity);
+    }
 
     if (Node.Camera)
     {
@@ -1037,7 +1045,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     for (Uint32 ChildIndex : Node.Children)
     {
         Status = CreateNode(Writer, Scene, ChildIndex, NodeEntity, NodeDocumentMatrix,
-                            SkinPoses, pSkinEntities, pMorphAnimationDestinations);
+                            SkinPoses, pNodeEntities, pSkinEntities, pMorphAnimationDestinations);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -1063,8 +1071,8 @@ void RegisterAnimationDestination(
     RADIENT_STATUS                          Status = Clip.CreateBinding(BindingDesc, pBinding.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK || pBinding == nullptr)
     {
-        LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
-                            "' because it could not be bound to ", DestinationDescription);
+        LOG_WARNING_MESSAGE("Skipping ", DestinationDescription, " binding for imported animation clip '",
+                            ClipDesc.Name, "' because it could not be created");
         return;
     }
 
@@ -1072,8 +1080,8 @@ void RegisterAnimationDestination(
     if (Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NO_CHANGE)
         return;
 
-    LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
-                        "' because its binding could not be registered");
+    LOG_WARNING_MESSAGE("Skipping ", DestinationDescription, " binding for imported animation clip '",
+                        ClipDesc.Name, "' because it could not be registered");
 
     // AddAnimationBinding implementations may have changed part of the
     // registry before reporting a failure. Remove this binding as a
@@ -1082,14 +1090,17 @@ void RegisterAnimationDestination(
         pBinding, pEntities, EntityCount);
     if (CleanupStatus != RADIENT_STATUS_OK && CleanupStatus != RADIENT_STATUS_NO_CHANGE)
     {
-        LOG_WARNING_MESSAGE("Unable to clean up the failed animation binding for clip '",
-                            ClipDesc.Name, "'");
+        LOG_WARNING_MESSAGE("Unable to clean up the failed ", DestinationDescription,
+                            " animation binding for clip '", ClipDesc.Name, "'");
     }
 }
 
 void RegisterSceneAnimations(
     const RadientImport::ImportedDocument&                  Scene,
     const std::vector<RefCntAutoPtr<IRadientSkeletonPose>>& SkinPoses,
+    IRadientAnimationDestination*                           pSceneDestination,
+    const NodeEntityLists&                                  NodeEntities,
+    RadientEntityID                                         SceneRootEntity,
     const SkinEntityLists&                                  SkinEntities,
     const MorphAnimationDestinationLists&                   MorphAnimationDestinations,
     IRadientAnimationRegistry&                              Registry)
@@ -1187,6 +1198,84 @@ void RegisterSceneAnimations(
                     "instantiated morph weights",
                     Registry);
             }
+        }
+
+        std::vector<bool> HasSceneTransformChannel(ClipDesc.TargetCount, false);
+        for (Uint32 ChannelIndex = 0; ChannelIndex < ClipDesc.ChannelCount; ++ChannelIndex)
+        {
+            const RadientAnimationChannelDesc& Channel = ClipDesc.pChannels[ChannelIndex];
+            switch (Channel.Property)
+            {
+                case RadientNodeTranslationProperty:
+                case RadientNodeRotationProperty:
+                case RadientNodeScaleProperty:
+                    HasSceneTransformChannel[Channel.TargetIndex] = true;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        std::vector<RadientAnimationDestinationMappingDesc> NodeMappings;
+        NodeMappings.reserve(ClipDesc.TargetCount);
+        bool MappingOverflow = false;
+        for (Uint32 ClipTargetIndex = 0; ClipTargetIndex < ClipDesc.TargetCount; ++ClipTargetIndex)
+        {
+            const RadientAnimationTargetDesc& Target = ClipDesc.pTargets[ClipTargetIndex];
+            if (Target.Schema != RadientNodeAnimationSchemaID || !HasSceneTransformChannel[ClipTargetIndex])
+                continue;
+
+            if (Target.Object >= NodeEntities.size())
+            {
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' target because it references an invalid source node");
+                continue;
+            }
+
+            for (RadientEntityID Entity : NodeEntities[static_cast<size_t>(Target.Object)])
+            {
+                if (Entity == InvalidRadientEntityID)
+                    continue;
+                if (NodeMappings.size() >= std::numeric_limits<Uint32>::max())
+                {
+                    MappingOverflow = true;
+                    break;
+                }
+
+                RadientAnimationDestinationMappingDesc& Mapping = NodeMappings.emplace_back();
+                Mapping.ClipTargetIndex                         = ClipTargetIndex;
+                Mapping.DestinationElement                      = Entity;
+            }
+
+            if (MappingOverflow)
+                break;
+        }
+
+        if (MappingOverflow)
+        {
+            LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                "' scene-node binding because it contains too many mappings");
+        }
+        else if (!NodeMappings.empty() && pSceneDestination == nullptr)
+        {
+            LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                "' scene-node binding because the scene writer does not expose an animation destination");
+        }
+        else if (!NodeMappings.empty())
+        {
+            RadientAnimationDestinationDesc DestinationDesc{};
+            DestinationDesc.pDestination = pSceneDestination;
+            DestinationDesc.pMappings    = NodeMappings.data();
+            DestinationDesc.MappingCount = static_cast<Uint32>(NodeMappings.size());
+
+            RegisterAnimationDestination(
+                *ImportedAnimation.pClip,
+                DestinationDesc,
+                &SceneRootEntity,
+                1,
+                "instantiated scene nodes",
+                Registry);
         }
     }
 }
@@ -1490,17 +1579,24 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
     if (ResolvedSceneIndex < Scene.Scenes.size())
     {
         std::vector<RefCntAutoPtr<IRadientSkeletonPose>> SkinPoses(Scene.Skins.size());
+        NodeEntityLists                                  NodeEntities;
         SkinEntityLists                                  SkinEntities;
         MorphAnimationDestinationLists                   MorphAnimationDestinations;
+        RefCntAutoPtr<IRadientAnimationDestination>      pSceneAnimationDestination;
         if (pAnimationRegistry != nullptr)
         {
+            NodeEntities.resize(Scene.Nodes.size());
             SkinEntities.resize(Scene.Skins.size());
             MorphAnimationDestinations.resize(Scene.Nodes.size());
+            Writer.QueryInterface(
+                IID_RadientAnimationDestination,
+                pSceneAnimationDestination.GetAddressOfEmpty());
         }
 
         for (Uint32 NodeIndex : Scene.Scenes[ResolvedSceneIndex].RootNodes)
         {
             Status = CreateNode(Writer, Scene, NodeIndex, RootEntity, RadientMatrix4x4{}, SkinPoses,
+                                pAnimationRegistry != nullptr ? &NodeEntities : nullptr,
                                 pAnimationRegistry != nullptr ? &SkinEntities : nullptr,
                                 pAnimationRegistry != nullptr ? &MorphAnimationDestinations : nullptr);
             if (RADIENT_FAILED(Status))
@@ -1510,7 +1606,8 @@ RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scen
         if (pAnimationRegistry != nullptr)
         {
             RegisterSceneAnimations(
-                Scene, SkinPoses, SkinEntities, MorphAnimationDestinations, *pAnimationRegistry);
+                Scene, SkinPoses, pSceneAnimationDestination, NodeEntities, RootEntity,
+                SkinEntities, MorphAnimationDestinations, *pAnimationRegistry);
         }
     }
 
