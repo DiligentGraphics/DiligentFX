@@ -90,6 +90,7 @@ static_assert(RadientNodeAnimationSchemaID.Data1 == 0xe4add320 &&
 static_assert(RadientNodeTranslationProperty == 1, "Unexpected node-translation property ID");
 static_assert(RadientNodeRotationProperty == 2, "Unexpected node-rotation property ID");
 static_assert(RadientNodeScaleProperty == 3, "Unexpected node-scale property ID");
+static_assert(RadientNodeVisibilityProperty == 4, "Unexpected node-visibility property ID");
 static_assert(RadientMorphWeightsAnimationSchemaID.Data1 == 0x8e3a3b5b &&
                   RadientMorphWeightsAnimationSchemaID.Data2 == 0x2267 &&
                   RadientMorphWeightsAnimationSchemaID.Data3 == 0x4e06 &&

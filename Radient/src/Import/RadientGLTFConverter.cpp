@@ -1200,7 +1200,7 @@ void RegisterSceneAnimations(
             }
         }
 
-        std::vector<bool> HasSceneTransformChannel(ClipDesc.TargetCount, false);
+        std::vector<bool> HasSceneNodeChannel(ClipDesc.TargetCount, false);
         for (Uint32 ChannelIndex = 0; ChannelIndex < ClipDesc.ChannelCount; ++ChannelIndex)
         {
             const RadientAnimationChannelDesc& Channel = ClipDesc.pChannels[ChannelIndex];
@@ -1209,7 +1209,8 @@ void RegisterSceneAnimations(
                 case RadientNodeTranslationProperty:
                 case RadientNodeRotationProperty:
                 case RadientNodeScaleProperty:
-                    HasSceneTransformChannel[Channel.TargetIndex] = true;
+                case RadientNodeVisibilityProperty:
+                    HasSceneNodeChannel[Channel.TargetIndex] = true;
                     break;
 
                 default:
@@ -1223,7 +1224,7 @@ void RegisterSceneAnimations(
         for (Uint32 ClipTargetIndex = 0; ClipTargetIndex < ClipDesc.TargetCount; ++ClipTargetIndex)
         {
             const RadientAnimationTargetDesc& Target = ClipDesc.pTargets[ClipTargetIndex];
-            if (Target.Schema != RadientNodeAnimationSchemaID || !HasSceneTransformChannel[ClipTargetIndex])
+            if (Target.Schema != RadientNodeAnimationSchemaID || !HasSceneNodeChannel[ClipTargetIndex])
                 continue;
 
             if (Target.Object >= NodeEntities.size())

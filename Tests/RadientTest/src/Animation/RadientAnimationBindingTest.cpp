@@ -2617,7 +2617,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesDistinctTransformCom
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesSupportedSubsetWithCompactOutputs)
 {
     const std::array Properties = {
-        MakeNodeProperty(0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(0, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
         MakeNodeProperty(1, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(1,
                          RadientNodeTranslationProperty,
@@ -2664,7 +2664,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesSupportedSubsetWithC
     EXPECT_EQ(Transforms[2].Position, Translation);
 }
 
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, IgnoresUnsupportedPropertyWhileAnimatingJointTransform)
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, IgnoresVisibilityWhileAnimatingJointTransform)
 {
     TestAnimationClipBuilder Builder;
     const Uint32             Target             = Builder.AddTarget(12, RadientNodeAnimationSchemaID);
@@ -2673,13 +2673,13 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, IgnoresUnsupportedPropertyWh
         RADIENT_ANIMATION_INTERPOLATION_LINEAR,
         {0.f, 1.f},
         {{10.f, 20.f, 30.f}, {20.f, 40.f, 60.f}});
-    const Uint32 UnsupportedSampler = Builder.AddSampler<Uint8>(
+    const Uint32 VisibilitySampler = Builder.AddSampler<Uint8>(
         RADIENT_ANIMATION_VALUE_TYPE_BOOL,
         RADIENT_ANIMATION_INTERPOLATION_STEP,
         {0.f, 1.f},
         {0, 1});
     Builder.AddChannel(Target, RadientNodeTranslationProperty, TranslationSampler);
-    Builder.AddChannel(Target, TestPropertyA, UnsupportedSampler);
+    Builder.AddChannel(Target, RadientNodeVisibilityProperty, VisibilitySampler);
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
     ASSERT_NE(pClip, nullptr);
 
@@ -3104,6 +3104,36 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnsupportedNodeProper
 {
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
         0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    RadientAnimationResolvedPropertyDesc Resolved;
+    Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+    EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, DoesNotExposeNodeVisibility)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        0, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL);
+    RadientAnimationResolvedPropertyDesc Resolved;
+    Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+    EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, TreatsVisibilityAsUnsupportedBeforeLayoutAndElementResolution)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        static_cast<Uint64>(m_Joints.size()) + 1,
+        RadientNodeVisibilityProperty,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        1,
+        2);
     RadientAnimationResolvedPropertyDesc Resolved;
     Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;

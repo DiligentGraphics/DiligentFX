@@ -99,12 +99,14 @@ static DILIGENT_CONSTEXPR Uint32 InvalidRadientAnimationSamplerIndex = (Uint32)~
 /// schemas may use every smaller Uint64 value.
 static DILIGENT_CONSTEXPR RadientAnimationDestinationElement InvalidRadientAnimationDestinationElement = (Uint64)~0ull;
 
-/// Built-in schema for local properties of an authored scene node.
+/// Built-in schema for animatable properties of an authored scene node.
 ///
 /// A target's Object is the authored node identity. A binding may resolve the
 /// same node to a skeleton joint, a scene entity, or another runtime node
-/// representation without changing the clip. Root animation is therefore
-/// represented by the same schema as every other node transform.
+/// representation without changing the clip. Each destination exposes only
+/// the subset it supports: skeleton poses expose local transforms, while scene
+/// entities also expose own visibility. Root animation is represented by the
+/// same schema as every other node transform.
 // {E4ADD320-EECA-439F-A6C3-1D8A25AEFBC3}
 static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientNodeAnimationSchemaID =
     {0xe4add320, 0xeeca, 0x439f, {0xa6, 0xc3, 0x1d, 0x8a, 0x25, 0xae, 0xfb, 0xc3}};
@@ -119,6 +121,12 @@ static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeRotationProperty
 
 /// FLOAT3[1] local scale property in RadientNodeAnimationSchemaID.
 static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeScaleProperty = 3;
+
+/// BOOL[1] own visibility property in RadientNodeAnimationSchemaID. Zero is
+/// hidden and one is visible. Only STEP interpolation is supported. Effective
+/// visibility is derived by the scene from this property and ancestor
+/// visibility.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeVisibilityProperty = 4;
 
 /// Built-in schema for morph weights owned by an authored scene node.
 ///
@@ -554,8 +562,9 @@ struct RadientAnimationResolvedPropertyDesc
     /// Semantic used to interpolate a bound property's native values. For
     /// example, RadientNodeRotationProperty resolves to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION, while node
-    /// translation, scale, RadientMorphWeightsProperty, and ordinary numeric
-    /// properties resolve to RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
+    /// translation, scale, visibility, RadientMorphWeightsProperty, and
+    /// ordinary numeric properties resolve to
+    /// RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
     /// The same accepted (Schema, Property) contract must resolve to the same
     /// non-UNKNOWN semantic for every element and destination implementation.
     /// UNKNOWN means that the destination did not bind this property; COUNT is
@@ -753,7 +762,8 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// This interface is the only runtime extension point required by the generic
 /// animation system. Radient-created skeleton poses expose it through
 /// QueryInterface() for node translation, rotation, and scale properties.
-/// Radient-created scene writers expose the same properties for scene entities.
+/// Radient-created scene writers expose those properties plus node own
+/// visibility for scene entities.
 /// Radient-created morph-target weight objects expose it for morph-weight
 /// array ranges. Custom destinations may implement it for material, light,
 /// camera, application, or extension properties. The interface is externally

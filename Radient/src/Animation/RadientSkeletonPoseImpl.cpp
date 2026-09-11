@@ -165,7 +165,10 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
         {
             const RadientAnimationPropertyBindingDesc& Property = pProperties[PropertyIndex];
             RadientNodeAnimationPropertyResolution     Resolution;
-            const RADIENT_STATUS                       Status = ResolveRadientNodeAnimationProperty(Property, Resolution);
+            const RADIENT_STATUS                       Status = ResolveRadientNodeAnimationProperty(
+                Property,
+                RadientNodeAnimationTransformPropertyMask,
+                Resolution);
             if (Status == RADIENT_STATUS_UNSUPPORTED)
                 continue;
             if (Status != RADIENT_STATUS_OK)

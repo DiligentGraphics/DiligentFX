@@ -43,6 +43,8 @@ using namespace Diligent::Testing;
 namespace
 {
 
+static constexpr RadientAnimationPropertyID UnknownNodeAnimationProperty = 0xffffffffffffffffull;
+
 class RadientSceneAnimationDestinationTest : public testing::Test
 {
 protected:
@@ -225,10 +227,11 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
     ASSERT_NE(FirstEntity, InvalidRadientEntityID);
     ASSERT_NE(SecondEntity, InvalidRadientEntityID);
     ASSERT_NE(ThirdEntity, InvalidRadientEntityID);
+    ASSERT_EQ(m_pWriter->SetEntityOwnVisibility(FirstEntity, False), RADIENT_STATUS_OK);
     ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const std::array Properties = {
-        MakeNodeProperty(FirstEntity, RadientNodeScaleProperty + 1, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(FirstEntity, UnknownNodeAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
         MakeNodeProperty(SecondEntity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(SecondEntity,
                          RadientNodeTranslationProperty,
@@ -236,10 +239,11 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
                          0,
                          1,
                          IID_RadientScene),
+        MakeNodeProperty(FirstEntity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
         MakeNodeProperty(ThirdEntity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
         MakeNodeProperty(FirstEntity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
-    std::array<RadientAnimationResolvedPropertyDesc, 5> Resolved;
+    std::array<RadientAnimationResolvedPropertyDesc, 6> Resolved;
     for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
         Result.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
 
@@ -257,6 +261,7 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
     EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
     EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
     EXPECT_EQ(Resolved[4].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[5].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
 
     void* const* pOutputs = nullptr;
     ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
@@ -264,13 +269,16 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
     ASSERT_NE(pOutputs[0], nullptr);
     ASSERT_NE(pOutputs[1], nullptr);
     ASSERT_NE(pOutputs[2], nullptr);
+    ASSERT_NE(pOutputs[3], nullptr);
 
     const RadientQuaternion Rotation    = {0.f, 0.f, 1.f, 0.f};
+    const Uint8             Visibility  = 1;
     const RadientFloat3     Translation = {10.f, 20.f, 30.f};
     const RadientFloat3     Scale       = {4.f, 5.f, 6.f};
     std::memcpy(pOutputs[0], &Rotation, sizeof(Rotation));
-    std::memcpy(pOutputs[1], &Translation, sizeof(Translation));
-    std::memcpy(pOutputs[2], &Scale, sizeof(Scale));
+    std::memcpy(pOutputs[1], &Visibility, sizeof(Visibility));
+    std::memcpy(pOutputs[2], &Translation, sizeof(Translation));
+    std::memcpy(pOutputs[3], &Scale, sizeof(Scale));
     ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
 
     RadientTransform FirstTransform{};
@@ -282,6 +290,9 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
     ExpectFloat3Near(FirstTransform.Scale, Scale);
     ExpectQuaternionNear(SecondTransform.Rotation, Rotation);
     ExpectFloat3Near(ThirdTransform.Position, Translation);
+    Bool FirstVisible = False;
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(FirstEntity, FirstVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(FirstVisible, True);
 }
 
 TEST_F(RadientSceneAnimationDestinationTest, DefersAndThenCommitsDerivedSceneState)
@@ -324,6 +335,178 @@ TEST_F(RadientSceneAnimationDestinationTest, DefersAndThenCommitsDerivedSceneSta
     RadientTransform ExpectedChildWorld{};
     ExpectedChildWorld.Position = {7.f, 2.f, 0.f};
     ExpectMatrixNear(ChildWorldMatrix, RadientMath::TransformToMatrix(ExpectedChildWorld));
+}
+
+TEST_F(RadientSceneAnimationDestinationTest, StagesVisibilityAndUpdatesOnlyVisibilityState)
+{
+    const RadientEntityID Parent = CreateEntity({});
+    const RadientEntityID Child  = CreateEntity({});
+    ASSERT_NE(Parent, InvalidRadientEntityID);
+    ASSERT_NE(Child, InvalidRadientEntityID);
+    ASSERT_EQ(m_pWriter->SetParent(Child, Parent, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const std::vector Properties = {
+        MakeNodeProperty(Parent, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
+    };
+    std::vector<RadientAnimationResolvedPropertyDesc>  Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding(Properties, &Resolved);
+    ASSERT_NE(pBinding, nullptr);
+    ASSERT_EQ(Resolved.size(), 1u);
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+
+    Bool CachedChildVisible = False;
+    ASSERT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Child, CachedChildVisible), RADIENT_STATUS_OK);
+    ASSERT_EQ(CachedChildVisible, True);
+
+    RadientTransform ParentTransformBefore{};
+    RadientTransform ChildTransformBefore{};
+    ASSERT_EQ(m_pScene->GetLocalTransform(Parent, ParentTransformBefore), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pScene->GetLocalTransform(Child, ChildTransformBefore), RADIENT_STATUS_OK);
+    const RadientSceneRevisions RevisionsBefore = m_pScene->GetSceneRevisions();
+
+    const Uint8  Hidden   = 0;
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    std::memcpy(pOutputs[0], &Hidden, sizeof(Hidden));
+
+    Bool ParentVisible = False;
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Parent, ParentVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(ParentVisible, True);
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), RevisionsBefore);
+
+    ASSERT_EQ(pBinding->EndUpdate(False), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Parent, ParentVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(ParentVisible, False);
+
+    RadientSceneRevisions ExpectedRevisions = RevisionsBefore;
+    ++ExpectedRevisions.Visibility;
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
+    EXPECT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Child, CachedChildVisible),
+              RADIENT_STATUS_OUT_OF_DATE);
+
+    RadientTransform ParentTransformAfter{};
+    RadientTransform ChildTransformAfter{};
+    ASSERT_EQ(m_pScene->GetLocalTransform(Parent, ParentTransformAfter), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pScene->GetLocalTransform(Child, ChildTransformAfter), RADIENT_STATUS_OK);
+    EXPECT_EQ(ParentTransformAfter, ParentTransformBefore);
+    EXPECT_EQ(ChildTransformAfter, ChildTransformBefore);
+
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    std::memcpy(pOutputs[0], &Hidden, sizeof(Hidden));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
+    ASSERT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Child, CachedChildVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(CachedChildVisible, False);
+
+    const Uint8 Visible = 1;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    std::memcpy(pOutputs[0], &Visible, sizeof(Visible));
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Parent, ParentVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(ParentVisible, False);
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+
+    ++ExpectedRevisions.Visibility;
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Parent, ParentVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(ParentVisible, True);
+    ASSERT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Child, CachedChildVisible), RADIENT_STATUS_OK);
+    EXPECT_EQ(CachedChildVisible, True);
+
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    std::memcpy(pOutputs[0], &Visible, sizeof(Visible));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
+}
+
+TEST_F(RadientSceneAnimationDestinationTest, EvaluatesStepVisibilityChannel)
+{
+    const RadientEntityID Entity = CreateEntity({});
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+    ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(m_pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientAnimationTargetDesc Target{};
+    Target.Schema = RadientNodeAnimationSchemaID;
+    Target.Object = 0;
+
+    const std::array<Float32, 2> Times            = {0.f, 1.f};
+    const std::array<Uint8, 2>   VisibilityValues = {0, 1};
+    RadientAnimationSamplerDesc  Sampler{};
+    Sampler.Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_BOOL;
+    Sampler.Value.ArraySize = 1;
+    Sampler.Interpolation   = RADIENT_ANIMATION_INTERPOLATION_STEP;
+    Sampler.pTimes          = Times.data();
+    Sampler.pValues         = VisibilityValues.data();
+    Sampler.ValueDataSize   = sizeof(VisibilityValues);
+    Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
+
+    RadientAnimationChannelDesc Channel{};
+    Channel.TargetIndex  = 0;
+    Channel.Property     = RadientNodeVisibilityProperty;
+    Channel.SamplerIndex = 0;
+
+    RadientAnimationClipDesc ClipDesc{};
+    ClipDesc.Name         = "Step visibility";
+    ClipDesc.Duration     = 2.f;
+    ClipDesc.pTargets     = &Target;
+    ClipDesc.TargetCount  = 1;
+    ClipDesc.pSamplers    = &Sampler;
+    ClipDesc.SamplerCount = 1;
+    ClipDesc.pChannels    = &Channel;
+    ClipDesc.ChannelCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(pAssetManager->CreateAnimationClip(ClipDesc, pClip.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientAnimationDestinationMappingDesc Mapping{};
+    Mapping.ClipTargetIndex    = 0;
+    Mapping.DestinationElement = Entity;
+
+    RadientAnimationDestinationDesc Destination{};
+    Destination.pDestination = m_pDestination;
+    Destination.pMappings    = &Mapping;
+    Destination.MappingCount = 1;
+
+    RadientAnimationBindingDesc BindingDesc{};
+    BindingDesc.pDestinations    = &Destination;
+    BindingDesc.DestinationCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+    ASSERT_EQ(pClip->CreateBinding(BindingDesc, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+
+    RadientSceneRevisions        ExpectedRevisions = m_pScene->GetSceneRevisions();
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+
+    Bool Visible = True;
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Entity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+    ASSERT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Entity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+    ++ExpectedRevisions.Visibility;
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
+
+    EvaluateInfo.Time = 1.5f;
+    ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pScene->GetEntityOwnVisibility(Entity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+    ASSERT_EQ(m_pScene->GetCachedEntityEffectiveVisibility(Entity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+    ++ExpectedRevisions.Visibility;
+    EXPECT_EQ(m_pScene->GetSceneRevisions(), ExpectedRevisions);
 }
 
 TEST_F(RadientSceneAnimationDestinationTest, ReportsDestroyedBoundEntity)
@@ -471,7 +654,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsUnsupportedProperty)
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
-        Entity, RadientNodeScaleProperty + 1, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+        Entity, UnknownNodeAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
     RadientAnimationResolvedPropertyDesc Resolved;
     Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
@@ -491,6 +674,9 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMalformedSupportedPropertyLa
         MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
         MakeNodeProperty(Entity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1),
         MakeNodeProperty(Entity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2),
+        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_UINT),
+        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1),
+        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 0, 2),
     };
 
     for (const RadientAnimationPropertyBindingDesc& Property : Properties)
@@ -516,7 +702,7 @@ TEST_F(RadientSceneAnimationDestinationTest, ReturnsUnsupportedWhenNoPropertiesA
                          0,
                          1,
                          IID_RadientScene),
-        MakeNodeProperty(Entity, RadientNodeScaleProperty + 1, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, UnknownNodeAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved;
     for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
@@ -538,7 +724,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsInvalidDestinationElementBef
 {
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
         static_cast<RadientEntityID>(InvalidRadientAnimationDestinationElement),
-        RadientNodeScaleProperty + 1,
+        UnknownNodeAnimationProperty,
         RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
         0,
         1,
@@ -563,33 +749,47 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMissingEntity)
     EXPECT_EQ(pBinding, nullptr);
 }
 
-TEST_F(RadientSceneAnimationDestinationTest, RejectsDuplicateEntityField)
+TEST_F(RadientSceneAnimationDestinationTest, RejectsDuplicateEntityProperty)
 {
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
-    const std::array Properties = {
-        MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
-        MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+    struct DuplicateCase
+    {
+        RadientAnimationPropertyID   Property;
+        RADIENT_ANIMATION_VALUE_TYPE Type;
     };
-    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
-    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
-    EXPECT_EQ(m_pDestination->CreateBinding(
-                  Properties.data(),
-                  static_cast<Uint32>(Properties.size()),
-                  Resolved.data(),
-                  pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pBinding, nullptr);
+
+    const DuplicateCase Cases[] = {
+        {RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4},
+        {RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
+    };
+    for (const DuplicateCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.Property);
+        const std::array Properties = {
+            MakeNodeProperty(Entity, Case.Property, Case.Type),
+            MakeNodeProperty(Entity, Case.Property, Case.Type),
+        };
+        std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
+        RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(
+                      Properties.data(),
+                      static_cast<Uint32>(Properties.size()),
+                      Resolved.data(),
+                      pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pBinding, nullptr);
+    }
 }
 
-TEST_F(RadientSceneAnimationDestinationTest, UnsupportedPropertyDoesNotMaskDuplicateEntityField)
+TEST_F(RadientSceneAnimationDestinationTest, UnsupportedPropertyDoesNotMaskDuplicateEntityProperty)
 {
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     const std::array Properties = {
         MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
-        MakeNodeProperty(Entity, RadientNodeScaleProperty + 1, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, UnknownNodeAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved{};
     RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;

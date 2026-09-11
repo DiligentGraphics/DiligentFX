@@ -52,6 +52,7 @@ void RadientAnimation_C_UseTypes(void)
     Property                              = RadientNodeTranslationProperty;
     Property                              = RadientNodeRotationProperty;
     Property                              = RadientNodeScaleProperty;
+    Property                              = RadientNodeVisibilityProperty;
     Schema                                = RadientMorphWeightsAnimationSchemaID;
     Property                              = RadientMorphWeightsProperty;
     Object                                = InvalidRadientAnimationObject;
