@@ -68,7 +68,10 @@ RADIENT_STATUS ResolveAnimationProperty(
     SkeletonPoseAnimationBindingEntry&         Entry,
     RADIENT_ANIMATION_VALUE_SEMANTIC&          Semantic) noexcept
 {
+    Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+
     if (Property.Schema == InvalidRadientAnimationSchemaID ||
+        Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
         Property.Property == InvalidRadientAnimationPropertyID ||
         Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
         Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
@@ -80,48 +83,43 @@ RADIENT_STATUS ResolveAnimationProperty(
     if (Property.Schema != RadientNodeAnimationSchemaID)
         return RADIENT_STATUS_UNSUPPORTED;
 
-    if (Property.DestinationElement >= JointCount)
-        return RADIENT_STATUS_NOT_FOUND;
-
-    Entry.JointIndex = static_cast<Uint32>(Property.DestinationElement);
+    RADIENT_ANIMATION_VALUE_TYPE ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
     switch (Property.Property)
     {
         case RadientNodeTranslationProperty:
-            Entry.Field = TransformField::Translation;
-            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT3 ||
-                Property.Value.ArraySize != 1 ||
-                Property.FirstArrayElement != 0)
-            {
-                return RADIENT_STATUS_UNSUPPORTED;
-            }
-            return RADIENT_STATUS_OK;
+            Entry.Field  = TransformField::Translation;
+            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
+            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+            break;
 
         case RadientNodeRotationProperty:
-            Entry.Field = TransformField::Rotation;
-            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
-            if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT4 ||
-                Property.Value.ArraySize != 1 ||
-                Property.FirstArrayElement != 0)
-            {
-                return RADIENT_STATUS_UNSUPPORTED;
-            }
-            return RADIENT_STATUS_OK;
+            Entry.Field  = TransformField::Rotation;
+            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
+            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
+            break;
 
         case RadientNodeScaleProperty:
-            Entry.Field = TransformField::Scale;
-            Semantic    = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT3 ||
-                Property.Value.ArraySize != 1 ||
-                Property.FirstArrayElement != 0)
-            {
-                return RADIENT_STATUS_UNSUPPORTED;
-            }
-            return RADIENT_STATUS_OK;
+            Entry.Field  = TransformField::Scale;
+            Semantic     = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
+            ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+            break;
 
         default:
             return RADIENT_STATUS_UNSUPPORTED;
     }
+
+    if (Property.DestinationElement >= JointCount)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (Property.Value.Type != ExpectedType ||
+        Property.Value.ArraySize != 1 ||
+        Property.FirstArrayElement != 0)
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    Entry.JointIndex = static_cast<Uint32>(Property.DestinationElement);
+    return RADIENT_STATUS_OK;
 }
 
 } // namespace
@@ -213,28 +211,33 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
 
     if (!RadientValidation::IsAddressableArray(PropertyCount, sizeof(RadientAnimationPropertyBindingDesc)) ||
         !RadientValidation::IsAddressableArray(PropertyCount, sizeof(RadientAnimationResolvedPropertyDesc)) ||
-        !RadientValidation::IsAddressableArray(PropertyCount, sizeof(void*)) ||
-        !RadientValidation::IsAddressableArray(PropertyCount, sizeof(RADIENT_ANIMATION_VALUE_SEMANTIC)))
+        !RadientValidation::IsAddressableArray(PropertyCount, sizeof(void*)))
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
+
+    for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+        pResolvedProperties[PropertyIndex] = {};
 
     try
     {
         const Uint32 JointCount = static_cast<Uint32>(m_Pose.m_State.LocalTransforms.size());
 
-        std::vector<Uint8>                            JointTransformFieldMasks(JointCount, 0);
-        std::vector<RADIENT_ANIMATION_VALUE_SEMANTIC> Semantics(PropertyCount);
-        std::vector<void*>                            Outputs(PropertyCount);
-        bool                                          HasDuplicate = false;
+        std::vector<Uint8> JointTransformFieldMasks(JointCount, 0);
+        std::vector<void*> Outputs;
+        Outputs.reserve(PropertyCount);
+        bool HasDuplicate = false;
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
         {
             SkeletonPoseAnimationBindingEntry Entry;
-            const RADIENT_STATUS              Status = ResolveAnimationProperty(
+            RADIENT_ANIMATION_VALUE_SEMANTIC  Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+            const RADIENT_STATUS              Status   = ResolveAnimationProperty(
                 pProperties[PropertyIndex],
                 JointCount,
                 Entry,
-                Semantics[PropertyIndex]);
+                Semantic);
+            if (Status == RADIENT_STATUS_UNSUPPORTED)
+                continue;
             if (Status != RADIENT_STATUS_OK)
                 return Status;
 
@@ -244,33 +247,38 @@ RADIENT_STATUS RadientSkeletonPoseAnimationDestinationImpl::CreateBinding(
             JointMask                      = static_cast<Uint8>(JointMask | TransformFieldMask);
 
             RadientTransform& Transform = m_Pose.m_State.LocalTransforms[Entry.JointIndex];
+            void*             pOutput   = nullptr;
             switch (Entry.Field)
             {
                 case TransformField::Translation:
-                    Outputs[PropertyIndex] = &Transform.Position;
+                    pOutput = &Transform.Position;
                     break;
 
                 case TransformField::Rotation:
-                    Outputs[PropertyIndex] = &Transform.Rotation;
+                    pOutput = &Transform.Rotation;
                     break;
 
                 case TransformField::Scale:
-                    Outputs[PropertyIndex] = &Transform.Scale;
+                    pOutput = &Transform.Scale;
                     break;
             }
+
+            VERIFY_EXPR(pOutput != nullptr);
+            pResolvedProperties[PropertyIndex].Semantic = Semantic;
+            Outputs.push_back(pOutput);
         }
 
         if (HasDuplicate)
             return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        if (Outputs.empty())
+            return RADIENT_STATUS_UNSUPPORTED;
 
         RefCntAutoPtr<RadientSkeletonPoseAnimationDestinationBindingImpl> pBinding{
             MakeNewRCObj<RadientSkeletonPoseAnimationDestinationBindingImpl>()(
                 static_cast<IRadientAnimationDestination*>(this),
                 m_Pose,
                 std::move(Outputs))};
-
-        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
-            pResolvedProperties[PropertyIndex].Semantic = Semantics[PropertyIndex];
 
         *ppBinding = pBinding.Detach();
         return RADIENT_STATUS_OK;

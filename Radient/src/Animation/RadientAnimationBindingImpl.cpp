@@ -607,6 +607,12 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
                                   " mapping ", MappingIndex, " references invalid clip target ", Mapping.ClipTargetIndex);
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
+            if (Mapping.DestinationElement == InvalidRadientAnimationDestinationElement)
+            {
+                LOG_ERROR_MESSAGE("Radient animation binding destination ", DestinationIndex,
+                                  " mapping ", MappingIndex, " references an invalid destination element");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
 
             MappingKeys.push_back({Mapping.ClipTargetIndex, Mapping.DestinationElement, MappingIndex});
             const Uint32 FirstChannel = ChannelIndex.pTargetOffsets[Mapping.ClipTargetIndex];
@@ -652,8 +658,6 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
         Pending.pDestination = Destination.pDestination;
         Pending.Properties.reserve(PropertyCount);
         Pending.SamplerIndices.reserve(PropertyCount);
-        std::vector<BoundAnimationPropertyRange> PropertyRanges;
-        PropertyRanges.reserve(PropertyCount);
 
         for (Uint32 MappingIndex = 0; MappingIndex < Destination.MappingCount; ++MappingIndex)
         {
@@ -676,29 +680,8 @@ RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&
                 Property.FirstArrayElement  = Channel.FirstArrayElement;
                 Property.Value              = Sampler.Value;
 
-                const Uint32 RequestIndex = static_cast<Uint32>(Pending.Properties.size());
                 Pending.Properties.push_back(Property);
                 Pending.SamplerIndices.push_back(Channel.SamplerIndex);
-                PropertyRanges.push_back({Property.Schema,
-                                          Property.DestinationElement,
-                                          Property.Property,
-                                          Property.FirstArrayElement,
-                                          static_cast<Uint64>(Property.FirstArrayElement) + Property.Value.ArraySize,
-                                          RequestIndex});
-            }
-        }
-
-        std::sort(PropertyRanges.begin(), PropertyRanges.end());
-        for (size_t RangeIndex = 1; RangeIndex < PropertyRanges.size(); ++RangeIndex)
-        {
-            const BoundAnimationPropertyRange& Previous = PropertyRanges[RangeIndex - 1];
-            const BoundAnimationPropertyRange& Current  = PropertyRanges[RangeIndex];
-            if (HaveSameBoundAnimationProperty(Previous, Current) && Current.First < Previous.End)
-            {
-                LOG_ERROR_MESSAGE("Radient animation binding destination ", DestinationIndex,
-                                  " property requests ", Previous.RequestIndex, " and ", Current.RequestIndex,
-                                  " address overlapping ranges");
-                return RADIENT_STATUS_INVALID_ARGUMENT;
             }
         }
 
@@ -1009,7 +992,7 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
     std::vector<AnimationSampleJob>               SampleJobs;
     std::vector<CompiledAnimationDestination>     Destinations;
     std::vector<AnimationPropertySemantic>        PropertySemantics;
-    std::vector<AnimationDestinationFirstOutput> DestinationFirstOutputs;
+    std::vector<AnimationDestinationFirstOutput>  DestinationFirstOutputs;
 
     Destinations.reserve(PendingDestinations.size());
     Uint32 DestinationGeneration = 0;
@@ -1025,6 +1008,24 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
             static_cast<Uint32>(Pending.Properties.size()),
             ResolvedProperties.data(),
             pDestinationBinding.GetAddressOfEmpty());
+
+        if (DestinationStatus == RADIENT_STATUS_UNSUPPORTED)
+        {
+            if (pDestinationBinding)
+            {
+                LOG_ERROR_MESSAGE("Radient animation destination created a binding while reporting that no properties are supported");
+                return RADIENT_STATUS_INVALID_OPERATION;
+            }
+            for (const RadientAnimationResolvedPropertyDesc& Resolved : ResolvedProperties)
+            {
+                if (Resolved.Semantic != RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN)
+                {
+                    LOG_ERROR_MESSAGE("Radient animation destination resolved a property while reporting that no properties are supported");
+                    return RADIENT_STATUS_INVALID_OPERATION;
+                }
+            }
+            continue;
+        }
 
         if (DestinationStatus != RADIENT_STATUS_OK)
         {
@@ -1049,15 +1050,28 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
         CompiledAnimationDestination Destination;
         Destination.pBinding = std::move(pDestinationBinding);
         Destination.WriteJobs.reserve(Pending.Properties.size());
+        std::vector<BoundAnimationPropertyRange> PropertyRanges;
+        PropertyRanges.reserve(Pending.Properties.size());
         for (size_t PropertyIndex = 0; PropertyIndex < Pending.Properties.size(); ++PropertyIndex)
         {
-            const RadientAnimationPropertyBindingDesc& Property = Pending.Properties[PropertyIndex];
-            const RADIENT_ANIMATION_VALUE_SEMANTIC     Semantic = ResolvedProperties[PropertyIndex].Semantic;
+            const RadientAnimationPropertyBindingDesc&  Property = Pending.Properties[PropertyIndex];
+            const RadientAnimationResolvedPropertyDesc& Resolved = ResolvedProperties[PropertyIndex];
+            if (Resolved.Semantic == RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN)
+                continue;
+
+            const RADIENT_ANIMATION_VALUE_SEMANTIC Semantic = Resolved.Semantic;
 
             const RADIENT_STATUS SemanticStatus =
                 ValidateAnimationPropertySemantic(Property, Semantic, PropertySemantics);
             if (SemanticStatus != RADIENT_STATUS_OK)
                 return SemanticStatus;
+
+            PropertyRanges.push_back({Property.Schema,
+                                      Property.DestinationElement,
+                                      Property.Property,
+                                      Property.FirstArrayElement,
+                                      static_cast<Uint64>(Property.FirstArrayElement) + Property.Value.ArraySize,
+                                      static_cast<Uint32>(PropertyIndex)});
 
             Uint32               SampleJobIndex = 0;
             const RADIENT_STATUS SampleJobStatus =
@@ -1070,7 +1084,7 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
             if (SampleJobStatus != RADIENT_STATUS_OK)
                 return SampleJobStatus;
 
-            const Uint32 OutputIndex = static_cast<Uint32>(PropertyIndex);
+            const Uint32 OutputIndex = static_cast<Uint32>(Destination.WriteJobs.size());
             if (DestinationFirstOutputs.size() < SampleJobs.size())
                 DestinationFirstOutputs.resize(SampleJobs.size());
 
@@ -1083,6 +1097,25 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
             }
 
             Destination.WriteJobs.push_back({SampleJobIndex, FirstOutput.FirstOutputIndex});
+        }
+
+        if (Destination.WriteJobs.empty())
+        {
+            LOG_ERROR_MESSAGE("Radient animation destination returned success without resolving any properties");
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        std::sort(PropertyRanges.begin(), PropertyRanges.end());
+        for (size_t RangeIndex = 1; RangeIndex < PropertyRanges.size(); ++RangeIndex)
+        {
+            const BoundAnimationPropertyRange& Previous = PropertyRanges[RangeIndex - 1];
+            const BoundAnimationPropertyRange& Current  = PropertyRanges[RangeIndex];
+            if (HaveSameBoundAnimationProperty(Previous, Current) && Current.First < Previous.End)
+            {
+                LOG_ERROR_MESSAGE("Radient animation binding destination property requests ", Previous.RequestIndex,
+                                  " and ", Current.RequestIndex, " address overlapping ranges");
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
         }
 
         Destinations.emplace_back(std::move(Destination));

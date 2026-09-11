@@ -327,9 +327,11 @@ struct TestAnimationDestinationState
 {
     Uint32 DestinationID = 0;
 
-    RADIENT_STATUS CreateStatus               = RADIENT_STATUS_OK;
-    bool           ReturnNullChild            = false;
-    bool           ReturnChildOnCreateFailure = false;
+    RADIENT_STATUS CreateStatus                = RADIENT_STATUS_OK;
+    bool           ReturnNullChild             = false;
+    bool           ReturnChildOnCreateFailure  = false;
+    bool           ReturnStatusAfterResolution = false;
+    bool           ReturnBindingWhenUnbound    = false;
 
     std::vector<std::pair<RadientAnimationPropertyID, RADIENT_ANIMATION_VALUE_SEMANTIC>> Semantics;
     std::vector<RADIENT_ANIMATION_VALUE_SEMANTIC>                                        SemanticsByRequest;
@@ -495,35 +497,60 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
         *ppBinding = nullptr;
 
-        if (m_State->CreateStatus != RADIENT_STATUS_OK && !m_State->ReturnChildOnCreateFailure)
+        if (m_State->CreateStatus != RADIENT_STATUS_OK &&
+            !m_State->ReturnChildOnCreateFailure &&
+            !m_State->ReturnStatusAfterResolution)
             return m_State->CreateStatus;
 
         if (PropertyCount == 0 || pProperties == nullptr || pResolvedProperties == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
+        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+            pResolvedProperties[PropertyIndex] = {};
+
         m_State->CreateRequests.emplace_back(pProperties, pProperties + PropertyCount);
 
+        Uint32 AcceptedPropertyCount = 0;
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
         {
             if (pProperties[PropertyIndex].DestinationElement == InvalidRadientAnimationDestinationElement)
-                return RADIENT_STATUS_NOT_FOUND;
-
-            for (Uint32 PreviousIndex = 0; PreviousIndex < PropertyIndex; ++PreviousIndex)
-            {
-                if (PropertyRangesOverlap(pProperties[PreviousIndex], pProperties[PropertyIndex]))
-                    return RADIENT_STATUS_INVALID_ARGUMENT;
-            }
+                return RADIENT_STATUS_INVALID_ARGUMENT;
 
             pResolvedProperties[PropertyIndex].Semantic =
                 m_State->GetSemantic(pProperties[PropertyIndex], PropertyIndex);
+            if (pResolvedProperties[PropertyIndex].Semantic != RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN)
+            {
+                for (Uint32 PreviousIndex = 0; PreviousIndex < PropertyIndex; ++PreviousIndex)
+                {
+                    if (pResolvedProperties[PreviousIndex].Semantic != RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN &&
+                        PropertyRangesOverlap(pProperties[PreviousIndex], pProperties[PropertyIndex]))
+                    {
+                        return RADIENT_STATUS_INVALID_ARGUMENT;
+                    }
+                }
+
+                ++AcceptedPropertyCount;
+            }
         }
+
+        if (m_State->CreateStatus != RADIENT_STATUS_OK && m_State->ReturnStatusAfterResolution)
+            return m_State->CreateStatus;
+
+        if (AcceptedPropertyCount == 0 &&
+            m_State->CreateStatus == RADIENT_STATUS_OK &&
+            !m_State->ReturnBindingWhenUnbound)
+            return RADIENT_STATUS_UNSUPPORTED;
 
         if (m_State->ReturnNullChild)
             return RADIENT_STATUS_OK;
 
-        std::vector<RadientAnimationPropertyBindingDesc> Properties{
-            pProperties,
-            pProperties + PropertyCount};
+        std::vector<RadientAnimationPropertyBindingDesc> Properties;
+        Properties.reserve(AcceptedPropertyCount);
+        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+        {
+            if (pResolvedProperties[PropertyIndex].Semantic != RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN)
+                Properties.push_back(pProperties[PropertyIndex]);
+        }
         RefCntAutoPtr<TestAnimationDestinationBinding> pBinding{
             MakeNewRCObj<TestAnimationDestinationBinding>()(
                 static_cast<IRadientAnimationDestination*>(this),
@@ -996,6 +1023,188 @@ TEST_F(RadientAnimationBindingTest, CompilesPropertiesAndBatchesInDescriptorOrde
     EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State0->EndCalls[0], 2), 30.f);
     EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State1->EndCalls[0], 0), 5.f);
     EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State1->EndCalls[0], 1), 30.f);
+}
+
+TEST_F(RadientAnimationBindingTest, SkipsUnboundPropertiesAndCompactsDestinationOutputs)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target   = Builder.AddTarget(100);
+    const Uint32             SamplerA = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {2.f, 6.f});
+    const Uint32 SamplerB = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {100.f, 200.f});
+    const Uint32 SamplerC = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {10.f, 30.f});
+    Builder.AddChannel(Target, TestPropertyA, SamplerA);
+    Builder.AddChannel(Target, TestPropertyB, SamplerB);
+    Builder.AddChannel(Target, TestPropertyC, SamplerC);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State                = std::make_shared<TestAnimationDestinationState>();
+    State->SemanticsByRequest = {
+        RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+        RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+    };
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+    RadientAnimationDestinationMappingDesc  Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 7;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    ASSERT_EQ(State->CreateRequests.size(), 1u);
+    ASSERT_EQ(State->CreateRequests[0].size(), 3u);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State->BeginCallCount, 1u);
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 2u);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 4.f);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 1), 20.f);
+}
+
+TEST_F(RadientAnimationBindingTest, IgnoresOverlappingRangesForUnboundProperties)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             AcceptedTarget = Builder.AddTarget(100);
+    const Uint32             IgnoredTarget0 = Builder.AddTarget(200);
+    const Uint32             IgnoredTarget1 = Builder.AddTarget(300);
+    const Uint32             Sampler        = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {2.f, 8.f});
+    Builder.AddChannel(AcceptedTarget, TestPropertyA, Sampler);
+    Builder.AddChannel(IgnoredTarget0, TestPropertyB, Sampler);
+    Builder.AddChannel(IgnoredTarget1, TestPropertyB, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State                = std::make_shared<TestAnimationDestinationState>();
+    State->SemanticsByRequest = {
+        RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+    };
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+
+    std::array<RadientAnimationDestinationMappingDesc, 3> Mappings{};
+    Mappings[0].ClipTargetIndex                      = AcceptedTarget;
+    Mappings[0].DestinationElement                   = 7;
+    Mappings[1].ClipTargetIndex                      = IgnoredTarget0;
+    Mappings[1].DestinationElement                   = 9;
+    Mappings[2].ClipTargetIndex                      = IgnoredTarget1;
+    Mappings[2].DestinationElement                   = 9;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(
+        pClip, pDestination, {Mappings[0], Mappings[1], Mappings[2]});
+    ASSERT_NE(pBinding, nullptr);
+    ASSERT_EQ(State->CreateRequests.size(), 1u);
+    ASSERT_EQ(State->CreateRequests[0].size(), 3u);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 1u);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 5.f);
+}
+
+TEST_F(RadientAnimationBindingTest, OmitsEntirelyUnsupportedDestination)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(100);
+    const Uint32             Sampler = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {2.f, 8.f});
+    Builder.AddChannel(Target, TestPropertyA, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto UnsupportedState                = std::make_shared<TestAnimationDestinationState>();
+    UnsupportedState->SemanticsByRequest = {
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+    };
+    auto                                    SupportedState = std::make_shared<TestAnimationDestinationState>();
+    RefCntAutoPtr<TestAnimationDestination> pUnsupportedDestination =
+        CreateTestDestination(UnsupportedState);
+    RefCntAutoPtr<TestAnimationDestination> pSupportedDestination =
+        CreateTestDestination(SupportedState);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex    = Target;
+    Mapping.DestinationElement = 7;
+    std::array<RadientAnimationDestinationDesc, 2> Destinations{};
+    Destinations[0].pDestination = pUnsupportedDestination;
+    Destinations[0].pMappings    = &Mapping;
+    Destinations[0].MappingCount = 1;
+    Destinations[1].pDestination = pSupportedDestination;
+    Destinations[1].pMappings    = &Mapping;
+    Destinations[1].MappingCount = 1;
+
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = Bind(
+        pClip,
+        std::vector<RadientAnimationDestinationDesc>{Destinations.begin(), Destinations.end()});
+    ASSERT_NE(pBinding, nullptr);
+    ASSERT_EQ(UnsupportedState->CreateRequests.size(), 1u);
+    EXPECT_EQ(UnsupportedState->LiveChildBindings, 0u);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(UnsupportedState->BeginCallCount, 0u);
+    EXPECT_TRUE(UnsupportedState->EndCalls.empty());
+    ASSERT_EQ(SupportedState->EndCalls.size(), 1u);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(SupportedState->EndCalls[0], 0), 5.f);
+}
+
+TEST_F(RadientAnimationBindingTest, CreatesEmptyBindingWhenEveryDestinationIsUnsupported)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target  = Builder.AddTarget(100);
+    const Uint32             Sampler = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f},
+        {7.f});
+    Builder.AddChannel(Target, TestPropertyA, Sampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    auto State                = std::make_shared<TestAnimationDestinationState>();
+    State->SemanticsByRequest = {
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+    };
+    RefCntAutoPtr<TestAnimationDestination> pDestination = CreateTestDestination(State);
+    RadientAnimationDestinationMappingDesc  Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 7;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+    ASSERT_EQ(State->CreateRequests.size(), 1u);
+    EXPECT_EQ(State->LiveChildBindings, 0u);
+
+    RadientAnimationEvaluateInfo Info;
+    EXPECT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State->BeginCallCount, 0u);
+    EXPECT_TRUE(State->EndCalls.empty());
 }
 
 TEST_F(RadientAnimationBindingTest, CreatesAndEvaluatesEmptyBinding)
@@ -1861,10 +2070,18 @@ TEST_F(RadientAnimationBindingTest, RejectsMalformedBindingDescriptors)
     ExpectInvalid(Desc);
 
     RadientAnimationDestinationMappingDesc InvalidMapping = Mapping;
-    InvalidMapping.ClipTargetIndex                        = pClip->GetDesc().TargetCount;
+    InvalidMapping.DestinationElement                     = InvalidRadientAnimationDestinationElement;
     InvalidDestination                                    = Destination;
     InvalidDestination.pMappings                          = &InvalidMapping;
     Desc.pDestinations                                    = &InvalidDestination;
+    ExpectInvalid(Desc);
+    EXPECT_TRUE(State->CreateRequests.empty());
+
+    InvalidMapping                 = Mapping;
+    InvalidMapping.ClipTargetIndex = pClip->GetDesc().TargetCount;
+    InvalidDestination             = Destination;
+    InvalidDestination.pMappings   = &InvalidMapping;
+    Desc.pDestinations             = &InvalidDestination;
     ExpectInvalid(Desc);
 
     std::array<RadientAnimationDestinationMappingDesc, 2> DuplicateMappings = {Mapping, Mapping};
@@ -1976,6 +2193,7 @@ TEST_F(RadientAnimationBindingTest, RejectsDestinationContractViolations)
         {0.f, 1.f},
         {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 0.f}});
     Builder.AddChannel(Target, TestQuaternionProperty, Sampler);
+    Builder.AddChannel(Target, TestPropertyA, Sampler);
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
     ASSERT_NE(pClip, nullptr);
 
@@ -2004,6 +2222,14 @@ TEST_F(RadientAnimationBindingTest, RejectsDestinationContractViolations)
     NullChildState->ReturnNullChild = true;
     ExpectInvalidOperation(NullChildState);
 
+    auto UnboundSuccessState                = std::make_shared<TestAnimationDestinationState>();
+    UnboundSuccessState->SemanticsByRequest = {
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+        RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN,
+    };
+    UnboundSuccessState->ReturnBindingWhenUnbound = true;
+    ExpectInvalidOperation(UnboundSuccessState);
+
     auto PositiveStatusState          = std::make_shared<TestAnimationDestinationState>();
     PositiveStatusState->CreateStatus = RADIENT_STATUS_NO_CHANGE;
     ExpectInvalidOperation(PositiveStatusState);
@@ -2015,10 +2241,15 @@ TEST_F(RadientAnimationBindingTest, RejectsDestinationContractViolations)
     EXPECT_EQ(FailureWithChildState->LiveChildBindings, 0u);
     EXPECT_EQ(FailureWithChildState->DestroyedChildBindings, 1u);
 
-    auto UnknownSemanticState = std::make_shared<TestAnimationDestinationState>();
-    UnknownSemanticState->Semantics.emplace_back(TestQuaternionProperty,
-                                                 RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
-    ExpectInvalidOperation(UnknownSemanticState);
+    auto UnsupportedWithResolvedState                         = std::make_shared<TestAnimationDestinationState>();
+    UnsupportedWithResolvedState->CreateStatus                = RADIENT_STATUS_UNSUPPORTED;
+    UnsupportedWithResolvedState->ReturnStatusAfterResolution = true;
+    ExpectInvalidOperation(UnsupportedWithResolvedState);
+
+    auto InvalidSemanticState = std::make_shared<TestAnimationDestinationState>();
+    InvalidSemanticState->Semantics.emplace_back(TestQuaternionProperty,
+                                                 RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT);
+    ExpectInvalidOperation(InvalidSemanticState);
 }
 
 TEST_F(RadientAnimationBindingTest, RejectsQuaternionSemanticForNonFloat4Storage)
@@ -2383,6 +2614,97 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesDistinctTransformCom
     EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
 }
 
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesSupportedSubsetWithCompactOutputs)
+{
+    const std::array Properties = {
+        MakeNodeProperty(0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(1, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(1,
+                         RadientNodeTranslationProperty,
+                         RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+                         0,
+                         1,
+                         TestAnimationSchemaID),
+        MakeNodeProperty(2, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(0, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 5> Resolved;
+    for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
+        Result.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    ASSERT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION);
+    EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[4].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    const RadientQuaternion Rotation    = {0.f, 0.f, 1.f, 0.f};
+    const RadientFloat3     Translation = {10.f, 20.f, 30.f};
+    const RadientFloat3     Scale       = {4.f, 5.f, 6.f};
+    std::memcpy(pOutputs[0], &Rotation, sizeof(Rotation));
+    std::memcpy(pOutputs[1], &Translation, sizeof(Translation));
+    std::memcpy(pOutputs[2], &Scale, sizeof(Scale));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+
+    const std::array<RadientTransform, 3> Transforms = GetLocalTransforms();
+    EXPECT_EQ(Transforms[0].Scale, Scale);
+    EXPECT_EQ(Transforms[1].Rotation, Rotation);
+    EXPECT_EQ(Transforms[2].Position, Translation);
+}
+
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, IgnoresUnsupportedPropertyWhileAnimatingJointTransform)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target             = Builder.AddTarget(12, RadientNodeAnimationSchemaID);
+    const Uint32             TranslationSampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {{10.f, 20.f, 30.f}, {20.f, 40.f, 60.f}});
+    const Uint32 UnsupportedSampler = Builder.AddSampler<Uint8>(
+        RADIENT_ANIMATION_VALUE_TYPE_BOOL,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f, 1.f},
+        {0, 1});
+    Builder.AddChannel(Target, RadientNodeTranslationProperty, TranslationSampler);
+    Builder.AddChannel(Target, TestPropertyA, UnsupportedSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 1;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    const Uint64                 InitialVersion = m_pPose->GetVersion();
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+
+    const std::array<RadientTransform, 3> Transforms = GetLocalTransforms();
+    EXPECT_EQ(Transforms[0], m_Joints[0].LocalRestTransform);
+    ExpectFloat3Near(Transforms[1].Position, {15.f, 30.f, 45.f});
+    EXPECT_EQ(Transforms[1].Rotation, m_Joints[1].LocalRestTransform.Rotation);
+    EXPECT_EQ(Transforms[1].Scale, m_Joints[1].LocalRestTransform.Scale);
+    EXPECT_EQ(Transforms[2].Position, m_Joints[2].LocalRestTransform.Position);
+    ExpectQuaternionNear(Transforms[2].Rotation, m_Joints[2].LocalRestTransform.Rotation);
+    EXPECT_EQ(Transforms[2].Scale, m_Joints[2].LocalRestTransform.Scale);
+}
+
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, UpdatesMappedJointPropertiesInOneBatch)
 {
     TestAnimationClipBuilder Builder;
@@ -2704,6 +3026,22 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidPropertyIdenti
     EXPECT_FALSE(pBinding);
 }
 
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidDestinationElementBeforeUnsupportedProperty)
+{
+    const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
+        InvalidRadientAnimationDestinationElement,
+        TestPropertyA,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        0,
+        1,
+        TestAnimationSchemaID);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsInvalidAnimationValueType)
 {
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
@@ -2753,22 +3091,26 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnsupportedSchema)
         0,
         1,
         TestAnimationSchemaID);
-    RadientAnimationResolvedPropertyDesc               Resolved;
+    RadientAnimationResolvedPropertyDesc Resolved;
+    Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
               RADIENT_STATUS_UNSUPPORTED);
     EXPECT_FALSE(pBinding);
+    EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
 }
 
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsUnsupportedNodeProperty)
 {
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
         0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
-    RadientAnimationResolvedPropertyDesc               Resolved;
+    RadientAnimationResolvedPropertyDesc Resolved;
+    Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
               RADIENT_STATUS_UNSUPPORTED);
     EXPECT_FALSE(pBinding);
+    EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
 }
 
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsOutOfRangeJointIndex)
@@ -2804,7 +3146,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongNodePropertyValu
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
 }
 
@@ -2815,7 +3157,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongRotationValueTyp
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
 }
 
@@ -2826,7 +3168,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsWrongScaleValueType)
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
 }
 
@@ -2837,7 +3179,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNodePropertyArrayOffs
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
 }
 
@@ -2848,7 +3190,7 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNodePropertyArraySize
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
 }
 
@@ -2884,26 +3226,22 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsDuplicatePhysicalWrit
     }
 }
 
-TEST_F(RadientSkeletonPoseAnimationDestinationTest, ResolvesAllPropertiesBeforeRejectingDuplicateWrites)
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, UnsupportedPropertyDoesNotMaskDuplicateWrites)
 {
     const std::array Properties = {
         MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(0, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(0, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
-    std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved;
-    for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
-        Result.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
-    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved{};
+    RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(
                   Properties.data(),
                   static_cast<Uint32>(Properties.size()),
                   Resolved.data(),
                   pBinding.GetAddressOfEmpty()),
-              RADIENT_STATUS_UNSUPPORTED);
+              RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_FALSE(pBinding);
-    for (const RadientAnimationResolvedPropertyDesc& Result : Resolved)
-        EXPECT_EQ(Result.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT);
 }
 
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullBeginUpdateOutput)

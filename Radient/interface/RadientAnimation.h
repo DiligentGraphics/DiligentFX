@@ -95,8 +95,8 @@ static DILIGENT_CONSTEXPR Uint32 InvalidRadientAnimationTargetIndex = (Uint32)~0
 /// a valid RadientAnimationChannelDesc::SamplerIndex.
 static DILIGENT_CONSTEXPR Uint32 InvalidRadientAnimationSamplerIndex = (Uint32)~0u;
 
-/// Invalid schema-specific runtime destination element. Schemas may reserve
-/// this value while allowing every smaller Uint64 value.
+/// Invalid schema-specific runtime destination element. This value is reserved;
+/// schemas may use every smaller Uint64 value.
 static DILIGENT_CONSTEXPR RadientAnimationDestinationElement InvalidRadientAnimationDestinationElement = (Uint64)~0ull;
 
 /// Built-in schema for local properties of an authored scene node.
@@ -225,7 +225,8 @@ DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_VALUE_TYPE, Uint8)
 /// Semantic interpolation applied to a resolved property's native values.
 DILIGENT_TYPED_ENUM(RADIENT_ANIMATION_VALUE_SEMANTIC, Uint8)
 {
-    /// Invalid or unspecified value semantic.
+    /// Unbound or unspecified value semantic. A destination uses this value for
+    /// a property that it does not expose.
     RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN = 0,
 
     /// Interpolates every scalar component independently.
@@ -531,6 +532,7 @@ struct RadientAnimationPropertyBindingDesc
     RadientAnimationSchemaID Schema DEFAULT_INITIALIZER(InvalidRadientAnimationSchemaID);
 
     /// Schema-specific runtime element selected by the destination mapping.
+    /// Must not equal InvalidRadientAnimationDestinationElement.
     RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
 
     /// Property identifier in Schema's namespace.
@@ -549,15 +551,17 @@ typedef struct RadientAnimationPropertyBindingDesc RadientAnimationPropertyBindi
 /// Destination result for one resolved property range.
 struct RadientAnimationResolvedPropertyDesc
 {
-    /// Semantic used to interpolate this property's native values. For
+    /// Semantic used to interpolate a bound property's native values. For
     /// example, RadientNodeRotationProperty resolves to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION, while node
     /// translation, scale, RadientMorphWeightsProperty, and ordinary numeric
     /// properties resolve to RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
-    /// The same (Schema, Property) contract must resolve to the same semantic
-    /// for every element and destination implementation. UNKNOWN and COUNT are
-    /// invalid successful results. NORMALIZED_QUATERNION requires FLOAT4
-    /// storage; binding creation rejects incompatible semantic/type pairs.
+    /// The same accepted (Schema, Property) contract must resolve to the same
+    /// non-UNKNOWN semantic for every element and destination implementation.
+    /// UNKNOWN means that the destination did not bind this property; COUNT is
+    /// always invalid.
+    /// NORMALIZED_QUATERNION requires FLOAT4 storage; binding creation rejects
+    /// incompatible semantic/type pairs.
     RADIENT_ANIMATION_VALUE_SEMANTIC Semantic DEFAULT_INITIALIZER(RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
 };
 typedef struct RadientAnimationResolvedPropertyDesc RadientAnimationResolvedPropertyDesc;
@@ -577,7 +581,8 @@ struct RadientAnimationDestinationMappingDesc
 
     /// Schema-specific element within its containing pDestination. The current
     /// skeleton-pose destination uses a zero-based joint index. Other
-    /// destinations define their own element identities.
+    /// destinations define their own element identities. Must not equal
+    /// InvalidRadientAnimationDestinationElement.
     RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
 };
 typedef struct RadientAnimationDestinationMappingDesc RadientAnimationDestinationMappingDesc;
@@ -606,18 +611,20 @@ typedef struct RadientAnimationDestinationDesc RadientAnimationDestinationDesc;
 /// Description used to compile an animation binding.
 ///
 /// Creation copies both descriptor-array levels and asks every destination to
-/// create one compiled child binding. Each child retains its destination; the
-/// outer binding retains the children. Unmapped clip targets are ignored.
-/// Every mapped target contributes all of its channels; if the destination
-/// cannot resolve any one of them, binding creation fails instead of silently
-/// dropping that channel. A zero-destination binding is valid and evaluates to
+/// resolve every channel contributed by its mapped targets. A destination may
+/// bind only the subset of schema properties that it exposes. Unsupported
+/// properties are omitted while compiling the binding and incur no evaluation
+/// cost. Each nonempty child binding retains its destination; the outer binding
+/// retains the children. Unmapped clip targets are ignored. A zero-destination
+/// or completely unbound binding is valid and evaluates to
 /// RADIENT_STATUS_NO_CHANGE.
 ///
 /// Each pDestination must occur in exactly one destination descriptor. Exact
-/// duplicate mappings and overlapping writes to the same resolved property
-/// range are invalid. A clip target may appear in multiple mappings to support
-/// fanout. Different targets may map to one element when their property ranges
-/// do not overlap. Aliasing through two different destination interface
+/// duplicate mappings and overlapping accepted writes to the same resolved
+/// property range are invalid. Unsupported requests do not participate in
+/// overlap checks. A clip target may appear in multiple mappings to support
+/// fanout. Different targets may map to one element when their accepted property
+/// ranges do not overlap. Aliasing through two different destination interface
 /// pointers cannot be detected and is the caller's responsibility; evaluation
 /// applies destination descriptors in order.
 ///
@@ -735,7 +742,7 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// never one call per element or property.
 DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
 {
-    /// Compiles a complete, ordered batch of property ranges.
+    /// Compiles the supported subset of an ordered property-range batch.
     ///
     /// pProperties contains PropertyCount requests derived from every channel
     /// mapped to this destination descriptor. pResolvedProperties contains the
@@ -743,29 +750,41 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
     /// be nonzero and both pointers must be non-null. ppBinding must be non-null
     /// and *ppBinding must be null.
     ///
-    /// On success, every output contains the semantic needed to interpolate the
-    /// corresponding property, and ppBinding receives a strong reference to an
-    /// IRadientAnimationDestinationBinding that retains this destination and
-    /// owns the compiled plan. The child binding preserves the property order
-    /// used here. This method does not retain either caller-owned array.
+    /// The implementation first resets every resolved output to UNKNOWN semantic.
+    /// On success, every supported request receives the semantic needed to
+    /// interpolate it, while unsupported schema/property requests remain UNKNOWN.
+    /// The output index of a supported request is its zero-based ordinal among
+    /// supported results in request order. ppBinding receives a strong reference
+    /// to an IRadientAnimationDestinationBinding that retains this destination
+    /// and owns the compiled plan for the supported requests. This method does
+    /// not retain either caller-owned array.
     ///
-    /// The operation is all-or-nothing: an implementation must resolve every
-    /// request or return a failure without creating a binding. It rejects
-    /// requests that resolve to overlapping physical storage, even when
+    /// For example, if three requests resolve to COMPONENT_WISE, UNKNOWN, and
+    /// NORMALIZED_QUATERNION, BeginUpdate() returns two output addresses: slot 0
+    /// for the first request and slot 1 for the third. The unsupported middle
+    /// request has no output slot.
+    ///
+    /// Unsupported requests are not failures and do not receive destination
+    /// storage. All other validation remains all-or-nothing: the implementation
+    /// rejects malformed requests, incompatible layouts for supported properties,
+    /// and requests that resolve to overlapping physical storage, even when
     /// different schemas or property IDs alias that storage. Outputs are
-    /// unspecified on failure.
+    /// unspecified on failure other than RADIENT_STATUS_UNSUPPORTED, which leaves
+    /// every result reset to its unbound state.
     ///
-    /// Returns RADIENT_STATUS_NOT_FOUND when a referenced runtime element no
-    /// longer exists, RADIENT_STATUS_UNSUPPORTED when the destination does not
-    /// expose the requested schema/property or cannot animate the requested
-    /// layout, and RADIENT_STATUS_INVALID_ARGUMENT for malformed input.
+    /// Returns RADIENT_STATUS_UNSUPPORTED without creating a binding when none
+    /// of the requests use a schema/property exposed by this destination,
+    /// RADIENT_STATUS_NOT_FOUND when a referenced runtime element for a
+    /// supported request no longer exists, and RADIENT_STATUS_INVALID_ARGUMENT
+    /// for malformed input or a layout incompatible with a supported property.
     ///
     /// On failure, *ppBinding remains null. Implementations return only
     /// RADIENT_STATUS_OK or a negative status; other nonnegative statuses are
     /// not valid for this method.
     ///
-    /// \return RADIENT_STATUS_OK when every request was compiled, or a negative
-    ///         RADIENT_STATUS value on failure.
+    /// \return RADIENT_STATUS_OK when at least one request was compiled,
+    ///         RADIENT_STATUS_UNSUPPORTED when no request was supported, or
+    ///         another negative RADIENT_STATUS value on failure.
     VIRTUAL RADIENT_STATUS METHOD(CreateBinding)(THIS_
                                                   const RadientAnimationPropertyBindingDesc* pProperties,
                                                   Uint32                                     PropertyCount,
@@ -807,11 +826,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     ///
     /// ppOutputs must be non-null. On success, *ppOutputs receives a borrowed,
     /// non-null array containing exactly one writable address for every property
-    /// supplied when this object was created, in the same order. Each address is
-    /// non-null, naturally aligned for the property's native type, and exposes
-    /// the complete tightly packed byte range described by the corresponding
-    /// RadientAnimationPropertyBindingDesc::Value. Property ranges do not
-    /// overlap because CreateBinding() rejects aliases.
+    /// accepted when this object was created, in supported-request order.
+    /// Each address is non-null, naturally aligned for the property's native
+    /// type, and exposes the complete tightly packed byte range described by the
+    /// corresponding RadientAnimationPropertyBindingDesc::Value. Property ranges
+    /// do not overlap because CreateBinding() rejects aliases.
     ///
     /// The caller writes one complete value to every returned address before
     /// calling EndUpdate(). Values must satisfy the resolved schema contract;
@@ -821,9 +840,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestinationBinding, IObject)
     ///
     /// Implementations may expose destination storage directly or return
     /// destination-owned staging storage for properties that cannot be written
-    /// in place. They may refresh or pin relocatable storage during this call.
-    /// The output array and every address in it remain valid only until the
-    /// matching EndUpdate() returns and must not be retained by the caller.
+    /// in place. Implementations may refresh or pin relocatable storage during
+    /// this call. The output array and every address in it remain valid only
+    /// until the matching EndUpdate() returns and must not be retained by the
+    /// caller.
     ///
     /// A successful call opens an update bracket and must be followed by exactly
     /// one EndUpdate() call before BeginUpdate() is called again. On failure, no
@@ -900,16 +920,18 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationClipAsset, IRadientAsset)
     VIRTUAL const RadientAnimationClipDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Compiles BindingDesc against this clip. The method invokes the
-    /// destination's CreateBinding() once for each destination descriptor. On
-    /// success, ppBinding receives a strong reference to a binding that retains
-    /// this clip and every compiled destination binding. The caller retains
+    /// destination's CreateBinding() once for each destination descriptor and
+    /// omits destinations that return RADIENT_STATUS_UNSUPPORTED. On success,
+    /// ppBinding receives a strong reference to a binding that retains this clip
+    /// and every nonempty compiled destination binding. The caller retains
     /// ownership of BindingDesc and its arrays. ppBinding must not be null and
     /// *ppBinding must be null. On failure, *ppBinding remains null and every
     /// destination binding created earlier in the operation is released.
     ///
     /// \return RADIENT_STATUS_OK when the binding was compiled,
     ///         RADIENT_STATUS_INVALID_ARGUMENT when the descriptor or output
-    ///         pointer is invalid, or the failure returned by a destination.
+    ///         pointer is invalid, or a destination failure other than
+    ///         RADIENT_STATUS_UNSUPPORTED.
     VIRTUAL RADIENT_STATUS METHOD(CreateBinding)(THIS_
                                                   const RadientAnimationBindingDesc REF BindingDesc,
                                                   IRadientAnimationBinding**            ppBinding) PURE;

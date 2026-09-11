@@ -290,6 +290,26 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
 
     try
     {
+        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+        {
+            RadientAnimationResolvedPropertyDesc& ResolvedProperty = pResolvedProperties[PropertyIndex];
+            ResolvedProperty.Semantic                              = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+        }
+
+        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
+        {
+            const RadientAnimationPropertyBindingDesc& Property = pProperties[PropertyIndex];
+            if (Property.Schema == InvalidRadientAnimationSchemaID ||
+                Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
+                Property.Property == InvalidRadientAnimationPropertyID ||
+                Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
+                Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
+                Property.Value.ArraySize == 0)
+            {
+                return RADIENT_STATUS_INVALID_ARGUMENT;
+            }
+        }
+
         const Uint32 WeightCount = static_cast<Uint32>(m_Weights.m_Weights.size());
 
         std::vector<MorphTargetWeightsAnimationRange> Ranges;
@@ -298,22 +318,15 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
         Outputs.reserve(PropertyCount);
         for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
         {
-            const RadientAnimationPropertyBindingDesc& Property = pProperties[PropertyIndex];
-            if (Property.Schema == InvalidRadientAnimationSchemaID ||
-                Property.Property == InvalidRadientAnimationPropertyID ||
-                Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
-                Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
-                Property.Value.ArraySize == 0)
-            {
-                return RADIENT_STATUS_INVALID_ARGUMENT;
-            }
+            const RadientAnimationPropertyBindingDesc& Property         = pProperties[PropertyIndex];
+            RadientAnimationResolvedPropertyDesc&      ResolvedProperty = pResolvedProperties[PropertyIndex];
 
             if (Property.Schema != RadientMorphWeightsAnimationSchemaID ||
-                Property.Property != RadientMorphWeightsProperty ||
-                Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT)
-            {
-                return RADIENT_STATUS_UNSUPPORTED;
-            }
+                Property.Property != RadientMorphWeightsProperty)
+                continue;
+
+            if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT)
+                return RADIENT_STATUS_INVALID_ARGUMENT;
 
             if (Property.DestinationElement != 0)
                 return RADIENT_STATUS_NOT_FOUND;
@@ -322,13 +335,17 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
                                                     Property.Value.ArraySize,
                                                     WeightCount))
             {
-                return RADIENT_STATUS_UNSUPPORTED;
+                return RADIENT_STATUS_INVALID_ARGUMENT;
             }
 
             const Uint32 End = Property.FirstArrayElement + Property.Value.ArraySize;
             Ranges.push_back({Property.FirstArrayElement, End});
+            ResolvedProperty.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
             Outputs.push_back(m_Weights.m_Weights.data() + Property.FirstArrayElement);
         }
+
+        if (Outputs.empty())
+            return RADIENT_STATUS_UNSUPPORTED;
 
         std::sort(Ranges.begin(), Ranges.end());
         for (size_t RangeIndex = 1; RangeIndex < Ranges.size(); ++RangeIndex)
@@ -342,12 +359,6 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
                 static_cast<IRadientAnimationDestination*>(this),
                 m_Weights,
                 std::move(Outputs))};
-
-        for (Uint32 PropertyIndex = 0; PropertyIndex < PropertyCount; ++PropertyIndex)
-        {
-            pResolvedProperties[PropertyIndex].Semantic =
-                RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-        }
 
         *ppBinding = pBinding.Detach();
         return RADIENT_STATUS_OK;

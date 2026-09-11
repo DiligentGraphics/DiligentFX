@@ -376,6 +376,91 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, ResolvesAndUpdatesDisj
     EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[1], 0.75f);
 }
 
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, IgnoresUnsupportedPropertiesAndCompactsAcceptedOutputs)
+{
+    static constexpr RadientAnimationSchemaID UnsupportedSchema =
+        {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
+    const std::array Properties = {
+        MakeMorphWeightProperty(1, 1),
+        MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema),
+        MakeMorphWeightProperty(0, 1),
+        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 4> Resolved;
+    for (RadientAnimationResolvedPropertyDesc& Property : Resolved)
+        Property.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
+        Properties.data(),
+        static_cast<Uint32>(Properties.size()),
+        Resolved.data());
+    ASSERT_NE(pBinding, nullptr);
+
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    ASSERT_NE(pOutputs[1], nullptr);
+
+    *static_cast<Float32*>(pOutputs[0]) = 0.75f;
+    *static_cast<Float32*>(pOutputs[1]) = -0.25f;
+    ASSERT_EQ(pBinding->EndUpdate(False), RADIENT_STATUS_OK);
+
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[0], -0.25f);
+    EXPECT_FLOAT_EQ(m_pWeights->GetWeights()[1], 0.75f);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, ReturnsUnsupportedWhenNoPropertiesAreAccepted)
+{
+    static constexpr RadientAnimationSchemaID UnsupportedSchema =
+        {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
+    const std::array Properties = {
+        MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema),
+        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2),
+    };
+    std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved;
+    for (RadientAnimationResolvedPropertyDesc& Property : Resolved)
+        Property.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  Properties.data(),
+                  static_cast<Uint32>(Properties.size()),
+                  Resolved.data(),
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_FALSE(pBinding);
+    for (const RadientAnimationResolvedPropertyDesc& Property : Resolved)
+        EXPECT_EQ(Property.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+}
+
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsInvalidDestinationElementBeforeFilteringUnsupportedProperty)
+{
+    static constexpr RadientAnimationSchemaID UnsupportedSchema =
+        {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
+    const RadientAnimationPropertyBindingDesc Property = MakeMorphWeightProperty(
+        0,
+        1,
+        InvalidRadientAnimationDestinationElement,
+        UnsupportedSchema,
+        2);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+
+    EXPECT_EQ(m_pDestination->CreateBinding(
+                  &Property,
+                  1,
+                  &Resolved,
+                  pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(pBinding);
+}
+
 TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsOverlappingWeightRanges)
 {
     const std::array Properties = {
@@ -393,7 +478,7 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsOverlappingWeig
     EXPECT_FALSE(pBinding);
 }
 
-TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsUnsupportedWeightPropertyLayouts)
+TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsMalformedWeightPropertyLayouts)
 {
     struct Case
     {
@@ -404,10 +489,10 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsUnsupportedWeig
     static constexpr RadientAnimationSchemaID UnsupportedSchema =
         {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
     const std::array Cases = {
-        Case{MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema), RADIENT_STATUS_UNSUPPORTED},
-        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2), RADIENT_STATUS_UNSUPPORTED},
-        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, RadientMorphWeightsProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2), RADIENT_STATUS_UNSUPPORTED},
-        Case{MakeMorphWeightProperty(1, 2), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(0, 0, 0, UnsupportedSchema), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, RadientMorphWeightsProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(0, 0), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(1, 2), RADIENT_STATUS_INVALID_ARGUMENT},
         Case{MakeMorphWeightProperty(0, 1, 1), RADIENT_STATUS_NOT_FOUND},
     };
 
