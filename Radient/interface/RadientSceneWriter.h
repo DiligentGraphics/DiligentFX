@@ -47,9 +47,9 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
 // clang-format off
 
 /// Scene graph mutation interface. Radient-created writers expose
-/// IID_RadientAnimationDestination through QueryInterface() for batched local
-/// scene-node translation, rotation, scale, and own visibility animation,
-/// where each RadientAnimationPropertyBindingDesc::DestinationElement is a
+/// IID_RadientAnimationDestination through QueryInterface() for batched scene
+/// node, light-component, and camera-component animation. Each
+/// RadientAnimationPropertyBindingDesc::DestinationElement is a
 /// RadientEntityID. No scene-writer method may be called between a successful
 /// animation destination binding BeginUpdate() and its matching EndUpdate().
 DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)

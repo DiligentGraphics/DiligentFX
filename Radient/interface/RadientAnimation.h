@@ -145,6 +145,128 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMorphWeightsAnimationS
 /// instead use element zero.
 static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientMorphWeightsProperty = 1;
 
+/// Built-in schema for animatable properties of an authored light.
+///
+/// A target's Object is the authored light identity. A scene binding may map
+/// the same authored light to one or more RadientEntityID values for runtime
+/// entities that instantiate it. Every destination entity must contain a
+/// RadientLightComponent. The schema exposes every RadientLightComponent field
+/// except the light type.
+// {BD8B6765-F0AF-4CF9-BC42-FF8F2C98CA99}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientLightAnimationSchemaID =
+    {0xbd8b6765, 0xf0af, 0x4cf9, {0xbc, 0x42, 0xff, 0x8f, 0x2c, 0x98, 0xca, 0x99}};
+
+/// FLOAT3[1] color property in RadientLightAnimationSchemaID. Components must
+/// be finite and non-negative at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightColorProperty = 1;
+
+/// FLOAT[1] intensity property in RadientLightAnimationSchemaID. Values must
+/// be finite and non-negative at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightIntensityProperty = 2;
+
+/// FLOAT[1] maximum effective range property in
+/// RadientLightAnimationSchemaID, in scene units. This property applies to
+/// point and spot lights. Values must be finite and non-negative at every
+/// sampled time; zero means unbounded.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightRangeProperty = 3;
+
+/// FLOAT[1] base-2 exposure property in RadientLightAnimationSchemaID. Values
+/// must be finite at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightExposureProperty = 4;
+
+/// FLOAT[1] inner spot-cone angle property in
+/// RadientLightAnimationSchemaID, in radians. Values must be finite,
+/// non-negative, and no greater than the resulting outer cone angle at every
+/// sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightInnerConeAngleProperty = 5;
+
+/// FLOAT[1] outer spot-cone angle property in
+/// RadientLightAnimationSchemaID, in radians. Values must be finite, no less
+/// than the resulting inner cone angle, and no greater than pi/2 at every
+/// sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightOuterConeAngleProperty = 6;
+
+/// FLOAT[1] diffuse-contribution multiplier property in
+/// RadientLightAnimationSchemaID. Values must be finite and non-negative at
+/// every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightDiffuseProperty = 7;
+
+/// FLOAT[1] specular-contribution multiplier property in
+/// RadientLightAnimationSchemaID. Values must be finite and non-negative at
+/// every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightSpecularProperty = 8;
+
+/// BOOL[1] power-normalization property in RadientLightAnimationSchemaID. Zero
+/// disables normalization and one enables it. Only STEP interpolation is
+/// supported.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightNormalizeProperty = 9;
+
+/// BOOL[1] color-temperature-enable property in
+/// RadientLightAnimationSchemaID. Zero disables color temperature and one
+/// enables it. Only STEP interpolation is supported.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightEnableColorTemperatureProperty = 10;
+
+/// FLOAT[1] color-temperature property in RadientLightAnimationSchemaID, in
+/// degrees Kelvin. Values must be finite and positive at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightColorTemperatureProperty = 11;
+
+/// FLOAT[1] radius property in RadientLightAnimationSchemaID, in scene units.
+/// Values must be finite and non-negative at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightRadiusProperty = 12;
+
+/// FLOAT[1] angular-diameter property in RadientLightAnimationSchemaID, in
+/// degrees. Values must be finite and non-negative at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightAngleProperty = 13;
+
+/// FLOAT[1] shaping-focus property in RadientLightAnimationSchemaID. Values
+/// must be finite at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightShapingFocusProperty = 14;
+
+/// Built-in schema for animatable properties of an authored camera.
+///
+/// A target's Object is the authored camera identity. A scene binding may map
+/// the same authored camera to one or more RadientEntityID values for runtime
+/// entities that instantiate it. Every destination entity must contain a
+/// RadientCameraComponent. Camera position and orientation remain properties
+/// of the containing node. Projection mode and aperture offsets are
+/// intentionally not exposed by this initial schema.
+// {FDB7924C-9096-47C7-A075-D5B9E6CCFED1}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientCameraAnimationSchemaID =
+    {0xfdb7924c, 0x9096, 0x47c7, {0xa0, 0x75, 0xd5, 0xb9, 0xe6, 0xcc, 0xfe, 0xd1}};
+
+/// FLOAT[1] horizontal aperture property in
+/// RadientCameraAnimationSchemaID, in millimeters. Values must be finite and
+/// positive at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraHorizontalApertureProperty = 1;
+
+/// FLOAT[1] vertical aperture property in RadientCameraAnimationSchemaID, in
+/// millimeters. Values must be finite and positive at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraVerticalApertureProperty = 2;
+
+/// FLOAT[1] focal-length property in RadientCameraAnimationSchemaID, in
+/// millimeters. Values must be finite and positive at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFocalLengthProperty = 3;
+
+/// FLOAT[1] near clipping-distance property in
+/// RadientCameraAnimationSchemaID, in scene units. Values must be finite and
+/// positive, and less than the resulting far clipping distance at every
+/// sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraNearClipProperty = 4;
+
+/// FLOAT[1] far clipping-distance property in RadientCameraAnimationSchemaID,
+/// in scene units. Values must be finite and greater than the resulting near
+/// clipping distance at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFarClipProperty = 5;
+
+/// FLOAT[1] lens f-stop property in RadientCameraAnimationSchemaID. Values
+/// must be finite and non-negative at every sampled time; zero disables depth
+/// of field.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFStopProperty = 6;
+
+/// FLOAT[1] focus-distance property in RadientCameraAnimationSchemaID, in scene
+/// units. Values must be finite and non-negative at every sampled time.
+static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFocusDistanceProperty = 7;
+
 
 // clang-format off
 
@@ -562,8 +684,8 @@ struct RadientAnimationResolvedPropertyDesc
     /// Semantic used to interpolate a bound property's native values. For
     /// example, RadientNodeRotationProperty resolves to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION, while node
-    /// translation, scale, visibility, RadientMorphWeightsProperty, and
-    /// ordinary numeric properties resolve to
+    /// translation, scale, visibility, light, camera,
+    /// RadientMorphWeightsProperty, and ordinary numeric properties resolve to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
     /// The same accepted (Schema, Property) contract must resolve to the same
     /// non-UNKNOWN semantic for every element and destination implementation.
@@ -763,10 +885,11 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// animation system. Radient-created skeleton poses expose it through
 /// QueryInterface() for node translation, rotation, and scale properties.
 /// Radient-created scene writers expose those properties plus node own
-/// visibility for scene entities.
+/// visibility, RadientLightAnimationSchemaID, and
+/// RadientCameraAnimationSchemaID for scene entities.
 /// Radient-created morph-target weight objects expose it for morph-weight
-/// array ranges. Custom destinations may implement it for material, light,
-/// camera, application, or extension properties. The interface is externally
+/// array ranges. Custom destinations may implement it for material,
+/// application, or extension properties. The interface is externally
 /// synchronized.
 ///
 /// Destination binding creation is a cold operation. The returned object owns

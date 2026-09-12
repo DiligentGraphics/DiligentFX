@@ -6,7 +6,9 @@ set(SOURCE
     src/Animation/RadientAnimationBindingImpl.cpp
     src/Animation/RadientAnimationRegistryImpl.cpp
     src/Animation/RadientMorphTargetWeightsImpl.cpp
+    src/Animation/RadientSceneAnimationDestinationBindingImpl.cpp
     src/Animation/RadientSceneAnimationDestinationImpl.cpp
+    src/Animation/RadientSceneAnimationProperties.cpp
     src/Animation/RadientSkeletonPoseImpl.cpp
     src/Assets/RadientAnimationClipAsset.cpp
     src/Assets/RadientAssetManagerImpl.cpp
@@ -74,6 +76,7 @@ set(INCLUDE
     include/Animation/RadientAnimationBindingImpl.hpp
     include/Animation/RadientNodeAnimationProperty.hpp
     include/Animation/RadientAnimationRegistryImpl.hpp
+    include/Animation/RadientSceneAnimationDestinationBindingImpl.hpp
     include/Animation/RadientSceneAnimationDestinationImpl.hpp
     include/Animation/RadientSkeletonPoseImpl.hpp
     include/Animation/RadientAnimationValueType.hpp

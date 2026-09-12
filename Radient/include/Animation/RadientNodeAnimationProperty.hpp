@@ -33,6 +33,7 @@ namespace Diligent
 
 enum class RadientNodeTransformField : Uint8
 {
+    Unknown     = 0,
     Translation = 1u << 0,
     Rotation    = 1u << 1,
     Scale       = 1u << 2,
@@ -60,9 +61,68 @@ static constexpr RadientNodeAnimationPropertyMask RadientNodeAnimationAllPropert
 struct RadientNodeAnimationPropertyResolution
 {
     RadientNodeAnimationPropertyKind Kind     = RadientNodeAnimationPropertyKind::Unknown;
-    RadientNodeTransformField        Field    = RadientNodeTransformField::Translation;
+    RadientNodeTransformField        Field    = RadientNodeTransformField::Unknown;
     RADIENT_ANIMATION_VALUE_SEMANTIC Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
 };
+
+struct RadientNodeAnimationPropertyInfo
+{
+    RadientAnimationPropertyID       Property = InvalidRadientAnimationPropertyID;
+    RadientNodeAnimationPropertyKind Kind     = RadientNodeAnimationPropertyKind::Unknown;
+    RadientNodeTransformField        Field    = RadientNodeTransformField::Unknown;
+    RadientAnimationValueDesc        Value;
+    RADIENT_ANIMATION_VALUE_SEMANTIC Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
+};
+
+static constexpr RadientNodeAnimationPropertyInfo RadientNodeTranslationPropertyInfo = {
+    RadientNodeTranslationProperty,
+    RadientNodeAnimationPropertyKind::Transform,
+    RadientNodeTransformField::Translation,
+    {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1},
+    RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+};
+
+static constexpr RadientNodeAnimationPropertyInfo RadientNodeRotationPropertyInfo = {
+    RadientNodeRotationProperty,
+    RadientNodeAnimationPropertyKind::Transform,
+    RadientNodeTransformField::Rotation,
+    {RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, 1},
+    RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION,
+};
+
+static constexpr RadientNodeAnimationPropertyInfo RadientNodeScalePropertyInfo = {
+    RadientNodeScaleProperty,
+    RadientNodeAnimationPropertyKind::Transform,
+    RadientNodeTransformField::Scale,
+    {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1},
+    RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+};
+
+static constexpr RadientNodeAnimationPropertyInfo RadientNodeVisibilityPropertyInfo = {
+    RadientNodeVisibilityProperty,
+    RadientNodeAnimationPropertyKind::Visibility,
+    RadientNodeTransformField::Unknown,
+    {RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1},
+    RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE,
+};
+
+inline const RadientNodeAnimationPropertyInfo* FindRadientNodeAnimationPropertyInfo(
+    RadientAnimationPropertyID Property) noexcept
+{
+    switch (Property)
+    {
+        case RadientNodeTranslationProperty:
+            return &RadientNodeTranslationPropertyInfo;
+        case RadientNodeRotationProperty:
+            return &RadientNodeRotationPropertyInfo;
+        case RadientNodeScaleProperty:
+            return &RadientNodeScalePropertyInfo;
+        case RadientNodeVisibilityProperty:
+            return &RadientNodeVisibilityPropertyInfo;
+        default:
+            return nullptr;
+    }
+}
 
 inline RADIENT_STATUS ResolveRadientNodeAnimationProperty(const RadientAnimationPropertyBindingDesc& Property,
                                                           RadientNodeAnimationPropertyMask           SupportedProperties,
@@ -83,39 +143,14 @@ inline RADIENT_STATUS ResolveRadientNodeAnimationProperty(const RadientAnimation
     if (Property.Schema != RadientNodeAnimationSchemaID)
         return RADIENT_STATUS_UNSUPPORTED;
 
-    RADIENT_ANIMATION_VALUE_TYPE ExpectedType = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
-    switch (Property.Property)
-    {
-        case RadientNodeTranslationProperty:
-            Resolution.Kind     = RadientNodeAnimationPropertyKind::Transform;
-            Resolution.Field    = RadientNodeTransformField::Translation;
-            Resolution.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            ExpectedType        = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-            break;
+    const RadientNodeAnimationPropertyInfo* pInfo =
+        FindRadientNodeAnimationPropertyInfo(Property.Property);
+    if (pInfo == nullptr)
+        return RADIENT_STATUS_UNSUPPORTED;
 
-        case RadientNodeRotationProperty:
-            Resolution.Kind     = RadientNodeAnimationPropertyKind::Transform;
-            Resolution.Field    = RadientNodeTransformField::Rotation;
-            Resolution.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION;
-            ExpectedType        = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
-            break;
-
-        case RadientNodeScaleProperty:
-            Resolution.Kind     = RadientNodeAnimationPropertyKind::Transform;
-            Resolution.Field    = RadientNodeTransformField::Scale;
-            Resolution.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            ExpectedType        = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-            break;
-
-        case RadientNodeVisibilityProperty:
-            Resolution.Kind     = RadientNodeAnimationPropertyKind::Visibility;
-            Resolution.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
-            ExpectedType        = RADIENT_ANIMATION_VALUE_TYPE_BOOL;
-            break;
-
-        default:
-            return RADIENT_STATUS_UNSUPPORTED;
-    }
+    Resolution.Kind     = pInfo->Kind;
+    Resolution.Field    = pInfo->Field;
+    Resolution.Semantic = pInfo->Semantic;
 
     if ((SupportedProperties & static_cast<RadientNodeAnimationPropertyMask>(Resolution.Kind)) == 0)
     {
@@ -123,8 +158,8 @@ inline RADIENT_STATUS ResolveRadientNodeAnimationProperty(const RadientAnimation
         return RADIENT_STATUS_UNSUPPORTED;
     }
 
-    if (Property.Value.Type != ExpectedType ||
-        Property.Value.ArraySize != 1 ||
+    if (Property.Value.Type != pInfo->Value.Type ||
+        Property.Value.ArraySize != pInfo->Value.ArraySize ||
         Property.FirstArrayElement != 0)
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;

@@ -104,6 +104,51 @@ static_assert(RadientMorphWeightsAnimationSchemaID.Data1 == 0x8e3a3b5b &&
                   RadientMorphWeightsAnimationSchemaID.Data4[7] == 0x61,
               "Unexpected morph-weights animation schema ID");
 static_assert(RadientMorphWeightsProperty == 1, "Unexpected morph-weights property ID");
+static_assert(RadientLightAnimationSchemaID.Data1 == 0xbd8b6765 &&
+                  RadientLightAnimationSchemaID.Data2 == 0xf0af &&
+                  RadientLightAnimationSchemaID.Data3 == 0x4cf9 &&
+                  RadientLightAnimationSchemaID.Data4[0] == 0xbc &&
+                  RadientLightAnimationSchemaID.Data4[1] == 0x42 &&
+                  RadientLightAnimationSchemaID.Data4[2] == 0xff &&
+                  RadientLightAnimationSchemaID.Data4[3] == 0x8f &&
+                  RadientLightAnimationSchemaID.Data4[4] == 0x2c &&
+                  RadientLightAnimationSchemaID.Data4[5] == 0x98 &&
+                  RadientLightAnimationSchemaID.Data4[6] == 0xca &&
+                  RadientLightAnimationSchemaID.Data4[7] == 0x99,
+              "Unexpected light-animation schema ID");
+static_assert(RadientLightColorProperty == 1, "Unexpected light-color property ID");
+static_assert(RadientLightIntensityProperty == 2, "Unexpected light-intensity property ID");
+static_assert(RadientLightRangeProperty == 3, "Unexpected light-range property ID");
+static_assert(RadientLightExposureProperty == 4, "Unexpected light-exposure property ID");
+static_assert(RadientLightInnerConeAngleProperty == 5, "Unexpected light-inner-cone property ID");
+static_assert(RadientLightOuterConeAngleProperty == 6, "Unexpected light-outer-cone property ID");
+static_assert(RadientLightDiffuseProperty == 7, "Unexpected light-diffuse property ID");
+static_assert(RadientLightSpecularProperty == 8, "Unexpected light-specular property ID");
+static_assert(RadientLightNormalizeProperty == 9, "Unexpected light-normalize property ID");
+static_assert(RadientLightEnableColorTemperatureProperty == 10, "Unexpected light-enable-color-temperature property ID");
+static_assert(RadientLightColorTemperatureProperty == 11, "Unexpected light-color-temperature property ID");
+static_assert(RadientLightRadiusProperty == 12, "Unexpected light-radius property ID");
+static_assert(RadientLightAngleProperty == 13, "Unexpected light-angle property ID");
+static_assert(RadientLightShapingFocusProperty == 14, "Unexpected light-shaping-focus property ID");
+static_assert(RadientCameraAnimationSchemaID.Data1 == 0xfdb7924c &&
+                  RadientCameraAnimationSchemaID.Data2 == 0x9096 &&
+                  RadientCameraAnimationSchemaID.Data3 == 0x47c7 &&
+                  RadientCameraAnimationSchemaID.Data4[0] == 0xa0 &&
+                  RadientCameraAnimationSchemaID.Data4[1] == 0x75 &&
+                  RadientCameraAnimationSchemaID.Data4[2] == 0xd5 &&
+                  RadientCameraAnimationSchemaID.Data4[3] == 0xb9 &&
+                  RadientCameraAnimationSchemaID.Data4[4] == 0xe6 &&
+                  RadientCameraAnimationSchemaID.Data4[5] == 0xcc &&
+                  RadientCameraAnimationSchemaID.Data4[6] == 0xfe &&
+                  RadientCameraAnimationSchemaID.Data4[7] == 0xd1,
+              "Unexpected camera-animation schema ID");
+static_assert(RadientCameraHorizontalApertureProperty == 1, "Unexpected camera-horizontal-aperture property ID");
+static_assert(RadientCameraVerticalApertureProperty == 2, "Unexpected camera-vertical-aperture property ID");
+static_assert(RadientCameraFocalLengthProperty == 3, "Unexpected camera-focal-length property ID");
+static_assert(RadientCameraNearClipProperty == 4, "Unexpected camera-near-clip property ID");
+static_assert(RadientCameraFarClipProperty == 5, "Unexpected camera-far-clip property ID");
+static_assert(RadientCameraFStopProperty == 6, "Unexpected camera-f-stop property ID");
+static_assert(RadientCameraFocusDistanceProperty == 7, "Unexpected camera-focus-distance property ID");
 static_assert(std::is_standard_layout<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationSamplerDesc>::value, "RadientAnimationSamplerDesc must be a standard-layout type");
