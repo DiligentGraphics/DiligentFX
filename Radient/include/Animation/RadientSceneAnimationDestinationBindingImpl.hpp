@@ -29,21 +29,12 @@
 #include "RadientAnimation.h"
 #include "Scene/RadientSceneState.hpp"
 
-#include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
-
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/flat_hash_map.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
+#include "STDAllocator.hpp"
 
 #include <cstddef>
-#include <vector>
+#include <memory>
 
 namespace Diligent
 {
@@ -74,6 +65,8 @@ public:
 private:
     friend class RadientSceneAnimationDestinationImpl;
 
+    class Builder;
+
     /// Selects direct component storage or binding-owned staging storage for a sampler output.
     enum class OutputStorageKind : Uint8
     {
@@ -88,8 +81,8 @@ private:
     struct StorageGroup;
 
     /// Returns the current address of one component storage for an entity.
-    using AcquireStorageFunc = void* (*)(RadientSceneAnimationDestinationBindingImpl& Binding,
-                                         entt::entity                                 Entity) noexcept;
+    using AcquireStorageFunc = void* (*)(RadientSceneAnimationDestinationBindingImpl & Binding,
+                                         entt::entity Entity) noexcept;
 
     /// Applies staged values and reports changes that depend on the sampled result.
     using FinalizeStorageFunc = RadientSceneState::CHANGE_FLAGS (*)(
@@ -161,53 +154,10 @@ private:
         size_t            Offset        = 0;
     };
 
-    /// Construction-only range used to reject overlaps within one storage address space.
-    struct BoundRange
-    {
-        Uint32            StorageIndex  = 0;
-        OutputStorageKind OutputStorage = OutputStorageKind::Direct;
-        size_t            Offset        = 0;
-        size_t            Size          = 0;
-    };
-
-    /// Identifies one entity/storage pair in the construction-time interning map.
-    struct StorageKey
-    {
-        Uint32             EntityIndex = 0;
-        const StorageDesc* pStorage    = nullptr;
-
-        bool operator==(const StorageKey& Rhs) const noexcept
-        {
-            return EntityIndex == Rhs.EntityIndex && pStorage == Rhs.pStorage;
-        }
-    };
-
-    /// Hashes the entity/storage identity used by the construction map.
-    struct StorageKeyHash
-    {
-        size_t operator()(const StorageKey& Key) const noexcept
-        {
-            return ComputeHash(Key.EntityIndex, Key.pStorage);
-        }
-    };
-
-    /// One-shot compilation of the supported subset and its compact playback plan.
+    /// Compiles the supported property subset into the compact playback plan.
     RADIENT_STATUS Initialize(const RadientAnimationPropertyBindingDesc* pProperties,
                               Uint32                                     PropertyCount,
                               RadientAnimationResolvedPropertyDesc*      pResolvedProperties);
-
-    /// Resolves and appends one supported property to the compact output sequence.
-    RADIENT_STATUS AddProperty(const RadientAnimationPropertyBindingDesc& Property,
-                               RadientAnimationResolvedPropertyDesc&      ResolvedProperty);
-
-    /// Validates output ranges and releases state used only during initialization.
-    RADIENT_STATUS FinalizeInitialization();
-
-    /// Interns a destination entity and validates that it currently exists.
-    RADIENT_STATUS GetOrAddEntity(RadientEntityID Entity, Uint32& EntityIndex);
-
-    /// Interns one entity/storage pair and validates that the component exists.
-    RADIENT_STATUS GetOrAddStorageGroup(Uint32 EntityIndex, const StorageDesc& Storage, Uint32& StorageIndex);
 
     /// Looks up the declarative storage mapping for a public animation property.
     static const PropertyDesc* FindProperty(RadientAnimationSchemaID   Schema,
@@ -245,19 +195,29 @@ private:
     const RefCntAutoPtr<IRadientAnimationDestination> m_pDestination;
     RadientSceneState&                                m_State;
 
-    // Construction-only interning state.
-    absl::flat_hash_map<RadientEntityID, Uint32>            m_EntityIndices;
-    absl::flat_hash_map<StorageKey, Uint32, StorageKeyHash> m_StorageIndices;
+    // Owns the single allocation containing every playback array.
+    std::unique_ptr<void, STDDeleterRawMem<void>> m_RuntimeMemory;
 
-    // Compiled entity, storage, and output plan. Bound ranges are construction-only.
-    std::vector<BindingEntity> m_Entities;
-    std::vector<StorageGroup>  m_StorageGroups;
-    std::vector<Uint32>        m_FinalizeStorageIndices;
-    std::vector<BoundOutput>   m_BoundOutputs;
-    std::vector<BoundRange>    m_BoundRanges;
-    std::vector<void*>         m_Outputs;
+    // Entities whose ECS handles are reacquired before each update.
+    BindingEntity* m_pEntities = nullptr;
+    // Entity/component groups acquired and finalized together.
+    StorageGroup* m_pStorageGroups = nullptr;
+    // Indices of storage groups that require post-write finalization.
+    const Uint32* m_pFinalizeStorageIndices = nullptr;
+    // Relative output locations corresponding to accepted properties.
+    const BoundOutput* m_pBoundOutputs = nullptr;
+    // Writable output addresses returned to the animation evaluator.
+    void** m_ppOutputs = nullptr;
 
-    // Revisions published for every completed update; finalizers add conditional changes.
+    // Number of entries in m_pEntities.
+    Uint32 m_EntityCount = 0;
+    // Number of entries in m_pStorageGroups.
+    Uint32 m_StorageGroupCount = 0;
+    // Number of entries in m_pFinalizeStorageIndices.
+    Uint32 m_FinalizeStorageCount = 0;
+    // Number of entries in both output arrays.
+    Uint32 m_OutputCount = 0;
+    // Scene revisions published for every completed update.
     RadientSceneState::CHANGE_FLAGS m_UnconditionalChangeFlags = RadientSceneState::CHANGE_FLAG_NONE;
 };
 
