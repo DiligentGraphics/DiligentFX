@@ -24,25 +24,35 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-
-/// \file
-/// Umbrella include for Radient public interfaces.
-
-#include "RadientMath.h"
-#include "RadientTypes.h"
 #include "RadientVertexLayout.h"
-#include "RadientAssets.h"
-#include "RadientMorphTargets.h"
-#include "RadientSkinning.h"
-#include "RadientAnimation.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+
+// Link and execute the C entry points as well as compiling their declarations.
+int RadientVertexLayout_C_TestHelpers(void)
+{
+    RadientVertexAttributeDesc Attribute = {"POSITION", 0, 0, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
+
+    if (Diligent_GetRadientVertexComponentSize(RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32) != 4 ||
+        Diligent_GetRadientVertexAttributeSize(&Attribute) != 12)
+        return 1;
+
+    if (Diligent_GetRadientVertexAttributeSize(0) != 0)
+        return 2;
+
+    Attribute.Normalized = True;
+    if (Diligent_GetRadientVertexAttributeSize(&Attribute) != 0)
+        return 3;
+
+    return 0;
+}
+
+// The prefixed macros are integer constant expressions for C static initializers.
+const RadientVertexLayoutDesc* RadientVertexLayout_C_GetAutomaticLayout(void)
+{
+    static const RadientVertexAttributeDesc Attributes[] = {
+        {"POSITION", 0, DILIGENT_RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, 0},
+        {"TEXCOORD_0", 0, DILIGENT_RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, 0},
+    };
+    static const RadientVertexBufferLayoutDesc Buffer = {DILIGENT_RADIENT_VERTEX_AUTO_STRIDE};
+    static const RadientVertexLayoutDesc       Layout = {Attributes, 2, &Buffer, 1};
+    return &Layout;
+}

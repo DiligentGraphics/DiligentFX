@@ -24,25 +24,27 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientVertexLayout.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientVertexLayout_C_UseTypes(void)
+{
+    RadientVertexAttributeDesc    Attribute = {0};
+    RadientVertexBufferLayoutDesc Buffer    = {0};
+    RadientVertexLayoutDesc       Layout    = {0};
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientVertexLayout.h"
-#include "RadientAssets.h"
-#include "RadientMorphTargets.h"
-#include "RadientSkinning.h"
-#include "RadientAnimation.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    Attribute.Semantic       = "COLOR_0";
+    Attribute.BufferIndex    = 0;
+    Attribute.ByteOffset     = RADIENT_VERTEX_AUTO_OFFSET;
+    Attribute.ComponentType  = RADIENT_VERTEX_COMPONENT_TYPE_UINT8;
+    Attribute.ComponentCount = 4;
+    Attribute.Normalized     = True;
+    Buffer.ByteStride        = RADIENT_VERTEX_AUTO_STRIDE;
+    Layout.pAttributes       = &Attribute;
+    Layout.AttributeCount    = 1;
+    Layout.pBuffers          = &Buffer;
+    Layout.BufferCount       = 1;
+
+    (void)Layout;
+    (void)Diligent_GetRadientVertexComponentSize(Attribute.ComponentType);
+    (void)Diligent_GetRadientVertexAttributeSize(&Attribute);
+}

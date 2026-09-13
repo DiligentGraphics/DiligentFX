@@ -28,6 +28,7 @@
 
 #include "Assets/RadientTextureFormat.hpp"
 #include "Assets/RadientTextureSource.hpp"
+#include "Assets/RadientVertexLayout.hpp"
 #include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 #include "Errors.hpp"
@@ -58,6 +59,12 @@ bool LogValidationError(const char* Type, ArgsType&&... Args)
 }
 
 } // namespace
+
+bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout)
+{
+    ResolvedVertexLayout Resolved;
+    return ResolveVertexLayout(Layout, Resolved);
+}
 
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
 {

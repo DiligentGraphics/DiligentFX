@@ -36,6 +36,7 @@ set(SOURCE
     src/Assets/RadientSurfaceMaterialAssetImpl.cpp
     src/Assets/RadientTextureAssetManager.cpp
     src/Assets/RadientTextureSource.cpp
+    src/Assets/RadientVertexLayout.cpp
     src/Core/RadientBackendImpl.cpp
     src/Core/RadientEngineImpl.cpp
     src/Core/RadientViewImpl.cpp
@@ -102,6 +103,7 @@ set(INCLUDE
     include/Assets/RadientTextureAssetManager.hpp
     include/Assets/RadientTextureFormat.hpp
     include/Assets/RadientTextureSource.hpp
+    include/Assets/RadientVertexLayout.hpp
     include/Core/RadientBackendImpl.hpp
     include/Core/RadientEngineImpl.hpp
     include/Core/RadientValidation.hpp
@@ -159,6 +161,7 @@ set(INTERFACE
     interface/RadientSkinning.h
     interface/RadientStandardMaterialParameters.h
     interface/RadientTypes.h
+    interface/RadientVertexLayout.h
     interface/RadientView.h
 )
 

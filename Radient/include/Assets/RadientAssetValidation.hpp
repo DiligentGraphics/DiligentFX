@@ -31,6 +31,20 @@
 namespace Diligent
 {
 
+struct RadientVertexLayoutDesc;
+
+/// Checks memory-layout structure, encodings, unique nonempty semantics,
+/// strides, buffer indices, and attribute ranges within vertex records.
+/// Resolves automatic offsets and strides before checking record ranges, without
+/// modifying the input. Rejects automatic strides for unreferenced buffers and
+/// resolved sizes that reach or exceed the reserved 0xFFFFFFFF sentinel.
+/// An empty layout is valid only when both counts are zero; its array
+/// pointers are ignored. Does not require POSITION, impose renderer/glTF
+/// semantic or alignment restrictions, or check source byte spans.
+/// Unaligned and aliased attributes are valid descriptions. Returns false
+/// without logging for invalid layouts, including compatibility queries.
+bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout);
+
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI);
 bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo);
 bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo);
