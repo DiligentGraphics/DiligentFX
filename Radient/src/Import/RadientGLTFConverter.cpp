@@ -440,8 +440,7 @@ RADIENT_STATUS GetAnimationSamplerLayout(const GLTF::AnimationSampler&    Sample
 
     const size_t ExpectedOutputElementCount = ValueCount * ArraySize;
     if (Sampler.OutputComponentCount != ComponentCount ||
-        Sampler.Outputs.size() % ComponentCount != 0 ||
-        Sampler.Outputs.size() / ComponentCount != ExpectedOutputElementCount)
+        Sampler.GetOutputElementCount() != ExpectedOutputElementCount)
     {
         LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SamplerIndex,
                             " has an invalid number of ", ValueName, " values");
@@ -511,12 +510,28 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
         return LayoutStatus;
     VERIFY_EXPR(ValueCount != 0);
 
-    for (size_t ComponentIndex = 0; ComponentIndex < Sampler.Outputs.size(); ++ComponentIndex)
+    // Core glTF transform and morph-weight channels require FLOAT outputs.
+    // Typed conversion for KHR_animation_pointer is property-specific and will
+    // be performed when those targets are mapped to Radient properties.
+    if (Sampler.OutputValueType != VT_FLOAT32 || Sampler.OutputIsNormalized)
     {
-        if (!RadientMath::IsFinite(Sampler.Outputs[ComponentIndex]))
+        LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
+                            " has an incompatible ", ValueName, " output component type");
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    const size_t ComponentValueCount = Sampler.OutputData.size() / sizeof(Float32);
+    for (size_t ComponentIndex = 0; ComponentIndex < ComponentValueCount; ++ComponentIndex)
+    {
+        Float32 Component;
+        std::memcpy(&Component,
+                    Sampler.OutputData.data() + ComponentIndex * sizeof(Component),
+                    sizeof(Component));
+        if (!RadientMath::IsFinite(Component))
         {
             LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
-                                " contains a non-finite ", ValueName, " component at index ", ComponentIndex);
+                                " contains a non-finite ", ValueName, " component at index ",
+                                ComponentIndex);
             return RADIENT_STATUS_INVALID_DATA;
         }
     }
@@ -571,8 +586,22 @@ RADIENT_STATUS CreateImportedAnimationClip(
             continue;
         }
 
-        Uint32 NodeIndex;
-        if (!GetNodeIndex(Model, Channel.pNode, NodeIndex))
+        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::POINTER)
+        {
+            LOG_WARNING_MESSAGE("Skipping unsupported animation-pointer channel in GLTF animation ",
+                                AnimationIndex);
+            continue;
+        }
+
+        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::UNKNOWN)
+        {
+            LOG_WARNING_MESSAGE("Skipping unsupported channel path in GLTF animation ", AnimationIndex);
+            continue;
+        }
+
+        const GLTF::Node* pNode = Channel.GetNode();
+        Uint32            NodeIndex;
+        if (!GetNodeIndex(Model, pNode, NodeIndex))
         {
             LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
                                 " channel that references an invalid target node");
@@ -623,14 +652,14 @@ RADIENT_STATUS CreateImportedAnimationClip(
 
             case GLTF::AnimationChannel::PATH_TYPE::WEIGHTS:
             {
-                if (Channel.pNode->pMesh == nullptr)
+                if (pNode->pMesh == nullptr)
                 {
                     LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
                                         " morph-weight channel for a node without a mesh");
                     continue;
                 }
 
-                const size_t MorphTargetCount = Channel.pNode->pMesh->GetMorphTargetCount();
+                const size_t MorphTargetCount = pNode->pMesh->GetMorphTargetCount();
                 if (MorphTargetCount == 0 || MorphTargetCount > std::numeric_limits<Uint32>::max())
                 {
                     LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
@@ -745,20 +774,12 @@ RADIENT_STATUS CreateImportedAnimationClip(
         const AnimationClipSamplerStorage& Storage = SamplerStorage[SamplerIndex];
         const GLTF::AnimationSampler&      Source  = Animation.Samplers[Storage.SourceSamplerIndex];
 
-        Uint64 ValueDataSize = 0;
-        if (!CheckedMultiply(static_cast<Uint64>(Source.Outputs.size()), sizeof(Float32), ValueDataSize))
-        {
-            LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
-                                " because its sampler value data is too large");
-            return RADIENT_STATUS_NO_CHANGE;
-        }
-
         RadientAnimationSamplerDesc& Desc = Samplers[SamplerIndex];
         Desc.Value                        = Storage.Value;
         Desc.Interpolation                = Storage.Interpolation;
         Desc.pTimes                       = Storage.Times.data();
-        Desc.pValues                      = Source.Outputs.data();
-        Desc.ValueDataSize                = ValueDataSize;
+        Desc.pValues                      = Source.OutputData.data();
+        Desc.ValueDataSize                = static_cast<Uint64>(Source.OutputData.size());
         Desc.KeyframeCount                = static_cast<Uint32>(Storage.Times.size());
     }
 

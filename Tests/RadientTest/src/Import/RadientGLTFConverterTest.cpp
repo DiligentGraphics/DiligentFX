@@ -73,6 +73,28 @@ namespace
 static constexpr Uint32 TestVertexCount = 3;
 static constexpr float  EPSILON         = 1e-5f;
 
+template <typename ValueType>
+void SetAnimationSamplerOutputData(GLTF::AnimationSampler&          Sampler,
+                                   VALUE_TYPE                       OutputValueType,
+                                   Uint32                           OutputComponentCount,
+                                   std::initializer_list<ValueType> Values,
+                                   bool                             OutputIsNormalized = false)
+{
+    Sampler.OutputValueType      = OutputValueType;
+    Sampler.OutputComponentCount = OutputComponentCount;
+    Sampler.OutputIsNormalized   = OutputIsNormalized;
+    Sampler.OutputData.resize(Values.size() * sizeof(ValueType));
+    if (Values.size() != 0)
+        std::memcpy(Sampler.OutputData.data(), Values.begin(), Sampler.OutputData.size());
+}
+
+void SetFloatAnimationSamplerOutputData(GLTF::AnimationSampler&        Sampler,
+                                        Uint32                         OutputComponentCount,
+                                        std::initializer_list<Float32> Values)
+{
+    SetAnimationSamplerOutputData(Sampler, VT_FLOAT32, OutputComponentCount, Values);
+}
+
 class FailingAnimationRegistry final : public ObjectBase<IRadientAnimationRegistry>
 {
 public:
@@ -162,8 +184,7 @@ RADIENT_STATUS ExtractSingleMorphAnimation(
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Samplers.emplace_back(Interpolation);
     Animation.Samplers[0].Inputs.assign(Inputs);
-    Animation.Samplers[0].OutputComponentCount = OutputComponentCount;
-    Animation.Samplers[0].Outputs.assign(Outputs);
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], OutputComponentCount, Outputs);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
 
     return RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager);
@@ -1513,29 +1534,16 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     Animation.Name             = "Joint motion";
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers.back().Inputs               = {2.f, 4.f};
-    Animation.Samplers.back().OutputComponentCount = 3;
-    Animation.Samplers.back().Outputs              = {
-        0.f, 0.f, 3.f,
-        2.f, 0.f, 3.f};
+    Animation.Samplers.back().Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers.back(), 3, {0.f, 0.f, 3.f, 2.f, 0.f, 3.f});
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
-    Animation.Samplers.back().Inputs               = {2.f, 4.f};
-    Animation.Samplers.back().OutputComponentCount = 4;
-    Animation.Samplers.back().Outputs              = {
-        0.f, 0.f, 0.f, 0.f,
-        0.f, 0.f, 0.f, 1.f,
-        0.f, 0.f, 0.f, 0.f,
-        0.f, 0.f, 0.f, 0.f,
-        0.f, 0.f, 1.f, 0.f,
-        0.f, 0.f, 0.f, 0.f};
+    Animation.Samplers.back().Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers.back(), 4, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f});
 
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
-    Animation.Samplers.back().Inputs               = {2.f, 4.f};
-    Animation.Samplers.back().OutputComponentCount = 3;
-    Animation.Samplers.back().Outputs              = {
-        2.f, 3.f, 4.f,
-        5.f, 6.f, 7.f};
+    Animation.Samplers.back().Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers.back(), 3, {2.f, 3.f, 4.f, 5.f, 6.f, 7.f});
 
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[2], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[3], 1);
@@ -1683,17 +1691,11 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Node motion";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {2.f, 4.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        1.f, 2.f, 3.f,
-        4.f, 5.f, 6.f};
+    Animation.Samplers[0].Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
-    Animation.Samplers[1].Inputs               = {3.f, 5.f};
-    Animation.Samplers[1].OutputComponentCount = 3;
-    Animation.Samplers[1].Outputs              = {
-        1.f, 1.f, 1.f,
-        2.f, 2.f, 2.f};
+    Animation.Samplers[1].Inputs = {3.f, 5.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {1.f, 1.f, 1.f, 2.f, 2.f, 2.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 1);
 
@@ -1745,6 +1747,46 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     EXPECT_FLOAT_EQ(ScaleSampler.pTimes[1], 3.f);
 }
 
+TEST(RadientGLTFConverterTest, UnsupportedAnimationPointerDoesNotDiscardCoreChannel)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Pointer and transform";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetAnimationSamplerOutputData(
+        Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{0, 1});
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+        &Model.Nodes[0],
+        "/extensions/KHR_node_visibility/visible",
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+}
+
 TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
@@ -1766,21 +1808,18 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Expression";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
-    Animation.Samplers[0].Inputs               = {2.f, 4.f};
-    Animation.Samplers[0].OutputComponentCount = 1;
-    Animation.Samplers[0].Outputs              = {
+    Animation.Samplers[0].Inputs                     = {2.f, 4.f};
+    const std::initializer_list<Float32> MorphValues = {
         0.f, 0.f, 0.f,
         0.1f, 0.2f, 0.3f,
         1.f, 2.f, 3.f,
         4.f, 5.f, 6.f,
         0.4f, 0.5f, 0.6f,
         0.f, 0.f, 0.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, MorphValues);
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[1].Inputs               = {2.f, 4.f};
-    Animation.Samplers[1].OutputComponentCount = 3;
-    Animation.Samplers[1].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 2.f, 3.f};
+    Animation.Samplers[1].Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
 
@@ -1824,14 +1863,14 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
     EXPECT_EQ(WeightSampler.Value.ArraySize, 3u);
     EXPECT_EQ(WeightSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
     ASSERT_EQ(WeightSampler.KeyframeCount, 2u);
-    EXPECT_EQ(WeightSampler.ValueDataSize, sizeof(Float32) * Animation.Samplers[0].Outputs.size());
+    EXPECT_EQ(WeightSampler.ValueDataSize, sizeof(Float32) * MorphValues.size());
     ASSERT_NE(WeightSampler.pTimes, nullptr);
     EXPECT_FLOAT_EQ(WeightSampler.pTimes[0], 0.f);
     EXPECT_FLOAT_EQ(WeightSampler.pTimes[1], 2.f);
     ASSERT_NE(WeightSampler.pValues, nullptr);
     const auto* const pWeights = static_cast<const Float32*>(WeightSampler.pValues);
-    for (size_t ValueIndex = 0; ValueIndex < Animation.Samplers[0].Outputs.size(); ++ValueIndex)
-        EXPECT_FLOAT_EQ(pWeights[ValueIndex], Animation.Samplers[0].Outputs[ValueIndex]);
+    for (size_t ValueIndex = 0; ValueIndex < MorphValues.size(); ++ValueIndex)
+        EXPECT_FLOAT_EQ(pWeights[ValueIndex], MorphValues.begin()[ValueIndex]);
 
     const RadientAnimationChannelDesc* const pTranslationChannel =
         FindAnimationChannel(ClipDesc, TransformTargetIndex, RadientNodeTranslationProperty);
@@ -1864,17 +1903,11 @@ TEST(RadientGLTFConverterTest, NonFiniteMorphChannelDoesNotDiscardValidTransform
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Valid transform and non-finite morph";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 1;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.1f, 0.2f,
-        0.3f, std::numeric_limits<Float32>::quiet_NaN(), 0.5f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {0.f, 0.1f, 0.2f, 0.3f, std::numeric_limits<Float32>::quiet_NaN(), 0.5f});
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[1].Inputs               = {0.f, 1.f};
-    Animation.Samplers[1].OutputComponentCount = 3;
-    Animation.Samplers[1].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 2.f, 3.f};
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
 
     // Put the malformed channel first to verify that a partial morph-channel
     // attempt does not leave an orphan target or sampler in the resulting clip.
@@ -2013,9 +2046,8 @@ TEST(RadientGLTFConverterTest, MorphAnimationSkipsNodeWithoutMesh)
     Model.Animations.resize(1);
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 1;
-    Animation.Samplers[0].Outputs              = {0.f, 1.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {0.f, 1.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
 
     RadientImport::ImportedDocument Scene;
@@ -2050,9 +2082,8 @@ TEST(RadientGLTFConverterTest, MorphAnimationSkipsSharedSamplerWithIncompatibleA
     Model.Animations.resize(1);
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 1;
-    Animation.Samplers[0].Outputs              = {0.f, 0.25f, 0.5f, 0.75f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {0.f, 0.25f, 0.5f, 0.75f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[0], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::WEIGHTS, &Model.Nodes[1], 0);
 
@@ -2098,17 +2129,11 @@ TEST(RadientGLTFConverterTest, GenericAnimationRetainsTargetsOutsideSkeletonMapp
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Mixed motion";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 0.f, 0.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 0.f, 0.f});
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
-    Animation.Samplers[1].Inputs               = {0.f, 1.f};
-    Animation.Samplers[1].OutputComponentCount = 3;
-    Animation.Samplers[1].Outputs              = {
-        1.f, 1.f, 1.f,
-        2.f, 2.f, 2.f};
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {1.f, 1.f, 1.f, 2.f, 2.f, 2.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[1], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 1);
 
@@ -2160,11 +2185,8 @@ TEST(RadientGLTFConverterTest, GenericAnimationReusesCompatibleSourceSamplerAcro
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Shared sampler";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        1.f, 2.f, 3.f,
-        4.f, 5.f, 6.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::SCALE, &Model.Nodes[0], 0);
 
@@ -2209,11 +2231,8 @@ TEST(RadientGLTFConverterTest, GenericAnimationSkipsChannelWithIncompatibleShare
     Model.Animations.resize(1);
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 1.f, 1.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 1.f, 1.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::ROTATION, &Model.Nodes[0], 0);
 
@@ -2242,11 +2261,8 @@ TEST(RadientGLTFConverterTest, MalformedTransformOnlyAnimationDoesNotFailSceneCo
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Malformed transform animation";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 2;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.f,
-        1.f, 1.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 2, {0.f, 0.f, 1.f, 1.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
 
     RadientImport::ImportedDocument Scene;
@@ -2268,17 +2284,11 @@ TEST(RadientGLTFConverterTest, InvalidAnimationTimeRangeDoesNotDiscardFollowingA
     GLTF::Animation& InvalidAnimation = Model.Animations[0];
     InvalidAnimation.Name             = "Overflowing time range";
     InvalidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    InvalidAnimation.Samplers[0].Inputs               = {-MaxTime, -1.f};
-    InvalidAnimation.Samplers[0].OutputComponentCount = 3;
-    InvalidAnimation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 0.f, 0.f};
+    InvalidAnimation.Samplers[0].Inputs = {-MaxTime, -1.f};
+    SetFloatAnimationSamplerOutputData(InvalidAnimation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 0.f, 0.f});
     InvalidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    InvalidAnimation.Samplers[1].Inputs               = {1.f, MaxTime};
-    InvalidAnimation.Samplers[1].OutputComponentCount = 3;
-    InvalidAnimation.Samplers[1].Outputs              = {
-        1.f, 1.f, 1.f,
-        2.f, 2.f, 2.f};
+    InvalidAnimation.Samplers[1].Inputs = {1.f, MaxTime};
+    SetFloatAnimationSamplerOutputData(InvalidAnimation.Samplers[1], 3, {1.f, 1.f, 1.f, 2.f, 2.f, 2.f});
     InvalidAnimation.Channels.emplace_back(
         GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
     InvalidAnimation.Channels.emplace_back(
@@ -2287,11 +2297,8 @@ TEST(RadientGLTFConverterTest, InvalidAnimationTimeRangeDoesNotDiscardFollowingA
     GLTF::Animation& ValidAnimation = Model.Animations[1];
     ValidAnimation.Name             = "Valid following animation";
     ValidAnimation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    ValidAnimation.Samplers[0].Inputs               = {2.f, 4.f};
-    ValidAnimation.Samplers[0].OutputComponentCount = 3;
-    ValidAnimation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 2.f, 3.f};
+    ValidAnimation.Samplers[0].Inputs = {2.f, 4.f};
+    SetFloatAnimationSamplerOutputData(ValidAnimation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
     ValidAnimation.Channels.emplace_back(
         GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
 
@@ -2325,11 +2332,8 @@ TEST(RadientGLTFConverterTest, StoppedAssetManagerAnimationFailureRemainsFatal)
 
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 2.f, 3.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
     Animation.Channels.emplace_back(
         GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 0);
 
@@ -2364,11 +2368,8 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Shared motion";
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
-    Animation.Samplers[0].Inputs               = {0.f, 1.f};
-    Animation.Samplers[0].OutputComponentCount = 3;
-    Animation.Samplers[0].Outputs              = {
-        0.f, 0.f, 0.f,
-        1.f, 0.f, 0.f};
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 3, {0.f, 0.f, 0.f, 1.f, 0.f, 0.f});
     Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[1], 0);
 
     RadientImport::ImportedDocument Scene;
