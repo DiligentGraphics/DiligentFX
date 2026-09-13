@@ -48,6 +48,7 @@
 #include "TinyGltfModelView.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <string>
@@ -450,12 +451,60 @@ RADIENT_STATUS GetAnimationSamplerLayout(const GLTF::AnimationSampler&    Sample
     return RADIENT_STATUS_OK;
 }
 
+static constexpr Uint8 NodeTranslationPropertyMask = 1u << 0u;
+static constexpr Uint8 NodeRotationPropertyMask    = 1u << 1u;
+static constexpr Uint8 NodeScalePropertyMask       = 1u << 2u;
+static constexpr Uint8 NodeVisibilityPropertyMask  = 1u << 3u;
+static constexpr Uint8 NodeTransformPropertyMask =
+    NodeTranslationPropertyMask | NodeRotationPropertyMask | NodeScalePropertyMask;
+
+struct AnimationPointerPropertyDesc
+{
+    GLTF::AnimationChannel::OBJECT_TYPE ObjectType;
+    const char*                         PropertyPath;
+    RadientAnimationSchemaID            Schema;
+    RadientAnimationPropertyID          Property;
+    RadientAnimationValueDesc           Value;
+    Uint32                              ComponentCount;
+    Uint8                               PropertyMask;
+    const char*                         ValueName;
+};
+
+const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
+    const GLTF::AnimationChannel& Channel)
+{
+    static constexpr AnimationPointerPropertyDesc Properties[] = {
+        {
+            GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+            "/extensions/KHR_node_visibility/visible",
+            RadientNodeAnimationSchemaID,
+            RadientNodeVisibilityProperty,
+            {RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1},
+            1,
+            NodeVisibilityPropertyMask,
+            "visibility",
+        },
+    };
+
+    for (const AnimationPointerPropertyDesc& Property : Properties)
+    {
+        if (Property.ObjectType == Channel.ObjectType &&
+            Channel.PropertyPath == Property.PropertyPath)
+        {
+            return &Property;
+        }
+    }
+
+    return nullptr;
+}
+
 struct AnimationClipSamplerStorage
 {
     Uint32                          SourceSamplerIndex = InvalidRadientAnimationSamplerIndex;
     RadientAnimationValueDesc       Value;
     RADIENT_ANIMATION_INTERPOLATION Interpolation = RADIENT_ANIMATION_INTERPOLATION_LINEAR;
     std::vector<Float32>            Times;
+    std::vector<Uint8>              ConvertedValues;
 };
 
 struct SourceAnimationSamplerMapping
@@ -510,29 +559,44 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
         return LayoutStatus;
     VERIFY_EXPR(ValueCount != 0);
 
-    // Core glTF transform and morph-weight channels require FLOAT outputs.
-    // Typed conversion for KHR_animation_pointer is property-specific and will
-    // be performed when those targets are mapped to Radient properties.
-    if (Sampler.OutputValueType != VT_FLOAT32 || Sampler.OutputIsNormalized)
+    if (Value.Type == RADIENT_ANIMATION_VALUE_TYPE_BOOL)
     {
-        LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
-                            " has an incompatible ", ValueName, " output component type");
-        return RADIENT_STATUS_INVALID_DATA;
-    }
-
-    const size_t ComponentValueCount = Sampler.OutputData.size() / sizeof(Float32);
-    for (size_t ComponentIndex = 0; ComponentIndex < ComponentValueCount; ++ComponentIndex)
-    {
-        Float32 Component;
-        std::memcpy(&Component,
-                    Sampler.OutputData.data() + ComponentIndex * sizeof(Component),
-                    sizeof(Component));
-        if (!RadientMath::IsFinite(Component))
+        if (Sampler.OutputValueType != VT_UINT8)
         {
             LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
-                                " contains a non-finite ", ValueName, " component at index ",
-                                ComponentIndex);
+                                " has an incompatible ", ValueName, " output component type");
             return RADIENT_STATUS_INVALID_DATA;
+        }
+        if (Interpolation != RADIENT_ANIMATION_INTERPOLATION_STEP)
+        {
+            LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
+                                " must use STEP interpolation for ", ValueName);
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+    }
+    else
+    {
+        if (Sampler.OutputValueType != VT_FLOAT32 || Sampler.OutputIsNormalized)
+        {
+            LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
+                                " has an incompatible ", ValueName, " output component type");
+            return RADIENT_STATUS_INVALID_DATA;
+        }
+
+        const size_t ComponentValueCount = Sampler.OutputData.size() / sizeof(Float32);
+        for (size_t ComponentIndex = 0; ComponentIndex < ComponentValueCount; ++ComponentIndex)
+        {
+            Float32 Component;
+            std::memcpy(&Component,
+                        Sampler.OutputData.data() + ComponentIndex * sizeof(Component),
+                        sizeof(Component));
+            if (!RadientMath::IsFinite(Component))
+            {
+                LOG_WARNING_MESSAGE("GLTF animation ", AnimationIndex, " sampler ", SourceSamplerIndex,
+                                    " contains a non-finite ", ValueName, " component at index ",
+                                    ComponentIndex);
+                return RADIENT_STATUS_INVALID_DATA;
+            }
         }
     }
 
@@ -547,6 +611,13 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
     Storage.Value                        = Value;
     Storage.Interpolation                = Interpolation;
     Storage.Times                        = Sampler.Inputs;
+    if (Value.Type == RADIENT_ANIMATION_VALUE_TYPE_BOOL)
+    {
+        Storage.ConvertedValues.resize(Sampler.OutputData.size());
+        std::transform(Sampler.OutputData.begin(), Sampler.OutputData.end(),
+                       Storage.ConvertedValues.begin(),
+                       [](Uint8 SourceValue) { return SourceValue != 0 ? Uint8{1} : Uint8{0}; });
+    }
 
     Mapping.ClipSamplerIndex = ClipSamplerIndex;
     Mapping.Value            = Value;
@@ -565,7 +636,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
     pResult.Release();
     SkinMappings.clear();
 
-    std::vector<Uint32>                        NodeToTransformTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
+    std::vector<Uint32>                        NodeToTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
     std::vector<Uint32>                        NodeToMorphTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
     std::vector<RadientAnimationTargetDesc>    Targets;
     std::vector<Uint8>                         TargetPropertyMasks;
@@ -586,17 +657,22 @@ RADIENT_STATUS CreateImportedAnimationClip(
             continue;
         }
 
-        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::POINTER)
-        {
-            LOG_WARNING_MESSAGE("Skipping unsupported animation-pointer channel in GLTF animation ",
-                                AnimationIndex);
-            continue;
-        }
-
         if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::UNKNOWN)
         {
             LOG_WARNING_MESSAGE("Skipping unsupported channel path in GLTF animation ", AnimationIndex);
             continue;
+        }
+
+        const AnimationPointerPropertyDesc* pPointerProperty = nullptr;
+        if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::POINTER)
+        {
+            pPointerProperty = FindAnimationPointerProperty(Channel);
+            if (pPointerProperty == nullptr)
+            {
+                LOG_WARNING_MESSAGE("Skipping unsupported animation-pointer target '",
+                                    Channel.PropertyPath, "' in GLTF animation ", AnimationIndex);
+                continue;
+            }
         }
 
         const GLTF::Node* pNode = Channel.GetNode();
@@ -615,72 +691,85 @@ RADIENT_STATUS CreateImportedAnimationClip(
         Uint8                      PropertyMask;
         const char*                ValueName;
         std::vector<Uint32>*       pNodeToTarget;
-        switch (Channel.PathType)
+        if (pPointerProperty != nullptr)
         {
-            case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
-                Schema          = RadientNodeAnimationSchemaID;
-                Property        = RadientNodeTranslationProperty;
-                Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-                Value.ArraySize = 1;
-                ComponentCount  = 3;
-                PropertyMask    = 1u << 0u;
-                ValueName       = "translation";
-                pNodeToTarget   = &NodeToTransformTarget;
-                break;
-
-            case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
-                Schema          = RadientNodeAnimationSchemaID;
-                Property        = RadientNodeRotationProperty;
-                Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
-                Value.ArraySize = 1;
-                ComponentCount  = 4;
-                PropertyMask    = 1u << 1u;
-                ValueName       = "rotation";
-                pNodeToTarget   = &NodeToTransformTarget;
-                break;
-
-            case GLTF::AnimationChannel::PATH_TYPE::SCALE:
-                Schema          = RadientNodeAnimationSchemaID;
-                Property        = RadientNodeScaleProperty;
-                Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
-                Value.ArraySize = 1;
-                ComponentCount  = 3;
-                PropertyMask    = 1u << 2u;
-                ValueName       = "scale";
-                pNodeToTarget   = &NodeToTransformTarget;
-                break;
-
-            case GLTF::AnimationChannel::PATH_TYPE::WEIGHTS:
+            Schema         = pPointerProperty->Schema;
+            Property       = pPointerProperty->Property;
+            Value          = pPointerProperty->Value;
+            ComponentCount = pPointerProperty->ComponentCount;
+            PropertyMask   = pPointerProperty->PropertyMask;
+            ValueName      = pPointerProperty->ValueName;
+            pNodeToTarget  = &NodeToTarget;
+        }
+        else
+        {
+            switch (Channel.PathType)
             {
-                if (pNode->pMesh == nullptr)
+                case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
+                    Schema          = RadientNodeAnimationSchemaID;
+                    Property        = RadientNodeTranslationProperty;
+                    Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+                    Value.ArraySize = 1;
+                    ComponentCount  = 3;
+                    PropertyMask    = NodeTranslationPropertyMask;
+                    ValueName       = "translation";
+                    pNodeToTarget   = &NodeToTarget;
+                    break;
+
+                case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
+                    Schema          = RadientNodeAnimationSchemaID;
+                    Property        = RadientNodeRotationProperty;
+                    Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
+                    Value.ArraySize = 1;
+                    ComponentCount  = 4;
+                    PropertyMask    = NodeRotationPropertyMask;
+                    ValueName       = "rotation";
+                    pNodeToTarget   = &NodeToTarget;
+                    break;
+
+                case GLTF::AnimationChannel::PATH_TYPE::SCALE:
+                    Schema          = RadientNodeAnimationSchemaID;
+                    Property        = RadientNodeScaleProperty;
+                    Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
+                    Value.ArraySize = 1;
+                    ComponentCount  = 3;
+                    PropertyMask    = NodeScalePropertyMask;
+                    ValueName       = "scale";
+                    pNodeToTarget   = &NodeToTarget;
+                    break;
+
+                case GLTF::AnimationChannel::PATH_TYPE::WEIGHTS:
                 {
-                    LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
-                                        " morph-weight channel for a node without a mesh");
-                    continue;
+                    if (pNode->pMesh == nullptr)
+                    {
+                        LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
+                                            " morph-weight channel for a node without a mesh");
+                        continue;
+                    }
+
+                    const size_t MorphTargetCount = pNode->pMesh->GetMorphTargetCount();
+                    if (MorphTargetCount == 0 || MorphTargetCount > std::numeric_limits<Uint32>::max())
+                    {
+                        LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
+                                            " morph-weight channel for a node without addressable morph targets");
+                        continue;
+                    }
+
+                    Schema          = RadientMorphWeightsAnimationSchemaID;
+                    Property        = RadientMorphWeightsProperty;
+                    Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+                    Value.ArraySize = static_cast<Uint32>(MorphTargetCount);
+                    ComponentCount  = 1;
+                    PropertyMask    = 1u;
+                    ValueName       = "morph-weight";
+                    pNodeToTarget   = &NodeToMorphTarget;
+                    break;
                 }
 
-                const size_t MorphTargetCount = pNode->pMesh->GetMorphTargetCount();
-                if (MorphTargetCount == 0 || MorphTargetCount > std::numeric_limits<Uint32>::max())
-                {
-                    LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex,
-                                        " morph-weight channel for a node without addressable morph targets");
+                default:
+                    LOG_WARNING_MESSAGE("Skipping unsupported channel path in GLTF animation ", AnimationIndex);
                     continue;
-                }
-
-                Schema          = RadientMorphWeightsAnimationSchemaID;
-                Property        = RadientMorphWeightsProperty;
-                Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
-                Value.ArraySize = static_cast<Uint32>(MorphTargetCount);
-                ComponentCount  = 1;
-                PropertyMask    = 1u;
-                ValueName       = "morph-weight";
-                pNodeToTarget   = &NodeToMorphTarget;
-                break;
             }
-
-            default:
-                LOG_WARNING_MESSAGE("Skipping unsupported channel path in GLTF animation ", AnimationIndex);
-                continue;
         }
 
         Uint32 ClipTargetIndex = (*pNodeToTarget)[NodeIndex];
@@ -773,13 +862,16 @@ RADIENT_STATUS CreateImportedAnimationClip(
     {
         const AnimationClipSamplerStorage& Storage = SamplerStorage[SamplerIndex];
         const GLTF::AnimationSampler&      Source  = Animation.Samplers[Storage.SourceSamplerIndex];
+        const std::vector<Uint8>&          Values  = Storage.ConvertedValues.empty() ?
+            Source.OutputData :
+            Storage.ConvertedValues;
 
         RadientAnimationSamplerDesc& Desc = Samplers[SamplerIndex];
         Desc.Value                        = Storage.Value;
         Desc.Interpolation                = Storage.Interpolation;
         Desc.pTimes                       = Storage.Times.data();
-        Desc.pValues                      = Source.OutputData.data();
-        Desc.ValueDataSize                = static_cast<Uint64>(Source.OutputData.size());
+        Desc.pValues                      = Values.data();
+        Desc.ValueDataSize                = static_cast<Uint64>(Values.size());
         Desc.KeyframeCount                = static_cast<Uint32>(Storage.Times.size());
     }
 
@@ -814,7 +906,8 @@ RADIENT_STATUS CreateImportedAnimationClip(
         for (Uint32 ClipTargetIndex = 0; ClipTargetIndex < static_cast<Uint32>(Targets.size()); ++ClipTargetIndex)
         {
             const RadientAnimationTargetDesc& Target = Targets[ClipTargetIndex];
-            if (Target.Schema != RadientNodeAnimationSchemaID)
+            if (Target.Schema != RadientNodeAnimationSchemaID ||
+                (TargetPropertyMasks[ClipTargetIndex] & NodeTransformPropertyMask) == 0)
                 continue;
 
             const Uint32 NodeIndex  = static_cast<Uint32>(Target.Object);

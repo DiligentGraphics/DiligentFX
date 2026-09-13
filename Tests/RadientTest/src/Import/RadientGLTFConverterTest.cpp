@@ -402,6 +402,69 @@ const RadientAnimationChannelDesc* FindAnimationChannel(const RadientAnimationCl
     return nullptr;
 }
 
+void ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
+    const char*                                PropertyPath,
+    GLTF::AnimationSampler::INTERPOLATION_TYPE PointerInterpolation,
+    VALUE_TYPE                                 PointerValueType)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Invalid pointer and transform";
+    Animation.Samplers.emplace_back(PointerInterpolation);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    if (PointerValueType == VT_FLOAT32)
+    {
+        SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {0.f, 1.f});
+    }
+    else
+    {
+        ASSERT_EQ(PointerValueType, VT_UINT8);
+        SetAnimationSamplerOutputData(
+            Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{0, 1});
+    }
+
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+        &Model.Nodes[0],
+        PropertyPath,
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_EQ(FindAnimationChannel(
+                  ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty),
+              nullptr);
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    EXPECT_EQ(ClipDesc.pSamplers[pTranslationChannel->SamplerIndex].Value.Type,
+              RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+}
+
 const RadientImport::ImportedAnimationSkinMapping* FindAnimationSkinMapping(
     const RadientImport::ImportedAnimation& Animation,
     Uint32                                  SkinIndex)
@@ -1747,7 +1810,152 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     EXPECT_FLOAT_EQ(ScaleSampler.pTimes[1], 3.f);
 }
 
-TEST(RadientGLTFConverterTest, UnsupportedAnimationPointerDoesNotDiscardCoreChannel)
+TEST(RadientGLTFConverterTest, ImportsNodeVisibilityAnimationPointer)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+    Model.Skins.resize(1);
+    Model.Skins[0].pSkeletonRoot = &Model.Nodes[0];
+    Model.Skins[0].Joints        = {&Model.Nodes[0]};
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Visibility";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[0].Inputs = {2.f, 4.f};
+    SetAnimationSamplerOutputData(
+        Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{0, 7});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+        &Model.Nodes[0],
+        "/extensions/KHR_node_visibility/visible",
+        0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_EQ(Scene.Skins.size(), 1u);
+    EXPECT_TRUE(Scene.Animations[0].SkinMappings.empty());
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Visibility");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[NodeTargetIndex].Name, "AnimatedNode");
+
+    const RadientAnimationChannelDesc* const pVisibilityChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+    ASSERT_NE(pVisibilityChannel, nullptr);
+    ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
+
+    const RadientAnimationSamplerDesc& VisibilitySampler =
+        ClipDesc.pSamplers[pVisibilityChannel->SamplerIndex];
+    EXPECT_EQ(VisibilitySampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_BOOL);
+    EXPECT_EQ(VisibilitySampler.Value.ArraySize, 1u);
+    EXPECT_EQ(VisibilitySampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    ASSERT_EQ(VisibilitySampler.KeyframeCount, 2u);
+    EXPECT_EQ(VisibilitySampler.ValueDataSize, 2u * sizeof(Uint8));
+    ASSERT_NE(VisibilitySampler.pTimes, nullptr);
+    EXPECT_FLOAT_EQ(VisibilitySampler.pTimes[0], 0.f);
+    EXPECT_FLOAT_EQ(VisibilitySampler.pTimes[1], 2.f);
+    ASSERT_NE(VisibilitySampler.pValues, nullptr);
+    const auto* const pVisibilityValues = static_cast<const Uint8*>(VisibilitySampler.pValues);
+    EXPECT_EQ(pVisibilityValues[0], 0u);
+    EXPECT_EQ(pVisibilityValues[1], 1u);
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphAnimatesNodeVisibilityPointer)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name = "AnimatedNode";
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0]};
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Visibility";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[0].Inputs = {0.f, 1.f, 2.f};
+    SetAnimationSamplerOutputData(
+        Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{0, 1, 0});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+        &Model.Nodes[0],
+        "/extensions/KHR_node_visibility/visible",
+        0);
+
+    RadientImport::ImportedDocument ImportedScene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, ImportedScene, pAssetManager),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ImportedScene.Animations.size(), 1u);
+    EXPECT_TRUE(ImportedScene.Skins.empty());
+    EXPECT_TRUE(ImportedScene.Animations[0].SkinMappings.empty());
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAnimationRegistry> pRegistry;
+    ASSERT_EQ(pEngine->CreateAnimationRegistry(pScene, pRegistry.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
+                  ImportedScene, 0, *pWriter, RootEntity, pRegistry),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientEntityID AnimatedEntity    = InvalidRadientEntityID;
+    Uint32          ChildrenRetrieved = 0;
+    ASSERT_EQ(pScene->GetChildren(RootEntity, 0, 1, &AnimatedEntity, ChildrenRetrieved),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildrenRetrieved, 1u);
+
+    const RadientAnimationRegistryState& RegistryState = pRegistry->GetState();
+    ASSERT_EQ(RegistryState.EntryCount, 1u);
+    ASSERT_EQ(RegistryState.pEntries[0].BindingCount, 1u);
+    IRadientAnimationBinding* const pBinding = RegistryState.pEntries[0].ppBindings[0];
+    ASSERT_NE(pBinding, nullptr);
+
+    Bool Visible = False;
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(AnimatedEntity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(AnimatedEntity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    EvaluateInfo.Time = 1.5f;
+    ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(AnimatedEntity, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+}
+
+TEST(RadientGLTFConverterTest, AnimationPointerAndCoreChannelAreRetained)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
     ASSERT_NE(pAssetManager, nullptr);
@@ -1762,7 +1970,7 @@ TEST(RadientGLTFConverterTest, UnsupportedAnimationPointerDoesNotDiscardCoreChan
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
     Animation.Samplers[0].Inputs = {0.f, 1.f};
     SetAnimationSamplerOutputData(
-        Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{0, 1});
+        Animation.Samplers[0], VT_UINT8, 1, std::initializer_list<Uint8>{1, 0});
     Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
     Animation.Samplers[1].Inputs = {0.f, 1.f};
     SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
@@ -1781,10 +1989,48 @@ TEST(RadientGLTFConverterTest, UnsupportedAnimationPointerDoesNotDiscardCoreChan
     ASSERT_NE(Scene.Animations[0].pClip, nullptr);
     const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
     ASSERT_EQ(ClipDesc.TargetCount, 1u);
-    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
-    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
-    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
-    EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    ASSERT_EQ(ClipDesc.SamplerCount, 2u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+    const RadientAnimationChannelDesc* const pVisibilityChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pVisibilityChannel, nullptr);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    EXPECT_EQ(ClipDesc.pSamplers[pVisibilityChannel->SamplerIndex].Value.Type,
+              RADIENT_ANIMATION_VALUE_TYPE_BOOL);
+    EXPECT_EQ(ClipDesc.pSamplers[pTranslationChannel->SamplerIndex].Value.Type,
+              RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+}
+
+TEST(RadientGLTFConverterTest, UnsupportedAnimationPointerDoesNotDiscardCoreChannel)
+{
+    ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/unsupported",
+        GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP,
+        VT_UINT8);
+}
+
+TEST(RadientGLTFConverterTest, InvalidVisibilityPointerValueTypeDoesNotDiscardCoreChannel)
+{
+    ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/extensions/KHR_node_visibility/visible",
+        GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP,
+        VT_FLOAT32);
+}
+
+TEST(RadientGLTFConverterTest, InvalidVisibilityPointerInterpolationDoesNotDiscardCoreChannel)
+{
+    ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/extensions/KHR_node_visibility/visible",
+        GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
+        VT_UINT8);
 }
 
 TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
