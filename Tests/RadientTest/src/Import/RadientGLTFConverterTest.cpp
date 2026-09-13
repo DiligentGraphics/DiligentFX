@@ -1247,6 +1247,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCopiesScenesNodesMeshesAndTransf
     Model.Nodes[1].Name        = "ChildA";
     Model.Nodes[1].Parent      = &Model.Nodes[0];
     Model.Nodes[1].Translation = {4.f, 5.f, 6.f};
+    Model.Nodes[1].Visible     = false;
 
     Model.Nodes[2].Name   = "ChildB";
     Model.Nodes[2].Parent = &Model.Nodes[0];
@@ -1273,6 +1274,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCopiesScenesNodesMeshesAndTransf
 
     ASSERT_EQ(Scene.Nodes.size(), 3u);
     EXPECT_EQ(Scene.Nodes[0].Name, "Root");
+    EXPECT_EQ(Scene.Nodes[0].Visible, True);
     EXPECT_EQ(Scene.Nodes[0].pMesh, pMesh);
     ASSERT_EQ(Scene.Nodes[0].Children.size(), 2u);
     EXPECT_EQ(Scene.Nodes[0].Children[0], 1u);
@@ -1283,12 +1285,72 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCopiesScenesNodesMeshesAndTransf
     ExpectFloat3Near(Scene.Nodes[0].Transform.Scale, {2.f, 3.f, 4.f});
 
     EXPECT_EQ(Scene.Nodes[1].Name, "ChildA");
+    EXPECT_EQ(Scene.Nodes[1].Visible, False);
     EXPECT_EQ(Scene.Nodes[1].pMesh, nullptr);
     EXPECT_TRUE(Scene.Nodes[1].Children.empty());
     ExpectFloat3Near(Scene.Nodes[1].Transform.Position, {4.f, 5.f, 6.f});
 
     EXPECT_EQ(Scene.Nodes[2].Name, "ChildB");
+    EXPECT_EQ(Scene.Nodes[2].Visible, True);
     ExpectFloat3Near(Scene.Nodes[2].Transform.Scale, {0.5f, 0.25f, 0.125f});
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphPreservesNodeVisibility)
+{
+    RadientImport::ImportedDocument ImportedScene;
+    ImportedScene.Nodes.resize(3);
+    ImportedScene.Nodes[0].Name                   = "Hidden parent";
+    ImportedScene.Nodes[0].Visible                = False;
+    ImportedScene.Nodes[0].Children               = {1};
+    ImportedScene.Nodes[1].Name                   = "Visible child";
+    ImportedScene.Nodes[2].Name                   = "Visible root";
+    ImportedScene.Scenes.emplace_back().RootNodes = {0, 2};
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(ImportedScene, 0, *pWriter, RootEntity),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    std::array<RadientEntityID, 2> RootChildren{};
+    Uint32                         ChildrenRetrieved = 0;
+    ASSERT_EQ(pScene->GetChildren(RootEntity, 0, static_cast<Uint32>(RootChildren.size()),
+                                  RootChildren.data(), ChildrenRetrieved),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildrenRetrieved, RootChildren.size());
+
+    const RadientEntityID HiddenParent = RootChildren[0];
+    const RadientEntityID VisibleRoot  = RootChildren[1];
+
+    RadientEntityID VisibleChild = InvalidRadientEntityID;
+    ASSERT_EQ(pScene->GetChildren(HiddenParent, 0, 1, &VisibleChild, ChildrenRetrieved),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildrenRetrieved, 1u);
+
+    Bool Visible = True;
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(HiddenParent, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+    ASSERT_EQ(pScene->GetEntityEffectiveVisibility(HiddenParent, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(VisibleChild, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+    ASSERT_EQ(pScene->GetEntityEffectiveVisibility(VisibleChild, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    ASSERT_EQ(pScene->GetEntityOwnVisibility(VisibleRoot, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+    ASSERT_EQ(pScene->GetEntityEffectiveVisibility(VisibleRoot, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
 }
 
 TEST(RadientGLTFConverterTest, ExtractSceneGraphConvertsCameras)

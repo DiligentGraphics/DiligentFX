@@ -57,6 +57,10 @@ struct ImportedNode
 
     RadientTransform Transform{};
 
+    /// Node-local visibility. Effective visibility also depends on every
+    /// ancestor in the instantiated scene hierarchy.
+    Bool Visible = True;
+
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
 
     /// Optional node-specific morph weights. An empty array uses the mesh

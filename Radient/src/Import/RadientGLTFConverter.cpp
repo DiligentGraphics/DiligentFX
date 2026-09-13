@@ -895,6 +895,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                              Writ
     RadientEntityDesc NodeDesc{};
     NodeDesc.Name      = !Node.Name.empty() ? Node.Name.c_str() : FallbackName.c_str();
     NodeDesc.Parent    = Parent;
+    NodeDesc.Flags     = Node.Visible ? RADIENT_ENTITY_FLAG_VISIBLE : RADIENT_ENTITY_FLAG_NONE;
     NodeDesc.Transform = Node.Transform;
 
     RadientEntityID NodeEntity = InvalidRadientEntityID;
@@ -1491,6 +1492,7 @@ RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
         RadientImport::ImportedNode& DstNode = Scene.Nodes[static_cast<size_t>(SrcNode.Index)];
         DstNode.Name                         = SrcNode.Name;
         DstNode.Transform                    = ToRadientTransform(SrcNode);
+        DstNode.Visible                      = SrcNode.Visible ? True : False;
 
         if (SrcNode.pMesh != nullptr)
         {
