@@ -56,6 +56,27 @@
       }
     },
     {
+      "name": "BoxAnimated",
+      "model": "Models/BoxAnimated/glTF-Binary/BoxAnimated.glb",
+      "camera": {
+        "eye": [4.0, 2.0, 6.0],
+        "target": [0.0, 1.25, 0.0]
+      },
+      "animation": {
+        "name": "0",
+        "captures": [
+          {
+            "name": "Rising",
+            "time": 0.625
+          },
+          {
+            "name": "Flipping",
+            "time": 1.875
+          }
+        ]
+      }
+    },
+    {
       "name": "BoxInterleaved",
       "model": "Models/BoxInterleaved/glTF-Binary/BoxInterleaved.glb",
       "camera": {
@@ -181,6 +202,26 @@
       "directionalLight": false
     },
     {
+      "name": "CubeVisibility",
+      "model": "Models/CubeVisibility/glTF-Binary/CubeVisibility.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 6.0]
+      },
+      "animation": {
+        "name": "BlinkingBlueCube",
+        "captures": [
+          {
+            "name": "Visible",
+            "time": 0.25
+          },
+          {
+            "name": "Hidden",
+            "time": 0.75
+          }
+        ]
+      }
+    },
+    {
       "name": "DamagedHelmet",
       "model": "Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
       "camera": {
@@ -264,6 +305,28 @@
       "debugVisualizations": [
         "Iridescence"
       ]
+    },
+    {
+      "name": "LightVisibility",
+      "model": "Models/LightVisibility/glTF-Binary/LightVisibility.glb",
+      "camera": {
+        "eye": [0.0, 0.0, 8.0]
+      },
+      "animation": {
+        "name": "BlinkingBlueLight",
+        "captures": [
+          {
+            "name": "Visible",
+            "time": 0.25
+          },
+          {
+            "name": "Hidden",
+            "time": 0.75
+          }
+        ]
+      },
+      "directionalLight": false,
+      "enableIBL": false
     },
     {
       "name": "MetalRoughSpheres",

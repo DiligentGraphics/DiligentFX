@@ -59,10 +59,16 @@ struct RadientRenderTestStatistics
     std::optional<Uint32> UpdateBufferMax;
 };
 
-struct RadientRenderTestAnimation
+struct RadientRenderTestAnimationCapture
 {
     std::string Name;
     float       Time = 0.f;
+};
+
+struct RadientRenderTestAnimation
+{
+    std::string                                    Name;
+    std::vector<RadientRenderTestAnimationCapture> Captures;
 };
 
 struct RadientRenderTestCase

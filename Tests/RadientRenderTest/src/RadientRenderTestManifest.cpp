@@ -253,6 +253,45 @@ bool ParseToneMapping(const Json&             Object,
     return true;
 }
 
+bool IsValidIdentifier(const std::string& Name)
+{
+    if (Name.empty())
+        return false;
+
+    for (char Character : Name)
+    {
+        if (Character != '_' && !std::isalnum(static_cast<unsigned char>(Character)))
+            return false;
+    }
+    return true;
+}
+
+bool ParseAnimationCapture(const Json&                        Object,
+                           RadientRenderTestAnimationCapture& Capture,
+                           const std::string&                 Path,
+                           std::string&                       Error)
+{
+    if (!Object.is_object())
+        return SetError(Error, Path + " must be an object");
+
+    const auto NameIt = Object.find("name");
+    if (NameIt == Object.end() || !NameIt->is_string())
+        return SetError(Error, Path + ".name is required and must be a string");
+    Capture.Name = NameIt->get<std::string>();
+    if (!IsValidIdentifier(Capture.Name))
+        return SetError(Error, Path + ".name must contain only letters, digits, and underscores");
+
+    const auto TimeIt = Object.find("time");
+    if (TimeIt == Object.end())
+        return SetError(Error, Path + ".time is required");
+    if (!ParseFloat(*TimeIt, Capture.Time, Path + ".time", Error))
+        return false;
+    if (Capture.Time < 0.f)
+        return SetError(Error, Path + ".time must be non-negative");
+
+    return true;
+}
+
 bool ParseAnimation(const Json&                 Object,
                     RadientRenderTestAnimation& Animation,
                     const std::string&          Path,
@@ -268,13 +307,38 @@ bool ParseAnimation(const Json&                 Object,
     if (Animation.Name.empty())
         return SetError(Error, Path + ".name must not be empty");
 
-    const auto TimeIt = Object.find("time");
-    if (TimeIt == Object.end())
-        return SetError(Error, Path + ".time is required");
-    if (!ParseFloat(*TimeIt, Animation.Time, Path + ".time", Error))
-        return false;
-    if (Animation.Time < 0.f)
-        return SetError(Error, Path + ".time must be non-negative");
+    const auto TimeIt     = Object.find("time");
+    const auto CapturesIt = Object.find("captures");
+    if ((TimeIt == Object.end()) == (CapturesIt == Object.end()))
+        return SetError(Error, Path + " must contain exactly one of time or captures");
+
+    if (TimeIt != Object.end())
+    {
+        RadientRenderTestAnimationCapture Capture;
+        if (!ParseFloat(*TimeIt, Capture.Time, Path + ".time", Error))
+            return false;
+        if (Capture.Time < 0.f)
+            return SetError(Error, Path + ".time must be non-negative");
+        Animation.Captures.push_back(std::move(Capture));
+        return true;
+    }
+
+    if (!CapturesIt->is_array() || CapturesIt->empty())
+        return SetError(Error, Path + ".captures must be a non-empty array");
+
+    std::unordered_set<std::string> CaptureNames;
+    Animation.Captures.reserve(CapturesIt->size());
+    for (size_t CaptureIndex = 0; CaptureIndex < CapturesIt->size(); ++CaptureIndex)
+    {
+        RadientRenderTestAnimationCapture Capture;
+        const std::string                 CapturePath = Path + ".captures[" + std::to_string(CaptureIndex) + ']';
+        if (!ParseAnimationCapture((*CapturesIt)[CaptureIndex], Capture, CapturePath, Error))
+            return false;
+        if (!CaptureNames.emplace(Capture.Name).second)
+            return SetError(Error, Path + ".captures contains duplicate name '" + Capture.Name + '\'');
+
+        Animation.Captures.push_back(std::move(Capture));
+    }
 
     return true;
 }
@@ -324,19 +388,6 @@ bool ParseDebugVisualizations(const Json&                               Value,
     return true;
 }
 
-bool IsValidTestName(const std::string& Name)
-{
-    if (Name.empty())
-        return false;
-
-    for (char Character : Name)
-    {
-        if (Character != '_' && !std::isalnum(static_cast<unsigned char>(Character)))
-            return false;
-    }
-    return true;
-}
-
 bool ParseTestCase(const Json&                     Object,
                    size_t                          TestIndex,
                    const RadientRenderTestOptions& Options,
@@ -351,7 +402,7 @@ bool ParseTestCase(const Json&                     Object,
     if (NameIt == Object.end() || !NameIt->is_string())
         return SetError(Error, Path + ".name is required and must be a string");
     Test.Name = NameIt->get<std::string>();
-    if (!IsValidTestName(Test.Name))
+    if (!IsValidIdentifier(Test.Name))
         return SetError(Error, Path + ".name must contain only letters, digits, and underscores");
 
     const auto ModelIt = Object.find("model");

@@ -134,10 +134,16 @@ const char* GetDebugVisualizationName(RADIENT_DEBUG_VISUALIZATION Visualization)
 }
 
 std::string GetImageBaseName(const RadientRenderTestCase& TestCase,
+                             const std::string&           AnimationCaptureName,
                              RADIENT_DEBUG_VISUALIZATION  Visualization,
                              const char*                  BackendSuffix)
 {
     std::string Name = TestCase.Name;
+    if (!AnimationCaptureName.empty())
+    {
+        Name += '_';
+        Name += AnimationCaptureName;
+    }
     if (Visualization != RADIENT_DEBUG_VISUALIZATION_NONE)
     {
         Name += '_';
@@ -317,7 +323,8 @@ public:
             RADIENT_STATUS_PENDING;
     }
 
-    RADIENT_STATUS EvaluateAnimation(const RadientRenderTestAnimation& AnimationSettings)
+    RADIENT_STATUS EvaluateAnimation(const RadientRenderTestAnimation& AnimationSettings,
+                                     float                             Time)
     {
         if (m_pAnimationRegistry == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
@@ -335,7 +342,7 @@ public:
                 continue;
 
             AnimationFound = true;
-            if (AnimationSettings.Time > AnimationDesc.Duration)
+            if (Time > AnimationDesc.Duration)
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             if (Entry.BindingCount == 0)
                 return RADIENT_STATUS_INVALID_OPERATION;
@@ -347,7 +354,7 @@ public:
                     return RADIENT_STATUS_INVALID_OPERATION;
 
                 RadientAnimationEvaluateInfo EvaluateInfo{};
-                EvaluateInfo.Time               = AnimationSettings.Time;
+                EvaluateInfo.Time               = Time;
                 EvaluateInfo.UpdateDerivedState = True;
                 const RADIENT_STATUS Status     = pBinding->Evaluate(EvaluateInfo);
                 if (RADIENT_FAILED(Status))
@@ -409,10 +416,11 @@ private:
         std::string                 ReferenceBasePath;
         std::string                 ReferencePath;
         std::vector<Uint8>          ReferencePixels;
-        Uint32                      ReferenceWidth  = 0;
-        Uint32                      ReferenceHeight = 0;
-        bool                        HasReference    = false;
-        bool                        Captured        = false;
+        Uint32                      ReferenceWidth        = 0;
+        Uint32                      ReferenceHeight       = 0;
+        bool                        HasReference          = false;
+        bool                        Captured              = false;
+        size_t                      AnimationCaptureIndex = 0;
     };
 
     void TestBody() override
@@ -471,10 +479,11 @@ private:
         size_t     PendingCaptureCount = Captures.size();
         double     Time                = 0.0;
 
-        // Render every output once after dependencies become ready to request
-        // all asynchronous PSO permutations before capture readback begins.
-        bool AllCapturesRequested = false;
-        bool AnimationEvaluated   = !m_TestCase.Animation.has_value();
+        // Captures with the same index are the normal and debug outputs for one
+        // animation timestamp. The first pass primes their asynchronous PSOs.
+        bool   CaptureReadbackReady  = false;
+        bool   AnimationEvaluated    = !m_TestCase.Animation.has_value();
+        size_t AnimationCaptureIndex = 0;
 
         while (PendingCaptureCount != 0 && std::chrono::steady_clock::now() < Deadline)
         {
@@ -482,17 +491,22 @@ private:
             ASSERT_FALSE(RADIENT_FAILED(PrepareStatus));
             const bool DependenciesReady = PrepareStatus == RADIENT_STATUS_OK;
 
+            // Apply the current timestamp once; later iterations only wait for rendering.
             if (DependenciesReady && !AnimationEvaluated)
             {
-                ASSERT_EQ(Scene.EvaluateAnimation(*m_TestCase.Animation), RADIENT_STATUS_OK)
+                ASSERT_LT(AnimationCaptureIndex, m_TestCase.Animation->Captures.size());
+                const RadientRenderTestAnimationCapture& AnimationCapture =
+                    m_TestCase.Animation->Captures[AnimationCaptureIndex];
+                ASSERT_EQ(Scene.EvaluateAnimation(*m_TestCase.Animation, AnimationCapture.Time), RADIENT_STATUS_OK)
                     << "Failed to evaluate animation '" << m_TestCase.Animation->Name
-                    << "' at time " << m_TestCase.Animation->Time;
+                    << "' at time " << AnimationCapture.Time;
                 AnimationEvaluated = true;
             }
 
+            // Finish every visualization in the current timestamp group before advancing.
             for (CaptureEntry& Capture : Captures)
             {
-                if (Capture.Captured)
+                if (Capture.Captured || Capture.AnimationCaptureIndex != AnimationCaptureIndex)
                     continue;
 
                 const RADIENT_STATUS VisualizationStatus = GetView()->SetDebugVisualization(Capture.Visualization);
@@ -504,7 +518,8 @@ private:
                 const DeviceContextCommandCounters After        = pContext->GetStats().CommandCounters;
                 ASSERT_FALSE(RADIENT_FAILED(RenderStatus));
 
-                if (AllCapturesRequested && DependenciesReady && RenderStatus == RADIENT_STATUS_OK)
+                // The priming pass is never read back, even if it renders successfully.
+                if (CaptureReadbackReady && DependenciesReady && RenderStatus == RADIENT_STATUS_OK)
                 {
                     DeviceContextCommandCounters Counters{};
                     Counters.MultiDrawIndexed = After.MultiDrawIndexed - Before.MultiDrawIndexed;
@@ -526,12 +541,28 @@ private:
             if (PendingCaptureCount == 0)
                 break;
 
-            AllCapturesRequested = DependenciesReady;
             Time += 1.0 / 60.0;
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
 
             pContext->WaitForIdle();
             pDevice->ReleaseStaleResources();
+
+            // Advance only after all normal and debug outputs for this timestamp are captured.
+            const bool AnimationCaptureComplete = std::none_of(
+                Captures.begin(), Captures.end(),
+                [AnimationCaptureIndex](const CaptureEntry& Capture) {
+                    return Capture.AnimationCaptureIndex == AnimationCaptureIndex && !Capture.Captured;
+                });
+            if (AnimationCaptureComplete)
+            {
+                ++AnimationCaptureIndex;
+                AnimationEvaluated = !m_TestCase.Animation.has_value();
+            }
+            else if (!CaptureReadbackReady)
+            {
+                // All later timestamps reuse the shaders requested by the first group.
+                CaptureReadbackReady = DependenciesReady;
+            }
         }
 
         ASSERT_EQ(PendingCaptureCount, 0u)
@@ -568,21 +599,47 @@ private:
             m_TestCase.Name);
 
         std::vector<CaptureEntry> Captures;
-        Captures.reserve(1 + m_TestCase.DebugVisualizations.size());
+        const size_t              VisualizationCount    = 1 + m_TestCase.DebugVisualizations.size();
+        const size_t              AnimationCaptureCount = m_TestCase.Animation ? m_TestCase.Animation->Captures.size() : 1;
+        Captures.reserve(VisualizationCount * AnimationCaptureCount);
 
-        const auto AddCapture = [&](RADIENT_DEBUG_VISUALIZATION Visualization) {
+        const auto AddCapture = [&](const std::string&          AnimationCaptureName,
+                                    size_t                      AnimationCaptureIndex,
+                                    RADIENT_DEBUG_VISUALIZATION Visualization) {
             CaptureEntry Capture;
-            Capture.Visualization      = Visualization;
-            Capture.ImageBaseName      = GetImageBaseName(m_TestCase, Visualization, BackendSuffix);
-            Capture.ReferenceDirectory = ReferenceDirectory;
-            Capture.ReferenceBasePath  = FileSystem::JoinPath(ReferenceDirectory, Capture.ImageBaseName);
-            Capture.ReferencePath      = Capture.ReferenceBasePath + ".png";
+            Capture.Visualization         = Visualization;
+            Capture.ImageBaseName         = GetImageBaseName(m_TestCase, AnimationCaptureName, Visualization, BackendSuffix);
+            Capture.ReferenceDirectory    = ReferenceDirectory;
+            Capture.ReferenceBasePath     = FileSystem::JoinPath(ReferenceDirectory, Capture.ImageBaseName);
+            Capture.ReferencePath         = Capture.ReferenceBasePath + ".png";
+            Capture.AnimationCaptureIndex = AnimationCaptureIndex;
             Captures.push_back(std::move(Capture));
         };
 
-        AddCapture(RADIENT_DEBUG_VISUALIZATION_NONE);
-        for (RADIENT_DEBUG_VISUALIZATION Visualization : m_TestCase.DebugVisualizations)
-            AddCapture(Visualization);
+        const auto AddCaptures = [&](const std::string& AnimationCaptureName,
+                                     size_t             AnimationCaptureIndex) {
+            AddCapture(AnimationCaptureName, AnimationCaptureIndex, RADIENT_DEBUG_VISUALIZATION_NONE);
+            for (RADIENT_DEBUG_VISUALIZATION Visualization : m_TestCase.DebugVisualizations)
+                AddCapture(AnimationCaptureName, AnimationCaptureIndex, Visualization);
+        };
+
+        // Expand each timestamp into its normal output and every requested debug view.
+        // Non-animated scenes use one group.
+        if (m_TestCase.Animation)
+        {
+            for (size_t AnimationCaptureIndex = 0;
+                 AnimationCaptureIndex < m_TestCase.Animation->Captures.size();
+                 ++AnimationCaptureIndex)
+            {
+                const RadientRenderTestAnimationCapture& AnimationCapture =
+                    m_TestCase.Animation->Captures[AnimationCaptureIndex];
+                AddCaptures(AnimationCapture.Name, AnimationCaptureIndex);
+            }
+        }
+        else
+        {
+            AddCaptures({}, 0);
+        }
 
         if (Options.UpdateGoldenImages &&
             !FileSystem::IsDirectory(ReferenceDirectory.c_str()) &&
