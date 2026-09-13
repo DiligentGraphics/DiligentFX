@@ -44,6 +44,8 @@
 #include "RadientMathTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientSkinning.h"
+#include "Scene/RadientSceneImpl.hpp"
+#include "Scene/RadientSceneState.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "RadientTestDataHelpers.hpp"
 
@@ -53,6 +55,7 @@
 
 #include "TinyGltfModelView.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -457,6 +460,79 @@ void ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
     EXPECT_EQ(FindAnimationChannel(
                   ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty),
               nullptr);
+    const RadientAnimationChannelDesc* const pTranslationChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+    ASSERT_NE(pTranslationChannel, nullptr);
+    ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
+    EXPECT_EQ(ClipDesc.pSamplers[pTranslationChannel->SamplerIndex].Value.Type,
+              RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+}
+
+void ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+    const char*                    PropertyPath,
+    Uint32                         PointerComponentCount,
+    std::initializer_list<Float32> PointerValues    = {0.f, 1.f},
+    VALUE_TYPE                     PointerValueType = VT_FLOAT32,
+    GLTF::Light::TYPE              LightType        = GLTF::Light::TYPE::SPOT,
+    Float32                        LightRange       = 1.f)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Lights.resize(1);
+    Model.Lights[0].Name  = "AnimatedLight";
+    Model.Lights[0].Type  = LightType;
+    Model.Lights[0].Range = LightRange;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name   = "AnimatedNode";
+    Model.Nodes[0].pLight = &Model.Lights[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Invalid light pointer and transform";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    if (PointerValueType == VT_FLOAT32)
+    {
+        SetFloatAnimationSamplerOutputData(
+            Animation.Samplers[0], PointerComponentCount, PointerValues);
+    }
+    else
+    {
+        ASSERT_EQ(PointerValueType, VT_INT32);
+        ASSERT_EQ(PointerValues.size(), 2u);
+        SetAnimationSamplerOutputData(
+            Animation.Samplers[0], VT_INT32, PointerComponentCount,
+            std::initializer_list<Int32>{0, 1});
+    }
+
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        PropertyPath,
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 1);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+
+    EXPECT_EQ(FindAnimationTargetIndex(ClipDesc, RadientLightAnimationSchemaID, 0u),
+              InvalidRadientAnimationTargetIndex);
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
     const RadientAnimationChannelDesc* const pTranslationChannel =
         FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
     ASSERT_NE(pTranslationChannel, nullptr);
@@ -1875,6 +1951,402 @@ TEST(RadientGLTFConverterTest, ImportsNodeVisibilityAnimationPointer)
     EXPECT_EQ(pVisibilityValues[1], 1u);
 }
 
+TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Lights.resize(1);
+    Model.Lights[0].Name  = "AnimatedLight";
+    Model.Lights[0].Type  = GLTF::Light::TYPE::SPOT;
+    Model.Lights[0].Range = 10.f;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].pLight = &Model.Lights[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Punctual light properties";
+    const auto AddSampler      = [&Animation](Uint32                         ComponentCount,
+                                         std::initializer_list<Float32> Values) {
+        const Uint32 SamplerIndex = static_cast<Uint32>(Animation.Samplers.size());
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers.back().Inputs = {2.f, 4.f};
+        SetFloatAnimationSamplerOutputData(Animation.Samplers.back(), ComponentCount, Values);
+        return SamplerIndex;
+    };
+
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/color",
+        AddSampler(3, {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f}));
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/intensity",
+        AddSampler(1, {2.f, 4.f}));
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/range",
+        AddSampler(1, {10.f, 20.f}));
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/spot/innerConeAngle",
+        AddSampler(1, {0.1f, 0.2f}));
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/spot/outerConeAngle",
+        AddSampler(1, {0.4f, 0.6f}));
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    EXPECT_STREQ(ClipDesc.Name, "Punctual light properties");
+    EXPECT_FLOAT_EQ(ClipDesc.Duration, 2.f);
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 5u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 5u);
+
+    const Uint32 LightTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientLightAnimationSchemaID, 0u);
+    ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
+    EXPECT_STREQ(ClipDesc.pTargets[LightTargetIndex].Name, "AnimatedLight");
+
+    const auto GetPropertySampler = [&](RadientAnimationPropertyID Property) {
+        const RadientAnimationChannelDesc* const pChannel =
+            FindAnimationChannel(ClipDesc, LightTargetIndex, Property);
+        EXPECT_NE(pChannel, nullptr);
+        if (pChannel == nullptr)
+            return static_cast<const RadientAnimationSamplerDesc*>(nullptr);
+        EXPECT_EQ(pChannel->FirstArrayElement, 0u);
+        EXPECT_LT(pChannel->SamplerIndex, ClipDesc.SamplerCount);
+        return pChannel->SamplerIndex < ClipDesc.SamplerCount ?
+            &ClipDesc.pSamplers[pChannel->SamplerIndex] :
+            nullptr;
+    };
+
+    const RadientAnimationSamplerDesc* const pColorSampler =
+        GetPropertySampler(RadientLightColorProperty);
+    ASSERT_NE(pColorSampler, nullptr);
+    EXPECT_EQ(pColorSampler->Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    EXPECT_EQ(pColorSampler->Value.ArraySize, 1u);
+    ASSERT_EQ(pColorSampler->KeyframeCount, 2u);
+    ASSERT_NE(pColorSampler->pValues, nullptr);
+    const auto* const pColors = static_cast<const RadientFloat3*>(pColorSampler->pValues);
+    ExpectFloat3Near(pColors[0], {0.1f, 0.2f, 0.3f});
+    ExpectFloat3Near(pColors[1], {0.4f, 0.5f, 0.6f});
+
+    struct ScalarPropertyExpectation
+    {
+        RadientAnimationPropertyID Property;
+        Float32                    FirstValue;
+        Float32                    SecondValue;
+    };
+    const ScalarPropertyExpectation ScalarProperties[] = {
+        {RadientLightIntensityProperty, 2.f, 4.f},
+        {RadientLightRangeProperty, 10.f, 20.f},
+        {RadientLightInnerConeAngleProperty, 0.1f, 0.2f},
+        {RadientLightOuterConeAngleProperty, 0.4f, 0.6f},
+    };
+    for (const ScalarPropertyExpectation& Property : ScalarProperties)
+    {
+        const RadientAnimationSamplerDesc* const pSampler = GetPropertySampler(Property.Property);
+        ASSERT_NE(pSampler, nullptr);
+        EXPECT_EQ(pSampler->Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+        EXPECT_EQ(pSampler->Value.ArraySize, 1u);
+        EXPECT_EQ(pSampler->Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+        ASSERT_EQ(pSampler->KeyframeCount, 2u);
+        ASSERT_NE(pSampler->pTimes, nullptr);
+        EXPECT_FLOAT_EQ(pSampler->pTimes[0], 0.f);
+        EXPECT_FLOAT_EQ(pSampler->pTimes[1], 2.f);
+        ASSERT_NE(pSampler->pValues, nullptr);
+        const auto* const pValues = static_cast<const Float32*>(pSampler->pValues);
+        EXPECT_FLOAT_EQ(pValues[0], Property.FirstValue);
+        EXPECT_FLOAT_EQ(pValues[1], Property.SecondValue);
+    }
+}
+
+TEST(RadientGLTFConverterTest, SharedPointerSamplerCreatesDistinctBoolAndFloatSamplers)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Lights.resize(1);
+    Model.Lights[0].Name = "AnimatedLight";
+    Model.Lights[0].Type = GLTF::Light::TYPE::POINT;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].Name   = "AnimatedNode";
+    Model.Nodes[0].pLight = &Model.Lights[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Shared normalized integer sampler";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetAnimationSamplerOutputData(
+        Animation.Samplers[0], VT_UINT8, 1,
+        std::initializer_list<Uint8>{0, 255}, true);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::NODE,
+        &Model.Nodes[0],
+        "/extensions/KHR_node_visibility/visible",
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/intensity",
+        0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 2u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 2u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 2u);
+
+    const Uint32 NodeTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientNodeAnimationSchemaID, 0u);
+    const Uint32 LightTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientLightAnimationSchemaID, 0u);
+    ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
+    ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
+
+    const RadientAnimationChannelDesc* const pVisibilityChannel =
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+    const RadientAnimationChannelDesc* const pIntensityChannel =
+        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityProperty);
+    ASSERT_NE(pVisibilityChannel, nullptr);
+    ASSERT_NE(pIntensityChannel, nullptr);
+    ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
+    ASSERT_LT(pIntensityChannel->SamplerIndex, ClipDesc.SamplerCount);
+    EXPECT_NE(pVisibilityChannel->SamplerIndex, pIntensityChannel->SamplerIndex);
+
+    const RadientAnimationSamplerDesc& VisibilitySampler =
+        ClipDesc.pSamplers[pVisibilityChannel->SamplerIndex];
+    EXPECT_EQ(VisibilitySampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_BOOL);
+    EXPECT_EQ(VisibilitySampler.Value.ArraySize, 1u);
+    EXPECT_EQ(VisibilitySampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    EXPECT_EQ(VisibilitySampler.ValueDataSize, 2u * sizeof(Uint8));
+    ASSERT_NE(VisibilitySampler.pValues, nullptr);
+    const auto* const pVisibilityValues = static_cast<const Uint8*>(VisibilitySampler.pValues);
+    EXPECT_EQ(pVisibilityValues[0], 0u);
+    EXPECT_EQ(pVisibilityValues[1], 1u);
+
+    const RadientAnimationSamplerDesc& IntensitySampler =
+        ClipDesc.pSamplers[pIntensityChannel->SamplerIndex];
+    EXPECT_EQ(IntensitySampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    EXPECT_EQ(IntensitySampler.Value.ArraySize, 1u);
+    EXPECT_EQ(IntensitySampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_STEP);
+    EXPECT_EQ(IntensitySampler.ValueDataSize, 2u * sizeof(Float32));
+    ASSERT_NE(IntensitySampler.pValues, nullptr);
+    const auto* const pIntensityValues = static_cast<const Float32*>(IntensitySampler.pValues);
+    EXPECT_FLOAT_EQ(pIntensityValues[0], 0.f);
+    EXPECT_FLOAT_EQ(pIntensityValues[1], 1.f);
+}
+
+TEST(RadientGLTFConverterTest, SharedScalarPointerSamplerValidatesEveryLightProperty)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Lights.resize(1);
+    Model.Lights[0].Name  = "AnimatedLight";
+    Model.Lights[0].Type  = GLTF::Light::TYPE::POINT;
+    Model.Lights[0].Range = 1.f;
+    Model.Nodes.emplace_back(0);
+    Model.Nodes[0].pLight = &Model.Lights[0];
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Shared scalar sampler";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {0.f, 1.f});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/intensity",
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/range",
+        0);
+
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& ClipDesc = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_EQ(ClipDesc.SamplerCount, 1u);
+    ASSERT_EQ(ClipDesc.ChannelCount, 1u);
+
+    const Uint32 LightTargetIndex = FindAnimationTargetIndex(
+        ClipDesc, RadientLightAnimationSchemaID, 0u);
+    ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
+    const RadientAnimationChannelDesc* const pIntensityChannel =
+        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityProperty);
+    ASSERT_NE(pIntensityChannel, nullptr);
+    EXPECT_EQ(FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightRangeProperty),
+              nullptr);
+    ASSERT_LT(pIntensityChannel->SamplerIndex, ClipDesc.SamplerCount);
+    const RadientAnimationSamplerDesc& IntensitySampler =
+        ClipDesc.pSamplers[pIntensityChannel->SamplerIndex];
+    ASSERT_NE(IntensitySampler.pValues, nullptr);
+    const auto* const pIntensityValues = static_cast<const Float32*>(IntensitySampler.pValues);
+    EXPECT_FLOAT_EQ(pIntensityValues[0], 0.f);
+    EXPECT_FLOAT_EQ(pIntensityValues[1], 1.f);
+}
+
+TEST(RadientGLTFConverterTest, InstantiateSceneGraphAnimatesEverySharedPunctualLightInstance)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    ASSERT_EQ(pEngine->GetAssetManager(pAssetManager.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    GLTF::Model Model;
+    Model.Lights.resize(1);
+    Model.Lights[0].Name      = "SharedLight";
+    Model.Lights[0].Type      = GLTF::Light::TYPE::POINT;
+    Model.Lights[0].Intensity = 2.f;
+    Model.Nodes.reserve(2);
+    Model.Nodes.emplace_back(0);
+    Model.Nodes.emplace_back(1);
+    Model.Nodes[0].pLight = &Model.Lights[0];
+    Model.Nodes[1].pLight = &Model.Lights[0];
+    Model.Scenes.resize(1);
+    Model.Scenes[0].RootNodes = {&Model.Nodes[0], &Model.Nodes[1]};
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Name             = "Shared light intensity and node translation";
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[0].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {2.f, 8.f});
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+    Animation.Samplers[1].Inputs = {0.f, 1.f};
+    SetFloatAnimationSamplerOutputData(
+        Animation.Samplers[1], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
+        &Model.Lights[0],
+        "/intensity",
+        0);
+    Animation.Channels.emplace_back(
+        GLTF::AnimationChannel::PATH_TYPE::TRANSLATION,
+        &Model.Nodes[0],
+        1);
+
+    RadientImport::ImportedDocument ImportedScene;
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, ImportedScene, pAssetManager),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ImportedScene.Animations.size(), 1u);
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    ASSERT_EQ(pEngine->CreateScene({}, pScene.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(pEngine->CreateSceneWriter(pScene, pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IRadientAnimationRegistry> pRegistry;
+    ASSERT_EQ(pEngine->CreateAnimationRegistry(pScene, pRegistry.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGLTFConverter::InstantiateSceneGraph(
+                  ImportedScene, 0, *pWriter, RootEntity, pRegistry),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 ChildCount = 0;
+    ASSERT_EQ(pScene->GetChildCount(RootEntity, ChildCount), RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildCount, 2u);
+    std::array<RadientEntityID, 2> LightEntities{};
+    Uint32                         ChildrenRetrieved = 0;
+    ASSERT_EQ(pScene->GetChildren(
+                  RootEntity, 0, ChildCount, LightEntities.data(), ChildrenRetrieved),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(ChildrenRetrieved, ChildCount);
+
+    const RadientAnimationRegistryState& RegistryState = pRegistry->GetState();
+    ASSERT_EQ(RegistryState.EntryCount, 1u);
+    ASSERT_EQ(RegistryState.pEntries[0].BindingCount, 2u);
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    for (Uint32 BindingIndex = 0;
+         BindingIndex < RegistryState.pEntries[0].BindingCount;
+         ++BindingIndex)
+    {
+        IRadientAnimationBinding* const pBinding =
+            RegistryState.pEntries[0].ppBindings[BindingIndex];
+        ASSERT_NE(pBinding, nullptr);
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    }
+
+    const RadientSceneImpl* const pSceneImpl = ClassPtrCast<RadientSceneImpl>(pScene.RawPtr());
+    ASSERT_NE(pSceneImpl, nullptr);
+    std::vector<RadientSceneState::RenderableLight> Lights;
+    ASSERT_EQ(pSceneImpl->GetState().EnumerateRenderableLights(
+                  [&Lights](const RadientSceneState::RenderableLight& Light) {
+                      Lights.push_back(Light);
+                  }),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Lights.size(), 2u);
+    for (RadientEntityID LightEntity : LightEntities)
+    {
+        const auto LightIt = std::find_if(
+            Lights.begin(), Lights.end(),
+            [LightEntity](const RadientSceneState::RenderableLight& Light) {
+                return Light.Entity == LightEntity;
+            });
+        ASSERT_NE(LightIt, Lights.end());
+        EXPECT_FLOAT_EQ(LightIt->Light.Intensity, 8.f);
+    }
+
+    RadientTransform Transform;
+    ASSERT_EQ(pScene->GetLocalTransform(LightEntities[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {1.f, 2.f, 3.f});
+
+    // The independently registered node binding remains usable when a light
+    // component referenced by the light binding disappears.
+    ASSERT_EQ(pWriter->RemoveComponent(LightEntities[1], RADIENT_COMPONENT_TYPE_LIGHT),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EvaluateInfo.Time             = 0.f;
+    Uint32 SuccessfulBindingCount = 0;
+    Uint32 MissingBindingCount    = 0;
+    for (Uint32 BindingIndex = 0; BindingIndex < RegistryState.pEntries[0].BindingCount; ++BindingIndex)
+    {
+        const RADIENT_STATUS Status = RegistryState.pEntries[0].ppBindings[BindingIndex]->Evaluate(EvaluateInfo);
+        EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_NOT_FOUND);
+        SuccessfulBindingCount += Status == RADIENT_STATUS_OK ? 1u : 0u;
+        MissingBindingCount += Status == RADIENT_STATUS_NOT_FOUND ? 1u : 0u;
+    }
+    EXPECT_EQ(SuccessfulBindingCount, 1u);
+    EXPECT_EQ(MissingBindingCount, 1u);
+    ASSERT_EQ(pScene->GetLocalTransform(LightEntities[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {});
+}
+
 TEST(RadientGLTFConverterTest, InstantiateSceneGraphAnimatesNodeVisibilityPointer)
 {
     RefCntAutoPtr<IRadientEngine> pEngine;
@@ -2031,6 +2503,48 @@ TEST(RadientGLTFConverterTest, InvalidVisibilityPointerInterpolationDoesNotDisca
         "/extensions/KHR_node_visibility/visible",
         GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR,
         VT_UINT8);
+}
+
+TEST(RadientGLTFConverterTest, UnsupportedLightAnimationPointerDoesNotDiscardCoreChannel)
+{
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel("/type", 1);
+}
+
+TEST(RadientGLTFConverterTest, InvalidLightAnimationPointerValueShapeDoesNotDiscardCoreChannel)
+{
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel("/color", 1);
+}
+
+TEST(RadientGLTFConverterTest, InvalidLightAnimationPointerKeyValuesDoNotDiscardCoreChannel)
+{
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/color", 3, {1.f, 0.5f, 0.25f, 1.f, -0.1f, 0.5f});
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/color", 3, {1.f, 0.5f, 0.25f, 1.f, 1.1f, 0.5f});
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/intensity", 1, {1.f, -1.f});
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/range", 1, {1.f, 0.f});
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/spot/innerConeAngle", 1, {0.1f, 2.f});
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/spot/outerConeAngle", 1, {0.5f, 0.f});
+}
+
+TEST(RadientGLTFConverterTest, InvalidLightAnimationPointerComponentTypeDoesNotDiscardCoreChannel)
+{
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/intensity", 1, {0.f, 1.f}, VT_INT32);
+}
+
+TEST(RadientGLTFConverterTest, LightAnimationPointerMustAddressPropertyDefinedForTargetLight)
+{
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/range", 1, {1.f, 2.f}, VT_FLOAT32, GLTF::Light::TYPE::DIRECTIONAL);
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/range", 1, {1.f, 2.f}, VT_FLOAT32, GLTF::Light::TYPE::POINT, 0.f);
+    ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
+        "/spot/innerConeAngle", 1, {0.1f, 0.2f}, VT_FLOAT32, GLTF::Light::TYPE::POINT);
 }
 
 TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)

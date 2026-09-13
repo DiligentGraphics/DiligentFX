@@ -1324,6 +1324,130 @@ TEST(RadientSceneImporterTest, ImportsLights)
     EXPECT_EQ(pSpot->EffectiveVisible, True);
 }
 
+TEST(RadientSceneImporterTest, AnimatesEveryInstanceOfRemappedSharedPunctualLight)
+{
+    TempDirectory TempDir{"RadientSceneImporterTest"};
+
+    const std::array<Float32, 2> AnimationTimes{0.f, 1.f};
+    const std::array<Float32, 2> AnimationIntensities{2.f, 8.f};
+    std::vector<Uint8>           Buffer;
+    const size_t                 AnimationTimeOffset      = AppendBytes(Buffer, AnimationTimes);
+    const size_t                 AnimationIntensityOffset = AppendBytes(Buffer, AnimationIntensities);
+    WriteBinaryFile(TempDir, "shared-light-animation.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "extensionsUsed": ["KHR_lights_punctual", "KHR_animation_pointer"],
+    "extensions": {
+        "KHR_lights_punctual": {
+            "lights": [
+                {"name": "Unused", "type": "directional"},
+                {"name": "Shared", "type": "point", "intensity": 2.0}
+            ]
+        }
+    },
+    "scene": 0,
+    "scenes": [{"nodes": [0, 1]}],
+    "nodes": [
+        {"name": "First light instance", "extensions": {"KHR_lights_punctual": {"light": 1}}},
+        {"name": "Second light instance", "extensions": {"KHR_lights_punctual": {"light": 1}}}
+    ],
+    "animations": [{
+        "name": "Shared light intensity",
+        "samplers": [{"input": 0, "output": 1, "interpolation": "LINEAR"}],
+        "channels": [{
+            "sampler": 0,
+            "target": {
+                "path": "pointer",
+                "extensions": {
+                    "KHR_animation_pointer": {
+                        "pointer": "/extensions/KHR_lights_punctual/lights/1/intensity"
+                    }
+                }
+            }
+        }]
+    }],
+    "buffers": [{"uri": "shared-light-animation.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationTimeOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationTimes) << R"GLTF(},
+        {"buffer": 0, "byteOffset": )GLTF"
+         << AnimationIntensityOffset << R"GLTF(, "byteLength": )GLTF" << sizeof(AnimationIntensities) << R"GLTF(}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [0], "max": [1]},
+        {"bufferView": 1, "componentType": 5126, "count": 2, "type": "SCALAR"}
+    ]
+})GLTF";
+    const std::string GLTFPath = WriteGLTFFile(
+        TempDir, "shared-light-animation.gltf", GLTF.str().c_str());
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+    ASSERT_NE(Fixture.pWriter, nullptr);
+    ASSERT_NE(Fixture.pAnimationRegistry, nullptr);
+
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name               = "Animated shared light";
+    InstantiateInfo.pAnimationRegistry = Fixture.pAnimationRegistry;
+
+    const ImportSceneResult ImportResult = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    ASSERT_EQ(ImportResult.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(ImportResult.pModel, nullptr);
+    ASSERT_NE(ImportResult.RootEntity, InvalidRadientEntityID);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneAssetDesc& SceneDesc = ImportResult.pModel->GetDesc();
+    ASSERT_EQ(SceneDesc.AnimationClipCount, 1u);
+    ASSERT_NE(SceneDesc.ppAnimationClips, nullptr);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip{SceneDesc.ppAnimationClips[0]};
+    ASSERT_NE(pClip, nullptr);
+
+    const RadientAnimationClipDesc& ClipDesc = pClip->GetDesc();
+    ASSERT_EQ(ClipDesc.TargetCount, 1u);
+    ASSERT_NE(ClipDesc.pTargets, nullptr);
+    EXPECT_EQ(ClipDesc.pTargets[0].Schema, RadientLightAnimationSchemaID);
+    EXPECT_EQ(ClipDesc.pTargets[0].Object, 0u);
+    EXPECT_STREQ(ClipDesc.pTargets[0].Name, "Shared");
+
+    const std::vector<RadientEntityID> LightNodes = GetChildren(*Fixture.pScene, ImportResult.RootEntity);
+    ASSERT_EQ(LightNodes.size(), 2u);
+
+    const RadientAnimationRegistryEntry* pRegistryEntry = FindAnimationRegistryEntry(
+        Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pRegistryEntry, nullptr);
+    ASSERT_EQ(pRegistryEntry->BindingCount, 1u);
+    ASSERT_NE(pRegistryEntry->ppBindings, nullptr);
+    ASSERT_NE(pRegistryEntry->ppBindings[0], nullptr);
+
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    ASSERT_EQ(pRegistryEntry->ppBindings[0]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+
+    const RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
+    ASSERT_NE(pSceneImpl, nullptr);
+    std::vector<CapturedRenderableLight> Lights;
+    ASSERT_EQ(pSceneImpl->GetState().EnumerateRenderableLights(
+                  [&Lights](const RadientSceneState::RenderableLight& Light) {
+                      Lights.push_back({Light.Entity, Light.Light, Light.EffectiveVisible});
+                  }),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Lights.size(), 2u);
+    for (RadientEntityID LightNode : LightNodes)
+    {
+        const CapturedRenderableLight* pLight = FindLight(Lights, LightNode);
+        ASSERT_NE(pLight, nullptr);
+        EXPECT_EQ(pLight->Light.Type, RADIENT_LIGHT_TYPE_POINT);
+        EXPECT_FLOAT_EQ(pLight->Light.Intensity, 8.f);
+    }
+}
+
 TEST(RadientSceneImporterTest, RejectsAnimationRegistryForAnotherScene)
 {
     TempDirectory     TempDir{"RadientSceneImporterTest"};

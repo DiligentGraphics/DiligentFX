@@ -49,7 +49,8 @@ using MaterialAssetList = std::vector<RefCntAutoPtr<IRadientMaterialAsset>>;
 using MeshAssetList     = std::vector<RefCntAutoPtr<IRadientMeshAsset>>;
 using SkinAssetList     = std::vector<RefCntAutoPtr<IRadientSkinAsset>>;
 
-static constexpr Uint32 InvalidImportedSkinIndex = ~Uint32{0};
+static constexpr Uint32 InvalidImportedSkinIndex  = ~Uint32{0};
+static constexpr Uint32 InvalidImportedLightIndex = ~Uint32{0};
 
 struct ImportedNode
 {
@@ -70,6 +71,10 @@ struct ImportedNode
     /// Index in ImportedDocument::Skins, or InvalidImportedSkinIndex when the
     /// node does not use skinning.
     Uint32 SkinIndex = InvalidImportedSkinIndex;
+
+    /// Source GLTF model light index used by animation targets, or
+    /// InvalidImportedLightIndex when this node has no imported light.
+    Uint32 LightIndex = InvalidImportedLightIndex;
 
     std::optional<RadientCameraComponent> Camera;
     std::optional<RadientLightComponent>  Light;
@@ -95,8 +100,8 @@ struct ImportedAnimationSkinMapping
 
 struct ImportedAnimation
 {
-    /// Generic clip containing the imported node-transform and morph-weight
-    /// channels. Target objects use source-document identities.
+    /// Generic clip containing the imported animation channels. Target objects
+    /// use indices from the source GLTF model passed to conversion.
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
 
     /// Per-skin intersections between pClip targets and imported skeleton
