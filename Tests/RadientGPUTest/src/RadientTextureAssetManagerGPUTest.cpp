@@ -503,6 +503,59 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
     pThreadPool->StopThreads();
 }
 
+TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAboveAtlasMipLevel0SizeAsStandaloneTexture)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
+    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+
+    GLTF::ResourceManager::CreateInfo ResourceManagerCI = MakeResourceManagerCI();
+    ResourceManagerCI.DefaultAtlasDesc.Desc.MipLevels   = 0;
+    ResourceManagerCI.DefaultAtlasMipLevel0Size         = 32u * 32u * TestTexturePixelSize;
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager =
+        GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+    ASSERT_NE(pResourceManager, nullptr);
+
+    const TextureDesc AtlasDesc = pResourceManager->GetAtlasDesc(TEX_FORMAT_RGBA8_TYPELESS);
+    ASSERT_EQ(AtlasDesc.Width, 32u);
+    ASSERT_EQ(AtlasDesc.Height, 32u);
+
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+
+    ProcessUploads(*pUploadManager, *pContext, *pTexture);
+    ITextureView* const pTextureSRV = RadientTextureAssetManager::GetTextureSRV(pTexture);
+    ASSERT_NE(pTextureSRV, nullptr);
+
+    const RadientTextureBindingIdentity BindingIdentity =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, RadientTextureViewType::Linear);
+    ASSERT_TRUE(BindingIdentity);
+    EXPECT_EQ(BindingIdentity.StandaloneResourceId, pTextureSRV->GetTexture()->GetUniqueID());
+
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;

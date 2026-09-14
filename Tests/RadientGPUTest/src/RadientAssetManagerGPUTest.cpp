@@ -356,6 +356,21 @@ TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
     ASSERT_NE(pAssetManager, nullptr);
 
+    GLTF::ResourceManager* pResourceManager = pAssetManager->GetResourceManager();
+    ASSERT_NE(pResourceManager, nullptr);
+
+    const TextureDesc R8AtlasDesc = pResourceManager->GetAtlasDesc(TEX_FORMAT_R8_UNORM);
+    EXPECT_EQ(R8AtlasDesc.Width, 2048u);
+    EXPECT_EQ(R8AtlasDesc.Height, 2048u);
+
+    const TextureDesc RGBA8AtlasDesc = pResourceManager->GetAtlasDesc(TEX_FORMAT_RGBA8_TYPELESS);
+    EXPECT_EQ(RGBA8AtlasDesc.Width, 2048u);
+    EXPECT_EQ(RGBA8AtlasDesc.Height, 2048u);
+
+    const TextureDesc RGBA32FAtlasDesc = pResourceManager->GetAtlasDesc(TEX_FORMAT_RGBA32_FLOAT);
+    EXPECT_EQ(RGBA32FAtlasDesc.Width, 1024u);
+    EXPECT_EQ(RGBA32FAtlasDesc.Height, 1024u);
+
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pMaterial), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);

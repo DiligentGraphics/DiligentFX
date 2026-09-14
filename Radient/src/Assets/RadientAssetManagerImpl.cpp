@@ -55,14 +55,15 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint64 RadientDefaultIndexBufferSize          = 16ull * 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMaxIndexBufferSize       = 256ull * 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMorphTargetBufferSize    = 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMaxMorphTargetBufferSize = 256ull * 1024ull * 1024ull;
-constexpr Uint32 RadientDefaultVertexPoolSize           = 1024u * 1024u;
-constexpr Uint32 RadientDefaultTextureAtlasSize         = 2048u;
-constexpr Uint32 RadientDefaultTextureAtlasSlices       = 1u;
-constexpr Uint32 RadientDefaultTextureAtlasMaxSlices    = 2048u;
+constexpr Uint64 RadientDefaultIndexBufferSize           = 16ull * 1024ull * 1024ull;
+constexpr Uint64 RadientDefaultMaxIndexBufferSize        = 256ull * 1024ull * 1024ull;
+constexpr Uint64 RadientDefaultMorphTargetBufferSize     = 1024ull * 1024ull;
+constexpr Uint64 RadientDefaultMaxMorphTargetBufferSize  = 256ull * 1024ull * 1024ull;
+constexpr Uint32 RadientDefaultVertexPoolSize            = 1024u * 1024u;
+constexpr Uint32 RadientDefaultTextureAtlasSize          = 2048u;
+constexpr Uint64 RadientDefaultTextureAtlasMipLevel0Size = 16ull * 1024ull * 1024ull;
+constexpr Uint32 RadientDefaultTextureAtlasSlices        = 1u;
+constexpr Uint32 RadientDefaultTextureAtlasMaxSlices     = 2048u;
 
 static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
 
@@ -230,6 +231,7 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
     CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
     CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
+    CreateInfo.DefaultAtlasMipLevel0Size       = RadientDefaultTextureAtlasMipLevel0Size;
 
     return CreateInfo;
 }
