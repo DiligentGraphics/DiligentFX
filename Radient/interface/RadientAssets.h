@@ -112,6 +112,46 @@ DILIGENT_TYPED_ENUM(RADIENT_INDEX_TYPE, Uint8)
 // clang-format on
 
 
+/// GPU resource pool creation attributes used by the engine's asset manager.
+/// These settings control resource capacity, not rendering feature availability.
+struct RadientResourceManagerCreateInfo
+{
+    /// Initial size and growth increment of each index buffer, in bytes.
+    /// Zero selects the engine default.
+    Uint32 IndexBufferSize DEFAULT_INITIALIZER(4u * 1024u * 1024u);
+
+    /// Maximum size of each index buffer, in bytes. Zero prevents growth beyond IndexBufferSize.
+    Uint64 MaxIndexBufferSize DEFAULT_INITIALIZER(256ull * 1024ull * 1024ull);
+
+    /// Initial size and growth increment of the morph-target buffer, in bytes.
+    /// Zero selects the engine default.
+    Uint32 MorphTargetBufferSize DEFAULT_INITIALIZER(1024u * 1024u);
+
+    /// Maximum morph-target buffer size, in bytes. Zero prevents growth beyond MorphTargetBufferSize.
+    Uint64 MaxMorphTargetBufferSize DEFAULT_INITIALIZER(256ull * 1024ull * 1024ull);
+
+    /// Vertex capacity of each new vertex pool. Zero selects the engine default.
+    /// Rounded up to a multiple of 1024 vertices.
+    Uint32 VertexPoolSize DEFAULT_INITIALIZER(64u * 1024u);
+
+    /// Starting width and height of each default texture atlas, in texels.
+    /// Zero selects the engine default.
+    Uint32 TextureAtlasSize DEFAULT_INITIALIZER(2048);
+
+    /// Maximum mip-level-0 size of one atlas slice, in bytes. Zero disables this limit.
+    /// Both dimensions are halved until the slice fits, without reducing either below 16.
+    /// The minimum dimensions take precedence when the limit is too small.
+    Uint64 TextureAtlasMipLevel0Size DEFAULT_INITIALIZER(16ull * 1024ull * 1024ull);
+
+    /// Initial number of slices in each texture atlas. Zero defers storage allocation.
+    Uint32 TextureAtlasSlices DEFAULT_INITIALIZER(1);
+
+    /// Maximum number of slices in each texture atlas. Zero selects the engine default.
+    Uint32 TextureAtlasMaxSlices DEFAULT_INITIALIZER(2048);
+};
+typedef struct RadientResourceManagerCreateInfo RadientResourceManagerCreateInfo;
+
+
 /// Asset manager description.
 struct RadientAssetManagerDesc
 {

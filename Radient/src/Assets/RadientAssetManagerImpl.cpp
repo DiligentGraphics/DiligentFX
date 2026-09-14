@@ -55,16 +55,6 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint64 RadientDefaultIndexBufferSize           = 16ull * 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMaxIndexBufferSize        = 256ull * 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMorphTargetBufferSize     = 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMaxMorphTargetBufferSize  = 256ull * 1024ull * 1024ull;
-constexpr Uint32 RadientDefaultVertexPoolSize            = 1024u * 1024u;
-constexpr Uint32 RadientDefaultTextureAtlasSize          = 2048u;
-constexpr Uint64 RadientDefaultTextureAtlasMipLevel0Size = 16ull * 1024ull * 1024ull;
-constexpr Uint32 RadientDefaultTextureAtlasSlices        = 1u;
-constexpr Uint32 RadientDefaultTextureAtlasMaxSlices     = 2048u;
-
 static constexpr INTERFACE_ID IID_SceneAssetImpl = {0xb59806f1, 0xa08a, 0x4dff, {0xb0, 0x37, 0x84, 0x75, 0xd6, 0xfd, 0x7f, 0x1b}};
 
 struct ImportedSceneStorage
@@ -196,52 +186,52 @@ struct ImportedSceneStorage
     mutable std::atomic<RADIENT_STATUS>      GPUResourceStatus{RADIENT_STATUS_OK};
 };
 
-GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
+GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo(const RadientResourceManagerCreateInfo& ResourceCI)
 {
     GLTF::ResourceManager::CreateInfo CreateInfo;
 
     CreateInfo.IndexAllocatorCI.Desc.Name      = "Radient index pool";
-    CreateInfo.IndexAllocatorCI.Desc.Size      = RadientDefaultIndexBufferSize;
+    CreateInfo.IndexAllocatorCI.Desc.Size      = ResourceCI.IndexBufferSize;
     CreateInfo.IndexAllocatorCI.Desc.Usage     = USAGE_DEFAULT;
     CreateInfo.IndexAllocatorCI.Desc.BindFlags = BIND_INDEX_BUFFER;
-    CreateInfo.IndexAllocatorCI.ExpansionSize  = static_cast<Uint32>(RadientDefaultIndexBufferSize);
-    CreateInfo.IndexAllocatorCI.MaxSize        = RadientDefaultMaxIndexBufferSize;
+    CreateInfo.IndexAllocatorCI.ExpansionSize  = ResourceCI.IndexBufferSize;
+    CreateInfo.IndexAllocatorCI.MaxSize        = ResourceCI.MaxIndexBufferSize;
 
     CreateInfo.MorphTargetAllocatorCI.Desc.Name              = "Radient morph target buffer";
-    CreateInfo.MorphTargetAllocatorCI.Desc.Size              = RadientDefaultMorphTargetBufferSize;
+    CreateInfo.MorphTargetAllocatorCI.Desc.Size              = ResourceCI.MorphTargetBufferSize;
     CreateInfo.MorphTargetAllocatorCI.Desc.Usage             = USAGE_DEFAULT;
     CreateInfo.MorphTargetAllocatorCI.Desc.BindFlags         = BIND_SHADER_RESOURCE;
     CreateInfo.MorphTargetAllocatorCI.Desc.Mode              = BUFFER_MODE_STRUCTURED;
     CreateInfo.MorphTargetAllocatorCI.Desc.ElementByteStride = sizeof(Float32);
-    CreateInfo.MorphTargetAllocatorCI.ExpansionSize          = static_cast<Uint32>(RadientDefaultMorphTargetBufferSize);
-    CreateInfo.MorphTargetAllocatorCI.MaxSize                = RadientDefaultMaxMorphTargetBufferSize;
+    CreateInfo.MorphTargetAllocatorCI.ExpansionSize          = ResourceCI.MorphTargetBufferSize;
+    CreateInfo.MorphTargetAllocatorCI.MaxSize                = ResourceCI.MaxMorphTargetBufferSize;
 
     CreateInfo.DefaultPoolDesc.Name        = "Radient vertex pool";
-    CreateInfo.DefaultPoolDesc.VertexCount = RadientDefaultVertexPoolSize;
+    CreateInfo.DefaultPoolDesc.VertexCount = ResourceCI.VertexPoolSize;
     CreateInfo.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
     CreateInfo.DefaultPoolDesc.Mode        = BUFFER_MODE_UNDEFINED;
 
     CreateInfo.DefaultAtlasDesc.Desc.Name      = "Radient texture atlas";
     CreateInfo.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-    CreateInfo.DefaultAtlasDesc.Desc.Width     = RadientDefaultTextureAtlasSize;
-    CreateInfo.DefaultAtlasDesc.Desc.Height    = RadientDefaultTextureAtlasSize;
+    CreateInfo.DefaultAtlasDesc.Desc.Width     = ResourceCI.TextureAtlasSize;
+    CreateInfo.DefaultAtlasDesc.Desc.Height    = ResourceCI.TextureAtlasSize;
     CreateInfo.DefaultAtlasDesc.Desc.MipLevels = 0;
-    CreateInfo.DefaultAtlasDesc.Desc.ArraySize = RadientDefaultTextureAtlasSlices;
+    CreateInfo.DefaultAtlasDesc.Desc.ArraySize = ResourceCI.TextureAtlasSlices;
     CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_TYPELESS;
     CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
     CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
-    CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
-    CreateInfo.DefaultAtlasMipLevel0Size       = RadientDefaultTextureAtlasMipLevel0Size;
+    CreateInfo.DefaultAtlasDesc.MaxSliceCount  = ResourceCI.TextureAtlasMaxSlices;
+    CreateInfo.DefaultAtlasMipLevel0Size       = ResourceCI.TextureAtlasMipLevel0Size;
 
     return CreateInfo;
 }
 
-RefCntAutoPtr<GLTF::ResourceManager> CreateRadientResourceManager(IRenderDevice* pDevice)
+RefCntAutoPtr<GLTF::ResourceManager> CreateRadientResourceManager(IRenderDevice* pDevice, const RadientResourceManagerCreateInfo& ResourceCI)
 {
     if (pDevice == nullptr)
         return {};
 
-    return GLTF::ResourceManager::Create(pDevice, CreateResourceManagerInfo());
+    return GLTF::ResourceManager::Create(pDevice, CreateResourceManagerInfo(ResourceCI));
 }
 
 RefCntAutoPtr<IGPUUploadManager> CreateRadientGPUUploadManager(IRenderDevice* pDevice)
@@ -404,7 +394,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     m_pThreadPool{CreateInfo.pThreadPool},
     m_pDevice{CreateInfo.pDevice},
     m_pAssetResolver{GetRadientAssetResolverOrDefault(CreateInfo.Assets.pAssetResolver)},
-    m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice)},
+    m_pResourceManager{CreateRadientResourceManager(CreateInfo.pDevice, CreateInfo.Resources)},
     m_pUploadManager{CreateRadientGPUUploadManager(CreateInfo.pDevice)},
     m_pTextureManager{
         RadientTextureAssetManager::Create(

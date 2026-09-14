@@ -64,7 +64,12 @@ public:
         EngineCI.Backend.pImmediateContext = pContext;
         EngineCI.Backend.pSwapChain        = pSwapChain;
         EngineCI.Assets.Desc.Name          = "Radient render test assets";
-        m_Status                           = CreateRadientEngine(EngineCI, &m_pEngine);
+
+        // Start with small pools; larger scenes can grow them on demand.
+        EngineCI.Resources.IndexBufferSize = 1u * 1024u * 1024u;
+        EngineCI.Resources.VertexPoolSize  = 16u * 1024u;
+
+        m_Status = CreateRadientEngine(EngineCI, &m_pEngine);
         if (RADIENT_FAILED(m_Status))
             return;
 

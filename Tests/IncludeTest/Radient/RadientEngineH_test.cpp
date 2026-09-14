@@ -26,6 +26,16 @@
 
 #include "Radient/interface/RadientEngine.h"
 
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.IndexBufferSize == 4u * 1024u * 1024u, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.MaxIndexBufferSize == 256ull * 1024ull * 1024ull, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.MorphTargetBufferSize == 1024u * 1024u, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.MaxMorphTargetBufferSize == 256ull * 1024ull * 1024ull, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.VertexPoolSize == 64u * 1024u, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.TextureAtlasSize == 2048, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.TextureAtlasMipLevel0Size == 16ull * 1024ull * 1024ull, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.TextureAtlasSlices == 1, "Resource default changed");
+static_assert(Diligent::RadientEngineCreateInfo{}.Resources.TextureAtlasMaxSlices == 2048, "Resource default changed");
+
 void RadientEngine_CPP_UseAnimationRegistry(Diligent::IRadientEngine* pEngine,
                                             Diligent::IRadientScene*  pScene)
 {

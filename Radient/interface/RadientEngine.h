@@ -56,6 +56,9 @@ struct RadientEngineCreateInfo
     /// Number of worker threads for the internal thread pool.
     /// Zero lets Radient choose a default based on the host system.
     Uint32 WorkerThreadCount DEFAULT_INITIALIZER(0);
+
+    /// GPU resource pool creation attributes. Used when the backend has a native device.
+    RadientResourceManagerCreateInfo Resources DEFAULT_INITIALIZER({});
 };
 typedef struct RadientEngineCreateInfo RadientEngineCreateInfo;
 

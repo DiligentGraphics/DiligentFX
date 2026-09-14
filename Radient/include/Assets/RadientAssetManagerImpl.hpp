@@ -70,9 +70,10 @@ public:
 
     struct CreateInfo
     {
-        RadientAssetManagerCreateInfo Assets;
-        IThreadPool*                  pThreadPool = nullptr;
-        IRenderDevice*                pDevice     = nullptr;
+        RadientAssetManagerCreateInfo    Assets;
+        RadientResourceManagerCreateInfo Resources;
+        IThreadPool*                     pThreadPool = nullptr;
+        IRenderDevice*                   pDevice     = nullptr;
     };
 
     RadientAssetManagerImpl(IReferenceCounters* pRefCounters,

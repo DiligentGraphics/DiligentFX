@@ -29,6 +29,7 @@
 #include "Import/RadientImportedScene.hpp"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientEngine.h"
 
 #include "GPUTestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
@@ -41,6 +42,7 @@
 #include <array>
 #include <chrono>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <thread>
 #include <vector>
@@ -335,6 +337,257 @@ void ExpectMaterialTextures(const IRadientMaterialAsset&    Material,
         EXPECT_EQ(pTexture, TextureData.pTexture);
     }
 }
+
+TEST(RadientAssetManagerGPUTest, UsesEngineResourceManagerSettings)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv = GPUTestingEnvironment::GetInstance();
+
+    RadientEngineCreateInfo EngineCI;
+    EngineCI.Backend.pDevice            = pEnv->GetDevice();
+    EngineCI.Backend.pImmediateContext  = pEnv->GetDeviceContext();
+    EngineCI.WorkerThreadCount          = 1;
+    auto& Resources                     = EngineCI.Resources;
+    Resources.IndexBufferSize           = 1024;
+    Resources.MaxIndexBufferSize        = 2048;
+    Resources.MorphTargetBufferSize     = 256;
+    Resources.MaxMorphTargetBufferSize  = 768;
+    Resources.VertexPoolSize            = 1024;
+    Resources.TextureAtlasSize          = 512;
+    Resources.TextureAtlasMipLevel0Size = 256 * 1024;
+    Resources.TextureAtlasSlices        = 2;
+    Resources.TextureAtlasMaxSlices     = 3;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientAssetManager> pAssets;
+    ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
+    auto* pAssetManager = static_cast<RadientAssetManagerImpl*>(pAssets.RawPtr());
+    auto* pResources    = pAssetManager->GetResourceManager();
+    ASSERT_NE(pResources, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pEnv->GetDevice(), pEnv->GetDeviceContext()));
+
+    ASSERT_NE(pResources->GetIndexBuffer(), nullptr);
+    EXPECT_EQ(pResources->GetIndexBuffer()->GetDesc().Size, Resources.IndexBufferSize);
+    ASSERT_NE(pResources->GetMorphTargetBuffer(), nullptr);
+    EXPECT_EQ(pResources->GetMorphTargetBuffer()->GetDesc().Size, Resources.MorphTargetBufferSize);
+
+    // The first index buffer grows to its limit; the next allocation uses a new buffer.
+    auto pIndices0 = pResources->AllocateIndices(Resources.IndexBufferSize);
+    auto pIndices1 = pResources->AllocateIndices(Resources.IndexBufferSize);
+    auto pIndices2 = pResources->AllocateIndices(Resources.IndexBufferSize);
+    ASSERT_NE(pIndices0, nullptr);
+    ASSERT_NE(pIndices1, nullptr);
+    ASSERT_NE(pIndices2, nullptr);
+    EXPECT_EQ(pIndices0->GetAllocator(), pIndices1->GetAllocator());
+    EXPECT_NE(pIndices0->GetAllocator(), pIndices2->GetAllocator());
+    EXPECT_EQ(pResources->GetIndexBufferCount(), 2u);
+    auto* pIndexBuffer = pResources->UpdateIndexBuffer(pEnv->GetDevice(), pEnv->GetDeviceContext());
+    ASSERT_NE(pIndexBuffer, nullptr);
+    EXPECT_EQ(pIndexBuffer->GetDesc().Size, Resources.MaxIndexBufferSize);
+
+    auto pMorphData = pResources->AllocateMorphTargetData(static_cast<Uint32>(Resources.MaxMorphTargetBufferSize));
+    ASSERT_NE(pMorphData, nullptr);
+    EXPECT_EQ(pResources->AllocateMorphTargetData(4), nullptr);
+    auto* pMorphBuffer = pResources->UpdateMorphTargetBuffer(pEnv->GetDevice(), pEnv->GetDeviceContext());
+    ASSERT_NE(pMorphBuffer, nullptr);
+    EXPECT_EQ(pMorphBuffer->GetDesc().Size, Resources.MaxMorphTargetBufferSize);
+
+    const GLTF::ResourceManager::VertexLayoutKey Layout{{sizeof(float) * 3, BIND_VERTEX_BUFFER}};
+    auto                                         pVertices = pResources->AllocateVertices(Layout, 3);
+    ASSERT_NE(pVertices, nullptr);
+    EXPECT_EQ(pVertices->GetPool()->GetDesc().VertexCount, Resources.VertexPoolSize);
+
+    const TextureDesc R8Desc = pResources->GetAtlasDesc(TEX_FORMAT_R8_UNORM);
+    EXPECT_EQ(R8Desc.Width, 512u);
+    EXPECT_EQ(R8Desc.Height, 512u);
+    EXPECT_EQ(R8Desc.ArraySize, Resources.TextureAtlasSlices);
+    const TextureDesc RGBA8Desc = pResources->GetAtlasDesc(TEX_FORMAT_RGBA8_TYPELESS);
+    EXPECT_EQ(RGBA8Desc.Width, 256u);
+    EXPECT_EQ(RGBA8Desc.Height, 256u);
+
+    // Fill the otherwise unused R8 atlas to verify the configured slice limit.
+    std::vector<RefCntAutoPtr<ITextureAtlasSuballocation>> Slices;
+    for (Uint32 Slice = 0; Slice < Resources.TextureAtlasMaxSlices; ++Slice)
+    {
+        auto pSlice = pResources->AllocateTextureSpace(TEX_FORMAT_R8_UNORM, R8Desc.Width, R8Desc.Height);
+        ASSERT_NE(pSlice, nullptr);
+        Slices.push_back(std::move(pSlice));
+    }
+    {
+        TestingEnvironment::ErrorScope            ExpectedErrors{"Failed to suballocate texture subregion"};
+        RefCntAutoPtr<ITextureAtlasSuballocation> pExtraSlice;
+        Slices.front()->GetAtlas()->Allocate(R8Desc.Width, R8Desc.Height, &pExtraSlice);
+        EXPECT_EQ(pExtraSlice, nullptr);
+    }
+
+    EXPECT_EQ(pAssets->Stop(pEnv->GetDeviceContext()), RADIENT_STATUS_OK);
+}
+
+TEST(RadientAssetManagerGPUTest, ZeroPoolSizesSelectEngineDefaults)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv = GPUTestingEnvironment::GetInstance();
+
+    RadientEngineCreateInfo EngineCI;
+    EngineCI.Backend.pDevice                 = pEnv->GetDevice();
+    EngineCI.Backend.pImmediateContext       = pEnv->GetDeviceContext();
+    EngineCI.WorkerThreadCount               = 1;
+    EngineCI.Resources.IndexBufferSize       = 0;
+    EngineCI.Resources.MorphTargetBufferSize = 0;
+    EngineCI.Resources.VertexPoolSize        = 0;
+    EngineCI.Resources.TextureAtlasSize      = 0;
+    EngineCI.Resources.TextureAtlasMaxSlices = 0;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientAssetManager> pAssets;
+    ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
+    auto* pAssetManager = static_cast<RadientAssetManagerImpl*>(pAssets.RawPtr());
+    auto* pResources    = pAssetManager->GetResourceManager();
+    ASSERT_NE(pResources, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pEnv->GetDevice(), pEnv->GetDeviceContext()));
+
+    constexpr RadientResourceManagerCreateInfo Defaults{};
+    ASSERT_NE(pResources->GetIndexBuffer(), nullptr);
+    EXPECT_EQ(pResources->GetIndexBuffer()->GetDesc().Size, Defaults.IndexBufferSize);
+    EXPECT_NE(pResources->AllocateIndices(4), nullptr);
+    ASSERT_NE(pResources->GetMorphTargetBuffer(), nullptr);
+    EXPECT_EQ(pResources->GetMorphTargetBuffer()->GetDesc().Size, Defaults.MorphTargetBufferSize);
+    EXPECT_NE(pResources->AllocateMorphTargetData(4), nullptr);
+
+    const GLTF::ResourceManager::VertexLayoutKey Layout{{sizeof(float) * 3, BIND_VERTEX_BUFFER}};
+    auto                                         pVertices = pResources->AllocateVertices(Layout, 3);
+    ASSERT_NE(pVertices, nullptr);
+    EXPECT_EQ(pVertices->GetPool()->GetDesc().VertexCount, Defaults.VertexPoolSize);
+
+    const TextureDesc AtlasDesc = pResources->GetAtlasDesc(TEX_FORMAT_R8_UNORM);
+    EXPECT_EQ(AtlasDesc.Width, Defaults.TextureAtlasSize);
+    EXPECT_EQ(AtlasDesc.Height, Defaults.TextureAtlasSize);
+
+    // The default slice limit allows the atlas to grow beyond its initial slice.
+    auto pSlice0 = pResources->AllocateTextureSpace(TEX_FORMAT_R8_UNORM, AtlasDesc.Width, AtlasDesc.Height);
+    auto pSlice1 = pResources->AllocateTextureSpace(TEX_FORMAT_R8_UNORM, AtlasDesc.Width, AtlasDesc.Height);
+    ASSERT_NE(pSlice0, nullptr);
+    ASSERT_NE(pSlice1, nullptr);
+    EXPECT_NE(pSlice0->GetSlice(), pSlice1->GetSlice());
+
+    EXPECT_EQ(pAssets->Stop(pEnv->GetDeviceContext()), RADIENT_STATUS_OK);
+}
+
+TEST(RadientAssetManagerGPUTest, RoundsEngineResourceSettingsUp)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv = GPUTestingEnvironment::GetInstance();
+
+    struct TestCase
+    {
+        Uint32 VertexPoolSize;
+        Uint64 TextureAtlasMipLevel0Size;
+        Uint32 ExpectedVertexPoolSize;
+        Uint32 ExpectedRG8AtlasSize;
+    };
+    const TestCase Cases[] = {
+        {1, 1, 1024, 128},
+        {1023, 64u * 1024u - 1u, 1024, 128},
+        {1024, 64u * 1024u, 1024, 128},
+        {1025, 64u * 1024u + 1u, 2048, 256},
+    };
+    for (const auto& Case : Cases)
+    {
+        SCOPED_TRACE(Case.VertexPoolSize);
+        RadientEngineCreateInfo EngineCI;
+        EngineCI.Backend.pDevice                     = pEnv->GetDevice();
+        EngineCI.Backend.pImmediateContext           = pEnv->GetDeviceContext();
+        EngineCI.WorkerThreadCount                   = 1;
+        EngineCI.Resources.VertexPoolSize            = Case.VertexPoolSize;
+        EngineCI.Resources.TextureAtlasSize          = 512;
+        EngineCI.Resources.TextureAtlasMipLevel0Size = Case.TextureAtlasMipLevel0Size;
+
+        RefCntAutoPtr<IRadientEngine> pEngine;
+        ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+        ASSERT_NE(pEngine, nullptr);
+        RefCntAutoPtr<IRadientAssetManager> pAssets;
+        ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
+        auto* pAssetManager = static_cast<RadientAssetManagerImpl*>(pAssets.RawPtr());
+        auto* pResources    = pAssetManager->GetResourceManager();
+        ASSERT_NE(pResources, nullptr);
+        ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pEnv->GetDevice(), pEnv->GetDeviceContext()));
+
+        const GLTF::ResourceManager::VertexLayoutKey Layout{{sizeof(float) * 3, BIND_VERTEX_BUFFER}};
+        auto                                         pVertices = pResources->AllocateVertices(Layout, 3);
+        ASSERT_NE(pVertices, nullptr);
+        EXPECT_EQ(pVertices->GetPool()->GetDesc().VertexCount, Case.ExpectedVertexPoolSize);
+
+        // A 64 KiB budget fits a 256x256 R8 slice, including when the input was smaller.
+        const TextureDesc AtlasDesc = pResources->GetAtlasDesc(TEX_FORMAT_R8_UNORM);
+        EXPECT_EQ(AtlasDesc.Width, 256u);
+        EXPECT_EQ(AtlasDesc.Height, 256u);
+        const TextureDesc RG8AtlasDesc = pResources->GetAtlasDesc(TEX_FORMAT_RG8_UNORM);
+        EXPECT_EQ(RG8AtlasDesc.Width, Case.ExpectedRG8AtlasSize);
+        EXPECT_EQ(RG8AtlasDesc.Height, Case.ExpectedRG8AtlasSize);
+        EXPECT_EQ(EngineCI.Resources.VertexPoolSize, Case.VertexPoolSize);
+        EXPECT_EQ(EngineCI.Resources.TextureAtlasMipLevel0Size, Case.TextureAtlasMipLevel0Size);
+        EXPECT_EQ(pAssets->Stop(pEnv->GetDeviceContext()), RADIENT_STATUS_OK);
+    }
+}
+
+TEST(RadientAssetManagerGPUTest, RejectsVertexPoolAlignmentOverflow)
+{
+    TestingEnvironment::ErrorScope ExpectedErrors{"VertexPoolSize"};
+    RadientEngineCreateInfo        EngineCI;
+    EngineCI.Backend.pDevice          = GPUTestingEnvironment::GetInstance()->GetDevice();
+    EngineCI.Resources.VertexPoolSize = std::numeric_limits<Uint32>::max();
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    EXPECT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pEngine, nullptr);
+}
+
+TEST(RadientAssetManagerGPUTest, RejectsTextureAtlasBudgetAlignmentOverflow)
+{
+    TestingEnvironment::ErrorScope ExpectedErrors{"TextureAtlasMipLevel0Size"};
+    RadientEngineCreateInfo        EngineCI;
+    EngineCI.Backend.pDevice                     = GPUTestingEnvironment::GetInstance()->GetDevice();
+    EngineCI.Resources.TextureAtlasMipLevel0Size = std::numeric_limits<Uint64>::max();
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    EXPECT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pEngine, nullptr);
+}
+
+TEST(RadientAssetManagerGPUTest, EngineAllowsLazyTextureAtlasWithoutSizeLimit)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv = GPUTestingEnvironment::GetInstance();
+
+    RadientEngineCreateInfo EngineCI;
+    EngineCI.Backend.pDevice                     = pEnv->GetDevice();
+    EngineCI.Backend.pImmediateContext           = pEnv->GetDeviceContext();
+    EngineCI.WorkerThreadCount                   = 1;
+    EngineCI.Resources.IndexBufferSize           = 1024;
+    EngineCI.Resources.TextureAtlasSlices        = 0;
+    EngineCI.Resources.TextureAtlasMipLevel0Size = 0;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientAssetManager> pAssets;
+    ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
+    auto* pAssetManager = static_cast<RadientAssetManagerImpl*>(pAssets.RawPtr());
+    auto* pResources    = pAssetManager->GetResourceManager();
+    ASSERT_NE(pResources, nullptr);
+    const GLTF::ResourceManager::VertexLayoutKey Layout{{sizeof(float) * 3, BIND_VERTEX_BUFFER}};
+    EXPECT_NE(pResources->AllocateVertices(Layout, 3), nullptr);
+    EXPECT_EQ(pResources->GetAtlasDesc(TEX_FORMAT_RGBA8_TYPELESS).Width, EngineCI.Resources.TextureAtlasSize);
+    EXPECT_EQ(pResources->GetAtlasDesc(TEX_FORMAT_RGBA32_FLOAT).Width, EngineCI.Resources.TextureAtlasSize);
+    EXPECT_NE(pResources->AllocateTextureSpace(TEX_FORMAT_RGBA8_TYPELESS, 16, 16), nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pEnv->GetDevice(), pEnv->GetDeviceContext()));
+    EXPECT_EQ(pAssets->Stop(pEnv->GetDeviceContext()), RADIENT_STATUS_OK);
+}
+
 
 TEST(RadientAssetManagerGPUTest, InitializesDefaultMaterialTextures)
 {

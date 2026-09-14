@@ -29,11 +29,13 @@
 #include "Animation/RadientAnimationRegistryImpl.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Core/RadientBackendImpl.hpp"
+#include "Core/RadientValidation.hpp"
 #include "Render/RadientRendererImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Import/RadientSceneImporterImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
 
+#include "Align.hpp"
 #include "Errors.hpp"
 #include "ThreadPool.hpp"
 
@@ -51,6 +53,41 @@ size_t GetDefaultRadientWorkerThreadCount()
 {
     const unsigned int HardwareThreads = std::thread::hardware_concurrency();
     return std::max(1u, HardwareThreads != 0 ? HardwareThreads - 1u : 1u);
+}
+
+bool NormalizeResourceManagerCreateInfo(RadientResourceManagerCreateInfo& ResourceCI)
+{
+    constexpr RadientResourceManagerCreateInfo Defaults{};
+    if (ResourceCI.IndexBufferSize == 0)
+        ResourceCI.IndexBufferSize = Defaults.IndexBufferSize;
+    if (ResourceCI.MorphTargetBufferSize == 0)
+        ResourceCI.MorphTargetBufferSize = Defaults.MorphTargetBufferSize;
+    if (ResourceCI.VertexPoolSize == 0)
+        ResourceCI.VertexPoolSize = Defaults.VertexPoolSize;
+    if (ResourceCI.TextureAtlasSize == 0)
+        ResourceCI.TextureAtlasSize = Defaults.TextureAtlasSize;
+    if (ResourceCI.TextureAtlasMaxSlices == 0)
+        ResourceCI.TextureAtlasMaxSlices = Defaults.TextureAtlasMaxSlices;
+
+    constexpr Uint32 VertexPoolAlignment = 1024;
+    if (!RadientValidation::IsSumRepresentable<Uint32>(ResourceCI.VertexPoolSize, VertexPoolAlignment - 1u))
+    {
+        LOG_ERROR_MESSAGE("Radient resource manager VertexPoolSize (", ResourceCI.VertexPoolSize,
+                          ") cannot be rounded up to a multiple of ", VertexPoolAlignment, " without overflowing Uint32.");
+        return false;
+    }
+    ResourceCI.VertexPoolSize = AlignUp(ResourceCI.VertexPoolSize, VertexPoolAlignment);
+
+    constexpr Uint64 AtlasMipLevel0SizeAlignment = 64ull * 1024ull;
+    if (!RadientValidation::IsSumRepresentable<Uint64>(ResourceCI.TextureAtlasMipLevel0Size, AtlasMipLevel0SizeAlignment - 1u))
+    {
+        LOG_ERROR_MESSAGE("Radient resource manager TextureAtlasMipLevel0Size (", ResourceCI.TextureAtlasMipLevel0Size,
+                          ") cannot be rounded up to a multiple of ", AtlasMipLevel0SizeAlignment, " bytes without overflowing Uint64.");
+        return false;
+    }
+    ResourceCI.TextureAtlasMipLevel0Size = AlignUp(ResourceCI.TextureAtlasMipLevel0Size, AtlasMipLevel0SizeAlignment);
+
+    return true;
 }
 
 } // namespace
@@ -76,6 +113,7 @@ RadientEngineImpl::RadientEngineImpl(IReferenceCounters* pRefCounters, const Rad
 
     RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
     AssetManagerCI.Assets      = CreateInfo.Assets;
+    AssetManagerCI.Resources   = CreateInfo.Resources;
     AssetManagerCI.pThreadPool = m_pThreadPool;
     AssetManagerCI.pDevice     = m_pBackend != nullptr ? m_pBackend->GetNativeDevice() : nullptr;
     m_pAssetManager            = RadientAssetManagerImpl::Create(AssetManagerCI);
@@ -234,7 +272,11 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientEngine)(const RadientEngine
     DEV_CHECK_ERR(*ppEngine == nullptr, "Output engine pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppEngine = nullptr;
 
-    RefCntAutoPtr<IRadientEngine> pEngine = RadientEngineImpl::Create(EngineCI);
+    RadientEngineCreateInfo NormalizedCI = EngineCI;
+    if (NormalizedCI.Backend.pDevice != nullptr && !NormalizeResourceManagerCreateInfo(NormalizedCI.Resources))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RefCntAutoPtr<IRadientEngine> pEngine = RadientEngineImpl::Create(NormalizedCI);
     *ppEngine                             = pEngine.Detach();
     return RADIENT_STATUS_OK;
 }

@@ -62,9 +62,18 @@ void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
 
 void RadientEngine_C_TestCreateFunction(void)
 {
-    RadientEngineCreateInfo EngineCI = {0};
-    IRadientEngine*         pEngine  = 0;
-    RADIENT_STATUS          Status   = Diligent_CreateRadientEngine(&EngineCI, &pEngine);
+    RadientEngineCreateInfo EngineCI             = {0};
+    EngineCI.Resources.IndexBufferSize           = 4u * 1024u * 1024u;
+    EngineCI.Resources.MaxIndexBufferSize        = 256ull * 1024ull * 1024ull;
+    EngineCI.Resources.MorphTargetBufferSize     = 1024u * 1024u;
+    EngineCI.Resources.MaxMorphTargetBufferSize  = 256ull * 1024ull * 1024ull;
+    EngineCI.Resources.VertexPoolSize            = 64u * 1024u;
+    EngineCI.Resources.TextureAtlasSize          = 2048;
+    EngineCI.Resources.TextureAtlasMipLevel0Size = 16ull * 1024ull * 1024ull;
+    EngineCI.Resources.TextureAtlasSlices        = 1;
+    EngineCI.Resources.TextureAtlasMaxSlices     = 2048;
+    IRadientEngine* pEngine                      = 0;
+    RADIENT_STATUS  Status                       = Diligent_CreateRadientEngine(&EngineCI, &pEngine);
 
     (void)pEngine;
     (void)Status;
