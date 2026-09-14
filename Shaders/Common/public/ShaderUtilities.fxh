@@ -113,7 +113,9 @@ float2 TransformDirectionToSphereMapUV(float3 Direction, bool Row0IsNegativeY)
     float Latitude  = asin(Direction.y);
     Latitude *= Row0IsNegativeY ? +1.0 : -1.0;
 
-    return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), Latitude) + float2(0.5, 0.5);
+    // Longitude is arbitrary at the poles; avoid atan2(0, 0), which may return NaN.
+    float Longitude = (Direction.x != 0.0 || Direction.z != 0.0) ? atan2(Direction.z, Direction.x) : 0.0;
+    return OneOverPi * float2(0.5 * Longitude, Latitude) + float2(0.5, 0.5);
 }
 
 float3 RotateDirectionAroundY(float3 Direction, float2 Rotation)

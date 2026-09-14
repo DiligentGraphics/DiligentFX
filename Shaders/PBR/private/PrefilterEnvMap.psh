@@ -1,5 +1,6 @@
 #include "PBR_PrecomputeCommon.fxh"
 #include "ShaderUtilities.fxh"
+#include "SphereMapSampling.fxh"
 
 #ifndef OPTIMIZE_SAMPLES
 #   define OPTIMIZE_SAMPLES 1
@@ -41,8 +42,9 @@ float3 SampleEnvrionmentMap(float3 R, float MipLevel)
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE || ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
     float2 UV = TransformDirectionToSphereMapUV(R, g_SphereMapRow0IsNegativeY != 0);
 #    if ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE_ARRAY
-    UV = UV * g_EnvMapUVScaleBias.xy + g_EnvMapUVScaleBias.zw;
-    return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, float3(UV, g_EnvMapSlice), MipLevel).rgb;
+    return SampleSphereMapAtlas(g_EnvironmentMap, g_EnvironmentMap_sampler, UV,
+                                g_EnvMapSlice, g_EnvMapUVScaleBias,
+                                float2(g_EnvMapWidth, g_EnvMapHeight), MipLevel, g_EnvMipCount);
 #    else
     return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, UV, MipLevel).rgb;
 #    endif

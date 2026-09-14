@@ -122,7 +122,9 @@ public:
         /// Average log luminance for tone mapping.
         float AverageLogLum = 1;
 
-        /// Mip level of the environment map to use.
+        /// Mip level of the environment map to use. Fractional levels blend
+        /// adjacent mips. For atlas regions, the caller must limit this value
+        /// to the region's valid mip range.
         float MipLevel = 0;
 
         /// Alpha value to write to the output render target.

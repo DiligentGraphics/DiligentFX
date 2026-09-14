@@ -63,8 +63,8 @@ struct EnvMapRenderer::EnvMapShaderAttribs
 
     float SphereMapSlice           = 0.f;
     Int32 SphereMapRow0IsNegativeY = 0;
-    float AtlasMipWidth            = 1.f;
-    float AtlasMipHeight           = 1.f;
+    float SphereMapHeight          = 1.f;
+    float EnvMapMipCount           = 1.f;
 
     float2 EnvironmentRotation{1.f, 0.f};
     float2 Padding{};
@@ -286,41 +286,39 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
 
     m_pCurrentSRBData->pEnvMapVar->Set(Attribs.pEnvMap);
 
-    const TextureDesc& EnvMapDesc     = Attribs.pEnvMap->GetTexture()->GetDesc();
-    const Uint32       LastMipLevel   = std::max(EnvMapDesc.MipLevels, 1u) - 1u;
-    const float        MipLevel       = std::max(0.f, std::min(Attribs.MipLevel, static_cast<float>(LastMipLevel)));
-    const Uint32       MipIndex       = static_cast<Uint32>(MipLevel + 0.5f);
-    const float        AtlasMipWidth  = static_cast<float>(std::max(EnvMapDesc.Width >> MipIndex, 1u));
-    const float        AtlasMipHeight = static_cast<float>(std::max(EnvMapDesc.Height >> MipIndex, 1u));
-    const float        SphereMapWidth = std::max(std::floor(AtlasMipWidth * Attribs.SphereMapUVScaleBias.x + 0.5f), 1.f);
+    const TextureDesc& EnvMapDesc      = Attribs.pEnvMap->GetTexture()->GetDesc();
+    const float        MipCount        = static_cast<float>(std::max(EnvMapDesc.MipLevels, 1u));
+    const float        MipLevel        = std::max(0.f, std::min(Attribs.MipLevel, MipCount - 1.f));
+    const float        SphereMapWidth  = std::max(std::floor(static_cast<float>(EnvMapDesc.Width) * Attribs.SphereMapUVScaleBias.x + 0.5f), 1.f);
+    const float        SphereMapHeight = std::max(std::floor(static_cast<float>(EnvMapDesc.Height) * Attribs.SphereMapUVScaleBias.y + 0.5f), 1.f);
     const float2       EnvironmentRotation{std::cos(Attribs.Yaw), std::sin(Attribs.Yaw)};
 
     if (m_ShaderAttribs)
     {
         if (std::memcmp(&m_ShaderAttribs->ToneMapping, &ToneMapping, sizeof(ToneMapping)) != 0 ||
             m_ShaderAttribs->AverageLogLum != Attribs.AverageLogLum ||
-            m_ShaderAttribs->MipLevel != static_cast<float>(MipIndex) ||
+            m_ShaderAttribs->MipLevel != MipLevel ||
             m_ShaderAttribs->Alpha != Attribs.Alpha ||
             m_ShaderAttribs->Scale != float4{Attribs.Scale, 1} ||
             m_ShaderAttribs->SphereMapUVScaleBias != Attribs.SphereMapUVScaleBias ||
             m_ShaderAttribs->SphereMapSlice != Attribs.SphereMapSlice ||
             m_ShaderAttribs->SphereMapRow0IsNegativeY != static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY) ||
             m_ShaderAttribs->SphereMapWidth != SphereMapWidth ||
-            m_ShaderAttribs->AtlasMipWidth != AtlasMipWidth ||
-            m_ShaderAttribs->AtlasMipHeight != AtlasMipHeight ||
+            m_ShaderAttribs->SphereMapHeight != SphereMapHeight ||
+            m_ShaderAttribs->EnvMapMipCount != MipCount ||
             m_ShaderAttribs->EnvironmentRotation != EnvironmentRotation)
         {
             m_ShaderAttribs->ToneMapping              = ToneMapping;
             m_ShaderAttribs->AverageLogLum            = Attribs.AverageLogLum;
-            m_ShaderAttribs->MipLevel                 = static_cast<float>(MipIndex);
+            m_ShaderAttribs->MipLevel                 = MipLevel;
             m_ShaderAttribs->Alpha                    = Attribs.Alpha;
             m_ShaderAttribs->Scale                    = float4{Attribs.Scale, 1};
             m_ShaderAttribs->SphereMapUVScaleBias     = Attribs.SphereMapUVScaleBias;
             m_ShaderAttribs->SphereMapSlice           = Attribs.SphereMapSlice;
             m_ShaderAttribs->SphereMapRow0IsNegativeY = static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY);
             m_ShaderAttribs->SphereMapWidth           = SphereMapWidth;
-            m_ShaderAttribs->AtlasMipWidth            = AtlasMipWidth;
-            m_ShaderAttribs->AtlasMipHeight           = AtlasMipHeight;
+            m_ShaderAttribs->SphereMapHeight          = SphereMapHeight;
+            m_ShaderAttribs->EnvMapMipCount           = MipCount;
             m_ShaderAttribs->EnvironmentRotation      = EnvironmentRotation;
 
             pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -334,15 +332,15 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
         {
             EnvMapAttribs->ToneMapping              = ToneMapping;
             EnvMapAttribs->AverageLogLum            = Attribs.AverageLogLum;
-            EnvMapAttribs->MipLevel                 = static_cast<float>(MipIndex);
+            EnvMapAttribs->MipLevel                 = MipLevel;
             EnvMapAttribs->Alpha                    = Attribs.Alpha;
             EnvMapAttribs->Scale                    = float4{Attribs.Scale, 1};
             EnvMapAttribs->SphereMapUVScaleBias     = Attribs.SphereMapUVScaleBias;
             EnvMapAttribs->SphereMapSlice           = Attribs.SphereMapSlice;
             EnvMapAttribs->SphereMapRow0IsNegativeY = static_cast<Int32>(Attribs.SphereMapRow0IsNegativeY);
             EnvMapAttribs->SphereMapWidth           = SphereMapWidth;
-            EnvMapAttribs->AtlasMipWidth            = AtlasMipWidth;
-            EnvMapAttribs->AtlasMipHeight           = AtlasMipHeight;
+            EnvMapAttribs->SphereMapHeight          = SphereMapHeight;
+            EnvMapAttribs->EnvMapMipCount           = MipCount;
             EnvMapAttribs->EnvironmentRotation      = EnvironmentRotation;
         }
     }
