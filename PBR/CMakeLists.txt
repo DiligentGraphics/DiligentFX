@@ -2,6 +2,7 @@ cmake_minimum_required (VERSION 3.10)
 
 set(SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/PBR_Renderer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PBR_PrecomputeSheen.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/GLTF_PBR_Renderer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/USD_Renderer.cpp"
 )

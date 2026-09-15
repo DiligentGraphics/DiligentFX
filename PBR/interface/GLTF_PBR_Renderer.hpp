@@ -193,6 +193,8 @@ public:
     /// \param [in] pFrameAttribs - Frame attributes constant buffer to set in the SRB.
     /// \param [in] pIrradianceCubeSRV    - Irradiance cube map shader resource view to set in the SRB.
     /// \param [in] pPrefilteredEnvMapSRV - Prefiltered environment map shader resource view to set in the SRB.
+    /// \param [in] pPrefilteredSheenEnvMapSRV - View-averaged Charlie environment map.
+    ///                                        Null uses the generic environment-map fallback.
     /// \param [out] ppCacheSRB   - Pointer to memory location where the pointer to the SRB object
     ///                             will be written.
     void CreateResourceCacheSRB(IRenderDevice*           pDevice,
@@ -201,6 +203,7 @@ public:
                                 IBuffer*                 pFrameAttribs,
                                 ITextureView*            pIrradianceCubeSRV,
                                 ITextureView*            pPrefilteredEnvMapSRV,
+                                ITextureView*            pPrefilteredSheenEnvMapSRV,
                                 IShaderResourceBinding** ppCacheSRB);
 
     /// Prepares the renderer for rendering objects.
@@ -216,8 +219,9 @@ public:
                ResourceCacheUseInfo&  CacheUseInfo,
                ResourceCacheBindings& Bindings,
                IBuffer*               pFrameAttribs,
-               ITextureView*          pIrradianceCubeSRV    = nullptr,
-               ITextureView*          pPrefilteredEnvMapSRV = nullptr);
+               ITextureView*          pIrradianceCubeSRV         = nullptr,
+               ITextureView*          pPrefilteredEnvMapSRV      = nullptr,
+               ITextureView*          pPrefilteredSheenEnvMapSRV = nullptr);
 
     struct PBRPrimitiveShaderAttribsData
     {

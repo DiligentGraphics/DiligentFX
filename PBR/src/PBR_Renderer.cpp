@@ -421,6 +421,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     if (m_Settings.EnableSheen)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples, BRDFType::Sheen);
+        if (m_Settings.EnableIBL)
+            PrecomputeSheenSampling(pCtx);
     }
 
     if (m_Settings.CreateDefaultTextures)
@@ -611,7 +613,7 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
     TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
     TexDesc.Width     = BRDF_LUT_Dim;
     TexDesc.Height    = BRDF_LUT_Dim;
-    TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
+    TexDesc.Format    = IsGGX ? TEX_FORMAT_RG16_FLOAT : TEX_FORMAT_R16_FLOAT;
     TexDesc.MipLevels = 1;
 
     RefCntAutoPtr<ITexture>      pPreintegratedBRDF = m_Device.CreateTexture(TexDesc);
@@ -797,6 +799,12 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
     if (Attribs.pPrefilteredSheenEnvMap == Attribs.pPrefilteredEnvMap)
     {
         UNEXPECTED("GGX and Charlie prefiltering require distinct output cubemaps");
+        return;
+    }
+
+    if (Attribs.pPrefilteredSheenEnvMap != nullptr && !m_Settings.EnableSheen)
+    {
+        LOG_ERROR_MESSAGE("Sheen environment map precomputation requires CreateInfo::EnableSheen to be true");
         return;
     }
 
@@ -990,9 +998,13 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
                 .AddVariable(SHADER_TYPE_VS_PS, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_INLINE_CONSTANTS)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
+            if (IsCharlie)
+                ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_SheenSampling", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
             PSODesc.ResourceLayout = ResourceLayout;
 
             Tech.PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            if (IsCharlie)
+                ShaderResourceVariableX{Tech.PSO, SHADER_TYPE_PIXEL, "g_SheenSampling"}.Set(m_pSheenSampling_SRV);
             Tech.PSO->CreateShaderResourceBinding(&Tech.SRB, true);
         }
         return Tech;

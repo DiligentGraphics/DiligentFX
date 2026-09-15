@@ -576,8 +576,9 @@ public:
         /// Output prefiltered environment map texture.
         ITexture* pPrefilteredEnvMap = nullptr;
 
-        /// Optional output environment map prefiltered with the Charlie
-        /// distribution for sheen IBL.
+        /// Optional output environment map for the normalized, view-averaged
+        /// Charlie BRDF. Runtime sheen samples this map by the surface normal.
+        /// A non-null output requires CreateInfo::EnableSheen to be true.
         ITexture* pPrefilteredSheenEnvMap = nullptr;
 
         /// Number of samples for diffuse irradiance precomputation.
@@ -956,7 +957,7 @@ public:
                              Uint32                  TextureCount) const;
 
     /// Binds IBL cubemaps. If pPrefilteredSheenEnvMapSRV is null, the
-    /// GGX-prefiltered environment map is used for sheen.
+    /// GGX-prefiltered environment map is used as an approximate sheen fallback.
     void SetIBLResourceViews(IShaderResourceBinding* pSRB,
                              ITextureView*           pIrradianceCubeSRV,
                              ITextureView*           pPrefilteredEnvMapSRV,
@@ -1075,6 +1076,9 @@ private:
                         Uint32          NumBRDFSamples,
                         BRDFType        Type);
 
+    /// Generate the environment-independent sampling distribution for sheen IBL during construction.
+    void PrecomputeSheenSampling(IDeviceContext* pCtx);
+
     void CreatePSO(PsoHashMapType&             PsoHashMap,
                    const GraphicsPipelineDesc& GraphicsDesc,
                    const PSOKey&               Key,
@@ -1160,6 +1164,9 @@ protected:
     static constexpr Uint32     BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView> m_pPreintegratedGGX_SRV;
     RefCntAutoPtr<ITextureView> m_pPreintegratedSheen_SRV;
+
+    /// Inverse CDF of the view-averaged Charlie kernel; used only for prefiltering.
+    RefCntAutoPtr<ITextureView> m_pSheenSampling_SRV;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;

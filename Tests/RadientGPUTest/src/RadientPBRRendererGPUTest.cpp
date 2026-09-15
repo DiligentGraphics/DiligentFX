@@ -70,7 +70,7 @@ TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)
 
     ITextureView* const pPreintegratedSheen = Renderer.GetPreintegratedSheen_SRV();
     ASSERT_NE(pPreintegratedSheen, nullptr);
-    EXPECT_EQ(pPreintegratedSheen->GetDesc().Format, TEX_FORMAT_RG16_FLOAT);
+    EXPECT_EQ(pPreintegratedSheen->GetDesc().Format, TEX_FORMAT_R16_FLOAT);
 
     RefCntAutoPtr<IShaderResourceBinding> pFrameSRB;
     RefCntAutoPtr<IShaderResourceBinding> pMaterialSRB;

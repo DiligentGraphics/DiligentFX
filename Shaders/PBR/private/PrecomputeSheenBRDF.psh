@@ -5,54 +5,57 @@
 #    define NUM_SAMPLES 512u
 #endif
 
-float AshikhminVisibility(float NdotL, float NdotV)
+// Integrate the Charlie directional albedo for a fixed view and roughness:
+//
+//   A(NdotV, r) = integral[D_Charlie(NdotH, r) * Visibility(NdotL, NdotV, r) * NdotL dOmegaL]
+//
+// This is the reflected response to unit radiance over the upper hemisphere,
+// with unit sheen color. N = (0, 0, 1), V is fixed, and H = normalize(V + L).
+// No environment texture is sampled, and viewing directions are not averaged;
+// the view-averaged environment-filter distribution is generated separately.
+//
+// Sample L directly using a grazing-biased, low-discrepancy distribution:
+//   U = (i + 0.5) / NumSamples, NdotL = U^2,
+//   Phi = 2 * PI * radicalInverseBase2(i).
+// Squaring U concentrates samples near the horizon to resolve grazing lobes.
+// This fixed distribution is independent of roughness and NdotV; it is not
+// cosine-weighted sampling or Charlie half-vector importance sampling.
+//
+// Since dOmegaL = dPhi * d(NdotL), the solid-angle PDF is
+//   p(L) = 1 / (4 * PI * sqrt(NdotL)) = 1 / (4 * PI * U).
+// Each BRDF * NdotL contribution is therefore weighted by 4 * PI * U.
+// The common 4 * PI / NumSamples factor is applied after accumulation.
+float IntegrateSheenBRDF(float SheenRoughness, float NdotV, uint NumSamples)
 {
-    return saturate(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)));
-}
+    if (SheenRoughness <= 0.0)
+        return 0.0;
 
-float2 IntegrateSheenBRDF(float SheenRoughness, float NdotV, uint NumSamples)
-{
     float3 V = float3(sqrt(saturate(1.0 - NdotV * NdotV)), 0.0, NdotV);
-
-    float CharlieBRDF      = 0.0;
     float DirectionalAlbedo = 0.0;
     for (uint i = 0u; i < NumSamples; ++i)
     {
-        float2 Xi = Hammersley2D(i, NumSamples);
-
-        // Integrate the Charlie split-sum term using Charlie importance sampling.
-        float3 H     = ImportanceSampleCharlie(Xi, SheenRoughness, float3(0.0, 0.0, 1.0));
-        float3 L     = 2.0 * dot(V, H) * H - V;
-        float  NdotL = saturate(L.z);
-        if (NdotL > 0.0)
-        {
-            float NdotH = saturate(H.z);
-            float VdotH = saturate(dot(V, H));
-            float D     = NormalDistribution_Charlie(NdotH, SheenRoughness);
-            CharlieBRDF += AshikhminVisibility(NdotL, NdotV) * D * NdotL * VdotH;
-        }
-
-        // Integrate the directional albedo of the actual sheen BRDF. Cosine-
-        // weighted sampling cancels NdotL and leaves PI * D * visibility.
-        float Phi      = 2.0 * PI * Xi.x;
-        float CosTheta = sqrt(1.0 - Xi.y);
-        float SinTheta = sqrt(Xi.y);
-        
-        L = float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
-        H = normalize(V + L);
-        
+        // Midpoints avoid the polar endpoints. Hammersley's radical-inverse
+        // coordinate distributes the azimuth angles around the normal.
+        float U        = (float(i) + 0.5) / float(NumSamples);
+        float Phi      = 2.0 * PI * Hammersley2D(i, NumSamples).y;
+        float CosTheta = U * U;
+        float SinTheta = sqrt(saturate(1.0 - CosTheta * CosTheta));
+        float3 L       = float3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
+        float3 H       = normalize(V + L);
         DirectionalAlbedo +=
-            PI * NormalDistribution_Charlie(saturate(H.z), SheenRoughness) *
+            U * CosTheta * NormalDistribution_Charlie(saturate(H.z), SheenRoughness) *
             SheenVisibility(CosTheta, NdotV, SheenRoughness);
     }
+    DirectionalAlbedo *= 4.0 * PI / float(NumSamples);
 
-    // R: Charlie split-sum term. G: sheen directional albedo.
-    return float2(8.0 * PI * CharlieBRDF, DirectionalAlbedo) / float(NumSamples);
+    // Both the normalized IBL map and punctual-light layering use this albedo.
+    return DirectionalAlbedo;
 }
 
 void PrecomputeSheenBRDF_PS(FullScreenTriangleVSOutput VSOut,
-                            out float2                 SheenBRDF : SV_Target)
+                            out float                  SheenBRDF : SV_Target)
 {
+    // LUT axes: X = NdotV, Y = sheen roughness.
     float2 UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
     SheenBRDF = IntegrateSheenBRDF(UV.y, UV.x, NUM_SAMPLES);
 }

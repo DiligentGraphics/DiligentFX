@@ -357,16 +357,16 @@ float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
 #endif
 }
 
-float2 SamplePreintegratedSheenBRDF(in Texture2D    PreintegratedSheen,
+float SamplePreintegratedSheenBRDF(in Texture2D    PreintegratedSheen,
                                     in SamplerState PreintegratedSheen_sampler,
                                     in float        NdotV,
                                     in float        SheenRoughness)
 {
     // At zero roughness, Charlie converges to an infinitely narrow grazing
     // lobe that a finite rasterized lookup table cannot represent.
-    float2 BRDF = float2(0.0, 0.0);
+    float BRDF = 0.0;
     if (SheenRoughness > 0.0)
-        BRDF = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).rg;
+        BRDF = PreintegratedSheen.Sample(PreintegratedSheen_sampler, float2(NdotV, SheenRoughness)).r;
     return BRDF;
 }
 
@@ -386,10 +386,10 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
     {
         float  NdotV               = dot_sat(n, v);
         float  lod                 = SheenRoughness * PrefilteredCubeLastMip;
-        float3 Reflection          = normalize(reflect(-v, n));
-        float3 EnvironmentDirection = RotateDirectionAroundY(Reflection, EnvironmentRotation);
+        // The view-averaged Charlie map is indexed by the surface normal.
+        float3 EnvironmentDirection = RotateDirectionAroundY(n, EnvironmentRotation);
 
-        float brdf = SamplePreintegratedSheenBRDF(PreintegratedSheen, PreintegratedSheen_sampler, NdotV, SheenRoughness).r;
+        float brdf = SamplePreintegratedSheenBRDF(PreintegratedSheen, PreintegratedSheen_sampler, NdotV, SheenRoughness);
 
         float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredSheenEnvMap, PrefilteredSheenEnvMap_sampler, EnvironmentDirection, lod);
         SpecularIBL = SpecularLight * SheenColor * brdf;
@@ -795,9 +795,9 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
     
         float MaxFactor = max(max(Shading.Sheen.Color.r, Shading.Sheen.Color.g), Shading.Sheen.Color.b);
         float DirectionalAlbedoV = SamplePreintegratedSheenBRDF(
-            PreintegratedSheen, PreintegratedSheen_sampler, NdotV, Shading.Sheen.Roughness).g;
+            PreintegratedSheen, PreintegratedSheen_sampler, NdotV, Shading.Sheen.Roughness);
         float DirectionalAlbedoL = SamplePreintegratedSheenBRDF(
-            PreintegratedSheen, PreintegratedSheen_sampler, NdotL, Shading.Sheen.Roughness).g;
+            PreintegratedSheen, PreintegratedSheen_sampler, NdotL, Shading.Sheen.Roughness);
         float AlbedoScaling =
             min(1.0 - MaxFactor * DirectionalAlbedoV,
                 1.0 - MaxFactor * DirectionalAlbedoL);

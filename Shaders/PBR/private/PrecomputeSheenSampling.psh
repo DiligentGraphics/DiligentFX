@@ -1,0 +1,207 @@
+#include "PBR_PrecomputeCommon.fxh"
+#include "SheenSampling.fxh"
+
+// Build an environment-independent importance-sampling LUT for the normalized,
+// view-averaged Charlie filter. This shader precomputes a sampling distribution,
+// not environment colors; the resulting LUT can be reused for any environment.
+//
+// A single cubemap cannot retain the full dependence on both N and V. Instead
+// of fixing V = N, average normalized Charlie responses over viewing directions
+// to obtain a rotationally symmetric filter around N, parameterized by NdotL
+// and roughness. This is still an approximation to the view-dependent BRDF.
+//
+// For each view, integrate D_Charlie(NdotH) * Visibility(NdotL, NdotV) * NdotL
+// over relative azimuth, with H = normalize(V + L). Divide this radial response
+// by its own hemisphere integral BEFORE averaging views, so high-albedo views
+// do not dominate the filter. Gauss-Legendre nodes and weights in cbSheenQuadrature
+// integrate NdotV uniformly on [0, 1], corresponding to uniform view solid angle.
+//
+// The LUT is generated in three passes:
+//   1. PrecomputeSheenViewAlbedo_PS: integrate a normalization for each view and
+//      roughness. These are scaled internal normalizers, not the physical
+//      directional-albedo LUT produced by PrecomputeSheenBRDF.psh. The common
+//      per-view scale avoids underflow and cancels in the next pass.
+//   2. PrecomputeSheenKernel_PS: average the individually normalized responses
+//      and store probability mass per NdotL bin. Bins are uniform in sqrt(NdotL)
+//      to resolve narrow grazing lobes; both passes use the same quadrature.
+//   3. PrecomputeSheenInverseCDF_PS: accumulate and normalize the bin masses,
+//      then invert the cumulative distribution. Each output texel stores the
+//      NdotL below which the requested fraction of probability mass lies.
+//
+// The final R32_FLOAT texture has roughness along Y, including 0 and 1. Along X,
+// a normalized column coordinate S represents probability SheenSamplingProbability(S).
+// This concentrates quantile knots near both probability endpoints to reduce
+// interpolation error. The zero-roughness row represents the tangent-circle
+// limit: all samples have NdotL = 0.
+//
+// PrefilterEnvMap.psh maps uniform probabilities through this inverse CDF and
+// combines them with uniform azimuths to sample directions around N. Because
+// the normalized filter is the sampling distribution, it averages environment
+// radiance without extra BRDF or NdotL weights. Shading samples the resulting
+// cubemap by N and restores view-dependent energy using the separate Charlie
+// directional-albedo LUT evaluated at the material's NdotV and roughness.
+
+#ifndef SHEEN_SAMPLING_VIEW_COUNT
+#    define SHEEN_SAMPLING_VIEW_COUNT 32
+#endif
+#ifndef SHEEN_SAMPLING_AZIMUTH_COUNT
+#    define SHEEN_SAMPLING_AZIMUTH_COUNT 128u
+#endif
+#ifndef SHEEN_SAMPLING_KERNEL_RESOLUTION
+#    define SHEEN_SAMPLING_KERNEL_RESOLUTION 256u
+#endif
+#ifndef SHEEN_SAMPLING_QUANTILE_RESOLUTION
+#    define SHEEN_SAMPLING_QUANTILE_RESOLUTION 256u
+#endif
+#ifndef SHEEN_SAMPLING_ROUGHNESS_RESOLUTION
+#    define SHEEN_SAMPLING_ROUGHNESS_RESOLUTION 64u
+#endif
+
+cbuffer cbSheenQuadrature
+{
+    // xy: Gauss-Legendre NdotV and weight on [0, 1]; zw: CB array padding.
+    float4 SheenViewQuadrature[SHEEN_SAMPLING_VIEW_COUNT];
+};
+
+// Temporary normalizations: X is the viewing-angle index; Y is roughness.
+Texture2D<float> g_SheenViewAlbedo;
+// Temporary radial probability masses: X is a sqrt(NdotL) bin; Y is roughness.
+Texture2D<float> g_SheenKernel;
+
+float GetSheenSamplingRoughness(uint Row)
+{
+    return float(Row) / float(SHEEN_SAMPLING_ROUGHNESS_RESOLUTION);
+}
+
+float2 GetSheenKernelBin(uint Index)
+{
+    // Squared boundaries resolve the narrow grazing lobe at low roughness.
+    float2 T = float2(float(Index), float(Index + 1u)) /
+               float(SHEEN_SAMPLING_KERNEL_RESOLUTION);
+    return T * T;
+}
+
+float GetSheenKernelBinSample(uint Index)
+{
+    float T = (float(Index) + 0.5) / float(SHEEN_SAMPLING_KERNEL_RESOLUTION);
+    return T * T;
+}
+
+float IntegrateScaledSheenAzimuth(float NdotL, float NdotV, float Roughness)
+{
+    float SinThetaL = sqrt(saturate(1.0 - NdotL * NdotL));
+    float SinThetaV = sqrt(saturate(1.0 - NdotV * NdotV));
+    float Exponent  = 0.5 / (Roughness * Roughness);
+
+    // Divide D by its maximum for this view before integrating. This common
+    // factor cancels during normalization, avoiding underflow at low roughness.
+    float MaxSin2H = 0.5 * (1.0 + SinThetaV);
+    float Sum      = 0.0;
+    [loop]
+    for (uint SampleIndex = 0u; SampleIndex < SHEEN_SAMPLING_AZIMUTH_COUNT; ++SampleIndex)
+    {
+        float Phi  = 2.0 * PI * (float(SampleIndex) + 0.5) /
+                     float(SHEEN_SAMPLING_AZIMUTH_COUNT);
+        float VdotL = NdotL * NdotV + SinThetaL * SinThetaV * cos(Phi);
+        float Cos2H = (NdotL + NdotV) * (NdotL + NdotV) /
+                      max(2.0 + 2.0 * VdotL, 1e-20);
+        // Match NormalDistribution_Charlie, including its minimum Sin2H.
+        float Sin2H = max(1.0 - Cos2H, 0.0078125);
+        Sum += exp(Exponent * min(log(Sin2H / MaxSin2H), 0.0));
+    }
+
+    return Sum / float(SHEEN_SAMPLING_AZIMUTH_COUNT) *
+           SheenVisibility(NdotL, NdotV, Roughness) * NdotL;
+}
+
+// Pass 1: normalize each viewing direction separately, rather than allowing
+// high-albedo views to dominate the average. The omitted 2*PI factor cancels.
+void PrecomputeSheenViewAlbedo_PS(float4 PixelPosition : SV_Position,
+                                 out float Albedo     : SV_Target)
+{
+    uint2 Pixel = uint2(PixelPosition.xy);
+    Albedo      = 1.0;
+    if (Pixel.y == 0u)
+        return;
+
+    float Roughness = GetSheenSamplingRoughness(Pixel.y);
+    float NdotV     = SheenViewQuadrature[Pixel.x].x;
+    Albedo          = 0.0;
+    [loop]
+    for (uint BinIndex = 0u; BinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++BinIndex)
+    {
+        float2 Bin = GetSheenKernelBin(BinIndex);
+        Albedo += IntegrateScaledSheenAzimuth(
+            GetSheenKernelBinSample(BinIndex), NdotV, Roughness) * (Bin.y - Bin.x);
+    }
+}
+
+// Pass 2: average individually normalized views into one radial distribution.
+// The normalization and this pass use identical light-angle quadrature.
+void PrecomputeSheenKernel_PS(float4 PixelPosition : SV_Position,
+                             out float Mass       : SV_Target)
+{
+    uint2 Pixel = uint2(PixelPosition.xy);
+    if (Pixel.y == 0u)
+    {
+        Mass = Pixel.x == 0u ? 1.0 : 0.0;
+        return;
+    }
+
+    float Roughness = GetSheenSamplingRoughness(Pixel.y);
+    float NdotL     = GetSheenKernelBinSample(Pixel.x);
+    float2 Bin      = GetSheenKernelBin(Pixel.x);
+    Mass            = 0.0;
+    [loop]
+    for (uint ViewIndex = 0u; ViewIndex < SHEEN_SAMPLING_VIEW_COUNT; ++ViewIndex)
+    {
+        float2 View   = SheenViewQuadrature[ViewIndex].xy;
+        float Albedo  = g_SheenViewAlbedo.Load(int3(int(ViewIndex), int(Pixel.y), 0));
+        float Density = IntegrateScaledSheenAzimuth(NdotL, View.x, Roughness);
+        if (Albedo > 0.0)
+            Mass += View.y * Density / Albedo;
+    }
+    Mass *= Bin.y - Bin.x;
+}
+
+// Pass 3: store inverse-CDF endpoint quantiles as NdotL, including 0 and 1.
+// Probability knots are concentrated near the tails. Environment prefiltering
+// interpolates linearly in probability within each interval; the resulting
+// sampling PDF determines its source-environment mip level.
+void PrecomputeSheenInverseCDF_PS(float4 PixelPosition : SV_Position,
+                                 out float NdotL      : SV_Target)
+{
+    uint2 Pixel = uint2(PixelPosition.xy);
+    NdotL       = 0.0;
+    // The zero-roughness limit is concentrated on the normal's horizon.
+    if (Pixel.y == 0u || Pixel.x == 0u)
+        return;
+    if (Pixel.x == SHEEN_SAMPLING_QUANTILE_RESOLUTION)
+    {
+        NdotL = 1.0;
+        return;
+    }
+
+    float TotalMass = 0.0;
+    [loop]
+    for (uint TotalBinIndex = 0u; TotalBinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++TotalBinIndex)
+        TotalMass += g_SheenKernel.Load(int3(int(TotalBinIndex), int(Pixel.y), 0));
+
+    float Probability = SheenSamplingProbability(
+        float(Pixel.x) / float(SHEEN_SAMPLING_QUANTILE_RESOLUTION));
+    float TargetMass = Probability * TotalMass;
+    float PrefixMass = 0.0;
+    [loop]
+    for (uint BinIndex = 0u; BinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++BinIndex)
+    {
+        float Mass = g_SheenKernel.Load(int3(int(BinIndex), int(Pixel.y), 0));
+        if (Mass > 0.0 && TargetMass <= PrefixMass + Mass)
+        {
+            float2 Bin = GetSheenKernelBin(BinIndex);
+            NdotL = lerp(Bin.x, Bin.y, saturate((TargetMass - PrefixMass) / Mass));
+            return;
+        }
+        PrefixMass += Mass;
+    }
+    NdotL = 1.0;
+}
