@@ -55,6 +55,7 @@ void RadientDataBlob_C_UseTypes(void)
     if (Diligent_CreateRadientMutableDataBlob(&CI, &pMutable) != RADIENT_STATUS_OK)
         return;
     (void)IRadientMutableDataBlob_GetSize(pMutable);
+    (void)IRadientMutableDataBlob_Resize(pMutable, sizeof(InitialData) * 2);
     if (IRadientMutableDataBlob_BeginWrite(pMutable, &pWriteData) == RADIENT_STATUS_OK)
         (void)IRadientMutableDataBlob_EndWrite(pMutable);
     if (IRadientMutableDataBlob_BeginRead(pMutable, &pReadData) == RADIENT_STATUS_OK)

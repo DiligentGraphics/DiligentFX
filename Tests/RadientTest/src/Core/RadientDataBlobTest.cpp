@@ -167,6 +167,162 @@ TEST(RadientDataBlobTest, CopiesInitialDataDuringCreation)
     EXPECT_EQ(Empty->EndRead(), RADIENT_STATUS_OK);
 }
 
+TEST(RadientDataBlobTest, ResizePreservesPrefixAndZeroInitializesNewBytes)
+{
+    const std::array<Uint8, 4> InitialData{{3, 17, 29, 255}};
+    RadientDataBlobCreateInfo  CI;
+    CI.Size  = InitialData.size();
+    CI.pData = InitialData.data();
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(CI, &Blob), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientDataBlob> Base{Blob, IID_RadientDataBlob};
+    ASSERT_NE(Base, nullptr);
+
+    EXPECT_EQ(Blob->Resize(InitialData.size()), RADIENT_STATUS_OK);
+    ASSERT_EQ(Blob->Resize(8), RADIENT_STATUS_OK);
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->GetSize(), 8u);
+    const std::array<Uint8, 8> Grown{{3, 17, 29, 255, 0, 0, 0, 0}};
+    EXPECT_EQ(std::memcmp(ReadData, Grown.data(), Grown.size()), 0);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Blob->Resize(2), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->GetSize(), 2u);
+    ASSERT_EQ(Blob->Resize(4), RADIENT_STATUS_OK);
+    void* WriteData = nullptr;
+    ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->GetSize(), 4u);
+    const std::array<Uint8, 4> Regrown{{3, 17, 0, 0}};
+    EXPECT_EQ(std::memcmp(WriteData, Regrown.data(), Regrown.size()), 0);
+    static_cast<Uint8*>(WriteData)[3] = 42;
+    EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(static_cast<const Uint8*>(ReadData)[3], 42);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Blob->Resize(0), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->GetSize(), 0u);
+    EXPECT_EQ(Blob->Resize(0), RADIENT_STATUS_OK);
+    ASSERT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(ReadData, nullptr);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(WriteData, nullptr);
+    EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Blob->Resize(4), RADIENT_STATUS_OK);
+    ASSERT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->GetSize(), 4u);
+    const std::array<Uint8, 4> Zeros{};
+    EXPECT_EQ(std::memcmp(ReadData, Zeros.data(), Zeros.size()), 0);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+}
+
+TEST(RadientDataBlobTest, ResizeRejectsEveryActiveAccessScope)
+{
+    auto Blob = MakeMutableBlob(4);
+    ASSERT_NE(Blob, nullptr);
+    RefCntAutoPtr<IRadientDataBlob> Base{Blob, IID_RadientDataBlob};
+    ASSERT_NE(Base, nullptr);
+    const void* First  = nullptr;
+    const void* Second = nullptr;
+    ASSERT_EQ(Base->BeginRead(&First), RADIENT_STATUS_OK);
+    ASSERT_EQ(Blob->BeginRead(&Second), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->Resize(4), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->Resize(0), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Base->GetSize(), 4u);
+    const std::array<Uint8, 4> Zeros{};
+    EXPECT_EQ(std::memcmp(First, Zeros.data(), Zeros.size()), 0);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(std::memcmp(Second, Zeros.data(), Zeros.size()), 0);
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+
+    void* WriteData = nullptr;
+    ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    static_cast<Uint8*>(WriteData)[0] = 73;
+    EXPECT_EQ(Blob->Resize(4), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->Resize(0), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Base->GetSize(), 4u);
+    EXPECT_EQ(static_cast<const Uint8*>(WriteData)[0], 73);
+    EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(Blob->Resize(8), RADIENT_STATUS_OK);
+    ASSERT_EQ(Base->BeginRead(&First), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->GetSize(), 8u);
+    EXPECT_EQ(static_cast<const Uint8*>(First)[0], 73);
+    EXPECT_EQ(Base->EndRead(), RADIENT_STATUS_OK);
+}
+
+TEST(RadientDataBlobTest, InvalidResizePreservesDataAndAccessState)
+{
+    auto Blob = MakeMutableBlob(4);
+    ASSERT_NE(Blob, nullptr);
+    void* WriteData = nullptr;
+    ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    const std::array<Uint8, 4> Expected{{1, 2, 3, 4}};
+    std::memcpy(WriteData, Expected.data(), Expected.size());
+    EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(Blob->Resize((std::numeric_limits<Uint64>::max)()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Blob->GetSize(), Expected.size());
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(std::memcmp(ReadData, Expected.data(), Expected.size()), 0);
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_OK);
+}
+
+TEST(RadientDataBlobTest, LastReaderCallbackCanResizeWithoutAdditionalNotifications)
+{
+    struct CallbackCounts
+    {
+        int Reads        = 0;
+        int Destructions = 0;
+    } Counts;
+    RadientDataBlobCreateInfo CI;
+    CI.Size                 = 1;
+    CI.pUserData            = &Counts;
+    CI.OnLastReaderReleased = [](IRadientDataBlob* pBlob, void* pContext) {
+        ++static_cast<CallbackCounts*>(pContext)->Reads;
+        RefCntAutoPtr<IRadientMutableDataBlob> Mutable{pBlob, IID_RadientMutableDataBlob};
+        ASSERT_NE(Mutable, nullptr);
+        ASSERT_EQ(Mutable->Resize(8), RADIENT_STATUS_OK);
+        void* WriteData = nullptr;
+        ASSERT_EQ(Mutable->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+        EXPECT_EQ(pBlob->GetSize(), 8u);
+        static_cast<Uint8*>(WriteData)[0] = 42;
+        EXPECT_EQ(Mutable->EndWrite(), RADIENT_STATUS_OK);
+    };
+    CI.OnDestroy = [](void* pContext) {
+        ++static_cast<CallbackCounts*>(pContext)->Destructions;
+    };
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(CI, &Blob), RADIENT_STATUS_OK);
+    ASSERT_EQ(Blob->Resize(2), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->Resize((std::numeric_limits<Uint64>::max)()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Counts.Reads, 0);
+    EXPECT_EQ(Counts.Destructions, 0);
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->Resize(0), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Counts.Reads, 1);
+    void* WriteData = nullptr;
+    ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->GetSize(), 8u);
+    EXPECT_EQ(static_cast<const Uint8*>(WriteData)[0], 42);
+    EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Blob->Resize(0), RADIENT_STATUS_OK);
+    EXPECT_EQ(Counts.Reads, 1);
+    EXPECT_EQ(Counts.Destructions, 0);
+    Blob.Release();
+    EXPECT_EQ(Counts.Destructions, 1);
+}
+
 TEST(RadientDataBlobTest, SharesReadsAndExcludesWrites)
 {
     auto Blob = MakeMutableBlob();
@@ -369,11 +525,14 @@ TEST(RadientDataBlobTest, ConcurrentReadersExcludeWriter)
     EXPECT_TRUE(Readers.WaitFor(4));
     EXPECT_EQ(SuccessfulReads, 4);
     EXPECT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Blob->GetSize(), 1u);
     EXPECT_EQ(Calls, 0);
     Readers.Release();
     for (auto& Thread : Threads)
         Thread.join();
     EXPECT_EQ(Calls, 1);
+    EXPECT_EQ(Blob->Resize(8), RADIENT_STATUS_OK);
     EXPECT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
     EXPECT_EQ(Blob->EndWrite(), RADIENT_STATUS_OK);
 }

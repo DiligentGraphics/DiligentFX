@@ -82,7 +82,11 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientDataBlob, TBase);
 
-    Uint64 DILIGENT_CALL_TYPE GetSize() const override final { return m_Size; }
+    Uint64 DILIGENT_CALL_TYPE GetSize() const override final
+    {
+        std::lock_guard<std::mutex> Lock{m_AccessMutex};
+        return m_Size;
+    }
 
     RADIENT_STATUS DILIGENT_CALL_TYPE BeginRead(const void** ppData) override final
     {
@@ -129,21 +133,21 @@ public:
     }
 
 protected:
-    // Never resized. In REFERENCE mode the vector is empty and m_pData points
-    // to the caller's bytes; OnDestroy can release the external storage owner.
+    // In REFERENCE mode the vector is empty and m_pData points to the caller's
+    // bytes. Mutable blobs update the pointer and size after resizing storage.
     std::vector<Uint8> m_Data;
+    const void*        m_pData;
+    Uint64             m_Size;
 
 private:
-    const void* const                            m_pData;
-    const Uint64                                 m_Size;
     const RadientDataBlobReadReleaseCallbackType m_OnLastReaderReleased;
     void* const                                  m_pUserData;
     const RadientDataBlobDestroyCallbackType     m_OnDestroy;
 
 protected:
-    std::mutex m_AccessMutex;
-    size_t     m_ReaderCount = 0;
-    bool       m_Writing     = false;
+    mutable std::mutex m_AccessMutex;
+    size_t             m_ReaderCount = 0;
+    bool               m_Writing     = false;
 };
 
 class RadientDataBlobImpl final : public RadientDataBlobBase<IRadientDataBlob>
@@ -183,6 +187,28 @@ public:
             return RADIENT_STATUS_INVALID_OPERATION;
 
         m_Writing = false;
+        return RADIENT_STATUS_OK;
+    }
+
+    RADIENT_STATUS DILIGENT_CALL_TYPE Resize(Uint64 NewSize) override final
+    {
+        std::lock_guard<std::mutex> Lock{m_AccessMutex};
+        if (m_Writing || m_ReaderCount != 0)
+            return RADIENT_STATUS_INVALID_OPERATION;
+        if (NewSize > m_Data.max_size())
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        try
+        {
+            m_Data.resize(static_cast<size_t>(NewSize));
+        }
+        catch (...)
+        {
+            return RADIENT_STATUS_FAILED;
+        }
+
+        m_pData = m_Data.empty() ? nullptr : m_Data.data();
+        m_Size  = NewSize;
         return RADIENT_STATUS_OK;
     }
 };

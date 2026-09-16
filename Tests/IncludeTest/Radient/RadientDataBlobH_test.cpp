@@ -52,6 +52,7 @@ void RadientDataBlob_CPP_UseTypes()
     if (CreateRadientMutableDataBlob(CI, &pMutable) != RADIENT_STATUS_OK)
         return;
     (void)pMutable->GetSize();
+    (void)pMutable->Resize(sizeof(InitialData) * 2);
     if (pMutable->BeginWrite(&pWriteData) == RADIENT_STATUS_OK)
         (void)pMutable->EndWrite();
     IRadientDataBlob* pBase = pMutable;

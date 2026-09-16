@@ -59,7 +59,8 @@ DILIGENT_TYPED_ENUM(RADIENT_DATA_BLOB_STORAGE_MODE, Uint8){
 ///
 /// Called synchronously by EndRead on the thread releasing the final reader,
 /// outside the internal access lock. The callback can acquire read access and,
-/// for mutable blobs, query IRadientMutableDataBlob to acquire write access.
+/// for mutable blobs, query IRadientMutableDataBlob to resize or acquire write
+/// access.
 /// Notification does not reserve access. New read cycles can make callbacks
 /// overlap across threads or nest on the same thread. A C++ callback exception
 /// makes EndRead return RADIENT_STATUS_FAILED; read access is already released.
@@ -76,13 +77,14 @@ typedef void (*RadientDataBlobReadReleaseCallbackType)(IRadientDataBlob* pBlob, 
 /// logged. Failed creation does not invoke this callback.
 typedef void (*RadientDataBlobDestroyCallbackType)(void* pUserData);
 
-/// Shared creation parameters for read-only and mutable fixed-size CPU blobs.
+/// Shared creation parameters for read-only and mutable CPU blobs.
 /// Both factories copy the descriptor during the call. The source bytes are
 /// copied for owning storage or referenced for REFERENCE storage as described below.
 struct RadientDataBlobCreateInfo
 {
-    /// Number of bytes exposed by the blob. The size never changes. Zero creates
-    /// a valid empty blob; successful access returns a null data pointer.
+    /// Initial number of bytes exposed by the blob. Read-only blobs keep this
+    /// size; mutable blobs can change it with IRadientMutableDataBlob::Resize.
+    /// Zero creates a valid empty blob; successful access returns a null pointer.
     /// Owning storage is limited to the implementation's addressable allocation
     /// range; REFERENCE storage requires a size representable by size_t.
     /// Unsupported sizes return RADIENT_STATUS_INVALID_ARGUMENT. Defaults to zero.
@@ -97,9 +99,9 @@ struct RadientDataBlobCreateInfo
     const void* pData DEFAULT_INITIALIZER(nullptr);
 
     /// Optional callback invoked once per reader-count transition from one to
-    /// zero, including for empty blobs. Creation, writes, failed access attempts,
-    /// and destruction do not invoke it. Registration remains fixed for the
-    /// blob's lifetime. Defaults to nullptr, which disables notifications.
+    /// zero, including for empty blobs. Creation, writes, resizing, failed access
+    /// attempts, and destruction do not invoke it. Registration remains fixed for
+    /// the blob's lifetime. Defaults to nullptr, which disables notifications.
     RadientDataBlobReadReleaseCallbackType OnLastReaderReleased DEFAULT_INITIALIZER(nullptr);
 
     /// Opaque context passed unchanged to both callbacks. The pointer is stored;
@@ -145,17 +147,21 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMutableDataBlob =
 /// for active scopes to finish.
 ///
 /// A read-only interface does not imply immutable storage: a mutable blob also
-/// exposes this interface, and its read scopes prevent concurrent writes through
-/// IRadientMutableDataBlob. Blobs created by CreateRadientDataBlob expose only read
-/// access and do not provide IRadientMutableDataBlob through QueryInterface.
+/// exposes this interface, and its read scopes prevent concurrent writes and
+/// resizing through IRadientMutableDataBlob. Blobs created by CreateRadientDataBlob
+/// expose only read access and do not provide IRadientMutableDataBlob through
+/// QueryInterface.
 ///
 /// Data pointers are usable only within their corresponding access scope. The
 /// caller holds a strong reference until it ends the scope; BeginRead does not
 /// retain the blob. Read access does not permit modifying the bytes.
 DILIGENT_BEGIN_INTERFACE(IRadientDataBlob, IObject)
 {
-    /// Returns the immutable data size in bytes, including during active read or
-    /// write access. Does not acquire access or invoke either callback.
+    /// Returns the current data size in bytes, including during active read or
+    /// write access. The size is stable within an acquired access scope. Outside
+    /// a scope, a mutable blob can be resized before the caller uses this value;
+    /// query the size after acquiring access when using it with a data pointer.
+    /// Does not acquire access or invoke either callback.
     VIRTUAL Uint64 METHOD(GetSize)(THIS) CONST PURE;
 
     /// Acquires one shared read scope and returns the first byte through ppData.
@@ -197,7 +203,7 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// An owning data blob with exclusive write access in addition to shared reads.
+/// An owning data blob with shared reads, exclusive writes, and resizable storage.
 ///
 /// Created by CreateRadientMutableDataBlob. QueryInterface exposes both
 /// IID_RadientDataBlob and IID_RadientMutableDataBlob on the same object. All
@@ -221,6 +227,28 @@ DILIGENT_BEGIN_INTERFACE(IRadientMutableDataBlob, IRadientDataBlob)
     /// interface. Otherwise returns RADIENT_STATUS_INVALID_OPERATION without
     /// changing state. Does not invoke OnLastReaderReleased or OnDestroy.
     VIRTUAL RADIENT_STATUS METHOD(EndWrite)(THIS) PURE;
+
+    /// Changes the data size when no read or write scope is active.
+    ///
+    /// \param [in] NewSize - New size in bytes. Zero makes the blob empty; subsequent
+    ///                       successful access returns a null data pointer.
+    ///
+    /// Preserves existing bytes up to the smaller of the old and new sizes, and
+    /// zero-initializes added bytes. Shrinking discards bytes beyond NewSize.
+    /// The allocation may move, so subsequent access scopes can return a different
+    /// data pointer.
+    ///
+    /// Returns RADIENT_STATUS_INVALID_OPERATION if any reader or writer is active,
+    /// even if NewSize equals the current size. Does not wait for active scopes to
+    /// finish. Otherwise returns RADIENT_STATUS_INVALID_ARGUMENT for a size beyond
+    /// the implementation's addressable allocation range, RADIENT_STATUS_FAILED
+    /// if allocation fails, or RADIENT_STATUS_OK on success. Resizing to the current
+    /// size succeeds without changing the contents when no scope is active.
+    /// Failure leaves the size, contents, and access state unchanged. Resizing
+    /// does not acquire an access scope or invoke either callback. The new size
+    /// is visible through every interface view of the blob.
+    VIRTUAL RADIENT_STATUS METHOD(Resize)(THIS_
+                                          Uint64 NewSize) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -232,6 +260,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientMutableDataBlob_EndRead(This)         CALL_IFACE_METHOD(RadientDataBlob, EndRead,           This)
 #    define IRadientMutableDataBlob_BeginWrite(This, ...) CALL_IFACE_METHOD(RadientMutableDataBlob, BeginWrite, This, __VA_ARGS__)
 #    define IRadientMutableDataBlob_EndWrite(This)        CALL_IFACE_METHOD(RadientMutableDataBlob, EndWrite,   This)
+#    define IRadientMutableDataBlob_Resize(This, ...)      CALL_IFACE_METHOD(RadientMutableDataBlob, Resize,     This, __VA_ARGS__)
 #endif
 
 // clang-format on

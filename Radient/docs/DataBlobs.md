@@ -1,9 +1,9 @@
 # Data blobs
 
-`IRadientDataBlob` exposes shared read access to a fixed-size span of CPU bytes.
-`IRadientMutableDataBlob` derives from it and adds exclusive write access. Both
-factories use `RadientDataBlobCreateInfo` and work without an engine or graphics
-device.
+`IRadientDataBlob` exposes shared read access to a span of CPU bytes.
+`IRadientMutableDataBlob` derives from it and adds exclusive write access and
+resizing outside access scopes. Both factories use `RadientDataBlobCreateInfo`
+and work without an engine or graphics device.
 
 | Storage | Factory | Result |
 | --- | --- | --- |
@@ -59,7 +59,10 @@ Pointers are usable only within their access scope. Clients hold a strong blob
 reference until that scope ends; acquiring access does not retain the object.
 Scopes can be handed between threads with caller-provided synchronization. Writes
 completed before `EndWrite` are visible to subsequent successful read and write
-acquisitions. Data pointers and sizes remain stable throughout the blob's lifetime.
+acquisitions. Data pointers and sizes remain stable throughout an acquired scope.
+For mutable blobs, call `GetSize` after acquiring access to obtain the size that
+matches the data pointer; a size queried beforehand may be changed by another
+thread's `Resize`. Blobs created by the read-only factory keep their original size.
 
 ```cpp
 RadientDataBlobCreateInfo CI;
@@ -85,11 +88,44 @@ if (Readable->BeginRead(&ReadData) == RADIENT_STATUS_OK)
 }
 ```
 
+## Resizing mutable blobs
+
+`IRadientMutableDataBlob::Resize(NewSize)` changes the number of bytes when no
+reader or writer is active. It preserves the existing prefix, zero-initializes
+added bytes, and discards bytes beyond the new size when shrinking. Resizing to
+zero creates an empty blob whose successful access calls return null pointers.
+Resizing to the current size succeeds without changing the contents when idle.
+
+Any active scope makes `Resize` return `RADIENT_STATUS_INVALID_OPERATION`, even
+when the requested size is unchanged. Unsupported sizes return
+`RADIENT_STATUS_INVALID_ARGUMENT`, and allocation failure returns
+`RADIENT_STATUS_FAILED`. Failure leaves the size, contents, and access state
+unchanged. Resizing invokes neither callback and does not acquire an access scope.
+The new size is visible through both the mutable and read-only interfaces.
+
+```cpp
+if (Blob->Resize(sizeof(float) * 6) != RADIENT_STATUS_OK)
+    return;
+
+void* Data = nullptr;
+if (Blob->BeginWrite(&Data) == RADIENT_STATUS_OK)
+{
+    const Uint64 Size = Blob->GetSize();
+    // Populate Data using Size while retaining Blob and holding write access.
+    Blob->EndWrite();
+}
+```
+
+Each call is thread-safe, but resizing and acquiring access are separate
+operations. If multiple threads resize a blob, the caller synchronizes them when
+it needs a particular size for its next access scope.
+
 ## Last-reader notification
 
 `OnLastReaderReleased` runs for each reader-count transition from one to zero,
 including for empty blobs. Registration is copied at creation and remains fixed.
-Construction, writes, failed access attempts, and destruction do not trigger it.
+Construction, writes, resizing, failed access attempts, and destruction do not
+trigger it.
 The callback receives an `IRadientDataBlob` and the shared `pUserData` context.
 For a mutable blob, it can query `IID_RadientMutableDataBlob` to attempt recycling.
 
@@ -97,8 +133,9 @@ The callback runs synchronously on the thread performing the final `EndRead`,
 outside the internal access lock. The blob stays alive throughout the callback,
 even if the callback releases the caller's reference. Retaining it afterward
 requires acquiring a separate strong reference. A notification does not reserve
-access: another reader or writer may already be active. Recycling starts with a
-successful `BeginWrite` on the mutable interface.
+access: another reader or writer may already be active. A mutable blob can be
+resized from the callback when no access scope is active. Recycling its contents
+starts with a successful `BeginWrite` on the mutable interface.
 
 New read cycles can produce nested callbacks or concurrent callbacks on different
 threads; callback state accounts for both. A callback exception is caught and
@@ -150,4 +187,4 @@ factory also takes the storage mode. A null descriptor returns
 `RADIENT_STATUS_INVALID_ARGUMENT` and clears a non-null output. Use
 `IRadientDataBlob_GetSize`, `IRadientDataBlob_BeginRead`, and
 `IRadientDataBlob_EndRead` for the base interface. The corresponding
-`IRadientMutableDataBlob_*` macros expose both inherited reads and write access.
+`IRadientMutableDataBlob_*` macros expose inherited reads, write access, and `Resize`.

@@ -67,6 +67,8 @@ int RadientDataBlob_C_TestAccess(void)
         if (*(const Uint8*)WriteData != 7 || Notifications != 0)
             Result = 8;
         *(Uint8*)WriteData = 29;
+        if (IRadientMutableDataBlob_Resize(pMutable, 4) != RADIENT_STATUS_INVALID_OPERATION)
+            Result = 25;
         if (IRadientMutableDataBlob_BeginRead(pMutable, &ReadData) != RADIENT_STATUS_INVALID_OPERATION || ReadData != 0)
             Result = 9;
         if (IRadientMutableDataBlob_EndWrite(pMutable) != RADIENT_STATUS_OK)
@@ -77,10 +79,26 @@ int RadientDataBlob_C_TestAccess(void)
         {
             if (*(const Uint8*)ReadData != 29)
                 Result = 12;
+            if (IRadientMutableDataBlob_Resize(pMutable, 8) != RADIENT_STATUS_INVALID_OPERATION)
+                Result = 26;
             if (IRadientMutableDataBlob_EndRead(pMutable) != RADIENT_STATUS_OK || Notifications != 1)
                 Result = 13;
         }
     }
+    if (IRadientMutableDataBlob_Resize(pMutable, 8) != RADIENT_STATUS_OK || IRadientMutableDataBlob_GetSize(pMutable) != 8 || Notifications != 1)
+        Result = 27;
+    if (IRadientMutableDataBlob_BeginWrite(pMutable, &WriteData) != RADIENT_STATUS_OK || WriteData == 0)
+        Result = 28;
+    else
+    {
+        const Uint8* Bytes = (const Uint8*)WriteData;
+        if (IRadientMutableDataBlob_GetSize(pMutable) != 8 || Bytes[0] != 29 || Bytes[1] != 8 || Bytes[2] != 9 || Bytes[3] != 10 || Bytes[4] != 0 || Bytes[5] != 0 || Bytes[6] != 0 || Bytes[7] != 0)
+            Result = 29;
+        if (IRadientMutableDataBlob_EndWrite(pMutable) != RADIENT_STATUS_OK)
+            Result = 30;
+    }
+    if (IRadientMutableDataBlob_Resize(pMutable, 0) != RADIENT_STATUS_OK || IRadientMutableDataBlob_GetSize(pMutable) != 0 || Notifications != 1)
+        Result = 31;
     IObject_Release(pMutable);
     pMutable = 0;
     if (Notifications != 2)
