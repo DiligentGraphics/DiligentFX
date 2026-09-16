@@ -106,6 +106,7 @@ set(INCLUDE
     include/Assets/RadientTextureSource.hpp
     include/Assets/RadientVertexLayout.hpp
     include/Core/RadientBackendImpl.hpp
+    include/Core/RadientDataBlobReadAccess.hpp
     include/Core/RadientEngineImpl.hpp
     include/Core/RadientValidation.hpp
     include/Core/RadientViewImpl.hpp
