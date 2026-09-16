@@ -24,26 +24,25 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientDataBlob.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+using namespace Diligent;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientDataBlob.h"
-#include "RadientVertexLayout.h"
-#include "RadientAssets.h"
-#include "RadientMorphTargets.h"
-#include "RadientSkinning.h"
-#include "RadientAnimation.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+void RadientDataBlob_CPP_UseTypes()
+{
+    const Uint32              InitialData = 42;
+    RadientDataBlobCreateInfo CI;
+    CI.Size                 = sizeof(InitialData);
+    CI.pInitialData         = &InitialData;
+    IRadientDataBlob* pBlob = nullptr;
+    if (CreateRadientDataBlob(CI, &pBlob) != RADIENT_STATUS_OK)
+        return;
+    const void* pReadData  = nullptr;
+    void*       pWriteData = nullptr;
+    (void)pBlob->GetSize();
+    if (pBlob->BeginWrite(&pWriteData) == RADIENT_STATUS_OK)
+        (void)pBlob->EndWrite();
+    if (pBlob->BeginRead(&pReadData) == RADIENT_STATUS_OK)
+        (void)pBlob->EndRead();
+    pBlob->Release();
+}

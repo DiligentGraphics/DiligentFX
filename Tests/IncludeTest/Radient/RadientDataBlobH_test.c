@@ -24,26 +24,27 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientDataBlob.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+static void OnLastReaderReleased(IRadientDataBlob* pBlob, void* pUserData)
+{
+    (void)pBlob;
+    (void)pUserData;
+}
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientDataBlob.h"
-#include "RadientVertexLayout.h"
-#include "RadientAssets.h"
-#include "RadientMorphTargets.h"
-#include "RadientSkinning.h"
-#include "RadientAnimation.h"
-#include "RadientMaterials.h"
-#include "RadientStandardMaterialParameters.h"
-#include "RadientMeshPrimitives.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+void RadientDataBlob_C_UseTypes(void)
+{
+    static const Uint8                     InitialData[16] = {1, 2, 3, 4};
+    static const RadientDataBlobCreateInfo CI              = {sizeof(InitialData), InitialData, OnLastReaderReleased, 0};
+    IRadientDataBlob*                      pBlob           = 0;
+    const void*                            pReadData       = 0;
+    void*                                  pWriteData      = 0;
+    if (Diligent_CreateRadientDataBlob(&CI, &pBlob) != RADIENT_STATUS_OK)
+        return;
+    (void)IRadientDataBlob_GetSize(pBlob);
+    if (IRadientDataBlob_BeginWrite(pBlob, &pWriteData) == RADIENT_STATUS_OK)
+        (void)IRadientDataBlob_EndWrite(pBlob);
+    if (IRadientDataBlob_BeginRead(pBlob, &pReadData) == RADIENT_STATUS_OK)
+        (void)IRadientDataBlob_EndRead(pBlob);
+    IObject_Release(pBlob);
+}

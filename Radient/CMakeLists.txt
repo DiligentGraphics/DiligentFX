@@ -37,6 +37,7 @@ set(SOURCE
     src/Assets/RadientTextureAssetManager.cpp
     src/Assets/RadientTextureSource.cpp
     src/Assets/RadientVertexLayout.cpp
+    src/Core/RadientDataBlob.cpp
     src/Core/RadientBackendImpl.cpp
     src/Core/RadientEngineImpl.cpp
     src/Core/RadientViewImpl.cpp
@@ -145,6 +146,7 @@ set(INCLUDE
 
 set(INTERFACE
     interface/Radient.h
+    interface/RadientDataBlob.h
     interface/RadientAnimation.h
     interface/RadientAssetResolver.h
     interface/RadientAssets.h
