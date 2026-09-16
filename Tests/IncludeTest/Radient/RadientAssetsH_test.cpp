@@ -60,6 +60,11 @@ void RadientAssets_CPP_UseMeshCreateInfo()
 
     (void)Primitive;
     (void)MeshCI;
+    IRadientDataBlob* pBlob   = TextureLoadInfo.pDataBlob;
+    TextureLoadInfo.pDataBlob = pBlob;
+    RadientTextureData PixelData;
+    PixelData.pDataBlob          = pBlob;
+    TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
 }

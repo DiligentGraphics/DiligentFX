@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetValidation.hpp"
 #include "RadientMorphTargets.h"
+#include "RadientTestAssetHelpers.hpp"
 
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
@@ -40,6 +41,31 @@ using namespace Diligent::Testing;
 
 namespace
 {
+
+// Descriptor validation must not query mutable storage before acquiring read access.
+class SizeOnlyDataBlob final : public ObjectBase<IRadientDataBlob>
+{
+public:
+    using TBase = ObjectBase<IRadientDataBlob>;
+    SizeOnlyDataBlob(IReferenceCounters* pRefCounters, Uint64 Size) :
+        TBase{pRefCounters}, m_Size{Size} {}
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientDataBlob, TBase);
+    Uint64 DILIGENT_CALL_TYPE GetSize() const override
+    {
+        ADD_FAILURE() << "Descriptor validation must not query blob storage";
+        return m_Size;
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE BeginRead(const void** ppData) override
+    {
+        ADD_FAILURE() << "Validation must not acquire read access";
+        if (ppData != nullptr) *ppData = nullptr;
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE EndRead() override { return RADIENT_STATUS_INVALID_OPERATION; }
+
+private:
+    const Uint64 m_Size;
+};
 
 struct MeshValidationData
 {
@@ -323,35 +349,39 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
     std::array<Uint8, 4> Data{1, 2, 3, 4};
-    LoadInfo       = {};
-    LoadInfo.pData = Data.data();
-    {
-        TestingEnvironment::ErrorScope ExpectedErrors{"DataSize must not be zero when pData is specified"};
-        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
-    }
+    auto                 pEmptyBlob = MakeTestDataBlob(nullptr, 0);
+    auto                 pBlob      = MakeTestDataBlob(Data.data(), Data.size());
+    ASSERT_NE(pEmptyBlob, nullptr);
+    ASSERT_NE(pBlob, nullptr);
+    LoadInfo           = {};
+    LoadInfo.pDataBlob = pEmptyBlob;
+    // Blob contents, including the current size, are checked by the texture source
+    // under a read scope. An empty mutable blob can be resized after validation.
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
-    LoadInfo.DataSize = static_cast<Uint64>(Data.size());
+    LoadInfo.pDataBlob = pBlob;
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
     LoadInfo.URI = "";
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
     std::array<Uint8, 16> RawPixels{};
+    auto                  pPixelBlob = MakeTestDataBlob(RawPixels.data(), RawPixels.size());
+    ASSERT_NE(pPixelBlob, nullptr);
 
     RadientTextureData TextureData{};
-    TextureData.Width  = 2;
-    TextureData.Height = 2;
-    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pData  = RawPixels.data();
+    TextureData.Width     = 2;
+    TextureData.Height    = 2;
+    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pDataBlob = pPixelBlob;
 
     LoadInfo              = {};
     LoadInfo.pTextureData = &TextureData;
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
-    LoadInfo.pData    = Data.data();
-    LoadInfo.DataSize = static_cast<Uint64>(Data.size());
+    LoadInfo.pDataBlob = pBlob;
     {
-        TestingEnvironment::ErrorScope ExpectedErrors{"pData and pTextureData must not both be specified"};
+        TestingEnvironment::ErrorScope ExpectedErrors{"pDataBlob and pTextureData must not both be specified"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
@@ -374,11 +404,11 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
-    InvalidTextureData       = TextureData;
-    InvalidTextureData.pData = nullptr;
-    LoadInfo.pTextureData    = &InvalidTextureData;
+    InvalidTextureData           = TextureData;
+    InvalidTextureData.pDataBlob = nullptr;
+    LoadInfo.pTextureData        = &InvalidTextureData;
     {
-        TestingEnvironment::ErrorScope ExpectedErrors{"texture data pointer must not be null"};
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data blob must not be null"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
@@ -390,12 +420,17 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
-    if ((std::numeric_limits<size_t>::max)() < (std::numeric_limits<Uint64>::max)())
-    {
-        LoadInfo          = {};
-        LoadInfo.pData    = Data.data();
-        LoadInfo.DataSize = static_cast<Uint64>((std::numeric_limits<size_t>::max)()) + Uint64{1};
-        TestingEnvironment::ErrorScope ExpectedErrors{"exceeds maximum supported size_t value"};
-        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
-    }
+    RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(
+        (std::numeric_limits<Uint64>::max)())};
+    LoadInfo           = {};
+    LoadInfo.pDataBlob = pUncheckedBlob;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+
+    // Pixel descriptors also defer all blob access until a read scope is held.
+    TextureData.pDataBlob = pUncheckedBlob;
+    LoadInfo              = {};
+    LoadInfo.pTextureData = &TextureData;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    TextureData.pDataBlob = pEmptyBlob;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 }

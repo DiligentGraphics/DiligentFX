@@ -30,7 +30,10 @@
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 
+#include "gtest/gtest.h"
+
 #include <chrono>
+#include <cstddef>
 #include <thread>
 
 namespace Diligent
@@ -58,18 +61,31 @@ Uint32 GetTextureStride(const TestTextureParams& Params)
 
 } // namespace
 
-std::vector<Uint8> MakeTexturePixels(Uint32                   Seed,
-                                     const TestTextureParams& Params)
+RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   Seed,
+                                                    const TestTextureParams& Params)
 {
     const Uint32 Stride = GetTextureStride(Params);
 
-    std::vector<Uint8> Pixels(Stride * Params.Height);
+    RadientDataBlobCreateInfo CI;
+    CI.Size = Uint64{Stride} * Params.Height;
+    RefCntAutoPtr<IRadientMutableDataBlob> pBlob;
+    RADIENT_STATUS                         Status = CreateRadientMutableDataBlob(CI, &pBlob);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
 
+    void* pData = nullptr;
+    Status      = pBlob->BeginWrite(&pData);
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    auto* Pixels = static_cast<Uint8*>(pData);
     for (Uint32 y = 0; y < Params.Height; ++y)
     {
         for (Uint32 x = 0; x < Params.Width; ++x)
         {
-            const Uint32 Offset = y * Stride + x * Params.PixelSize;
+            const size_t Offset = static_cast<size_t>(y) * Stride + x * Params.PixelSize;
             Pixels[Offset + 0]  = static_cast<Uint8>((x * 3 + y * 5 + Seed * 29) & 0xFF);
             Pixels[Offset + 1]  = static_cast<Uint8>((x * 11 + y * 7 + (x ^ y) + Seed * 31) & 0xFF);
             Pixels[Offset + 2]  = static_cast<Uint8>((x * y + x * 13 + y * 17 + Seed * 37) & 0xFF);
@@ -77,17 +93,22 @@ std::vector<Uint8> MakeTexturePixels(Uint32                   Seed,
         }
     }
 
-    return Pixels;
+    Status = pBlob->EndWrite();
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    if (Status != RADIENT_STATUS_OK)
+        return {};
+
+    return pBlob;
 }
 
-RadientTextureData MakeTextureData(const std::vector<Uint8>& Pixels,
-                                   const TestTextureParams&  Params)
+RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                   const TestTextureParams& Params)
 {
     RadientTextureData TextureData{
         Params.Width,
         Params.Height,
         RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-        Pixels.data(),
+        pDataBlob,
         GetTextureStride(Params),
     };
     return TextureData;

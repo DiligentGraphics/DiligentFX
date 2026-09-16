@@ -40,6 +40,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -583,17 +584,25 @@ TEST_F(RadientRender, SSAO)
 
     // Uniform IBL keeps the unoccluded lighting spatially constant, making
     // SSAO the only source of lighting variation in the captured image.
-    static constexpr Uint32                                     EnvironmentWidth  = 16;
-    static constexpr Uint32                                     EnvironmentHeight = 8;
-    std::array<Uint8, EnvironmentWidth * EnvironmentHeight * 4> WhiteEnvironmentPixels;
-    WhiteEnvironmentPixels.fill(255);
+    static constexpr Uint32 EnvironmentWidth  = 16;
+    static constexpr Uint32 EnvironmentHeight = 8;
+
+    RadientDataBlobCreateInfo EnvironmentBlobCI;
+    EnvironmentBlobCI.Size = Uint64{EnvironmentWidth} * EnvironmentHeight * 4;
+    RefCntAutoPtr<IRadientMutableDataBlob> pEnvironmentBlob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(EnvironmentBlobCI, &pEnvironmentBlob), RADIENT_STATUS_OK);
+
+    void* pEnvironmentPixels = nullptr;
+    ASSERT_EQ(pEnvironmentBlob->BeginWrite(&pEnvironmentPixels), RADIENT_STATUS_OK);
+    std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
+    ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
     RadientTextureData EnvironmentData{};
-    EnvironmentData.Width  = EnvironmentWidth;
-    EnvironmentData.Height = EnvironmentHeight;
-    EnvironmentData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pData  = WhiteEnvironmentPixels.data();
-    EnvironmentData.Stride = EnvironmentWidth * 4;
+    EnvironmentData.Width     = EnvironmentWidth;
+    EnvironmentData.Height    = EnvironmentHeight;
+    EnvironmentData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    EnvironmentData.pDataBlob = pEnvironmentBlob;
+    EnvironmentData.Stride    = EnvironmentWidth * 4;
 
     RadientTextureLoadInfo EnvironmentLoadInfo{};
     EnvironmentLoadInfo.pTextureData = &EnvironmentData;
@@ -777,17 +786,25 @@ TEST_F(RadientRender, SSR)
 
     // Uniform IBL provides stable baseline illumination while the colored
     // scene geometry supplies spatially varying radiance for SSR.
-    static constexpr Uint32                                     EnvironmentWidth  = 16;
-    static constexpr Uint32                                     EnvironmentHeight = 8;
-    std::array<Uint8, EnvironmentWidth * EnvironmentHeight * 4> WhiteEnvironmentPixels;
-    WhiteEnvironmentPixels.fill(255);
+    static constexpr Uint32 EnvironmentWidth  = 16;
+    static constexpr Uint32 EnvironmentHeight = 8;
+
+    RadientDataBlobCreateInfo EnvironmentBlobCI;
+    EnvironmentBlobCI.Size = Uint64{EnvironmentWidth} * EnvironmentHeight * 4;
+    RefCntAutoPtr<IRadientMutableDataBlob> pEnvironmentBlob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(EnvironmentBlobCI, &pEnvironmentBlob), RADIENT_STATUS_OK);
+
+    void* pEnvironmentPixels = nullptr;
+    ASSERT_EQ(pEnvironmentBlob->BeginWrite(&pEnvironmentPixels), RADIENT_STATUS_OK);
+    std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
+    ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
     RadientTextureData EnvironmentData{};
-    EnvironmentData.Width  = EnvironmentWidth;
-    EnvironmentData.Height = EnvironmentHeight;
-    EnvironmentData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pData  = WhiteEnvironmentPixels.data();
-    EnvironmentData.Stride = EnvironmentWidth * 4;
+    EnvironmentData.Width     = EnvironmentWidth;
+    EnvironmentData.Height    = EnvironmentHeight;
+    EnvironmentData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    EnvironmentData.pDataBlob = pEnvironmentBlob;
+    EnvironmentData.Stride    = EnvironmentWidth * 4;
 
     RadientTextureLoadInfo EnvironmentLoadInfo{};
     EnvironmentLoadInfo.pTextureData = &EnvironmentData;
@@ -803,7 +820,14 @@ TEST_F(RadientRender, SSR)
         {220, 205, 175},
         {115, 155, 190},
     }};
-    std::array<Uint8, CheckerWidth * CheckerHeight * 4>  CheckerPixels;
+    RadientDataBlobCreateInfo                            CheckerBlobCI;
+    CheckerBlobCI.Size = Uint64{CheckerWidth} * CheckerHeight * 4;
+    RefCntAutoPtr<IRadientMutableDataBlob> pCheckerBlob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(CheckerBlobCI, &pCheckerBlob), RADIENT_STATUS_OK);
+
+    void* pCheckerPixels = nullptr;
+    ASSERT_EQ(pCheckerBlob->BeginWrite(&pCheckerPixels), RADIENT_STATUS_OK);
+    auto* CheckerPixels = static_cast<Uint8*>(pCheckerPixels);
     for (Uint32 y = 0; y < CheckerHeight; ++y)
     {
         for (Uint32 x = 0; x < CheckerWidth; ++x)
@@ -817,12 +841,14 @@ TEST_F(RadientRender, SSR)
         }
     }
 
+    ASSERT_EQ(pCheckerBlob->EndWrite(), RADIENT_STATUS_OK);
+
     RadientTextureData CheckerData{};
-    CheckerData.Width  = CheckerWidth;
-    CheckerData.Height = CheckerHeight;
-    CheckerData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    CheckerData.pData  = CheckerPixels.data();
-    CheckerData.Stride = CheckerWidth * 4;
+    CheckerData.Width     = CheckerWidth;
+    CheckerData.Height    = CheckerHeight;
+    CheckerData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    CheckerData.pDataBlob = pCheckerBlob;
+    CheckerData.Stride    = CheckerWidth * 4;
 
     RadientTextureLoadInfo CheckerLoadInfo{};
     CheckerLoadInfo.pTextureData = &CheckerData;

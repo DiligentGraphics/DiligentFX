@@ -33,6 +33,7 @@
 
 #include "GPUTestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientGPUTestHelpers.hpp"
 #include "TempDirectory.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
@@ -56,41 +57,17 @@ namespace
 
 static constexpr auto TextureManagerWaitTimeout = std::chrono::seconds{10};
 
-std::vector<Uint8> MakeTexturePixels(Uint32 Width,
-                                     Uint32 Height,
-                                     Uint32 Stride,
-                                     Uint32 Seed)
-{
-    static constexpr Uint32 PixelSize = 4;
-
-    std::vector<Uint8> Pixels(static_cast<size_t>(Stride) * Height);
-
-    for (Uint32 y = 0; y < Height; ++y)
-    {
-        for (Uint32 x = 0; x < Width; ++x)
-        {
-            const Uint32 Offset = y * Stride + x * PixelSize;
-            Pixels[Offset + 0]  = static_cast<Uint8>((x * 3 + y * 5 + Seed * 29) & 0xFF);
-            Pixels[Offset + 1]  = static_cast<Uint8>((x * 11 + y * 7 + Seed * 31) & 0xFF);
-            Pixels[Offset + 2]  = static_cast<Uint8>((x * y + x * 13 + y * 17 + Seed * 37) & 0xFF);
-            Pixels[Offset + 3]  = static_cast<Uint8>(127 + ((x + y + Seed * 3) & 0x7F));
-        }
-    }
-
-    return Pixels;
-}
-
-RadientTextureData MakeTextureData(Uint32      Width,
-                                   Uint32      Height,
-                                   Uint32      Stride,
-                                   const void* pData)
+RadientTextureData MakeTextureData(Uint32            Width,
+                                   Uint32            Height,
+                                   Uint32            Stride,
+                                   IRadientDataBlob* pDataBlob)
 {
     RadientTextureData TextureData{};
-    TextureData.Width  = Width;
-    TextureData.Height = Height;
-    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pData  = pData;
-    TextureData.Stride = Stride;
+    TextureData.Width     = Width;
+    TextureData.Height    = Height;
+    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pDataBlob = pDataBlob;
+    TextureData.Stride    = Stride;
     return TextureData;
 }
 
@@ -1010,20 +987,22 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
     ASSERT_NE(pBlocker, nullptr);
 
-    const Uint32 TextureWidth  = 64;
-    const Uint32 TextureHeight = 64;
-    const Uint32 TextureStride = TextureWidth * 4;
+    const Uint32                            TextureWidth  = 64;
+    const Uint32                            TextureHeight = 64;
+    const Uint32                            TextureStride = TextureWidth * 4;
+    const RadientGPUTest::TestTextureParams TextureParams{TextureWidth, TextureHeight, 4, TextureStride};
 
     static constexpr size_t NumTextures = 4;
 
-    std::array<std::vector<Uint8>, NumTextures>                  TexturePixels;
+    std::array<RefCntAutoPtr<IRadientDataBlob>, NumTextures>     TextureBlobs;
     std::array<RadientTextureData, NumTextures>                  TextureData;
     std::array<RefCntAutoPtr<IRadientTextureAsset>, NumTextures> Textures;
 
     for (size_t i = 0; i < NumTextures; ++i)
     {
-        TexturePixels[i] = MakeTexturePixels(TextureWidth, TextureHeight, TextureStride, static_cast<Uint32>(i + 1));
-        TextureData[i]   = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TexturePixels[i].data());
+        TextureBlobs[i] = RadientGPUTest::MakeTextureDataBlob(static_cast<Uint32>(i + 1), TextureParams);
+        ASSERT_NE(TextureBlobs[i], nullptr);
+        TextureData[i] = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TextureBlobs[i]);
     }
 
     {
@@ -1072,12 +1051,14 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    const Uint32 TextureWidth  = 64;
-    const Uint32 TextureHeight = 64;
-    const Uint32 TextureStride = TextureWidth * 4;
+    const Uint32                            TextureWidth  = 64;
+    const Uint32                            TextureHeight = 64;
+    const Uint32                            TextureStride = TextureWidth * 4;
+    const RadientGPUTest::TestTextureParams TextureParams{TextureWidth, TextureHeight, 4, TextureStride};
 
-    std::vector<Uint8> TexturePixels = MakeTexturePixels(TextureWidth, TextureHeight, TextureStride, 1);
-    RadientTextureData TextureData   = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TexturePixels.data());
+    const RefCntAutoPtr<IRadientDataBlob> pTextureBlob = RadientGPUTest::MakeTextureDataBlob(1, TextureParams);
+    ASSERT_NE(pTextureBlob, nullptr);
+    RadientTextureData TextureData = MakeTextureData(TextureWidth, TextureHeight, TextureStride, pTextureBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     bool                                PendingCopyCommandEnqueueCallbacks = false;

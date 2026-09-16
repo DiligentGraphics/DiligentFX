@@ -39,7 +39,6 @@
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
 
-#include <array>
 #include <atomic>
 #include <cstring>
 #include <exception>
@@ -254,21 +253,44 @@ RadientMaterialDefaultTextures CreateDefaultMaterialTextures(IThreadPool&       
     RadientMaterialDefaultTextures DefaultTextures;
 
     auto LoadDefaultTexture = [&](const char* URI, Uint32 Pixel, IRadientTextureAsset** ppTexture) {
-        std::array<Uint32, DefaultTextureSize * DefaultTextureSize> Pixels;
-        Pixels.fill(Pixel);
+        RadientDataBlobCreateInfo BlobCI;
+        BlobCI.Size = DefaultTextureSize * DefaultTextureSize * sizeof(Pixel);
+        RefCntAutoPtr<IRadientMutableDataBlob> pPixels;
+        RADIENT_STATUS                         Status = CreateRadientMutableDataBlob(BlobCI, &pPixels);
+        if (Status != RADIENT_STATUS_OK)
+        {
+            LOG_ERROR_MESSAGE("Failed to allocate Radient default material texture '", URI, "'");
+            return;
+        }
+
+        void* pData = nullptr;
+        Status      = pPixels->BeginWrite(&pData);
+        if (Status != RADIENT_STATUS_OK)
+        {
+            LOG_ERROR_MESSAGE("Failed to access Radient default material texture '", URI, "'");
+            return;
+        }
+        for (Uint32 Index = 0; Index < DefaultTextureSize * DefaultTextureSize; ++Index)
+            std::memcpy(static_cast<Uint8*>(pData) + Index * sizeof(Pixel), &Pixel, sizeof(Pixel));
+        Status = pPixels->EndWrite();
+        if (Status != RADIENT_STATUS_OK)
+        {
+            LOG_ERROR_MESSAGE("Failed to finish Radient default material texture '", URI, "'");
+            return;
+        }
 
         RadientTextureData TextureData;
-        TextureData.Width  = DefaultTextureSize;
-        TextureData.Height = DefaultTextureSize;
-        TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-        TextureData.pData  = Pixels.data();
-        TextureData.Stride = DefaultTextureSize * sizeof(Pixel);
+        TextureData.Width     = DefaultTextureSize;
+        TextureData.Height    = DefaultTextureSize;
+        TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+        TextureData.pDataBlob = pPixels;
+        TextureData.Stride    = DefaultTextureSize * sizeof(Pixel);
 
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.URI          = URI;
         LoadInfo.pTextureData = &TextureData;
 
-        const RADIENT_STATUS Status = TextureManager.LoadTexture(ThreadPool, LoadInfo, ppTexture);
+        Status = TextureManager.LoadTexture(ThreadPool, LoadInfo, ppTexture);
         if (RADIENT_FAILED(Status))
             LOG_ERROR_MESSAGE("Failed to create Radient default material texture '", URI, "'");
     };

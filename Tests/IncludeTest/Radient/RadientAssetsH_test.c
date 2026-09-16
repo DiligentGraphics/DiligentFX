@@ -48,6 +48,11 @@ void RadientAssets_C_UseTypes(void)
     (void)Primitive;
     (void)MeshCI;
     (void)MeshDesc;
+    IRadientDataBlob* pBlob      = TextureLoadInfo.pDataBlob;
+    TextureLoadInfo.pDataBlob    = pBlob;
+    RadientTextureData PixelData = {0};
+    PixelData.pDataBlob          = pBlob;
+    TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
     (void)SceneAssetDesc;

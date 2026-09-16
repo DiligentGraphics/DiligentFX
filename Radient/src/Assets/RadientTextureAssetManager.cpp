@@ -639,6 +639,8 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RadientTextureSource TextureSource{LoadInfo};
+    if (TextureSource.GetStatus() != RADIENT_STATUS_OK)
+        return TextureSource.GetStatus();
 
     std::string AssetURI = TextureSource.GetURI();
     if (AssetURI.empty())
@@ -649,8 +651,6 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!pTextureAsset)
         return RADIENT_STATUS_FAILED;
-
-    TextureSource.MakeMemoryCopy();
 
     pTextureAsset->QueryInterface(IID_RadientTextureAsset, ppTexture);
 
@@ -680,11 +680,6 @@ RADIENT_STATUS RadientTextureAssetManager::RejectTextureLoad(const RadientTextur
 {
     if (!ValidateTextureLoadInfo(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (LoadInfo.ReleaseData != nullptr)
-    {
-        RadientTextureSource TextureSource{LoadInfo};
-    }
 
     return RADIENT_STATUS_INVALID_OPERATION;
 }

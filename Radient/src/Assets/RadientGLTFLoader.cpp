@@ -41,6 +41,7 @@
 #include "HashUtils.hpp"
 #include "Import/RadientGLTFConverter.hpp"
 #include "Math/RadientMath.hpp"
+#include "RadientDataBlob.h"
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -70,11 +71,6 @@ using MeshAssetList     = RadientImport::MeshAssetList;
 std::string MakeEmbeddedGLTFTextureURI(const std::string& SourceURI, Uint32 TextureIndex)
 {
     return SourceURI + "#texture:" + std::to_string(TextureIndex);
-}
-
-void ReleaseGLTFTextureSourceData(const void*, Uint64, void* pUserData)
-{
-    delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
 }
 
 struct TextureColorSpaceUsage
@@ -901,9 +897,7 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
         LoadInfo.URI = TextureURI.c_str();
         // External image URIs returned by GetTextureSourceInfo() are already
         // resolved relative to the GLTF document, so no base URI is needed.
-        LoadInfo.BaseURI  = nullptr;
-        LoadInfo.pData    = Source.pData;
-        LoadInfo.DataSize = Source.DataSize;
+        LoadInfo.BaseURI = nullptr;
 
         const TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
         if (Usage.SRGB && Usage.Linear)
@@ -913,15 +907,25 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
         }
         LoadInfo.IsSRGB = Usage.SRGB && !Usage.Linear;
 
-        std::unique_ptr<std::shared_ptr<const GLTF::Document>> pDocumentOwner;
+        RefCntAutoPtr<IRadientDataBlob> pDataBlob;
         if (Source.pData != nullptr)
         {
-            // Embedded texture bytes are owned by the temporary GLTF document.
-            // The release callback keeps that document alive until the texture
-            // worker has created its loader/cache key from the borrowed bytes.
-            pDocumentOwner                = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
-            LoadInfo.ReleaseData          = ReleaseGLTFTextureSourceData;
-            LoadInfo.pReleaseDataUserData = pDocumentOwner.get();
+            // Retain the document while queued loads or decoders reference its image bytes.
+            auto pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
+            RadientDataBlobCreateInfo BlobCI;
+            BlobCI.pData     = Source.pData;
+            BlobCI.Size      = Source.DataSize;
+            BlobCI.pUserData = pDocumentOwner.get();
+            BlobCI.OnDestroy = [](void* pUserData) {
+                delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
+            };
+            if (CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pDataBlob) != RADIENT_STATUS_OK)
+            {
+                LOG_ERROR_MESSAGE("Failed to create data blob for GLTF texture ", TextureIndex, " in '", SourceURI, "'");
+                continue;
+            }
+            pDocumentOwner.release();
+            LoadInfo.pDataBlob = pDataBlob;
         }
 
         TextureManager.LoadTexture(ThreadPool, LoadInfo, Textures[TextureIndex].GetAddressOfEmpty());
@@ -930,8 +934,6 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
             LOG_ERROR_MESSAGE("Failed to create Radient texture asset for GLTF texture ", TextureIndex, " in '", SourceURI, "'");
             continue;
         }
-
-        pDocumentOwner.release();
     }
 
     return Textures;

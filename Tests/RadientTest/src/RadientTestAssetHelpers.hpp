@@ -528,6 +528,35 @@ inline constexpr std::array<Uint8, TransparentPngSize> TransparentPng{
     0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
     0x42, 0x60, 0x82};
 
+inline RefCntAutoPtr<IRadientDataBlob> MakeTestDataBlob(const void* pData, Uint64 Size, RadientDataBlobReadReleaseCallbackType Callback = nullptr, void* pUserData = nullptr)
+{
+    RadientDataBlobCreateInfo CI;
+    CI.Size                 = Size;
+    CI.pData                = pData;
+    CI.OnLastReaderReleased = Callback;
+    CI.pUserData            = pUserData;
+    RefCntAutoPtr<IRadientDataBlob> pBlob;
+    CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pBlob);
+    return pBlob;
+}
+
+inline RefCntAutoPtr<IRadientMutableDataBlob> MakeTestMutableDataBlob(const void* pData, Uint64 Size, RadientDataBlobReadReleaseCallbackType Callback = nullptr, void* pUserData = nullptr)
+{
+    RadientDataBlobCreateInfo CI;
+    CI.Size                 = Size;
+    CI.pData                = pData;
+    CI.OnLastReaderReleased = Callback;
+    CI.pUserData            = pUserData;
+    RefCntAutoPtr<IRadientMutableDataBlob> pBlob;
+    CreateRadientMutableDataBlob(CI, &pBlob);
+    return pBlob;
+}
+
+inline void CountBlobReadReleases(IRadientDataBlob*, void* pUserData)
+{
+    ++*static_cast<Uint32*>(pUserData);
+}
+
 inline RefCntAutoPtr<IRadientMeshAsset> MakeTestMeshAsset(const char* URI = "mesh://test", Uint64 Version = 1)
 {
     RefCntAutoPtr<TestMeshAsset> pAsset{MakeNewRCObj<TestMeshAsset>()(URI, Version)};

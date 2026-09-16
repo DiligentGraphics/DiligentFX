@@ -1812,3 +1812,50 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAssetWithMaterial)
 
     pThreadPool->StopThreads();
 }
+
+TEST(RadientGLTFLoaderTest, EmbeddedTexturesRetainDocumentUntilQueuedLoadsFinish)
+{
+    auto                          ThreadPool     = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto                          TextureManager = RadientTextureAssetManager::Create({});
+    TempDirectory                 TempDir{"RadientGLTFLoaderTest"};
+    const auto                    Path     = WriteGLTFDataURIAndBufferViewTexturesFile(TempDir);
+    auto                          Document = LoadMetadataOnlyDocument(Path);
+    std::weak_ptr<GLTF::Document> WeakDocument{Document};
+    auto                          Textures = RadientGLTFLoader::LoadTextures(*ThreadPool, *TextureManager, Path, Document);
+    ASSERT_EQ(Textures.size(), 2u);
+    ASSERT_NE(Textures[0], nullptr);
+    ASSERT_NE(Textures[1], nullptr);
+    Document.reset();
+    EXPECT_FALSE(WeakDocument.expired());
+    EXPECT_EQ(ThreadPool->GetQueueSize(), 2u);
+    ThreadPool->ProcessTask(0, false);
+    EXPECT_FALSE(WeakDocument.expired());
+    ThreadPool->ProcessTask(0, false);
+    EXPECT_TRUE(WeakDocument.expired());
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[1]), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(Textures[0]),
+              RadientTextureAssetManager::GetTexturePayload(Textures[1]));
+    ThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, RejectedTextureLoadsDoNotRetainDocument)
+{
+    auto ThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ThreadPool->StopThreads();
+    auto                            TextureManager = RadientTextureAssetManager::Create({});
+    TempDirectory                   TempDir{"RadientGLTFLoaderTest"};
+    const auto                      Path     = WriteGLTFBufferViewTextureFile(TempDir);
+    auto                            Document = LoadMetadataOnlyDocument(Path);
+    std::weak_ptr<GLTF::Document>   WeakDocument{Document};
+    RadientImport::TextureAssetList Textures;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        Textures = RadientGLTFLoader::LoadTextures(*ThreadPool, *TextureManager, Path, Document);
+    }
+    Document.reset();
+    EXPECT_TRUE(WeakDocument.expired());
+    ASSERT_EQ(Textures.size(), 1u);
+    ASSERT_NE(Textures[0], nullptr);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_INVALID_OPERATION);
+}

@@ -27,11 +27,10 @@
 #pragma once
 
 #include "RadientAssets.h"
-#include "RefCntAutoPtr.hpp"
+#include "Core/RadientDataBlobReadAccess.hpp"
 
 #include <cstddef>
 #include <string>
-#include <vector>
 
 namespace Diligent
 {
@@ -40,7 +39,7 @@ struct ITextureLoader;
 struct IRadientAssetLocation;
 struct IRadientAssetResolver;
 
-/// Describes the valid readable span of RadientTextureData::pData.
+/// Describes the valid readable span of RadientTextureData::pDataBlob.
 struct RadientTextureDataSpan
 {
     /// Number of bytes in each row that contain texture data.
@@ -50,7 +49,7 @@ struct RadientTextureDataSpan
     /// Number of stored source rows. For block-compressed formats, this is the number of block rows.
     Uint32 RowCount = 0;
 
-    /// Minimum number of bytes that may be read from RadientTextureData::pData:
+    /// Minimum number of bytes that may be read from RadientTextureData::pDataBlob:
     /// (RowCount - 1) * Stride + ActiveRowSize.
     /// The final row does not need padding bytes beyond ActiveRowSize.
     Uint64 DataSize = 0;
@@ -61,8 +60,9 @@ struct RadientTextureDataSpan
 /// \returns    true if the format, dimensions, stride, and computed span are valid; false otherwise.
 ///
 /// \remarks    If RadientTextureData::Stride is zero, tightly packed rows are assumed.
-///             The function validates that non-zero stride is at least ActiveRowSize and that
-///             the computed DataSize does not overflow Uint64.
+///             Validates that non-zero stride is at least ActiveRowSize, that multiple rows
+///             start at component-aligned offsets, and that DataSize does not overflow Uint64.
+///             Does not acquire blob access or validate its data pointer or size.
 bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
                                RadientTextureDataSpan&   Span);
 
@@ -121,13 +121,12 @@ public:
         return m_DataSize;
     }
 
-    bool OwnsMemory() const
+    RADIENT_STATUS GetStatus() const
     {
-        return !m_Data.empty() || m_ReleaseData != nullptr;
+        return m_Status;
     }
 
-    void MakeMemoryCopy();
-
+    // For memory input, this source must outlive the returned loader.
     RADIENT_STATUS CreateLoader(IRadientAssetResolver* pAssetResolver,
                                 IRadientAssetLocation* pAssetLocation,
                                 ITextureLoader**       ppLoader) const;
@@ -145,16 +144,16 @@ private:
     std::string m_BaseURI;
     Bool        m_IsSRGB = False;
 
-    std::vector<Uint8> m_Data;
-    const void*        m_pData    = nullptr;
-    size_t             m_DataSize = 0;
+    RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
+
+    // Retains the blob and read access while loaders use the source bytes.
+    RadientDataBlobReadAccess m_ReadAccess;
+    const void*               m_pData    = nullptr;
+    size_t                    m_DataSize = 0;
 
     RadientTextureData m_TextureData;
     Uint64             m_TextureDataActiveRowSize = 0;
     Uint32             m_TextureDataRowCount      = 0;
-
-    RadientTextureReleaseDataCallbackType m_ReleaseData          = nullptr;
-    void*                                 m_pReleaseDataUserData = nullptr;
 };
 
 } // namespace Diligent

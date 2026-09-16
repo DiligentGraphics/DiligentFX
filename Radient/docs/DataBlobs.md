@@ -129,9 +129,9 @@ trigger it.
 The callback receives an `IRadientDataBlob` and the shared `pUserData` context.
 For a mutable blob, it can query `IID_RadientMutableDataBlob` to attempt recycling.
 
-The callback runs synchronously on the thread performing the final `EndRead`,
-outside the internal access lock. The blob stays alive throughout the callback,
-even if the callback releases the caller's reference. Retaining it afterward
+The callback runs synchronously on the thread performing the final `EndRead`
+and may call blob methods. The blob stays alive throughout the callback, even
+if the callback releases the caller's reference. Retaining it afterward
 requires acquiring a separate strong reference. A notification does not reserve
 access: another reader or writer may already be active. A mutable blob can be
 resized from the callback when no access scope is active. Recycling its contents
@@ -151,9 +151,8 @@ not receive a blob pointer because the blob is being destroyed and cannot be
 accessed or retained. It runs synchronously on the destroying thread and must not
 throw; C++ exceptions are caught and logged.
 
-A reference blob can keep external storage alive by storing an owner reference
-in the callback context. The same pattern works for a parsed document that owns
-encoded images, avoiding a copy of those image bytes:
+A reference blob can keep external storage alive without copying its bytes by
+storing an owner reference in the callback context:
 
 ```cpp
 auto Bytes = std::make_shared<const std::vector<Uint8>>(std::initializer_list<Uint8>{1, 2, 3});
@@ -188,3 +187,67 @@ factory also takes the storage mode. A null descriptor returns
 `IRadientDataBlob_GetSize`, `IRadientDataBlob_BeginRead`, and
 `IRadientDataBlob_EndRead` for the base interface. The corresponding
 `IRadientMutableDataBlob_*` macros expose inherited reads, write access, and `Resize`.
+
+## Encoded texture input
+
+Set `RadientTextureLoadInfo::pDataBlob` to a non-empty blob containing the entire
+encoded image. `LoadTexture()` retains the blob and starts reading during the
+call without copying its bytes. End any write scope before submitting a mutable
+blob; an active writer causes `RADIENT_STATUS_INVALID_OPERATION` and no texture
+handle. The caller can release its blob reference after the call returns.
+
+```cpp
+RadientTextureLoadInfo LoadInfo;
+LoadInfo.pDataBlob = Blob;
+LoadInfo.IsSRGB = True;
+RefCntAutoPtr<IRadientTextureAsset> Texture;
+const RADIENT_STATUS Status = AssetManager->LoadTexture(LoadInfo, &Texture);
+```
+
+`LoadTexture()` retains read access for as long as it needs the blob's bytes.
+Writes and resizing are unavailable during that time.
+
+`OnLastReaderReleased` can run during `LoadTexture()` or later on a worker thread.
+It marks the end of a read cycle, independently of GPU upload completion. A
+mutable blob can then be reused after acquiring write access; other readers
+still prevent writes and resizing. For REFERENCE blobs, external storage remains
+alive and unchanged for the blob's entire lifetime; release its owner through
+`OnDestroy`, as described above.
+
+`pDataBlob` and the decoded-pixel descriptor `pTextureData` are mutually exclusive.
+
+## Decoded texture input
+
+`RadientTextureData::pDataBlob` contains mip 0 pixels beginning at byte zero.
+Set `Width`, `Height`, `Format`, and optionally `Stride`, then pass the descriptor
+through `RadientTextureLoadInfo::pTextureData`. A zero stride means tightly packed
+rows. An explicit stride can include row padding, which is preserved during loading.
+
+The blob must cover `(Height - 1) * effective stride + active row size` bytes.
+Trailing padding after the final row is optional. Row padding and extra bytes
+do not affect texture caching. An undersized blob returns
+`RADIENT_STATUS_INVALID_ARGUMENT`. The read pointer must be aligned to the
+format's component size (1, 2, or 4 bytes). For multiple rows, the stride must
+also be a multiple of that size. Misaligned decoded storage returns
+`RADIENT_STATUS_INVALID_ARGUMENT`.
+
+```cpp
+RadientTextureData Pixels;
+Pixels.Width = 2;
+Pixels.Height = 2;
+Pixels.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+Pixels.pDataBlob = PixelBlob; // At least 16 bytes containing four RGBA pixels.
+
+RadientTextureLoadInfo LoadInfo;
+LoadInfo.pTextureData = &Pixels;
+RefCntAutoPtr<IRadientTextureAsset> Texture;
+const RADIENT_STATUS Status = AssetManager->LoadTexture(LoadInfo, &Texture);
+```
+
+`LoadTexture()` copies the descriptor, retains its blob, and reads the pixels
+without copying the input bytes. It generates the remaining mip levels.
+The caller can discard the descriptor and release its blob reference after the
+call returns. End any write scope before loading; writes and resizing remain
+unavailable while Radient is reading the blob. Read-only COPY, REFERENCE, and
+mutable blobs follow the same ownership and notification rules as encoded
+texture input.

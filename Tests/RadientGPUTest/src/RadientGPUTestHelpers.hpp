@@ -31,8 +31,6 @@
 #include "RadientAssets.h"
 #include "RefCntAutoPtr.hpp"
 
-#include <vector>
-
 namespace Threading
 {
 class Signal;
@@ -62,13 +60,14 @@ struct TestTextureParams
     Uint32 Stride = 0;
 };
 
-// Generates deterministic RGBA8-like pixel data for texture upload tests.
-std::vector<Uint8> MakeTexturePixels(Uint32                   Seed   = 0,
-                                     const TestTextureParams& Params = {});
+// Generates deterministic RGBA8-like pixels directly in an owning blob.
+// The helper finishes writing before returning the blob's read-only interface.
+RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   Seed   = 0,
+                                                    const TestTextureParams& Params = {});
 
-// Creates a Radient texture data view over caller-owned pixel storage.
-RadientTextureData MakeTextureData(const std::vector<Uint8>& Pixels,
-                                   const TestTextureParams&  Params = {});
+// Creates a texture descriptor. The caller retains the blob until LoadTexture returns.
+RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                   const TestTextureParams& Params = {});
 
 // Wraps texture data into a memory-based texture load request.
 RadientTextureLoadInfo MakeTextureDataLoadInfo(const RadientTextureData& TextureData);

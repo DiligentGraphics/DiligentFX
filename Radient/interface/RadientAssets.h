@@ -31,6 +31,7 @@
 
 #include "RadientTypes.h"
 #include "RadientAssetResolver.h"
+#include "RadientDataBlob.h"
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
@@ -284,14 +285,6 @@ struct RadientMeshAssetDesc
 typedef struct RadientMeshAssetDesc RadientMeshAssetDesc;
 
 
-/// Texture load attributes.
-/// Optional callback used to release memory passed through RadientTextureLoadInfo::pData or
-/// RadientTextureLoadInfo::pTextureData->pData.
-/// The callback is invoked when Radient no longer needs the source memory.
-/// The callback may be invoked from any thread.
-/// The callback must not throw exceptions.
-typedef void (*RadientTextureReleaseDataCallbackType)(const void* pData, Uint64 DataSize, void* pUserData);
-
 /// Texture format.
 DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
     /// Unknown format.
@@ -381,27 +374,45 @@ DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
     /// Four 32-bit floating-point components.
     RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT};
 
-/// Texture source data.
+/// Decoded mip 0 data for a 2D texture. The descriptor is copied by LoadTexture.
 struct RadientTextureData
 {
-    /// Texture width in pixels.
+    /// Texture width in pixels. Must be nonzero; defaults to zero.
     Uint32 Width DEFAULT_INITIALIZER(0);
 
-    /// Texture height in pixels.
+    /// Texture height in pixels. Must be nonzero; defaults to zero.
     Uint32 Height DEFAULT_INITIALIZER(0);
 
-    /// Texture format.
+    /// Pixel format. Must not be RADIENT_TEXTURE_FORMAT_UNKNOWN, which is the default.
     RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
 
-    /// Pointer to mip 0 pixel data.
-    const void* pData DEFAULT_INITIALIZER(nullptr);
+    /// Required blob containing mip 0 pixel data, starting at byte zero.
+    /// Accepts read-only or mutable blobs. Its size must cover every active source row:
+    /// (Height - 1) * effective stride + active row size. The effective stride is Stride
+    /// when nonzero, otherwise the active row size derived from Format and Width.
+    /// The final row does not require trailing padding; extra bytes are ignored.
+    /// The read pointer must be aligned to the format's component size (1, 2, or 4 bytes).
+    /// Insufficient size or component misalignment returns RADIENT_STATUS_INVALID_ARGUMENT.
+    /// LoadTexture retains the blob and acquires read access before returning, then
+    /// consumes the pixels directly without copying or repacking the source rows.
+    /// Read access lasts while loading or upload preparation references these pixels.
+    /// Other readers are allowed; writes and resizing remain blocked until all readers
+    /// finish. An active writer causes LoadTexture to return RADIENT_STATUS_INVALID_OPERATION.
+    /// The caller may release its blob reference after LoadTexture returns. For REFERENCE
+    /// storage, the bytes remain alive and unchanged for the blob's entire lifetime;
+    /// RadientDataBlobCreateInfo::OnDestroy can release their owner. Last-reader callbacks
+    /// may run during LoadTexture or later on a worker thread; they do not indicate GPU
+    /// upload completion. Defaults to nullptr, which is invalid for decoded texture input.
+    IRadientDataBlob* pDataBlob DEFAULT_INITIALIZER(nullptr);
 
     /// Row stride, in bytes. If zero, Radient derives tightly packed stride from Format and Width.
-    /// Stride must be at least the active row size.
+    /// Stride must be at least the active row size and, when Height is greater than one,
+    /// a multiple of the format's component size, so each row remains component-aligned.
     Uint32 Stride DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientTextureData RadientTextureData;
 
+/// Texture load attributes. Selects encoded bytes, decoded pixels, or a URI source.
 struct RadientTextureLoadInfo
 {
     /// Source URI. For memory-backed textures, this is optional and may be used as the texture identity
@@ -412,30 +423,30 @@ struct RadientTextureLoadInfo
     /// value by the active asset resolver.
     const Char* BaseURI DEFAULT_INITIALIZER(nullptr);
 
-    /// Optional pointer to encoded texture data.
-    const void* pData DEFAULT_INITIALIZER(nullptr);
+    /// Optional blob containing the complete encoded texture, starting at byte zero.
+    /// Accepts read-only or mutable blobs. The blob must be non-empty and its size must fit in size_t.
+    /// Mutually exclusive with pTextureData. Radient retains the blob and acquires read access during
+    /// LoadTexture(), before returning. The data pointer and size are checked within this read scope.
+    /// The encoded bytes are consumed directly; LoadTexture() does not copy them.
+    /// Read access remains active until Radient no longer needs the source bytes, including any
+    /// decoder references used during upload preparation. The caller may release its blob reference
+    /// after LoadTexture() returns. For REFERENCE storage, the caller keeps the referenced bytes alive
+    /// and unchanged throughout the blob's lifetime; OnDestroy can release their owner. Other readers
+    /// may access the blob while Radient is reading it. Mutable blobs cannot be written or resized
+    /// until all readers finish. Finish any write access before calling LoadTexture(); an active writer
+    /// causes the call to return RADIENT_STATUS_INVALID_OPERATION without creating a texture asset.
+    /// If acquiring read access fails, no matching EndRead() or last-reader callback is performed.
+    /// Once acquired, access is released on completion or failure. OnLastReaderReleased, if set,
+    /// may run before LoadTexture() returns or later on a worker thread. This notification reports
+    /// that all readers have finished; it does not indicate GPU upload completion or end the lifetime
+    /// requirement for REFERENCE storage. See RadientDataBlobCreateInfo for callback details.
+    IRadientDataBlob* pDataBlob DEFAULT_INITIALIZER(nullptr);
 
-    /// Size of the encoded texture data, in bytes.
-    Uint64 DataSize DEFAULT_INITIALIZER(0);
-
-    /// Optional pointer to texture data. Only 2D texture data is currently supported.
-    /// Mip 0 data must be provided; Radient always generates mip levels.
+    /// Optional pointer to decoded texture data, mutually exclusive with pDataBlob.
+    /// Only 2D texture data is currently supported. Mip 0 data must be provided; Radient always
+    /// generates mip levels. The descriptor is copied during LoadTexture(), and its pDataBlob
+    /// is retained with read access while the pixels are needed; see RadientTextureData::pDataBlob.
     const RadientTextureData* pTextureData DEFAULT_INITIALIZER(nullptr);
-
-    /// Optional callback to release pData or pTextureData->pData when Radient no longer needs it.
-    /// For pTextureData, DataSize is the minimum source span described by RadientTextureData::pData.
-    /// If this callback is null and memory-backed source data is not null, Radient makes an internal copy of the data.
-    /// If this callback is non-null and LoadTexture() validation accepts a memory-backed source, ownership
-    /// of the source memory transfers to Radient before LoadTexture() returns. The callback is invoked exactly
-    /// once even if a later loading step fails and LoadTexture() returns an error status. If LoadTexture()
-    /// returns RADIENT_STATUS_INVALID_ARGUMENT during input validation, ownership remains with the caller and
-    /// the callback is not invoked.
-    /// The caller must not read, write, reuse, or release transferred source memory until the callback is invoked.
-    /// The callback may be invoked from any thread and must not throw exceptions.
-    RadientTextureReleaseDataCallbackType ReleaseData DEFAULT_INITIALIZER(nullptr);
-
-    /// User data passed to ReleaseData.
-    void* pReleaseDataUserData DEFAULT_INITIALIZER(nullptr);
 
     /// Interpret the texture as sRGB.
     Bool IsSRGB DEFAULT_INITIALIZER(False);
@@ -669,9 +680,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// The returned status reports source loading and GPU upload scheduling. A successful status
     /// does not guarantee that the texture is already available for sampling.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
-    /// If LoadInfo.ReleaseData is non-null and input validation accepts a memory-backed source, ownership
-    /// transfers to Radient before this method returns. The callback will be invoked exactly once even if
-    /// this method returns a non-INVALID_ARGUMENT failure caused by a later admission or loading step.
+    /// Encoded input in LoadInfo.pDataBlob or decoded input in LoadInfo.pTextureData->pDataBlob
+    /// is retained with read access until the source bytes are no longer needed. An active writer
+    /// prevents loading and returns RADIENT_STATUS_INVALID_OPERATION. The caller may release its
+    /// blob reference after the call. Rejected loads leave ownership with the caller.
     VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;

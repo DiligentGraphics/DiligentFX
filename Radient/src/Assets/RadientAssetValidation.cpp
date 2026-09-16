@@ -226,13 +226,13 @@ bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo)
 bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
 {
     const bool HasURI         = LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
-    const bool HasEncodedData = LoadInfo.pData != nullptr;
+    const bool HasEncodedData = LoadInfo.pDataBlob != nullptr;
     const bool HasTextureData = LoadInfo.pTextureData != nullptr;
 
     if (HasEncodedData && HasTextureData)
     {
         return LogValidationError("RadientTextureLoadInfo",
-                                  "pData and pTextureData must not both be specified.");
+                                  "pDataBlob and pTextureData must not both be specified.");
     }
 
     if (!HasEncodedData && !HasTextureData)
@@ -240,26 +240,14 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         if (!HasURI)
         {
             return LogValidationError("RadientTextureLoadInfo",
-                                      "either URI must be non-empty, pData must not be null, or pTextureData must not be null.");
+                                      "either URI must be non-empty, pDataBlob must not be null, or pTextureData must not be null.");
         }
 
         return true;
     }
 
-    if (HasEncodedData)
-    {
-        if (LoadInfo.DataSize == 0)
-            return LogValidationError("RadientTextureLoadInfo", "DataSize must not be zero when pData is specified.");
-
-        if (!IsAddressableSize(LoadInfo.DataSize))
-        {
-            return LogValidationError("RadientTextureLoadInfo",
-                                      "DataSize (", LoadInfo.DataSize,
-                                      ") exceeds maximum supported size_t value (",
-                                      (std::numeric_limits<size_t>::max)(), ").");
-        }
-    }
-
+    // Blob storage is validated after read acquisition by RadientTextureSource.
+    // Only descriptor metadata is checked here, so concurrent Resize is safe.
     if (HasTextureData)
     {
         const RadientTextureData& TextureData = *LoadInfo.pTextureData;
@@ -270,15 +258,15 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         if (TextureFormat == TEX_FORMAT_UNKNOWN)
             return LogValidationError("RadientTextureLoadInfo", "texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN.");
 
-        if (TextureData.pData == nullptr)
-            return LogValidationError("RadientTextureLoadInfo", "texture data pointer must not be null.");
+        if (TextureData.pDataBlob == nullptr)
+            return LogValidationError("RadientTextureLoadInfo", "texture data blob must not be null.");
 
         RadientTextureDataSpan Span;
         if (!GetRadientTextureDataSpan(TextureData, Span))
         {
             return LogValidationError("RadientTextureLoadInfo",
                                       "texture data stride (", TextureData.Stride,
-                                      ") must be zero or at least the active row size and texture data size must not overflow.");
+                                      ") must be zero or at least the active row size, must align components across rows, and texture data size must not overflow.");
         }
 
         if (!IsAddressableSize(Span.DataSize))

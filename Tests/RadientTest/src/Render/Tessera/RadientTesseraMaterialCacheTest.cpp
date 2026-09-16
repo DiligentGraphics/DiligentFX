@@ -362,11 +362,13 @@ TEST(RadientTesseraMaterialCacheTest, RequiresGPUReadyMaterialDependencies)
     ASSERT_NE(pTextureManager, nullptr);
 
     const std::array<Uint8, 4> Pixels{};
-    RadientTextureData         TextureData{};
-    TextureData.Width  = 1;
-    TextureData.Height = 1;
-    TextureData.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pData  = Pixels.data();
+    auto                       pPixelBlob = Testing::MakeTestDataBlob(Pixels.data(), Pixels.size());
+    ASSERT_NE(pPixelBlob, nullptr);
+    RadientTextureData TextureData{};
+    TextureData.Width     = 1;
+    TextureData.Height    = 1;
+    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pDataBlob = pPixelBlob;
 
     RadientTextureLoadInfo TextureLoadInfo{};
     TextureLoadInfo.pTextureData = &TextureData;

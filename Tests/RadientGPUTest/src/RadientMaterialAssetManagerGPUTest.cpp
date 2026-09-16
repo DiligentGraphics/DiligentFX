@@ -37,7 +37,6 @@
 #include "gtest/gtest.h"
 
 #include <initializer_list>
-#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -231,8 +230,9 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
-    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
-    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+    const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -300,8 +300,9 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
     RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
     ASSERT_NE(pMaterialManager, nullptr);
 
-    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
-    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+    const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -365,8 +366,9 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
-    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+    const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;
@@ -417,8 +419,9 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
     ASSERT_NE(pBlocker, nullptr);
 
-    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
-    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+    const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;

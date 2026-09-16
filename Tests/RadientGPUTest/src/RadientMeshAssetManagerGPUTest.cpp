@@ -39,7 +39,6 @@
 
 #include <chrono>
 #include <thread>
-#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -124,8 +123,9 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pMeshManager, nullptr);
 
-    const std::vector<Uint8> TexturePixels = MakeTexturePixels();
-    const RadientTextureData TextureData   = MakeTextureData(TexturePixels);
+    const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));

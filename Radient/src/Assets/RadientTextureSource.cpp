@@ -33,10 +33,11 @@
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
 #include "ProxyDataBlob.hpp"
+#include "RefCntAutoPtr.hpp"
 #include "TextureLoader.h"
 #include "XXH128Hasher.hpp"
 
-#include <cstring>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -81,6 +82,8 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
 
     const Uint32 Stride = TextureData.Stride != 0 ? TextureData.Stride : static_cast<Uint32>(MipProps.RowSize);
     if (Stride < MipProps.RowSize)
+        return false;
+    if (RowCount > 1 && (Stride % FmtAttribs.ComponentSize) != 0)
         return false;
 
     Uint64 DataSize = MipProps.RowSize;
@@ -148,44 +151,78 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
     m_BaseURI{LoadInfo.BaseURI != nullptr ? LoadInfo.BaseURI : ""},
     m_IsSRGB{LoadInfo.IsSRGB}
 {
+    if (LoadInfo.pDataBlob != nullptr && LoadInfo.pTextureData != nullptr)
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        return;
+    }
+
+    RadientTextureDataSpan Span;
+    IRadientDataBlob*      pBlob = LoadInfo.pDataBlob;
     if (LoadInfo.pTextureData != nullptr)
     {
         m_TextureData = *LoadInfo.pTextureData;
-        m_pData       = m_TextureData.pData;
-
-        RadientTextureDataSpan Span;
-        if (GetRadientTextureDataSpan(m_TextureData, Span) &&
-            RadientValidation::IsAddressableSize(Span.DataSize))
+        pBlob         = m_TextureData.pDataBlob;
+        if (pBlob == nullptr || !GetRadientTextureDataSpan(m_TextureData, Span) ||
+            !RadientValidation::IsAddressableSize(Span.DataSize))
         {
-            m_SourceType = SourceType::TextureData;
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return;
+        }
+    }
 
+    if (pBlob != nullptr)
+    {
+        RadientDataBlobReadAccess ReadAccess{pBlob};
+        if (!ReadAccess)
+        {
+            m_Status = RADIENT_STATUS_INVALID_OPERATION;
+            return;
+        }
+
+        // Both the pointer and size stay stable throughout this shared read scope.
+        const Uint64 Size = ReadAccess.GetSize();
+        if (Size == 0 || !RadientValidation::IsAddressableSize(Size) || Size < Span.DataSize)
+        {
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return;
+        }
+        if (ReadAccess.GetData() == nullptr)
+        {
+            m_Status = RADIENT_STATUS_INVALID_DATA;
+            return;
+        }
+
+        const bool IsDecoded = LoadInfo.pTextureData != nullptr;
+        if (IsDecoded)
+        {
+            // Mip generation reads typed components directly from each source row.
+            const auto& FmtAttribs = GetTextureFormatAttribs(RadientToTextureFormat(m_TextureData.Format));
+            if ((reinterpret_cast<std::uintptr_t>(ReadAccess.GetData()) % FmtAttribs.ComponentSize) != 0)
+            {
+                m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+                return;
+            }
+        }
+        m_DataSize   = static_cast<size_t>(IsDecoded ? Span.DataSize : Size);
+        m_ReadAccess = std::move(ReadAccess);
+        m_pData      = m_ReadAccess.GetData();
+        m_SourceType = IsDecoded ? SourceType::TextureData : SourceType::EncodedMemory;
+        if (IsDecoded)
+        {
             if (m_TextureData.Stride == 0)
                 m_TextureData.Stride = static_cast<Uint32>(Span.ActiveRowSize);
-
             m_TextureDataActiveRowSize = Span.ActiveRowSize;
             m_TextureDataRowCount      = Span.RowCount;
-            m_DataSize                 = static_cast<size_t>(Span.DataSize);
         }
-
-        m_ReleaseData          = LoadInfo.ReleaseData;
-        m_pReleaseDataUserData = LoadInfo.pReleaseDataUserData;
-    }
-    else if (LoadInfo.pData != nullptr)
-    {
-        m_pData = LoadInfo.pData;
-        if (RadientValidation::IsAddressableSize(LoadInfo.DataSize))
-        {
-            m_DataSize = static_cast<size_t>(LoadInfo.DataSize);
-            if (m_DataSize != 0)
-                m_SourceType = SourceType::EncodedMemory;
-        }
-
-        m_ReleaseData          = LoadInfo.ReleaseData;
-        m_pReleaseDataUserData = LoadInfo.pReleaseDataUserData;
     }
     else if (!m_URI.empty())
     {
         m_SourceType = SourceType::URI;
+    }
+    else
+    {
+        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
     }
 }
 
@@ -209,38 +246,6 @@ RadientTextureSource& RadientTextureSource::operator=(RadientTextureSource&& Rhs
     return *this;
 }
 
-void RadientTextureSource::MakeMemoryCopy()
-{
-    if (!IsMemory() || OwnsMemory())
-        return;
-
-    const Uint8* pBytes = static_cast<const Uint8*>(m_pData);
-    if (m_SourceType == SourceType::TextureData)
-    {
-        const size_t ActiveRowSize = static_cast<size_t>(m_TextureDataActiveRowSize);
-        const size_t RowCount      = static_cast<size_t>(m_TextureDataRowCount);
-        const size_t PackedSize    = ActiveRowSize * RowCount;
-
-        m_Data.resize(PackedSize);
-        for (size_t Row = 0; Row < m_TextureDataRowCount; ++Row)
-        {
-            std::memcpy(m_Data.data() + Row * ActiveRowSize,
-                        pBytes + Row * m_TextureData.Stride,
-                        ActiveRowSize);
-        }
-
-        m_pData              = m_Data.data();
-        m_DataSize           = m_Data.size();
-        m_TextureData.pData  = m_pData;
-        m_TextureData.Stride = static_cast<Uint32>(m_TextureDataActiveRowSize);
-    }
-    else if (m_SourceType == SourceType::EncodedMemory)
-    {
-        m_Data.assign(pBytes, pBytes + m_DataSize);
-        m_pData = m_Data.data();
-    }
-}
-
 RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetResolver,
                                                   IRadientAssetLocation* pAssetLocation,
                                                   ITextureLoader**       ppLoader) const
@@ -248,6 +253,9 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
     if (ppLoader == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppLoader = nullptr;
+
+    if (m_Status != RADIENT_STATUS_OK)
+        return m_Status;
 
     TextureLoadInfo LoadInfo{m_URI.empty() ? nullptr : m_URI.c_str()};
     LoadInfo.Usage     = USAGE_DEFAULT;
@@ -374,51 +382,32 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
 
 void RadientTextureSource::ReleaseMemory()
 {
-    auto* const Callback = std::exchange(m_ReleaseData, nullptr);
-    auto* const UserData = std::exchange(m_pReleaseDataUserData, nullptr);
-    const void* pData    = std::exchange(m_pData, nullptr);
-    const auto  DataSize = std::exchange(m_DataSize, size_t{0});
-
+    m_pData                    = nullptr;
+    m_DataSize                 = 0;
     m_SourceType               = SourceType::Invalid;
     m_TextureData              = {};
     m_TextureDataActiveRowSize = 0;
     m_TextureDataRowCount      = 0;
 
-    if (pData != nullptr && Callback != nullptr)
-    {
-        try
-        {
-            Callback(pData, static_cast<Uint64>(DataSize), UserData);
-        }
-        catch (...)
-        {
-            LOG_ERROR_MESSAGE("Radient texture release callback threw an exception.");
-        }
-    }
+    // Clear observable state before EndRead can invoke a reentrant callback.
+    m_ReadAccess.Reset();
 }
 
 void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
 {
+    m_Status                   = Rhs.m_Status;
+    m_ReadAccess               = std::move(Rhs.m_ReadAccess);
     m_SourceType               = Rhs.m_SourceType;
     m_URI                      = std::move(Rhs.m_URI);
     m_BaseURI                  = std::move(Rhs.m_BaseURI);
     m_IsSRGB                   = Rhs.m_IsSRGB;
-    m_Data                     = std::move(Rhs.m_Data);
     m_DataSize                 = Rhs.m_DataSize;
     m_TextureData              = Rhs.m_TextureData;
     m_TextureDataActiveRowSize = Rhs.m_TextureDataActiveRowSize;
     m_TextureDataRowCount      = Rhs.m_TextureDataRowCount;
-    m_ReleaseData              = Rhs.m_ReleaseData;
-    m_pReleaseDataUserData     = Rhs.m_pReleaseDataUserData;
+    m_pData                    = Rhs.m_pData;
 
-    if (!m_Data.empty())
-        m_pData = m_Data.data();
-    else
-        m_pData = Rhs.m_pData;
-
-    if (m_SourceType == SourceType::TextureData)
-        m_TextureData.pData = m_pData;
-
+    Rhs.m_Status     = RADIENT_STATUS_INVALID_ARGUMENT;
     Rhs.m_SourceType = SourceType::Invalid;
     Rhs.m_URI.clear();
     Rhs.m_BaseURI.clear();
@@ -427,8 +416,6 @@ void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
     Rhs.m_TextureData              = {};
     Rhs.m_TextureDataActiveRowSize = 0;
     Rhs.m_TextureDataRowCount      = 0;
-    Rhs.m_ReleaseData              = nullptr;
-    Rhs.m_pReleaseDataUserData     = nullptr;
 }
 
 } // namespace Diligent
