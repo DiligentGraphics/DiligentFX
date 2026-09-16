@@ -27,6 +27,7 @@
 #include "RadientDataBlob.h"
 
 #include "RefCntAutoPtr.hpp"
+#include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
 #include <array>
@@ -46,16 +47,16 @@ extern "C" int RadientDataBlob_C_TestAccess(void);
 namespace
 {
 
-RefCntAutoPtr<IRadientDataBlob> MakeBlob(Uint64                                 Size      = 16,
-                                         RadientDataBlobReadReleaseCallbackType Callback  = nullptr,
-                                         void*                                  pUserData = nullptr)
+RefCntAutoPtr<IRadientMutableDataBlob> MakeMutableBlob(Uint64                                 Size      = 16,
+                                                       RadientDataBlobReadReleaseCallbackType Callback  = nullptr,
+                                                       void*                                  pUserData = nullptr)
 {
     RadientDataBlobCreateInfo CI;
     CI.Size                 = Size;
     CI.OnLastReaderReleased = Callback;
     CI.pUserData            = pUserData;
-    RefCntAutoPtr<IRadientDataBlob> Blob;
-    EXPECT_EQ(CreateRadientDataBlob(CI, &Blob), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
+    EXPECT_EQ(CreateRadientMutableDataBlob(CI, &Blob), RADIENT_STATUS_OK);
     return Blob;
 }
 
@@ -100,11 +101,12 @@ TEST(RadientDataBlobTest, CreatesEmptyBlobAndRejectsInvalidCreation)
 {
     RadientDataBlobCreateInfo CI;
     EXPECT_EQ(CI.Size, 0u);
-    EXPECT_EQ(CI.pInitialData, nullptr);
+    EXPECT_EQ(CI.pData, nullptr);
     EXPECT_EQ(CI.OnLastReaderReleased, nullptr);
     EXPECT_EQ(CI.pUserData, nullptr);
-    EXPECT_EQ(CreateRadientDataBlob(CI, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    auto Blob = MakeBlob(0);
+    EXPECT_EQ(CI.OnDestroy, nullptr);
+    EXPECT_EQ(CreateRadientMutableDataBlob(CI, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    auto Blob = MakeMutableBlob(0);
     ASSERT_NE(Blob, nullptr);
     EXPECT_EQ(Blob->GetSize(), 0u);
     int   Dummy;
@@ -118,24 +120,24 @@ TEST(RadientDataBlobTest, CreatesEmptyBlobAndRejectsInvalidCreation)
     EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
 
     CI.Size = (std::numeric_limits<Uint64>::max)();
-    RefCntAutoPtr<IRadientDataBlob> Invalid;
-    EXPECT_EQ(CreateRadientDataBlob(CI, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
+    RefCntAutoPtr<IRadientMutableDataBlob> Invalid;
+    EXPECT_EQ(CreateRadientMutableDataBlob(CI, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Invalid, nullptr);
 }
 
 TEST(RadientDataBlobTest, CopiesInitialDataDuringCreation)
 {
-    const std::array<Uint8, 5>      Expected{{3, 17, 29, 128, 255}};
-    std::atomic<int>                Calls{0};
-    RefCntAutoPtr<IRadientDataBlob> Blob;
+    const std::array<Uint8, 5>             Expected{{3, 17, 29, 128, 255}};
+    std::atomic<int>                       Calls{0};
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
     {
         auto                      InitialData = Expected;
         RadientDataBlobCreateInfo CI;
         CI.Size                 = InitialData.size();
-        CI.pInitialData         = InitialData.data();
+        CI.pData                = InitialData.data();
         CI.OnLastReaderReleased = CountNotification;
         CI.pUserData            = &Calls;
-        ASSERT_EQ(CreateRadientDataBlob(CI, &Blob), RADIENT_STATUS_OK);
+        ASSERT_EQ(CreateRadientMutableDataBlob(CI, &Blob), RADIENT_STATUS_OK);
         InitialData.fill(0);
         CI = {};
     }
@@ -156,9 +158,9 @@ TEST(RadientDataBlobTest, CopiesInitialDataDuringCreation)
 
     // A non-null initial-data pointer is ignored for empty allocations.
     RadientDataBlobCreateInfo EmptyCI;
-    EmptyCI.pInitialData = Expected.data();
-    RefCntAutoPtr<IRadientDataBlob> Empty;
-    ASSERT_EQ(CreateRadientDataBlob(EmptyCI, &Empty), RADIENT_STATUS_OK);
+    EmptyCI.pData = Expected.data();
+    RefCntAutoPtr<IRadientMutableDataBlob> Empty;
+    ASSERT_EQ(CreateRadientMutableDataBlob(EmptyCI, &Empty), RADIENT_STATUS_OK);
     EXPECT_EQ(Empty->GetSize(), 0u);
     ASSERT_EQ(Empty->BeginRead(&ReadData), RADIENT_STATUS_OK);
     EXPECT_EQ(ReadData, nullptr);
@@ -167,7 +169,7 @@ TEST(RadientDataBlobTest, CopiesInitialDataDuringCreation)
 
 TEST(RadientDataBlobTest, SharesReadsAndExcludesWrites)
 {
-    auto Blob = MakeBlob();
+    auto Blob = MakeMutableBlob();
     ASSERT_NE(Blob, nullptr);
     EXPECT_EQ(Blob->GetSize(), 16u);
     const void* First = nullptr;
@@ -207,7 +209,7 @@ TEST(RadientDataBlobTest, SharesReadsAndExcludesWrites)
 
 TEST(RadientDataBlobTest, NullOutputsDoNotChangeAccessState)
 {
-    auto Blob = MakeBlob();
+    auto Blob = MakeMutableBlob();
     ASSERT_NE(Blob, nullptr);
     EXPECT_EQ(Blob->BeginRead(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Blob->BeginWrite(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -227,10 +229,10 @@ TEST(RadientDataBlobTest, NullOutputsDoNotChangeAccessState)
 
 TEST(RadientDataBlobTest, CopiesRegistrationAndNotifiesOncePerReadCycle)
 {
-    std::atomic<int>                Calls{0};
-    RadientDataBlobCreateInfo       CI{16, nullptr, CountNotification, &Calls};
-    RefCntAutoPtr<IRadientDataBlob> Blob;
-    ASSERT_EQ(CreateRadientDataBlob(CI, &Blob), RADIENT_STATUS_OK);
+    std::atomic<int>                       Calls{0};
+    RadientDataBlobCreateInfo              CI{16, nullptr, CountNotification, &Calls};
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(CI, &Blob), RADIENT_STATUS_OK);
     CI = {};
     EXPECT_EQ(Calls, 0);
     void* WriteData = nullptr;
@@ -255,11 +257,13 @@ TEST(RadientDataBlobTest, CopiesRegistrationAndNotifiesOncePerReadCycle)
 
 TEST(RadientDataBlobTest, CallbackCanAcquireWriteAccess)
 {
-    auto Blob = MakeBlob(1, [](IRadientDataBlob* pBlob, void*) {
+    auto Blob = MakeMutableBlob(1, [](IRadientDataBlob* pBlob, void*) {
+        RefCntAutoPtr<IRadientMutableDataBlob> Mutable{pBlob, IID_RadientMutableDataBlob};
+        ASSERT_NE(Mutable, nullptr);
         void* Data = nullptr;
-        ASSERT_EQ(pBlob->BeginWrite(&Data), RADIENT_STATUS_OK);
+        ASSERT_EQ(Mutable->BeginWrite(&Data), RADIENT_STATUS_OK);
         *static_cast<Uint8*>(Data) = 42;
-        EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Mutable->EndWrite(), RADIENT_STATUS_OK);
     });
     ASSERT_NE(Blob, nullptr);
     const void* Data = nullptr;
@@ -273,7 +277,7 @@ TEST(RadientDataBlobTest, CallbackCanAcquireWriteAccess)
 TEST(RadientDataBlobTest, CallbackCanStartAnotherReadCycle)
 {
     int  Calls = 0;
-    auto Blob  = MakeBlob(
+    auto Blob  = MakeMutableBlob(
         1, [](IRadientDataBlob* pBlob, void* Context) {
         if (++*static_cast<int*>(Context) == 1)
         {
@@ -290,17 +294,19 @@ TEST(RadientDataBlobTest, CallbackCanStartAnotherReadCycle)
 
 TEST(RadientDataBlobTest, KeepsBlobAliveWhileCallbackReleasesCallerReference)
 {
-    RefCntAutoPtr<IRadientDataBlob> Blob;
-    Blob = MakeBlob(
+    RefCntAutoPtr<IRadientMutableDataBlob> Blob;
+    Blob = MakeMutableBlob(
         16, [](IRadientDataBlob* pBlob, void* Context) {
-        static_cast<RefCntAutoPtr<IRadientDataBlob>*>(Context)->Release();
+        static_cast<RefCntAutoPtr<IRadientMutableDataBlob>*>(Context)->Release();
         EXPECT_EQ(pBlob->GetSize(), 16u);
+        RefCntAutoPtr<IRadientMutableDataBlob> Mutable{pBlob, IID_RadientMutableDataBlob};
+        ASSERT_NE(Mutable, nullptr);
         void* Data = nullptr;
-        ASSERT_EQ(pBlob->BeginWrite(&Data), RADIENT_STATUS_OK);
-        EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK); }, std::addressof(Blob));
+        ASSERT_EQ(Mutable->BeginWrite(&Data), RADIENT_STATUS_OK);
+        EXPECT_EQ(Mutable->EndWrite(), RADIENT_STATUS_OK); }, std::addressof(Blob));
     ASSERT_NE(Blob, nullptr);
-    RefCntWeakPtr<IRadientDataBlob> Weak{Blob};
-    const void*                     Data = nullptr;
+    RefCntWeakPtr<IRadientMutableDataBlob> Weak{Blob};
+    const void*                            Data = nullptr;
     ASSERT_EQ(Blob->BeginRead(&Data), RADIENT_STATUS_OK);
     IRadientDataBlob* pRawBlob = Blob;
     EXPECT_EQ(pRawBlob->EndRead(), RADIENT_STATUS_OK);
@@ -310,10 +316,10 @@ TEST(RadientDataBlobTest, KeepsBlobAliveWhileCallbackReleasesCallerReference)
 
 TEST(RadientDataBlobTest, CallbackCanRetainBlobForReuse)
 {
-    RefCntAutoPtr<IRadientDataBlob> Recycled;
+    RefCntAutoPtr<IRadientMutableDataBlob> Recycled;
 
-    auto Blob = MakeBlob(
-        16, [](IRadientDataBlob* pBlob, void* Context) { *static_cast<RefCntAutoPtr<IRadientDataBlob>*>(Context) = pBlob; }, std::addressof(Recycled));
+    auto Blob = MakeMutableBlob(
+        16, [](IRadientDataBlob* pBlob, void* Context) { *static_cast<RefCntAutoPtr<IRadientMutableDataBlob>*>(Context) = RefCntAutoPtr<IRadientMutableDataBlob>{pBlob, IID_RadientMutableDataBlob}; }, std::addressof(Recycled));
     ASSERT_NE(Blob, nullptr);
     const void* Data = nullptr;
     ASSERT_EQ(Blob->BeginRead(&Data), RADIENT_STATUS_OK);
@@ -327,7 +333,7 @@ TEST(RadientDataBlobTest, CallbackCanRetainBlobForReuse)
 
 TEST(RadientDataBlobTest, CallbackFailureLeavesReadAccessReleased)
 {
-    auto Blob = MakeBlob(1, [](IRadientDataBlob*, void*) { throw 1; });
+    auto Blob = MakeMutableBlob(1, [](IRadientDataBlob*, void*) { throw 1; });
     ASSERT_NE(Blob, nullptr);
     const void* Data = nullptr;
     ASSERT_EQ(Blob->BeginRead(&Data), RADIENT_STATUS_OK);
@@ -341,7 +347,7 @@ TEST(RadientDataBlobTest, CallbackFailureLeavesReadAccessReleased)
 TEST(RadientDataBlobTest, ConcurrentReadersExcludeWriter)
 {
     std::atomic<int> Calls{0};
-    auto             Blob = MakeBlob(1, CountNotification, &Calls);
+    auto             Blob = MakeMutableBlob(1, CountNotification, &Calls);
     ASSERT_NE(Blob, nullptr);
     void* WriteData = nullptr;
     ASSERT_EQ(Blob->BeginWrite(&WriteData), RADIENT_STATUS_OK);
@@ -374,7 +380,7 @@ TEST(RadientDataBlobTest, ConcurrentReadersExcludeWriter)
 
 TEST(RadientDataBlobTest, OnlyOneConcurrentWriterSucceeds)
 {
-    auto Blob = MakeBlob();
+    auto Blob = MakeMutableBlob();
     ASSERT_NE(Blob, nullptr);
     AccessGate                 Start;
     AccessGate                 Attempts;
@@ -413,16 +419,18 @@ TEST(RadientDataBlobTest, CallbackDoesNotReserveAccessOrHoldInternalLock)
         RADIENT_STATUS   WriteStatus = RADIENT_STATUS_FAILED;
     } Context;
 
-    auto Blob = MakeBlob(
+    auto Blob = MakeMutableBlob(
         1, [](IRadientDataBlob* pBlob, void* Data) {
         auto& Context = *static_cast<CallbackContext*>(Data);
         if (++Context.Calls == 1)
         {
             Context.FirstCallback.ArriveAndWait();
+            RefCntAutoPtr<IRadientMutableDataBlob> Mutable{pBlob, IID_RadientMutableDataBlob};
+            ASSERT_NE(Mutable, nullptr);
             void* Bytes = nullptr;
-            Context.WriteStatus = pBlob->BeginWrite(&Bytes);
+            Context.WriteStatus = Mutable->BeginWrite(&Bytes);
             if (Context.WriteStatus == RADIENT_STATUS_OK)
-                pBlob->EndWrite();
+                Mutable->EndWrite();
         } }, &Context);
     ASSERT_NE(Blob, nullptr);
     const void* Data = nullptr;
@@ -444,9 +452,277 @@ TEST(RadientDataBlobTest, CallbackDoesNotReserveAccessOrHoldInternalLock)
 
 TEST(RadientDataBlobTest, SupportsQueryInterfaceAndCEntryPoints)
 {
-    auto Blob = MakeBlob();
+    auto Blob = MakeMutableBlob();
     ASSERT_NE(Blob, nullptr);
-    RefCntAutoPtr<IRadientDataBlob> Interface{Blob, IID_RadientDataBlob};
-    EXPECT_EQ(Interface, Blob);
+    RefCntAutoPtr<IRadientDataBlob> Base{Blob, IID_RadientDataBlob};
+    ASSERT_NE(Base, nullptr);
+    RefCntAutoPtr<IRadientMutableDataBlob> Mutable{Base, IID_RadientMutableDataBlob};
+    EXPECT_EQ(Mutable, Blob);
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    void* WriteData = nullptr;
+    EXPECT_EQ(Mutable->BeginWrite(&WriteData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Mutable->EndRead(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Mutable->BeginWrite(&WriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(Base->BeginRead(&ReadData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Mutable->EndWrite(), RADIENT_STATUS_OK);
+    Blob.Release();
+    Mutable.Release();
+    EXPECT_EQ(Base->GetSize(), 16u);
     EXPECT_EQ(RadientDataBlob_C_TestAccess(), 0);
+}
+
+class RadientReadOnlyDataBlobTest : public testing::TestWithParam<RADIENT_DATA_BLOB_STORAGE_MODE>
+{};
+
+TEST_P(RadientReadOnlyDataBlobTest, StorageModeDeterminesWhetherDataIsCopied)
+{
+    const std::array<Uint8, 5> Data{{3, 17, 29, 128, 255}};
+    RadientDataBlobCreateInfo  CI;
+    CI.Size  = Data.size();
+    CI.pData = Data.data();
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    CI = {};
+    EXPECT_EQ(Blob->GetSize(), Data.size());
+    RefCntAutoPtr<IRadientDataBlob> Base{Blob, IID_RadientDataBlob};
+    EXPECT_EQ(Base, Blob);
+    RefCntAutoPtr<IRadientMutableDataBlob> Mutable{Blob, IID_RadientMutableDataBlob};
+    EXPECT_EQ(Mutable, nullptr);
+
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(std::memcmp(ReadData, Data.data(), Data.size()), 0);
+    if (GetParam() == RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE)
+        EXPECT_EQ(ReadData, Data.data());
+    else
+        EXPECT_NE(ReadData, Data.data());
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+}
+
+TEST_P(RadientReadOnlyDataBlobTest, EmptyAndNullSourceData)
+{
+    Uint8                     Data = 42;
+    RadientDataBlobCreateInfo CI;
+    CI.pData = &Data;
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->GetSize(), 0u);
+    const void* ReadData = &Data;
+    ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    EXPECT_EQ(ReadData, nullptr);
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+    Blob.Release();
+
+    CI.pData = nullptr;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    EXPECT_EQ(Blob->GetSize(), 0u);
+    Blob.Release();
+    CI.Size = 4;
+    if (GetParam() == RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE)
+    {
+        EXPECT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(Blob, nullptr);
+    }
+    else
+    {
+        ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+        ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+        const std::array<Uint8, 4> Zeros{};
+        EXPECT_EQ(std::memcmp(ReadData, Zeros.data(), Zeros.size()), 0);
+        EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+    }
+}
+
+TEST_P(RadientReadOnlyDataBlobTest, KeepsBackingOwnerUntilFinalReferenceIsReleased)
+{
+    struct CallbackCounts
+    {
+        int Reads        = 0;
+        int Destructions = 0;
+    } Counts;
+    struct BackingOwner
+    {
+        std::array<Uint8, 4> Bytes{{11, 12, 13, 14}};
+        CallbackCounts*      Counts = nullptr;
+    };
+    auto Owner    = std::make_unique<BackingOwner>();
+    Owner->Counts = &Counts;
+    RadientDataBlobCreateInfo CI;
+    CI.Size                 = Owner->Bytes.size();
+    CI.pData                = Owner->Bytes.data();
+    CI.pUserData            = Owner.get();
+    CI.OnLastReaderReleased = [](IRadientDataBlob*, void* pContext) {
+        ++static_cast<BackingOwner*>(pContext)->Counts->Reads;
+    };
+    CI.OnDestroy = [](void* pContext) {
+        auto* Owner = static_cast<BackingOwner*>(pContext);
+        ++Owner->Counts->Destructions;
+        delete Owner;
+    };
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    Owner.release();
+    CI = {};
+    RefCntAutoPtr<IRadientDataBlob> Retained{Blob};
+    Blob.Release();
+    EXPECT_EQ(Counts.Destructions, 0);
+    for (int Cycle = 0; Cycle < 2; ++Cycle)
+    {
+        EXPECT_EQ(Retained->BeginRead(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+        const void* First  = nullptr;
+        const void* Second = nullptr;
+        ASSERT_EQ(Retained->BeginRead(&First), RADIENT_STATUS_OK);
+        ASSERT_EQ(Retained->BeginRead(&Second), RADIENT_STATUS_OK);
+        EXPECT_EQ(First, Second);
+        EXPECT_EQ(*static_cast<const Uint8*>(First), 11);
+        EXPECT_EQ(Retained->EndRead(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Counts.Reads, Cycle);
+        EXPECT_EQ(Retained->EndRead(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Counts.Reads, Cycle + 1);
+        EXPECT_EQ(Retained->EndRead(), RADIENT_STATUS_INVALID_OPERATION);
+        EXPECT_EQ(Counts.Destructions, 0);
+    }
+    Retained.Release();
+    EXPECT_EQ(Counts.Reads, 2);
+    EXPECT_EQ(Counts.Destructions, 1);
+}
+
+TEST_P(RadientReadOnlyDataBlobTest, AllowsConcurrentReaders)
+{
+    Uint8                           Data = 73;
+    std::atomic<int>                Calls{0};
+    RadientDataBlobCreateInfo       CI{1, &Data, CountNotification, &Calls};
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    AccessGate                 Readers;
+    std::atomic<int>           SuccessfulReads{0};
+    std::array<std::thread, 4> Threads;
+    for (auto& Thread : Threads)
+        Thread = std::thread{[&] {
+            const void* ReadData = nullptr;
+            const auto  Status   = Blob->BeginRead(&ReadData);
+            if (Status == RADIENT_STATUS_OK && *static_cast<const Uint8*>(ReadData) == Data)
+                ++SuccessfulReads;
+            Readers.ArriveAndWait();
+            if (Status == RADIENT_STATUS_OK)
+                EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+        }};
+    EXPECT_TRUE(Readers.WaitFor(4));
+    EXPECT_EQ(SuccessfulReads, 4);
+    EXPECT_EQ(Calls, 0);
+    Readers.Release();
+    for (auto& Thread : Threads)
+        Thread.join();
+    EXPECT_EQ(Calls, 1);
+}
+
+TEST_P(RadientReadOnlyDataBlobTest, LastReaderCallbackRetainsBlobUntilItReturns)
+{
+    struct CallbackContext
+    {
+        RefCntAutoPtr<IRadientDataBlob> Blob;
+        int                             Destructions = 0;
+    } Context;
+    RadientDataBlobCreateInfo CI;
+    CI.pUserData            = &Context;
+    CI.OnLastReaderReleased = [](IRadientDataBlob* pBlob, void* pContext) {
+        auto& Context = *static_cast<CallbackContext*>(pContext);
+        Context.Blob.Release();
+        EXPECT_EQ(Context.Destructions, 0);
+        EXPECT_EQ(pBlob->GetSize(), 0u);
+    };
+    CI.OnDestroy = [](void* pContext) {
+        ++static_cast<CallbackContext*>(pContext)->Destructions;
+    };
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Context.Blob), RADIENT_STATUS_OK);
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Context.Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    auto* RawBlob = Context.Blob.RawPtr();
+    EXPECT_EQ(RawBlob->EndRead(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Context.Blob, nullptr);
+    EXPECT_EQ(Context.Destructions, 1);
+}
+
+TEST_P(RadientReadOnlyDataBlobTest, DestructionCallbackExceptionsDoNotEscape)
+{
+    int                       Calls = 0;
+    RadientDataBlobCreateInfo CI;
+    CI.pUserData = &Calls;
+    CI.OnDestroy = [](void* pContext) {
+        ++*static_cast<int*>(pContext);
+        throw 1;
+    };
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    ASSERT_EQ(CreateRadientDataBlob(CI, GetParam(), &Blob), RADIENT_STATUS_OK);
+    Testing::TestingEnvironment::ErrorScope ExpectedError{"Radient data blob destruction callback threw an exception"};
+    EXPECT_NO_THROW(Blob.Release());
+    EXPECT_EQ(Calls, 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(StorageModes, RadientReadOnlyDataBlobTest, testing::Values(RADIENT_DATA_BLOB_STORAGE_MODE_COPY, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE));
+
+TEST(RadientDataBlobTest, ReadOnlyCopyOutlivesSourceStorage)
+{
+    RefCntAutoPtr<IRadientDataBlob> Blob;
+    {
+        std::array<Uint8, 4>      Data{{11, 12, 13, 14}};
+        RadientDataBlobCreateInfo CI;
+        CI.Size  = Data.size();
+        CI.pData = Data.data();
+        ASSERT_EQ(CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &Blob), RADIENT_STATUS_OK);
+        Data.fill(0);
+    }
+    const void* ReadData = nullptr;
+    ASSERT_EQ(Blob->BeginRead(&ReadData), RADIENT_STATUS_OK);
+    const std::array<Uint8, 4> Expected{{11, 12, 13, 14}};
+    EXPECT_EQ(std::memcmp(ReadData, Expected.data(), Expected.size()), 0);
+    EXPECT_EQ(Blob->EndRead(), RADIENT_STATUS_OK);
+}
+
+TEST(RadientDataBlobTest, CreationFailuresDoNotTransferCallbackContext)
+{
+    std::atomic<int>          Calls{0};
+    RadientDataBlobCreateInfo CI;
+    CI.OnLastReaderReleased = CountNotification;
+    CI.pUserData            = &Calls;
+    CI.OnDestroy            = [](void* pContext) {
+        ++*static_cast<std::atomic<int>*>(pContext);
+    };
+    auto Existing = MakeMutableBlob();
+    ASSERT_NE(Existing, nullptr);
+    Testing::TestingEnvironment::ErrorScope ExpectedErrors{
+        "Output data blob pointer must be null",
+        "Output data blob pointer must be null",
+        "Output data blob pointer must be null",
+        "Output data blob pointer must be null"};
+    IRadientDataBlob* Invalid     = Existing;
+    const auto        InvalidMode = static_cast<RADIENT_DATA_BLOB_STORAGE_MODE>(255);
+    EXPECT_EQ(CreateRadientDataBlob(CI, InvalidMode, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Invalid, nullptr);
+    EXPECT_EQ(CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(CreateRadientMutableDataBlob(CI, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    CI.Size = 1;
+    Invalid = Existing;
+    EXPECT_EQ(CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Invalid, nullptr);
+    CI.Size = (std::numeric_limits<Uint64>::max)();
+    Invalid = Existing;
+    EXPECT_EQ(CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Invalid, nullptr);
+    IRadientMutableDataBlob* InvalidMutable = Existing;
+    EXPECT_EQ(CreateRadientMutableDataBlob(CI, &InvalidMutable), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(InvalidMutable, nullptr);
+    EXPECT_EQ(Calls, 0);
+
+    CI.Size = 0;
+    RefCntAutoPtr<IRadientMutableDataBlob> Mutable;
+    ASSERT_EQ(CreateRadientMutableDataBlob(CI, &Mutable), RADIENT_STATUS_OK);
+    CI = {};
+    RefCntAutoPtr<IRadientDataBlob> Base{Mutable};
+    Mutable.Release();
+    EXPECT_EQ(Calls, 0);
+    Base.Release();
+    EXPECT_EQ(Calls, 1);
 }

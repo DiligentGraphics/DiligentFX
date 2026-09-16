@@ -32,19 +32,32 @@ static void OnLastReaderReleased(IRadientDataBlob* pBlob, void* pUserData)
     (void)pUserData;
 }
 
+static void OnDestroy(void* pUserData)
+{
+    (void)pUserData;
+}
+
 void RadientDataBlob_C_UseTypes(void)
 {
     static const Uint8                     InitialData[16] = {1, 2, 3, 4};
-    static const RadientDataBlobCreateInfo CI              = {sizeof(InitialData), InitialData, OnLastReaderReleased, 0};
+    static const RadientDataBlobCreateInfo CI              = {sizeof(InitialData), InitialData, OnLastReaderReleased, 0, OnDestroy};
     IRadientDataBlob*                      pBlob           = 0;
+    IRadientMutableDataBlob*               pMutable        = 0;
     const void*                            pReadData       = 0;
     void*                                  pWriteData      = 0;
-    if (Diligent_CreateRadientDataBlob(&CI, &pBlob) != RADIENT_STATUS_OK)
+    if (Diligent_CreateRadientDataBlob(&CI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob) != RADIENT_STATUS_OK)
         return;
     (void)IRadientDataBlob_GetSize(pBlob);
-    if (IRadientDataBlob_BeginWrite(pBlob, &pWriteData) == RADIENT_STATUS_OK)
-        (void)IRadientDataBlob_EndWrite(pBlob);
     if (IRadientDataBlob_BeginRead(pBlob, &pReadData) == RADIENT_STATUS_OK)
         (void)IRadientDataBlob_EndRead(pBlob);
     IObject_Release(pBlob);
+
+    if (Diligent_CreateRadientMutableDataBlob(&CI, &pMutable) != RADIENT_STATUS_OK)
+        return;
+    (void)IRadientMutableDataBlob_GetSize(pMutable);
+    if (IRadientMutableDataBlob_BeginWrite(pMutable, &pWriteData) == RADIENT_STATUS_OK)
+        (void)IRadientMutableDataBlob_EndWrite(pMutable);
+    if (IRadientMutableDataBlob_BeginRead(pMutable, &pReadData) == RADIENT_STATUS_OK)
+        (void)IRadientMutableDataBlob_EndRead(pMutable);
+    IObject_Release(pMutable);
 }

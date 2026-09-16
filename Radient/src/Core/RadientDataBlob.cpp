@@ -26,6 +26,7 @@
 
 #include "RadientDataBlob.h"
 
+#include "Core/RadientValidation.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -40,27 +41,48 @@ namespace Diligent
 namespace
 {
 
-class RadientDataBlobImpl final : public ObjectBase<IRadientDataBlob>
+// Both capabilities use the same storage, reader accounting, and callback rules.
+// The read-only instantiation has no mutable interface or write methods in its vtable.
+template <typename InterfaceType>
+class RadientDataBlobBase : public ObjectBase<InterfaceType>
 {
 public:
-    using TBase = ObjectBase<IRadientDataBlob>;
+    using TBase = ObjectBase<InterfaceType>;
 
-    RadientDataBlobImpl(IReferenceCounters* pRefCounters, const RadientDataBlobCreateInfo& CI) :
+    RadientDataBlobBase(IReferenceCounters*              pRefCounters,
+                        const RadientDataBlobCreateInfo& CI,
+                        RADIENT_DATA_BLOB_STORAGE_MODE   StorageMode) :
         TBase{pRefCounters},
-        m_Data(static_cast<size_t>(CI.Size)),
+        m_Data(StorageMode == RADIENT_DATA_BLOB_STORAGE_MODE_COPY ? static_cast<size_t>(CI.Size) : 0),
+        m_pData{CI.Size == 0 ? nullptr :
+                               (StorageMode == RADIENT_DATA_BLOB_STORAGE_MODE_COPY ? m_Data.data() : CI.pData)},
+        m_Size{CI.Size},
         m_OnLastReaderReleased{CI.OnLastReaderReleased},
-        m_pUserData{CI.pUserData}
+        m_pUserData{CI.pUserData},
+        m_OnDestroy{CI.OnDestroy}
     {
-        if (CI.pInitialData != nullptr && !m_Data.empty())
-            std::memcpy(m_Data.data(), CI.pInitialData, m_Data.size());
+        if (CI.pData != nullptr && !m_Data.empty())
+            std::memcpy(m_Data.data(), CI.pData, m_Data.size());
+    }
+
+    ~RadientDataBlobBase()
+    {
+        if (m_OnDestroy != nullptr)
+        {
+            try
+            {
+                m_OnDestroy(m_pUserData);
+            }
+            catch (...)
+            {
+                LOG_ERROR_MESSAGE("Radient data blob destruction callback threw an exception.");
+            }
+        }
     }
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientDataBlob, TBase);
 
-    Uint64 DILIGENT_CALL_TYPE GetSize() const override final
-    {
-        return static_cast<Uint64>(m_Data.size());
-    }
+    Uint64 DILIGENT_CALL_TYPE GetSize() const override final { return m_Size; }
 
     RADIENT_STATUS DILIGENT_CALL_TYPE BeginRead(const void** ppData) override final
     {
@@ -73,7 +95,7 @@ public:
             return RADIENT_STATUS_INVALID_OPERATION;
 
         ++m_ReaderCount;
-        *ppData = m_Data.empty() ? nullptr : m_Data.data();
+        *ppData = m_pData;
         return RADIENT_STATUS_OK;
     }
 
@@ -92,8 +114,8 @@ public:
 
         if (KeepAlive)
         {
-            // A callback can reenter this object or release the caller's reference.
-            // Access is already released; no internal lock is held during the call.
+            // Notifications may reenter or release the caller's reference. This
+            // reference also postpones OnDestroy until the notification finishes.
             try
             {
                 m_OnLastReaderReleased(this, m_pUserData);
@@ -105,6 +127,39 @@ public:
         }
         return RADIENT_STATUS_OK;
     }
+
+protected:
+    // Never resized. In REFERENCE mode the vector is empty and m_pData points
+    // to the caller's bytes; OnDestroy can release the external storage owner.
+    std::vector<Uint8> m_Data;
+
+private:
+    const void* const                            m_pData;
+    const Uint64                                 m_Size;
+    const RadientDataBlobReadReleaseCallbackType m_OnLastReaderReleased;
+    void* const                                  m_pUserData;
+    const RadientDataBlobDestroyCallbackType     m_OnDestroy;
+
+protected:
+    std::mutex m_AccessMutex;
+    size_t     m_ReaderCount = 0;
+    bool       m_Writing     = false;
+};
+
+class RadientDataBlobImpl final : public RadientDataBlobBase<IRadientDataBlob>
+{
+public:
+    using TBase = RadientDataBlobBase<IRadientDataBlob>;
+    using TBase::TBase;
+};
+
+class RadientMutableDataBlobImpl final : public RadientDataBlobBase<IRadientMutableDataBlob>
+{
+public:
+    using TBase = RadientDataBlobBase<IRadientMutableDataBlob>;
+    using TBase::TBase;
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMutableDataBlob, TBase);
 
     RADIENT_STATUS DILIGENT_CALL_TYPE BeginWrite(void** ppData) override final
     {
@@ -130,33 +185,38 @@ public:
         m_Writing = false;
         return RADIENT_STATUS_OK;
     }
-
-private:
-    // Never resized, so acquiring access cannot move the bytes or change GetSize().
-    std::vector<Uint8>                           m_Data;
-    const RadientDataBlobReadReleaseCallbackType m_OnLastReaderReleased;
-    void* const                                  m_pUserData;
-    std::mutex                                   m_AccessMutex;
-    size_t                                       m_ReaderCount = 0;
-    bool                                         m_Writing     = false;
 };
 
-} // namespace
-
-RADIENT_STATUS CreateRadientDataBlob(const RadientDataBlobCreateInfo& CreateInfo,
-                                     IRadientDataBlob**               ppBlob)
+template <typename ImplType, typename InterfaceType>
+RADIENT_STATUS CreateBlob(const RadientDataBlobCreateInfo& CI,
+                          RADIENT_DATA_BLOB_STORAGE_MODE   StorageMode,
+                          InterfaceType**                  ppBlob)
 {
     if (ppBlob == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
     DEV_CHECK_ERR(*ppBlob == nullptr, "Output data blob pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppBlob = nullptr;
 
-    if (CreateInfo.Size > std::vector<Uint8>{}.max_size())
+    if (StorageMode == RADIENT_DATA_BLOB_STORAGE_MODE_COPY)
+    {
+        if (CI.Size > std::vector<Uint8>{}.max_size())
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+    else if (StorageMode == RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE)
+    {
+        if (!RadientValidation::IsAddressableSize(CI.Size) || (CI.Size != 0 && CI.pData == nullptr))
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+    else
+    {
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     try
     {
-        RefCntAutoPtr<RadientDataBlobImpl> pBlob{MakeNewRCObj<RadientDataBlobImpl>()(CreateInfo)};
+        // Byte allocation is the only throwing construction step and precedes
+        // callback registration. Failure therefore leaves context cleanup to the caller.
+        RefCntAutoPtr<ImplType> pBlob{MakeNewRCObj<ImplType>()(CI, StorageMode)};
         *ppBlob = pBlob.Detach();
         return RADIENT_STATUS_OK;
     }
@@ -166,12 +226,28 @@ RADIENT_STATUS CreateRadientDataBlob(const RadientDataBlobCreateInfo& CreateInfo
     }
 }
 
+} // namespace
+
+RADIENT_STATUS CreateRadientDataBlob(const RadientDataBlobCreateInfo& CreateInfo,
+                                     RADIENT_DATA_BLOB_STORAGE_MODE   StorageMode,
+                                     IRadientDataBlob**               ppBlob)
+{
+    return CreateBlob<RadientDataBlobImpl>(CreateInfo, StorageMode, ppBlob);
+}
+
+RADIENT_STATUS CreateRadientMutableDataBlob(const RadientDataBlobCreateInfo& CreateInfo,
+                                            IRadientMutableDataBlob**        ppBlob)
+{
+    return CreateBlob<RadientMutableDataBlobImpl>(CreateInfo, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, ppBlob);
+}
+
 } // namespace Diligent
 
 extern "C"
 {
     Diligent::RADIENT_STATUS Diligent_CreateRadientDataBlob(
         const Diligent::RadientDataBlobCreateInfo* pCreateInfo,
+        Diligent::RADIENT_DATA_BLOB_STORAGE_MODE   StorageMode,
         Diligent::IRadientDataBlob**               ppBlob)
     {
         if (pCreateInfo == nullptr)
@@ -180,6 +256,19 @@ extern "C"
                 *ppBlob = nullptr;
             return Diligent::RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        return Diligent::CreateRadientDataBlob(*pCreateInfo, ppBlob);
+        return Diligent::CreateRadientDataBlob(*pCreateInfo, StorageMode, ppBlob);
+    }
+
+    Diligent::RADIENT_STATUS Diligent_CreateRadientMutableDataBlob(
+        const Diligent::RadientDataBlobCreateInfo* pCreateInfo,
+        Diligent::IRadientMutableDataBlob**        ppBlob)
+    {
+        if (pCreateInfo == nullptr)
+        {
+            if (ppBlob != nullptr)
+                *ppBlob = nullptr;
+            return Diligent::RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        return Diligent::CreateRadientMutableDataBlob(*pCreateInfo, ppBlob);
     }
 }

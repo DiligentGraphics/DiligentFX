@@ -33,16 +33,29 @@ void RadientDataBlob_CPP_UseTypes()
     const Uint32              InitialData = 42;
     RadientDataBlobCreateInfo CI;
     CI.Size                 = sizeof(InitialData);
-    CI.pInitialData         = &InitialData;
+    CI.pData                = &InitialData;
+    CI.OnLastReaderReleased = [](IRadientDataBlob*, void*) {
+    };
+    CI.OnDestroy = [](void*) {
+    };
     IRadientDataBlob* pBlob = nullptr;
-    if (CreateRadientDataBlob(CI, &pBlob) != RADIENT_STATUS_OK)
+    if (CreateRadientDataBlob(CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pBlob) != RADIENT_STATUS_OK)
         return;
     const void* pReadData  = nullptr;
     void*       pWriteData = nullptr;
     (void)pBlob->GetSize();
-    if (pBlob->BeginWrite(&pWriteData) == RADIENT_STATUS_OK)
-        (void)pBlob->EndWrite();
     if (pBlob->BeginRead(&pReadData) == RADIENT_STATUS_OK)
         (void)pBlob->EndRead();
     pBlob->Release();
+
+    IRadientMutableDataBlob* pMutable = nullptr;
+    if (CreateRadientMutableDataBlob(CI, &pMutable) != RADIENT_STATUS_OK)
+        return;
+    (void)pMutable->GetSize();
+    if (pMutable->BeginWrite(&pWriteData) == RADIENT_STATUS_OK)
+        (void)pMutable->EndWrite();
+    IRadientDataBlob* pBase = pMutable;
+    if (pBase->BeginRead(&pReadData) == RADIENT_STATUS_OK)
+        (void)pBase->EndRead();
+    pMutable->Release();
 }

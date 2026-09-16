@@ -32,43 +32,95 @@ static void CountNotification(IRadientDataBlob* pBlob, void* pUserData)
         ++*(int*)pUserData;
 }
 
+static void CountDestruction(void* pUserData)
+{
+    ++*(int*)pUserData;
+}
+
 int RadientDataBlob_C_TestAccess(void)
 {
     Uint8                     InitialData[] = {7, 8, 9, 10};
     int                       Notifications = 0;
-    RadientDataBlobCreateInfo CI            = {4, InitialData, CountNotification, &Notifications};
-    IRadientDataBlob*         pBlob         = 0;
+    RadientDataBlobCreateInfo CI            = {4, InitialData, CountNotification, &Notifications, CountDestruction};
+    IRadientDataBlob*         pReadOnly     = 0;
+    IRadientMutableDataBlob*  pMutable      = 0;
     void*                     WriteData     = 0;
     const void*               ReadData      = 0;
     int                       Result        = 0;
-    if (Diligent_CreateRadientDataBlob(0, &pBlob) != RADIENT_STATUS_INVALID_ARGUMENT || pBlob != 0)
+    if (Diligent_CreateRadientDataBlob(0, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pReadOnly) != RADIENT_STATUS_INVALID_ARGUMENT || pReadOnly != 0)
         return 1;
-    if (Diligent_CreateRadientDataBlob(&CI, 0) != RADIENT_STATUS_INVALID_ARGUMENT)
+    if (Diligent_CreateRadientDataBlob(&CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, 0) != RADIENT_STATUS_INVALID_ARGUMENT)
         return 2;
-    if (Diligent_CreateRadientDataBlob(&CI, &pBlob) != RADIENT_STATUS_OK || pBlob == 0)
+    if (Diligent_CreateRadientMutableDataBlob(0, &pMutable) != RADIENT_STATUS_INVALID_ARGUMENT || pMutable != 0)
         return 3;
+    if (Diligent_CreateRadientMutableDataBlob(&CI, 0) != RADIENT_STATUS_INVALID_ARGUMENT || Notifications != 0)
+        return 4;
+    if (Diligent_CreateRadientMutableDataBlob(&CI, &pMutable) != RADIENT_STATUS_OK || pMutable == 0)
+        return 5;
     InitialData[0] = 0;
-    if (IRadientDataBlob_BeginWrite(pBlob, &WriteData) != RADIENT_STATUS_OK || WriteData == 0)
-        Result = 4;
+    if (IRadientMutableDataBlob_GetSize(pMutable) != 4)
+        Result = 6;
+    if (IRadientMutableDataBlob_BeginWrite(pMutable, &WriteData) != RADIENT_STATUS_OK || WriteData == 0)
+        Result = 7;
     else
     {
         if (*(const Uint8*)WriteData != 7 || Notifications != 0)
-            Result = 10;
+            Result = 8;
         *(Uint8*)WriteData = 29;
-        if (IRadientDataBlob_BeginRead(pBlob, &ReadData) != RADIENT_STATUS_INVALID_OPERATION || ReadData != 0)
-            Result = 5;
-        if (IRadientDataBlob_EndWrite(pBlob) != RADIENT_STATUS_OK)
-            Result = 6;
-        if (IRadientDataBlob_BeginRead(pBlob, &ReadData) != RADIENT_STATUS_OK || ReadData == 0)
-            Result = 7;
+        if (IRadientMutableDataBlob_BeginRead(pMutable, &ReadData) != RADIENT_STATUS_INVALID_OPERATION || ReadData != 0)
+            Result = 9;
+        if (IRadientMutableDataBlob_EndWrite(pMutable) != RADIENT_STATUS_OK)
+            Result = 10;
+        if (IRadientMutableDataBlob_BeginRead(pMutable, &ReadData) != RADIENT_STATUS_OK || ReadData == 0)
+            Result = 11;
         else
         {
             if (*(const Uint8*)ReadData != 29)
-                Result = 8;
-            if (IRadientDataBlob_EndRead(pBlob) != RADIENT_STATUS_OK || Notifications != 1)
-                Result = 9;
+                Result = 12;
+            if (IRadientMutableDataBlob_EndRead(pMutable) != RADIENT_STATUS_OK || Notifications != 1)
+                Result = 13;
         }
     }
-    IObject_Release(pBlob);
+    IObject_Release(pMutable);
+    pMutable = 0;
+    if (Notifications != 2)
+        Result = 14;
+    if (Result != 0)
+        return Result;
+
+    if (Diligent_CreateRadientDataBlob(&CI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pReadOnly) != RADIENT_STATUS_OK || pReadOnly == 0)
+        return 15;
+    if (IRadientDataBlob_BeginRead(pReadOnly, &ReadData) != RADIENT_STATUS_OK)
+        Result = 16;
+    else
+    {
+        if (ReadData != InitialData || IRadientDataBlob_GetSize(pReadOnly) != 4)
+            Result = 17;
+        if (IRadientDataBlob_EndRead(pReadOnly) != RADIENT_STATUS_OK || Notifications != 3)
+            Result = 18;
+    }
+    IObject_Release(pReadOnly);
+    pReadOnly = 0;
+    if (Notifications != 4)
+        Result = 19;
+    if (Result != 0)
+        return Result;
+
+    if (Diligent_CreateRadientDataBlob(&CI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pReadOnly) != RADIENT_STATUS_OK || pReadOnly == 0)
+        return 20;
+    InitialData[0] = 57;
+    if (IRadientDataBlob_BeginRead(pReadOnly, &ReadData) != RADIENT_STATUS_OK)
+        Result = 21;
+    else
+    {
+        if (ReadData == InitialData || *(const Uint8*)ReadData != 0)
+            Result = 22;
+        if (IRadientDataBlob_EndRead(pReadOnly) != RADIENT_STATUS_OK || Notifications != 5)
+            Result = 23;
+    }
+    IObject_Release(pReadOnly);
+    pReadOnly = 0;
+    if (Notifications != 6)
+        Result = 24;
     return Result;
 }
