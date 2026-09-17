@@ -77,16 +77,24 @@ struct MorphAnimationDestinationInstance
 
 using MorphAnimationDestinationLists = std::vector<std::vector<MorphAnimationDestinationInstance>>;
 
-struct MeshSourceDataOwner
+RefCntAutoPtr<IRadientDataBlob> CreateDocumentDataBlob(const std::shared_ptr<const GLTF::Document>& pDocument,
+                                                       const void*                                  pData,
+                                                       Uint64                                       Size)
 {
-    explicit MeshSourceDataOwner(std::shared_ptr<const GLTF::Document> pDoc) :
-        pDocument{std::move(pDoc)}
-    {
-    }
-
-    std::shared_ptr<const GLTF::Document> pDocument;
-    std::vector<Uint32>                   GeneratedIndices;
-};
+    auto                      pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.pData     = pData;
+    BlobCI.Size      = Size;
+    BlobCI.pUserData = pDocumentOwner.get();
+    BlobCI.OnDestroy = [](void* pUserData) {
+        delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
+    };
+    RefCntAutoPtr<IRadientDataBlob> pBlob;
+    if (CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob) != RADIENT_STATUS_OK)
+        return {};
+    pDocumentOwner.release();
+    return pBlob;
+}
 
 RadientTransform ToRadientTransform(const GLTF::Node& Node)
 {
@@ -1881,18 +1889,9 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
             return {};
         }
 
-        auto                      pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
-        RadientDataBlobCreateInfo BlobCI;
-        BlobCI.pData     = GltfData.pData;
-        BlobCI.Size      = DataSize;
-        BlobCI.pUserData = pDocumentOwner.get();
-        BlobCI.OnDestroy = [](void* pUserData) {
-            delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
-        };
-        RefCntAutoPtr<IRadientDataBlob> pBlob;
-        if (CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob) != RADIENT_STATUS_OK)
+        RefCntAutoPtr<IRadientDataBlob> pBlob = CreateDocumentDataBlob(pDocument, GltfData.pData, DataSize);
+        if (pBlob == nullptr)
             return {};
-        pDocumentOwner.release();
 
         RadientMeshVertexSource::SourceAttribute& SrcAttrib = SourceAttributes.emplace_back();
         SrcAttrib.Name                                      = DstAttrib.Name;
@@ -1941,15 +1940,16 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
         return Result;
     }
 
-    std::shared_ptr<MeshSourceDataOwner> pOwner = std::make_shared<MeshSourceDataOwner>(pDocument);
-    RadientMeshIndexSource::CreateInfo   IndexCI;
-    Uint32                               IndexCount    = 0;
-    const int                            IndexAccessor = GltfPrimitive.GetIndicesId();
+    RefCntAutoPtr<IRadientDataBlob>    pIndexBlob;
+    RadientMeshIndexSource::CreateInfo IndexCI;
+    const int                          IndexAccessor = GltfPrimitive.GetIndicesId();
     if (IndexAccessor >= 0)
     {
         const auto GltfIndexData = GLTF::GetGltfDataInfo(GltfModel, IndexAccessor);
         if (GltfIndexData.pData == nullptr ||
-            GltfIndexData.ByteStride <= 0)
+            GltfIndexData.ByteStride <= 0 ||
+            GltfIndexData.Count == 0 ||
+            GltfIndexData.Count > (std::numeric_limits<Uint32>::max)())
         {
             return {};
         }
@@ -1964,26 +1964,47 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
             return {};
         }
 
-        IndexCI.pData = GltfIndexData.pData;
-        IndexCI.Type  = IndexType;
-        IndexCount    = static_cast<Uint32>(GltfIndexData.Count);
+        const Uint64 DataSize = Uint64{GltfIndexData.Count} * IndexValueSize;
+        const auto   View     = GltfModel.GetBufferView(GltfIndexData.Accessor.GetBufferViewId());
+        const auto   Buffer   = GltfModel.GetBuffer(View.GetBufferId());
+        if (!RadientValidation::IsValidSubrange(GltfIndexData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
+            !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
+        {
+            return {};
+        }
+
+        pIndexBlob = CreateDocumentDataBlob(pDocument, GltfIndexData.pData, DataSize);
+        if (pIndexBlob == nullptr)
+            return {};
+
+        IndexCI.Type       = IndexType;
+        IndexCI.IndexCount = static_cast<Uint32>(GltfIndexData.Count);
     }
     else
     {
-        pOwner->GeneratedIndices.resize(VertexCount);
-        for (Uint32 Index = 0; Index < VertexCount; ++Index)
-            pOwner->GeneratedIndices[Index] = Index;
+        if (VertexCount == 0)
+            return {};
 
-        IndexCI.pData = pOwner->GeneratedIndices.data();
-        IndexCI.Type  = VT_UINT32;
-        IndexCount    = VertexCount;
+        RadientDataBlobCreateInfo BlobCI;
+        BlobCI.Size = Uint64{VertexCount} * sizeof(Uint32);
+        RefCntAutoPtr<IRadientMutableDataBlob> pMutableBlob;
+        if (CreateRadientMutableDataBlob(BlobCI, &pMutableBlob) != RADIENT_STATUS_OK)
+            return {};
+        void* pData = nullptr;
+        if (pMutableBlob->BeginWrite(&pData) != RADIENT_STATUS_OK)
+            return {};
+        auto* pIndices = static_cast<Uint32*>(pData);
+        for (Uint32 Index = 0; Index < VertexCount; ++Index)
+            pIndices[Index] = Index;
+        if (pMutableBlob->EndWrite() != RADIENT_STATUS_OK)
+            return {};
+
+        pIndexBlob         = pMutableBlob;
+        IndexCI.Type       = VT_UINT32;
+        IndexCI.IndexCount = VertexCount;
     }
 
-    if (IndexCount == 0)
-        return {};
-
-    IndexCI.IndexCount       = IndexCount;
-    IndexCI.pSourceDataOwner = pOwner;
+    IndexCI.pDataBlob = pIndexBlob;
 
     std::unique_ptr<RadientMeshIndexSource> pSource = std::make_unique<RadientMeshIndexSource>(IndexCI);
     if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)

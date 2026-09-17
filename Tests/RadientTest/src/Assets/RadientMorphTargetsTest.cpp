@@ -85,6 +85,7 @@ struct MorphMeshData
     const RadientVertexBufferLayoutDesc   VertexBuffer{};
     const RefCntAutoPtr<IRadientDataBlob> pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
     IRadientDataBlob* const               VertexData  = pVertexBlob;
+    const RefCntAutoPtr<IRadientDataBlob> pIndexBlob  = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
 
     RadientMeshCreateInfo MakeCreateInfo() const
     {
@@ -94,7 +95,7 @@ struct MorphMeshData
         CI.VertexCount      = static_cast<Uint32>(Positions.size());
         CI.pMorphTargets    = Targets.data();
         CI.MorphTargetCount = static_cast<Uint32>(Targets.size());
-        CI.pIndices         = Indices.data();
+        CI.pIndexBuffer     = pIndexBlob;
         CI.IndexCount       = static_cast<Uint32>(Indices.size());
         CI.IndexType        = RADIENT_INDEX_TYPE_UINT32;
         CI.pPrimitives      = &Primitive;

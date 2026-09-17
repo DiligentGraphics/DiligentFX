@@ -192,13 +192,17 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     BlobCI.pData = Colors;
     RefCntAutoPtr<IRadientDataBlob> pColorsBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pColorsBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(Indices);
+    BlobCI.pData = Indices;
+    RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob};
     const Uint32            VertexBufferCount = 2;
 
     MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
     MeshCI.ppVertexBuffers = VertexData;
     MeshCI.VertexCount     = 3;
-    MeshCI.pIndices        = Indices;
+    MeshCI.pIndexBuffer    = pIndexBlob;
     MeshCI.IndexCount      = 3;
     MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
     MeshCI.pPrimitives     = &PrimitiveCI;
@@ -332,6 +336,10 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     BlobCI.pData = Positions;
     RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(Indices);
+    BlobCI.pData = Indices;
+    RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob};
     const Uint32            VertexBufferCount = 1;
 
@@ -340,7 +348,7 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     MeshCI.VertexCount      = 3;
     MeshCI.pMorphTargets    = &MorphTargetCI;
     MeshCI.MorphTargetCount = 1;
-    MeshCI.pIndices         = Indices;
+    MeshCI.pIndexBuffer     = pIndexBlob;
     MeshCI.IndexCount       = 3;
     MeshCI.IndexType        = RADIENT_INDEX_TYPE_UINT32;
     MeshCI.pPrimitives      = &PrimitiveCI;

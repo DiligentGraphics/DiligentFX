@@ -112,10 +112,10 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
 ///
 /// If the primitive has an index accessor, it must use a supported tightly
 /// packed unsigned index type. If the primitive is not indexed, sequential
-/// Uint32 indices are generated for \p VertexCount vertices. The returned
-/// source borrows GLTF buffer spans or generated index storage, but keeps
-/// \p pDocument alive internally, so the caller may release its document
-/// reference after this function succeeds.
+/// Uint32 indices are generated directly in an owning data blob for \p VertexCount
+/// vertices. Accessor data is referenced without copying through a blob that
+/// retains \p pDocument. The returned source retains its blob and holds read
+/// access; the caller may release its document reference after this function succeeds.
 ///
 /// Returns a default MeshIndexSourceResult on failure.
 MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&               GltfModel,

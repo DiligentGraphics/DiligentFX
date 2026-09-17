@@ -90,8 +90,8 @@ soon as the call returns. Stack-local arrays and temporary strings are valid
 inputs. The object's copy remains valid for its lifetime, independently of the
 caller's original metadata.
 
-`CreateMesh` retains the supplied vertex data blobs and acquires read access
-before returning. It does not copy vertex bytes merely to retain the input.
+`CreateMesh` retains the supplied vertex and index data blobs and acquires read
+access before returning. It does not copy source bytes merely to retain the input.
 The layout arrays, semantic strings, and array of blob pointers can be released
 immediately after the call. The caller may also release its own blob references;
 Radient retains the blobs while it needs their source data.
@@ -142,6 +142,13 @@ is optional. A buffer with no attributes can supply a null blob pointer.
 Blob sizes and data are checked while read access is held. An active writer
 prevents mesh creation and results in `RADIENT_STATUS_INVALID_OPERATION`.
 
+`pIndexBuffer` supplies indices through an `IRadientDataBlob` with the same
+ownership and read-access rules. It contains `IndexCount` tightly packed `UINT16`
+or `UINT32` values, selected by `IndexType`, beginning at the blob's first byte.
+The blob must contain at least `IndexCount * sizeof(index type)` bytes; additional
+bytes are ignored. Index data does not use `VertexLayout`. Both the index buffer
+and a nonzero index count are required.
+
 Mesh creation requires a nonzero vertex count and a three-component `POSITION`.
 `JOINTS_0` and `WEIGHTS_0` appear together with four components each; joint
 indices use non-normalized unsigned integers or `FLOAT32` components. Source
@@ -154,7 +161,8 @@ feature by itself.
 
 For the explicit interleaved layout above, populate mutable blobs directly.
 Here `FillVertexBuffer` is caller code that writes `VertexCount` records in the
-layout for the specified buffer. Check each returned status in application code:
+layout for the specified buffer; `FillIndices` writes the mesh indices. Check
+each returned status in application code:
 
 ```cpp
 RefCntAutoPtr<IRadientMutableDataBlob> VertexBlobs[2];
@@ -172,11 +180,23 @@ for (Uint32 BufferIndex = 0; BufferIndex < 2; ++BufferIndex)
     VertexData[BufferIndex] = VertexBlobs[BufferIndex];
 }
 
+RefCntAutoPtr<IRadientMutableDataBlob> IndexBlob;
+RadientDataBlobCreateInfo IndexBlobCI;
+IndexBlobCI.Size = Uint64{IndexCount} * sizeof(Uint32);
+CreateRadientMutableDataBlob(IndexBlobCI, &IndexBlob);
+void* pIndexData = nullptr;
+IndexBlob->BeginWrite(&pIndexData);
+FillIndices(static_cast<Uint32*>(pIndexData), IndexCount);
+IndexBlob->EndWrite();
+
 RadientMeshCreateInfo MeshCI;
 MeshCI.VertexLayout = Layout;
 MeshCI.ppVertexBuffers = VertexData;
 MeshCI.VertexCount = VertexCount;
-// Set indices and primitives as usual, then call CreateMesh.
+MeshCI.pIndexBuffer = IndexBlob;
+MeshCI.IndexCount = IndexCount;
+MeshCI.IndexType = RADIENT_INDEX_TYPE_UINT32;
+// Set primitives, then call CreateMesh.
 ```
 
 Existing bytes can instead be supplied through read-only blobs. Use `COPY` to

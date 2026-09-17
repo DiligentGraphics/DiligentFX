@@ -850,15 +850,20 @@ void ExpectCreateMeshIndexSourcePacksIndices(const IndexData&              Indic
                                              std::initializer_list<Uint32> ExpectedIndices)
 {
     RadientGLTFConverter::MeshIndexSourceResult Result;
+    std::weak_ptr<GLTF::Document>               WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
-        GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
+        WeakDocument                              = pDocument;
+        GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
         Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pSource, nullptr);
+    EXPECT_FALSE(WeakDocument.expired());
     ExpectPackedIndices(*Result.pSource, ExpectedIndices);
+    Result.pSource.reset();
+    EXPECT_TRUE(WeakDocument.expired());
 }
 
 } // namespace
@@ -1375,14 +1380,17 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexSourcePacksUint32Indices)
 TEST(RadientGLTFConverterTest, CreateMeshIndexSourceGeneratesSequentialIndices)
 {
     RadientGLTFConverter::MeshIndexSourceResult Result;
+    std::weak_ptr<GLTF::Document>               WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()});
-        GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
+        WeakDocument                              = pDocument;
+        GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
         Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pSource, nullptr);
+    EXPECT_TRUE(WeakDocument.expired());
     ExpectPackedIndices(*Result.pSource, {0, 1, 2});
 }
 
@@ -1973,7 +1981,8 @@ TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
     Model.Animations.resize(1);
     GLTF::Animation& Animation = Model.Animations[0];
     Animation.Name             = "Punctual light properties";
-    const auto AddSampler      = [&Animation](Uint32                         ComponentCount,
+
+    const auto AddSampler = [&Animation](Uint32                         ComponentCount,
                                          std::initializer_list<Float32> Values) {
         const Uint32 SamplerIndex = static_cast<Uint32>(Animation.Samplers.size());
         Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);

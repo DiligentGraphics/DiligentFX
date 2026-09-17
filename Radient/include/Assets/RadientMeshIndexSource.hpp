@@ -28,33 +28,28 @@
 
 #include "GraphicsTypes.h"
 #include "RadientAssets.h"
+#include "Core/RadientDataBlobReadAccess.hpp"
 
-#include <memory>
 #include <string>
-#include <vector>
 
 namespace Diligent
 {
 
-/// Owns CPU-side index source data that is packed into a mesh index buffer.
+/// Retains read access to CPU-side index data that is packed into a mesh index buffer.
 class RadientMeshIndexSource final
 {
 public:
     struct CreateInfo
     {
-        /// Pointer to the first tightly packed source index.
-        const void* pData = nullptr;
+        /// Blob containing tightly packed source indices. The source retains the
+        /// blob and read access to its bytes until destruction, without copying.
+        IRadientDataBlob* pDataBlob = nullptr;
 
         /// Source index type. VT_UINT8, VT_UINT16, and VT_UINT32 are supported.
         VALUE_TYPE Type = VT_UNDEFINED;
 
         /// Number of source indices.
         Uint32 IndexCount = 0;
-
-        /// Keeps borrowed source memory alive.
-        /// If null, source data is copied into RadientMeshIndexSource.
-        /// If non-null, source data is borrowed and this owner must keep the source span alive.
-        std::shared_ptr<const void> pSourceDataOwner;
     };
 
     struct PackDestination
@@ -106,9 +101,7 @@ private:
     VALUE_TYPE   m_IndexType  = VT_UNDEFINED;
     const Uint8* m_pIndexData = nullptr;
 
-    std::vector<Uint8> m_Indices;
-
-    std::shared_ptr<const void> m_pSourceDataOwner;
+    RadientDataBlobReadAccess m_IndexBuffer;
 };
 
 } // namespace Diligent

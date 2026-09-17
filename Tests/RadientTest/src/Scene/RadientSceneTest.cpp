@@ -182,13 +182,14 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
     const auto              pColorsBlob      = MakeTestDataBlob(Colors, sizeof(Colors));
     const auto              pBoneIndicesBlob = MakeTestDataBlob(BoneIndices, sizeof(BoneIndices));
     const auto              pBoneWeightsBlob = MakeTestDataBlob(BoneWeights, sizeof(BoneWeights));
+    const auto              pIndexBlob       = MakeTestDataBlob(Indices, sizeof(Indices));
     IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob, pBoneIndicesBlob, pBoneWeightsBlob};
     const Uint32            VertexBufferCount = 4;
 
     MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
     MeshCI.ppVertexBuffers = VertexData;
     MeshCI.VertexCount     = 3;
-    MeshCI.pIndices        = Indices;
+    MeshCI.pIndexBuffer    = pIndexBlob;
     MeshCI.IndexCount      = 3;
     MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
     MeshCI.pPrimitives     = &PrimitiveCI;

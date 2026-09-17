@@ -210,8 +210,8 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     if (MeshCI.IndexCount == 0)
         return LogValidationError("RadientMeshCreateInfo", "IndexCount must not be zero.");
 
-    if (MeshCI.pIndices == nullptr)
-        return LogValidationError("RadientMeshCreateInfo", "pIndices must not be null.");
+    if (MeshCI.pIndexBuffer == nullptr)
+        return LogValidationError("RadientMeshCreateInfo", "pIndexBuffer must not be null.");
 
     if (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
         MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32)

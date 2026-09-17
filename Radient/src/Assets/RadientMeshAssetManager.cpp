@@ -1041,6 +1041,10 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (RADIENT_FAILED(pVertexSource->GetStatus()))
         return pVertexSource->GetStatus();
 
+    auto pIndexSource = std::make_unique<RadientMeshIndexSource>(MeshCI);
+    if (RADIENT_FAILED(pIndexSource->GetStatus()))
+        return pIndexSource->GetStatus();
+
     RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
     if (MeshCI.MorphTargetCount != 0)
     {
@@ -1078,7 +1082,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
 
     RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
     Status = CreateMeshIndexData(ThreadPool,
-                                 std::make_unique<RadientMeshIndexSource>(MeshCI),
+                                 std::move(pIndexSource),
                                  pIndexData.GetAddressOfEmpty());
     if (RADIENT_FAILED(Status) || pIndexData == nullptr)
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;

@@ -230,8 +230,23 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    // CreateMesh copies indices synchronously, so vertex blobs need not retain them.
-    const auto Indices = std::move(Mesh.Indices);
+    // Index and vertex blobs own their storage independently so either source can
+    // release its data as soon as processing completes.
+    auto         pIndices   = std::make_unique<std::vector<Uint32>>(std::move(Mesh.Indices));
+    const Uint32 IndexCount = static_cast<Uint32>(pIndices->size());
+
+    RadientDataBlobCreateInfo IndexBlobCI;
+    IndexBlobCI.pData     = pIndices->data();
+    IndexBlobCI.Size      = pIndices->size() * sizeof(Uint32);
+    IndexBlobCI.pUserData = pIndices.get();
+    IndexBlobCI.OnDestroy = [](void* pUserData) {
+        delete static_cast<std::vector<Uint32>*>(pUserData);
+    };
+    RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+    RADIENT_STATUS                  Status = CreateRadientDataBlob(IndexBlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pIndexBlob);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    pIndices.release();
 
     const auto         pMeshData = std::make_shared<MeshBuilder>(std::move(Mesh));
     const MeshBuilder& MeshData  = *pMeshData;
@@ -273,7 +288,7 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
         return Status;
     };
 
-    RADIENT_STATUS Status = AddVertexAttribute(MeshData.Positions, "POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    Status = AddVertexAttribute(MeshData.Positions, "POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
     if (Status != RADIENT_STATUS_OK)
         return Status;
     Status = AddVertexAttribute(MeshData.Normals, "NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
@@ -289,7 +304,7 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
     PrimitiveCI.Name       = Name;
     PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
+    PrimitiveCI.IndexCount = IndexCount;
     PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
@@ -297,8 +312,8 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
     MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
     MeshCI.ppVertexBuffers = VertexData;
     MeshCI.VertexCount     = static_cast<Uint32>(MeshData.Positions.size());
-    MeshCI.pIndices        = Indices.data();
-    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
+    MeshCI.pIndexBuffer    = pIndexBlob;
+    MeshCI.IndexCount      = IndexCount;
     MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
     MeshCI.pPrimitives     = &PrimitiveCI;
     MeshCI.PrimitiveCount  = 1;

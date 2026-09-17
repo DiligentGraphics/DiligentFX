@@ -116,6 +116,9 @@ struct MeshValidationData
                                                                 MakeTestDataBlob(BoneWeights.data(), sizeof(BoneWeights))}};
     std::array<IRadientDataBlob*, 3>               VertexData{{VertexBlobs[0], VertexBlobs[1], VertexBlobs[2]}};
 
+    RefCntAutoPtr<IRadientDataBlob> IndexBlob16 = MakeTestDataBlob(Indices16.data(), sizeof(Indices16));
+    RefCntAutoPtr<IRadientDataBlob> IndexBlob32 = MakeTestDataBlob(Indices32.data(), sizeof(Indices32));
+
     RadientMeshCreateInfo MakeMeshCI()
     {
         Primitive.FirstIndex = 0;
@@ -125,7 +128,7 @@ struct MeshValidationData
         MeshCI.VertexLayout    = {VertexAttributes.data(), 1, VertexBuffers.data(), 1};
         MeshCI.ppVertexBuffers = VertexData.data();
         MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
-        MeshCI.pIndices        = Indices16.data();
+        MeshCI.pIndexBuffer    = IndexBlob16;
         MeshCI.IndexCount      = static_cast<Uint32>(Indices16.size());
         MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT16;
         MeshCI.pPrimitives     = &Primitive;
@@ -169,8 +172,8 @@ TEST(RadientAssetValidationTest, ValidatesMeshCreateInfo)
     RadientMeshCreateInfo MeshCI = Data.MakeMeshCI();
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
 
-    MeshCI.pIndices  = Data.Indices32.data();
-    MeshCI.IndexType = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pIndexBuffer = Data.IndexBlob32;
+    MeshCI.IndexType    = RADIENT_INDEX_TYPE_UINT32;
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
 
     MeshCI.VertexLayout.AttributeCount = MeshCI.VertexLayout.BufferCount = 3;
@@ -188,8 +191,8 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMissingRequiredData)
     ExpectInvalidMeshCreateInfo("IndexCount must not be zero", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexCount = 0;
     });
-    ExpectInvalidMeshCreateInfo("pIndices must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
-        MeshCI.pIndices = nullptr;
+    ExpectInvalidMeshCreateInfo("pIndexBuffer must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+        MeshCI.pIndexBuffer = nullptr;
     });
     ExpectInvalidMeshCreateInfo("IndexType must be RADIENT_INDEX_TYPE_UINT16 or RADIENT_INDEX_TYPE_UINT32", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexType = RADIENT_INDEX_TYPE_NONE;
@@ -529,14 +532,17 @@ TEST(RadientAssetValidationTest, DefersMeshBlobAccessUntilSourceConstruction)
     auto                            CI = Data.MakeMeshCI();
     RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
     Data.VertexData[0] = pUncheckedBlob;
+    CI.pIndexBuffer    = pUncheckedBlob;
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
 
     auto pEmptyBlob    = MakeTestDataBlob(nullptr, 0);
     Data.VertexData[0] = pEmptyBlob;
+    CI.pIndexBuffer    = pEmptyBlob;
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
 
     auto pMutableBlob  = MakeTestMutableDataBlob(Data.Positions.data(), sizeof(Data.Positions));
     Data.VertexData[0] = pMutableBlob;
+    CI.pIndexBuffer    = pMutableBlob;
     void* pWrite       = nullptr;
     ASSERT_EQ(pMutableBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));

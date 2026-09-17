@@ -58,34 +58,11 @@ VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
     }
 }
 
-bool GetSourceIndexLayout(const void* pData,
-                          VALUE_TYPE  Type,
-                          Uint32      IndexCount,
-                          Uint32&     ElementSize)
-{
-    if (pData == nullptr)
-        return false;
-
-    if (!RadientMeshIndexSource::IsSupportedIndexType(Type))
-        return false;
-
-    ElementSize = GetValueSize(Type);
-    if (ElementSize == 0)
-        return false;
-
-    return IsProductRepresentable<Uint32>(IndexCount, ElementSize);
-}
-
 bool ValidateMeshIndexSourceCI(const RadientMeshIndexSource::CreateInfo& CI)
 {
-    if (CI.IndexCount == 0)
-        return false;
-
-    if (!IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32)))
-        return false;
-
-    Uint32 IndexElementSize = 0;
-    return GetSourceIndexLayout(CI.pData, CI.Type, CI.IndexCount, IndexElementSize);
+    return CI.pDataBlob != nullptr && CI.IndexCount != 0 &&
+        RadientMeshIndexSource::IsSupportedIndexType(CI.Type) &&
+        IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32));
 }
 
 void UpdateRawIfNotEmpty(XXH128State& Hasher, const void* pData, size_t Size)
@@ -120,7 +97,7 @@ RadientMeshIndexSource::RadientMeshIndexSource(const CreateInfo& CI)
 RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI)
 {
     CreateInfo CI;
-    CI.pData      = MeshCI.pIndices;
+    CI.pDataBlob  = MeshCI.pIndexBuffer;
     CI.Type       = GetSourceIndexType(MeshCI.IndexType);
     CI.IndexCount = MeshCI.IndexCount;
     Initialize(CI);
@@ -135,46 +112,31 @@ bool RadientMeshIndexSource::IsSupportedIndexType(VALUE_TYPE IndexType)
 
 void RadientMeshIndexSource::Initialize(const CreateInfo& CI)
 {
-    m_Status     = RADIENT_STATUS_OK;
-    m_IndexCount = 0;
-    m_IndexType  = VT_UNDEFINED;
-    m_pIndexData = nullptr;
-    m_Indices.clear();
-    m_pSourceDataOwner.reset();
-
     if (!ValidateMeshIndexSourceCI(CI))
+        return;
+
+    RadientDataBlobReadAccess Buffer{CI.pDataBlob};
+    if (!Buffer)
     {
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        m_Status = RADIENT_STATUS_INVALID_OPERATION;
         return;
     }
 
-    m_IndexCount = CI.IndexCount;
-    m_IndexType  = CI.Type;
+    const Uint64 DataSize = Uint64{CI.IndexCount} * GetValueSize(CI.Type);
+    if (!RadientValidation::IsAddressableSize(Buffer.GetSize()) || DataSize > Buffer.GetSize())
+        return;
 
-    Uint32 IndexElementSize = 0;
-    if (!GetSourceIndexLayout(CI.pData, m_IndexType, m_IndexCount, IndexElementSize))
+    if (Buffer.GetData() == nullptr)
     {
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+        m_Status = RADIENT_STATUS_INVALID_DATA;
         return;
     }
 
-    const bool BorrowSourceData = CI.pSourceDataOwner != nullptr;
-    if (BorrowSourceData)
-        m_pSourceDataOwner = CI.pSourceDataOwner;
-
-    const Uint8* const pSrcIndices = static_cast<const Uint8*>(CI.pData);
-    if (BorrowSourceData)
-    {
-        // Index data is tightly packed by contract, so the source bytes can be
-        // referenced directly when the source owner is retained.
-        m_pIndexData = pSrcIndices;
-    }
-    else
-    {
-        m_Indices.resize(size_t{m_IndexCount} * IndexElementSize);
-        std::memcpy(m_Indices.data(), pSrcIndices, m_Indices.size());
-        m_pIndexData = m_Indices.data();
-    }
+    m_IndexCount  = CI.IndexCount;
+    m_IndexType   = CI.Type;
+    m_pIndexData  = static_cast<const Uint8*>(Buffer.GetData());
+    m_IndexBuffer = std::move(Buffer);
+    m_Status      = RADIENT_STATUS_OK;
 }
 
 std::string RadientMeshIndexSource::MakeCacheKey() const

@@ -204,10 +204,10 @@ struct RadientMeshPrimitiveCreateInfo
     /// Optional primitive name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// First index in RadientMeshCreateInfo::pIndices.
+    /// Zero-based index element offset in RadientMeshCreateInfo::pIndexBuffer.
     Uint32 FirstIndex DEFAULT_INITIALIZER(0);
 
-    /// Number of indices in RadientMeshCreateInfo::pIndices.
+    /// Number of indices in RadientMeshCreateInfo::pIndexBuffer.
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
     /// Default material for this primitive.
@@ -218,11 +218,12 @@ typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
 
 /// CPU-side mesh creation attributes.
 ///
-/// Vertex data is described by VertexLayout and ppVertexBuffers. Radient copies
-/// the layout arrays and semantic strings and retains the referenced blobs before
-/// CreateMesh returns, including when uploads are asynchronous. The caller can
-/// then modify or release the descriptors and its blob references. Vertex bytes
-/// are read without copying the input buffers and remain under shared read access
+/// Vertex data is described by VertexLayout and ppVertexBuffers; index data is
+/// supplied through pIndexBuffer. Radient copies the layout arrays and semantic
+/// strings and retains the referenced blobs before CreateMesh returns, including
+/// when uploads are asynchronous. The caller can then modify or release the
+/// descriptors and its blob references. Vertex and index bytes are read without
+/// copying the input buffers and remain under shared read access
 /// until source processing finishes. End write access before calling CreateMesh;
 /// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Writes and resizing
 /// are unavailable while Radient is reading a mutable blob. OnLastReaderReleased
@@ -271,13 +272,23 @@ struct RadientMeshCreateInfo
     /// Number of elements in pMorphTargets.
     Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
 
-    /// Index data. Type is controlled by IndexType.
-    const void* pIndices DEFAULT_INITIALIZER(nullptr);
+    /// Blob containing IndexCount tightly packed indices starting at its first byte.
+    /// Required and non-null. IndexType determines the element size; the blob must
+    /// contain at least IndexCount * element size bytes. Additional bytes are ignored.
+    /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
+    /// Radient retains the blob and acquires shared read access before CreateMesh
+    /// returns, without copying the source bytes. Size and data are checked under
+    /// read access, which lasts until index processing finishes. Both read-only and
+    /// mutable blobs are accepted; an active writer returns RADIENT_STATUS_INVALID_OPERATION.
+    /// The caller may release its blob reference after CreateMesh returns. Reference
+    /// blobs retain their usual external-storage lifetime requirements.
+    IRadientDataBlob* pIndexBuffer DEFAULT_INITIALIZER(nullptr);
 
-    /// Number of indices.
+    /// Number of indices in pIndexBuffer. Must be nonzero.
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
-    /// Index type.
+    /// Encoding of each index in pIndexBuffer. Mesh creation requires UINT16 or
+    /// UINT32; the default NONE is invalid. The renderer selects its stored format.
     RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
 
     /// Mesh primitives.

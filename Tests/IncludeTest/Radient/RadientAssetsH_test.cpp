@@ -75,6 +75,7 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     MeshCI.VertexLayout.BufferCount                  = 1;
     MeshCI.ppVertexBuffers                           = &VertexData;
     MeshCI.VertexCount                               = 1;
+    MeshCI.pIndexBuffer                              = VertexData;
     (void)MeshCI;
     IRadientDataBlob* pBlob   = TextureLoadInfo.pDataBlob;
     TextureLoadInfo.pDataBlob = pBlob;
