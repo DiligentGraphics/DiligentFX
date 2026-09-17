@@ -26,6 +26,8 @@
 
 #include "Assets/RadientMeshVertexSource.hpp"
 
+#include "Assets/RadientAssetValidation.hpp"
+#include "Assets/RadientVertexLayout.hpp"
 #include "Core/RadientValidation.hpp"
 
 #include "GLTFVertexDataConverter.hpp"
@@ -33,7 +35,6 @@
 #include "XXH128Hasher.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <utility>
 
@@ -43,7 +44,7 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint32 MeshVertexSourceCacheKeyVersion = 1;
+constexpr Uint32 MeshVertexSourceCacheKeyVersion = 2;
 
 using RadientValidation::IsProductRepresentable;
 
@@ -61,7 +62,7 @@ bool GetSourceAttributeLayout(const RadientMeshVertexSource::SourceAttribute& At
                               Uint32&                                         Stride)
 {
     if (Attribute.Name == nullptr ||
-        Attribute.pData == nullptr ||
+        Attribute.pDataBlob == nullptr ||
         Attribute.Type <= VT_UNDEFINED ||
         Attribute.Type >= VT_NUM_TYPES ||
         Attribute.NumComponents == 0 ||
@@ -103,20 +104,20 @@ bool ValidateMeshVertexSourceCI(const RadientMeshVertexSource::CreateInfo& CI)
     return true;
 }
 
-bool ValidateRadientMeshVertexSourceCI(const RadientMeshCreateInfo& MeshCI)
+VALUE_TYPE GetVertexValueType(RADIENT_VERTEX_COMPONENT_TYPE Type)
 {
-    if (MeshCI.VertexCount == 0 ||
-        MeshCI.pPositions == nullptr)
+    switch (Type)
     {
-        return false;
+        case RADIENT_VERTEX_COMPONENT_TYPE_INT8: return VT_INT8;
+        case RADIENT_VERTEX_COMPONENT_TYPE_UINT8: return VT_UINT8;
+        case RADIENT_VERTEX_COMPONENT_TYPE_INT16: return VT_INT16;
+        case RADIENT_VERTEX_COMPONENT_TYPE_UINT16: return VT_UINT16;
+        case RADIENT_VERTEX_COMPONENT_TYPE_INT32: return VT_INT32;
+        case RADIENT_VERTEX_COMPONENT_TYPE_UINT32: return VT_UINT32;
+        case RADIENT_VERTEX_COMPONENT_TYPE_FLOAT16: return VT_FLOAT16;
+        case RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32: return VT_FLOAT32;
+        default: return VT_UNDEFINED;
     }
-
-    const bool HasBoneIndices = MeshCI.pBoneIndices0 != nullptr;
-    const bool HasBoneWeights = MeshCI.pBoneWeights0 != nullptr;
-    if (HasBoneIndices != HasBoneWeights)
-        return false;
-
-    return true;
 }
 
 bool IsAttributeName(const GLTF::VertexAttributeDesc& DstAttrib, const char* Name)
@@ -194,148 +195,114 @@ void UpdateString(XXH128State& Hasher, const Char* Str)
 
 RadientMeshVertexSource::RadientMeshVertexSource(const CreateInfo& CI)
 {
+    if (!ValidateMeshVertexSourceCI(CI))
+    {
+        LOG_ERROR_MESSAGE("Invalid Radient mesh vertex source create info.");
+        return;
+    }
     Initialize(CI);
 }
 
 RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI)
 {
-    if (!ValidateRadientMeshVertexSourceCI(MeshCI))
-    {
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+    ResolvedVertexLayout Resolved;
+    if (!ValidateMeshVertexData(MeshCI, Resolved).empty())
         return;
+
+    const RadientVertexLayoutDesc& Layout = MeshCI.VertexLayout;
+    std::vector<SourceAttribute>   Attributes(Layout.AttributeCount);
+    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
+    {
+        const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[AttributeIndex];
+
+        SourceAttribute& SrcAttribute = Attributes[AttributeIndex];
+        SrcAttribute.Name             = Attribute.Semantic;
+        SrcAttribute.Type             = GetVertexValueType(Attribute.ComponentType);
+        SrcAttribute.NumComponents    = static_cast<Uint8>(Attribute.ComponentCount);
+        SrcAttribute.IsNormalized     = Attribute.Normalized;
+        SrcAttribute.pDataBlob        = MeshCI.ppVertexBuffers[Attribute.BufferIndex];
+        SrcAttribute.Stride           = Resolved.BufferStrides[Attribute.BufferIndex];
+        SrcAttribute.ByteOffset       = Resolved.AttributeOffsets[AttributeIndex];
     }
 
-    std::array<SourceAttribute, 7> Attributes{};
+    Initialize(CreateInfo{Attributes.data(), Layout.AttributeCount, MeshCI.VertexCount}, &Layout);
+    if (RADIENT_FAILED(m_Status))
+        return;
 
-    Uint32 AttributeCount = 0;
-    auto   AddAttribute =
-        [&Attributes, &AttributeCount](const char* Name, VALUE_TYPE Type, Uint8 NumComponents, bool IsNormalized, const auto* pSrcData) //
+    // Preserve resolved public buffer layouts for the direct-copy compatibility check.
+    m_SrcBufferLayouts.resize(Layout.BufferCount);
+    for (Uint32 BufferIndex = 0; BufferIndex < Layout.BufferCount; ++BufferIndex)
+        m_SrcBufferLayouts[BufferIndex].ByteStride = Resolved.BufferStrides[BufferIndex];
+
+    m_SrcLayoutAttributes.assign(Layout.pAttributes, Layout.pAttributes + Layout.AttributeCount);
+    m_SrcAttributeNames.resize(Layout.AttributeCount);
+    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
     {
-        if (pSrcData == nullptr)
-            return;
-
-        SourceAttribute& Attribute = Attributes[AttributeCount++];
-        Attribute.Name             = Name;
-        Attribute.Type             = Type;
-        Attribute.NumComponents    = NumComponents;
-        Attribute.IsNormalized     = IsNormalized;
-        Attribute.pData            = pSrcData;
-        Attribute.Stride           = sizeof(*pSrcData);
-    };
-
-    AddAttribute(GLTF::PositionAttributeName, VT_FLOAT32, 3, false, MeshCI.pPositions);
-    AddAttribute(GLTF::NormalAttributeName, VT_FLOAT32, 3, false, MeshCI.pNormals);
-    AddAttribute(GLTF::TangentAttributeName, VT_FLOAT32, 4, false, MeshCI.pTangents);
-    AddAttribute(GLTF::Texcoord0AttributeName, VT_FLOAT32, 2, false, MeshCI.pTexCoords0);
-    AddAttribute(GLTF::VertexColorAttributeName, VT_UINT8, 4, true, MeshCI.pColors0);
-    AddAttribute(GLTF::JointsAttributeName, VT_UINT16, 4, false, MeshCI.pBoneIndices0);
-    AddAttribute(GLTF::WeightsAttributeName, VT_FLOAT32, 4, false, MeshCI.pBoneWeights0);
-
-    CreateInfo CI;
-    CI.pAttributes    = Attributes.data();
-    CI.AttributeCount = AttributeCount;
-    CI.VertexCount    = MeshCI.VertexCount;
-
-    Initialize(CI);
+        RadientVertexAttributeDesc& Attribute = m_SrcLayoutAttributes[AttributeIndex];
+        m_SrcAttributeNames[AttributeIndex]   = Attribute.Semantic;
+        Attribute.Semantic                    = m_SrcAttributeNames[AttributeIndex].c_str();
+        Attribute.ByteOffset                  = Resolved.AttributeOffsets[AttributeIndex];
+    }
 }
 
-void RadientMeshVertexSource::Initialize(const CreateInfo& CI)
+void RadientMeshVertexSource::Initialize(const CreateInfo& CI, const RadientVertexLayoutDesc* pLayout)
 {
-    m_Status = RADIENT_STATUS_OK;
-    m_SrcAttributes.clear();
-    m_VertexAttribFlags      = PBR_Renderer::PSO_FLAG_NONE;
-    m_VertexCount            = 0;
-    m_ActiveVertexBufferMask = 0;
-    m_DstAttributes.clear();
-    m_DstAttributeNames.clear();
-    m_DstAttributeDefaultValues.clear();
-    m_VertexStrides.clear();
-    m_VertexBufferDataSizes.clear();
-    m_pSourceDataOwner.reset();
-
-    if (!ValidateMeshVertexSourceCI(CI))
-    {
-        LOG_ERROR_MESSAGE("Invalid Radient mesh vertex source create info.");
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
-        return;
-    }
-
-    m_VertexCount = CI.VertexCount;
-
-    const bool BorrowSourceData = CI.pSourceDataOwner != nullptr;
-    if (BorrowSourceData)
-        m_pSourceDataOwner = CI.pSourceDataOwner;
-
+    decltype(m_SrcAttributes)              SrcAttributes;
+    std::vector<RadientDataBlobReadAccess> Buffers(pLayout != nullptr ? pLayout->BufferCount : CI.AttributeCount);
     for (Uint32 AttributeIndex = 0; AttributeIndex < CI.AttributeCount; ++AttributeIndex)
     {
-        const SourceAttribute& Attribute = CI.pAttributes[AttributeIndex];
+        const SourceAttribute& Attribute   = CI.pAttributes[AttributeIndex];
+        const Uint32           ElementSize = GetValueSize(Attribute.Type) * Attribute.NumComponents;
+        const Uint32           SrcStride   = Attribute.Stride != 0 ? Attribute.Stride : ElementSize;
+        const Uint32           BufferIndex = pLayout != nullptr ? pLayout->pAttributes[AttributeIndex].BufferIndex : AttributeIndex;
 
-        Uint32 ElementSize = 0;
-        Uint32 SrcStride   = 0;
-        if (!GetSourceAttributeLayout(Attribute, m_VertexCount, ElementSize, SrcStride))
+        auto& Buffer = Buffers[BufferIndex];
+        if (!Buffer)
         {
-            LOG_ERROR_MESSAGE("Invalid source vertex attribute at index ", AttributeIndex,
-                              ": name='", Attribute.Name != nullptr ? Attribute.Name : "<null>",
-                              "', value type=", static_cast<Int32>(Attribute.Type),
-                              ", component count=", static_cast<Uint32>(Attribute.NumComponents),
-                              ", stride=", Attribute.Stride, ".");
-            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            Buffer = RadientDataBlobReadAccess{Attribute.pDataBlob};
+            if (!Buffer)
+            {
+                m_Status = RADIENT_STATUS_INVALID_OPERATION;
+                return;
+            }
+        }
+        const Uint64 DataSize = Uint64{CI.VertexCount - 1} * SrcStride + ElementSize;
+        if (!RadientValidation::IsAddressableSize(Buffer.GetSize()) ||
+            Attribute.ByteOffset > Buffer.GetSize() || DataSize > Buffer.GetSize() - Attribute.ByteOffset)
+        {
+            return;
+        }
+        if (Buffer.GetData() == nullptr)
+        {
+            m_Status = RADIENT_STATUS_INVALID_DATA;
             return;
         }
 
         SrcAttributeData Data;
-        Data.Type                    = Attribute.Type;
-        Data.NumComponents           = Attribute.NumComponents;
-        Data.IsNormalized            = Attribute.IsNormalized;
-        Data.ElementSize             = ElementSize;
-        const Uint8* const pSrcBytes = static_cast<const Uint8*>(Attribute.pData);
+        Data.Type          = Attribute.Type;
+        Data.NumComponents = Attribute.NumComponents;
+        Data.IsNormalized  = Attribute.IsNormalized;
+        Data.ElementSize   = ElementSize;
+        Data.Stride        = SrcStride;
+        Data.pData         = static_cast<const Uint8*>(Buffer.GetData()) + static_cast<size_t>(Attribute.ByteOffset);
 
-        if (BorrowSourceData)
-        {
-            // Keep the original source layout; the owner supplied in CreateInfo
-            // keeps these spans alive.
-            Data.Stride = SrcStride;
-            Data.pData  = pSrcBytes;
-        }
-        else
-        {
-            // Store each copied attribute tightly packed, even when it came
-            // from an interleaved source vertex stream.
-            Data.Stride = ElementSize;
-            Data.OwnedBytes.resize(size_t{m_VertexCount} * ElementSize);
-
-            Uint8* const pDstBytes = Data.OwnedBytes.data();
-            if (SrcStride == ElementSize)
-            {
-                std::memcpy(pDstBytes, pSrcBytes, Data.OwnedBytes.size());
-            }
-            else
-            {
-                for (Uint32 Vertex = 0; Vertex < m_VertexCount; ++Vertex)
-                {
-                    std::memcpy(pDstBytes + size_t{Vertex} * ElementSize,
-                                pSrcBytes + size_t{Vertex} * SrcStride,
-                                ElementSize);
-                }
-            }
-            Data.pData = Data.OwnedBytes.data();
-        }
-
-        auto [It, Inserted] = m_SrcAttributes.emplace(HashMapStringKey{Attribute.Name, true}, std::move(Data));
+        auto [It, Inserted] = SrcAttributes.emplace(HashMapStringKey{Attribute.Name, true}, std::move(Data));
         if (!Inserted)
         {
             LOG_ERROR_MESSAGE("Duplicate source vertex attribute '", Attribute.Name, "'.");
-            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
             return;
         }
     }
 
-    if (m_SrcAttributes.find(GLTF::PositionAttributeName) == m_SrcAttributes.end())
+    if (SrcAttributes.find(GLTF::PositionAttributeName) == SrcAttributes.end())
     {
         LOG_ERROR_MESSAGE("Radient mesh vertex source requires source POSITION attribute.");
-        m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
     }
+    m_VertexCount   = CI.VertexCount;
+    m_SrcAttributes = std::move(SrcAttributes);
+    m_SrcBuffers    = std::move(Buffers);
+    m_Status        = RADIENT_STATUS_OK;
 }
 
 std::string RadientMeshVertexSource::MakeCacheKey() const
@@ -527,8 +494,16 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
     {
         // Only buffers with source-backed attributes are uploaded. Default-only
         // attributes in inactive buffers do not create GPU vertex buffers.
-        if (m_SrcAttributes.find(DstAttrib.Name) != m_SrcAttributes.end())
-            ActiveVertexBufferMask |= Uint32{1} << DstAttrib.BufferId;
+        const auto SrcAttribIt = m_SrcAttributes.find(DstAttrib.Name);
+        if (SrcAttribIt == m_SrcAttributes.end())
+            continue;
+        if (!GLTF::VertexDataConverter::IsConversionSupported(SrcAttribIt->second.Type, DstAttrib.ValueType))
+        {
+            LOG_ERROR_MESSAGE("Unsupported vertex attribute conversion for '", DstAttrib.Name, "'.");
+            m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
+            return m_Status;
+        }
+        ActiveVertexBufferMask |= Uint32{1} << DstAttrib.BufferId;
     }
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
@@ -616,6 +591,55 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
     m_VertexStrides          = std::move(VertexStrides);
     m_VertexBufferDataSizes  = std::move(VertexBufferDataSizes);
 
+    // Find source buffers whose layouts already match the renderer's destination
+    // buffers. Each matching source index lets PackVertexData use one memcpy;
+    // ~0u selects attribute-by-attribute packing and conversion instead. Temporary
+    // destination descriptors adapt the renderer's layout for the compatibility check.
+    m_CopySourceBufferIndices.assign(m_VertexStrides.size(), ~0u);
+    if (!m_SrcLayoutAttributes.empty())
+    {
+        const RadientVertexLayoutDesc SourceLayout{
+            m_SrcLayoutAttributes.data(),
+            static_cast<Uint32>(m_SrcLayoutAttributes.size()),
+            m_SrcBufferLayouts.data(),
+            static_cast<Uint32>(m_SrcBufferLayouts.size()),
+        };
+        for (Uint32 BufferIndex = 0; BufferIndex < m_VertexStrides.size(); ++BufferIndex)
+        {
+            if (!IsVertexBufferActive(BufferIndex))
+                continue;
+            std::vector<RadientVertexAttributeDesc> Attributes;
+            for (const auto& Attribute : m_DstAttributes)
+            {
+                if (Attribute.BufferId == BufferIndex)
+                {
+                    Attributes.push_back({
+                        Attribute.Name,
+                        0,
+                        Attribute.RelativeOffset,
+                        RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+                        Attribute.NumComponents,
+                        False,
+                    });
+                }
+            }
+            const RadientVertexBufferLayoutDesc Buffer{m_VertexStrides[BufferIndex]};
+            const RadientVertexLayoutDesc       DestinationLayout{Attributes.data(), static_cast<Uint32>(Attributes.size()), &Buffer, 1};
+            for (Uint32 SourceBuffer = 0; SourceBuffer < m_SrcBuffers.size(); ++SourceBuffer)
+            {
+                // A whole-buffer copy requires the full span, including padding
+                // after the final vertex. Sources that omit this padding remain
+                // valid for attribute-by-attribute packing, but not for this copy.
+                if (m_SrcBuffers[SourceBuffer].GetSize() >= m_VertexBufferDataSizes[BufferIndex] &&
+                    AreVertexBuffersCompatible(SourceLayout, SourceBuffer, DestinationLayout, 0))
+                {
+                    m_CopySourceBufferIndices[BufferIndex] = SourceBuffer;
+                    break;
+                }
+            }
+        }
+    }
+
     return RADIENT_STATUS_OK;
 }
 
@@ -633,6 +657,13 @@ RADIENT_STATUS RadientMeshVertexSource::PackVertexData(Uint32          VertexBuf
         Destination.DataSize < m_VertexBufferDataSizes[VertexBufferIndex])
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    const Uint32 SourceBuffer = m_CopySourceBufferIndices[VertexBufferIndex];
+    if (SourceBuffer != ~0u)
+    {
+        std::memcpy(Destination.pData, m_SrcBuffers[SourceBuffer].GetData(), m_VertexBufferDataSizes[VertexBufferIndex]);
+        return RADIENT_STATUS_OK;
     }
 
     // Missing attributes without explicit defaults remain zero-filled.

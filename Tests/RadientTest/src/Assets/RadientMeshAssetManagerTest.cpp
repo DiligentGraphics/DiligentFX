@@ -33,6 +33,7 @@
 #include "ThreadSignal.hpp"
 #include "TestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
 #include "gtest/gtest.h"
 
@@ -83,7 +84,7 @@ struct MeshSources
     std::unique_ptr<RadientMeshIndexSource>  pIndexSource;
 };
 
-MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2})
+MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientDataBlob* pBlob = nullptr)
 {
     // Leave destination vertex attributes unset. RadientMeshAssetManager should
     // resolve the default GLTF layout before computing the mesh cache key.
@@ -91,12 +92,32 @@ MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2})
         RadientFloat3{0.f, 0.f, 0.f},
         RadientFloat3{1.f, 0.f, 0.f},
         RadientFloat3{0.f, 1.f, 0.f}};
-    RadientMeshCreateInfo MeshCI{};
-    MeshCI.pPositions  = Positions.data();
-    MeshCI.VertexCount = static_cast<Uint32>(Positions.size());
-    MeshCI.pIndices    = Indices.data();
-    MeshCI.IndexCount  = static_cast<Uint32>(Indices.size());
-    MeshCI.IndexType   = RADIENT_INDEX_TYPE_UINT32;
+    RadientMeshCreateInfo            MeshCI{};
+    const RadientVertexAttributeDesc VertexAttributes[]{
+        {
+            "POSITION",
+            0,
+            RADIENT_VERTEX_AUTO_OFFSET,
+            RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+            3,
+            false,
+        },
+    };
+    const RadientVertexBufferLayoutDesc VertexBuffers[1]{};
+
+    const RefCntAutoPtr<IRadientDataBlob> pVertexBlob = pBlob != nullptr ?
+        RefCntAutoPtr<IRadientDataBlob>{pBlob} :
+        Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
+
+    IRadientDataBlob* const VertexData[]{pVertexBlob};
+    const Uint32            VertexBufferCount = 1;
+
+    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.ppVertexBuffers = VertexData;
+    MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
+    MeshCI.pIndices        = Indices.data();
+    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
 
     MeshSources Sources;
     Sources.pVertexSource = std::make_unique<RadientMeshVertexSource>(MeshCI);
@@ -302,6 +323,95 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
               RadientMeshAssetManager::GetMeshIndexDataPayload(pDefaultMesh, 0));
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, RetainsQueuedVertexBlobUntilWorkerFinishes)
+{
+    auto   pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto   pMeshManager = RadientMeshAssetManager::Create({});
+    Uint32 ReadReleases = 0;
+    auto   pBlob        = Testing::MakeTestMutableDataBlob(nullptr, 3 * sizeof(RadientFloat3), Testing::CountBlobReadReleases, &ReadReleases);
+    ASSERT_NE(pBlob, nullptr);
+    RefCntWeakPtr<IRadientDataBlob>       WeakBlob{pBlob.RawPtr()};
+    MeshSources                           Sources = MakeMeshSources({0, 1, 2}, pBlob);
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+    ASSERT_EQ(CreateMeshVertexDataHandle(*pMeshManager, *pThreadPool, std::move(Sources.pVertexSource), pVertexData),
+              RADIENT_STATUS_PENDING);
+    void* pWriteData = nullptr;
+    EXPECT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pBlob->Resize(4 * sizeof(RadientFloat3)), RADIENT_STATUS_INVALID_OPERATION);
+    pBlob.Release();
+    EXPECT_NE(WeakBlob.Lock(), nullptr);
+    EXPECT_EQ(ReadReleases, 0u);
+    DrainThreadPool(*pThreadPool);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pVertexData), RADIENT_STATUS_OK);
+    EXPECT_EQ(ReadReleases, 1u);
+    EXPECT_EQ(WeakBlob.Lock(), nullptr);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, RejectsActiveVertexBlobWriterBeforeQueuingLoad)
+{
+    auto   pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto   pMeshManager = RadientMeshAssetManager::Create({});
+    Uint32 ReadReleases = 0;
+    auto   pBlob        = Testing::MakeTestMutableDataBlob(nullptr, 3 * sizeof(RadientFloat3), Testing::CountBlobReadReleases, &ReadReleases);
+    ASSERT_NE(pBlob, nullptr);
+    const RadientVertexAttributeDesc    Attribute{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
+    const RadientVertexBufferLayoutDesc BufferLayout{};
+    IRadientDataBlob* const             VertexBuffers[]{pBlob};
+    const Uint32                        Indices[]{0, 1, 2};
+    RadientMeshPrimitiveCreateInfo      Primitive;
+    Primitive.IndexCount = 3;
+    RadientMeshCreateInfo MeshCI;
+    MeshCI.VertexLayout    = {&Attribute, 1, &BufferLayout, 1};
+    MeshCI.ppVertexBuffers = VertexBuffers;
+    MeshCI.VertexCount     = 3;
+    MeshCI.pIndices        = Indices;
+    MeshCI.IndexCount      = 3;
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives     = &Primitive;
+    MeshCI.PrimitiveCount  = 1;
+
+    void* pWriteData = nullptr;
+    ASSERT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_EQ(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMesh, nullptr);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    EXPECT_EQ(ReadReleases, 0u);
+    ASSERT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh), RADIENT_STATUS_PENDING);
+    DrainThreadPool(*pThreadPool);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(ReadReleases, 1u);
+    EXPECT_EQ(pBlob->Resize(4 * sizeof(RadientFloat3)), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, ReleasesVertexBlobReadAccessWhenEnqueueFails)
+{
+    auto pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    pThreadPool->StopThreads();
+    auto   pMeshManager = RadientMeshAssetManager::Create({});
+    Uint32 ReadReleases = 0;
+    auto   pBlob        = Testing::MakeTestMutableDataBlob(nullptr, 3 * sizeof(RadientFloat3), Testing::CountBlobReadReleases, &ReadReleases);
+    ASSERT_NE(pBlob, nullptr);
+    MeshSources                           Sources = MakeMeshSources({0, 1, 2}, pBlob);
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+    {
+        Testing::TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
+        EXPECT_EQ(CreateMeshVertexDataHandle(*pMeshManager, *pThreadPool, std::move(Sources.pVertexSource), pVertexData),
+                  RADIENT_STATUS_INVALID_OPERATION);
+    }
+    EXPECT_EQ(ReadReleases, 1u);
+    EXPECT_EQ(pBlob->Resize(4 * sizeof(RadientFloat3)), RADIENT_STATUS_OK);
+    void* pWriteData = nullptr;
+    EXPECT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
 }
 
 TEST(RadientMeshAssetManagerTest, ConcurrentIdenticalSourcesSharePayloads)

@@ -815,14 +815,17 @@ void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, 
         Attributes.emplace_back(Attribute);
 
     RadientGLTFConverter::MeshVertexSourceResult Result;
+    std::weak_ptr<GLTF::Document>                WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument(Attributes);
-        GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
+        WeakDocument                              = pDocument;
+        GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
         Result = RadientGLTFConverter::CreateMeshVertexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pSource, nullptr);
+    EXPECT_FALSE(WeakDocument.expired());
     EXPECT_EQ(Result.pSource->GetVertexCount(), TestVertexCount);
 
     const std::vector<GLTF::VertexAttributeDesc> DstAttributes = MakeDestinationLayout(Attribute.Name.c_str());
@@ -832,6 +835,9 @@ void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, 
     const Uint32             BufferIndex = Attribute.Name == GLTF::PositionAttributeName ? 0u : 1u;
     const std::vector<Uint8> Buffer      = PackAttributeBuffer(*Result.pSource, BufferIndex);
     Validate(Buffer);
+
+    Result.pSource.reset();
+    EXPECT_TRUE(WeakDocument.expired());
 }
 
 template <typename IndexType, size_t Size>

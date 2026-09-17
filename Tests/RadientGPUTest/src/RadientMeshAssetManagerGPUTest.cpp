@@ -177,15 +177,32 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name           = "Radient mesh waiting for material";
-    MeshCI.pPositions     = Positions;
-    MeshCI.pColors0       = Colors;
-    MeshCI.VertexCount    = 3;
-    MeshCI.pIndices       = Indices;
-    MeshCI.IndexCount     = 3;
-    MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives    = &PrimitiveCI;
-    MeshCI.PrimitiveCount = 1;
+    MeshCI.Name = "Radient mesh waiting for material";
+    const RadientVertexAttributeDesc VertexAttributes[]{
+        {"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false},
+        {"COLOR_0", 1, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true}};
+    const RadientVertexBufferLayoutDesc VertexBuffers[2]{};
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Positions);
+    BlobCI.pData = Positions;
+    RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(Colors);
+    BlobCI.pData = Colors;
+    RefCntAutoPtr<IRadientDataBlob> pColorsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pColorsBlob), RADIENT_STATUS_OK);
+    IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob};
+    const Uint32            VertexBufferCount = 2;
+
+    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.ppVertexBuffers = VertexData;
+    MeshCI.VertexCount     = 3;
+    MeshCI.pIndices        = Indices;
+    MeshCI.IndexCount      = 3;
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives     = &PrimitiveCI;
+    MeshCI.PrimitiveCount  = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));
@@ -305,8 +322,21 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     PrimitiveCI.IndexCount = 3;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name             = "Radient morph target GPU upload";
-    MeshCI.pPositions       = Positions;
+    MeshCI.Name = "Radient morph target GPU upload";
+    const RadientVertexAttributeDesc VertexAttributes[]{
+        {"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false}};
+    const RadientVertexBufferLayoutDesc VertexBuffers[1]{};
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Positions);
+    BlobCI.pData = Positions;
+    RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+    IRadientDataBlob* const VertexData[]{pPositionsBlob};
+    const Uint32            VertexBufferCount = 1;
+
+    MeshCI.VertexLayout     = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.ppVertexBuffers  = VertexData;
     MeshCI.VertexCount      = 3;
     MeshCI.pMorphTargets    = &MorphTargetCI;
     MeshCI.MorphTargetCount = 1;

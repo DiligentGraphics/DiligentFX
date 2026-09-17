@@ -28,10 +28,13 @@
 
 #include "RadientAssets.h"
 
+#include <string>
+
 namespace Diligent
 {
 
 struct RadientVertexLayoutDesc;
+struct ResolvedVertexLayout;
 
 /// Checks memory-layout structure, encodings, unique nonempty semantics,
 /// strides, buffer indices, and attribute ranges within vertex records.
@@ -44,6 +47,15 @@ struct RadientVertexLayoutDesc;
 /// Unaligned and aliased attributes are valid descriptions. Returns false
 /// without logging for invalid layouts, including compatibility queries.
 bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout);
+
+/// Validates mesh vertex metadata and resolves its layout. Checks required
+/// semantics, skinning pairs, and non-null referenced blobs without acquiring
+/// access or inspecting blob storage. The vertex source checks readable ranges
+/// after acquiring read access. Returns an empty string on success or an error
+/// message on failure. Does not log or retain input; Resolved is only usable on
+/// success.
+std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
+                                   ResolvedVertexLayout&        Resolved);
 
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI);
 bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo);

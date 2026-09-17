@@ -1829,19 +1829,16 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
     const auto PositionData = GLTF::GetGltfDataInfo(GltfModel, *pPositionAccessor);
     if (PositionData.pData == nullptr ||
         PositionData.ByteStride <= 0 ||
-        PositionData.Count == 0)
+        PositionData.Count == 0 ||
+        PositionData.Count > (std::numeric_limits<Uint32>::max)())
     {
         return {};
     }
 
-    float3 BBMin;
-    float3 BBMax;
-    if (!GLTF::ComputePrimitiveBoundingBox(PositionData, BBMin, BBMax))
-        return {};
-
-    std::shared_ptr<MeshSourceDataOwner>                  pOwner = std::make_shared<MeshSourceDataOwner>(pDocument);
     std::vector<RadientMeshVertexSource::SourceAttribute> SourceAttributes;
+    std::vector<RefCntAutoPtr<IRadientDataBlob>>          SourceBlobs;
     SourceAttributes.reserve(GLTF::DefaultVertexAttributes.size());
+    SourceBlobs.reserve(GLTF::DefaultVertexAttributes.size());
 
     const Uint32 VertexCount = static_cast<Uint32>(PositionData.Count);
 
@@ -1855,29 +1852,70 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
         const auto GltfData = GLTF::GetGltfDataInfo(GltfModel, *pAccessor);
         if (GltfData.pData == nullptr ||
             GltfData.ByteStride <= 0 ||
-            static_cast<Uint32>(GltfData.Count) != VertexCount)
+            GltfData.Count != VertexCount)
         {
             return {};
         }
 
-        RadientMeshVertexSource::SourceAttribute& SrcAttrib = SourceAttributes.emplace_back();
+        const VALUE_TYPE ComponentType = GltfData.Accessor.GetComponentType();
+        const int        NumComponents = GltfData.Accessor.GetNumComponents();
+        const Uint32     ComponentSize = GetValueSize(ComponentType);
+        if (ComponentSize == 0 || NumComponents < 1 || NumComponents > 4)
+            return {};
 
-        SrcAttrib.Name          = DstAttrib.Name;
-        SrcAttrib.Type          = GltfData.Accessor.GetComponentType();
-        SrcAttrib.NumComponents = static_cast<Uint8>(GltfData.Accessor.GetNumComponents());
-        SrcAttrib.IsNormalized  = GltfData.Accessor.IsNormalized();
-        SrcAttrib.pData         = GltfData.pData;
-        SrcAttrib.Stride        = static_cast<Uint32>(GltfData.ByteStride);
+        const Uint64 ElementSize = Uint64{ComponentSize} * static_cast<Uint32>(NumComponents);
+        Uint64       DataSize    = 0;
+        if (static_cast<Uint64>(GltfData.ByteStride) < ElementSize ||
+            !CheckedMultiply(VertexCount - 1u, static_cast<Uint64>(GltfData.ByteStride), DataSize) ||
+            DataSize > (std::numeric_limits<Uint64>::max)() - ElementSize)
+        {
+            return {};
+        }
+        DataSize += ElementSize;
+
+        const auto View   = GltfModel.GetBufferView(GltfData.Accessor.GetBufferViewId());
+        const auto Buffer = GltfModel.GetBuffer(View.GetBufferId());
+        if (!RadientValidation::IsValidSubrange(GltfData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
+            !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
+        {
+            return {};
+        }
+
+        auto                      pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
+        RadientDataBlobCreateInfo BlobCI;
+        BlobCI.pData     = GltfData.pData;
+        BlobCI.Size      = DataSize;
+        BlobCI.pUserData = pDocumentOwner.get();
+        BlobCI.OnDestroy = [](void* pUserData) {
+            delete static_cast<std::shared_ptr<const GLTF::Document>*>(pUserData);
+        };
+        RefCntAutoPtr<IRadientDataBlob> pBlob;
+        if (CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob) != RADIENT_STATUS_OK)
+            return {};
+        pDocumentOwner.release();
+
+        RadientMeshVertexSource::SourceAttribute& SrcAttrib = SourceAttributes.emplace_back();
+        SrcAttrib.Name                                      = DstAttrib.Name;
+        SrcAttrib.Type                                      = ComponentType;
+        SrcAttrib.NumComponents                             = static_cast<Uint8>(NumComponents);
+        SrcAttrib.IsNormalized                              = GltfData.Accessor.IsNormalized();
+        SrcAttrib.pDataBlob                                 = pBlob;
+        SrcAttrib.Stride                                    = static_cast<Uint32>(GltfData.ByteStride);
+        SourceBlobs.push_back(std::move(pBlob));
     }
 
     if (SourceAttributes.empty())
         return {};
 
+    float3 BBMin;
+    float3 BBMax;
+    if (!GLTF::ComputePrimitiveBoundingBox(PositionData, BBMin, BBMax))
+        return {};
+
     RadientMeshVertexSource::CreateInfo VertexCI;
-    VertexCI.pAttributes      = SourceAttributes.data();
-    VertexCI.AttributeCount   = static_cast<Uint32>(SourceAttributes.size());
-    VertexCI.VertexCount      = VertexCount;
-    VertexCI.pSourceDataOwner = pOwner;
+    VertexCI.pAttributes    = SourceAttributes.data();
+    VertexCI.AttributeCount = static_cast<Uint32>(SourceAttributes.size());
+    VertexCI.VertexCount    = VertexCount;
 
     std::unique_ptr<RadientMeshVertexSource> pSource = std::make_unique<RadientMeshVertexSource>(VertexCI);
     if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)

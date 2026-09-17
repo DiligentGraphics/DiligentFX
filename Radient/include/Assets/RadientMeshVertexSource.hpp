@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Core/RadientDataBlobReadAccess.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
 #include "GraphicsTypes.h"
@@ -42,7 +43,7 @@
 namespace Diligent
 {
 
-/// Owns CPU-side vertex attribute source data and packs it into destination vertex buffers.
+/// Retains read access to CPU vertex data and packs it into renderer-selected buffers.
 class RadientMeshVertexSource final
 {
 public:
@@ -60,16 +61,19 @@ public:
         /// Indicates if integer source values are normalized.
         bool IsNormalized = false;
 
-        /// Pointer to the first attribute element.
-        const void* pData = nullptr;
+        /// Blob containing the attribute elements. Retained with read access.
+        IRadientDataBlob* pDataBlob = nullptr;
 
         /// Distance, in bytes, between consecutive elements. Zero means tightly packed.
         Uint32 Stride = 0;
+
+        /// Offset of the first attribute element from the blob's first byte.
+        Uint64 ByteOffset = 0;
     };
 
     struct CreateInfo
     {
-        /// Source vertex attributes.
+        /// Source attributes. Metadata and names are copied; blobs retain read access.
         const SourceAttribute* pAttributes = nullptr;
 
         /// Number of source vertex attributes.
@@ -77,11 +81,6 @@ public:
 
         /// Number of source vertices.
         Uint32 VertexCount = 0;
-
-        /// Keeps borrowed source memory alive.
-        /// If null, source data is copied into RadientMeshVertexSource.
-        /// If non-null, source data is borrowed and this owner must keep all source spans alive.
-        std::shared_ptr<const void> pSourceDataOwner;
     };
 
     struct PackDestination
@@ -158,7 +157,7 @@ public:
 
     RADIENT_STATUS PackVertexData(Uint32 VertexBufferIndex, PackDestination Destination) const noexcept;
 
-    /// Returns a key for packed GPU vertex data.
+    /// Returns a key for vertex attribute data and destination layout, excluding padding.
     std::string MakeCacheKey() const;
 
 private:
@@ -171,11 +170,12 @@ private:
         Uint32     Stride        = 0;
 
         const Uint8* pData = nullptr;
-
-        std::vector<Uint8> OwnedBytes;
     };
 
-    void Initialize(const CreateInfo& CI);
+    // Both constructors validate their metadata before calling this function.
+    // pLayout supplies public buffer-slot mapping; source offsets and strides are
+    // already resolved in CI. Without a layout, each attribute has its own slot.
+    void Initialize(const CreateInfo& CI, const RadientVertexLayoutDesc* pLayout = nullptr);
 
     void VerifyVertexAttributesSet() const
     {
@@ -201,7 +201,14 @@ private:
     std::vector<Uint32>                    m_VertexStrides;
     std::vector<Uint32>                    m_VertexBufferDataSizes;
 
-    std::shared_ptr<const void> m_pSourceDataOwner;
+    // Public layout metadata is copied and resolved; source bytes stay in the blobs.
+    std::vector<RadientVertexAttributeDesc>    m_SrcLayoutAttributes;
+    std::vector<std::string>                   m_SrcAttributeNames;
+    std::vector<RadientVertexBufferLayoutDesc> m_SrcBufferLayouts;
+    std::vector<RadientDataBlobReadAccess>     m_SrcBuffers;
+
+    // One source buffer index per destination buffer; ~0u selects conversion.
+    std::vector<Uint32> m_CopySourceBufferIndices;
 };
 
 } // namespace Diligent

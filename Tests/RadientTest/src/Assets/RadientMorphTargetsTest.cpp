@@ -32,6 +32,7 @@
 #include "Scene/RadientSceneState.hpp"
 #include "RadientAnimation.h"
 #include "ThreadPool.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
 #include "gtest/gtest.h"
 
@@ -80,10 +81,16 @@ struct MorphMeshData
         Primitive.IndexCount = static_cast<Uint32>(Indices.size());
     }
 
+    const RadientVertexAttributeDesc      VertexAttribute{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
+    const RadientVertexBufferLayoutDesc   VertexBuffer{};
+    const RefCntAutoPtr<IRadientDataBlob> pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
+    IRadientDataBlob* const               VertexData  = pVertexBlob;
+
     RadientMeshCreateInfo MakeCreateInfo() const
     {
         RadientMeshCreateInfo CI{};
-        CI.pPositions       = Positions.data();
+        CI.VertexLayout     = {&VertexAttribute, 1, &VertexBuffer, 1};
+        CI.ppVertexBuffers  = &VertexData;
         CI.VertexCount      = static_cast<Uint32>(Positions.size());
         CI.pMorphTargets    = Targets.data();
         CI.MorphTargetCount = static_cast<Uint32>(Targets.size());

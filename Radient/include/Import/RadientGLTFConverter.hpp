@@ -98,9 +98,10 @@ struct MeshIndexSourceResult
 /// Creates a Radient vertex source for a GLTF primitive.
 ///
 /// The primitive must have a valid POSITION accessor. Other supported default
-/// GLTF attributes are added when present. The returned source borrows GLTF
-/// buffer spans, but keeps \p pDocument alive internally, so the caller may
-/// release its document reference after this function succeeds.
+/// GLTF attributes are added when present. The returned source copies attribute
+/// metadata and retains \p pDocument while referencing its vertex bytes without
+/// copying them. The caller may release its document reference after this
+/// function succeeds.
 ///
 /// Returns a default MeshVertexSourceResult on failure.
 MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&               GltfModel,

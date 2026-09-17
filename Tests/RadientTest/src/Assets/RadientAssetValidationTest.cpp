@@ -82,19 +82,54 @@ struct MeshValidationData
     RadientMorphTargetCreateInfo                         MorphTarget{};
     RadientMeshPrimitiveCreateInfo                       Primitive{};
 
+    std::array<RadientVertexAttributeDesc, 3> VertexAttributes{
+        {
+            {
+                "POSITION",
+                0,
+                RADIENT_VERTEX_AUTO_OFFSET,
+                RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+                3,
+                False,
+            },
+            {
+                "JOINTS_0",
+                1,
+                RADIENT_VERTEX_AUTO_OFFSET,
+                RADIENT_VERTEX_COMPONENT_TYPE_UINT16,
+                4,
+                False,
+            },
+            {
+                "WEIGHTS_0",
+                2,
+                RADIENT_VERTEX_AUTO_OFFSET,
+                RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+                4,
+                False,
+            },
+        },
+    };
+    std::array<RadientVertexBufferLayoutDesc, 3>   VertexBuffers{};
+    std::array<RefCntAutoPtr<IRadientDataBlob>, 3> VertexBlobs{{MakeTestDataBlob(Positions.data(), sizeof(Positions)),
+                                                                MakeTestDataBlob(BoneIndices.data(), sizeof(BoneIndices)),
+                                                                MakeTestDataBlob(BoneWeights.data(), sizeof(BoneWeights))}};
+    std::array<IRadientDataBlob*, 3>               VertexData{{VertexBlobs[0], VertexBlobs[1], VertexBlobs[2]}};
+
     RadientMeshCreateInfo MakeMeshCI()
     {
         Primitive.FirstIndex = 0;
         Primitive.IndexCount = static_cast<Uint32>(Indices16.size());
 
         RadientMeshCreateInfo MeshCI{};
-        MeshCI.pPositions     = Positions.data();
-        MeshCI.VertexCount    = static_cast<Uint32>(Positions.size());
-        MeshCI.pIndices       = Indices16.data();
-        MeshCI.IndexCount     = static_cast<Uint32>(Indices16.size());
-        MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT16;
-        MeshCI.pPrimitives    = &Primitive;
-        MeshCI.PrimitiveCount = 1;
+        MeshCI.VertexLayout    = {VertexAttributes.data(), 1, VertexBuffers.data(), 1};
+        MeshCI.ppVertexBuffers = VertexData.data();
+        MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
+        MeshCI.pIndices        = Indices16.data();
+        MeshCI.IndexCount      = static_cast<Uint32>(Indices16.size());
+        MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT16;
+        MeshCI.pPrimitives     = &Primitive;
+        MeshCI.PrimitiveCount  = 1;
         return MeshCI;
     }
 
@@ -138,8 +173,7 @@ TEST(RadientAssetValidationTest, ValidatesMeshCreateInfo)
     MeshCI.IndexType = RADIENT_INDEX_TYPE_UINT32;
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
 
-    MeshCI.pBoneIndices0 = Data.BoneIndices.data();
-    MeshCI.pBoneWeights0 = Data.BoneWeights.data();
+    MeshCI.VertexLayout.AttributeCount = MeshCI.VertexLayout.BufferCount = 3;
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
 }
 
@@ -148,8 +182,8 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMissingRequiredData)
     ExpectInvalidMeshCreateInfo("VertexCount must not be zero", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.VertexCount = 0;
     });
-    ExpectInvalidMeshCreateInfo("pPositions must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
-        MeshCI.pPositions = nullptr;
+    ExpectInvalidMeshCreateInfo("ppVertexBuffers must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+        MeshCI.ppVertexBuffers = nullptr;
     });
     ExpectInvalidMeshCreateInfo("IndexCount must not be zero", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexCount = 0;
@@ -170,13 +204,16 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMissingRequiredData)
 
 TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMismatchedSkinningData)
 {
-    ExpectInvalidMeshCreateInfo("pBoneIndices0 and pBoneWeights0 must both be specified or both be null",
+    ExpectInvalidMeshCreateInfo("JOINTS_0 and WEIGHTS_0 must both be specified or both be absent",
                                 [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
-                                    MeshCI.pBoneIndices0 = Data.BoneIndices.data();
+                                    MeshCI.VertexLayout.AttributeCount = MeshCI.VertexLayout.BufferCount = 2;
                                 });
-    ExpectInvalidMeshCreateInfo("pBoneIndices0 and pBoneWeights0 must both be specified or both be null",
+    ExpectInvalidMeshCreateInfo("JOINTS_0 and WEIGHTS_0 must both be specified or both be absent",
                                 [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
-                                    MeshCI.pBoneWeights0 = Data.BoneWeights.data();
+                                    Data.VertexAttributes[1]             = Data.VertexAttributes[2];
+                                    Data.VertexAttributes[1].BufferIndex = 1;
+                                    Data.VertexData[1]                   = Data.VertexData[2];
+                                    MeshCI.VertexLayout.AttributeCount = MeshCI.VertexLayout.BufferCount = 2;
                                 });
 }
 
@@ -433,4 +470,83 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
     TextureData.pDataBlob = pEmptyBlob;
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+}
+
+TEST(RadientAssetValidationTest, RejectsInvalidVertexLayoutsAndMissingBlobs)
+{
+    ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto& CI, auto&) { CI.VertexLayout.pAttributes = nullptr; });
+    ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto& CI, auto&) { CI.VertexLayout.pBuffers = nullptr; });
+    ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto&, auto& Data) { Data.VertexAttributes[0].BufferIndex = 1; });
+    ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto&, auto& Data) { Data.VertexBuffers[0].ByteStride = 8; });
+    ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto&, auto& Data) { Data.VertexAttributes[0].ComponentType = RADIENT_VERTEX_COMPONENT_TYPE_UNKNOWN; });
+    ExpectInvalidMeshCreateInfo("requires a three-component POSITION", [](auto&, auto& Data) { Data.VertexAttributes[0].Semantic = "position"; });
+    ExpectInvalidMeshCreateInfo("requires a three-component POSITION", [](auto&, auto& Data) { Data.VertexAttributes[0].ComponentCount = 2; });
+    ExpectInvalidMeshCreateInfo("must not be null", [](auto&, auto& Data) { Data.VertexData[0] = nullptr; });
+}
+
+TEST(RadientAssetValidationTest, ValidatesSkinningEncodings)
+{
+    MeshValidationData Data;
+    auto               CI          = Data.MakeMeshCI();
+    CI.VertexLayout.AttributeCount = CI.VertexLayout.BufferCount = 3;
+    Data.VertexAttributes[2].ComponentType                       = RADIENT_VERTEX_COMPONENT_TYPE_UINT8;
+    Data.VertexAttributes[2].Normalized                          = True;
+    for (RADIENT_VERTEX_COMPONENT_TYPE Type : {RADIENT_VERTEX_COMPONENT_TYPE_UINT8,
+                                               RADIENT_VERTEX_COMPONENT_TYPE_UINT16,
+                                               RADIENT_VERTEX_COMPONENT_TYPE_UINT32,
+                                               RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32})
+    {
+        SCOPED_TRACE(static_cast<int>(Type));
+        Data.VertexAttributes[1].ComponentType = Type;
+        EXPECT_TRUE(ValidateMeshCreateInfo(CI));
+    }
+    Data.VertexAttributes[1].ComponentType = RADIENT_VERTEX_COMPONENT_TYPE_UINT8;
+    {
+        TestingEnvironment::ErrorScope Errors{"JOINTS_0 requires non-normalized unsigned integer or FLOAT32 components"};
+        Data.VertexAttributes[1].Normalized = True;
+        EXPECT_FALSE(ValidateMeshCreateInfo(CI));
+    }
+    Data.VertexAttributes[1].Normalized = False;
+    for (RADIENT_VERTEX_COMPONENT_TYPE Type : {RADIENT_VERTEX_COMPONENT_TYPE_INT8,
+                                               RADIENT_VERTEX_COMPONENT_TYPE_FLOAT16})
+    {
+        SCOPED_TRACE(static_cast<int>(Type));
+        TestingEnvironment::ErrorScope Errors{"JOINTS_0 requires non-normalized unsigned integer or FLOAT32 components"};
+        Data.VertexAttributes[1].ComponentType = Type;
+        EXPECT_FALSE(ValidateMeshCreateInfo(CI));
+    }
+    Data.VertexAttributes[1].ComponentType = RADIENT_VERTEX_COMPONENT_TYPE_UINT8;
+    {
+        TestingEnvironment::ErrorScope Errors{"JOINTS_0 and WEIGHTS_0 require four components"};
+        Data.VertexAttributes[2].ComponentCount = 3;
+        EXPECT_FALSE(ValidateMeshCreateInfo(CI));
+    }
+}
+
+TEST(RadientAssetValidationTest, DefersMeshBlobAccessUntilSourceConstruction)
+{
+    MeshValidationData              Data;
+    auto                            CI = Data.MakeMeshCI();
+    RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
+    Data.VertexData[0] = pUncheckedBlob;
+    EXPECT_TRUE(ValidateMeshCreateInfo(CI));
+
+    auto pEmptyBlob    = MakeTestDataBlob(nullptr, 0);
+    Data.VertexData[0] = pEmptyBlob;
+    EXPECT_TRUE(ValidateMeshCreateInfo(CI));
+
+    auto pMutableBlob  = MakeTestMutableDataBlob(Data.Positions.data(), sizeof(Data.Positions));
+    Data.VertexData[0] = pMutableBlob;
+    void* pWrite       = nullptr;
+    ASSERT_EQ(pMutableBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    EXPECT_TRUE(ValidateMeshCreateInfo(CI));
+    EXPECT_EQ(pMutableBlob->EndWrite(), RADIENT_STATUS_OK);
+
+    // Buffer slots that are not referenced by any attribute do not need storage.
+    CI.VertexLayout.BufferCount      = 3;
+    Data.VertexBuffers[1].ByteStride = 1;
+    Data.VertexBuffers[2].ByteStride = 1;
+    Data.VertexData[1]               = nullptr;
+    Data.VertexData[2]               = pUncheckedBlob;
+    EXPECT_TRUE(ValidateMeshCreateInfo(CI));
 }

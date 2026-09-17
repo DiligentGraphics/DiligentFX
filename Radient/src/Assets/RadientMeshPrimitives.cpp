@@ -29,9 +29,12 @@
 #include "Math/RadientMath.hpp"
 
 #include "Errors.hpp"
+#include "RefCntAutoPtr.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace Diligent
@@ -212,7 +215,7 @@ MeshBuilder CreateSphere(Float32 Radius, Uint32 Subdivisions)
 RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
                                    const Char*            Name,
                                    IRadientMaterialAsset* pMaterial,
-                                   const MeshBuilder&     Mesh,
+                                   MeshBuilder            Mesh,
                                    IRadientMeshAsset**    ppMesh)
 {
     if (ppMesh == nullptr)
@@ -227,24 +230,78 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
+    // CreateMesh copies indices synchronously, so vertex blobs need not retain them.
+    const auto Indices = std::move(Mesh.Indices);
+
+    const auto         pMeshData = std::make_shared<MeshBuilder>(std::move(Mesh));
+    const MeshBuilder& MeshData  = *pMeshData;
+
+    RefCntAutoPtr<IRadientDataBlob>     VertexBlobs[4];
+    IRadientDataBlob*                   VertexData[4]{};
+    RadientVertexAttributeDesc          VertexAttributes[4]{};
+    const RadientVertexBufferLayoutDesc VertexBuffers[4]{};
+    Uint32                              VertexBufferCount = 0;
+
+    const auto AddVertexAttribute = [&](const auto& Vertices, const Char* Semantic,
+                                        RADIENT_VERTEX_COMPONENT_TYPE ComponentType, Uint32 ComponentCount,
+                                        Bool Normalized = False) {
+        if (Vertices.empty())
+            return RADIENT_STATUS_OK;
+
+        const Uint32              BufferIndex = VertexBufferCount;
+        auto                      pOwner      = std::make_unique<std::shared_ptr<MeshBuilder>>(pMeshData);
+        RadientDataBlobCreateInfo BlobCI;
+        BlobCI.pData     = Vertices.data();
+        BlobCI.Size      = Vertices.size() * sizeof(Vertices[0]);
+        BlobCI.pUserData = pOwner.get();
+        BlobCI.OnDestroy = [](void* pUserData) {
+            delete static_cast<std::shared_ptr<MeshBuilder>*>(pUserData);
+        };
+        // Create a reference-mode blob to avoid copying vertex data. The blob will hold a
+        // shared_ptr to the MeshBuilder, ensuring that the vertex data remains valid until
+        // the blob is destroyed. When the blob is destroyed, it will delete the shared_ptr,
+        // which will in turn release the MeshBuilder if there are no other references to it.
+        const RADIENT_STATUS Status = CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &VertexBlobs[BufferIndex]);
+        if (Status == RADIENT_STATUS_OK)
+        {
+            pOwner.release();
+            VertexData[BufferIndex]       = VertexBlobs[BufferIndex];
+            VertexAttributes[BufferIndex] = {Semantic, BufferIndex, RADIENT_VERTEX_AUTO_OFFSET,
+                                             ComponentType, ComponentCount, Normalized};
+            ++VertexBufferCount;
+        }
+        return Status;
+    };
+
+    RADIENT_STATUS Status = AddVertexAttribute(MeshData.Positions, "POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = AddVertexAttribute(MeshData.Normals, "NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = AddVertexAttribute(MeshData.TexCoords0, "TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = AddVertexAttribute(MeshData.Colors0, "COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, True);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
     PrimitiveCI.Name       = Name;
     PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = static_cast<Uint32>(Mesh.Indices.size());
+    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
     PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name           = Name;
-    MeshCI.pPositions     = Mesh.Positions.data();
-    MeshCI.pNormals       = Mesh.Normals.data();
-    MeshCI.pTexCoords0    = Mesh.TexCoords0.data();
-    MeshCI.pColors0       = Mesh.Colors0.empty() ? nullptr : Mesh.Colors0.data();
-    MeshCI.VertexCount    = static_cast<Uint32>(Mesh.Positions.size());
-    MeshCI.pIndices       = Mesh.Indices.data();
-    MeshCI.IndexCount     = static_cast<Uint32>(Mesh.Indices.size());
-    MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives    = &PrimitiveCI;
-    MeshCI.PrimitiveCount = 1;
+    MeshCI.Name            = Name;
+    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.ppVertexBuffers = VertexData;
+    MeshCI.VertexCount     = static_cast<Uint32>(MeshData.Positions.size());
+    MeshCI.pIndices        = Indices.data();
+    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives     = &PrimitiveCI;
+    MeshCI.PrimitiveCount  = 1;
 
     return pAssetManager->CreateMesh(MeshCI, ppMesh);
 }
@@ -263,9 +320,9 @@ RADIENT_STATUS CreateRadientCubeMesh(IRadientAssetManager*            pAssetMana
     if (!RadientMath::IsFinitePositive(MeshCI.Size))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const Uint32      Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
-    const MeshBuilder Mesh         = CreateCube(MeshCI.Size, Subdivisions, MeshCI.pFaceColors);
-    return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial, Mesh, ppMesh);
+    const Uint32 Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
+    return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial,
+                               CreateCube(MeshCI.Size, Subdivisions, MeshCI.pFaceColors), ppMesh);
 }
 
 RADIENT_STATUS CreateRadientSphereMesh(IRadientAssetManager*              pAssetManager,
@@ -280,9 +337,9 @@ RADIENT_STATUS CreateRadientSphereMesh(IRadientAssetManager*              pAsset
     if (!RadientMath::IsFinitePositive(MeshCI.Radius))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const Uint32      Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
-    const MeshBuilder Mesh         = CreateSphere(MeshCI.Radius, Subdivisions);
-    return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial, Mesh, ppMesh);
+    const Uint32 Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
+    return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial,
+                               CreateSphere(MeshCI.Radius, Subdivisions), ppMesh);
 }
 
 } // namespace Diligent

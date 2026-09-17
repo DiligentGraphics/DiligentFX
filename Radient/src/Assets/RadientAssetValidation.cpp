@@ -66,27 +66,66 @@ bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout)
     return ResolveVertexLayout(Layout, Resolved);
 }
 
-bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
+std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
+                                   ResolvedVertexLayout&        Resolved)
 {
     if (MeshCI.VertexCount == 0)
-        return LogValidationError("RadientMeshCreateInfo", "VertexCount must not be zero.");
+        return "VertexCount must not be zero.";
+    const RadientVertexLayoutDesc& Layout = MeshCI.VertexLayout;
+    if (!ResolveVertexLayout(Layout, Resolved))
+        return "VertexLayout is invalid.";
+    if (Layout.AttributeCount == 0)
+        return "VertexLayout requires a three-component POSITION attribute.";
+    if (MeshCI.ppVertexBuffers == nullptr)
+        return "ppVertexBuffers must not be null.";
+    if (!IsAddressableArray(Layout.BufferCount, sizeof(IRadientDataBlob*)))
+        return "Vertex buffer array exceeds the addressable range.";
+    // Blob data and sizes are checked under retained read access by the source.
+    const RadientVertexAttributeDesc* Position = nullptr;
+    const RadientVertexAttributeDesc* Joints   = nullptr;
+    const RadientVertexAttributeDesc* Weights  = nullptr;
+    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
+    {
+        const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[AttributeIndex];
+        if (MeshCI.ppVertexBuffers[Attribute.BufferIndex] == nullptr)
+            return "Referenced vertex buffer blob must not be null.";
+        if (std::strcmp(Attribute.Semantic, "POSITION") == 0)
+            Position = &Attribute;
+        else if (std::strcmp(Attribute.Semantic, "JOINTS_0") == 0)
+            Joints = &Attribute;
+        else if (std::strcmp(Attribute.Semantic, "WEIGHTS_0") == 0)
+            Weights = &Attribute;
+    }
+    if (Position == nullptr || Position->ComponentCount != 3)
+        return "VertexLayout requires a three-component POSITION attribute.";
+    if ((Joints != nullptr) != (Weights != nullptr))
+        return "JOINTS_0 and WEIGHTS_0 must both be specified or both be absent.";
+    if (Joints != nullptr)
+    {
+        if (Joints->ComponentCount != 4 || Weights->ComponentCount != 4)
+            return "JOINTS_0 and WEIGHTS_0 require four components.";
+        if (Joints->Normalized ||
+            (Joints->ComponentType != RADIENT_VERTEX_COMPONENT_TYPE_UINT8 &&
+             Joints->ComponentType != RADIENT_VERTEX_COMPONENT_TYPE_UINT16 &&
+             Joints->ComponentType != RADIENT_VERTEX_COMPONENT_TYPE_UINT32 &&
+             Joints->ComponentType != RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32))
+            return "JOINTS_0 requires non-normalized unsigned integer or FLOAT32 components.";
+    }
+    return {};
+}
 
-    if (MeshCI.pPositions == nullptr)
-        return LogValidationError("RadientMeshCreateInfo", "pPositions must not be null.");
+bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
+{
+    ResolvedVertexLayout Resolved;
+    const std::string    Error = ValidateMeshVertexData(MeshCI, Resolved);
+    if (!Error.empty())
+        return LogValidationError("RadientMeshCreateInfo", Error);
 
     if (MeshCI.PrimitiveCount == 0)
         return LogValidationError("RadientMeshCreateInfo", "PrimitiveCount must not be zero.");
 
     if (MeshCI.pPrimitives == nullptr)
         return LogValidationError("RadientMeshCreateInfo", "pPrimitives must not be null.");
-
-    const bool HasBoneIndices = MeshCI.pBoneIndices0 != nullptr;
-    const bool HasBoneWeights = MeshCI.pBoneWeights0 != nullptr;
-    if (HasBoneIndices != HasBoneWeights)
-    {
-        return LogValidationError("RadientMeshCreateInfo",
-                                  "pBoneIndices0 and pBoneWeights0 must both be specified or both be null.");
-    }
 
     if (MeshCI.MorphTargetCount != 0 && MeshCI.pMorphTargets == nullptr)
     {

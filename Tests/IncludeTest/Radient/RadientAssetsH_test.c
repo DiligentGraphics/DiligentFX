@@ -46,6 +46,23 @@ void RadientAssets_C_UseTypes(void)
     (void)AssetManagerDesc;
     (void)AssetManagerCI;
     (void)Primitive;
+
+    const RadientVertexAttributeDesc VertexAttribute = {
+        "POSITION",
+        0,
+        DILIGENT_RADIENT_VERTEX_AUTO_OFFSET,
+        RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+        3,
+        0,
+    };
+    const RadientVertexBufferLayoutDesc VertexBuffer = {DILIGENT_RADIENT_VERTEX_AUTO_STRIDE};
+    IRadientDataBlob* const             VertexData   = 0;
+    MeshCI.VertexLayout.pAttributes                  = &VertexAttribute;
+    MeshCI.VertexLayout.AttributeCount               = 1;
+    MeshCI.VertexLayout.pBuffers                     = &VertexBuffer;
+    MeshCI.VertexLayout.BufferCount                  = 1;
+    MeshCI.ppVertexBuffers                           = &VertexData;
+    MeshCI.VertexCount                               = 1;
     (void)MeshCI;
     (void)MeshDesc;
     IRadientDataBlob* pBlob      = TextureLoadInfo.pDataBlob;

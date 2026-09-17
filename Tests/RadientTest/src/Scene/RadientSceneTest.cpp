@@ -170,17 +170,29 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
     PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name           = "Radient test mesh";
-    MeshCI.pPositions     = Positions;
-    MeshCI.pColors0       = Colors;
-    MeshCI.pBoneIndices0  = BoneIndices;
-    MeshCI.pBoneWeights0  = BoneWeights;
-    MeshCI.VertexCount    = 3;
-    MeshCI.pIndices       = Indices;
-    MeshCI.IndexCount     = 3;
-    MeshCI.IndexType      = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives    = &PrimitiveCI;
-    MeshCI.PrimitiveCount = 1;
+    MeshCI.Name = "Radient test mesh";
+    const RadientVertexAttributeDesc VertexAttributes[]{
+        {"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false},
+        {"COLOR_0", 1, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true},
+        {"JOINTS_0", 2, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_UINT16, 4, false},
+        {"WEIGHTS_0", 3, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, false}};
+    const RadientVertexBufferLayoutDesc VertexBuffers[4]{};
+
+    const auto              pPositionsBlob   = MakeTestDataBlob(Positions, sizeof(Positions));
+    const auto              pColorsBlob      = MakeTestDataBlob(Colors, sizeof(Colors));
+    const auto              pBoneIndicesBlob = MakeTestDataBlob(BoneIndices, sizeof(BoneIndices));
+    const auto              pBoneWeightsBlob = MakeTestDataBlob(BoneWeights, sizeof(BoneWeights));
+    IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob, pBoneIndicesBlob, pBoneWeightsBlob};
+    const Uint32            VertexBufferCount = 4;
+
+    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.ppVertexBuffers = VertexData;
+    MeshCI.VertexCount     = 3;
+    MeshCI.pIndices        = Indices;
+    MeshCI.IndexCount      = 3;
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives     = &PrimitiveCI;
+    MeshCI.PrimitiveCount  = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     const RADIENT_STATUS             CreateStatus = AssetManager.CreateMesh(MeshCI, &pMesh);

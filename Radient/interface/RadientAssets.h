@@ -32,6 +32,7 @@
 #include "RadientTypes.h"
 #include "RadientAssetResolver.h"
 #include "RadientDataBlob.h"
+#include "RadientVertexLayout.h"
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
@@ -216,33 +217,50 @@ typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
 
 
 /// CPU-side mesh creation attributes.
+///
+/// Vertex data is described by VertexLayout and ppVertexBuffers. Radient copies
+/// the layout arrays and semantic strings and retains the referenced blobs before
+/// CreateMesh returns, including when uploads are asynchronous. The caller can
+/// then modify or release the descriptors and its blob references. Vertex bytes
+/// are read without copying the input buffers and remain under shared read access
+/// until source processing finishes. End write access before calling CreateMesh;
+/// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Writes and resizing
+/// are unavailable while Radient is reading a mutable blob. OnLastReaderReleased
+/// can be used to recycle its storage after acquiring write access; it does not
+/// signal GPU completion. Reference blobs follow their normal storage-lifetime
+/// requirements. The renderer selects its storage layout and converts source
+/// attributes as needed; VertexLayout describes only the supplied CPU bytes.
 struct RadientMeshCreateInfo
 {
     /// Mesh name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Vertex positions. Required when VertexCount is not zero.
-    const RadientFloat3* pPositions DEFAULT_INITIALIZER(nullptr);
+    /// Layout of the source vertex buffers. Automatic offsets and strides are
+    /// resolved before reading the data. A nonempty layout with a three-component
+    /// POSITION attribute is required. JOINTS_0 and WEIGHTS_0, when present, occur
+    /// together and each has four components; JOINTS_0 uses non-normalized unsigned
+    /// integers or FLOAT32 components. Conversion to the renderer's storage format
+    /// supports integer and FLOAT32 source components. FLOAT16 conversion is
+    /// unsupported by the current renderer.
+    /// The default empty layout is invalid for mesh creation.
+    RadientVertexLayoutDesc VertexLayout;
 
-    /// Vertex normals.
-    const RadientFloat3* pNormals DEFAULT_INITIALIZER(nullptr);
+    /// Array of VertexLayout.BufferCount source data blobs. Required and non-null
+    /// for mesh creation. An attribute's BufferIndex selects its blob; ByteOffset
+    /// is relative to the blob's first byte. Each referenced entry must be non-null
+    /// and contain every attribute value through the last vertex:
+    /// (VertexCount - 1) * resolved ByteStride + resolved ByteOffset + element size.
+    /// Trailing padding after the final attribute value is optional. Insufficient
+    /// or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT. Size and
+    /// data are inspected under read access. Unreferenced entries are ignored and
+    /// may be null. The same blob may appear in multiple entries. Radient retains
+    /// the blobs, so the pointer array and caller references can be released after
+    /// CreateMesh returns. Both read-only and mutable blobs are accepted. The
+    /// default is nullptr.
+    IRadientDataBlob* const* ppVertexBuffers DEFAULT_INITIALIZER(nullptr);
 
-    /// Vertex tangents.
-    const RadientFloat4* pTangents DEFAULT_INITIALIZER(nullptr);
-
-    /// Primary texture coordinates.
-    const RadientFloat2* pTexCoords0 DEFAULT_INITIALIZER(nullptr);
-
-    /// Primary vertex colors as 8-bit RGBA values.
-    const RadientColorRGBA8* pColors0 DEFAULT_INITIALIZER(nullptr);
-
-    /// Four bone indices matching pBoneWeights0.
-    const RadientBoneIndices4* pBoneIndices0 DEFAULT_INITIALIZER(nullptr);
-
-    /// Four bone weights matching pBoneIndices0.
-    const RadientFloat4* pBoneWeights0 DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of vertices.
+    /// Number of vertex records in every referenced buffer. Must be nonzero.
+    /// This count also defines the vertex domain for indices and morph targets.
     Uint32 VertexCount DEFAULT_INITIALIZER(0);
 
     /// Morph targets whose attribute streams use the mesh vertex domain. Each

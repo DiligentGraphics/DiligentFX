@@ -90,8 +90,20 @@ soon as the call returns. Stack-local arrays and temporary strings are valid
 inputs. The object's copy remains valid for its lifetime, independently of the
 caller's original metadata.
 
-Layout metadata and vertex data have separate lifetimes. Vertex-data ownership
-will be documented with the creation and update APIs introduced in later stages.
+`CreateMesh` retains the supplied vertex data blobs and acquires read access
+before returning. It does not copy vertex bytes merely to retain the input.
+The layout arrays, semantic strings, and array of blob pointers can be released
+immediately after the call. The caller may also release its own blob references;
+Radient retains the blobs while it needs their source data.
+
+A mutable blob cannot be written or resized while Radient holds read access.
+Finish any write scope before calling `CreateMesh`. Use the blob's
+`OnLastReaderReleased` callback to learn when all read access has ended and its
+storage can be reused; other readers can also delay or reacquire access. A
+read-only blob created with `RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE` requires
+its external storage to remain alive and unchanged until the blob is destroyed.
+Its `OnDestroy` callback can release that storage's owner. See
+[Data Blobs](DataBlobs.md) for the storage modes and access rules.
 
 ## Layout requirements
 
@@ -117,3 +129,64 @@ unchanged. The public helpers only report component and attribute sizes.
 C callers use the same descriptors and the `Diligent_`-prefixed size helper
 names, passing an attribute pointer where the C++ helper accepts a reference.
 A null attribute pointer returns zero.
+
+## Creating a mesh
+
+`RadientMeshCreateInfo::VertexLayout` describes the supplied CPU data.
+`ppVertexBuffers` points to one `IRadientDataBlob*` per layout buffer,
+and `VertexCount` is shared by all attributes. Attribute offsets are relative
+to the start of the corresponding blob. For each attribute, the blob contains
+at least `(VertexCount - 1) * ByteStride + ByteOffset + attribute size` bytes
+after automatic values are resolved. Padding after the final attribute value
+is optional. A buffer with no attributes can supply a null blob pointer.
+Blob sizes and data are checked while read access is held. An active writer
+prevents mesh creation and results in `RADIENT_STATUS_INVALID_OPERATION`.
+
+Mesh creation requires a nonzero vertex count and a three-component `POSITION`.
+`JOINTS_0` and `WEIGHTS_0` appear together with four components each; joint
+indices use non-normalized unsigned integers or `FLOAT32` components. Source
+conversion supports integer and `FLOAT32` components, including normalized
+8/16-bit values. `FLOAT16` layouts can be described, but the current renderer
+stores `FLOAT32` attributes and does not support converting `FLOAT16` input.
+Other semantics can have one through four components. The renderer consumes
+the semantics it supports; supplying an attribute does not enable a new shader
+feature by itself.
+
+For the explicit interleaved layout above, populate mutable blobs directly.
+Here `FillVertexBuffer` is caller code that writes `VertexCount` records in the
+layout for the specified buffer. Check each returned status in application code:
+
+```cpp
+RefCntAutoPtr<IRadientMutableDataBlob> VertexBlobs[2];
+IRadientDataBlob* VertexData[2] = {};
+for (Uint32 BufferIndex = 0; BufferIndex < 2; ++BufferIndex)
+{
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size = Uint64{VertexCount} * Buffers[BufferIndex].ByteStride;
+    CreateRadientMutableDataBlob(BlobCI, &VertexBlobs[BufferIndex]);
+
+    void* pData = nullptr;
+    VertexBlobs[BufferIndex]->BeginWrite(&pData);
+    FillVertexBuffer(BufferIndex, pData, VertexCount);
+    VertexBlobs[BufferIndex]->EndWrite();
+    VertexData[BufferIndex] = VertexBlobs[BufferIndex];
+}
+
+RadientMeshCreateInfo MeshCI;
+MeshCI.VertexLayout = Layout;
+MeshCI.ppVertexBuffers = VertexData;
+MeshCI.VertexCount = VertexCount;
+// Set indices and primitives as usual, then call CreateMesh.
+```
+
+Existing bytes can instead be supplied through read-only blobs. Use `COPY` to
+initialize independent owned storage, or `REFERENCE` to retain external storage
+without copying, with the lifetime requirements described above.
+
+The renderer chooses the destination layout. Compatible complete buffers can be
+copied directly. Other buffers are repacked, with scalar conversion and
+normalization as required. Padding contents are unspecified and do not affect
+cache reuse. Missing destination attributes use
+renderer defaults, or zero when no default is provided; extra source components
+are discarded and additional destination components remain zero. The source
+layout does not request GPU buffer placement or packing.
