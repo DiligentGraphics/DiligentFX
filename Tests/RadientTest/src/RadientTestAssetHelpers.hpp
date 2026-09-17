@@ -92,7 +92,18 @@ private:
     RadientAssetReference m_Ref{};
 };
 
-using TestTextureAsset = TestRadientAssetBase<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
+class TestTextureAsset final : public TestRadientAssetBase<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>
+{
+public:
+    using TBase = TestRadientAssetBase<IRadientTextureAsset, IID_RadientTextureAsset, RADIENT_ASSET_TYPE_TEXTURE>;
+    using TBase::TBase;
+
+    virtual const RadientTextureAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientTextureAssetDesc Desc{};
+        return Desc;
+    }
+};
 
 class TestMeshAsset final : public TestRadientAssetBase<IRadientMeshAsset, IID_RadientMeshAsset, RADIENT_ASSET_TYPE_MESH>
 {

@@ -173,11 +173,14 @@ TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
 
 TEST(RadientTextureSourceTest, MapsRadientTextureFormats)
 {
-    const std::array<std::pair<RADIENT_TEXTURE_FORMAT, TEXTURE_FORMAT>, 28> Formats{
+    const std::array<std::pair<RADIENT_TEXTURE_FORMAT, TEXTURE_FORMAT>, 48> Formats{
         std::pair{RADIENT_TEXTURE_FORMAT_R8_UNORM, TEX_FORMAT_R8_UNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_RG8_UNORM, TEX_FORMAT_RG8_UNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, TEX_FORMAT_RGBA8_UNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB, TEX_FORMAT_RGBA8_UNORM_SRGB},
+        std::pair{RADIENT_TEXTURE_FORMAT_R8_SNORM, TEX_FORMAT_R8_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG8_SNORM, TEX_FORMAT_RG8_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_SNORM, TEX_FORMAT_RGBA8_SNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_R8_UINT, TEX_FORMAT_R8_UINT},
         std::pair{RADIENT_TEXTURE_FORMAT_RG8_UINT, TEX_FORMAT_RG8_UINT},
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA8_UINT, TEX_FORMAT_RGBA8_UINT},
@@ -187,6 +190,9 @@ TEST(RadientTextureSourceTest, MapsRadientTextureFormats)
         std::pair{RADIENT_TEXTURE_FORMAT_R16_UNORM, TEX_FORMAT_R16_UNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_RG16_UNORM, TEX_FORMAT_RG16_UNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_UNORM, TEX_FORMAT_RGBA16_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_R16_SNORM, TEX_FORMAT_R16_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RG16_SNORM, TEX_FORMAT_RG16_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_SNORM, TEX_FORMAT_RGBA16_SNORM},
         std::pair{RADIENT_TEXTURE_FORMAT_R16_UINT, TEX_FORMAT_R16_UINT},
         std::pair{RADIENT_TEXTURE_FORMAT_RG16_UINT, TEX_FORMAT_RG16_UINT},
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA16_UINT, TEX_FORMAT_RGBA16_UINT},
@@ -201,11 +207,95 @@ TEST(RadientTextureSourceTest, MapsRadientTextureFormats)
         std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_SINT, TEX_FORMAT_RGBA32_SINT},
         std::pair{RADIENT_TEXTURE_FORMAT_R32_FLOAT, TEX_FORMAT_R32_FLOAT},
         std::pair{RADIENT_TEXTURE_FORMAT_RG32_FLOAT, TEX_FORMAT_RG32_FLOAT},
-        std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT, TEX_FORMAT_RGBA32_FLOAT}};
+        std::pair{RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT, TEX_FORMAT_RGBA32_FLOAT},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC1_UNORM, TEX_FORMAT_BC1_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC1_UNORM_SRGB, TEX_FORMAT_BC1_UNORM_SRGB},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC2_UNORM, TEX_FORMAT_BC2_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC2_UNORM_SRGB, TEX_FORMAT_BC2_UNORM_SRGB},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC3_UNORM, TEX_FORMAT_BC3_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC3_UNORM_SRGB, TEX_FORMAT_BC3_UNORM_SRGB},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC4_UNORM, TEX_FORMAT_BC4_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC4_SNORM, TEX_FORMAT_BC4_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC5_UNORM, TEX_FORMAT_BC5_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC5_SNORM, TEX_FORMAT_BC5_SNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC6H_UF16, TEX_FORMAT_BC6H_UF16},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC6H_SF16, TEX_FORMAT_BC6H_SF16},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC7_UNORM, TEX_FORMAT_BC7_UNORM},
+        std::pair{RADIENT_TEXTURE_FORMAT_BC7_UNORM_SRGB, TEX_FORMAT_BC7_UNORM_SRGB},
+    };
 
     EXPECT_EQ(RadientToTextureFormat(RADIENT_TEXTURE_FORMAT_UNKNOWN), TEX_FORMAT_UNKNOWN);
+    EXPECT_EQ(TextureFormatToRadient(TEX_FORMAT_UNKNOWN), RADIENT_TEXTURE_FORMAT_UNKNOWN);
     for (const auto& [RadientFormat, TextureFormat] : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(RadientFormat));
         EXPECT_EQ(RadientToTextureFormat(RadientFormat), TextureFormat);
+        EXPECT_EQ(TextureFormatToRadient(TextureFormat), RadientFormat);
+    }
+    EXPECT_EQ(TextureFormatToRadient(static_cast<TEXTURE_FORMAT>(0xFFFF)), RADIENT_TEXTURE_FORMAT_UNKNOWN);
+    EXPECT_EQ(RadientToTextureFormat(static_cast<RADIENT_TEXTURE_FORMAT>(0xFF)), TEX_FORMAT_UNKNOWN);
+}
+
+TEST(RadientTextureSourceTest, ExcludedFormatsHaveNoPublicRepresentation)
+{
+    const TEXTURE_FORMAT Formats[] = {
+        TEX_FORMAT_RGBA32_TYPELESS,
+        TEX_FORMAT_RGB32_TYPELESS,
+        TEX_FORMAT_RGBA16_TYPELESS,
+        TEX_FORMAT_RG32_TYPELESS,
+        TEX_FORMAT_R32G8X24_TYPELESS,
+        TEX_FORMAT_D32_FLOAT_S8X24_UINT,
+        TEX_FORMAT_R32_FLOAT_X8X24_TYPELESS,
+        TEX_FORMAT_X32_TYPELESS_G8X24_UINT,
+        TEX_FORMAT_RGB10A2_TYPELESS,
+        TEX_FORMAT_RGBA8_TYPELESS,
+        TEX_FORMAT_RG16_TYPELESS,
+        TEX_FORMAT_R32_TYPELESS,
+        TEX_FORMAT_D32_FLOAT,
+        TEX_FORMAT_R24G8_TYPELESS,
+        TEX_FORMAT_D24_UNORM_S8_UINT,
+        TEX_FORMAT_R24_UNORM_X8_TYPELESS,
+        TEX_FORMAT_X24_TYPELESS_G8_UINT,
+        TEX_FORMAT_RG8_TYPELESS,
+        TEX_FORMAT_R16_TYPELESS,
+        TEX_FORMAT_D16_UNORM,
+        TEX_FORMAT_R8_TYPELESS,
+        TEX_FORMAT_BC1_TYPELESS,
+        TEX_FORMAT_BC2_TYPELESS,
+        TEX_FORMAT_BC3_TYPELESS,
+        TEX_FORMAT_BC4_TYPELESS,
+        TEX_FORMAT_BC5_TYPELESS,
+        TEX_FORMAT_BGRA8_TYPELESS,
+        TEX_FORMAT_BGRX8_TYPELESS,
+        TEX_FORMAT_BC6H_TYPELESS,
+        TEX_FORMAT_BC7_TYPELESS,
+        TEX_FORMAT_RGB32_FLOAT,
+        TEX_FORMAT_RGB32_UINT,
+        TEX_FORMAT_RGB32_SINT,
+        TEX_FORMAT_RGBA16_FLOAT,
+        TEX_FORMAT_RGB10A2_UNORM,
+        TEX_FORMAT_RGB10A2_UINT,
+        TEX_FORMAT_R11G11B10_FLOAT,
+        TEX_FORMAT_RG16_FLOAT,
+        TEX_FORMAT_R16_FLOAT,
+        TEX_FORMAT_A8_UNORM,
+        TEX_FORMAT_R1_UNORM,
+        TEX_FORMAT_RGB9E5_SHAREDEXP,
+        TEX_FORMAT_RG8_B8G8_UNORM,
+        TEX_FORMAT_G8R8_G8B8_UNORM,
+        TEX_FORMAT_B5G6R5_UNORM,
+        TEX_FORMAT_B5G5R5A1_UNORM,
+        TEX_FORMAT_BGRA8_UNORM,
+        TEX_FORMAT_BGRX8_UNORM,
+        TEX_FORMAT_R10G10B10_XR_BIAS_A2_UNORM,
+        TEX_FORMAT_BGRA8_UNORM_SRGB,
+        TEX_FORMAT_BGRX8_UNORM_SRGB,
+    };
+    for (const auto Format : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        EXPECT_EQ(TextureFormatToRadient(Format), RADIENT_TEXTURE_FORMAT_UNKNOWN);
+    }
 }
 
 TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
@@ -667,6 +757,57 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
     CheckMip(0, 4, 4, Data.data());
     CheckMip(1, 2, 2, ExpectedMip1.data());
     CheckMip(2, 1, 1, ExpectedMip2.data());
+}
+
+TEST(RadientTextureSourceTest, SignedNormalizedInputsGenerateSignedMipValues)
+{
+    const auto CheckFormat = [](auto Component, RADIENT_TEXTURE_FORMAT Format, Uint32 ComponentCount) {
+        using ComponentType = decltype(Component);
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        const Int32                Scale         = sizeof(ComponentType) == 1 ? 1 : 100;
+        const Int32                Values[]      = {-100, -60, 20, 60};
+        const Uint32               RowComponents = 2 * ComponentCount + 1;
+        std::vector<ComponentType> Pixels(RowComponents + 2 * ComponentCount, ComponentType{99});
+        for (Uint32 Pixel = 0; Pixel < 4; ++Pixel)
+        {
+            for (Uint32 Channel = 0; Channel < ComponentCount; ++Channel)
+            {
+                const Uint32 Offset = (Pixel / 2) * RowComponents + (Pixel % 2) * ComponentCount + Channel;
+                Pixels[Offset]      = static_cast<ComponentType>((Values[Pixel] + static_cast<Int32>(Channel) * 4) * Scale);
+            }
+        }
+        auto               pBlob = MakeReferencedDataBlob(Pixels.data(), Pixels.size() * sizeof(ComponentType));
+        RadientTextureData Data;
+        Data.Width     = 2;
+        Data.Height    = 2;
+        Data.Format    = Format;
+        Data.pDataBlob = pBlob;
+        Data.Stride    = RowComponents * static_cast<Uint32>(sizeof(ComponentType));
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pTextureData = &Data;
+        RadientTextureSource Source{LoadInfo};
+        ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+        RefCntAutoPtr<ITextureLoader> pLoader;
+        ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+        ASSERT_NE(pLoader, nullptr);
+        const auto& Desc = pLoader->GetTextureDesc();
+        EXPECT_EQ(Desc.Width, 2u);
+        EXPECT_EQ(Desc.Height, 2u);
+        EXPECT_EQ(Desc.Format, RadientToTextureFormat(Format));
+        ASSERT_EQ(Desc.MipLevels, 2u);
+        EXPECT_EQ(pLoader->GetSubresourceData(0).pData, Pixels.data());
+        EXPECT_EQ(pLoader->GetSubresourceData(0).Stride, Data.Stride);
+        const auto* pMip = static_cast<const ComponentType*>(pLoader->GetSubresourceData(1).pData);
+        ASSERT_NE(pMip, nullptr);
+        for (Uint32 Channel = 0; Channel < ComponentCount; ++Channel)
+            EXPECT_EQ(pMip[Channel], (-20 + static_cast<Int32>(Channel) * 4) * Scale);
+    };
+    CheckFormat(Int8{}, RADIENT_TEXTURE_FORMAT_R8_SNORM, 1);
+    CheckFormat(Int8{}, RADIENT_TEXTURE_FORMAT_RG8_SNORM, 2);
+    CheckFormat(Int8{}, RADIENT_TEXTURE_FORMAT_RGBA8_SNORM, 4);
+    CheckFormat(Int16{}, RADIENT_TEXTURE_FORMAT_R16_SNORM, 1);
+    CheckFormat(Int16{}, RADIENT_TEXTURE_FORMAT_RG16_SNORM, 2);
+    CheckFormat(Int16{}, RADIENT_TEXTURE_FORMAT_RGBA16_SNORM, 4);
 }
 
 TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)

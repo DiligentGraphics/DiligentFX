@@ -32,6 +32,7 @@
 #include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 #include "Errors.hpp"
+#include "GraphicsAccessories.hpp"
 #include "RadientMorphTargets.h"
 
 #include <cstddef>
@@ -296,6 +297,8 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         const TEXTURE_FORMAT TextureFormat = RadientToTextureFormat(TextureData.Format);
         if (TextureFormat == TEX_FORMAT_UNKNOWN)
             return LogValidationError("RadientTextureLoadInfo", "texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN.");
+        if (GetTextureFormatAttribs(TextureFormat).ComponentType == COMPONENT_TYPE_COMPRESSED)
+            return LogValidationError("RadientTextureLoadInfo", "compressed formats require an encoded texture source; decoded texture input must be uncompressed.");
 
         if (TextureData.pDataBlob == nullptr)
             return LogValidationError("RadientTextureLoadInfo", "texture data blob must not be null.");

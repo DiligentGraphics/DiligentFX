@@ -46,6 +46,9 @@ static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE 
 static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
 static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
 
+static_assert(std::is_standard_layout<RadientTextureAssetDesc>::value, "RadientTextureAssetDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientTextureAssetDesc>::value, "RadientTextureAssetDesc must be trivially copyable");
+
 static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
 static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
 static_assert(std::is_standard_layout<RadientMeshGeometryDesc>::value, "RadientMeshGeometryDesc must be a standard-layout type");
@@ -88,6 +91,19 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;
+}
+
+void RadientAssets_CPP_UseTextureAsset(IRadientTextureAsset* pTexture)
+{
+    const RadientTextureAssetDesc& Desc      = pTexture->GetDesc();
+    const Uint32                   Width     = Desc.Width;
+    const Uint32                   Height    = Desc.Height;
+    const RADIENT_TEXTURE_FORMAT   Format    = Desc.Format;
+    const Uint32                   MipLevels = Desc.MipLevels;
+    (void)Width;
+    (void)Height;
+    (void)Format;
+    (void)MipLevels;
 }
 
 void RadientAssets_CPP_UseMeshAsset(IRadientMeshAsset* pMesh)

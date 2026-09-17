@@ -31,6 +31,7 @@
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientTextureSource.hpp"
+#include "Assets/RadientTextureFormat.hpp"
 #include "Atomics.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFResourceManager.hpp"
@@ -77,6 +78,18 @@ public:
     TextureStorage           (TextureStorage&&)      = delete;
     TextureStorage& operator=(TextureStorage&&)      = delete;
     // clang-format on
+
+    void SetDesc(const RadientTextureAssetDesc& Desc) noexcept
+    {
+        VERIFY_EXPR(GetLoadStatus() == RADIENT_STATUS_PENDING);
+        m_Desc = Desc;
+    }
+
+    const RadientTextureAssetDesc& GetDesc() const noexcept
+    {
+        static const RadientTextureAssetDesc EmptyDesc{};
+        return GetLoadStatus() == RADIENT_STATUS_OK ? m_Desc : EmptyDesc;
+    }
 
     void SetLoadStatus(RADIENT_STATUS Status) noexcept
     {
@@ -369,6 +382,10 @@ private:
     TEXTURE_FORMAT                                                                 m_StorageFormat = TEX_FORMAT_UNKNOWN;
     std::array<TEXTURE_FORMAT, static_cast<size_t>(RadientTextureViewType::Count)> m_ViewFormats{};
 
+    // The decoded description is published once and survives GPU upload failure.
+    // It describes the logical image independently of atlas/resource allocation.
+    RadientTextureAssetDesc m_Desc;
+
     std::atomic<RADIENT_STATUS> m_LoadStatus{RADIENT_STATUS_OK};
     std::atomic<RADIENT_STATUS> m_GPUResourceStatus{RADIENT_STATUS_OK};
 
@@ -456,8 +473,23 @@ public:
 namespace
 {
 
-using TextureAssetImpl =
-    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TexturePayloadImpl>;
+class TextureAssetImpl;
+using TextureAssetBase =
+    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TexturePayloadImpl, TextureAssetImpl>;
+
+class TextureAssetImpl final : public TextureAssetBase
+{
+public:
+    using TBase = TextureAssetBase;
+    using TBase::TBase;
+
+    virtual const RadientTextureAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientTextureAssetDesc EmptyDesc{};
+        RefCntAutoPtr<TexturePayloadImpl>    pPayload = GetPayload();
+        return pPayload ? pPayload->GetStorage().GetDesc() : EmptyDesc;
+    }
+};
 
 struct TextureCopyData
 {
@@ -747,7 +779,15 @@ ASYNC_TASK_STATUS RadientTextureAssetManager::LoadTextureFromSource(IRadientText
         return ASYNC_TASK_STATUS_COMPLETE;
     }
 
-    TextureStorage& TextureStorage = pTextureAsset->GetStorage();
+    TextureStorage&    TextureStorage = pTextureAsset->GetStorage();
+    const TextureDesc& LoaderDesc     = pLoader->GetTextureDesc();
+
+    RadientTextureAssetDesc Desc;
+    Desc.Width     = LoaderDesc.Width;
+    Desc.Height    = LoaderDesc.Height;
+    Desc.Format    = TextureFormatToRadient(LoaderDesc.Format);
+    Desc.MipLevels = LoaderDesc.MipLevels;
+    TextureStorage.SetDesc(Desc);
     TextureStorage.SetLoadStatus(RADIENT_STATUS_OK);
 
     if (m_pDevice == nullptr)

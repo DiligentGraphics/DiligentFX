@@ -36,6 +36,7 @@ void RadientAssets_C_UseTypes(void)
     RadientMeshGeometryDesc          GeometryDesc        = {0};
     RadientMeshPrimitiveDesc         PrimitiveDesc       = {0};
     RadientTextureLoadInfo           TextureLoadInfo     = {0};
+    RadientTextureAssetDesc          TextureDesc         = {0};
     RadientSceneLoadInfo             SceneLoadInfo       = {0};
     RadientSceneAssetDesc            SceneAssetDesc      = {0};
     RadientAssetReference            Asset               = {0};
@@ -87,6 +88,11 @@ void RadientAssets_C_UseTypes(void)
     PixelData.pDataBlob          = pBlob;
     TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
+    TextureDesc.Width     = 16;
+    TextureDesc.Height    = 8;
+    TextureDesc.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDesc.MipLevels = 5;
+    (void)TextureDesc;
     (void)SceneLoadInfo;
     (void)SceneAssetDesc;
     (void)Asset;
@@ -132,6 +138,18 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
     }
     Status = IRadientAssetManager_CreateMaterial(pAssetManager, pMaterialDefinition, &pMaterial);
     Status = IRadientAssetManager_LoadTexture(pAssetManager, &TextureInfo, &pTexture);
+    if (pTexture != 0)
+    {
+        const RadientTextureAssetDesc* pTextureDesc = IRadientTextureAsset_GetDesc(pTexture);
+        const Uint32                   Width        = pTextureDesc->Width;
+        const Uint32                   Height       = pTextureDesc->Height;
+        const RADIENT_TEXTURE_FORMAT   Format       = pTextureDesc->Format;
+        const Uint32                   MipLevels    = pTextureDesc->MipLevels;
+        (void)Width;
+        (void)Height;
+        (void)Format;
+        (void)MipLevels;
+    }
     Status = IRadientAssetManager_LoadScene(pAssetManager, &SceneLoadInfo, &pScene);
     Status = IRadientAssetManager_WaitForAssetLoad(pAssetManager, (IRadientAsset*)pScene);
     if (pScene != 0)

@@ -74,8 +74,22 @@ public:
     using TBase::TBase;
 };
 
-using TestTextureAssetImpl =
-    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TestTextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TestTexturePayloadImpl>;
+class TestTextureAssetImpl;
+using TestTextureAssetBase =
+    RadientAssetImpl<IRadientTextureAsset, IID_RadientTextureAsset, IID_TestTextureAssetImpl, RADIENT_ASSET_TYPE_TEXTURE, TestTexturePayloadImpl, TestTextureAssetImpl>;
+
+class TestTextureAssetImpl final : public TestTextureAssetBase
+{
+public:
+    using TBase = TestTextureAssetBase;
+    using TBase::TBase;
+
+    virtual const RadientTextureAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
+    {
+        static const RadientTextureAssetDesc Desc{};
+        return Desc;
+    }
+};
 
 RefCntAutoPtr<TestTexturePayloadImpl> CreatePayload(Uint32         Value,
                                                     RADIENT_STATUS LoadStatus = RADIENT_STATUS_OK)

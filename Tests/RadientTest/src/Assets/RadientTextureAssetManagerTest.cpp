@@ -25,8 +25,13 @@
  */
 
 #include "Assets/RadientTextureAssetManager.hpp"
+#include "Core/RadientDataBlobReadAccess.hpp"
 
 #include "RadientTestAssetHelpers.hpp"
+#include "DataBlobImpl.hpp"
+#include "GraphicsAccessories.hpp"
+#include "MemoryFileStream.hpp"
+#include "TextureLoader.h"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
 #include "TestingEnvironment.hpp"
@@ -35,7 +40,9 @@
 
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace Diligent;
@@ -132,6 +139,58 @@ void ExpectStatusOkOrPending(RADIENT_STATUS Status)
         << "Unexpected status: " << static_cast<int>(Status);
 }
 
+void ExpectTextureDesc(IRadientTextureAsset*  pTexture,
+                       Uint32                 Width     = 0,
+                       Uint32                 Height    = 0,
+                       RADIENT_TEXTURE_FORMAT Format    = RADIENT_TEXTURE_FORMAT_UNKNOWN,
+                       Uint32                 MipLevels = 0)
+{
+    ASSERT_NE(pTexture, nullptr);
+    const RadientTextureAssetDesc& Desc = pTexture->GetDesc();
+    EXPECT_EQ(Desc.Width, Width);
+    EXPECT_EQ(Desc.Height, Height);
+    EXPECT_EQ(Desc.Format, Format);
+    EXPECT_EQ(Desc.MipLevels, MipLevels);
+}
+
+RefCntAutoPtr<IRadientDataBlob> MakeDDSTestBlob(const TextureDesc& Desc)
+{
+    const Uint32                    SubresourceCount = Desc.MipLevels * Desc.GetArraySize();
+    std::vector<std::vector<Uint8>> Pixels(SubresourceCount);
+    std::vector<TextureSubResData>  Subresources(SubresourceCount);
+    for (Uint32 Slice = 0; Slice < Desc.GetArraySize(); ++Slice)
+    {
+        for (Uint32 Mip = 0; Mip < Desc.MipLevels; ++Mip)
+        {
+            const auto   Properties = GetMipLevelProperties(Desc, Mip);
+            const Uint32 Index      = Slice * Desc.MipLevels + Mip;
+            Pixels[Index].resize(static_cast<size_t>(Properties.MipSize));
+            Subresources[Index].pData       = Pixels[Index].data();
+            Subresources[Index].Stride      = Properties.RowSize;
+            Subresources[Index].DepthStride = Properties.DepthSliceSize;
+        }
+    }
+    const auto pDDS    = DataBlobImpl::Create();
+    const auto pStream = MemoryFileStream::Create(pDDS);
+    if (!WriteDDSToStream(pStream, Desc, TextureData{Subresources.data(), SubresourceCount}))
+    {
+        ADD_FAILURE() << "Failed to create in-memory DDS fixture";
+        return {};
+    }
+    if (Desc.IsCube())
+    {
+        // The DDS writer emits face data but omits the DX10 cube flag and uses
+        // face count where the file header requires cube count. Correct the fixture.
+        // The DX10 header follows the four-byte magic and 124-byte legacy header.
+        constexpr size_t DX10HeaderOffset = 4 + 124;
+        const Uint32     CubeFlag         = 0x4; // D3D11_RESOURCE_MISC_TEXTURECUBE
+        const Uint32     CubeCount        = Desc.GetArraySize() / 6;
+        std::memcpy(pDDS->GetDataPtr(DX10HeaderOffset + 2 * sizeof(Uint32)), &CubeFlag, sizeof(CubeFlag));
+        std::memcpy(pDDS->GetDataPtr(DX10HeaderOffset + 3 * sizeof(Uint32)), &CubeCount, sizeof(CubeCount));
+    }
+    return MakeTestDataBlob(pDDS->GetConstDataPtr(), pDDS->GetSize());
+}
+
 TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRuns)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateTestThreadPool();
@@ -154,6 +213,8 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     EXPECT_NE(pTexture, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_PENDING);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture), nullptr);
+    ExpectTextureDesc(pTexture);
+    const RadientTextureAssetDesc& PendingDesc = pTexture->GetDesc();
 
     ReleaseWorker.Trigger();
     WaitForAllTasksAndStop(*pThreadPool);
@@ -162,6 +223,12 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+    ExpectTextureDesc(pTexture, 2, 2, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 2);
+    // A reference obtained while pending remains an immutable empty description.
+    EXPECT_EQ(PendingDesc.Width, 0u);
+    EXPECT_EQ(PendingDesc.Height, 0u);
+    EXPECT_EQ(PendingDesc.Format, RADIENT_TEXTURE_FORMAT_UNKNOWN);
+    EXPECT_EQ(PendingDesc.MipLevels, 0u);
 }
 
 TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
@@ -187,6 +254,7 @@ TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
 
     ASSERT_NE(pTexture, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_INVALID_OPERATION);
+    ExpectTextureDesc(pTexture);
     EXPECT_EQ(ReadReleases, 1u);
 
     const RadientTextureAssetManagerStats Stats = pManager->GetStats();
@@ -223,6 +291,15 @@ TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
     const TexturePayloadImpl* pPayload0 = RadientTextureAssetManager::GetTexturePayload(pTexture0);
     ASSERT_NE(pPayload0, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture1), pPayload0);
+    ExpectTextureDesc(pTexture0, 2, 2, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 2);
+    ExpectTextureDesc(pTexture1, 2, 2, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 2);
+    const RadientTextureAssetDesc& Desc = pTexture0->GetDesc();
+    pTexture1.Release();
+    pManager.reset();
+    pBlob0.Release();
+    pBlob1.Release();
+    ExpectTextureDesc(pTexture0, 2, 2, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 2);
+    EXPECT_EQ(&pTexture0->GetDesc(), &Desc);
 }
 
 TEST(RadientTextureAssetManagerTest, CanonicalURIAliasesSharePayload)
@@ -293,6 +370,7 @@ TEST(RadientTextureAssetManagerTest, PreservesAssetOpenFailureStatus)
 
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NOT_FOUND);
+    ExpectTextureDesc(pTexture);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
 }
 
@@ -323,6 +401,182 @@ TEST(RadientTextureAssetManagerTest, DifferentTextureOptionsUseDifferentPayloads
     const TexturePayloadImpl* pLinearPayload = RadientTextureAssetManager::GetTexturePayload(pLinearTexture);
     ASSERT_NE(pLinearPayload, nullptr);
     EXPECT_NE(pLinearPayload, pSRGBPayload);
+}
+
+TEST(RadientTextureAssetManagerTest, ReflectsEncodedPNGColorSpaceWithoutGPUResources)
+{
+    auto pThreadPool = CreateTestThreadPool(0);
+    auto pManager    = CreateTextureManager();
+    auto pBlob       = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size());
+    ASSERT_NE(pBlob, nullptr);
+    std::array<RefCntAutoPtr<IRadientTextureAsset>, 2> Textures;
+    for (Uint32 i = 0; i < Textures.size(); ++i)
+    {
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pDataBlob = pBlob;
+        LoadInfo.IsSRGB    = i != 0 ? True : False;
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]), RADIENT_STATUS_PENDING);
+        ExpectTextureDesc(Textures[i]);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[i]), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[i]), RADIENT_STATUS_NO_GPU_DATA);
+        ExpectTextureDesc(Textures[i], 1, 1,
+                          i != 0 ? RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB : RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 1);
+    }
+    EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(Textures[0]),
+              RadientTextureAssetManager::GetTexturePayload(Textures[1]));
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerTest, ReflectsDecodedDimensionsFormatAndGeneratedMipCount)
+{
+    const std::array<Uint8, 8 * 4> Pixels{};
+    auto                           pThreadPool = CreateTestThreadPool(0);
+    auto                           pManager    = CreateTextureManager();
+    auto                           pBlob       = MakeTestDataBlob(Pixels.data(), Pixels.size());
+    RadientTextureData             Data;
+    Data.Width     = 8;
+    Data.Height    = 4;
+    Data.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    Data.pDataBlob = pBlob;
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
+    // The load request copies the input descriptor.
+    Data.Width  = 1;
+    Data.Height = 1;
+    Data.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+    ExpectTextureDesc(pTexture, 8, 4, RADIENT_TEXTURE_FORMAT_R8_UNORM, 4);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCount)
+{
+    struct TestCase
+    {
+        TEXTURE_FORMAT         SourceFormat;
+        RADIENT_TEXTURE_FORMAT ExpectedFormat;
+        Bool                   IsSRGB;
+    };
+    const TestCase Cases[] = {
+        {TEX_FORMAT_BC1_UNORM, RADIENT_TEXTURE_FORMAT_BC1_UNORM, False},
+        {TEX_FORMAT_BC1_UNORM, RADIENT_TEXTURE_FORMAT_BC1_UNORM_SRGB, True},
+        {TEX_FORMAT_BC6H_UF16, RADIENT_TEXTURE_FORMAT_BC6H_UF16, False},
+    };
+    auto pThreadPool = CreateTestThreadPool(0);
+    auto pManager    = CreateTextureManager();
+    for (const auto& Case : Cases)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Case.ExpectedFormat));
+        TextureDesc Desc;
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = 8;
+        Desc.Height    = 4;
+        Desc.Format    = Case.SourceFormat;
+        Desc.MipLevels = 2;
+        auto pBlob     = MakeDDSTestBlob(Desc);
+        ASSERT_NE(pBlob, nullptr);
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pDataBlob = pBlob;
+        LoadInfo.IsSRGB    = Case.IsSRGB;
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+        ExpectTextureDesc(pTexture, 8, 4, Case.ExpectedFormat, 2);
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerTest, PreservesDDSLoadingForUnreflectedFormats)
+{
+    const TEXTURE_FORMAT Formats[] = {
+        TEX_FORMAT_RGBA8_TYPELESS,
+        TEX_FORMAT_BC1_TYPELESS,
+        TEX_FORMAT_D32_FLOAT_S8X24_UINT,
+        TEX_FORMAT_D32_FLOAT,
+        TEX_FORMAT_D24_UNORM_S8_UINT,
+        TEX_FORMAT_D16_UNORM,
+        TEX_FORMAT_R16_FLOAT,
+        TEX_FORMAT_RG16_FLOAT,
+        TEX_FORMAT_RGBA16_FLOAT,
+        TEX_FORMAT_RGB32_FLOAT,
+        TEX_FORMAT_RGB10A2_UNORM,
+        TEX_FORMAT_BGRA8_UNORM,
+    };
+    auto pThreadPool = CreateTestThreadPool(0);
+    auto pManager    = CreateTextureManager();
+    for (const auto Format : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        TextureDesc Desc;
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = 4;
+        Desc.Height    = 4;
+        Desc.Format    = Format;
+        Desc.MipLevels = 2;
+        auto pBlob     = MakeDDSTestBlob(Desc);
+        ASSERT_NE(pBlob, nullptr);
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pDataBlob = pBlob;
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        ExpectTextureDesc(pTexture);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+        ExpectTextureDesc(pTexture, Desc.Width, Desc.Height, RADIENT_TEXTURE_FORMAT_UNKNOWN, Desc.MipLevels);
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerTest, ReflectsEncodedTextureDimensionsWithoutRestrictingShape)
+{
+    const std::pair<RESOURCE_DIMENSION, Uint32> Cases[] = {
+        {RESOURCE_DIM_TEX_1D, 1},
+        {RESOURCE_DIM_TEX_2D_ARRAY, 3},
+        {RESOURCE_DIM_TEX_CUBE, 6},
+        {RESOURCE_DIM_TEX_CUBE_ARRAY, 12},
+    };
+    auto pThreadPool = CreateTestThreadPool(0);
+    auto pManager    = CreateTextureManager();
+    for (const auto& [Dimension, ArraySize] : Cases)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Dimension));
+        TextureDesc Desc;
+        Desc.Type      = Dimension;
+        Desc.Width     = 8;
+        Desc.Height    = Desc.Is1D() ? 1 : (Desc.IsCube() ? 8 : 4);
+        Desc.ArraySize = ArraySize;
+        Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
+        Desc.MipLevels = 3;
+        auto pBlob     = MakeDDSTestBlob(Desc);
+        ASSERT_NE(pBlob, nullptr);
+        {
+            // Verify that cube fixtures actually decode as cubes, rather than arrays.
+            RadientDataBlobReadAccess ReadAccess{pBlob};
+            ASSERT_TRUE(ReadAccess);
+            RefCntAutoPtr<ITextureLoader> pLoader;
+            CreateTextureLoaderFromMemory(ReadAccess.GetData(), static_cast<size_t>(ReadAccess.GetSize()),
+                                          false, TextureLoadInfo{}, &pLoader);
+            ASSERT_NE(pLoader, nullptr);
+            EXPECT_EQ(pLoader->GetTextureDesc().Type, Dimension);
+            EXPECT_EQ(pLoader->GetTextureDesc().GetArraySize(), ArraySize);
+        }
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pDataBlob = pBlob;
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        ExpectTextureDesc(pTexture);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+        ExpectTextureDesc(pTexture, Desc.Width, Desc.Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, Desc.MipLevels);
+    }
+    pThreadPool->StopThreads();
 }
 
 TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
@@ -466,6 +720,7 @@ TEST(RadientTextureAssetManagerTest, RetainsQueuedBlobUntilWorkerFinishes)
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_EQ(ReadReleases, 1u);
     EXPECT_EQ(WeakBlob.Lock(), nullptr);
+    ExpectTextureDesc(pTexture, 1, 1, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, 1);
     pThreadPool->StopThreads();
 }
 
@@ -534,6 +789,7 @@ TEST(RadientTextureAssetManagerTest, ReleasesBlobReadAccessOnDecodeFailure)
         EXPECT_TRUE(pThreadPool->ProcessTask(0, false));
     }
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_FAILED);
+    ExpectTextureDesc(pTexture);
     EXPECT_EQ(ReadReleases, 1u);
     void* pWriteData = nullptr;
     EXPECT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);

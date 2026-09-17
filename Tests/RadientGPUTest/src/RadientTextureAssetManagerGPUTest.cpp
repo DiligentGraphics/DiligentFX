@@ -50,11 +50,23 @@ namespace
 
 static constexpr Uint32 TestTexturePixelSize = TestTextureParams{}.PixelSize;
 
+void ExpectTextureDescription(const IRadientTextureAsset& Texture,
+                              const RadientTextureData&   ExpectedData)
+{
+    const RadientTextureAssetDesc& Desc = Texture.GetDesc();
+    EXPECT_EQ(Desc.Width, ExpectedData.Width);
+    EXPECT_EQ(Desc.Height, ExpectedData.Height);
+    EXPECT_EQ(Desc.Format, ExpectedData.Format);
+    EXPECT_EQ(Desc.MipLevels, ComputeMipLevelsCount(ExpectedData.Width, ExpectedData.Height));
+}
+
 void VerifyUploadedTextureData(IDeviceContext&           Context,
                                ISwapChain&               SwapChain,
                                IRadientTextureAsset&     Texture,
                                const RadientTextureData& ExpectedData)
 {
+    ExpectTextureDescription(Texture, ExpectedData);
+
     RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{&SwapChain, IID_TestingSwapChain};
     ASSERT_NE(pTestingSwapChain, nullptr);
 
@@ -132,6 +144,8 @@ void VerifyUploadedStandaloneTextureData(IDeviceContext&           Context,
                                          IRadientTextureAsset&     Texture,
                                          const RadientTextureData& ExpectedData)
 {
+    ExpectTextureDescription(Texture, ExpectedData);
+
     RefCntAutoPtr<ITestingSwapChain> pTestingSwapChain{&SwapChain, IID_TestingSwapChain};
     ASSERT_NE(pTestingSwapChain, nullptr);
 
@@ -234,6 +248,11 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
 
+    ASSERT_TRUE(WaitForPendingCopyCommandEnqueueCallbacks(pManager));
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+    ExpectTextureDescription(*pTexture, TextureData);
+
     ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
 
@@ -242,6 +261,210 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
     VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerGPUTest, DescriptionKeepsLogicalMipChainWhenAtlasHasFewerLevels)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreads{pThreadPool};
+
+    constexpr Uint32                  AtlasSize         = 128;
+    constexpr Uint32                  AtlasMipLevels    = 2;
+    GLTF::ResourceManager::CreateInfo ResourceManagerCI = MakeResourceManagerCI(AtlasSize);
+    ResourceManagerCI.DefaultAtlasDesc.Desc.MipLevels   = AtlasMipLevels;
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager =
+        GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+    ASSERT_NE(pResourceManager, nullptr);
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+    auto pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    const TestTextureParams Params{32, 16};
+    const auto              pTextureDataBlob = MakeTextureDataBlob(0, Params);
+    ASSERT_NE(pTextureDataBlob, nullptr);
+    const RadientTextureData            TextureData = MakeTextureData(pTextureDataBlob, Params);
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+
+    ASSERT_TRUE(WaitForPendingCopyCommandEnqueueCallbacks(pManager));
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
+    ExpectTextureDescription(*pTexture, TextureData);
+    EXPECT_EQ(pTexture->GetDesc().MipLevels, 6u);
+
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pTexture);
+    ITextureView* pSRV = RadientTextureAssetManager::GetTextureSRV(pTexture);
+    ASSERT_NE(pSRV, nullptr);
+    EXPECT_EQ(pSRV->GetTexture()->GetDesc().Width, AtlasSize);
+    EXPECT_EQ(pSRV->GetTexture()->GetDesc().Height, AtlasSize);
+    EXPECT_EQ(pSRV->GetTexture()->GetDesc().MipLevels, AtlasMipLevels);
+    RadientTextureSamplingInfo SamplingInfo;
+    ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo));
+    EXPECT_EQ(SamplingInfo.MipLevels, AtlasMipLevels);
+    ExpectTextureDescription(*pTexture, TextureData);
+    VerifyUploadedTextureData(*pContext, *pEnv->GetSwapChain(), *pTexture, TextureData);
+}
+
+TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndReflection)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv     = GPUTestingEnvironment::GetInstance();
+    auto*                              pDevice  = pEnv->GetDevice();
+    auto*                              pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    auto pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreads{pThreadPool};
+    auto                pResourceManager = CreateTestResourceManager(pDevice, 128);
+    ASSERT_NE(pResourceManager, nullptr);
+    auto pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+    auto pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    constexpr Uint32 FaceSize     = 8;
+    constexpr Uint32 FaceCount    = 6;
+    constexpr Uint32 MipLevels    = 3;
+    constexpr Uint32 PixelSize    = 4;
+    constexpr Uint32 FaceDataSize = (8 * 8 + 4 * 4 + 2 * 2) * PixelSize;
+    // DDS + DX10 headers. DX10 arraySize counts cubes, while the texture
+    // descriptor and subresource array count their six individual faces.
+    std::array<Uint32, 37> Header{};
+    Header[0]  = 0x20534444; // DDS magic.
+    Header[1]  = 124;        // DDS_HEADER size.
+    Header[2]  = 0x0002100F; // Caps, dimensions, pitch, pixel format, and mip count.
+    Header[3]  = FaceSize;
+    Header[4]  = FaceSize;
+    Header[5]  = FaceSize * PixelSize;
+    Header[7]  = MipLevels;
+    Header[19] = 32;         // DDS_PIXELFORMAT size.
+    Header[20] = 0x4;        // FourCC.
+    Header[21] = 0x30315844; // DX10.
+    Header[27] = 0x00401008; // Texture, complex, and mipmap caps.
+    Header[28] = 0x0000FE00; // Cubemap and all six faces.
+    Header[32] = 28;         // DXGI_FORMAT_R8G8B8A8_UNORM.
+    Header[33] = 3;          // D3D11_RESOURCE_DIMENSION_TEXTURE2D.
+    Header[34] = 0x4;        // D3D11_RESOURCE_MISC_TEXTURECUBE.
+    Header[35] = 1;          // One cube.
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size = sizeof(Header) + FaceCount * FaceDataSize;
+    RefCntAutoPtr<IRadientMutableDataBlob> pBlob;
+    ASSERT_EQ(CreateRadientMutableDataBlob(BlobCI, &pBlob), RADIENT_STATUS_OK);
+    void* pBlobData = nullptr;
+    ASSERT_EQ(pBlob->BeginWrite(&pBlobData), RADIENT_STATUS_OK);
+    std::memcpy(pBlobData, Header.data(), sizeof(Header));
+    auto* pPixels    = static_cast<Uint8*>(pBlobData) + sizeof(Header);
+    auto  PixelValue = [](Uint32 Face, Uint32 Mip, Uint32 Row, Uint32 Byte) {
+        return static_cast<Uint8>(Face * 31 + Mip * 11 + Row * 7 + Byte * 3);
+    };
+    for (Uint32 Face = 0; Face < FaceCount; ++Face)
+    {
+        for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
+        {
+            const Uint32 Size = FaceSize >> Mip;
+            for (Uint32 Row = 0; Row < Size; ++Row)
+                for (Uint32 Byte = 0; Byte < Size * PixelSize; ++Byte)
+                    *pPixels++ = PixelValue(Face, Mip, Row, Byte);
+        }
+    }
+    ASSERT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pDataBlob = pBlob;
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    ASSERT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ProcessUploads(*pUploadManager, *pContext, *pTexture);
+    ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_OK);
+    const auto& Desc = pTexture->GetDesc();
+    EXPECT_EQ(Desc.Width, FaceSize);
+    EXPECT_EQ(Desc.Height, FaceSize);
+    EXPECT_EQ(Desc.Format, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(Desc.MipLevels, MipLevels);
+
+    auto* pSRV = RadientTextureAssetManager::GetTextureSRV(pTexture);
+    ASSERT_NE(pSRV, nullptr);
+    EXPECT_EQ(pSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_CUBE);
+    auto* pUploaded = pSRV->GetTexture();
+    ASSERT_NE(pUploaded, nullptr);
+    EXPECT_EQ(pUploaded->GetDesc().Type, RESOURCE_DIM_TEX_CUBE);
+    EXPECT_EQ(pUploaded->GetDesc().GetArraySize(), FaceCount);
+    EXPECT_EQ(pUploaded->GetDesc().MipLevels, MipLevels);
+
+    TextureDesc ReadbackDesc;
+    ReadbackDesc.Name           = "DDS cube face readback";
+    ReadbackDesc.Type           = RESOURCE_DIM_TEX_2D_ARRAY;
+    ReadbackDesc.Width          = FaceSize;
+    ReadbackDesc.Height         = FaceSize;
+    ReadbackDesc.ArraySize      = FaceCount;
+    ReadbackDesc.MipLevels      = MipLevels;
+    ReadbackDesc.Format         = TEX_FORMAT_RGBA8_UNORM;
+    ReadbackDesc.Usage          = USAGE_STAGING;
+    ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<ITexture> pReadback;
+    pDevice->CreateTexture(ReadbackDesc, nullptr, &pReadback);
+    ASSERT_NE(pReadback, nullptr);
+    for (Uint32 Face = 0; Face < FaceCount; ++Face)
+    {
+        for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
+        {
+            CopyTextureAttribs Copy;
+            Copy.pSrcTexture              = pUploaded;
+            Copy.SrcSlice                 = Face;
+            Copy.SrcMipLevel              = Mip;
+            Copy.pDstTexture              = pReadback;
+            Copy.DstSlice                 = Face;
+            Copy.DstMipLevel              = Mip;
+            Copy.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+            Copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+            pContext->CopyTexture(Copy);
+        }
+    }
+    pContext->WaitForIdle();
+
+    const auto      DeviceType = pDevice->GetDeviceInfo().Type;
+    const MAP_FLAGS MapFlags   = DeviceType == RENDER_DEVICE_TYPE_D3D11 || DeviceType == RENDER_DEVICE_TYPE_GL ?
+        MAP_FLAG_NONE :
+        MAP_FLAG_DO_NOT_WAIT;
+
+    std::array<Uint8, FaceSize * PixelSize> ExpectedRow{};
+    for (Uint32 Face = 0; Face < FaceCount; ++Face)
+    {
+        for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
+        {
+            SCOPED_TRACE(Face);
+            SCOPED_TRACE(Mip);
+            MappedTextureSubresource Mapped;
+            pContext->MapTextureSubresource(pReadback, Mip, Face, MAP_READ, MapFlags, nullptr, Mapped);
+            ASSERT_NE(Mapped.pData, nullptr);
+            const Uint32 Size = FaceSize >> Mip;
+            for (Uint32 Row = 0; Row < Size; ++Row)
+            {
+                for (Uint32 Byte = 0; Byte < Size * PixelSize; ++Byte)
+                    ExpectedRow[Byte] = PixelValue(Face, Mip, Row, Byte);
+                EXPECT_EQ(std::memcmp(static_cast<const Uint8*>(Mapped.pData) + Row * Mapped.Stride,
+                                      ExpectedRow.data(), Size * PixelSize),
+                          0);
+            }
+            pContext->UnmapTextureSubresource(pReadback, Mip, Face);
+        }
+    }
 }
 
 TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)
@@ -308,6 +531,8 @@ TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)
     EXPECT_EQ(pOtherLinearSRV->GetTexture(), pLinearSRV->GetTexture());
     EXPECT_EQ(pOtherSRGBSRV->GetTexture(), pLinearSRV->GetTexture());
     EXPECT_EQ(pLinearSRV->GetTexture()->GetDesc().Format, TEX_FORMAT_RGBA8_TYPELESS);
+    ExpectTextureDescription(*pLinearTexture, LinearData);
+    ExpectTextureDescription(*pSRGBTexture, SRGBData);
 
     const RadientTextureBindingIdentity LinearBinding =
         RadientTextureAssetManager::GetTextureBindingIdentity(pLinearTexture, RadientTextureViewType::Linear);
@@ -385,6 +610,7 @@ TEST(RadientTextureAssetManagerGPUTest, SRGBViewRequestUsesNativeFormatWhenSRGBI
     ASSERT_NE(pSRGBSRV, nullptr);
     EXPECT_EQ(pLinearSRV, pSRGBSRV);
     EXPECT_EQ(pLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA32_FLOAT);
+    ExpectTextureDescription(*pTexture, TextureData);
 
     pThreadPool->StopThreads();
 }
@@ -424,6 +650,7 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
     ASSERT_NE(pFirstTexture, nullptr);
     ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
     ProcessUploads(*pUploadManager, *pContext, *pFirstTexture);
+    ExpectTextureDescription(*pFirstTexture, FirstData);
 
     // Keep the original views alive so pointer comparison remains reliable
     // after the atlas replaces its backing texture.
@@ -456,6 +683,8 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
     ASSERT_NE(pNewLinearSRV, nullptr);
     ASSERT_NE(pNewSRGBSRV, nullptr);
     EXPECT_NE(pNewLinearSRV->GetTexture(), pOldAtlasTexture);
+    ExpectTextureDescription(*pFirstTexture, FirstData);
+    ExpectTextureDescription(*pSecondTexture, SecondData);
     EXPECT_EQ(pNewLinearSRV->GetTexture(), pNewSRGBSRV->GetTexture());
     EXPECT_EQ(pNewLinearSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM);
     EXPECT_EQ(pNewSRGBSRV->GetDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
@@ -619,6 +848,8 @@ TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload
     const TexturePayloadImpl* pPayload = RadientTextureAssetManager::GetTexturePayload(pTexture0);
     ASSERT_NE(pPayload, nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(pTexture1), pPayload);
+    ExpectTextureDescription(*pTexture0, TextureData);
+    ExpectTextureDescription(*pTexture1, TextureData);
 
     ProcessUploads(*pUploadManager, *pContext, *pTexture0);
     EXPECT_NE(RadientTextureAssetManager::GetTextureSRV(pTexture0), nullptr);
@@ -811,6 +1042,7 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_CANCELLED);
     ASSERT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+    ExpectTextureDescription(*pTexture, TextureData);
 }
 
 TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
@@ -850,6 +1082,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     // they could enqueue copy commands, so GPU resource status remains pending.
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_PENDING);
+    ExpectTextureDescription(*pTexture, TextureData);
 
     pUploadManager->Stop(pContext);
     pThreadPool->StopThreads();
@@ -861,6 +1094,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_FAILED);
     EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), nullptr);
+    ExpectTextureDescription(*pTexture, TextureData);
 }
 
 TEST(RadientTextureAssetManagerGPUTest, TextureHandleMayOutliveManagerAfterUpload)

@@ -401,7 +401,9 @@ struct RadientMeshAssetDesc
 typedef struct RadientMeshAssetDesc RadientMeshAssetDesc;
 
 
-/// Texture format.
+/// Typed color formats for texture data and texture asset descriptions.
+/// UNORM components represent values in [0, 1]; SNORM components represent values in [-1, 1].
+/// The formats accepted as decoded input are listed in RadientTextureData::Format.
 DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
     /// Unknown format.
     RADIENT_TEXTURE_FORMAT_UNKNOWN = 0,
@@ -415,8 +417,17 @@ DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
     /// Four 8-bit unsigned normalized components.
     RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
 
-    /// Four 8-bit unsigned normalized components with sRGB-encoded color data.
+    /// Four 8-bit components with sRGB-encoded RGB and unsigned normalized alpha.
     RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB,
+
+    /// One 8-bit signed normalized component.
+    RADIENT_TEXTURE_FORMAT_R8_SNORM,
+
+    /// Two 8-bit signed normalized components.
+    RADIENT_TEXTURE_FORMAT_RG8_SNORM,
+
+    /// Four 8-bit signed normalized components.
+    RADIENT_TEXTURE_FORMAT_RGBA8_SNORM,
 
     /// One 8-bit unsigned integer component.
     RADIENT_TEXTURE_FORMAT_R8_UINT,
@@ -444,6 +455,15 @@ DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
 
     /// Four 16-bit unsigned normalized components.
     RADIENT_TEXTURE_FORMAT_RGBA16_UNORM,
+
+    /// One 16-bit signed normalized component.
+    RADIENT_TEXTURE_FORMAT_R16_SNORM,
+
+    /// Two 16-bit signed normalized components.
+    RADIENT_TEXTURE_FORMAT_RG16_SNORM,
+
+    /// Four 16-bit signed normalized components.
+    RADIENT_TEXTURE_FORMAT_RGBA16_SNORM,
 
     /// One 16-bit unsigned integer component.
     RADIENT_TEXTURE_FORMAT_R16_UINT,
@@ -488,7 +508,95 @@ DILIGENT_TYPED_ENUM(RADIENT_TEXTURE_FORMAT, Uint8){
     RADIENT_TEXTURE_FORMAT_RG32_FLOAT,
 
     /// Four 32-bit floating-point components.
-    RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT};
+    RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT,
+
+    /// BC1 block compression for RGB and optional one-bit alpha, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 8 bytes.
+    RADIENT_TEXTURE_FORMAT_BC1_UNORM,
+
+    /// BC1 block compression for RGB and optional one-bit alpha, with sRGB-encoded RGB and unsigned normalized alpha.
+    /// Each 4x4 pixel block occupies 8 bytes.
+    RADIENT_TEXTURE_FORMAT_BC1_UNORM_SRGB,
+
+    /// BC2 block compression for RGB and explicit four-bit alpha, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC2_UNORM,
+
+    /// BC2 block compression for RGB and explicit four-bit alpha, with sRGB-encoded RGB and unsigned normalized alpha.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC2_UNORM_SRGB,
+
+    /// BC3 block compression for RGB and interpolated alpha, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC3_UNORM,
+
+    /// BC3 block compression for RGB and interpolated alpha, with sRGB-encoded RGB and unsigned normalized alpha.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC3_UNORM_SRGB,
+
+    /// BC4 block compression for one R component, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 8 bytes.
+    RADIENT_TEXTURE_FORMAT_BC4_UNORM,
+
+    /// BC4 block compression for one R component, with signed normalized components.
+    /// Each 4x4 pixel block occupies 8 bytes.
+    RADIENT_TEXTURE_FORMAT_BC4_SNORM,
+
+    /// BC5 block compression for R and G components, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC5_UNORM,
+
+    /// BC5 block compression for R and G components, with signed normalized components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC5_SNORM,
+
+    /// BC6H block compression for RGB components, with unsigned half-precision floating-point components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC6H_UF16,
+
+    /// BC6H block compression for RGB components, with signed half-precision floating-point components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC6H_SF16,
+
+    /// BC7 block compression for RGB and alpha components, with unsigned normalized components.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC7_UNORM,
+
+    /// BC7 block compression for RGB and alpha components, with sRGB-encoded RGB and unsigned normalized alpha.
+    /// Each 4x4 pixel block occupies 16 bytes.
+    RADIENT_TEXTURE_FORMAT_BC7_UNORM_SRGB,
+};
+
+/// Immutable description of a loaded texture asset.
+/// Describes the logical image after decoding and mip generation. The dimensions,
+/// format, and mip count are independent of GPU allocation, atlas placement, and
+/// mip residency. All members have their default values until CPU loading succeeds.
+struct RadientTextureAssetDesc
+{
+    /// Width of mip 0, in pixels, for each array layer or cube face.
+    /// Nonzero after CPU loading succeeds; defaults to zero.
+    Uint32 Width DEFAULT_INITIALIZER(0);
+
+    /// Height of mip 0, in pixels, for each array layer or cube face.
+    /// One for 1D textures. Nonzero after CPU loading succeeds; defaults to zero.
+    Uint32 Height DEFAULT_INITIALIZER(0);
+
+    /// Loaded image format, including any channel expansion or encoding conversion
+    /// performed during loading. This is independent of the storage format and of
+    /// the linear or sRGB sampling view selected by a material.
+    /// RADIENT_TEXTURE_FORMAT_UNKNOWN if CPU loading has not succeeded or the loaded
+    /// format has no corresponding public enum value. Defaults to UNKNOWN.
+    RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
+
+    /// Number of mip levels per array layer or cube face in the loaded or generated
+    /// logical image, including mip 0.
+    /// This count does not indicate how many levels are currently resident on the GPU
+    /// or available through a texture atlas. Nonzero after CPU loading succeeds;
+    /// defaults to zero.
+    Uint32 MipLevels DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientTextureAssetDesc RadientTextureAssetDesc;
+
 
 /// Decoded mip 0 data for a 2D texture. The descriptor is copied by LoadTexture.
 struct RadientTextureData
@@ -499,7 +607,9 @@ struct RadientTextureData
     /// Texture height in pixels. Must be nonzero; defaults to zero.
     Uint32 Height DEFAULT_INITIALIZER(0);
 
-    /// Pixel format. Must not be RADIENT_TEXTURE_FORMAT_UNKNOWN, which is the default.
+    /// Pixel format. Accepts all uncompressed RADIENT_TEXTURE_FORMAT values, including SNORM.
+    /// Compressed BC formats are only supported through encoded texture sources.
+    /// Must not be RADIENT_TEXTURE_FORMAT_UNKNOWN, which is the default.
     RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
 
     /// Required blob containing mip 0 pixel data, starting at byte zero.
@@ -680,14 +790,37 @@ DILIGENT_END_INTERFACE
 // clang-format on
 
 
-#if DILIGENT_CPP_INTERFACE
+#define DILIGENT_INTERFACE_NAME IRadientTextureAsset
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
 
-/// Texture asset.
-struct IRadientTextureAsset : public IRadientAsset
+#define IRadientTextureAssetInclusiveMethods \
+    IRadientAssetInclusiveMethods;           \
+    IRadientTextureAssetMethods RadientTextureAsset
+
+// clang-format off
+
+/// A texture asset and its immutable logical image description.
+DILIGENT_BEGIN_INTERFACE(IRadientTextureAsset, IRadientAsset)
 {
+    /// Returns the immutable texture description. The description is empty until
+    /// CPU loading completes successfully; GPU resources and upload completion
+    /// are not required. Decode failures leave the description empty. Once CPU
+    /// loading succeeds, the description remains available even if GPU creation
+    /// or upload later fails or is cancelled, and its members do not change.
+    /// The returned reference remains valid while the texture asset is retained.
+    VIRTUAL const RadientTextureAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 };
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_C_INTERFACE
+
+#    define IRadientTextureAsset_GetDesc(This) CALL_IFACE_METHOD(RadientTextureAsset, GetDesc, This)
 
 #endif
+
+// clang-format on
 
 
 #define DILIGENT_INTERFACE_NAME IRadientSceneAsset
