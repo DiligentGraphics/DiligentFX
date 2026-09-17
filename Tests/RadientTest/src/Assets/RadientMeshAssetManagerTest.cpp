@@ -262,6 +262,11 @@ TEST(RadientMeshAssetManagerTest, DrawableMeshRemainsPendingUntilPayloadIsReady)
         RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
     EXPECT_EQ(PendingResult.Status, RADIENT_STATUS_PENDING);
     EXPECT_EQ(PendingResult.pMesh, nullptr);
+    const RadientMeshAssetDesc& PendingDesc = pMesh->GetDesc();
+    EXPECT_EQ(PendingDesc.GeometryCount, 0u);
+    EXPECT_EQ(PendingDesc.pGeometries, nullptr);
+    EXPECT_EQ(PendingDesc.PrimitiveCount, 0u);
+    EXPECT_EQ(PendingDesc.pPrimitives, nullptr);
 
     DrainThreadPool(*pThreadPool);
 
@@ -269,6 +274,44 @@ TEST(RadientMeshAssetManagerTest, DrawableMeshRemainsPendingUntilPayloadIsReady)
         RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
     EXPECT_EQ(ReadyResult.Status, RADIENT_STATUS_OK);
     EXPECT_NE(ReadyResult.pMesh, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+
+    // CPU loading publishes the stored layout, including default-filled fields
+    // in active buffers, without requiring any GPU resources.
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    const RadientMeshGeometryDesc& Geometry = Desc.pGeometries[0];
+    EXPECT_EQ(Geometry.VertexCount, 3u);
+    EXPECT_EQ(Geometry.IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Geometry.IndexCount, 3u);
+    const RadientVertexLayoutDesc& Layout = Geometry.VertexLayout;
+    ASSERT_EQ(Layout.BufferCount, 1u);
+    ASSERT_NE(Layout.pBuffers, nullptr);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 32u);
+    ASSERT_EQ(Layout.AttributeCount, 3u);
+    ASSERT_NE(Layout.pAttributes, nullptr);
+    const std::array<const char*, 3> Semantics{"POSITION", "NORMAL", "TEXCOORD_0"};
+    const std::array<Uint32, 3>      Offsets{0, 12, 24};
+    const std::array<Uint32, 3>      ComponentCounts{3, 3, 2};
+    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
+    {
+        const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[AttributeIndex];
+        EXPECT_STREQ(Attribute.Semantic, Semantics[AttributeIndex]);
+        EXPECT_EQ(Attribute.BufferIndex, 0u);
+        EXPECT_EQ(Attribute.ByteOffset, Offsets[AttributeIndex]);
+        EXPECT_EQ(Attribute.ComponentType, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32);
+        EXPECT_EQ(Attribute.ComponentCount, ComponentCounts[AttributeIndex]);
+        EXPECT_FALSE(Attribute.Normalized);
+    }
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    ASSERT_NE(Desc.pPrimitives, nullptr);
+    EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].FirstElement, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, 3u);
+    EXPECT_EQ(Desc.pPrimitives[0].pMaterial, nullptr);
+    EXPECT_EQ(Desc.MorphTargetCount, 0u);
+    EXPECT_EQ(Desc.pMorphTargets, nullptr);
 }
 
 TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
@@ -327,6 +370,127 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
               RadientMeshAssetManager::GetMeshIndexDataPayload(pDefaultMesh, 0));
 
     pThreadPool->StopThreads();
+}
+
+TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
+{
+    auto                               pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto                               pMeshManager = RadientMeshAssetManager::Create({});
+    const std::array<RadientFloat3, 3> Positions{
+        RadientFloat3{0, 0, 0}, RadientFloat3{1, 0, 0}, RadientFloat3{0, 1, 0}};
+    const std::array<Uint16, 3>      Indices{0, 1, 2};
+    auto                             pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
+    auto                             pIndexBlob  = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
+    IRadientDataBlob* const          VertexBuffers[]{pVertexBlob};
+    const RadientVertexAttributeDesc Attribute{
+        "POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
+    const RadientVertexBufferLayoutDesc Buffer{};
+    RadientMeshPrimitiveCreateInfo      Primitive{};
+    Primitive.IndexCount = static_cast<Uint32>(Indices.size());
+    RadientMeshCreateInfo MeshCI{};
+    MeshCI.VertexLayout    = {&Attribute, 1, &Buffer, 1};
+    MeshCI.ppVertexBuffers = VertexBuffers;
+    MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
+    MeshCI.pIndexBuffer    = pIndexBlob;
+    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
+    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT16;
+    MeshCI.pPrimitives     = &Primitive;
+    MeshCI.PrimitiveCount  = 1;
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+    pVertexBlob.Release();
+    pIndexBlob.Release();
+    DrainThreadPool(*pThreadPool);
+
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, 3u);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
+}
+
+TEST(RadientMeshAssetManagerTest, MeshViewCacheSharesPayloadAndPreservesPrimitiveNames)
+{
+    auto                pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto                pMeshManager = RadientMeshAssetManager::Create({});
+    MeshGeometryHandles Geometry;
+    ASSERT_EQ(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry),
+              RADIENT_STATUS_PENDING);
+    DrainThreadPool(*pThreadPool);
+    const RadientMeshGeometryData                              GeometryData = MakeGeometryData(Geometry);
+    const std::array<const char*, 4>                           Names{nullptr, "", "first primitive", "second primitive"};
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, Names.size()> Meshes;
+    for (size_t MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        std::string                     Name = Names[MeshIndex] != nullptr ? Names[MeshIndex] : "";
+        RadientMeshPrimitiveCreateInfo  Primitive{};
+        const RadientMeshViewCreateInfo View = MakeMeshView(Primitive);
+        Primitive.Name                       = Names[MeshIndex] != nullptr ? Name.c_str() : nullptr;
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, View, &Meshes[MeshIndex])));
+        ASSERT_NE(Meshes[MeshIndex], nullptr);
+        Name.assign("overwritten source name");
+    }
+    DrainThreadPool(*pThreadPool);
+
+    for (size_t MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Meshes[MeshIndex]), RADIENT_STATUS_OK);
+        ASSERT_NE(RadientMeshAssetManager::GetMeshPayload(Meshes[MeshIndex]), nullptr);
+        const RadientMeshAssetDesc& Desc = Meshes[MeshIndex]->GetDesc();
+        ASSERT_EQ(Desc.GeometryCount, 1u);
+        ASSERT_NE(Desc.pGeometries, nullptr);
+        ASSERT_EQ(Desc.PrimitiveCount, 1u);
+        ASSERT_NE(Desc.pPrimitives, nullptr);
+        EXPECT_STREQ(Desc.pPrimitives[0].Name, Names[MeshIndex]);
+        EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(Meshes[MeshIndex]), Geometry.pVertexData.RawPtr());
+        EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Meshes[MeshIndex]), Geometry.pIndexData.RawPtr());
+        for (size_t OtherIndex = 0; OtherIndex < MeshIndex; ++OtherIndex)
+        {
+            EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(Meshes[MeshIndex]),
+                      RadientMeshAssetManager::GetMeshPayload(Meshes[OtherIndex]));
+            EXPECT_EQ(Desc.pGeometries, Meshes[OtherIndex]->GetDesc().pGeometries);
+            EXPECT_NE(Desc.pPrimitives, Meshes[OtherIndex]->GetDesc().pPrimitives);
+        }
+    }
+
+    // A cache hit after the payload is ready also keeps its own copied name.
+    RefCntAutoPtr<IRadientMeshAsset> pCachedMesh;
+    {
+        std::string                     Name = "cached primitive";
+        RadientMeshPrimitiveCreateInfo  Primitive{};
+        const RadientMeshViewCreateInfo View = MakeMeshView(Primitive);
+        Primitive.Name                       = Name.c_str();
+        EXPECT_TRUE(IsAcceptedOrMissingGPU(pMeshManager->CreateMeshView(*pThreadPool, &GeometryData, 1, View, &pCachedMesh)));
+    }
+    ASSERT_NE(pCachedMesh, nullptr);
+    DrainThreadPool(*pThreadPool);
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pCachedMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pCachedMesh),
+              RadientMeshAssetManager::GetMeshPayload(Meshes[0]));
+    const RadientMeshAssetDesc CachedDesc = pCachedMesh->GetDesc();
+    ASSERT_EQ(CachedDesc.GeometryCount, 1u);
+    ASSERT_NE(CachedDesc.pGeometries, nullptr);
+    ASSERT_EQ(CachedDesc.PrimitiveCount, 1u);
+    ASSERT_NE(CachedDesc.pPrimitives, nullptr);
+    EXPECT_STREQ(CachedDesc.pPrimitives[0].Name, "cached primitive");
+    EXPECT_NE(CachedDesc.pPrimitives, Meshes[0]->GetDesc().pPrimitives);
+    const Char* const pCachedName = CachedDesc.pPrimitives[0].Name;
+
+    pThreadPool->StopThreads();
+    for (auto& pMesh : Meshes)
+        pMesh.Release();
+    Geometry = {};
+    pMeshManager.reset();
+
+    EXPECT_EQ(pCachedMesh->GetDesc().pGeometries, CachedDesc.pGeometries);
+    EXPECT_EQ(pCachedMesh->GetDesc().pPrimitives, CachedDesc.pPrimitives);
+    EXPECT_EQ(pCachedMesh->GetDesc().pPrimitives[0].Name, pCachedName);
+    EXPECT_STREQ(pCachedName, "cached primitive");
+    EXPECT_EQ(CachedDesc.pGeometries[0].VertexCount, 3u);
 }
 
 TEST(RadientMeshAssetManagerTest, RetainsQueuedVertexBlobUntilWorkerFinishes)
@@ -844,13 +1008,27 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     ASSERT_NE(CustomGeometry.pVertexData, nullptr);
     ASSERT_NE(CustomGeometry.pIndexData, nullptr);
 
-    std::array<RadientMeshPrimitiveCreateInfo, 2> Primitives{};
+    auto pMaterialManagerA = RadientMaterialAssetManager::Create();
+    auto pMaterialManagerB = RadientMaterialAssetManager::Create();
+    auto pMaterialA        = CreateDefaultMaterial(*pMaterialManagerA);
+    auto pMaterialB        = CreateDefaultMaterial(*pMaterialManagerB);
+    ASSERT_NE(pMaterialA, nullptr);
+    ASSERT_NE(pMaterialB, nullptr);
+
+    std::array<RadientMeshPrimitiveCreateInfo, 3> Primitives{};
+    Primitives[0].Name       = "custom whole";
     Primitives[0].FirstIndex = 0;
     Primitives[0].IndexCount = 3;
-    Primitives[1].FirstIndex = 0;
-    Primitives[1].IndexCount = 3;
+    Primitives[0].pMaterial  = pMaterialA;
+    Primitives[1].Name       = "default subrange";
+    Primitives[1].FirstIndex = 1;
+    Primitives[1].IndexCount = 2;
+    Primitives[2].Name       = "custom subrange";
+    Primitives[2].FirstIndex = 2;
+    Primitives[2].IndexCount = 1;
+    Primitives[2].pMaterial  = pMaterialB;
 
-    const std::array<Uint32, 2> GeometryIndices{0, 1};
+    const std::array<Uint32, 3> GeometryIndices{1, 0, 1};
 
     RadientMeshViewCreateInfo ViewCI{};
     ViewCI.pPrimitives      = Primitives.data();
@@ -869,6 +1047,44 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
+
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 2u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    // Geometry indices are compacted in first-use order: custom, then default.
+    const RadientVertexLayoutDesc& CustomLayout = Desc.pGeometries[0].VertexLayout;
+    ASSERT_EQ(CustomLayout.BufferCount, 1u);
+    ASSERT_NE(CustomLayout.pBuffers, nullptr);
+    EXPECT_EQ(CustomLayout.pBuffers[0].ByteStride, 28u);
+    ASSERT_EQ(CustomLayout.AttributeCount, 1u);
+    ASSERT_NE(CustomLayout.pAttributes, nullptr);
+    EXPECT_STREQ(CustomLayout.pAttributes[0].Semantic, "POSITION");
+    EXPECT_EQ(CustomLayout.pAttributes[0].ByteOffset, 16u);
+    EXPECT_EQ(CustomLayout.pAttributes[0].BufferIndex, 0u);
+    const RadientVertexLayoutDesc& DefaultLayout = Desc.pGeometries[1].VertexLayout;
+    ASSERT_EQ(DefaultLayout.BufferCount, 1u);
+    ASSERT_NE(DefaultLayout.pBuffers, nullptr);
+    EXPECT_EQ(DefaultLayout.pBuffers[0].ByteStride, 32u);
+    EXPECT_EQ(DefaultLayout.AttributeCount, 3u);
+    for (Uint32 GeometryIndex = 0; GeometryIndex < Desc.GeometryCount; ++GeometryIndex)
+    {
+        EXPECT_EQ(Desc.pGeometries[GeometryIndex].VertexCount, 3u);
+        EXPECT_EQ(Desc.pGeometries[GeometryIndex].IndexCount, 3u);
+        EXPECT_EQ(Desc.pGeometries[GeometryIndex].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    }
+
+    ASSERT_EQ(Desc.PrimitiveCount, 3u);
+    ASSERT_NE(Desc.pPrimitives, nullptr);
+    const std::array<Uint32, 3> ReflectedGeometryIndices{0, 1, 0};
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Desc.PrimitiveCount; ++PrimitiveIndex)
+    {
+        const RadientMeshPrimitiveDesc& Primitive = Desc.pPrimitives[PrimitiveIndex];
+        EXPECT_STREQ(Primitive.Name, Primitives[PrimitiveIndex].Name);
+        EXPECT_EQ(Primitive.GeometryIndex, ReflectedGeometryIndices[PrimitiveIndex]);
+        EXPECT_EQ(Primitive.FirstElement, Primitives[PrimitiveIndex].FirstIndex);
+        EXPECT_EQ(Primitive.ElementCount, Primitives[PrimitiveIndex].IndexCount);
+        EXPECT_EQ(Primitive.pMaterial, Primitives[PrimitiveIndex].pMaterial);
+    }
 
     pThreadPool->StopThreads();
 }
@@ -935,7 +1151,24 @@ TEST(RadientMeshAssetManagerTest, MeshViewCacheUsesCanonicalGeometryPayload)
     EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexData(pMeshB), UsedGeometry.pVertexData.RawPtr());
     EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMeshB), UsedGeometry.pIndexData.RawPtr());
 
+    const RadientMeshAssetDesc& DescA = pMeshA->GetDesc();
+    const RadientMeshAssetDesc& DescB = pMeshB->GetDesc();
+    ASSERT_EQ(DescA.GeometryCount, 1u);
+    ASSERT_EQ(DescB.GeometryCount, 1u);
+    ASSERT_EQ(DescB.PrimitiveCount, 1u);
+    ASSERT_NE(DescB.pGeometries, nullptr);
+    ASSERT_NE(DescB.pPrimitives, nullptr);
+    EXPECT_EQ(DescB.pPrimitives[0].GeometryIndex, 0u);
+    EXPECT_EQ(DescA.pGeometries, DescB.pGeometries);
+    EXPECT_NE(DescA.pPrimitives, DescB.pPrimitives);
+
     pThreadPool->StopThreads();
+    pMeshA.Release();
+    UsedGeometry = {};
+    pMeshManager.reset();
+    EXPECT_EQ(pMeshB->GetDesc().pGeometries, DescB.pGeometries);
+    EXPECT_EQ(DescB.pGeometries[0].VertexCount, 3u);
+    EXPECT_STREQ(DescB.pGeometries[0].VertexLayout.pAttributes[0].Semantic, "POSITION");
 }
 
 TEST(RadientMeshAssetManagerTest, MeshViewCacheDistinguishesMaterialsFromDifferentManagers)
@@ -1024,8 +1257,14 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
     ASSERT_NE(pMeshManager, nullptr);
 
     MeshGeometryHandles Geometry;
-    EXPECT_EQ(CreateMeshGeometryData(*pMeshManager, *pThreadPool, MakeMeshSources(), Geometry),
-              RADIENT_STATUS_PENDING);
+    {
+        MeshSources                     Sources  = MakeMeshSources();
+        const std::string               Semantic = "POSITION";
+        const GLTF::VertexAttributeDesc Attribute{Semantic.c_str(), 0, VT_FLOAT32, 3};
+        ASSERT_EQ(Sources.pVertexSource->SetVertexAttributes(&Attribute, 1), RADIENT_STATUS_OK);
+        EXPECT_EQ(CreateMeshGeometryData(*pMeshManager, *pThreadPool, std::move(Sources), Geometry),
+                  RADIENT_STATUS_PENDING);
+    }
     ASSERT_NE(Geometry.pVertexData, nullptr);
     ASSERT_NE(Geometry.pIndexData, nullptr);
 
@@ -1060,6 +1299,16 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    const RadientVertexLayoutDesc& Layout = Desc.pGeometries[0].VertexLayout;
+    ASSERT_EQ(Layout.AttributeCount, 1u);
+    ASSERT_NE(Layout.pAttributes, nullptr);
+    EXPECT_STREQ(Layout.pAttributes[0].Semantic, "POSITION");
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    ASSERT_NE(Desc.pPrimitives, nullptr);
+    EXPECT_STREQ(Desc.pPrimitives[0].Name, "temporary primitive name");
 }
 
 TEST(RadientMeshAssetManagerTest, MeshTasksKeepManagerAliveUntilCompletion)

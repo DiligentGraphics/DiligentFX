@@ -210,3 +210,50 @@ cache reuse. Missing destination attributes use
 renderer defaults, or zero when no default is provided; extra source components
 are discarded and additional destination components remain zero. The source
 layout does not request GPU buffer placement or packing.
+
+## Inspecting stored mesh data
+
+After mesh loading succeeds, `IRadientMeshAsset::GetDesc()` exposes the stored
+representation through `RadientMeshAssetDesc`. CPU loading is sufficient; GPU
+upload completion is not required. Before loading succeeds, the description has
+zero counts and null array pointers.
+
+`pGeometries` contains each geometry's vertex layout, vertex count, index type,
+and total index count. The layout describes the renderer's chosen representation,
+including default attributes, rather than the original input buffers. Offsets and
+strides are explicit. Only active logical vertex streams appear in the layout,
+with consecutive buffer indices starting at zero. These indices and offsets do
+not expose GPU binding slots or placement within resource pools.
+
+`pPrimitives` contains primitive names, geometry indices, draw ranges, and default
+materials. Multiple primitives can share a geometry. `GeometryIndex` selects an
+entry in `pGeometries`; `FirstElement` and `ElementCount` select a range within
+that geometry. They count indices when the geometry's `IndexType` is not `NONE`,
+and vertices otherwise. `pMaterial` reports the default material, or null when
+none is assigned; scene-instance material overrides do not change this value.
+
+For example, application code can inspect the geometry used by each primitive:
+
+```cpp
+const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Desc.PrimitiveCount; ++PrimitiveIndex)
+{
+    const RadientMeshPrimitiveDesc& Primitive = Desc.pPrimitives[PrimitiveIndex];
+    const RadientMeshGeometryDesc& Geometry = Desc.pGeometries[Primitive.GeometryIndex];
+    const bool Indexed = Geometry.IndexType != RADIENT_INDEX_TYPE_NONE;
+
+    // Geometry.VertexLayout describes the stored vertex records.
+    // Primitive.FirstElement and Primitive.ElementCount describe the draw range.
+    // Primitive.pMaterial is the mesh's default assignment.
+}
+```
+
+`IndexType` describes stored indices, not the input encoding. Radient currently
+stores `UINT32` indices, including sequential indices generated for non-indexed
+GLTF input. Such imported geometry therefore reports `UINT32` and an index count.
+`NONE` describes geometry with no stored index buffer and an index count of zero;
+this reflection API does not add support for creating non-indexed meshes.
+
+The mesh owns the returned descriptor arrays, nested layout arrays, and names,
+and retains the default materials. These pointers remain valid while the mesh
+is retained. Copying a descriptor alone does not extend their lifetime.

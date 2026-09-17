@@ -128,6 +128,20 @@ public:
         return static_cast<Uint32>(m_VertexStrides.size());
     }
 
+    /// Returns the stored layout with active buffers numbered densely from zero.
+    /// Arrays and semantic strings remain valid until SetVertexAttributes is called
+    /// again or this source is destroyed.
+    RadientVertexLayoutDesc GetVertexLayout() const
+    {
+        VerifyVertexAttributesSet();
+        return {
+            m_StoredLayoutAttributes.data(),
+            static_cast<Uint32>(m_StoredLayoutAttributes.size()),
+            m_StoredBufferLayouts.data(),
+            static_cast<Uint32>(m_StoredBufferLayouts.size()),
+        };
+    }
+
     Uint32 GetVertexStride(Uint32 BufferIndex) const
     {
         VerifyVertexAttributesSet();
@@ -200,6 +214,11 @@ private:
     std::vector<std::unique_ptr<Uint8[]>>  m_DstAttributeDefaultValues;
     std::vector<Uint32>                    m_VertexStrides;
     std::vector<Uint32>                    m_VertexBufferDataSizes;
+
+    // Reflection includes all attributes in uploaded buffers. Semantic strings
+    // use the owned destination names; buffer indices omit inactive buffers.
+    std::vector<RadientVertexAttributeDesc>    m_StoredLayoutAttributes;
+    std::vector<RadientVertexBufferLayoutDesc> m_StoredBufferLayouts;
 
     // Public layout metadata is copied and resolved; source bytes stay in the blobs.
     std::vector<RadientVertexAttributeDesc>    m_SrcLayoutAttributes;

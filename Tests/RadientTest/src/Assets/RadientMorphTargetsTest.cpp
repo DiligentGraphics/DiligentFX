@@ -231,6 +231,16 @@ TEST(RadientMorphTargetsTest, MeshCreatesMutableWeightsFromDefaults)
     ASSERT_NE(Desc.pMorphTargets, nullptr);
     EXPECT_STREQ(Desc.pMorphTargets[0].Name, "Smile");
     EXPECT_STREQ(Desc.pMorphTargets[1].Name, "");
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, Source.Positions.size());
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, Source.Indices.size());
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_GT(Desc.pGeometries[0].VertexLayout.AttributeCount, 0u);
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    ASSERT_NE(Desc.pPrimitives, nullptr);
+    EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, Source.Primitive.IndexCount);
 
     RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
     ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);

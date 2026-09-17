@@ -322,6 +322,9 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
     ExpectInvalidAttributes(UnsupportedDstType.data(), static_cast<Uint32>(UnsupportedDstType.size()),
                             "Invalid destination vertex attribute at index 0");
 
+    const GLTF::VertexAttributeDesc EmptySemantic{"", 0, VT_FLOAT32, 3};
+    ExpectInvalidAttributes(&EmptySemantic, 1, "Invalid destination vertex attribute at index 0");
+
     const std::array<GLTF::VertexAttributeDesc, 1> TooManyComponents{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 5}};
     ExpectInvalidAttributes(TooManyComponents.data(), static_cast<Uint32>(TooManyComponents.size()),
@@ -338,6 +341,18 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{0}}};
     ExpectInvalidAttributes(OverlappingSameBuffer.data(), static_cast<Uint32>(OverlappingSameBuffer.size()),
                             "overlap in vertex buffer");
+}
+
+TEST(RadientMeshVertexSourceTest, RejectsStoredStrideMatchingAutomaticSentinel)
+{
+    auto MeshData        = MakeVertexMeshCI(DefaultPositions);
+    MeshData.VertexCount = 1;
+    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    const GLTF::VertexAttributeDesc Position{
+        "POSITION", 0, VT_FLOAT32, 3, RADIENT_VERTEX_AUTO_STRIDE - Uint32{12}};
+    Testing::TestingEnvironment::ErrorScope ExpectedErrors{"Invalid vertex buffer"};
+    EXPECT_EQ(Source.SetVertexAttributes(&Position, 1), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(RadientMeshVertexSourceTest, PacksStridedSourceAttributes)
@@ -685,6 +700,49 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIncludesDestinationVertexLayout)
     EXPECT_NE(TightSource.MakeCacheKey(), PaddedSource.MakeCacheKey());
 }
 
+TEST(RadientMeshVertexSourceTest, CacheKeyIncludesZeroFilledAttributeMetadata)
+{
+    // POSITION anchors the stride, so changes to the zero-filled attribute leave
+    // both the buffer size and all packed bytes unchanged.
+    const std::array<GLTF::VertexAttributeDesc, 3> Attributes{
+        GLTF::VertexAttributeDesc{"POSITION", 2, VT_FLOAT32, 3, Uint32{16}},
+        GLTF::VertexAttributeDesc{"_ZERO", 2, VT_FLOAT32, 1, Uint32{0}},
+        GLTF::VertexAttributeDesc{"_INACTIVE", 1, VT_FLOAT32, 1, Uint32{0}}};
+    std::vector<Uint8> Expected(56, 0);
+    std::memcpy(Expected.data() + 16, &DefaultPositions[0], sizeof(RadientFloat3));
+    std::memcpy(Expected.data() + 44, &DefaultPositions[1], sizeof(RadientFloat3));
+    auto GetKey = [&Expected](const std::array<GLTF::VertexAttributeDesc, 3>& Layout) //
+    {
+        RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+        EXPECT_EQ(Source.SetVertexAttributes(Layout.data(), static_cast<Uint32>(Layout.size())), RADIENT_STATUS_OK);
+        std::vector<Uint8> Packed(Source.GetVertexBufferDataSize(2));
+        EXPECT_EQ(Source.PackVertexData(2, {Packed.data(), static_cast<Uint32>(Packed.size())}), RADIENT_STATUS_OK);
+        EXPECT_EQ(Packed, Expected);
+        return Source.MakeCacheKey();
+    };
+    const std::string Key = GetKey(Attributes);
+    ASSERT_FALSE(Key.empty());
+
+    auto Renamed    = Attributes;
+    Renamed[1].Name = "_OTHER_ZERO";
+    EXPECT_NE(GetKey(Renamed), Key);
+
+    auto Relocated              = Attributes;
+    Relocated[1].RelativeOffset = 4;
+    EXPECT_NE(GetKey(Relocated), Key);
+
+    const float Zero             = 0.f;
+    auto        WithDefault      = Attributes;
+    WithDefault[1].pDefaultValue = &Zero;
+    EXPECT_NE(GetKey(WithDefault), Key);
+
+    auto InactiveChanged              = Attributes;
+    InactiveChanged[2].Name           = "_OTHER_INACTIVE";
+    InactiveChanged[2].RelativeOffset = 8;
+    InactiveChanged[2].NumComponents  = 2;
+    EXPECT_EQ(GetKey(InactiveChanged), Key);
+}
+
 TEST(RadientMeshVertexSourceTest, CacheKeyIgnoresUnusedMeshInputs)
 {
     auto MeshData = MakeVertexMeshCI(DefaultPositions);
@@ -769,6 +827,79 @@ TEST(RadientMeshVertexSourceTest, CopiesDestinationVertexAttributeDescriptors)
 
     ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffer0, 0), DefaultPositions[0]);
     ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffer0, 12), RadientFloat4{1.f, 0.f, 0.f, 1.f});
+}
+
+TEST(RadientMeshVertexSourceTest, ReflectsStoredVertexLayout)
+{
+    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, True, DefaultColors);
+    MeshData.Add("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
+    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    {
+        std::string                     PositionName = "POSITION";
+        std::string                     ZeroName     = "_ZERO_FILLED_ATTRIBUTE";
+        const RadientFloat3             DefaultNormal{0.f, 0.f, 1.f};
+        const GLTF::VertexAttributeDesc Attributes[]{
+            {PositionName.c_str(), 2, VT_FLOAT32, 3, Uint32{4}},
+            {"NORMAL", 2, VT_FLOAT32, 3, Uint32{20}, &DefaultNormal},
+            {"COLOR_0", 0, VT_FLOAT32, 4, Uint32{8}},
+            {"TEXCOORD_1", 1, VT_FLOAT32, 2},
+            {ZeroName.c_str(), 2, VT_FLOAT32, 2},
+            {"_INACTIVE_TRAILING", 3, VT_FLOAT32, 1}};
+        ASSERT_EQ(Source.SetVertexAttributes(Attributes, 6), RADIENT_STATUS_OK);
+        PositionName.assign("MODIFIED");
+        ZeroName.assign("MODIFIED");
+    }
+
+    const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
+    ASSERT_EQ(Layout.BufferCount, 2u);
+    ASSERT_EQ(Layout.AttributeCount, 4u);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 24u);
+    EXPECT_EQ(Layout.pBuffers[1].ByteStride, 40u);
+    const char* const ExpectedNames[]{"POSITION", "NORMAL", "COLOR_0", "_ZERO_FILLED_ATTRIBUTE"};
+    const Uint32      ExpectedBuffers[]{1, 1, 0, 1};
+    const Uint32      ExpectedOffsets[]{4, 20, 8, 32};
+    const Uint32      ExpectedComponents[]{3, 3, 4, 2};
+    for (Uint32 Index = 0; Index < Layout.AttributeCount; ++Index)
+    {
+        const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[Index];
+        EXPECT_STREQ(Attribute.Semantic, ExpectedNames[Index]);
+        EXPECT_EQ(Attribute.BufferIndex, ExpectedBuffers[Index]);
+        EXPECT_EQ(Attribute.ByteOffset, ExpectedOffsets[Index]);
+        EXPECT_EQ(Attribute.ComponentType, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32);
+        EXPECT_EQ(Attribute.ComponentCount, ExpectedComponents[Index]);
+        EXPECT_EQ(Attribute.Normalized, False);
+    }
+
+    // The reflected defaults and zero-filled elements occupy real stored bytes.
+    std::vector<Uint8> Packed(Source.GetVertexBufferDataSize(2), 0xFF);
+    ASSERT_EQ(Source.PackVertexData(2, {Packed.data(), static_cast<Uint32>(Packed.size())}), RADIENT_STATUS_OK);
+    ExpectFloat3Eq(ReadValue<RadientFloat3>(Packed, 4), DefaultPositions[0]);
+    ExpectFloat3Eq(ReadValue<RadientFloat3>(Packed, 20), RadientFloat3{0.f, 0.f, 1.f});
+    ExpectFloat2Eq(ReadValue<RadientFloat2>(Packed, 32), RadientFloat2{0.f, 0.f});
+}
+
+TEST(RadientMeshVertexSourceTest, RefreshesStoredVertexLayout)
+{
+    RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    const GLTF::VertexAttributeDesc InitialAttributes[]{
+        {"POSITION", 2, VT_FLOAT32, 3, Uint32{8}},
+        {"NORMAL", 2, VT_FLOAT32, 3}};
+    ASSERT_EQ(Source.SetVertexAttributes(InitialAttributes, 2), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.GetVertexLayout().AttributeCount, 2u);
+    ASSERT_EQ(Source.GetVertexLayout().pBuffers[0].ByteStride, 32u);
+
+    const GLTF::VertexAttributeDesc Position{"POSITION", 0, VT_FLOAT32, 3};
+    ASSERT_EQ(Source.SetVertexAttributes(&Position, 1), RADIENT_STATUS_OK);
+    const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
+    ASSERT_EQ(Layout.BufferCount, 1u);
+    ASSERT_EQ(Layout.AttributeCount, 1u);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 12u);
+    EXPECT_STREQ(Layout.pAttributes[0].Semantic, "POSITION");
+    EXPECT_EQ(Layout.pAttributes[0].BufferIndex, 0u);
+    EXPECT_EQ(Layout.pAttributes[0].ByteOffset, 0u);
 }
 
 TEST(RadientMeshVertexSourceTest, PacksUnsortedExplicitVertexAttributeOffsets)

@@ -212,6 +212,19 @@ TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
     ExpectCreateMeshAccepted(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh));
     ExpectValidMeshAsset(pMesh);
     ExpectMeshLoadFinished(pAssetManager, pMesh);
+
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_NE(Desc.pGeometries, nullptr);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, 6u * 3u * 3u);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, 6u * 2u * 2u * 6u);
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    ASSERT_NE(Desc.pPrimitives, nullptr);
+    EXPECT_STREQ(Desc.pPrimitives[0].Name, CubeCI.Name);
+    EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].FirstElement, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, Desc.pGeometries[0].IndexCount);
 }
 
 TEST(RadientMeshPrimitivesTest, CreateCubeMeshWithFaceColors)

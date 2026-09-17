@@ -141,20 +141,52 @@ public:
 class MeshVertexDataStorage : public MeshDataStatusStorage
 {
 public:
-    MeshVertexDataStorage(RADIENT_STATUS          InitLoadStatus,
-                          std::string             CacheKey,
-                          Uint32                  VertexCount,
-                          PBR_Renderer::PSO_FLAGS VertexAttribFlags) :
+    MeshVertexDataStorage(RADIENT_STATUS                 InitLoadStatus,
+                          std::string                    CacheKey,
+                          const RadientMeshVertexSource& Source) :
         MeshDataStatusStorage{InitLoadStatus, std::move(CacheKey)},
-        VertexCount{VertexCount},
-        VertexAttribFlags{VertexAttribFlags}
+        VertexCount{Source.GetVertexCount()},
+        VertexAttribFlags{Source.GetVertexAttribFlags()}
     {
+        // Keep the stored layout after the source and its read scopes are released.
+        const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
+        VertexAttributes.assign(Layout.pAttributes, Layout.pAttributes + Layout.AttributeCount);
+        VertexBuffers.assign(Layout.pBuffers, Layout.pBuffers + Layout.BufferCount);
+        AttributeNames.resize(Layout.AttributeCount);
+        for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
+        {
+            AttributeNames[AttributeIndex]            = VertexAttributes[AttributeIndex].Semantic;
+            VertexAttributes[AttributeIndex].Semantic = AttributeNames[AttributeIndex].c_str();
+        }
+    }
+
+    // The descriptors point into this storage's arrays and strings.
+    // clang-format off
+    MeshVertexDataStorage(const MeshVertexDataStorage&)            = delete;
+    MeshVertexDataStorage(MeshVertexDataStorage&&)                 = delete;
+    MeshVertexDataStorage& operator=(const MeshVertexDataStorage&) = delete;
+    MeshVertexDataStorage& operator=(MeshVertexDataStorage&&)      = delete;
+    // clang-format on
+
+    RadientVertexLayoutDesc GetVertexLayout() const
+    {
+        return {
+            VertexAttributes.data(),
+            static_cast<Uint32>(VertexAttributes.size()),
+            VertexBuffers.data(),
+            static_cast<Uint32>(VertexBuffers.size()),
+        };
     }
 
     RefCntAutoPtr<IVertexPoolAllocation> pVertexAllocation;
 
     const Uint32                  VertexCount       = 0;
     const PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+private:
+    std::vector<RadientVertexAttributeDesc>    VertexAttributes;
+    std::vector<RadientVertexBufferLayoutDesc> VertexBuffers;
+    std::vector<std::string>                   AttributeNames;
 };
 
 class MeshMorphTargetDataStorage : public MeshDataStatusStorage
@@ -276,6 +308,9 @@ struct MeshStorage
     std::vector<MeshGeometryStorage>                  Geometries;
     std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
+    RadientMeshAssetDesc                 Desc;
+    std::vector<RadientMeshGeometryDesc> GeometryDescs;
+
     std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
 
     // Aggregate dependency statuses are computed lazily while dependencies are
@@ -305,6 +340,9 @@ namespace
 
 class MeshAssetImpl;
 
+RADIENT_STATUS GetMeshGeometryLoadStatus(MeshStorage& Mesh);
+RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh);
+
 using MeshAssetBase =
     RadientAssetImpl<IRadientMeshAsset, IID_RadientMeshAsset, IID_MeshAssetImpl, RADIENT_ASSET_TYPE_MESH, MeshPayloadImpl, MeshAssetImpl>;
 
@@ -316,6 +354,37 @@ public:
     using TBase::Create;
     using TBase::ResolveAsset;
 
+    void SetMeshPayload(RefCntAutoPtr<MeshPayloadImpl>&& pPayload,
+                        const RadientMeshViewSource&     View)
+    {
+        const MeshStorage& Storage = pPayload->GetStorage();
+        m_Desc                     = Storage.Desc;
+        m_Primitives.resize(Storage.DrawableMesh.Primitives.size());
+        m_PrimitiveNames.resize(m_Primitives.size());
+        for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < m_Primitives.size(); ++PrimitiveIndex)
+        {
+            const auto& DrawablePrimitive = Storage.DrawableMesh.Primitives[PrimitiveIndex];
+            const Char* Name              = View.GetPrimitive(PrimitiveIndex).Name;
+            if (Name != nullptr)
+            {
+                m_PrimitiveNames[PrimitiveIndex] = Name;
+                Name                             = m_PrimitiveNames[PrimitiveIndex].c_str();
+            }
+            m_Primitives[PrimitiveIndex] = {
+                Name,
+                DrawablePrimitive.GeometryIndex,
+                DrawablePrimitive.FirstElement,
+                DrawablePrimitive.ElementCount,
+                DrawablePrimitive.pMaterialAsset};
+        }
+        m_Desc.pPrimitives    = m_Primitives.empty() ? nullptr : m_Primitives.data();
+        m_Desc.PrimitiveCount = static_cast<Uint32>(m_Primitives.size());
+
+        // Publish per-asset names and reflection before readers can acquire the
+        // shared payload. Names do not affect cached geometry or drawable data.
+        TBase::SetPayload(std::move(pPayload));
+    }
+
     virtual const RadientMeshAssetDesc& DILIGENT_CALL_TYPE GetDesc() const override final
     {
         static const RadientMeshAssetDesc EmptyDesc{};
@@ -323,19 +392,25 @@ public:
         if (pPayload == nullptr)
             return EmptyDesc;
 
-        const MeshStorage& Storage = pPayload->GetStorage();
-        for (const MeshGeometryStorage& Geometry : Storage.Geometries)
+        MeshStorage& Storage = pPayload->GetStorage();
+        if (Storage.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
+            GetMeshGeometryLoadStatus(Storage) != RADIENT_STATUS_OK ||
+            GetMeshMaterialStatus(Storage) != RADIENT_STATUS_OK)
         {
-            if (Geometry.pMorphTargetDataPayload != nullptr)
-                return Geometry.pMorphTargetDataPayload->GetStorage().Data.GetDesc();
+            return EmptyDesc;
         }
-        return EmptyDesc;
+        return m_Desc;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
     {
         return CreateRadientMorphTargetWeights(this, GetDesc(), ppWeights);
     }
+
+private:
+    RadientMeshAssetDesc                  m_Desc;
+    std::vector<RadientMeshPrimitiveDesc> m_Primitives;
+    std::vector<std::string>              m_PrimitiveNames;
 };
 
 struct MeshIndexBufferWriteData
@@ -402,6 +477,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
     }
 
     DrawableMesh.Geometries.reserve(Geometries.size());
+    GeometryDescs.reserve(Geometries.size());
     for (const MeshGeometryStorage& Geometry : Geometries)
     {
         if (Geometry.pIndexDataPayload == nullptr ||
@@ -424,6 +500,19 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             Geometry.pMorphTargetDataPayload != nullptr ?
             &Geometry.pMorphTargetDataPayload->GetStorage().Data :
             nullptr;
+
+        GeometryDescs.push_back(RadientMeshGeometryDesc{
+            VertexData.GetVertexLayout(),
+            VertexData.VertexCount,
+            RADIENT_INDEX_TYPE_UINT32,
+            IndexData.IndexCount});
+
+        if (pMorphTargetData != nullptr && Desc.pMorphTargets == nullptr)
+        {
+            const RadientMeshAssetDesc& MorphDesc = pMorphTargetData->GetDesc();
+            Desc.pMorphTargets                    = MorphDesc.pMorphTargets;
+            Desc.MorphTargetCount                 = MorphDesc.MorphTargetCount;
+        }
 
         DrawableMesh.Geometries.push_back(RadientDrawableMeshGeometry{
             nullptr,
@@ -474,6 +563,8 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             PrimitiveCI.IndexCount});
     }
 
+    Desc.pGeometries   = GeometryDescs.data();
+    Desc.GeometryCount = static_cast<Uint32>(GeometryDescs.size());
     MaterialStatus.store(MaterialStatusValue, std::memory_order_release);
 }
 
@@ -1003,9 +1094,7 @@ RADIENT_STATUS CreateMeshDataAsset(IThreadPool&                    ThreadPool,
 RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
                                                      bool         RequireGPUResourcesReady);
 
-RADIENT_STATUS GetMeshGeometryLoadStatus(MeshStorage& Mesh);
 RADIENT_STATUS GetMeshGeometryGPUResourceStatus(MeshStorage& Mesh);
-RADIENT_STATUS GetMeshMaterialStatus(MeshStorage& Mesh);
 RADIENT_STATUS GetMeshMaterialGPUResourceStatus(MeshStorage& Mesh);
 RADIENT_STATUS ResolveMeshMaterialDependencies(MeshStorage& Mesh);
 
@@ -1145,8 +1234,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
         [](const RadientMeshVertexSource& Source, std::string CacheKey) {
             return MeshVertexDataPayloadImpl::Create(RADIENT_STATUS_PENDING,
                                                      std::move(CacheKey),
-                                                     Source.GetVertexCount(),
-                                                     Source.GetVertexAttribFlags());
+                                                     Source);
         },
         CreateMeshVertexDataFromSource);
 }
@@ -1381,7 +1469,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                 if (!pMeshPayload)
                     return FailMesh();
 
-                pMeshAsset->SetPayload(std::move(pMeshPayload));
+                pMeshAsset->SetMeshPayload(std::move(pMeshPayload), MeshView);
                 return ASYNC_TASK_STATUS_COMPLETE;
             });
 

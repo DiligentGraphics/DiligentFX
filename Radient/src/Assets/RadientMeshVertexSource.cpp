@@ -44,7 +44,7 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint32 MeshVertexSourceCacheKeyVersion = 2;
+constexpr Uint32 MeshVertexSourceCacheKeyVersion = 3;
 
 using RadientValidation::IsProductRepresentable;
 
@@ -316,22 +316,19 @@ std::string RadientMeshVertexSource::MakeCacheKey() const
                   m_ActiveVertexBufferMask);
 
     Hasher.Update(static_cast<Uint64>(m_VertexStrides.size()));
-    for (Uint32 Stride : m_VertexStrides)
-        Hasher.Update(Stride);
+    for (Uint32 BufferIndex = 0; BufferIndex < m_VertexStrides.size(); ++BufferIndex)
+    {
+        if (IsActiveVertexBuffer(m_ActiveVertexBufferMask, BufferIndex))
+            Hasher.Update(m_VertexStrides[BufferIndex]);
+    }
 
     std::vector<const GLTF::VertexAttributeDesc*> UsedDstAttributes;
     UsedDstAttributes.reserve(m_DstAttributes.size());
     for (const GLTF::VertexAttributeDesc& DstAttrib : m_DstAttributes)
     {
-        const auto SrcAttribIt = m_SrcAttributes.find(DstAttrib.Name);
-        const bool HasSource   = SrcAttribIt != m_SrcAttributes.end();
-        // Default values only matter when they are written into an active
-        // vertex buffer. Source-backed attributes ignore defaults.
-        const bool UsesDefault = !HasSource &&
-            DstAttrib.pDefaultValue != nullptr &&
-            IsActiveVertexBuffer(m_ActiveVertexBufferMask, DstAttrib.BufferId);
-
-        if (HasSource || UsesDefault)
+        // Cached reflection includes every attribute in an active buffer,
+        // including missing attributes whose stored elements are zero-filled.
+        if (IsActiveVertexBuffer(m_ActiveVertexBufferMask, DstAttrib.BufferId))
             UsedDstAttributes.push_back(&DstAttrib);
     }
 
@@ -359,9 +356,13 @@ std::string RadientMeshVertexSource::MakeCacheKey() const
         }
         else
         {
-            const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
-            Hasher.Update(false);
-            UpdateRawIfNotEmpty(Hasher, DstAttrib.pDefaultValue, DstAttribSize);
+            const bool HasDefault = DstAttrib.pDefaultValue != nullptr;
+            Hasher.Update(false, HasDefault);
+            if (HasDefault)
+            {
+                const Uint32 DstAttribSize = GetValueSize(DstAttrib.ValueType) * DstAttrib.NumComponents;
+                UpdateRawIfNotEmpty(Hasher, DstAttrib.pDefaultValue, DstAttribSize);
+            }
         }
     }
 
@@ -387,7 +388,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
     for (Uint32 AttribIndex = 0; AttribIndex < NumDstAttributes; ++AttribIndex)
     {
         const GLTF::VertexAttributeDesc& DstAttrib = DstAttributes[AttribIndex];
-        if (DstAttrib.Name == nullptr ||
+        if (DstAttrib.Name == nullptr || DstAttrib.Name[0] == '\0' ||
             DstAttrib.ValueType != VT_FLOAT32 ||
             DstAttrib.NumComponents == 0 ||
             DstAttrib.NumComponents > 4 ||
@@ -545,7 +546,7 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
             continue;
 
         const Uint32 VertexStride = VertexStrides[BufferIndex];
-        if (VertexStride == 0 ||
+        if (VertexStride == 0 || VertexStride == RADIENT_VERTEX_AUTO_STRIDE ||
             !IsProductRepresentable<Uint32>(m_VertexCount, VertexStride))
         {
             LOG_ERROR_MESSAGE("Invalid vertex buffer ", BufferIndex, " stride ",
@@ -590,6 +591,30 @@ RADIENT_STATUS RadientMeshVertexSource::SetVertexAttributes(const GLTF::VertexAt
     m_ActiveVertexBufferMask = ActiveVertexBufferMask;
     m_VertexStrides          = std::move(VertexStrides);
     m_VertexBufferDataSizes  = std::move(VertexBufferDataSizes);
+
+    // Describe exactly the stored streams, including default and zero-filled
+    // attributes that share an active buffer with source-backed attributes.
+    m_StoredLayoutAttributes.clear();
+    m_StoredBufferLayouts.clear();
+    std::vector<Uint32> StoredBufferIndices(m_VertexStrides.size(), ~0u);
+    for (Uint32 BufferIndex = 0; BufferIndex < m_VertexStrides.size(); ++BufferIndex)
+    {
+        if (!IsVertexBufferActive(BufferIndex))
+            continue;
+        StoredBufferIndices[BufferIndex] = static_cast<Uint32>(m_StoredBufferLayouts.size());
+        m_StoredBufferLayouts.push_back({m_VertexStrides[BufferIndex]});
+    }
+    for (const auto& Attribute : m_DstAttributes)
+    {
+        if (!IsVertexBufferActive(Attribute.BufferId))
+            continue;
+        m_StoredLayoutAttributes.push_back({Attribute.Name,
+                                            StoredBufferIndices[Attribute.BufferId],
+                                            Attribute.RelativeOffset,
+                                            RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
+                                            Attribute.NumComponents,
+                                            False});
+    }
 
     // Find source buffers whose layouts already match the renderer's destination
     // buffers. Each matching source index lets PackVertexData use one memcpy;

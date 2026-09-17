@@ -48,6 +48,10 @@ static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UIN
 
 static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
 static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
+static_assert(std::is_standard_layout<RadientMeshGeometryDesc>::value, "RadientMeshGeometryDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMeshGeometryDesc>::value, "RadientMeshGeometryDesc must be trivially copyable");
+static_assert(std::is_standard_layout<RadientMeshPrimitiveDesc>::value, "RadientMeshPrimitiveDesc must be a standard-layout type");
+static_assert(std::is_trivially_copyable<RadientMeshPrimitiveDesc>::value, "RadientMeshPrimitiveDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientMeshAssetDesc>::value, "RadientMeshAssetDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientMeshAssetDesc>::value, "RadientMeshAssetDesc must be trivially copyable");
 
@@ -91,7 +95,27 @@ void RadientAssets_CPP_UseMeshAsset(IRadientMeshAsset* pMesh)
     IRadientMorphTargetWeights* pWeights = nullptr;
     const RadientMeshAssetDesc& Desc     = pMesh->GetDesc();
     (void)pMesh->CreateMorphTargetWeights(&pWeights);
-    (void)Desc;
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Desc.PrimitiveCount; ++PrimitiveIndex)
+    {
+        const RadientMeshPrimitiveDesc& Primitive = Desc.pPrimitives[PrimitiveIndex];
+        if (Primitive.GeometryIndex < Desc.GeometryCount)
+        {
+            const RadientMeshGeometryDesc& Geometry  = Desc.pGeometries[Primitive.GeometryIndex];
+            const RadientVertexLayoutDesc& Layout    = Geometry.VertexLayout;
+            const RADIENT_INDEX_TYPE       IndexType = Geometry.IndexType;
+            const Uint32                   Available = IndexType == RADIENT_INDEX_TYPE_NONE ? Geometry.VertexCount : Geometry.IndexCount;
+            const Uint32                   First     = Primitive.FirstElement;
+            const Uint32                   Count     = Primitive.ElementCount;
+            IRadientMaterialAsset*         pMaterial = Primitive.pMaterial;
+            const Char*                    Name      = Primitive.Name;
+            (void)Layout;
+            (void)Available;
+            (void)First;
+            (void)Count;
+            (void)pMaterial;
+            (void)Name;
+        }
+    }
     (void)pWeights;
 }
 

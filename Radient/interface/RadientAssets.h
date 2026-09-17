@@ -101,7 +101,7 @@ DILIGENT_TYPED_ENUM(RADIENT_SCENE_FORMAT, Uint8)
 /// Mesh index buffer element type.
 DILIGENT_TYPED_ENUM(RADIENT_INDEX_TYPE, Uint8)
 {
-    /// The primitive is not indexed.
+    /// The geometry has no index buffer and is drawn directly from its vertices.
     RADIENT_INDEX_TYPE_NONE = 0,
 
     /// 16-bit unsigned indices.
@@ -300,12 +300,99 @@ struct RadientMeshCreateInfo
 typedef struct RadientMeshCreateInfo RadientMeshCreateInfo;
 
 
-/// Immutable mesh asset description.
+/// Immutable description of one geometry's stored vertex and index data.
+///
+/// Multiple primitives can reference the same geometry while selecting different
+/// draw ranges and default materials. Counts describe the complete geometry;
+/// RadientMeshPrimitiveDesc describes the range used by each primitive.
+struct RadientMeshGeometryDesc
+{
+    /// Renderer-selected layout of the stored vertex data. Attribute offsets and
+    /// buffer strides are explicit; automatic packing values do not appear here.
+    /// The layout contains only active logical streams, numbered consecutively
+    /// from zero. BufferIndex identifies a stream within this layout, not a GPU
+    /// binding slot. ByteOffset is relative to a vertex record and excludes any
+    /// GPU pool or allocation offset. The layout may differ from the source layout
+    /// supplied during mesh creation, including attribute encodings and defaults.
+    /// The mesh owns the arrays and semantic strings for its lifetime.
+    RadientVertexLayoutDesc VertexLayout DEFAULT_INITIALIZER({});
+
+    /// Number of vertex records in every logical stream in VertexLayout.
+    /// Indices and non-indexed primitive ranges refer to this vertex domain.
+    Uint32 VertexCount DEFAULT_INITIALIZER(0);
+
+    /// Encoding of the stored indices. NONE identifies non-indexed geometry,
+    /// whose primitives select vertices directly. This describes the renderer's
+    /// stored representation, which may differ from the input index encoding.
+    RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
+
+    /// Total number of stored indices. Zero when IndexType is NONE.
+    /// Indexed primitive ranges select elements within this index domain.
+    Uint32 IndexCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientMeshGeometryDesc RadientMeshGeometryDesc;
+
+
+/// Immutable description of one mesh primitive's draw range and default material.
+///
+/// GeometryIndex selects the shared geometry that supplies vertex and index data.
+/// The referenced geometry's IndexType determines whether FirstElement and
+/// ElementCount count indices or vertices.
+struct RadientMeshPrimitiveDesc
+{
+    /// Optional null-terminated primitive name, or nullptr when no name is set.
+    /// The mesh owns the string, which remains valid while the mesh is retained.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Zero-based index into RadientMeshAssetDesc::pGeometries. Less than the mesh
+    /// description's GeometryCount for every primitive in a loaded mesh.
+    Uint32 GeometryIndex DEFAULT_INITIALIZER(0);
+
+    /// Zero-based first index when the geometry is indexed, or first vertex when
+    /// its IndexType is NONE. Relative to the referenced geometry's data, without
+    /// any GPU pool or allocation offset; measured in elements, not bytes.
+    Uint32 FirstElement DEFAULT_INITIALIZER(0);
+
+    /// Number of indices when the geometry is indexed, or vertices when its
+    /// IndexType is NONE. FirstElement + ElementCount does not exceed the geometry's
+    /// IndexCount for indexed geometry, or VertexCount for non-indexed geometry.
+    Uint32 ElementCount DEFAULT_INITIALIZER(0);
+
+    /// Default material assigned to this primitive, or nullptr when none is set.
+    /// Does not include material overrides applied to scene instances. The mesh
+    /// retains the material; this pointer remains valid while the mesh is retained.
+    IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct RadientMeshPrimitiveDesc RadientMeshPrimitiveDesc;
+
+
+/// Immutable description of a mesh's stored geometry, primitives, and morph targets.
+///
+/// Available after successful CPU loading, independently of GPU upload completion.
+/// Before loading succeeds, all counts are zero and all array pointers are null.
+/// The mesh owns the descriptor arrays and referenced strings and retains the
+/// default materials. All referenced data remains valid while the mesh is retained.
 struct RadientMeshAssetDesc
 {
+    /// Array of GeometryCount descriptions of stored vertex and index data.
+    /// Primitive GeometryIndex values select elements of this array. Null when
+    /// GeometryCount is zero. The mesh owns this array and all nested layouts.
+    const RadientMeshGeometryDesc* pGeometries DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pGeometries. Multiple primitives may share a geometry.
+    Uint32 GeometryCount DEFAULT_INITIALIZER(0);
+
+    /// Array of PrimitiveCount primitive descriptions, including geometry indices,
+    /// draw ranges, and default materials. Null when PrimitiveCount is zero.
+    /// The mesh owns this array and its names and retains its non-null materials.
+    const RadientMeshPrimitiveDesc* pPrimitives DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pPrimitives.
+    Uint32 PrimitiveCount DEFAULT_INITIALIZER(0);
+
     /// Array of MorphTargetCount morph-target descriptions. The array, its
     /// attribute descriptions, and all referenced strings remain valid while
-    /// the mesh asset is retained. May be null when MorphTargetCount is zero.
+    /// the mesh asset is retained. Null when MorphTargetCount is zero.
     const RadientMorphTargetDesc* pMorphTargets DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pMorphTargets.
@@ -564,12 +651,13 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Immutable mesh asset and its morph-target schema.
+/// Immutable mesh asset with geometry, primitive, and morph-target descriptions.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshAsset, IRadientAsset)
 {
     /// Returns the immutable mesh description. The description is empty until
-    /// mesh loading completes successfully. The returned reference and all data
-    /// it references remain valid while the mesh asset is retained.
+    /// CPU loading completes successfully; GPU upload completion is not required.
+    /// The returned reference, nested arrays, names, and material pointers remain
+    /// valid while the mesh asset is retained.
     VIRTUAL const RadientMeshAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Creates mutable weights initialized to the mesh morph-target defaults.

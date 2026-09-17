@@ -33,6 +33,8 @@ void RadientAssets_C_UseTypes(void)
     RadientMeshPrimitiveCreateInfo   Primitive           = {0};
     RadientMeshCreateInfo            MeshCI              = {0};
     RadientMeshAssetDesc             MeshDesc            = {0};
+    RadientMeshGeometryDesc          GeometryDesc        = {0};
+    RadientMeshPrimitiveDesc         PrimitiveDesc       = {0};
     RadientTextureLoadInfo           TextureLoadInfo     = {0};
     RadientSceneLoadInfo             SceneLoadInfo       = {0};
     RadientSceneAssetDesc            SceneAssetDesc      = {0};
@@ -65,6 +67,19 @@ void RadientAssets_C_UseTypes(void)
     MeshCI.VertexCount                               = 1;
     MeshCI.pIndexBuffer                              = VertexData;
     (void)MeshCI;
+    GeometryDesc.VertexLayout   = MeshCI.VertexLayout;
+    GeometryDesc.VertexCount    = MeshCI.VertexCount;
+    GeometryDesc.IndexType      = RADIENT_INDEX_TYPE_UINT32;
+    GeometryDesc.IndexCount     = 3;
+    PrimitiveDesc.Name          = "Primitive";
+    PrimitiveDesc.GeometryIndex = 0;
+    PrimitiveDesc.FirstElement  = 0;
+    PrimitiveDesc.ElementCount  = 3;
+    PrimitiveDesc.pMaterial     = pMaterial;
+    MeshDesc.pGeometries        = &GeometryDesc;
+    MeshDesc.GeometryCount      = 1;
+    MeshDesc.pPrimitives        = &PrimitiveDesc;
+    MeshDesc.PrimitiveCount     = 1;
     (void)MeshDesc;
     IRadientDataBlob* pBlob      = TextureLoadInfo.pDataBlob;
     TextureLoadInfo.pDataBlob    = pBlob;
@@ -101,7 +116,18 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
         IRadientMorphTargetWeights* pWeights  = 0;
         const RadientMeshAssetDesc* pMeshDesc = IRadientMeshAsset_GetDesc(pMesh);
         Status                                = IRadientMeshAsset_CreateMorphTargetWeights(pMesh, &pWeights);
-        (void)pMeshDesc;
+        if (pMeshDesc->PrimitiveCount != 0)
+        {
+            const RadientMeshPrimitiveDesc* pPrimitiveDesc = &pMeshDesc->pPrimitives[0];
+            if (pPrimitiveDesc->GeometryIndex < pMeshDesc->GeometryCount)
+            {
+                const RadientMeshGeometryDesc* pGeometry = &pMeshDesc->pGeometries[pPrimitiveDesc->GeometryIndex];
+                const RadientVertexLayoutDesc* pLayout   = &pGeometry->VertexLayout;
+                const RADIENT_INDEX_TYPE       IndexType = pGeometry->IndexType;
+                (void)pLayout;
+                (void)IndexType;
+            }
+        }
         (void)pWeights;
     }
     Status = IRadientAssetManager_CreateMaterial(pAssetManager, pMaterialDefinition, &pMaterial);

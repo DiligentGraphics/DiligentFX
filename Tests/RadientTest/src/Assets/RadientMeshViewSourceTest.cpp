@@ -219,6 +219,26 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesPrimitiveRangesAndMaterials)
     EXPECT_TRUE(InvalidView.MakeCacheKey(GeometryCacheKey).empty());
 }
 
+TEST(RadientMeshViewSourceTest, CacheKeyIgnoresPrimitiveNames)
+{
+    auto Primitive  = MakePrimitive();
+    auto KeyForName = [&Primitive](const Char* Name) {
+        Primitive.Name = Name;
+        RadientMeshViewSource View{MakeViewCI(&Primitive, 1), 3};
+        return View.MakeCacheKey("mesh-geometry:test");
+    };
+
+    const auto UnnamedKey   = KeyForName(nullptr);
+    const auto EmptyNameKey = KeyForName("");
+    const auto NamedKey     = KeyForName("primitive");
+    ASSERT_FALSE(UnnamedKey.empty());
+    EXPECT_EQ(UnnamedKey, EmptyNameKey);
+    EXPECT_EQ(UnnamedKey, NamedKey);
+    EXPECT_EQ(EmptyNameKey, NamedKey);
+    EXPECT_EQ(NamedKey, KeyForName("other"));
+    EXPECT_EQ(NamedKey, KeyForName(std::string{"primitive"}.c_str()));
+}
+
 TEST(RadientMeshViewSourceTest, GeometryIndicesSelectValidationRanges)
 {
     const std::array<Uint32, 2> GeometryIndexCounts{3, 6};

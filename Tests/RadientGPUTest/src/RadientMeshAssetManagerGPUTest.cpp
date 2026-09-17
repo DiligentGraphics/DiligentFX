@@ -222,6 +222,13 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     // stay pending until dependent texture GPU work has been enqueued.
     ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_PENDING));
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_PENDING);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, 3u);
+    EXPECT_EQ(Desc.pPrimitives[0].pMaterial, pMaterial.RawPtr());
     {
         const RadientDrawableMeshResolveResult Result =
             RadientMeshAssetManager::GetDrawableMesh(pMesh, true);
