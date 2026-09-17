@@ -598,47 +598,53 @@ struct RadientTextureAssetDesc
 typedef struct RadientTextureAssetDesc RadientTextureAssetDesc;
 
 
-/// Decoded mip 0 data for a 2D texture. The descriptor is copied by LoadTexture.
+/// Mip 0 data for a 2D texture, in pixel or compressed block form.
+/// The descriptor is copied by LoadTexture.
 struct RadientTextureData
 {
-    /// Texture width in pixels. Must be nonzero; defaults to zero.
+    /// Texture width in pixels. Must be nonzero and a multiple of four for BC formats;
+    /// defaults to zero. Invalid dimensions cause LoadTexture to return RADIENT_STATUS_INVALID_ARGUMENT.
     Uint32 Width DEFAULT_INITIALIZER(0);
 
-    /// Texture height in pixels. Must be nonzero; defaults to zero.
+    /// Texture height in pixels. Must be nonzero and a multiple of four for BC formats;
+    /// defaults to zero. Invalid dimensions cause LoadTexture to return RADIENT_STATUS_INVALID_ARGUMENT.
     Uint32 Height DEFAULT_INITIALIZER(0);
 
-    /// Pixel format. Accepts all uncompressed RADIENT_TEXTURE_FORMAT values, including SNORM.
-    /// Compressed BC formats are only supported through encoded texture sources.
-    /// Must not be RADIENT_TEXTURE_FORMAT_UNKNOWN, which is the default.
+    /// Pixel or block-compressed format. Accepts all RADIENT_TEXTURE_FORMAT values except
+    /// RADIENT_TEXTURE_FORMAT_UNKNOWN, which is the default.
     RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
 
-    /// Required blob containing mip 0 pixel data, starting at byte zero.
+    /// Required blob containing mip 0 pixels or compressed blocks, starting at byte zero.
     /// Accepts read-only or mutable blobs. Its size must cover every active source row:
-    /// (Height - 1) * effective stride + active row size. The effective stride is Stride
-    /// when nonzero, otherwise the active row size derived from Format and Width.
+    /// (row count - 1) * effective stride + active row size. For uncompressed formats,
+    /// row count is Height. For BC formats, row count is Height / 4 and the active
+    /// row size is Width / 4 times the block size (8 or 16 bytes, depending on Format).
+    /// The effective stride is Stride when nonzero, otherwise the active row size.
     /// The final row does not require trailing padding; extra bytes are ignored.
-    /// The read pointer must be aligned to the format's component size (1, 2, or 4 bytes).
+    /// For uncompressed formats, the read pointer must be aligned to the component size
+    /// (1, 2, or 4 bytes). Compressed data has no pointer alignment requirement.
     /// Insufficient size or component misalignment returns RADIENT_STATUS_INVALID_ARGUMENT.
     /// LoadTexture retains the blob and acquires read access before returning, then
-    /// consumes the pixels directly without copying or repacking the source rows.
-    /// Read access lasts while loading or upload preparation references these pixels.
+    /// consumes the data directly without copying or repacking the source rows.
+    /// Read access lasts while loading or upload preparation references this data.
     /// Other readers are allowed; writes and resizing remain blocked until all readers
     /// finish. An active writer causes LoadTexture to return RADIENT_STATUS_INVALID_OPERATION.
     /// The caller may release its blob reference after LoadTexture returns. For REFERENCE
     /// storage, the bytes remain alive and unchanged for the blob's entire lifetime;
     /// RadientDataBlobCreateInfo::OnDestroy can release their owner. Last-reader callbacks
     /// may run during LoadTexture or later on a worker thread; they do not indicate GPU
-    /// upload completion. Defaults to nullptr, which is invalid for decoded texture input.
+    /// upload completion. Defaults to nullptr, which is invalid for mip 0 texture input.
     IRadientDataBlob* pDataBlob DEFAULT_INITIALIZER(nullptr);
 
-    /// Row stride, in bytes. If zero, Radient derives tightly packed stride from Format and Width.
-    /// Stride must be at least the active row size and, when Height is greater than one,
-    /// a multiple of the format's component size, so each row remains component-aligned.
+    /// Stride between pixel rows or compressed block rows, in bytes. If zero, Radient
+    /// derives tightly packed stride from Format and Width. Must be at least the active
+    /// row size. For uncompressed formats with Height greater than one, it must also be
+    /// a multiple of the component size, so each row remains component-aligned.
     Uint32 Stride DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientTextureData RadientTextureData;
 
-/// Texture load attributes. Selects encoded bytes, decoded pixels, or a URI source.
+/// Texture load attributes. Selects encoded bytes, mip 0 data, or a URI source.
 struct RadientTextureLoadInfo
 {
     /// Source URI. For memory-backed textures, this is optional and may be used as the texture identity
@@ -650,6 +656,9 @@ struct RadientTextureLoadInfo
     const Char* BaseURI DEFAULT_INITIALIZER(nullptr);
 
     /// Optional blob containing the complete encoded texture, starting at byte zero.
+    /// Encoded BC textures require mip 0 width and height to be multiples of four;
+    /// otherwise loading fails with RADIENT_STATUS_UNSUPPORTED. Smaller mip levels
+    /// may have dimensions below four.
     /// Accepts read-only or mutable blobs. The blob must be non-empty and its size must fit in size_t.
     /// Mutually exclusive with pTextureData. Radient retains the blob and acquires read access during
     /// LoadTexture(), before returning. The data pointer and size are checked within this read scope.
@@ -668,10 +677,12 @@ struct RadientTextureLoadInfo
     /// requirement for REFERENCE storage. See RadientDataBlobCreateInfo for callback details.
     IRadientDataBlob* pDataBlob DEFAULT_INITIALIZER(nullptr);
 
-    /// Optional pointer to decoded texture data, mutually exclusive with pDataBlob.
-    /// Only 2D texture data is currently supported. Mip 0 data must be provided; Radient always
-    /// generates mip levels. The descriptor is copied during LoadTexture(), and its pDataBlob
-    /// is retained with read access while the pixels are needed; see RadientTextureData::pDataBlob.
+    /// Optional pointer to mip 0 texture data, mutually exclusive with pDataBlob.
+    /// Only 2D texture data is currently supported. Radient generates mip levels for
+    /// uncompressed formats. BC formats retain the supplied mip 0 without generating
+    /// additional levels. To supply a compressed mip chain, use an encoded texture source.
+    /// The descriptor is copied during LoadTexture(), and its pDataBlob is retained
+    /// with read access while the data is needed; see RadientTextureData::pDataBlob.
     const RadientTextureData* pTextureData DEFAULT_INITIALIZER(nullptr);
 
     /// Interpret the texture as sRGB.

@@ -34,10 +34,15 @@ Encoded texture sources retain support for cube maps and texture arrays.
 If a loaded format has no corresponding `RADIENT_TEXTURE_FORMAT` value, `Format`
 is `RADIENT_TEXTURE_FORMAT_UNKNOWN`; the dimensions and mip count remain available.
 
-`RadientTextureData` accepts all uncompressed formats in `RADIENT_TEXTURE_FORMAT`,
-including SNORM, and generates mip levels. Compressed BC formats can be reflected
-from encoded texture sources such as DDS or KTX; direct compressed input through
-`RadientTextureData` is not supported.
+`RadientTextureData` accepts all defined formats except `RADIENT_TEXTURE_FORMAT_UNKNOWN`.
+Uncompressed input generates a full mip chain. BC input supplies compressed blocks
+for mip level zero and keeps that single level without decompression or recompression.
+Its stride counts bytes between block rows; zero selects tightly packed blocks.
+To load an existing compressed mip chain, provide an encoded texture such as DDS or KTX.
+BC mip 0 width and height must be multiples of four for all sources. Invalid raw
+dimensions return `RADIENT_STATUS_INVALID_ARGUMENT`; encoded textures with these
+dimensions fail loading with `RADIENT_STATUS_UNSUPPORTED`. Smaller dimensions in
+subsequent mip levels remain valid.
 
 C callers use `IRadientTextureAsset_GetDesc(Texture)` to obtain a pointer to the
 same immutable description.

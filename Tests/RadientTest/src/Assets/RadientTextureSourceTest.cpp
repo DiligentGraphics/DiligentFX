@@ -810,6 +810,149 @@ TEST(RadientTextureSourceTest, SignedNormalizedInputsGenerateSignedMipValues)
     CheckFormat(Int16{}, RADIENT_TEXTURE_FORMAT_RGBA16_SNORM, 4);
 }
 
+TEST(RadientTextureSourceTest, CompressedInputsRetainMipZeroWithoutCopyingOrRepacking)
+{
+    const std::pair<RADIENT_TEXTURE_FORMAT, Uint32> Formats[] = {
+        {RADIENT_TEXTURE_FORMAT_BC1_UNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC1_UNORM_SRGB, 8},
+        {RADIENT_TEXTURE_FORMAT_BC2_UNORM, 16},
+        {RADIENT_TEXTURE_FORMAT_BC2_UNORM_SRGB, 16},
+        {RADIENT_TEXTURE_FORMAT_BC3_UNORM, 16},
+        {RADIENT_TEXTURE_FORMAT_BC3_UNORM_SRGB, 16},
+        {RADIENT_TEXTURE_FORMAT_BC4_UNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC4_SNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC5_UNORM, 16},
+        {RADIENT_TEXTURE_FORMAT_BC5_SNORM, 16},
+        {RADIENT_TEXTURE_FORMAT_BC6H_UF16, 16},
+        {RADIENT_TEXTURE_FORMAT_BC6H_SF16, 16},
+        {RADIENT_TEXTURE_FORMAT_BC7_UNORM, 16},
+        {RADIENT_TEXTURE_FORMAT_BC7_UNORM_SRGB, 16},
+    };
+    for (const auto& [Format, BlockSize] : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        std::string PackedKey;
+        for (const Uint32 Padding : {0u, 3u})
+        {
+            SCOPED_TRACE(Padding);
+            const Uint32                          ActiveRowSize = 2 * BlockSize;
+            const Uint32                          Stride        = ActiveRowSize + Padding;
+            const Uint32                          DataSize      = Stride + ActiveRowSize;
+            alignas(Uint32) std::array<Uint8, 80> Bytes{};
+            Bytes.fill(0xCD);
+            // Block data may start at an arbitrary byte address and use odd row pitches.
+            Uint8* const pBytes = Bytes.data() + 1;
+            for (Uint32 Row = 0; Row < 2; ++Row)
+            {
+                for (Uint32 Byte = 0; Byte < ActiveRowSize; ++Byte)
+                    pBytes[Row * Stride + Byte] = static_cast<Uint8>(Row * ActiveRowSize + Byte * 7);
+            }
+            auto               pBlob = MakeReferencedDataBlob(pBytes, DataSize);
+            RadientTextureData Data;
+            Data.Width     = 8;
+            Data.Height    = 8;
+            Data.Format    = Format;
+            Data.pDataBlob = pBlob;
+            Data.Stride    = Padding == 0 ? 0 : Stride;
+            RadientTextureDataSpan Span;
+            ASSERT_TRUE(GetRadientTextureDataSpan(Data, Span));
+            EXPECT_EQ(Span.ActiveRowSize, ActiveRowSize);
+            EXPECT_EQ(Span.RowCount, 2u);
+            EXPECT_EQ(Span.DataSize, DataSize);
+            RadientTextureLoadInfo LoadInfo;
+            LoadInfo.pTextureData = &Data;
+            RadientTextureSource Source{LoadInfo};
+            ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+            EXPECT_EQ(Source.GetDataSize(), DataSize);
+            const auto Key = Source.MakeCacheKey();
+            ASSERT_FALSE(Key.empty());
+            if (Padding == 0)
+                PackedKey = Key;
+            else
+                EXPECT_EQ(Key, PackedKey);
+            RefCntAutoPtr<ITextureLoader> pLoader;
+            ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+            ASSERT_NE(pLoader, nullptr);
+            const auto& Desc = pLoader->GetTextureDesc();
+            EXPECT_EQ(Desc.Type, RESOURCE_DIM_TEX_2D);
+            EXPECT_EQ(Desc.Width, Data.Width);
+            EXPECT_EQ(Desc.Height, Data.Height);
+            EXPECT_EQ(Desc.Format, RadientToTextureFormat(Format));
+            EXPECT_EQ(Desc.MipLevels, 1u);
+            const auto& Subres = pLoader->GetSubresourceData(0);
+            EXPECT_EQ(Subres.pData, pBytes);
+            EXPECT_EQ(Subres.Stride, Stride);
+        }
+    }
+}
+
+TEST(RadientTextureSourceTest, ComputesPartialBlockSpansIndependentlyOfLoadingRestrictions)
+{
+    const std::pair<RADIENT_TEXTURE_FORMAT, Uint32> Formats[] = {
+        {RADIENT_TEXTURE_FORMAT_BC1_UNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC7_UNORM, 16},
+    };
+    for (const auto& [Format, BlockSize] : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        for (const Uint32 Padding : {0u, 3u})
+        {
+            RadientTextureData Data;
+            Data.Width  = 5;
+            Data.Height = 7;
+            Data.Format = Format;
+            Data.Stride = Padding == 0 ? 0 : 2 * BlockSize + Padding;
+            RadientTextureDataSpan Span;
+            ASSERT_TRUE(GetRadientTextureDataSpan(Data, Span));
+            EXPECT_EQ(Span.ActiveRowSize, 2 * BlockSize);
+            EXPECT_EQ(Span.RowCount, 2u);
+            EXPECT_EQ(Span.DataSize, 4 * BlockSize + Padding);
+        }
+    }
+}
+
+TEST(RadientTextureSourceTest, RejectsCompressedInputsWithIncompleteBlocksOrShortStride)
+{
+    const std::pair<RADIENT_TEXTURE_FORMAT, Uint32> Formats[] = {
+        {RADIENT_TEXTURE_FORMAT_BC1_UNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC7_UNORM, 16},
+    };
+    const std::array<Uint8, 80> Bytes{};
+    for (const auto& [Format, BlockSize] : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        for (const bool Truncated : {false, true})
+        {
+            SCOPED_TRACE(Truncated);
+            const Uint32 ActiveRowSize = 2 * BlockSize;
+            const Uint32 Stride        = ActiveRowSize + 3;
+            Uint32       ReadReleases  = 0;
+
+            auto pBlob = MakeReferencedDataBlob(Bytes.data(), Stride + ActiveRowSize - (Truncated ? 1 : 0),
+                                                CountBlobReadReleases, &ReadReleases);
+
+            RadientTextureData Data;
+            Data.Width     = 8;
+            Data.Height    = 8;
+            Data.Format    = Format;
+            Data.pDataBlob = pBlob;
+            Data.Stride    = Truncated ? Stride : ActiveRowSize - 1;
+            RadientTextureDataSpan Span;
+            EXPECT_EQ(GetRadientTextureDataSpan(Data, Span), Truncated);
+            RadientTextureLoadInfo LoadInfo;
+            LoadInfo.pTextureData = &Data;
+            RadientTextureSource Source{LoadInfo};
+            EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
+            EXPECT_FALSE(Source.IsMemory());
+            EXPECT_TRUE(Source.MakeCacheKey().empty());
+            EXPECT_EQ(ReadReleases, Truncated ? 1u : 0u);
+            RefCntAutoPtr<ITextureLoader> pLoader;
+            EXPECT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_INVALID_ARGUMENT);
+            EXPECT_EQ(pLoader, nullptr);
+        }
+    }
+}
+
 TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
 {
     RadientTextureLoadInfo LoadInfo{};

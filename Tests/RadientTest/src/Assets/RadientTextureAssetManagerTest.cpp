@@ -40,7 +40,6 @@
 
 #include <array>
 #include <atomic>
-#include <cstring>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -176,17 +175,6 @@ RefCntAutoPtr<IRadientDataBlob> MakeDDSTestBlob(const TextureDesc& Desc)
     {
         ADD_FAILURE() << "Failed to create in-memory DDS fixture";
         return {};
-    }
-    if (Desc.IsCube())
-    {
-        // The DDS writer emits face data but omits the DX10 cube flag and uses
-        // face count where the file header requires cube count. Correct the fixture.
-        // The DX10 header follows the four-byte magic and 124-byte legacy header.
-        constexpr size_t DX10HeaderOffset = 4 + 124;
-        const Uint32     CubeFlag         = 0x4; // D3D11_RESOURCE_MISC_TEXTURECUBE
-        const Uint32     CubeCount        = Desc.GetArraySize() / 6;
-        std::memcpy(pDDS->GetDataPtr(DX10HeaderOffset + 2 * sizeof(Uint32)), &CubeFlag, sizeof(CubeFlag));
-        std::memcpy(pDDS->GetDataPtr(DX10HeaderOffset + 3 * sizeof(Uint32)), &CubeCount, sizeof(CubeCount));
     }
     return MakeTestDataBlob(pDDS->GetConstDataPtr(), pDDS->GetSize());
 }
@@ -452,6 +440,38 @@ TEST(RadientTextureAssetManagerTest, ReflectsDecodedDimensionsFormatAndGenerated
     pThreadPool->StopThreads();
 }
 
+TEST(RadientTextureAssetManagerTest, ReflectsRawCompressedTextureDataWithoutGeneratingMips)
+{
+    const std::pair<RADIENT_TEXTURE_FORMAT, Uint32> Formats[] = {
+        {RADIENT_TEXTURE_FORMAT_BC1_UNORM, 8},
+        {RADIENT_TEXTURE_FORMAT_BC3_UNORM_SRGB, 16},
+        {RADIENT_TEXTURE_FORMAT_BC6H_UF16, 16},
+    };
+    const std::array<Uint8, 67> Blocks{};
+    auto                        pThreadPool = CreateTestThreadPool(0);
+    auto                        pManager    = CreateTextureManager();
+    for (const auto& [Format, BlockSize] : Formats)
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        const Uint32       Stride = 2 * BlockSize + 3;
+        auto               pBlob  = MakeTestDataBlob(Blocks.data(), Stride + 2 * BlockSize);
+        RadientTextureData Data;
+        Data.Width     = 8;
+        Data.Height    = 8;
+        Data.Format    = Format;
+        Data.pDataBlob = pBlob;
+        Data.Stride    = Stride;
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
+        ExpectTextureDesc(pTexture);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
+        ExpectTextureDesc(pTexture, Data.Width, Data.Height, Format, 1);
+    }
+    pThreadPool->StopThreads();
+}
+
 TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCount)
 {
     struct TestCase
@@ -471,11 +491,12 @@ TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCou
     {
         SCOPED_TRACE(static_cast<Uint32>(Case.ExpectedFormat));
         TextureDesc Desc;
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = 8;
-        Desc.Height    = 4;
-        Desc.Format    = Case.SourceFormat;
-        Desc.MipLevels = 2;
+        Desc.Type   = RESOURCE_DIM_TEX_2D;
+        Desc.Width  = 8;
+        Desc.Height = 8;
+        Desc.Format = Case.SourceFormat;
+        // Lower levels include 2x2 and 1x1 images; only mip 0 must cover whole blocks.
+        Desc.MipLevels = 4;
         auto pBlob     = MakeDDSTestBlob(Desc);
         ASSERT_NE(pBlob, nullptr);
         RadientTextureLoadInfo LoadInfo;
@@ -486,7 +507,40 @@ TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCou
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
         EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
-        ExpectTextureDesc(pTexture, 8, 4, Case.ExpectedFormat, 2);
+        ExpectTextureDesc(pTexture, 8, 8, Case.ExpectedFormat, 4);
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientTextureAssetManagerTest, RejectsCompressedDDSWithPartialBlockMipZeroDimensions)
+{
+    const Uint32 Dimensions[][2] = {{5, 8}, {8, 5}, {5, 7}, {2, 2}};
+    auto         pThreadPool     = CreateTestThreadPool(0);
+    auto         pManager        = CreateTextureManager();
+    for (const auto Format : {TEX_FORMAT_BC1_UNORM, TEX_FORMAT_BC7_UNORM})
+    {
+        for (const auto& Dimension : Dimensions)
+        {
+            SCOPED_TRACE(static_cast<Uint32>(Format));
+            SCOPED_TRACE(Dimension[0]);
+            SCOPED_TRACE(Dimension[1]);
+            TextureDesc Desc;
+            Desc.Type      = RESOURCE_DIM_TEX_2D;
+            Desc.Width     = Dimension[0];
+            Desc.Height    = Dimension[1];
+            Desc.Format    = Format;
+            Desc.MipLevels = 1;
+            auto pBlob     = MakeDDSTestBlob(Desc);
+            ASSERT_NE(pBlob, nullptr);
+            RadientTextureLoadInfo LoadInfo;
+            LoadInfo.pDataBlob = pBlob;
+            RefCntAutoPtr<IRadientTextureAsset> pTexture;
+            ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+            ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+            EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_UNSUPPORTED);
+            EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_UNSUPPORTED);
+            ExpectTextureDesc(pTexture);
+        }
     }
     pThreadPool->StopThreads();
 }

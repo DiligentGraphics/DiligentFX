@@ -475,6 +475,55 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 }
 
+TEST(RadientAssetValidationTest, ValidatesCompressedTextureDataWithoutReadingBlob)
+{
+    RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
+    for (const auto Format : {RADIENT_TEXTURE_FORMAT_BC1_UNORM,
+                              RADIENT_TEXTURE_FORMAT_BC3_UNORM_SRGB,
+                              RADIENT_TEXTURE_FORMAT_BC5_SNORM,
+                              RADIENT_TEXTURE_FORMAT_BC6H_UF16})
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        RadientTextureData Data;
+        Data.Width     = 8;
+        Data.Height    = 8;
+        Data.Format    = Format;
+        Data.pDataBlob = pUncheckedBlob;
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pTextureData = &Data;
+        EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+        Data.Stride = 35; // Accommodates two 16-byte blocks plus unaligned padding.
+        EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+        Data.Stride = 1;
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data stride"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+}
+
+TEST(RadientAssetValidationTest, RejectsCompressedMipZeroWithPartialBlockDimensionsBeforeReadingBlob)
+{
+    const Uint32                    Dimensions[][2] = {{5, 8}, {8, 5}, {5, 7}, {2, 2}};
+    RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
+    for (const auto Format : {RADIENT_TEXTURE_FORMAT_BC1_UNORM, RADIENT_TEXTURE_FORMAT_BC7_UNORM})
+    {
+        for (const auto& Dimension : Dimensions)
+        {
+            SCOPED_TRACE(static_cast<Uint32>(Format));
+            SCOPED_TRACE(Dimension[0]);
+            SCOPED_TRACE(Dimension[1]);
+            RadientTextureData Data;
+            Data.Width     = Dimension[0];
+            Data.Height    = Dimension[1];
+            Data.Format    = Format;
+            Data.pDataBlob = pUncheckedBlob;
+            RadientTextureLoadInfo LoadInfo;
+            LoadInfo.pTextureData = &Data;
+            TestingEnvironment::ErrorScope ExpectedErrors{"block dimensions"};
+            EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+        }
+    }
+}
+
 TEST(RadientAssetValidationTest, RejectsInvalidVertexLayoutsAndMissingBlobs)
 {
     ExpectInvalidMeshCreateInfo("VertexLayout is invalid", [](auto& CI, auto&) { CI.VertexLayout.pAttributes = nullptr; });

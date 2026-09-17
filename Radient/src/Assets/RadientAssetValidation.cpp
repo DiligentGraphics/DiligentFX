@@ -297,8 +297,16 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         const TEXTURE_FORMAT TextureFormat = RadientToTextureFormat(TextureData.Format);
         if (TextureFormat == TEX_FORMAT_UNKNOWN)
             return LogValidationError("RadientTextureLoadInfo", "texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN.");
-        if (GetTextureFormatAttribs(TextureFormat).ComponentType == COMPONENT_TYPE_COMPRESSED)
-            return LogValidationError("RadientTextureLoadInfo", "compressed formats require an encoded texture source; decoded texture input must be uncompressed.");
+
+        const auto& FmtAttribs = GetTextureFormatAttribs(TextureFormat);
+        if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED &&
+            (TextureData.Width % FmtAttribs.BlockWidth != 0 ||
+             TextureData.Height % FmtAttribs.BlockHeight != 0))
+        {
+            return LogValidationError("RadientTextureLoadInfo",
+                                      "compressed texture width and height must be multiples of the block dimensions (",
+                                      Uint32{FmtAttribs.BlockWidth}, " x ", Uint32{FmtAttribs.BlockHeight}, ").");
+        }
 
         if (TextureData.pDataBlob == nullptr)
             return LogValidationError("RadientTextureLoadInfo", "texture data blob must not be null.");
@@ -308,7 +316,7 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
         {
             return LogValidationError("RadientTextureLoadInfo",
                                       "texture data stride (", TextureData.Stride,
-                                      ") must be zero or at least the active row size, must align components across rows, and texture data size must not overflow.");
+                                      ") must be zero or at least the active row size, must align components across uncompressed rows, and texture data size must not overflow.");
         }
 
         if (!IsAddressableSize(Span.DataSize))

@@ -26,13 +26,16 @@
 
 #include "Assets/RadientTextureAssetManager.hpp"
 
+#include "DataBlobImpl.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
 #include "GraphicsAccessories.hpp"
+#include "MemoryFileStream.hpp"
 #include "RadientGPUTestHelpers.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
+#include "TextureLoader.h"
 
 #include "gtest/gtest.h"
 
@@ -49,6 +52,49 @@ namespace
 {
 
 static constexpr Uint32 TestTexturePixelSize = TestTextureParams{}.PixelSize;
+
+RefCntAutoPtr<ITextureLoader> MakeCompressedTexture(Uint32 Width, Uint32 Height, Uint32 MipLevels, Uint32 Seed = 0, TEXTURE_FORMAT SourceFormat = TEX_FORMAT_RGBA8_UNORM)
+{
+    const Uint32        PixelSize = GetTextureFormatAttribs(SourceFormat).NumComponents;
+    std::vector<Uint32> Pixels((Width * Height * PixelSize + 3) / 4);
+    auto*               pBytes = reinterpret_cast<Uint8*>(Pixels.data());
+    for (Uint32 Row = 0; Row < Height; ++Row)
+        for (Uint32 Byte = 0; Byte < Width * PixelSize; ++Byte)
+            pBytes[Row * Width * PixelSize + Byte] = static_cast<Uint8>(Seed * 31 + Row * 7 + Byte * 3);
+
+    TextureDesc Desc;
+    Desc.Type      = RESOURCE_DIM_TEX_2D;
+    Desc.Width     = Width;
+    Desc.Height    = Height;
+    Desc.MipLevels = 1;
+    Desc.Format    = SourceFormat;
+    TextureSubResData Subres{Pixels.data(), Width * PixelSize};
+    TextureData       Data{&Subres, 1};
+    TextureLoadInfo   LoadInfo;
+    LoadInfo.MipLevels    = MipLevels;
+    LoadInfo.GenerateMips = MipLevels > 1;
+    LoadInfo.CompressMode = TEXTURE_LOAD_COMPRESS_MODE_BC;
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    CreateTextureLoaderFromTextureData(Desc, Data, false, &LoadInfo, &pLoader);
+    return pLoader;
+}
+
+void VerifyCompressedReadback(IDeviceContext& Context, ITexture& Readback, MAP_FLAGS MapFlags, const TextureSubResData& Expected, Uint32 Mip = 0, Uint32 Slice = 0)
+{
+    MappedTextureSubresource Mapped;
+    Context.MapTextureSubresource(&Readback, Mip, Slice, MAP_READ, MapFlags, nullptr, Mapped);
+    ASSERT_NE(Mapped.pData, nullptr);
+    const auto  MipProps   = GetMipLevelProperties(Readback.GetDesc(), Mip);
+    const auto& FmtAttribs = GetTextureFormatAttribs(Readback.GetDesc().Format);
+    for (Uint32 Row = 0; Row < MipProps.StorageHeight / FmtAttribs.BlockHeight; ++Row)
+    {
+        EXPECT_EQ(std::memcmp(static_cast<const Uint8*>(Mapped.pData) + Row * Mapped.Stride,
+                              static_cast<const Uint8*>(Expected.pData) + Row * Expected.Stride,
+                              static_cast<size_t>(MipProps.RowSize)),
+                  0);
+    }
+    Context.UnmapTextureSubresource(&Readback, Mip, Slice);
+}
 
 void ExpectTextureDescription(const IRadientTextureAsset& Texture,
                               const RadientTextureData&   ExpectedData)
@@ -325,6 +371,39 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     auto*                              pContext = pEnv->GetDeviceContext();
     ASSERT_NE(pDevice, nullptr);
     ASSERT_NE(pContext, nullptr);
+    if (pDevice->GetDeviceInfo().Features.TextureCompressionBC != DEVICE_FEATURE_STATE_ENABLED)
+        GTEST_SKIP() << "BC-compressed DDS textures are not supported by this device.";
+    const auto& FormatInfo = pDevice->GetTextureFormatInfoExt(TEX_FORMAT_BC3_UNORM);
+    if ((FormatInfo.Dimensions & RESOURCE_DIMENSION_SUPPORT_TEX_CUBE) == 0 ||
+        (FormatInfo.BindFlags & BIND_SHADER_RESOURCE) == 0)
+        GTEST_SKIP() << "BC3 cube textures are not supported by this device.";
+
+    constexpr Uint32                                     FaceSize  = 8;
+    constexpr Uint32                                     FaceCount = 6;
+    constexpr Uint32                                     MipLevels = 3;
+    std::array<RefCntAutoPtr<ITextureLoader>, FaceCount> FaceLoaders;
+    std::array<TextureSubResData, FaceCount * MipLevels> Subresources;
+    for (Uint32 Face = 0; Face < FaceCount; ++Face)
+    {
+        FaceLoaders[Face] = MakeCompressedTexture(FaceSize, FaceSize, MipLevels, Face);
+        ASSERT_NE(FaceLoaders[Face], nullptr);
+        ASSERT_EQ(FaceLoaders[Face]->GetTextureDesc().Format, TEX_FORMAT_BC3_UNORM);
+        ASSERT_EQ(FaceLoaders[Face]->GetTextureDesc().MipLevels, MipLevels);
+        for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
+            Subresources[Face * MipLevels + Mip] = FaceLoaders[Face]->GetSubresourceData(Mip);
+    }
+    TextureDesc CubeDesc = FaceLoaders[0]->GetTextureDesc();
+    CubeDesc.Type        = RESOURCE_DIM_TEX_CUBE;
+    CubeDesc.ArraySize   = FaceCount;
+    auto pDDSData        = DataBlobImpl::Create();
+    auto pDDSStream      = MemoryFileStream::Create(pDDSData);
+    ASSERT_TRUE(WriteDDSToStream(pDDSStream, CubeDesc,
+                                 TextureData{Subresources.data(), static_cast<Uint32>(Subresources.size())}));
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = pDDSData->GetSize();
+    BlobCI.pData = pDDSData->GetConstDataPtr();
+    RefCntAutoPtr<IRadientDataBlob> pBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob), RADIENT_STATUS_OK);
 
     auto pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
@@ -335,54 +414,6 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     ASSERT_NE(pUploadManager, nullptr);
     auto pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
-
-    constexpr Uint32 FaceSize     = 8;
-    constexpr Uint32 FaceCount    = 6;
-    constexpr Uint32 MipLevels    = 3;
-    constexpr Uint32 PixelSize    = 4;
-    constexpr Uint32 FaceDataSize = (8 * 8 + 4 * 4 + 2 * 2) * PixelSize;
-    // DDS + DX10 headers. DX10 arraySize counts cubes, while the texture
-    // descriptor and subresource array count their six individual faces.
-    std::array<Uint32, 37> Header{};
-    Header[0]  = 0x20534444; // DDS magic.
-    Header[1]  = 124;        // DDS_HEADER size.
-    Header[2]  = 0x0002100F; // Caps, dimensions, pitch, pixel format, and mip count.
-    Header[3]  = FaceSize;
-    Header[4]  = FaceSize;
-    Header[5]  = FaceSize * PixelSize;
-    Header[7]  = MipLevels;
-    Header[19] = 32;         // DDS_PIXELFORMAT size.
-    Header[20] = 0x4;        // FourCC.
-    Header[21] = 0x30315844; // DX10.
-    Header[27] = 0x00401008; // Texture, complex, and mipmap caps.
-    Header[28] = 0x0000FE00; // Cubemap and all six faces.
-    Header[32] = 28;         // DXGI_FORMAT_R8G8B8A8_UNORM.
-    Header[33] = 3;          // D3D11_RESOURCE_DIMENSION_TEXTURE2D.
-    Header[34] = 0x4;        // D3D11_RESOURCE_MISC_TEXTURECUBE.
-    Header[35] = 1;          // One cube.
-
-    RadientDataBlobCreateInfo BlobCI;
-    BlobCI.Size = sizeof(Header) + FaceCount * FaceDataSize;
-    RefCntAutoPtr<IRadientMutableDataBlob> pBlob;
-    ASSERT_EQ(CreateRadientMutableDataBlob(BlobCI, &pBlob), RADIENT_STATUS_OK);
-    void* pBlobData = nullptr;
-    ASSERT_EQ(pBlob->BeginWrite(&pBlobData), RADIENT_STATUS_OK);
-    std::memcpy(pBlobData, Header.data(), sizeof(Header));
-    auto* pPixels    = static_cast<Uint8*>(pBlobData) + sizeof(Header);
-    auto  PixelValue = [](Uint32 Face, Uint32 Mip, Uint32 Row, Uint32 Byte) {
-        return static_cast<Uint8>(Face * 31 + Mip * 11 + Row * 7 + Byte * 3);
-    };
-    for (Uint32 Face = 0; Face < FaceCount; ++Face)
-    {
-        for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
-        {
-            const Uint32 Size = FaceSize >> Mip;
-            for (Uint32 Row = 0; Row < Size; ++Row)
-                for (Uint32 Byte = 0; Byte < Size * PixelSize; ++Byte)
-                    *pPixels++ = PixelValue(Face, Mip, Row, Byte);
-        }
-    }
-    ASSERT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
 
     RadientTextureLoadInfo LoadInfo;
     LoadInfo.pDataBlob = pBlob;
@@ -395,7 +426,7 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     const auto& Desc = pTexture->GetDesc();
     EXPECT_EQ(Desc.Width, FaceSize);
     EXPECT_EQ(Desc.Height, FaceSize);
-    EXPECT_EQ(Desc.Format, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM);
+    EXPECT_EQ(Desc.Format, RADIENT_TEXTURE_FORMAT_BC3_UNORM);
     EXPECT_EQ(Desc.MipLevels, MipLevels);
 
     auto* pSRV = RadientTextureAssetManager::GetTextureSRV(pTexture);
@@ -407,15 +438,14 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     EXPECT_EQ(pUploaded->GetDesc().GetArraySize(), FaceCount);
     EXPECT_EQ(pUploaded->GetDesc().MipLevels, MipLevels);
 
-    TextureDesc ReadbackDesc;
+    if (pDevice->GetDeviceInfo().IsGLDevice())
+        GTEST_SKIP() << "Cube upload and metadata checks completed; the OpenGL backend does not support compressed texture readback.";
+
+    TextureDesc ReadbackDesc    = CubeDesc;
     ReadbackDesc.Name           = "DDS cube face readback";
     ReadbackDesc.Type           = RESOURCE_DIM_TEX_2D_ARRAY;
-    ReadbackDesc.Width          = FaceSize;
-    ReadbackDesc.Height         = FaceSize;
-    ReadbackDesc.ArraySize      = FaceCount;
-    ReadbackDesc.MipLevels      = MipLevels;
-    ReadbackDesc.Format         = TEX_FORMAT_RGBA8_UNORM;
     ReadbackDesc.Usage          = USAGE_STAGING;
+    ReadbackDesc.BindFlags      = BIND_NONE;
     ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
     RefCntAutoPtr<ITexture> pReadback;
     pDevice->CreateTexture(ReadbackDesc, nullptr, &pReadback);
@@ -442,29 +472,129 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     const MAP_FLAGS MapFlags   = DeviceType == RENDER_DEVICE_TYPE_D3D11 || DeviceType == RENDER_DEVICE_TYPE_GL ?
         MAP_FLAG_NONE :
         MAP_FLAG_DO_NOT_WAIT;
-
-    std::array<Uint8, FaceSize * PixelSize> ExpectedRow{};
     for (Uint32 Face = 0; Face < FaceCount; ++Face)
     {
         for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
         {
             SCOPED_TRACE(Face);
             SCOPED_TRACE(Mip);
-            MappedTextureSubresource Mapped;
-            pContext->MapTextureSubresource(pReadback, Mip, Face, MAP_READ, MapFlags, nullptr, Mapped);
-            ASSERT_NE(Mapped.pData, nullptr);
-            const Uint32 Size = FaceSize >> Mip;
-            for (Uint32 Row = 0; Row < Size; ++Row)
-            {
-                for (Uint32 Byte = 0; Byte < Size * PixelSize; ++Byte)
-                    ExpectedRow[Byte] = PixelValue(Face, Mip, Row, Byte);
-                EXPECT_EQ(std::memcmp(static_cast<const Uint8*>(Mapped.pData) + Row * Mapped.Stride,
-                                      ExpectedRow.data(), Size * PixelSize),
-                          0);
-            }
-            pContext->UnmapTextureSubresource(pReadback, Mip, Face);
+            VerifyCompressedReadback(*pContext, *pReadback, MapFlags,
+                                     FaceLoaders[Face]->GetSubresourceData(Mip), Mip, Face);
         }
     }
+}
+
+TEST(RadientTextureAssetManagerGPUTest, RawCompressedTextureUsesOnlyUploadedAtlasMip)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    auto*                              pEnv     = GPUTestingEnvironment::GetInstance();
+    auto*                              pDevice  = pEnv->GetDevice();
+    auto*                              pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+    if (pDevice->GetDeviceInfo().Features.TextureCompressionBC != DEVICE_FEATURE_STATE_ENABLED)
+        GTEST_SKIP() << "BC textures are not supported by this device.";
+
+    constexpr Uint32 Width          = 32;
+    constexpr Uint32 Height         = 16;
+    constexpr Uint32 AtlasSize      = 128;
+    constexpr Uint32 AtlasMipLevels = 4;
+    for (TEXTURE_FORMAT SourceFormat : {TEX_FORMAT_R8_UNORM, TEX_FORMAT_RGBA8_UNORM})
+    {
+        SCOPED_TRACE(SourceFormat);
+        auto pLoader = MakeCompressedTexture(Width, Height, 1, 0, SourceFormat);
+        ASSERT_NE(pLoader, nullptr);
+        const auto& CompressedDesc = pLoader->GetTextureDesc();
+        const auto& FormatInfo     = pDevice->GetTextureFormatInfoExt(CompressedDesc.Format);
+        if ((FormatInfo.Dimensions & RESOURCE_DIMENSION_SUPPORT_TEX_2D_ARRAY) == 0 ||
+            (FormatInfo.BindFlags & BIND_SHADER_RESOURCE) == 0)
+            GTEST_SKIP() << "Compressed texture arrays are not supported by this device.";
+        const auto&  Expected   = pLoader->GetSubresourceData(0);
+        const auto   MipProps   = GetMipLevelProperties(CompressedDesc, 0);
+        const auto&  FmtAttribs = GetTextureFormatAttribs(CompressedDesc.Format);
+        const Uint32 Rows       = MipProps.StorageHeight / FmtAttribs.BlockHeight;
+        const Uint32 Stride     = static_cast<Uint32>(MipProps.RowSize) + 3;
+        // Deliberately unaligned pointer and padded block rows. No padding is
+        // needed after the final row, and neither affects the uploaded blocks.
+        std::vector<Uint8> PaddedData(1 + (Rows - 1) * Stride + MipProps.RowSize, 0xCD);
+        for (Uint32 Row = 0; Row < Rows; ++Row)
+            std::memcpy(PaddedData.data() + 1 + Row * Stride,
+                        static_cast<const Uint8*>(Expected.pData) + Row * Expected.Stride,
+                        static_cast<size_t>(MipProps.RowSize));
+        RadientDataBlobCreateInfo BlobCI;
+        BlobCI.Size  = PaddedData.size() - 1;
+        BlobCI.pData = PaddedData.data() + 1;
+        RefCntAutoPtr<IRadientDataBlob> pBlob;
+        ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob), RADIENT_STATUS_OK);
+
+        auto pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+        ASSERT_NE(pThreadPool, nullptr);
+        ThreadPoolStopGuard StopThreads{pThreadPool};
+        auto                ResourceManagerCI             = MakeResourceManagerCI(AtlasSize);
+        ResourceManagerCI.DefaultAtlasDesc.Desc.MipLevels = AtlasMipLevels;
+        auto pResourceManager                             = GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+        ASSERT_NE(pResourceManager, nullptr);
+        auto pUploadManager = CreateTestUploadManager(pDevice, pContext);
+        ASSERT_NE(pUploadManager, nullptr);
+        auto pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+        ASSERT_NE(pManager, nullptr);
+
+        const auto Format = SourceFormat == TEX_FORMAT_R8_UNORM ?
+            RADIENT_TEXTURE_FORMAT_BC4_UNORM :
+            RADIENT_TEXTURE_FORMAT_BC3_UNORM;
+
+        const RadientTextureData            TextureData{Width, Height, Format, pBlob, Stride};
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        ASSERT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
+        ASSERT_NE(pTexture, nullptr);
+        ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+        ProcessUploads(*pUploadManager, *pContext, *pTexture);
+        ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(pTexture->GetDesc().Width, Width);
+        EXPECT_EQ(pTexture->GetDesc().Height, Height);
+        EXPECT_EQ(pTexture->GetDesc().Format, Format);
+        EXPECT_EQ(pTexture->GetDesc().MipLevels, 1u);
+        RadientTextureSamplingInfo SamplingInfo;
+        ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo));
+        EXPECT_EQ(SamplingInfo.MipLevels, 1u);
+        auto* pSRV = RadientTextureAssetManager::GetTextureSRV(pTexture);
+        ASSERT_NE(pSRV, nullptr);
+        auto* pUploaded = pSRV->GetTexture();
+        ASSERT_NE(pUploaded, nullptr);
+        EXPECT_EQ(pUploaded->GetDesc().Width, AtlasSize);
+        EXPECT_EQ(pUploaded->GetDesc().Height, AtlasSize);
+        EXPECT_EQ(pUploaded->GetDesc().MipLevels, AtlasMipLevels);
+
+        if (pDevice->GetDeviceInfo().IsGLDevice())
+            continue; // Check both BC formats before reporting unavailable readback below.
+
+        TextureDesc ReadbackDesc    = CompressedDesc;
+        ReadbackDesc.Usage          = USAGE_STAGING;
+        ReadbackDesc.BindFlags      = BIND_NONE;
+        ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
+        RefCntAutoPtr<ITexture> pReadback;
+        pDevice->CreateTexture(ReadbackDesc, nullptr, &pReadback);
+        ASSERT_NE(pReadback, nullptr);
+        const Uint32       X = static_cast<Uint32>(SamplingInfo.UVScaleBias.z * AtlasSize + 0.5f);
+        const Uint32       Y = static_cast<Uint32>(SamplingInfo.UVScaleBias.w * AtlasSize + 0.5f);
+        const Box          SourceBox{X, X + Width, Y, Y + Height};
+        CopyTextureAttribs Copy;
+        Copy.pSrcTexture              = pUploaded;
+        Copy.SrcSlice                 = static_cast<Uint32>(SamplingInfo.TextureSlice);
+        Copy.pSrcBox                  = &SourceBox;
+        Copy.pDstTexture              = pReadback;
+        Copy.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        Copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        pContext->CopyTexture(Copy);
+        pContext->WaitForIdle();
+        const auto      DeviceType = pDevice->GetDeviceInfo().Type;
+        const MAP_FLAGS MapFlags   = DeviceType == RENDER_DEVICE_TYPE_D3D11 || DeviceType == RENDER_DEVICE_TYPE_GL ?
+            MAP_FLAG_NONE :
+            MAP_FLAG_DO_NOT_WAIT;
+        VerifyCompressedReadback(*pContext, *pReadback, MapFlags, Expected);
+    }
+    if (pDevice->GetDeviceInfo().IsGLDevice())
+        GTEST_SKIP() << "BC3 and BC4 upload and metadata checks completed; the OpenGL backend does not support compressed texture readback.";
 }
 
 TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)

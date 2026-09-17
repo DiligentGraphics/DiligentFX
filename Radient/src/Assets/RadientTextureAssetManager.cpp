@@ -192,7 +192,7 @@ public:
         return m_Standalone.pTexture;
     }
 
-    void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation)
+    void SetAtlasSuballocation(RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation, Uint32 UploadedMipLevels)
     {
         if (pAtlasSuballocation != nullptr)
         {
@@ -202,7 +202,7 @@ public:
                               pAtlasSuballocation->GetSlice(),
                               Size.x,
                               Size.y,
-                              pAtlasSuballocation->GetMipLevelCount());
+                              UploadedMipLevels);
         }
         else
         {
@@ -898,8 +898,9 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
     TextureDesc StorageDesc = TexDesc;
     StorageDesc.Format      = Texture.GetStorageFormat();
 
-    const TextureDesc AtlasDescForFit = ResourceManager.GetAtlasDesc(StorageDesc.Format);
-    const bool        UseTextureAtlas =
+    const TextureFormatAttribs& FmtAttribs      = GetTextureFormatAttribs(TexDesc.Format);
+    const TextureDesc           AtlasDescForFit = ResourceManager.GetAtlasDesc(StorageDesc.Format);
+    const bool                  UseTextureAtlas =
         TexDesc.Type == RESOURCE_DIM_TEX_2D &&
         TexDesc.GetArraySize() == 1 &&
         AtlasDescForFit.Type != RESOURCE_DIM_UNDEFINED &&
@@ -926,11 +927,9 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
                                                                    TextureCacheKey.c_str());
         if (pAtlasSuballocation == nullptr)
             return RADIENT_STATUS_FAILED;
-        Texture.SetAtlasSuballocation(pAtlasSuballocation);
 
-        const TextureDesc           AtlasDesc  = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
-        const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(TexDesc.Format);
-        const Uint32                MipLevels  = std::min(AtlasDesc.MipLevels, TexDesc.MipLevels);
+        const TextureDesc AtlasDesc = pAtlasSuballocation->GetAtlas()->GetAtlasDesc();
+        const Uint32      MipLevels = std::min({AtlasDesc.MipLevels, TexDesc.MipLevels, pAtlasSuballocation->GetMipLevelCount()});
 
         UploadMipLevels = 0;
         UploadSlices    = 1;
@@ -942,12 +941,17 @@ RADIENT_STATUS RadientTextureAssetManager::ScheduleTextureGPUUpload(GLTF::Resour
             const MipLevelProperties MipProps = GetMipLevelProperties(TexDesc, UploadMipLevels);
             if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED)
             {
-                // Do not copy mip levels that are smaller than the block size.
-                if (MipProps.LogicalWidth < FmtAttribs.BlockWidth ||
-                    MipProps.LogicalHeight < FmtAttribs.BlockHeight)
+                // Every atlas copy must cover whole blocks at block-aligned origins.
+                if (MipProps.LogicalWidth % FmtAttribs.BlockWidth != 0 ||
+                    MipProps.LogicalHeight % FmtAttribs.BlockHeight != 0 ||
+                    (AtlasOrigin.x >> UploadMipLevels) % FmtAttribs.BlockWidth != 0 ||
+                    (AtlasOrigin.y >> UploadMipLevels) % FmtAttribs.BlockHeight != 0)
                     break;
             }
         }
+        // Sampling must not expose absent source mips or levels that cannot be
+        // uploaded safely into this allocation.
+        Texture.SetAtlasSuballocation(pAtlasSuballocation, UploadMipLevels);
     }
 
     const Uint32 UploadSubresourceCount = UploadSlices * UploadMipLevels;

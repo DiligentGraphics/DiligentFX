@@ -60,8 +60,9 @@ struct RadientTextureDataSpan
 /// \returns    true if the format, dimensions, stride, and computed span are valid; false otherwise.
 ///
 /// \remarks    If RadientTextureData::Stride is zero, tightly packed rows are assumed.
-///             Validates that non-zero stride is at least ActiveRowSize, that multiple rows
-///             start at component-aligned offsets, and that DataSize does not overflow Uint64.
+///             Validates that non-zero stride is at least ActiveRowSize and that DataSize
+///             does not overflow Uint64. Uncompressed rows must start at component-aligned
+///             offsets; compressed block rows have no alignment requirement.
 ///             Does not acquire blob access or validate its data pointer or size.
 bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
                                RadientTextureDataSpan&   Span);

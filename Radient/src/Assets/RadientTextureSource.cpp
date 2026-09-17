@@ -83,7 +83,8 @@ bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
     const Uint32 Stride = TextureData.Stride != 0 ? TextureData.Stride : static_cast<Uint32>(MipProps.RowSize);
     if (Stride < MipProps.RowSize)
         return false;
-    if (RowCount > 1 && (Stride % FmtAttribs.ComponentSize) != 0)
+    if (FmtAttribs.ComponentType != COMPONENT_TYPE_COMPRESSED &&
+        RowCount > 1 && (Stride % FmtAttribs.ComponentSize) != 0)
         return false;
 
     Uint64 DataSize = MipProps.RowSize;
@@ -198,7 +199,8 @@ RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInf
         {
             // Mip generation reads typed components directly from each source row.
             const auto& FmtAttribs = GetTextureFormatAttribs(RadientToTextureFormat(m_TextureData.Format));
-            if ((reinterpret_cast<std::uintptr_t>(ReadAccess.GetData()) % FmtAttribs.ComponentSize) != 0)
+            if (FmtAttribs.ComponentType != COMPONENT_TYPE_COMPRESSED &&
+                (reinterpret_cast<std::uintptr_t>(ReadAccess.GetData()) % FmtAttribs.ComponentSize) != 0)
             {
                 m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
                 return;
@@ -285,8 +287,11 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
         LoadInfo.MipLevels    = 0;
         LoadInfo.Format       = Desc.Format;
 
+        // Compressed blocks are consumed as supplied. The image-processing path
+        // generates mips for uncompressed formats and does not accept compressed data.
+        const bool     IsCompressed = GetTextureFormatAttribs(Desc.Format).ComponentType == COMPONENT_TYPE_COMPRESSED;
         constexpr bool MakeDataCopy = false;
-        CreateTextureLoaderFromTextureData(Desc, TexData, MakeDataCopy, &LoadInfo, &pLoader);
+        CreateTextureLoaderFromTextureData(Desc, TexData, MakeDataCopy, IsCompressed ? nullptr : &LoadInfo, &pLoader);
     }
     else if (m_SourceType == SourceType::EncodedMemory)
     {
@@ -326,6 +331,16 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
 
     if (pLoader == nullptr)
         return RADIENT_STATUS_FAILED;
+
+    // Require whole blocks at mip 0 for every source, including encoded images.
+    // Smaller dimensions at the end of a compressed mip chain remain valid.
+    const TextureDesc&          Desc       = pLoader->GetTextureDesc();
+    const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(Desc.Format);
+    if (FmtAttribs.ComponentType == COMPONENT_TYPE_COMPRESSED &&
+        (Desc.Width % FmtAttribs.BlockWidth != 0 || Desc.Height % FmtAttribs.BlockHeight != 0))
+    {
+        return RADIENT_STATUS_UNSUPPORTED;
+    }
 
     *ppLoader = pLoader.Detach();
     return RADIENT_STATUS_OK;

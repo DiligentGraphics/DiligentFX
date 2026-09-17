@@ -21,6 +21,7 @@ PRIVATE
     Diligent-Common
     Diligent-GraphicsEngine
     Diligent-GPUTestFramework
+    Diligent-TextureLoader
     DiligentFX
     Radient
     EnTT
