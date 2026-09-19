@@ -232,7 +232,8 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
+    RadientTextureMipData    TextureDataMip;
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -302,7 +303,8 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
+    RadientTextureMipData    TextureDataMip;
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -368,7 +370,8 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
+    RadientTextureMipData    TextureDataMip;
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;
@@ -421,7 +424,8 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
+    RadientTextureMipData    TextureDataMip;
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;

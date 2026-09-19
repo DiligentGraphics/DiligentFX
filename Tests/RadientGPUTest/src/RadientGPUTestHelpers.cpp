@@ -102,14 +102,17 @@ RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   See
 }
 
 RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                   RadientTextureMipData&   MipData,
                                    const TestTextureParams& Params)
 {
+    MipData = {pDataBlob, 0, GetTextureStride(Params)};
     RadientTextureData TextureData{
         Params.Width,
         Params.Height,
         RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-        pDataBlob,
-        GetTextureStride(Params),
+        &MipData,
+        1,
+        True,
     };
     return TextureData;
 }

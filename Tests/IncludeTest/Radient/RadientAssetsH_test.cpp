@@ -86,8 +86,14 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     (void)MeshCI;
     IRadientDataBlob* pBlob   = TextureLoadInfo.pDataBlob;
     TextureLoadInfo.pDataBlob = pBlob;
-    RadientTextureData PixelData;
-    PixelData.pDataBlob          = pBlob;
+    RadientTextureData    PixelData;
+    RadientTextureMipData Mip{};
+    Mip.pDataBlob                = pBlob;
+    Mip.ByteOffset               = 0;
+    Mip.Stride                   = 8;
+    PixelData.pMipLevels         = &Mip;
+    PixelData.MipLevelCount      = 1;
+    PixelData.GenerateMips       = True;
     TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
     (void)SceneLoadInfo;

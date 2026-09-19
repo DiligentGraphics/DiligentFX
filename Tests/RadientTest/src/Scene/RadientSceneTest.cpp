@@ -496,17 +496,21 @@ TEST(RadientAssetManagerTest, RejectsLoadsWithoutThreadPool)
     EXPECT_EQ(pGLTFModel, nullptr);
 
     std::array<Uint8, 4> TextureData{1, 2, 3, 4};
-    Uint32               PixelReadReleases = 0;
-    auto                 pPixelBlob        = MakeTestDataBlob(TextureData.data(), TextureData.size(), CountBlobReadReleases, &PixelReadReleases);
+
+    Uint32 PixelReadReleases = 0;
+    auto   pPixelBlob        = MakeTestDataBlob(TextureData.data(), TextureData.size(), CountBlobReadReleases, &PixelReadReleases);
     ASSERT_NE(pPixelBlob, nullptr);
     RefCntWeakPtr<IRadientDataBlob> WeakPixelBlob{pPixelBlob.RawPtr()};
 
-    RadientTextureLoadInfo TextureLoadInfo{};
-    RadientTextureData     PixelData;
+    RadientTextureLoadInfo      TextureLoadInfo{};
+    const RadientTextureMipData PixelDataMip{pPixelBlob, 0, 0};
+    RadientTextureData          PixelData{};
     PixelData.Width              = 1;
     PixelData.Height             = 1;
     PixelData.Format             = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    PixelData.pDataBlob          = pPixelBlob;
+    PixelData.pMipLevels         = &PixelDataMip;
+    PixelData.MipLevelCount      = 1;
+    PixelData.GenerateMips       = True;
     TextureLoadInfo.pTextureData = &PixelData;
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
@@ -571,11 +575,14 @@ TEST(RadientAssetManagerTest, MethodsFailAfterStop)
     ASSERT_NE(pPixelBlob, nullptr);
     RefCntWeakPtr<IRadientDataBlob> WeakPixelBlob{pPixelBlob.RawPtr()};
     RadientTextureLoadInfo          TextureLoadInfo;
-    RadientTextureData              PixelData;
+    const RadientTextureMipData     PixelDataMip{pPixelBlob, 0, 0};
+    RadientTextureData              PixelData{};
     PixelData.Width              = 1;
     PixelData.Height             = 1;
     PixelData.Format             = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    PixelData.pDataBlob          = pPixelBlob;
+    PixelData.pMipLevels         = &PixelDataMip;
+    PixelData.MipLevelCount      = 1;
+    PixelData.GenerateMips       = True;
     TextureLoadInfo.pTextureData = &PixelData;
     EXPECT_EQ(pAssetManager->LoadTexture(TextureLoadInfo, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pTexture, nullptr);

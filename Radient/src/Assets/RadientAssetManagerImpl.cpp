@@ -279,12 +279,14 @@ RadientMaterialDefaultTextures CreateDefaultMaterialTextures(IThreadPool&       
             return;
         }
 
-        RadientTextureData TextureData;
-        TextureData.Width     = DefaultTextureSize;
-        TextureData.Height    = DefaultTextureSize;
-        TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-        TextureData.pDataBlob = pPixels;
-        TextureData.Stride    = DefaultTextureSize * sizeof(Pixel);
+        const RadientTextureMipData Mip{pPixels, 0, DefaultTextureSize * sizeof(Pixel)};
+        RadientTextureData          TextureData;
+        TextureData.Width         = DefaultTextureSize;
+        TextureData.Height        = DefaultTextureSize;
+        TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+        TextureData.pMipLevels    = &Mip;
+        TextureData.MipLevelCount = 1;
+        TextureData.GenerateMips  = True;
 
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.URI          = URI;

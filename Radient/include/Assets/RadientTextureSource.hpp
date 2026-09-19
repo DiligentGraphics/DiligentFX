@@ -31,6 +31,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace Diligent
 {
@@ -39,7 +40,7 @@ struct ITextureLoader;
 struct IRadientAssetLocation;
 struct IRadientAssetResolver;
 
-/// Describes the valid readable span of RadientTextureData::pDataBlob.
+/// Describes the valid readable span of one RadientTextureMipData.
 struct RadientTextureDataSpan
 {
     /// Number of bytes in each row that contain texture data.
@@ -49,22 +50,23 @@ struct RadientTextureDataSpan
     /// Number of stored source rows. For block-compressed formats, this is the number of block rows.
     Uint32 RowCount = 0;
 
-    /// Minimum number of bytes that may be read from RadientTextureData::pDataBlob:
+    /// Minimum number of bytes read starting at the mip's ByteOffset:
     /// (RowCount - 1) * Stride + ActiveRowSize.
     /// The final row does not need padding bytes beyond ActiveRowSize.
     Uint64 DataSize = 0;
 };
 
-/// Computes the format-aware source data span for RadientTextureData.
+/// Computes the format-aware source span for one supplied mip level, excluding ByteOffset.
 ///
 /// \returns    true if the format, dimensions, stride, and computed span are valid; false otherwise.
 ///
-/// \remarks    If RadientTextureData::Stride is zero, tightly packed rows are assumed.
+/// \remarks    If RadientTextureMipData::Stride is zero, tightly packed rows are assumed.
 ///             Validates that non-zero stride is at least ActiveRowSize and that DataSize
 ///             does not overflow Uint64. Uncompressed rows must start at component-aligned
 ///             offsets; compressed block rows have no alignment requirement.
 ///             Does not acquire blob access or validate its data pointer or size.
 bool GetRadientTextureDataSpan(const RadientTextureData& TextureData,
+                               Uint32                    MipLevel,
                                RadientTextureDataSpan&   Span);
 
 class RadientTextureSource final
@@ -152,9 +154,15 @@ private:
     const void*               m_pData    = nullptr;
     size_t                    m_DataSize = 0;
 
-    RadientTextureData m_TextureData;
-    Uint64             m_TextureDataActiveRowSize = 0;
-    Uint32             m_TextureDataRowCount      = 0;
+    struct MipData
+    {
+        RadientDataBlobReadAccess ReadAccess;
+        const void*               pData  = nullptr;
+        Uint32                    Stride = 0;
+        RadientTextureDataSpan    Span;
+    };
+    RadientTextureData   m_TextureData;
+    std::vector<MipData> m_Mips;
 };
 
 } // namespace Diligent

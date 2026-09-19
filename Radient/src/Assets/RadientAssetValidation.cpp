@@ -308,23 +308,33 @@ bool ValidateTextureLoadInfo(const RadientTextureLoadInfo& LoadInfo)
                                       Uint32{FmtAttribs.BlockWidth}, " x ", Uint32{FmtAttribs.BlockHeight}, ").");
         }
 
-        if (TextureData.pDataBlob == nullptr)
-            return LogValidationError("RadientTextureLoadInfo", "texture data blob must not be null.");
-
-        RadientTextureDataSpan Span;
-        if (!GetRadientTextureDataSpan(TextureData, Span))
+        if (TextureData.pMipLevels == nullptr || TextureData.MipLevelCount == 0 ||
+            TextureData.MipLevelCount > ComputeMipLevelsCount(TextureData.Width, TextureData.Height))
         {
-            return LogValidationError("RadientTextureLoadInfo",
-                                      "texture data stride (", TextureData.Stride,
-                                      ") must be zero or at least the active row size, must align components across uncompressed rows, and texture data size must not overflow.");
+            return LogValidationError("RadientTextureLoadInfo", "pMipLevels must not be null and MipLevelCount must describe a nonempty chain no longer than the full mip chain.");
         }
 
-        if (!IsAddressableSize(Span.DataSize))
+        for (Uint32 Level = 0; Level < TextureData.MipLevelCount; ++Level)
         {
-            return LogValidationError("RadientTextureLoadInfo",
-                                      "texture data size (", Span.DataSize,
-                                      ") exceeds maximum supported size_t value (",
-                                      (std::numeric_limits<size_t>::max)(), ").");
+            const RadientTextureMipData& Mip = TextureData.pMipLevels[Level];
+            if (Mip.pDataBlob == nullptr)
+                return LogValidationError("RadientTextureLoadInfo", "texture data blob must not be null for mip ", Level, ".");
+
+            RadientTextureDataSpan Span;
+            if (!GetRadientTextureDataSpan(TextureData, Level, Span))
+            {
+                return LogValidationError("RadientTextureLoadInfo",
+                                          "texture data stride (", Mip.Stride, ") for mip ", Level,
+                                          " must be zero or at least the active row size, must align components across uncompressed rows, and texture data size must not overflow.");
+            }
+            if (!RadientValidation::IsSumRepresentable<Uint64>(Mip.ByteOffset, Span.DataSize) ||
+                !IsAddressableSize(Mip.ByteOffset + Span.DataSize))
+            {
+                return LogValidationError("RadientTextureLoadInfo",
+                                          "texture data byte range for mip ", Level,
+                                          " overflows or exceeds maximum supported size_t value (",
+                                          (std::numeric_limits<size_t>::max)(), ").");
+            }
         }
     }
 

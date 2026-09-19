@@ -57,17 +57,20 @@ namespace
 
 static constexpr auto TextureManagerWaitTimeout = std::chrono::seconds{10};
 
-RadientTextureData MakeTextureData(Uint32            Width,
-                                   Uint32            Height,
-                                   Uint32            Stride,
-                                   IRadientDataBlob* pDataBlob)
+RadientTextureData MakeTextureData(Uint32                 Width,
+                                   Uint32                 Height,
+                                   Uint32                 Stride,
+                                   IRadientDataBlob*      pDataBlob,
+                                   RadientTextureMipData& MipData)
 {
+    MipData = {pDataBlob, 0, Stride};
     RadientTextureData TextureData{};
-    TextureData.Width     = Width;
-    TextureData.Height    = Height;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pDataBlob;
-    TextureData.Stride    = Stride;
+    TextureData.Width         = Width;
+    TextureData.Height        = Height;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureData.pMipLevels    = &MipData;
+    TextureData.MipLevelCount = 1;
+    TextureData.GenerateMips  = True;
     return TextureData;
 }
 
@@ -995,6 +998,7 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     static constexpr size_t NumTextures = 4;
 
     std::array<RefCntAutoPtr<IRadientDataBlob>, NumTextures>     TextureBlobs;
+    std::array<RadientTextureMipData, NumTextures>               TextureMips;
     std::array<RadientTextureData, NumTextures>                  TextureData;
     std::array<RefCntAutoPtr<IRadientTextureAsset>, NumTextures> Textures;
 
@@ -1002,7 +1006,7 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     {
         TextureBlobs[i] = RadientGPUTest::MakeTextureDataBlob(static_cast<Uint32>(i + 1), TextureParams);
         ASSERT_NE(TextureBlobs[i], nullptr);
-        TextureData[i] = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TextureBlobs[i]);
+        TextureData[i] = MakeTextureData(TextureWidth, TextureHeight, TextureStride, TextureBlobs[i], TextureMips[i]);
     }
 
     {
@@ -1058,7 +1062,8 @@ TEST(RadientAssetManagerGPUTest, StopShutsDownUploadManagerForBlockedTextureUplo
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureBlob = RadientGPUTest::MakeTextureDataBlob(1, TextureParams);
     ASSERT_NE(pTextureBlob, nullptr);
-    RadientTextureData TextureData = MakeTextureData(TextureWidth, TextureHeight, TextureStride, pTextureBlob);
+    RadientTextureMipData TextureMip;
+    RadientTextureData    TextureData = MakeTextureData(TextureWidth, TextureHeight, TextureStride, pTextureBlob, TextureMip);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     bool                                PendingCopyCommandEnqueueCallbacks = false;

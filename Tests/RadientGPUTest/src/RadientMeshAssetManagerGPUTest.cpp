@@ -125,7 +125,8 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob);
+    RadientTextureMipData    TextureDataMip;
+    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));

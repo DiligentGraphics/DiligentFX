@@ -214,29 +214,40 @@ still prevent writes and resizing. For REFERENCE blobs, external storage remains
 alive and unchanged for the blob's entire lifetime; release its owner through
 `OnDestroy`, as described above.
 
-`pDataBlob` and the decoded-pixel descriptor `pTextureData` are mutually exclusive.
+`pDataBlob` and the mip-data descriptor `pTextureData` are mutually exclusive.
 
-## Decoded texture input
+## Texture mip data
 
-`RadientTextureData::pDataBlob` contains mip 0 pixels beginning at byte zero.
-Set `Width`, `Height`, `Format`, and optionally `Stride`, then pass the descriptor
-through `RadientTextureLoadInfo::pTextureData`. A zero stride means tightly packed
-rows. An explicit stride can include row padding, which is preserved during loading.
+`RadientTextureData` describes a 2D texture with one or more supplied mip levels.
+Set `Width`, `Height`, and `Format`, then provide an array of `RadientTextureMipData`
+through `pMipLevels` and `MipLevelCount`. Levels are consecutive, starting at mip 0.
+Each descriptor supplies a blob, a `ByteOffset` within it, and a row `Stride`.
+A zero stride means tightly packed rows. Multiple levels may share one blob or
+reference separate blobs.
 
-The blob must cover `(Height - 1) * effective stride + active row size` bytes.
-Trailing padding after the final row is optional. Row padding and extra bytes
-do not affect texture caching. An undersized blob returns
-`RADIENT_STATUS_INVALID_ARGUMENT`. The read pointer must be aligned to the
-format's component size (1, 2, or 4 bytes). For multiple rows, the stride must
-also be a multiple of that size. Misaligned decoded storage returns
-`RADIENT_STATUS_INVALID_ARGUMENT`.
+Each blob must cover its mip's byte offset plus
+`(row count - 1) * effective stride + active row size`. For compressed data,
+row count is `ceil(logical mip height / block height)` and active row size is
+`ceil(logical mip width / block width) * bytes per block`. Block dimensions and
+bytes per block are defined by the format. Storage contains complete blocks,
+with at least one block in each dimension, even for a logical 1x1 mip.
+Padding after the final row is optional; padding, byte offsets, and unused bytes
+do not affect texture caching. An invalid range returns
+`RADIENT_STATUS_INVALID_ARGUMENT`. For uncompressed data, each mip's first pixel
+and each subsequent row must align to the format's component size (1, 2, or 4 bytes).
+BC data has no pointer or stride alignment requirement.
 
 ```cpp
+RadientTextureMipData Mip;
+Mip.pDataBlob = PixelBlob; // At least 16 bytes containing four RGBA pixels.
+
 RadientTextureData Pixels;
 Pixels.Width = 2;
 Pixels.Height = 2;
 Pixels.Format = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-Pixels.pDataBlob = PixelBlob; // At least 16 bytes containing four RGBA pixels.
+Pixels.pMipLevels = &Mip;
+Pixels.MipLevelCount = 1;
+Pixels.GenerateMips = True;
 
 RadientTextureLoadInfo LoadInfo;
 LoadInfo.pTextureData = &Pixels;
@@ -244,10 +255,16 @@ RefCntAutoPtr<IRadientTextureAsset> Texture;
 const RADIENT_STATUS Status = AssetManager->LoadTexture(LoadInfo, &Texture);
 ```
 
-`LoadTexture()` copies the descriptor, retains its blob, and reads the pixels
-without copying the input bytes. It generates the remaining mip levels.
-The caller can discard the descriptor and release its blob reference after the
-call returns. End any write scope before loading; writes and resizing remain
-unavailable while Radient is reading the blob. Read-only COPY, REFERENCE, and
+`LoadTexture()` copies the descriptor and mip array, retains their blobs, and reads
+the supplied data without copying it. `GenerateMips` defaults to `True`: for
+uncompressed formats, it generates only the missing tail from the last supplied
+level. With `False`, it loads exactly the supplied levels. Compressed formats always
+load the supplied levels without generation. An incomplete compressed chain with
+`GenerateMips = True` logs a warning and continues loading; a complete chain or
+`GenerateMips = False` produces no warning.
+
+The caller can discard the descriptors and release its blob references after the
+call returns. End write scopes before loading; writes and resizing remain
+unavailable while Radient is reading the blobs. Read-only COPY, REFERENCE, and
 mutable blobs follow the same ownership and notification rules as encoded
 texture input.

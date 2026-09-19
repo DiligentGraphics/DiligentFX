@@ -27,7 +27,9 @@
 #include "Assets/RadientTextureFormat.hpp"
 #include "Assets/RadientTextureSource.hpp"
 
+#include "DebugOutput.h"
 #include "RadientTestAssetHelpers.hpp"
+#include "TestingEnvironment.hpp"
 #include "TextureLoader.h"
 
 #include "gtest/gtest.h"
@@ -43,6 +45,51 @@ using namespace Diligent::Testing;
 
 namespace
 {
+
+class ScopedMessageCapture final
+{
+public:
+    ScopedMessageCapture() :
+        m_PreviousCallback{DebugMessageCallback}
+    {
+        EXPECT_EQ(s_pActive, nullptr);
+        s_pActive = this;
+        SetDebugMessageCallback(Callback);
+    }
+
+    ~ScopedMessageCapture()
+    {
+        SetDebugMessageCallback(m_PreviousCallback);
+        s_pActive = nullptr;
+    }
+
+    // clang-format off
+    ScopedMessageCapture(const ScopedMessageCapture&)            = delete;
+    ScopedMessageCapture& operator=(const ScopedMessageCapture&) = delete;
+    // clang-format on
+
+    std::vector<std::string> Warnings;
+    std::vector<std::string> Errors;
+
+private:
+    static void DILIGENT_CALL_TYPE Callback(DEBUG_MESSAGE_SEVERITY Severity,
+                                            const Char*            Message,
+                                            const Char*            Function,
+                                            const Char*            File,
+                                            int                    Line)
+    {
+        if (Severity == DEBUG_MESSAGE_SEVERITY_WARNING)
+            s_pActive->Warnings.emplace_back(Message);
+        else if (Severity == DEBUG_MESSAGE_SEVERITY_ERROR || Severity == DEBUG_MESSAGE_SEVERITY_FATAL_ERROR)
+            s_pActive->Errors.emplace_back(Message);
+        // Preserve the test environment's diagnostics and unexpected-error checks.
+        if (s_pActive->m_PreviousCallback != nullptr)
+            s_pActive->m_PreviousCallback(Severity, Message, Function, File, Line);
+    }
+
+    const DebugMessageCallbackType      m_PreviousCallback;
+    static inline ScopedMessageCapture* s_pActive = nullptr;
+};
 
 // Ensures texture loading captures storage metadata only after BeginRead.
 class ScopeCheckedDataBlob final : public ObjectBase<IRadientDataBlob>
@@ -305,19 +352,25 @@ TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
     std::array<Uint8, 4>  Data2{1, 2, 3, 5};
     std::array<Uint8, 16> Data3{1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4};
 
-    auto               pTextureDataBlob = MakeTestDataBlob(Data0.data(), Data0.size() * sizeof(Data0[0]));
-    RadientTextureData TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 2;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
-    TextureData.pDataBlob = pTextureDataBlob;
+    auto                  pTextureDataBlob = MakeTestDataBlob(Data0.data(), Data0.size() * sizeof(Data0[0]));
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 2;
+    TextureData.Height        = 2;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureDataMip.pDataBlob  = pTextureDataBlob;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
 
-    auto               pSameTextureDataBlob = MakeTestDataBlob(Data1.data(), Data1.size() * sizeof(Data1[0]));
-    RadientTextureData SameTextureData      = TextureData;
-    SameTextureData.pDataBlob               = pSameTextureDataBlob;
+    auto                  pSameTextureDataBlob = MakeTestDataBlob(Data1.data(), Data1.size() * sizeof(Data1[0]));
+    RadientTextureMipData SameTextureDataMip   = *TextureData.pMipLevels;
+    RadientTextureData    SameTextureData      = TextureData;
+    SameTextureData.pMipLevels                 = &SameTextureDataMip;
+    SameTextureData.MipLevelCount              = 1;
+    SameTextureDataMip.pDataBlob               = pSameTextureDataBlob;
     RadientTextureLoadInfo SameDataLoadInfo{};
     SameDataLoadInfo.pTextureData = &SameTextureData;
 
@@ -325,18 +378,24 @@ TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
     RadientTextureSource SameDataSource{SameDataLoadInfo};
     EXPECT_EQ(Source.MakeCacheKey(), SameDataSource.MakeCacheKey());
 
-    auto               pDifferentTextureDataBlob = MakeTestDataBlob(Data2.data(), Data2.size() * sizeof(Data2[0]));
-    RadientTextureData DifferentTextureData      = TextureData;
-    DifferentTextureData.pDataBlob               = pDifferentTextureDataBlob;
+    auto                  pDifferentTextureDataBlob = MakeTestDataBlob(Data2.data(), Data2.size() * sizeof(Data2[0]));
+    RadientTextureMipData DifferentTextureDataMip   = *TextureData.pMipLevels;
+    RadientTextureData    DifferentTextureData      = TextureData;
+    DifferentTextureData.pMipLevels                 = &DifferentTextureDataMip;
+    DifferentTextureData.MipLevelCount              = 1;
+    DifferentTextureDataMip.pDataBlob               = pDifferentTextureDataBlob;
     RadientTextureLoadInfo DifferentDataLoadInfo{};
     DifferentDataLoadInfo.pTextureData = &DifferentTextureData;
     RadientTextureSource DifferentDataSource{DifferentDataLoadInfo};
     EXPECT_NE(Source.MakeCacheKey(), DifferentDataSource.MakeCacheKey());
 
-    auto               pDifferentFormatTextureDataBlob = MakeTestDataBlob(Data3.data(), Data3.size() * sizeof(Data3[0]));
-    RadientTextureData DifferentFormatTextureData      = TextureData;
-    DifferentFormatTextureData.Format                  = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    DifferentFormatTextureData.pDataBlob               = pDifferentFormatTextureDataBlob;
+    auto                  pDifferentFormatTextureDataBlob = MakeTestDataBlob(Data3.data(), Data3.size() * sizeof(Data3[0]));
+    RadientTextureMipData DifferentFormatTextureDataMip   = *TextureData.pMipLevels;
+    RadientTextureData    DifferentFormatTextureData      = TextureData;
+    DifferentFormatTextureData.pMipLevels                 = &DifferentFormatTextureDataMip;
+    DifferentFormatTextureData.MipLevelCount              = 1;
+    DifferentFormatTextureData.Format                     = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    DifferentFormatTextureDataMip.pDataBlob               = pDifferentFormatTextureDataBlob;
     RadientTextureLoadInfo DifferentFormatLoadInfo{};
     DifferentFormatLoadInfo.pTextureData = &DifferentFormatTextureData;
     RadientTextureSource DifferentFormatSource{DifferentFormatLoadInfo};
@@ -368,23 +427,29 @@ TEST(RadientTextureSourceTest, TextureDataCacheKeyIgnoresRowAndTrailingPadding)
         13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 201, 202, 203};
     // clang-format on
 
-    auto               pTextureDataBlob = MakeTestDataBlob(Data0.data(), Data0.size() * sizeof(Data0[0]));
-    RadientTextureData TextureData{};
-    TextureData.Width     = Width;
-    TextureData.Height    = Height;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.Stride    = Stride0;
-    TextureData.pDataBlob = pTextureDataBlob;
+    auto                  pTextureDataBlob = MakeTestDataBlob(Data0.data(), Data0.size() * sizeof(Data0[0]));
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = Width;
+    TextureData.Height        = Height;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.Stride     = Stride0;
+    TextureDataMip.pDataBlob  = pTextureDataBlob;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
 
     RadientTextureSource Source{LoadInfo};
 
-    auto               pSameTextureDataBlob = MakeTestDataBlob(Data1.data(), Data1.size() * sizeof(Data1[0]));
-    RadientTextureData SameTextureData      = TextureData;
-    SameTextureData.pDataBlob               = pSameTextureDataBlob;
-    SameTextureData.Stride                  = Stride1;
+    auto                  pSameTextureDataBlob = MakeTestDataBlob(Data1.data(), Data1.size() * sizeof(Data1[0]));
+    RadientTextureMipData SameTextureDataMip   = *TextureData.pMipLevels;
+    RadientTextureData    SameTextureData      = TextureData;
+    SameTextureData.pMipLevels                 = &SameTextureDataMip;
+    SameTextureData.MipLevelCount              = 1;
+    SameTextureDataMip.pDataBlob               = pSameTextureDataBlob;
+    SameTextureDataMip.Stride                  = Stride1;
     RadientTextureLoadInfo SameLoadInfo{};
     SameLoadInfo.pTextureData = &SameTextureData;
 
@@ -395,9 +460,12 @@ TEST(RadientTextureSourceTest, TextureDataCacheKeyIgnoresRowAndTrailingPadding)
     std::array<Uint8, DataSize0> Data2 = Data0;
     Data2[4]                           = 200;
 
-    auto               pDifferentTextureDataBlob = MakeTestDataBlob(Data2.data(), Data2.size() * sizeof(Data2[0]));
-    RadientTextureData DifferentTextureData      = TextureData;
-    DifferentTextureData.pDataBlob               = pDifferentTextureDataBlob;
+    auto                  pDifferentTextureDataBlob = MakeTestDataBlob(Data2.data(), Data2.size() * sizeof(Data2[0]));
+    RadientTextureMipData DifferentTextureDataMip   = *TextureData.pMipLevels;
+    RadientTextureData    DifferentTextureData      = TextureData;
+    DifferentTextureData.pMipLevels                 = &DifferentTextureDataMip;
+    DifferentTextureData.MipLevelCount              = 1;
+    DifferentTextureDataMip.pDataBlob               = pDifferentTextureDataBlob;
     RadientTextureLoadInfo DifferentLoadInfo{};
     DifferentLoadInfo.pTextureData = &DifferentTextureData;
 
@@ -410,12 +478,15 @@ TEST(RadientTextureSourceTest, SupportsRGBA8_UNORM_SRGBTextureDataFormat)
 {
     std::array<Uint8, 16> Data{};
 
-    auto               pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
-    RadientTextureData TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 2;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB;
-    TextureData.pDataBlob = pTextureDataBlob;
+    auto                  pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 2;
+    TextureData.Height        = 2;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB;
+    TextureDataMip.pDataBlob  = pTextureDataBlob;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI          = "rgba8-srgb-data";
@@ -429,8 +500,11 @@ TEST(RadientTextureSourceTest, SupportsRGBA8_UNORM_SRGBTextureDataFormat)
     ASSERT_NE(pLoader, nullptr);
     EXPECT_EQ(pLoader->GetTextureDesc().Format, TEX_FORMAT_RGBA8_UNORM_SRGB);
 
-    RadientTextureData LinearTextureData = TextureData;
-    LinearTextureData.Format             = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    RadientTextureMipData LinearTextureDataMip = *TextureData.pMipLevels;
+    RadientTextureData    LinearTextureData    = TextureData;
+    LinearTextureData.pMipLevels               = &LinearTextureDataMip;
+    LinearTextureData.MipLevelCount            = 1;
+    LinearTextureData.Format                   = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
 
     RadientTextureLoadInfo LinearLoadInfo{};
     LinearLoadInfo.URI          = LoadInfo.URI;
@@ -444,12 +518,15 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromIntegerTextureData)
 {
     const std::array<Uint16, 1> Data{42};
 
-    auto               pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
-    RadientTextureData TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R16_UINT;
-    TextureData.pDataBlob = pTextureDataBlob;
+    auto                  pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_R16_UINT;
+    TextureDataMip.pDataBlob  = pTextureDataBlob;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI          = "r16-uint-data";
@@ -497,12 +574,15 @@ TEST(RadientTextureSourceTest, RetainsDecodedBlobWithoutCopyingOrPackingRows)
     auto                            pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
     RefCntWeakPtr<IRadientDataBlob> WeakBlob{pBlob};
 
-    RadientTextureData TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 2;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
-    TextureData.Stride    = 4;
-    TextureData.pDataBlob = pBlob;
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 2;
+    TextureData.Height        = 2;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureDataMip.Stride     = 4;
+    TextureDataMip.pDataBlob  = pBlob;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
@@ -531,13 +611,16 @@ TEST(RadientTextureSourceTest, LoaderReferencesPaddedTextureRowsWithoutCopying)
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
         90, 91, 92, 93,
         13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
-    auto               pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
-    RadientTextureData TextureData{};
-    TextureData.Width     = Width;
-    TextureData.Height    = Height;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.Stride    = Stride;
-    TextureData.pDataBlob = pBlob;
+    auto                  pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = Width;
+    TextureData.Height        = Height;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.Stride     = Stride;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
 
@@ -578,11 +661,14 @@ TEST(RadientTextureSourceTest, DecodedSourceHoldsMutableBlobReadAccess)
     Uint32                     ReadReleases = 0;
     auto                       pBlob        = MakeTestMutableDataBlob(Data.data(), Data.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureData TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pBlob;
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
     void* pWriteData      = nullptr;
@@ -618,11 +704,14 @@ TEST(RadientTextureSourceTest, DetachesDecodedBlobStateBeforeReadReleaseCallback
         EXPECT_EQ(pMutableBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
         EXPECT_EQ(pMutableBlob->EndWrite(), RADIENT_STATUS_OK); }, &State);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureData TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pBlob;
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
     {
@@ -635,37 +724,58 @@ TEST(RadientTextureSourceTest, DetachesDecodedBlobStateBeforeReadReleaseCallback
     EXPECT_TRUE(State.CacheKeyEmpty);
 }
 
-TEST(RadientTextureSourceTest, InvalidTextureDataDoesNotFallbackToOtherSourceTypes)
+TEST(RadientTextureSourceTest, InvalidTextureDataReportsItsErrorWithoutFallingBackToURI)
 {
     const std::array<Uint8, 8> Data{1, 2, 3, 4, 5, 6, 7, 8};
-    auto                       pBlob        = MakeTestDataBlob(Data.data(), Data.size());
-    auto                       pEncodedBlob = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size());
-    auto                       pShortBlob   = MakeTestDataBlob(Data.data(), Uint64{5});
-    auto                       pEmptyBlob   = MakeTestDataBlob(nullptr, 0);
+    auto                       pBlob      = MakeTestDataBlob(Data.data(), Data.size());
+    auto                       pShortBlob = MakeTestDataBlob(Data.data(), Uint64{5});
+    auto                       pEmptyBlob = MakeTestDataBlob(nullptr, 0);
+    RadientTextureMipData      ValidDataMip{};
     RadientTextureData         ValidData{};
-    ValidData.Width     = 2;
-    ValidData.Height    = 2;
-    ValidData.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
-    ValidData.Stride    = 4;
-    ValidData.pDataBlob = pBlob;
+    ValidData.pMipLevels    = &ValidDataMip;
+    ValidData.MipLevelCount = 1;
+    ValidData.Width         = 2;
+    ValidData.Height        = 2;
+    ValidData.Format        = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    ValidDataMip.Stride     = 4;
+    ValidDataMip.pDataBlob  = pBlob;
 
-    std::array<RadientTextureData, 7> InvalidData;
+    std::array<RadientTextureData, 10> InvalidData;
     InvalidData.fill(ValidData);
-    InvalidData[0].Format    = RADIENT_TEXTURE_FORMAT_UNKNOWN;
-    InvalidData[1].Width     = 0;
-    InvalidData[2].Height    = 0;
-    InvalidData[3].Stride    = 1;
-    InvalidData[4].pDataBlob = nullptr;
-    InvalidData[5].pDataBlob = pShortBlob;
-    InvalidData[6].pDataBlob = pEmptyBlob;
+    std::array<RadientTextureMipData, 10> InvalidMips;
+    InvalidMips.fill(ValidDataMip);
+    for (size_t i = 0; i < InvalidData.size(); ++i)
+        InvalidData[i].pMipLevels = &InvalidMips[i];
+    InvalidData[0].Format         = RADIENT_TEXTURE_FORMAT_UNKNOWN;
+    InvalidData[1].Width          = 0;
+    InvalidData[2].Height         = 0;
+    InvalidMips[3].Stride         = 1;
+    InvalidMips[4].pDataBlob      = nullptr;
+    InvalidMips[5].pDataBlob      = pShortBlob;
+    InvalidMips[6].pDataBlob      = pEmptyBlob;
+    InvalidData[7].pMipLevels     = nullptr;
+    InvalidData[8].MipLevelCount  = 0;
+    InvalidData[9].MipLevelCount  = 3;
+    const char* ExpectedDetails[] = {
+        "unsupported texture data format",
+        "width and height must be nonzero; got 0 x 2",
+        "width and height must be nonzero; got 2 x 0",
+        "Stride (1) and active row size (2)",
+        "Invalid texture mip 0: pDataBlob must not be null",
+        "required data size (6) exceed data blob size (5)",
+        "required data size (6) exceed data blob size (0)",
+        "pMipLevels must not be null",
+        "MipLevelCount (0) must be between 1 and 2",
+        "MipLevelCount (3) must be between 1 and 2",
+    };
     for (size_t Index = 0; Index < InvalidData.size(); ++Index)
     {
         SCOPED_TRACE(Index);
         RadientTextureLoadInfo LoadInfo{};
         LoadInfo.URI          = "textures/albedo.png";
         LoadInfo.pTextureData = &InvalidData[Index];
-        LoadInfo.pDataBlob    = pEncodedBlob;
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{ExpectedDetails[Index]};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_FALSE(Source.IsMemory());
         EXPECT_FALSE(Source.IsTextureData());
@@ -681,11 +791,14 @@ TEST(RadientTextureSourceTest, DecodedBlobReadAccessSurvivesMovesAndMultipleSour
     const std::array<Uint8, 4> Data{1, 2, 3, 4};
     Uint32                     ReadReleases = 0;
     auto                       pBlob        = MakeTestMutableDataBlob(Data.data(), Data.size(), CountBlobReadReleases, &ReadReleases);
+    RadientTextureMipData      TextureDataMip{};
     RadientTextureData         TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pBlob;
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
     {
@@ -704,7 +817,7 @@ TEST(RadientTextureSourceTest, DecodedBlobReadAccessSurvivesMovesAndMultipleSour
     EXPECT_EQ(ReadReleases, 1u);
 }
 
-TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
+TEST(RadientTextureSourceTest, DefaultMipGenerationBuildsUncompressedTail)
 {
     const std::array<Uint8, 16> Data{
         1, 3, 20, 24,
@@ -712,13 +825,17 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromTextureData)
         40, 44, 80, 88,
         52, 56, 94, 98};
 
-    auto               pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
-    RadientTextureData TextureData{};
-    TextureData.Width     = 4;
-    TextureData.Height    = 4;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
-    TextureData.pDataBlob = pTextureDataBlob;
-    TextureData.Stride    = 4;
+    auto                  pTextureDataBlob = MakeTestDataBlob(Data.data(), Data.size() * sizeof(Data[0]));
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    EXPECT_EQ(TextureData.GenerateMips, True);
+    TextureData.Width        = 4;
+    TextureData.Height       = 4;
+    TextureData.Format       = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureDataMip.pDataBlob = pTextureDataBlob;
+    TextureDataMip.Stride    = 4;
 
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI          = "r8-data";
@@ -776,13 +893,17 @@ TEST(RadientTextureSourceTest, SignedNormalizedInputsGenerateSignedMipValues)
                 Pixels[Offset]      = static_cast<ComponentType>((Values[Pixel] + static_cast<Int32>(Channel) * 4) * Scale);
             }
         }
-        auto               pBlob = MakeReferencedDataBlob(Pixels.data(), Pixels.size() * sizeof(ComponentType));
-        RadientTextureData Data;
-        Data.Width     = 2;
-        Data.Height    = 2;
-        Data.Format    = Format;
-        Data.pDataBlob = pBlob;
-        Data.Stride    = RowComponents * static_cast<Uint32>(sizeof(ComponentType));
+        auto                  pBlob = MakeReferencedDataBlob(Pixels.data(), Pixels.size() * sizeof(ComponentType));
+        RadientTextureMipData DataMip{};
+        RadientTextureData    Data;
+        Data.pMipLevels    = &DataMip;
+        Data.MipLevelCount = 1;
+        Data.GenerateMips  = True;
+        Data.Width         = 2;
+        Data.Height        = 2;
+        Data.Format        = Format;
+        DataMip.pDataBlob  = pBlob;
+        DataMip.Stride     = RowComponents * static_cast<Uint32>(sizeof(ComponentType));
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.pTextureData = &Data;
         RadientTextureSource Source{LoadInfo};
@@ -796,7 +917,7 @@ TEST(RadientTextureSourceTest, SignedNormalizedInputsGenerateSignedMipValues)
         EXPECT_EQ(Desc.Format, RadientToTextureFormat(Format));
         ASSERT_EQ(Desc.MipLevels, 2u);
         EXPECT_EQ(pLoader->GetSubresourceData(0).pData, Pixels.data());
-        EXPECT_EQ(pLoader->GetSubresourceData(0).Stride, Data.Stride);
+        EXPECT_EQ(pLoader->GetSubresourceData(0).Stride, DataMip.Stride);
         const auto* pMip = static_cast<const ComponentType*>(pLoader->GetSubresourceData(1).pData);
         ASSERT_NE(pMip, nullptr);
         for (Uint32 Channel = 0; Channel < ComponentCount; ++Channel)
@@ -847,15 +968,19 @@ TEST(RadientTextureSourceTest, CompressedInputsRetainMipZeroWithoutCopyingOrRepa
                 for (Uint32 Byte = 0; Byte < ActiveRowSize; ++Byte)
                     pBytes[Row * Stride + Byte] = static_cast<Uint8>(Row * ActiveRowSize + Byte * 7);
             }
-            auto               pBlob = MakeReferencedDataBlob(pBytes, DataSize);
-            RadientTextureData Data;
-            Data.Width     = 8;
-            Data.Height    = 8;
-            Data.Format    = Format;
-            Data.pDataBlob = pBlob;
-            Data.Stride    = Padding == 0 ? 0 : Stride;
+            auto                  pBlob = MakeReferencedDataBlob(pBytes, DataSize);
+            RadientTextureMipData DataMip{};
+            RadientTextureData    Data;
+            Data.pMipLevels    = &DataMip;
+            Data.MipLevelCount = 1;
+            Data.GenerateMips  = False;
+            Data.Width         = 8;
+            Data.Height        = 8;
+            Data.Format        = Format;
+            DataMip.pDataBlob  = pBlob;
+            DataMip.Stride     = Padding == 0 ? 0 : Stride;
             RadientTextureDataSpan Span;
-            ASSERT_TRUE(GetRadientTextureDataSpan(Data, Span));
+            ASSERT_TRUE(GetRadientTextureDataSpan(Data, 0, Span));
             EXPECT_EQ(Span.ActiveRowSize, ActiveRowSize);
             EXPECT_EQ(Span.RowCount, 2u);
             EXPECT_EQ(Span.DataSize, DataSize);
@@ -897,13 +1022,16 @@ TEST(RadientTextureSourceTest, ComputesPartialBlockSpansIndependentlyOfLoadingRe
         SCOPED_TRACE(static_cast<Uint32>(Format));
         for (const Uint32 Padding : {0u, 3u})
         {
-            RadientTextureData Data;
-            Data.Width  = 5;
-            Data.Height = 7;
-            Data.Format = Format;
-            Data.Stride = Padding == 0 ? 0 : 2 * BlockSize + Padding;
+            RadientTextureMipData DataMip{};
+            RadientTextureData    Data;
+            Data.pMipLevels    = &DataMip;
+            Data.MipLevelCount = 1;
+            Data.Width         = 5;
+            Data.Height        = 7;
+            Data.Format        = Format;
+            DataMip.Stride     = Padding == 0 ? 0 : 2 * BlockSize + Padding;
             RadientTextureDataSpan Span;
-            ASSERT_TRUE(GetRadientTextureDataSpan(Data, Span));
+            ASSERT_TRUE(GetRadientTextureDataSpan(Data, 0, Span));
             EXPECT_EQ(Span.ActiveRowSize, 2 * BlockSize);
             EXPECT_EQ(Span.RowCount, 2u);
             EXPECT_EQ(Span.DataSize, 4 * BlockSize + Padding);
@@ -931,17 +1059,21 @@ TEST(RadientTextureSourceTest, RejectsCompressedInputsWithIncompleteBlocksOrShor
             auto pBlob = MakeReferencedDataBlob(Bytes.data(), Stride + ActiveRowSize - (Truncated ? 1 : 0),
                                                 CountBlobReadReleases, &ReadReleases);
 
-            RadientTextureData Data;
-            Data.Width     = 8;
-            Data.Height    = 8;
-            Data.Format    = Format;
-            Data.pDataBlob = pBlob;
-            Data.Stride    = Truncated ? Stride : ActiveRowSize - 1;
+            RadientTextureMipData DataMip{};
+            RadientTextureData    Data;
+            Data.pMipLevels    = &DataMip;
+            Data.MipLevelCount = 1;
+            Data.Width         = 8;
+            Data.Height        = 8;
+            Data.Format        = Format;
+            DataMip.pDataBlob  = pBlob;
+            DataMip.Stride     = Truncated ? Stride : ActiveRowSize - 1;
             RadientTextureDataSpan Span;
-            EXPECT_EQ(GetRadientTextureDataSpan(Data, Span), Truncated);
+            EXPECT_EQ(GetRadientTextureDataSpan(Data, 0, Span), Truncated);
             RadientTextureLoadInfo LoadInfo;
             LoadInfo.pTextureData = &Data;
-            RadientTextureSource Source{LoadInfo};
+            TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 0"};
+            RadientTextureSource           Source{LoadInfo};
             EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
             EXPECT_FALSE(Source.IsMemory());
             EXPECT_TRUE(Source.MakeCacheKey().empty());
@@ -996,6 +1128,29 @@ TEST(RadientTextureSourceTest, CreatesLoaderFromURIAssetResolver)
     EXPECT_EQ(Stats.AssetDataDestroyCount, 0u);
     pLoader.Release();
     EXPECT_EQ(Stats.AssetDataDestroyCount, 1u);
+}
+
+TEST(RadientTextureSourceTest, ReportsMissingLoaderArguments)
+{
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.URI = "textures/albedo.png";
+    RadientTextureSource                    Source{LoadInfo};
+    RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
+    RefCntAutoPtr<ITextureLoader>           pLoader;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"ppLoader must not be null"};
+        EXPECT_EQ(Source.CreateLoader(nullptr, nullptr, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"'textures/albedo.png': pAssetResolver must not be null"};
+        EXPECT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pLoader, nullptr);
+    }
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"'textures/albedo.png': pAssetLocation must not be null"};
+        EXPECT_EQ(Source.CreateLoader(pResolver, nullptr, &pLoader), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pLoader, nullptr);
+    }
 }
 
 TEST(RadientTextureSourceTest, RequiresOKAssetOpenStatus)
@@ -1058,7 +1213,8 @@ TEST(RadientTextureSourceTest, BusyBlobDoesNotFallBackToURI)
     LoadInfo.pDataBlob = pBlob;
     LoadInfo.URI       = "textures/albedo.png";
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to encoded texture data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
         EXPECT_TRUE(Source.MakeCacheKey().empty());
         RefCntAutoPtr<ITextureLoader> pLoader;
@@ -1127,7 +1283,8 @@ TEST(RadientTextureSourceTest, RejectsInvalidBlobStorageUnderReadAccess)
     LoadInfo.pDataBlob = Blob;
     LoadInfo.URI       = "textures/albedo.png";
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Encoded texture data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_DATA);
         EXPECT_FALSE(Source.IsMemory());
         EXPECT_EQ(Source.GetData(), nullptr);
@@ -1143,7 +1300,8 @@ TEST(RadientTextureSourceTest, RejectsInvalidBlobStorageUnderReadAccess)
         RefCntAutoPtr<ScopeCheckedDataBlob> LargeBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(
             TransparentPng.data(), static_cast<Uint64>((std::numeric_limits<size_t>::max)()) + Uint64{1})};
         LoadInfo.pDataBlob = LargeBlob;
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Encoded texture data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(LargeBlob->ReaderCount, 0u);
     }
@@ -1158,7 +1316,8 @@ TEST(RadientTextureSourceTest, RejectsEmptyBlobAndActiveEmptyBlobWriter)
     LoadInfo.pDataBlob = Blob;
     LoadInfo.URI       = "textures/albedo.png";
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Encoded texture data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_TRUE(Source.MakeCacheKey().empty());
     }
@@ -1167,7 +1326,8 @@ TEST(RadientTextureSourceTest, RejectsEmptyBlobAndActiveEmptyBlobWriter)
     void* Data = nullptr;
     ASSERT_EQ(Blob->BeginWrite(&Data), RADIENT_STATUS_OK);
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to encoded texture data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
         EXPECT_TRUE(Source.MakeCacheKey().empty());
     }
@@ -1179,12 +1339,15 @@ TEST(RadientTextureSourceTest, CapturesDecodedBlobSizeUnderReadAccess)
 {
     const std::array<Uint8, 8>          Data{1, 2, 90, 91, 3, 4, 92, 93};
     RefCntAutoPtr<ScopeCheckedDataBlob> pBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(Data.data(), Data.size())};
+    RadientTextureMipData               TextureDataMip{};
     RadientTextureData                  TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 2;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R8_UNORM;
-    TextureData.Stride    = 4;
-    TextureData.pDataBlob = pBlob;
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 2;
+    TextureData.Height        = 2;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    TextureDataMip.Stride     = 4;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
     {
@@ -1211,23 +1374,28 @@ TEST(RadientTextureSourceTest, BusyDecodedBlobDoesNotFallbackToOtherSources)
     auto                       pEncodedBlob = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size());
     void*                      pWriteData   = nullptr;
     ASSERT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
-    RadientTextureData TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pBlob;
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI          = "textures/albedo.png";
     LoadInfo.pDataBlob    = pEncodedBlob;
     LoadInfo.pTextureData = &TextureData;
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture source"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_TRUE(Source.MakeCacheKey().empty());
     }
     LoadInfo.pDataBlob = nullptr;
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to texture mip 0 data blob"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
         EXPECT_TRUE(Source.MakeCacheKey().empty());
         RefCntAutoPtr<ITextureLoader> pLoader;
@@ -1240,16 +1408,20 @@ TEST(RadientTextureSourceTest, BusyDecodedBlobDoesNotFallbackToOtherSources)
 TEST(RadientTextureSourceTest, RejectsInvalidDecodedBlobStorageUnderReadAccess)
 {
     RefCntAutoPtr<ScopeCheckedDataBlob> pBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(nullptr, Uint64{4})};
+    RadientTextureMipData               TextureDataMip{};
     RadientTextureData                  TextureData{};
-    TextureData.Width     = 1;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pBlob;
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 1;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.URI          = "textures/albedo.png";
     LoadInfo.pTextureData = &TextureData;
     {
-        RadientTextureSource Source{LoadInfo};
+        TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 0"};
+        RadientTextureSource           Source{LoadInfo};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_DATA);
         EXPECT_FALSE(Source.IsMemory());
         EXPECT_TRUE(Source.MakeCacheKey().empty());
@@ -1267,17 +1439,21 @@ TEST(RadientTextureSourceTest, RejectsMisalignedDecodedBlobPointers)
     for (const auto Format : Formats)
     {
         SCOPED_TRACE(Format);
-        Uint32             ReadReleases = 0;
-        auto               pBlob        = MakeReferencedDataBlob(Data.data() + 1, Data.size() - 1, CountBlobReadReleases, &ReadReleases);
-        RadientTextureData TextureData{};
-        TextureData.Width     = 2;
-        TextureData.Height    = 2;
-        TextureData.Format    = Format;
-        TextureData.pDataBlob = pBlob;
+        Uint32                ReadReleases = 0;
+        auto                  pBlob        = MakeReferencedDataBlob(Data.data() + 1, Data.size() - 1, CountBlobReadReleases, &ReadReleases);
+        RadientTextureMipData TextureDataMip{};
+        RadientTextureData    TextureData{};
+        TextureData.pMipLevels    = &TextureDataMip;
+        TextureData.MipLevelCount = 1;
+        TextureData.Width         = 2;
+        TextureData.Height        = 2;
+        TextureData.Format        = Format;
+        TextureDataMip.pDataBlob  = pBlob;
         RadientTextureLoadInfo LoadInfo{};
         LoadInfo.pTextureData = &TextureData;
         {
-            RadientTextureSource Source{LoadInfo};
+            TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 0"};
+            RadientTextureSource           Source{LoadInfo};
             EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
             EXPECT_FALSE(Source.IsMemory());
             EXPECT_TRUE(Source.MakeCacheKey().empty());
@@ -1300,20 +1476,24 @@ TEST(RadientTextureSourceTest, RejectsMisalignedDecodedMultirowStridesBeforeRead
     for (const auto& [Format, ComponentSize] : Formats)
     {
         SCOPED_TRACE(Format);
-        Uint32             ReadReleases = 0;
-        auto               pBlob        = MakeReferencedDataBlob(Data.data(), Data.size(), CountBlobReadReleases, &ReadReleases);
-        RadientTextureData TextureData{};
-        TextureData.Width     = 2;
-        TextureData.Height    = 2;
-        TextureData.Format    = Format;
-        TextureData.Stride    = TextureData.Width * ComponentSize + 1;
-        TextureData.pDataBlob = pBlob;
+        Uint32                ReadReleases = 0;
+        auto                  pBlob        = MakeReferencedDataBlob(Data.data(), Data.size(), CountBlobReadReleases, &ReadReleases);
+        RadientTextureMipData TextureDataMip{};
+        RadientTextureData    TextureData{};
+        TextureData.pMipLevels    = &TextureDataMip;
+        TextureData.MipLevelCount = 1;
+        TextureData.Width         = 2;
+        TextureData.Height        = 2;
+        TextureData.Format        = Format;
+        TextureDataMip.Stride     = TextureData.Width * ComponentSize + 1;
+        TextureDataMip.pDataBlob  = pBlob;
         RadientTextureDataSpan Span;
-        EXPECT_FALSE(GetRadientTextureDataSpan(TextureData, Span));
+        EXPECT_FALSE(GetRadientTextureDataSpan(TextureData, 0, Span));
         RadientTextureLoadInfo LoadInfo{};
         LoadInfo.pTextureData = &TextureData;
         {
-            RadientTextureSource Source{LoadInfo};
+            TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 0"};
+            RadientTextureSource           Source{LoadInfo};
             EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
             EXPECT_FALSE(Source.IsMemory());
             EXPECT_TRUE(Source.MakeCacheKey().empty());
@@ -1331,13 +1511,17 @@ TEST(RadientTextureSourceTest, AlignedDecodedComponentsAndRowPaddingGenerateMips
     for (const auto& [Format, ComponentSize] : Formats)
     {
         SCOPED_TRACE(Format);
-        auto               pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
-        RadientTextureData TextureData{};
-        TextureData.Width     = 2;
-        TextureData.Height    = 2;
-        TextureData.Format    = Format;
-        TextureData.Stride    = (TextureData.Width + 1) * ComponentSize;
-        TextureData.pDataBlob = pBlob;
+        auto                  pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
+        RadientTextureMipData TextureDataMip{};
+        RadientTextureData    TextureData{};
+        TextureData.pMipLevels    = &TextureDataMip;
+        TextureData.MipLevelCount = 1;
+        TextureData.GenerateMips  = True;
+        TextureData.Width         = 2;
+        TextureData.Height        = 2;
+        TextureData.Format        = Format;
+        TextureDataMip.Stride     = (TextureData.Width + 1) * ComponentSize;
+        TextureDataMip.pDataBlob  = pBlob;
         RadientTextureLoadInfo LoadInfo{};
         LoadInfo.pTextureData = &TextureData;
         RadientTextureSource Source{LoadInfo};
@@ -1348,7 +1532,7 @@ TEST(RadientTextureSourceTest, AlignedDecodedComponentsAndRowPaddingGenerateMips
         ASSERT_EQ(pLoader->GetTextureDesc().MipLevels, 2u);
         const auto& Subres = pLoader->GetSubresourceData(0);
         EXPECT_EQ(Subres.pData, Data.data());
-        EXPECT_EQ(Subres.Stride, TextureData.Stride);
+        EXPECT_EQ(Subres.Stride, TextureDataMip.Stride);
         const auto* pMip = static_cast<const Uint8*>(pLoader->GetSubresourceData(1).pData);
         ASSERT_NE(pMip, nullptr);
         for (Uint32 Byte = 0; Byte < ComponentSize; ++Byte)
@@ -1360,14 +1544,18 @@ TEST(RadientTextureSourceTest, SingleRowDecodedTextureAllowsUnalignedUnusedStrid
 {
     alignas(Uint32) const std::array<Uint8, 8> Data{};
     auto                                       pBlob = MakeReferencedDataBlob(Data.data(), Data.size());
+    RadientTextureMipData                      TextureDataMip{};
     RadientTextureData                         TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 1;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_R32_FLOAT;
-    TextureData.Stride    = 9;
-    TextureData.pDataBlob = pBlob;
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.GenerateMips  = True;
+    TextureData.Width         = 2;
+    TextureData.Height        = 1;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_R32_FLOAT;
+    TextureDataMip.Stride     = 9;
+    TextureDataMip.pDataBlob  = pBlob;
     RadientTextureDataSpan Span;
-    EXPECT_TRUE(GetRadientTextureDataSpan(TextureData, Span));
+    EXPECT_TRUE(GetRadientTextureDataSpan(TextureData, 0, Span));
     EXPECT_EQ(Span.DataSize, Data.size());
     RadientTextureLoadInfo LoadInfo{};
     LoadInfo.pTextureData = &TextureData;
@@ -1378,5 +1566,332 @@ TEST(RadientTextureSourceTest, SingleRowDecodedTextureAllowsUnalignedUnusedStrid
     ASSERT_NE(pLoader, nullptr);
     EXPECT_EQ(pLoader->GetTextureDesc().MipLevels, 2u);
     EXPECT_EQ(pLoader->GetSubresourceData(0).pData, Data.data());
-    EXPECT_EQ(pLoader->GetSubresourceData(0).Stride, TextureData.Stride);
+    EXPECT_EQ(pLoader->GetSubresourceData(0).Stride, TextureDataMip.Stride);
+}
+
+
+TEST(RadientTextureSourceTest, CompressedMipGenerationWarnsOnlyForMissingTail)
+{
+    const std::array<Uint8, 160> Blocks{};
+    auto                         pBlob = MakeReferencedDataBlob(Blocks.data(), Blocks.size());
+    for (const auto Format : {RADIENT_TEXTURE_FORMAT_BC1_UNORM, RADIENT_TEXTURE_FORMAT_BC7_UNORM})
+    {
+        SCOPED_TRACE(Format);
+        const Uint32                BlockSize = Format == RADIENT_TEXTURE_FORMAT_BC1_UNORM ? 8u : 16u;
+        const RadientTextureMipData Mips[]    = {
+            {pBlob, 1, 2 * BlockSize + 3},
+            {pBlob, 72, BlockSize + 1},
+            {pBlob, 100, 0},
+            {pBlob, 125, 0},
+        };
+        for (Uint32 MipCount : {2u, 4u})
+        {
+            SCOPED_TRACE(MipCount);
+            std::string ManualKey;
+            for (Bool Generate : {False, True})
+            {
+                SCOPED_TRACE(Generate);
+                RadientTextureData Data;
+                Data.Width = Data.Height = 8;
+                Data.Format              = Format;
+                Data.pMipLevels          = Mips;
+                Data.MipLevelCount       = MipCount;
+                Data.GenerateMips        = Generate;
+                RadientTextureLoadInfo LoadInfo;
+                LoadInfo.pTextureData = &Data;
+                ScopedMessageCapture Capture;
+                RadientTextureSource Source{LoadInfo};
+                ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+                const size_t ExpectedWarnings = Generate && MipCount < 4 ? 1u : 0u;
+                ASSERT_EQ(Capture.Warnings.size(), ExpectedWarnings);
+                if (ExpectedWarnings != 0)
+                    EXPECT_EQ(Capture.Warnings[0], "Mip generation is unsupported for compressed textures; only the supplied mip levels will be loaded.");
+                if (Generate)
+                    EXPECT_EQ(Source.MakeCacheKey(), ManualKey);
+                else
+                    ManualKey = Source.MakeCacheKey();
+                RefCntAutoPtr<ITextureLoader> pLoader;
+                ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+                ASSERT_NE(pLoader, nullptr);
+                ASSERT_EQ(pLoader->GetTextureDesc().MipLevels, MipCount);
+                EXPECT_EQ(Capture.Warnings.size(), ExpectedWarnings);
+                for (Uint32 Level = 0; Level < MipCount; ++Level)
+                {
+                    SCOPED_TRACE(Level);
+                    const auto& Subres = pLoader->GetSubresourceData(Level);
+                    EXPECT_EQ(Subres.pData, Blocks.data() + Mips[Level].ByteOffset);
+                    EXPECT_EQ(Subres.Stride, Mips[Level].Stride != 0 ? Mips[Level].Stride : BlockSize);
+                    RadientTextureDataSpan Span;
+                    ASSERT_TRUE(GetRadientTextureDataSpan(Data, Level, Span));
+                    // Even the 2x2 and 1x1 tail levels occupy one whole block.
+                    if (Level != 0)
+                    {
+                        EXPECT_EQ(Span.RowCount, 1u);
+                        EXPECT_EQ(Span.DataSize, BlockSize);
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST(RadientTextureSourceTest, GeneratesMissingTailFromLastSuppliedMip)
+{
+    const std::array<Uint8, 64> Base{};
+    const std::array<Uint8, 16> AuthoredMip1{
+        1, 3, 20, 24,
+        5, 7, 28, 32,
+        40, 44, 80, 88,
+        52, 56, 94, 98};
+    const std::array<Uint8, 4>  AuthoredMip2{40, 80, 120, 160};
+    const Uint8                 AuthoredMip3 = 231;
+    auto                        pBase        = MakeReferencedDataBlob(Base.data(), Base.size());
+    auto                        pMip1        = MakeReferencedDataBlob(AuthoredMip1.data(), AuthoredMip1.size());
+    auto                        pMip2        = MakeReferencedDataBlob(AuthoredMip2.data(), AuthoredMip2.size());
+    auto                        pMip3        = MakeReferencedDataBlob(&AuthoredMip3, sizeof(AuthoredMip3));
+    const RadientTextureMipData Mips[]       = {{pBase}, {pMip1}, {pMip2}, {pMip3}};
+    const void* const           Pointers[]   = {Base.data(), AuthoredMip1.data(), AuthoredMip2.data(), &AuthoredMip3};
+    for (Uint32 MipCount : {2u, 4u})
+    {
+        for (Bool Generate : {False, True})
+        {
+            SCOPED_TRACE(MipCount);
+            SCOPED_TRACE(Generate);
+            RadientTextureData Data;
+            Data.Width = Data.Height = 8;
+            Data.Format              = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+            Data.pMipLevels          = Mips;
+            Data.MipLevelCount       = MipCount;
+            Data.GenerateMips        = Generate;
+            RadientTextureLoadInfo LoadInfo;
+            LoadInfo.pTextureData = &Data;
+            RadientTextureSource Source{LoadInfo};
+            ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+            RefCntAutoPtr<ITextureLoader> pLoader;
+            ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+            ASSERT_NE(pLoader, nullptr);
+            ASSERT_EQ(pLoader->GetTextureDesc().MipLevels, Generate ? 4u : MipCount);
+            for (Uint32 Level = 0; Level < MipCount; ++Level)
+                EXPECT_EQ(pLoader->GetSubresourceData(Level).pData, Pointers[Level]);
+            if (Generate && MipCount == 2)
+            {
+                const auto& Mip2   = pLoader->GetSubresourceData(2);
+                const auto* pBytes = static_cast<const Uint8*>(Mip2.pData);
+                ASSERT_NE(pBytes, nullptr);
+                EXPECT_EQ(pBytes[0], 4u);
+                EXPECT_EQ(pBytes[1], 26u);
+                EXPECT_EQ(pBytes[Mip2.Stride], 48u);
+                EXPECT_EQ(pBytes[Mip2.Stride + 1], 90u);
+                EXPECT_EQ(*static_cast<const Uint8*>(pLoader->GetSubresourceData(3).pData), 42u);
+            }
+        }
+    }
+}
+
+TEST(RadientTextureSourceTest, MipCacheKeysIncludeEveryLevelAndGenerationButIgnoreStorageLayout)
+{
+    const auto MakeKey = [](bool Padded, int ChangedMip, Bool Generate, Uint32 MipCount = 2) {
+        std::array<Uint8, 48> Bytes;
+        Bytes.fill(Padded ? 0xCD : 0xAB);
+        RadientTextureMipData Mips[] = {
+            {nullptr, Padded ? 3u : 0u, Padded ? 7u : 4u},
+            {nullptr, Padded ? 35u : 16u, Padded ? 5u : 2u},
+            {nullptr, Padded ? 45u : 20u, 1},
+        };
+        for (Uint32 Level = 0; Level < 3; ++Level)
+        {
+            const Uint32 Width = 4u >> Level;
+            for (Uint32 Y = 0; Y < Width; ++Y)
+            {
+                for (Uint32 X = 0; X < Width; ++X)
+                {
+                    Bytes[static_cast<size_t>(Mips[Level].ByteOffset + Y * Mips[Level].Stride + X)] = static_cast<Uint8>(Level * 40 + Y * Width + X);
+                }
+            }
+        }
+        if (ChangedMip >= 0)
+            ++Bytes[static_cast<size_t>(Mips[ChangedMip].ByteOffset)];
+        auto pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
+        for (auto& Mip : Mips)
+            Mip.pDataBlob = pBlob;
+        RadientTextureData Data;
+        Data.Width = Data.Height = 4;
+        Data.Format              = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+        Data.pMipLevels          = Mips;
+        Data.MipLevelCount       = MipCount;
+        Data.GenerateMips        = Generate;
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pTextureData = &Data;
+        RadientTextureSource Source{LoadInfo};
+        EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+        return Source.MakeCacheKey();
+    };
+    const auto Key = MakeKey(false, -1, False);
+    ASSERT_FALSE(Key.empty());
+    EXPECT_EQ(Key, MakeKey(true, -1, False));
+    EXPECT_NE(Key, MakeKey(false, 0, False));
+    EXPECT_NE(Key, MakeKey(false, 1, False));
+    EXPECT_NE(Key, MakeKey(false, -1, True));
+    EXPECT_NE(Key, MakeKey(false, -1, False, 1));
+    const auto CompleteKey = MakeKey(false, -1, False, 3);
+    EXPECT_EQ(CompleteKey, MakeKey(true, -1, True, 3));
+    EXPECT_NE(CompleteKey, MakeKey(false, 2, False, 3));
+}
+
+TEST(RadientTextureSourceTest, RetainsAllMipBlobsAndCopiedDescriptorsAcrossMoves)
+{
+    const std::array<Uint8, 16>     Base{};
+    const std::array<Uint8, 5>      Tail{11, 12, 13, 14, 99};
+    Uint32                          BaseReleases = 0;
+    Uint32                          TailReleases = 0;
+    auto                            pBase        = MakeTestMutableDataBlob(Base.data(), Base.size(), CountBlobReadReleases, &BaseReleases);
+    auto                            pTail        = MakeTestMutableDataBlob(Tail.data(), Tail.size(), CountBlobReadReleases, &TailReleases);
+    RefCntWeakPtr<IRadientDataBlob> WeakBase{pBase.RawPtr()};
+    RefCntWeakPtr<IRadientDataBlob> WeakTail{pTail.RawPtr()};
+    RadientTextureMipData           Mips[] = {{pBase}, {pTail}, {pTail, 4}};
+    RadientTextureData              Data;
+    Data.Width = Data.Height = 4;
+    Data.Format              = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    Data.pMipLevels          = Mips;
+    Data.MipLevelCount       = 3;
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pTextureData = &Data;
+    {
+        RadientTextureSource First{LoadInfo};
+        RadientTextureSource Second{LoadInfo};
+        ASSERT_EQ(First.GetStatus(), RADIENT_STATUS_OK);
+        ASSERT_EQ(Second.GetStatus(), RADIENT_STATUS_OK);
+        RadientTextureSource Moved{std::move(First)};
+        Second = std::move(Moved);
+        EXPECT_FALSE(First.IsMemory());
+        EXPECT_FALSE(Moved.IsMemory());
+        for (auto& Mip : Mips)
+            Mip = {};
+        Data         = {};
+        void* pWrite = nullptr;
+        EXPECT_EQ(pBase->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
+        EXPECT_EQ(pTail->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
+        pBase.Release();
+        pTail.Release();
+        EXPECT_NE(WeakBase.Lock(), nullptr);
+        EXPECT_NE(WeakTail.Lock(), nullptr);
+        EXPECT_EQ(BaseReleases, 0u);
+        EXPECT_EQ(TailReleases, 0u);
+        RefCntAutoPtr<ITextureLoader> pLoader;
+        ASSERT_EQ(Second.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+        ASSERT_NE(pLoader, nullptr);
+        EXPECT_EQ(pLoader->GetTextureDesc().MipLevels, 3u);
+        const auto* pMip1 = static_cast<const Uint8*>(pLoader->GetSubresourceData(1).pData);
+        ASSERT_NE(pMip1, nullptr);
+        EXPECT_EQ(pMip1[0], 11u);
+        EXPECT_EQ(pMip1[3], 14u);
+        EXPECT_EQ(*static_cast<const Uint8*>(pLoader->GetSubresourceData(2).pData), 99u);
+    }
+    EXPECT_EQ(BaseReleases, 1u);
+    EXPECT_EQ(TailReleases, 1u);
+    EXPECT_EQ(WeakBase.Lock(), nullptr);
+    EXPECT_EQ(WeakTail.Lock(), nullptr);
+}
+
+TEST(RadientTextureSourceTest, FailedLaterMipReadReleasesEarlierReads)
+{
+    Uint32 BaseReleases = 0;
+    auto   pBase        = MakeTestMutableDataBlob(nullptr, 16, CountBlobReadReleases, &BaseReleases);
+    auto   pTail        = MakeTestMutableDataBlob(nullptr, 4);
+    void*  pWrite       = nullptr;
+    ASSERT_EQ(pTail->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    const RadientTextureMipData Mips[] = {{pBase}, {pTail}};
+    RadientTextureData          Data;
+    Data.Width = Data.Height = 4;
+    Data.Format              = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    Data.pMipLevels          = Mips;
+    Data.MipLevelCount       = 2;
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pTextureData = &Data;
+    TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to texture mip 1 data blob"};
+    RadientTextureSource           Source{LoadInfo};
+    EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_FALSE(Source.IsMemory());
+    EXPECT_TRUE(Source.MakeCacheKey().empty());
+    EXPECT_EQ(BaseReleases, 1u);
+    EXPECT_EQ(pBase->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBase->EndWrite(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pTail->EndWrite(), RADIENT_STATUS_OK);
+}
+
+TEST(RadientTextureSourceTest, RejectsInvalidLaterMipStorageAndOffsets)
+{
+    auto pBase  = MakeTestMutableDataBlob(nullptr, 32);
+    auto pTail  = MakeTestMutableDataBlob(nullptr, 64);
+    auto pShort = MakeTestMutableDataBlob(nullptr, 7);
+    struct InvalidMipCase
+    {
+        RadientTextureMipData Mip;
+        const char*           ExpectedDetail;
+    };
+    const InvalidMipCase Cases[] = {
+        {{pTail, (std::numeric_limits<Uint64>::max)()}, "ByteOffset (18446744073709551615)"},
+        {{pTail, 65}, "ByteOffset (65) and required data size (8) exceed data blob size (64)"},
+        {{pTail, 58}, "ByteOffset (58) and required data size (8) exceed data blob size (64)"},
+        {{pTail, 1}, "ByteOffset (1) is not aligned to the 2-byte components"},
+        {{pTail, 0, 5}, "Stride (5)"},
+        {{pTail, 0, 2}, "Stride (2)"},
+        {{pShort}, "ByteOffset (0) and required data size (8) exceed data blob size (7)"},
+    };
+    for (const auto& TestCase : Cases)
+    {
+        SCOPED_TRACE(TestCase.ExpectedDetail);
+        const RadientTextureMipData Mips[] = {{pBase}, TestCase.Mip};
+        RadientTextureData          Data;
+        Data.Width = Data.Height = 4;
+        Data.Format              = RADIENT_TEXTURE_FORMAT_R16_UNORM;
+        Data.pMipLevels          = Mips;
+        Data.MipLevelCount       = 2;
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pTextureData = &Data;
+        ScopedMessageCapture           Capture;
+        TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 1"};
+        RadientTextureSource           Source{LoadInfo};
+        EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_FALSE(Source.IsMemory());
+        EXPECT_TRUE(Source.MakeCacheKey().empty());
+        ASSERT_EQ(Capture.Errors.size(), 1u);
+        EXPECT_NE(Capture.Errors[0].find(TestCase.ExpectedDetail), std::string::npos);
+        if (TestCase.Mip.Stride != 0)
+        {
+            EXPECT_NE(Capture.Errors[0].find("active row size (4)"), std::string::npos);
+            EXPECT_NE(Capture.Errors[0].find("R16_UNORM"), std::string::npos);
+            EXPECT_NE(Capture.Errors[0].find("uncompressed rows must be component-aligned"), std::string::npos);
+        }
+        RefCntAutoPtr<ITextureLoader> pLoader;
+        EXPECT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pLoader, nullptr);
+        EXPECT_EQ(Capture.Errors.size(), 1u);
+        void* pWrite = nullptr;
+        EXPECT_EQ(pBase->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+        EXPECT_EQ(pBase->EndWrite(), RADIENT_STATUS_OK);
+        EXPECT_EQ(pTail->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+        EXPECT_EQ(pTail->EndWrite(), RADIENT_STATUS_OK);
+    }
+}
+
+
+TEST(RadientTextureSourceTest, ByteOffsetMayAlignAnUnalignedReferencedBlob)
+{
+    alignas(Uint32) const std::array<Uint8, 32> Bytes{};
+    auto                                        pBlob = MakeReferencedDataBlob(Bytes.data() + 1, Bytes.size() - 1);
+    const RadientTextureMipData                 Mip{pBlob, 3};
+    RadientTextureData                          Data;
+    Data.Width = Data.Height = 2;
+    Data.Format              = RADIENT_TEXTURE_FORMAT_R32_FLOAT;
+    Data.pMipLevels          = &Mip;
+    Data.MipLevelCount       = 1;
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pTextureData = &Data;
+    RadientTextureSource Source{LoadInfo};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    ASSERT_EQ(Source.CreateLoader(nullptr, nullptr, &pLoader), RADIENT_STATUS_OK);
+    ASSERT_NE(pLoader, nullptr);
+    EXPECT_EQ(pLoader->GetSubresourceData(0).pData, Bytes.data() + 4);
 }

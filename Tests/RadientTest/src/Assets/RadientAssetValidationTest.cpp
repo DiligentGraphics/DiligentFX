@@ -409,11 +409,14 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     auto                  pPixelBlob = MakeTestDataBlob(RawPixels.data(), RawPixels.size());
     ASSERT_NE(pPixelBlob, nullptr);
 
-    RadientTextureData TextureData{};
-    TextureData.Width     = 2;
-    TextureData.Height    = 2;
-    TextureData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pDataBlob = pPixelBlob;
+    RadientTextureMipData TextureDataMip{};
+    RadientTextureData    TextureData{};
+    TextureData.pMipLevels    = &TextureDataMip;
+    TextureData.MipLevelCount = 1;
+    TextureData.Width         = 2;
+    TextureData.Height        = 2;
+    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    TextureDataMip.pDataBlob  = pPixelBlob;
 
     LoadInfo              = {};
     LoadInfo.pTextureData = &TextureData;
@@ -428,33 +431,42 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     LoadInfo              = {};
     LoadInfo.pTextureData = &TextureData;
 
-    RadientTextureData InvalidTextureData = TextureData;
-    InvalidTextureData.Width              = 0;
-    LoadInfo.pTextureData                 = &InvalidTextureData;
+    RadientTextureMipData InvalidTextureDataMip = *TextureData.pMipLevels;
+    RadientTextureData    InvalidTextureData    = TextureData;
+    InvalidTextureData.pMipLevels               = &InvalidTextureDataMip;
+    InvalidTextureData.MipLevelCount            = 1;
+    InvalidTextureData.Width                    = 0;
+    LoadInfo.pTextureData                       = &InvalidTextureData;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"texture data width and height must not be zero"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
-    InvalidTextureData        = TextureData;
-    InvalidTextureData.Format = RADIENT_TEXTURE_FORMAT_UNKNOWN;
-    LoadInfo.pTextureData     = &InvalidTextureData;
+    InvalidTextureData            = TextureData;
+    InvalidTextureDataMip         = TextureDataMip;
+    InvalidTextureData.pMipLevels = &InvalidTextureDataMip;
+    InvalidTextureData.Format     = RADIENT_TEXTURE_FORMAT_UNKNOWN;
+    LoadInfo.pTextureData         = &InvalidTextureData;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"texture data format must not be RADIENT_TEXTURE_FORMAT_UNKNOWN"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
-    InvalidTextureData           = TextureData;
-    InvalidTextureData.pDataBlob = nullptr;
-    LoadInfo.pTextureData        = &InvalidTextureData;
+    InvalidTextureData              = TextureData;
+    InvalidTextureDataMip           = TextureDataMip;
+    InvalidTextureData.pMipLevels   = &InvalidTextureDataMip;
+    InvalidTextureDataMip.pDataBlob = nullptr;
+    LoadInfo.pTextureData           = &InvalidTextureData;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"texture data blob must not be null"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 
-    InvalidTextureData        = TextureData;
-    InvalidTextureData.Stride = 1;
-    LoadInfo.pTextureData     = &InvalidTextureData;
+    InvalidTextureData            = TextureData;
+    InvalidTextureDataMip         = TextureDataMip;
+    InvalidTextureData.pMipLevels = &InvalidTextureDataMip;
+    InvalidTextureDataMip.Stride  = 1;
+    LoadInfo.pTextureData         = &InvalidTextureData;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"texture data stride"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
@@ -467,11 +479,11 @@ TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 
     // Pixel descriptors also defer all blob access until a read scope is held.
-    TextureData.pDataBlob = pUncheckedBlob;
-    LoadInfo              = {};
-    LoadInfo.pTextureData = &TextureData;
+    TextureDataMip.pDataBlob = pUncheckedBlob;
+    LoadInfo                 = {};
+    LoadInfo.pTextureData    = &TextureData;
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
-    TextureData.pDataBlob = pEmptyBlob;
+    TextureDataMip.pDataBlob = pEmptyBlob;
     EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
 }
 
@@ -484,17 +496,20 @@ TEST(RadientAssetValidationTest, ValidatesCompressedTextureDataWithoutReadingBlo
                               RADIENT_TEXTURE_FORMAT_BC6H_UF16})
     {
         SCOPED_TRACE(static_cast<Uint32>(Format));
-        RadientTextureData Data;
-        Data.Width     = 8;
-        Data.Height    = 8;
-        Data.Format    = Format;
-        Data.pDataBlob = pUncheckedBlob;
+        RadientTextureMipData DataMip{};
+        RadientTextureData    Data;
+        Data.pMipLevels    = &DataMip;
+        Data.MipLevelCount = 1;
+        Data.Width         = 8;
+        Data.Height        = 8;
+        Data.Format        = Format;
+        DataMip.pDataBlob  = pUncheckedBlob;
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.pTextureData = &Data;
         EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
-        Data.Stride = 35; // Accommodates two 16-byte blocks plus unaligned padding.
+        DataMip.Stride = 35; // Accommodates two 16-byte blocks plus unaligned padding.
         EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
-        Data.Stride = 1;
+        DataMip.Stride = 1;
         TestingEnvironment::ErrorScope ExpectedErrors{"texture data stride"};
         EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
@@ -511,16 +526,92 @@ TEST(RadientAssetValidationTest, RejectsCompressedMipZeroWithPartialBlockDimensi
             SCOPED_TRACE(static_cast<Uint32>(Format));
             SCOPED_TRACE(Dimension[0]);
             SCOPED_TRACE(Dimension[1]);
-            RadientTextureData Data;
-            Data.Width     = Dimension[0];
-            Data.Height    = Dimension[1];
-            Data.Format    = Format;
-            Data.pDataBlob = pUncheckedBlob;
+            RadientTextureMipData DataMip{};
+            RadientTextureData    Data;
+            Data.pMipLevels    = &DataMip;
+            Data.MipLevelCount = 1;
+            Data.Width         = Dimension[0];
+            Data.Height        = Dimension[1];
+            Data.Format        = Format;
+            DataMip.pDataBlob  = pUncheckedBlob;
             RadientTextureLoadInfo LoadInfo;
             LoadInfo.pTextureData = &Data;
             TestingEnvironment::ErrorScope ExpectedErrors{"block dimensions"};
             EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
         }
+    }
+}
+
+TEST(RadientAssetValidationTest, ValidatesMipChainsWithoutReadingBlobStorage)
+{
+    RefCntAutoPtr<SizeOnlyDataBlob>      pBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
+    std::array<RadientTextureMipData, 4> Mips;
+    for (auto& Mip : Mips)
+        Mip.pDataBlob = pBlob;
+    RadientTextureData Data;
+    Data.Width = Data.Height = 8;
+    Data.Format              = RADIENT_TEXTURE_FORMAT_BC7_UNORM;
+    Data.pMipLevels          = Mips.data();
+    Data.MipLevelCount       = static_cast<Uint32>(Mips.size());
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pTextureData = &Data;
+    // The last two compressed levels are smaller than one block.
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    EXPECT_EQ(Data.GenerateMips, True);
+    Data.MipLevelCount = 2;
+    // Validation accepts compressed requests with missing mips. Loading warns
+    // that generation is unavailable and retains the supplied levels.
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    Data.GenerateMips = False;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    Data.GenerateMips  = True;
+    Data.MipLevelCount = 4;
+    Data.Format        = RADIENT_TEXTURE_FORMAT_R8_UNORM;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    Data.MipLevelCount = 2;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    const RadientTextureData ValidData = Data;
+    for (Uint32 InvalidCount : {0u, 5u})
+    {
+        Data.MipLevelCount = InvalidCount;
+        TestingEnvironment::ErrorScope ExpectedErrors{"MipLevelCount"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+    Data            = ValidData;
+    Data.pMipLevels = nullptr;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"pMipLevels"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+    Data              = ValidData;
+    Mips[1].pDataBlob = nullptr;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data blob must not be null for mip 1"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+    Mips[1].pDataBlob = pBlob;
+    Mips[1].Stride    = 3; // Mip 1 contains four R8 components per row.
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data stride"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+    Mips[1].Stride     = 0;
+    Mips[1].ByteOffset = (std::numeric_limits<Uint64>::max)() - 1;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"texture data byte range for mip 1"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
+    }
+
+    // Keep the high-bit dimension while ensuring the byte range fits 32-bit size_t.
+    Data.Width         = 1;
+    Data.Height        = 0x80000000u;
+    Data.MipLevelCount = 1;
+    Data.GenerateMips  = False;
+    EXPECT_TRUE(ValidateTextureLoadInfo(LoadInfo));
+    Data.MipLevelCount = 33;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"MipLevelCount"};
+        EXPECT_FALSE(ValidateTextureLoadInfo(LoadInfo));
     }
 }
 

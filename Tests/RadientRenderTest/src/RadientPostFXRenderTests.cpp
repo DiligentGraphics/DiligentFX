@@ -597,12 +597,14 @@ TEST_F(RadientRender, SSAO)
     std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
     ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    RadientTextureData EnvironmentData{};
-    EnvironmentData.Width     = EnvironmentWidth;
-    EnvironmentData.Height    = EnvironmentHeight;
-    EnvironmentData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pDataBlob = pEnvironmentBlob;
-    EnvironmentData.Stride    = EnvironmentWidth * 4;
+    const RadientTextureMipData EnvironmentDataMip{pEnvironmentBlob, 0, EnvironmentWidth * 4};
+    RadientTextureData          EnvironmentData{};
+    EnvironmentData.Width         = EnvironmentWidth;
+    EnvironmentData.Height        = EnvironmentHeight;
+    EnvironmentData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    EnvironmentData.pMipLevels    = &EnvironmentDataMip;
+    EnvironmentData.MipLevelCount = 1;
+    EnvironmentData.GenerateMips  = True;
 
     RadientTextureLoadInfo EnvironmentLoadInfo{};
     EnvironmentLoadInfo.pTextureData = &EnvironmentData;
@@ -799,12 +801,14 @@ TEST_F(RadientRender, SSR)
     std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
     ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    RadientTextureData EnvironmentData{};
-    EnvironmentData.Width     = EnvironmentWidth;
-    EnvironmentData.Height    = EnvironmentHeight;
-    EnvironmentData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pDataBlob = pEnvironmentBlob;
-    EnvironmentData.Stride    = EnvironmentWidth * 4;
+    const RadientTextureMipData EnvironmentDataMip{pEnvironmentBlob, 0, EnvironmentWidth * 4};
+    RadientTextureData          EnvironmentData{};
+    EnvironmentData.Width         = EnvironmentWidth;
+    EnvironmentData.Height        = EnvironmentHeight;
+    EnvironmentData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    EnvironmentData.pMipLevels    = &EnvironmentDataMip;
+    EnvironmentData.MipLevelCount = 1;
+    EnvironmentData.GenerateMips  = True;
 
     RadientTextureLoadInfo EnvironmentLoadInfo{};
     EnvironmentLoadInfo.pTextureData = &EnvironmentData;
@@ -843,12 +847,14 @@ TEST_F(RadientRender, SSR)
 
     ASSERT_EQ(pCheckerBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    RadientTextureData CheckerData{};
-    CheckerData.Width     = CheckerWidth;
-    CheckerData.Height    = CheckerHeight;
-    CheckerData.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    CheckerData.pDataBlob = pCheckerBlob;
-    CheckerData.Stride    = CheckerWidth * 4;
+    const RadientTextureMipData CheckerDataMip{pCheckerBlob, 0, CheckerWidth * 4};
+    RadientTextureData          CheckerData{};
+    CheckerData.Width         = CheckerWidth;
+    CheckerData.Height        = CheckerHeight;
+    CheckerData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
+    CheckerData.pMipLevels    = &CheckerDataMip;
+    CheckerData.MipLevelCount = 1;
+    CheckerData.GenerateMips  = True;
 
     RadientTextureLoadInfo CheckerLoadInfo{};
     CheckerLoadInfo.pTextureData = &CheckerData;

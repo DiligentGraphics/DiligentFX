@@ -65,8 +65,10 @@ struct TestTextureParams
 RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   Seed   = 0,
                                                     const TestTextureParams& Params = {});
 
-// Creates a texture descriptor. The caller retains the blob until LoadTexture returns.
+// Creates a texture descriptor with mip generation enabled. The caller retains
+// MipData and the blob until LoadTexture returns.
 RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                   RadientTextureMipData&   MipData,
                                    const TestTextureParams& Params = {});
 
 // Wraps texture data into a memory-based texture load request.
