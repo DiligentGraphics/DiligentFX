@@ -27,6 +27,7 @@
 #include "Assets/RadientMeshVertexSource.hpp"
 
 #include "RadientMathTestHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "RadientTestDataHelpers.hpp"
 #include "TestingEnvironment.hpp"
@@ -97,8 +98,7 @@ RefCntAutoPtr<IRadientDataBlob> MakeReferencedDataBlob(const void* pData, Uint64
 
 struct VertexMeshData
 {
-    std::vector<RadientVertexAttributeDesc>      Attributes;
-    std::vector<RadientVertexBufferLayoutDesc>   Buffers;
+    RadientVertexLayoutDescX                     Layout;
     std::vector<RefCntAutoPtr<IRadientDataBlob>> Blobs;
     std::vector<IRadientDataBlob*>               Data;
     Uint32                                       VertexCount = 2;
@@ -106,9 +106,8 @@ struct VertexMeshData
     template <typename T, size_t N>
     void Add(const char* Semantic, RADIENT_VERTEX_COMPONENT_TYPE Type, Uint32 Components, Bool Normalized, const std::array<T, N>& Values)
     {
-        Attributes.push_back({Semantic, static_cast<Uint32>(Buffers.size()), RADIENT_VERTEX_AUTO_OFFSET,
-                              Type, Components, Normalized});
-        Buffers.emplace_back();
+        const Uint32 BufferIndex = Layout.GetBufferCount();
+        Layout.AddBuffer().AddAttribute(Semantic, Type, Components, BufferIndex, RADIENT_VERTEX_AUTO_OFFSET, Normalized);
         Blobs.push_back(MakeTestDataBlob(Values.data(), sizeof(Values)));
         Data.push_back(Blobs.back());
     }
@@ -116,7 +115,7 @@ struct VertexMeshData
     RadientMeshCreateInfo GetCreateInfo() const
     {
         RadientMeshCreateInfo CI;
-        CI.VertexLayout    = {Attributes.data(), static_cast<Uint32>(Attributes.size()), Buffers.data(), static_cast<Uint32>(Buffers.size())};
+        CI.VertexLayout    = Layout;
         CI.ppVertexBuffers = Data.data();
         CI.VertexCount     = VertexCount;
         return CI;
@@ -987,14 +986,14 @@ TEST(RadientMeshVertexSourceTest, CopiesLayoutMetadataAndRetainsInterleavedBlob)
     }
     EXPECT_EQ(Packed, Expected);
 
-    const RadientVertexAttributeDesc Attributes[]{
-        {"POSITION", 0, 4, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False},
-        {"TEXCOORD_0", 0, 20, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False}};
-    const RadientVertexBufferLayoutDesc Buffer{28};
-    auto                                pBlob = MakeTestDataBlob(Expected.data(), Expected.size());
-    IRadientDataBlob*                   Data  = pBlob;
-    RadientMeshCreateInfo               CI;
-    CI.VertexLayout    = {Attributes, 2, &Buffer, 1};
+    RadientVertexLayoutDescX Layout;
+    Layout.AddBuffer(28)
+        .AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, 0, 4)
+        .AddAttribute("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, 0, 20);
+    auto                  pBlob = MakeTestDataBlob(Expected.data(), Expected.size());
+    IRadientDataBlob*     Data  = pBlob;
+    RadientMeshCreateInfo CI;
+    CI.VertexLayout    = Layout;
     CI.ppVertexBuffers = &Data;
     CI.VertexCount     = 2;
     RadientMeshVertexSource ZeroPadded{CI};
@@ -1019,12 +1018,12 @@ TEST(RadientMeshVertexSourceTest, ConvertsSupportedComponentTypesFromUnalignedBu
         std::array<Uint8, 2 * Stride> Bytes{};
         for (Uint32 Vertex = 0; Vertex < 2; ++Vertex)
             std::memcpy(Bytes.data() + 1 + Vertex * Stride, Values.data() + Vertex * 3, 3 * ValueSize);
-        const RadientVertexAttributeDesc    Attribute{"POSITION", 0, 1, Type, 3, Normalized};
-        const RadientVertexBufferLayoutDesc Buffer{Stride};
-        auto                                pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
-        IRadientDataBlob*                   Data  = pBlob;
-        RadientMeshCreateInfo               CI;
-        CI.VertexLayout    = {&Attribute, 1, &Buffer, 1};
+        RadientVertexLayoutDescX Layout;
+        Layout.AddBuffer(Stride).AddAttribute("POSITION", Type, 3, 0, 1, Normalized);
+        auto                  pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
+        IRadientDataBlob*     Data  = pBlob;
+        RadientMeshCreateInfo CI;
+        CI.VertexLayout    = Layout;
         CI.ppVertexBuffers = &Data;
         CI.VertexCount     = 2;
         RadientMeshVertexSource Source{CI};
@@ -1078,12 +1077,12 @@ TEST(RadientMeshVertexSourceTest, RepackagesSourceWithOmittedFinalPadding)
     std::array<Uint8, 28> Bytes{}; // Two 16-byte records, omitting the final 4 padding bytes.
     std::memcpy(Bytes.data(), &DefaultPositions[0], 12);
     std::memcpy(Bytes.data() + 16, &DefaultPositions[1], 12);
-    const RadientVertexAttributeDesc    Attribute{"POSITION", 0, 0, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
-    const RadientVertexBufferLayoutDesc Buffer{16};
-    auto                                pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
-    IRadientDataBlob*                   Data  = pBlob;
-    RadientMeshCreateInfo               CI;
-    CI.VertexLayout    = {&Attribute, 1, &Buffer, 1};
+    RadientVertexLayoutDescX Layout;
+    Layout.AddBuffer(16).AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, 0, 0);
+    auto                  pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
+    IRadientDataBlob*     Data  = pBlob;
+    RadientMeshCreateInfo CI;
+    CI.VertexLayout    = Layout;
     CI.ppVertexBuffers = &Data;
     CI.VertexCount     = 2;
     RadientMeshVertexSource Source{CI};
@@ -1196,9 +1195,9 @@ TEST(RadientMeshVertexSourceTest, AcceptsAddressableSourceSpanLargerThanUint32)
     if (sizeof(size_t) <= sizeof(Uint32))
         GTEST_SKIP() << "Requires an address space larger than Uint32.";
 
-    auto MeshData                  = MakeVertexMeshCI(DefaultPositions);
-    MeshData.Buffers[0].ByteStride = (std::numeric_limits<Uint32>::max)() - 3;
-    const Uint64 RequiredSize      = Uint64{MeshData.Buffers[0].ByteStride} + sizeof(RadientFloat3);
+    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    MeshData.Layout.SetBuffer(0, (std::numeric_limits<Uint32>::max)() - 3);
+    const Uint64 RequiredSize = Uint64{MeshData.Layout.GetBuffer(0).ByteStride} + sizeof(RadientFloat3);
     ASSERT_GT(RequiredSize, (std::numeric_limits<Uint32>::max)());
 
     // Only construction is exercised; no bytes from the advertised large span are read.
@@ -1220,7 +1219,7 @@ TEST(RadientMeshVertexSourceTest, QueriesSharedBlobSizeUnderReadAccessAndIgnores
     MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, DefaultNormals);
     MeshData.Data[0] = pBlob;
     MeshData.Data[1] = pBlob;
-    MeshData.Buffers.push_back({1});
+    MeshData.Layout.AddBuffer(1);
     auto pUnused = MakeTestMutableDataBlob(nullptr, 0);
     MeshData.Data.push_back(pUnused);
     void* pWrite = nullptr;
@@ -1256,7 +1255,7 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidBlobStorageAfterAcquiringReadAcc
     Check(DefaultPositions.data(), sizeof(DefaultPositions) - 1, RADIENT_STATUS_INVALID_ARGUMENT);
 
     // The full span is checked with wide arithmetic before accessing any bytes.
-    MeshData.VertexCount           = (std::numeric_limits<Uint32>::max)();
-    MeshData.Buffers[0].ByteStride = RADIENT_VERTEX_AUTO_STRIDE - 1;
+    MeshData.VertexCount = (std::numeric_limits<Uint32>::max)();
+    MeshData.Layout.SetBuffer(0, RADIENT_VERTEX_AUTO_STRIDE - 1);
     Check(DefaultPositions.data(), sizeof(DefaultPositions), RADIENT_STATUS_INVALID_ARGUMENT);
 }

@@ -25,6 +25,7 @@
  */
 
 #include "RadientRenderTestFixture.hpp"
+#include "RadientTypesX.hpp"
 #include "RadientRenderTestOptions.hpp"
 
 #include "Math/RadientMath.hpp"
@@ -597,17 +598,12 @@ TEST_F(RadientRender, SSAO)
     std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
     ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    const RadientTextureMipData EnvironmentDataMip{pEnvironmentBlob, 0, EnvironmentWidth * 4};
-    RadientTextureData          EnvironmentData{};
-    EnvironmentData.Width         = EnvironmentWidth;
-    EnvironmentData.Height        = EnvironmentHeight;
-    EnvironmentData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pMipLevels    = &EnvironmentDataMip;
-    EnvironmentData.MipLevelCount = 1;
-    EnvironmentData.GenerateMips  = True;
+    RadientTextureDataX EnvironmentData{EnvironmentWidth, EnvironmentHeight, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    EnvironmentData.SetGenerateMips(True);
+    EnvironmentData.AddMip(pEnvironmentBlob, 0, EnvironmentWidth * 4);
 
-    RadientTextureLoadInfo EnvironmentLoadInfo{};
-    EnvironmentLoadInfo.pTextureData = &EnvironmentData;
+    RadientTextureLoadInfoX EnvironmentLoadInfo{};
+    EnvironmentLoadInfo.SetTextureData(EnvironmentData);
 
     RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap;
     ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(EnvironmentLoadInfo, &pEnvironmentMap)));
@@ -801,17 +797,12 @@ TEST_F(RadientRender, SSR)
     std::memset(pEnvironmentPixels, 255, static_cast<size_t>(EnvironmentBlobCI.Size));
     ASSERT_EQ(pEnvironmentBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    const RadientTextureMipData EnvironmentDataMip{pEnvironmentBlob, 0, EnvironmentWidth * 4};
-    RadientTextureData          EnvironmentData{};
-    EnvironmentData.Width         = EnvironmentWidth;
-    EnvironmentData.Height        = EnvironmentHeight;
-    EnvironmentData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    EnvironmentData.pMipLevels    = &EnvironmentDataMip;
-    EnvironmentData.MipLevelCount = 1;
-    EnvironmentData.GenerateMips  = True;
+    RadientTextureDataX EnvironmentData{EnvironmentWidth, EnvironmentHeight, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    EnvironmentData.SetGenerateMips(True);
+    EnvironmentData.AddMip(pEnvironmentBlob, 0, EnvironmentWidth * 4);
 
-    RadientTextureLoadInfo EnvironmentLoadInfo{};
-    EnvironmentLoadInfo.pTextureData = &EnvironmentData;
+    RadientTextureLoadInfoX EnvironmentLoadInfo{};
+    EnvironmentLoadInfo.SetTextureData(EnvironmentData);
 
     RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap;
     ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(EnvironmentLoadInfo, &pEnvironmentMap)));
@@ -847,18 +838,12 @@ TEST_F(RadientRender, SSR)
 
     ASSERT_EQ(pCheckerBlob->EndWrite(), RADIENT_STATUS_OK);
 
-    const RadientTextureMipData CheckerDataMip{pCheckerBlob, 0, CheckerWidth * 4};
-    RadientTextureData          CheckerData{};
-    CheckerData.Width         = CheckerWidth;
-    CheckerData.Height        = CheckerHeight;
-    CheckerData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    CheckerData.pMipLevels    = &CheckerDataMip;
-    CheckerData.MipLevelCount = 1;
-    CheckerData.GenerateMips  = True;
+    RadientTextureDataX CheckerData{CheckerWidth, CheckerHeight, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    CheckerData.SetGenerateMips(True);
+    CheckerData.AddMip(pCheckerBlob, 0, CheckerWidth * 4);
 
-    RadientTextureLoadInfo CheckerLoadInfo{};
-    CheckerLoadInfo.pTextureData = &CheckerData;
-    CheckerLoadInfo.IsSRGB       = True;
+    RadientTextureLoadInfoX CheckerLoadInfo{};
+    CheckerLoadInfo.SetTextureData(CheckerData).SetSRGB(True);
 
     RefCntAutoPtr<IRadientTextureAsset> pCheckerTexture;
     ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(CheckerLoadInfo, &pCheckerTexture)));

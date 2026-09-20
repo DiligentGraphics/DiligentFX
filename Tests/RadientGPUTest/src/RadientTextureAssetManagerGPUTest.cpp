@@ -32,6 +32,7 @@
 #include "GraphicsAccessories.hpp"
 #include "MemoryFileStream.hpp"
 #include "RadientGPUTestHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "TestingSwapChainBase.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
@@ -288,8 +289,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAndReturnsSRV)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -339,8 +339,7 @@ TEST(RadientTextureAssetManagerGPUTest, DescriptionKeepsLogicalMipChainWhenAtlas
     const TestTextureParams Params{32, 16};
     const auto              pTextureDataBlob = MakeTextureDataBlob(0, Params);
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData               TextureDataMip;
-    const RadientTextureData            TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip, Params);
+    const RadientTextureDataX           TextureData = MakeTextureData(pTextureDataBlob, Params);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
     ASSERT_NE(pTexture, nullptr);
@@ -417,8 +416,8 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     auto pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pManager, nullptr);
 
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ASSERT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture)));
     ASSERT_NE(pTexture, nullptr);
@@ -545,8 +544,8 @@ TEST(RadientTextureAssetManagerGPUTest, RawCompressedTextureUsesOnlyUploadedAtla
             RADIENT_TEXTURE_FORMAT_BC4_UNORM :
             RADIENT_TEXTURE_FORMAT_BC3_UNORM;
 
-        const RadientTextureMipData         MipData{pBlob, 0, Stride};
-        const RadientTextureData            TextureData{Width, Height, Format, &MipData, 1};
+        RadientTextureDataX TextureData{Width, Height, Format};
+        TextureData.AddMip(pBlob, 0, Stride);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
         ASSERT_NE(pTexture, nullptr);
@@ -622,7 +621,8 @@ TEST(RadientTextureAssetManagerGPUTest, RawCompressedMipChainPreservesSuppliedLe
     ASSERT_NE(pLoader, nullptr);
     ASSERT_EQ(pLoader->GetTextureDesc().MipLevels, MipLevels);
     std::array<RefCntAutoPtr<IRadientMutableDataBlob>, MipLevels> Blobs;
-    std::array<RadientTextureMipData, MipLevels>                  Mips;
+    RadientTextureDataX                                           TextureData{Width, Height, RADIENT_TEXTURE_FORMAT_BC3_UNORM};
+    TextureData.SetGenerateMips(False);
     for (Uint32 Mip = 0; Mip < MipLevels; ++Mip)
     {
         const auto                MipProps = GetMipLevelProperties(pLoader->GetTextureDesc(), Mip);
@@ -641,10 +641,8 @@ TEST(RadientTextureAssetManagerGPUTest, RawCompressedMipChainPreservesSuppliedLe
                         static_cast<const Uint8*>(Expected.pData) + Row * Expected.Stride,
                         static_cast<size_t>(MipProps.RowSize));
         ASSERT_EQ(Blobs[Mip]->EndWrite(), RADIENT_STATUS_OK);
-        Mips[Mip] = {Blobs[Mip], Offset, Stride};
+        TextureData.AddMip(Blobs[Mip], Offset, Stride);
     }
-    const RadientTextureData TextureData{Width, Height, RADIENT_TEXTURE_FORMAT_BC3_UNORM,
-                                         Mips.data(), MipLevels, False};
 
     for (bool UseAtlas : {true, false})
     {
@@ -750,7 +748,8 @@ TEST(RadientTextureAssetManagerGPUTest, GeneratesMipTailFromLastSuppliedLevel)
     constexpr Uint32                                                      MipLevels         = 5;
     const std::array<std::array<Uint8, 4>, SuppliedMipLevels>             Colors{{{7, 31, 63, 255}, {199, 101, 53, 255}}};
     std::array<RefCntAutoPtr<IRadientMutableDataBlob>, SuppliedMipLevels> Blobs;
-    std::array<RadientTextureMipData, SuppliedMipLevels>                  Mips;
+    RadientTextureDataX                                                   TextureData{Width, Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    TextureData.SetGenerateMips(True);
     for (Uint32 Mip = 0; Mip < SuppliedMipLevels; ++Mip)
     {
         RadientDataBlobCreateInfo BlobCI;
@@ -761,11 +760,9 @@ TEST(RadientTextureAssetManagerGPUTest, GeneratesMipTailFromLastSuppliedLevel)
         for (size_t Byte = 0; Byte < BlobCI.Size; ++Byte)
             static_cast<Uint8*>(pData)[Byte] = Colors[Mip][Byte % 4];
         ASSERT_EQ(Blobs[Mip]->EndWrite(), RADIENT_STATUS_OK);
-        Mips[Mip] = {Blobs[Mip]};
+        TextureData.AddMip(Blobs[Mip]);
     }
-    const RadientTextureData TextureData{Width, Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-                                         Mips.data(), SuppliedMipLevels, True};
-    auto                     pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    auto pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
     ThreadPoolStopGuard StopThreads{pThreadPool};
     auto                pResourceManager = CreateTestResourceManager(pDevice, 4);
@@ -857,13 +854,11 @@ TEST(RadientTextureAssetManagerGPUTest, LinearAndSRGBViewsShareTypelessAtlas)
 
     const RefCntAutoPtr<IRadientDataBlob> pLinearDataBlob = MakeTextureDataBlob(0);
     ASSERT_NE(pLinearDataBlob, nullptr);
-    RadientTextureMipData                 LinearDataMip;
-    RadientTextureData                    LinearData    = MakeTextureData(pLinearDataBlob, LinearDataMip);
+    RadientTextureDataX                   LinearData    = MakeTextureData(pLinearDataBlob);
     const RefCntAutoPtr<IRadientDataBlob> pSRGBDataBlob = MakeTextureDataBlob(1);
     ASSERT_NE(pSRGBDataBlob, nullptr);
-    RadientTextureMipData SRGBDataMip;
-    RadientTextureData    SRGBData = MakeTextureData(pSRGBDataBlob, SRGBDataMip);
-    SRGBData.Format                = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB;
+    RadientTextureDataX SRGBData = MakeTextureData(pSRGBDataBlob);
+    SRGBData.SetFormat(RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB);
 
     RefCntAutoPtr<IRadientTextureAsset> pLinearTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(LinearData), &pLinearTexture)));
@@ -955,14 +950,8 @@ TEST(RadientTextureAssetManagerGPUTest, SRGBViewRequestUsesNativeFormatWhenSRGBI
     for (Uint32 i = 0; i < Width * Height * ComponentCount; ++i)
         std::memcpy(static_cast<Uint8*>(pTexturePixels) + i * sizeof(float), &ComponentValue, sizeof(ComponentValue));
     ASSERT_EQ(pTextureDataBlob->EndWrite(), RADIENT_STATUS_OK);
-    const RadientTextureMipData MipData{pTextureDataBlob, 0, Width * ComponentCount * static_cast<Uint32>(sizeof(float))};
-    const RadientTextureData    TextureData{
-        Width,
-        Height,
-        RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT,
-        &MipData,
-        1,
-        True};
+    RadientTextureDataX TextureData{Width, Height, RADIENT_TEXTURE_FORMAT_RGBA32_FLOAT};
+    TextureData.AddMip(pTextureDataBlob, 0, Width * ComponentCount * static_cast<Uint32>(sizeof(float)));
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -1010,8 +999,7 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
 
     const RefCntAutoPtr<IRadientDataBlob> pFirstDataBlob = MakeTextureDataBlob(0, Params);
     ASSERT_NE(pFirstDataBlob, nullptr);
-    RadientTextureMipData    FirstDataMip;
-    const RadientTextureData FirstData = MakeTextureData(pFirstDataBlob, FirstDataMip, Params);
+    const RadientTextureDataX FirstData = MakeTextureData(pFirstDataBlob, Params);
 
     RefCntAutoPtr<IRadientTextureAsset> pFirstTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(FirstData), &pFirstTexture)));
@@ -1038,8 +1026,7 @@ TEST(RadientTextureAssetManagerGPUTest, TypedViewsRefreshAfterAtlasResize)
     // requires another slice and forces the dynamic array to grow.
     const RefCntAutoPtr<IRadientDataBlob> pSecondDataBlob = MakeTextureDataBlob(1, Params);
     ASSERT_NE(pSecondDataBlob, nullptr);
-    RadientTextureMipData    SecondDataMip;
-    const RadientTextureData SecondData = MakeTextureData(pSecondDataBlob, SecondDataMip, Params);
+    const RadientTextureDataX SecondData = MakeTextureData(pSecondDataBlob, Params);
 
     RefCntAutoPtr<IRadientTextureAsset> pSecondTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(SecondData), &pSecondTexture)));
@@ -1080,10 +1067,9 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsOversizedTextureAsStandaloneTextu
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
-    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice, TextureData.Width / 2);
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice, TextureData.Get().Width / 2);
     ASSERT_NE(pResourceManager, nullptr);
 
     RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
@@ -1140,8 +1126,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadsTextureAboveAtlasMipLevel0SizeAsS
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     GLTF::ResourceManager::CreateInfo ResourceManagerCI = MakeResourceManagerCI();
     ResourceManagerCI.DefaultAtlasDesc.Desc.MipLevels   = 0;
@@ -1204,8 +1189,7 @@ TEST(RadientTextureAssetManagerGPUTest, DeduplicatedTexturesShareUploadedPayload
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture0)));
@@ -1255,18 +1239,16 @@ TEST(RadientTextureAssetManagerGPUTest, DifferentPayloadsWithSameAssetURIUseSepa
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureData0Blob = MakeTextureDataBlob(0);
     ASSERT_NE(pTextureData0Blob, nullptr);
-    RadientTextureMipData                 TextureData0Mip;
-    const RadientTextureData              TextureData0      = MakeTextureData(pTextureData0Blob, TextureData0Mip);
+    const RadientTextureDataX             TextureData0      = MakeTextureData(pTextureData0Blob);
     const RefCntAutoPtr<IRadientDataBlob> pTextureData1Blob = MakeTextureDataBlob(1);
     ASSERT_NE(pTextureData1Blob, nullptr);
-    RadientTextureMipData    TextureData1Mip;
-    const RadientTextureData TextureData1 = MakeTextureData(pTextureData1Blob, TextureData1Mip);
+    const RadientTextureDataX TextureData1 = MakeTextureData(pTextureData1Blob);
 
-    RadientTextureLoadInfo LoadInfo0 = MakeTextureDataLoadInfo(TextureData0);
-    RadientTextureLoadInfo LoadInfo1 = MakeTextureDataLoadInfo(TextureData1);
+    RadientTextureLoadInfoX LoadInfo0 = MakeTextureDataLoadInfo(TextureData0);
+    RadientTextureLoadInfoX LoadInfo1 = MakeTextureDataLoadInfo(TextureData1);
     // The handle URI is intentionally the same, but the source data and payload keys differ.
-    LoadInfo0.URI = "textures/shared-name.png";
-    LoadInfo1.URI = "textures/shared-name.png";
+    LoadInfo0.SetURI("textures/shared-name.png");
+    LoadInfo1.SetURI("textures/shared-name.png");
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo0, &pTexture0)));
@@ -1315,8 +1297,7 @@ TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
     ASSERT_NE(pManager, nullptr);
 
     std::array<RefCntAutoPtr<IRadientDataBlob>, NumTextures>     TextureBlobs;
-    std::array<RadientTextureMipData, NumTextures>               TextureMips;
-    std::array<RadientTextureData, NumTextures>                  TextureData;
+    std::array<RadientTextureDataX, NumTextures>                 TextureData;
     std::array<RefCntAutoPtr<IRadientTextureAsset>, NumTextures> Textures;
     std::array<RADIENT_STATUS, NumTextures>                      LoadStatuses{};
 
@@ -1324,7 +1305,7 @@ TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
     {
         TextureBlobs[i] = MakeTextureDataBlob(static_cast<Uint32>(i + 1));
         ASSERT_NE(TextureBlobs[i], nullptr);
-        TextureData[i] = MakeTextureData(TextureBlobs[i], TextureMips[i]);
+        TextureData[i] = MakeTextureData(TextureBlobs[i]);
     }
 
     Threading::Signal        StartSignal;
@@ -1336,10 +1317,9 @@ TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
             [pThreadPool, pManager, &TextureData, &Textures, &LoadStatuses, &StartSignal, i]() {
                 StartSignal.Wait();
 
-                RadientTextureLoadInfo LoadInfo;
-                LoadInfo.pTextureData = &TextureData[i];
-                LoadInfo.IsSRGB       = False;
-                LoadStatuses[i]       = pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]);
+                RadientTextureLoadInfoX LoadInfo;
+                LoadInfo.SetTextureData(TextureData[i]).SetSRGB(False);
+                LoadStatuses[i] = pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]);
             });
     }
 
@@ -1390,8 +1370,7 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
@@ -1445,8 +1424,7 @@ TEST(RadientTextureAssetManagerGPUTest, UploadManagerStopUnblocksTextureUpload)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -1495,8 +1473,7 @@ TEST(RadientTextureAssetManagerGPUTest, TextureHandleMayOutliveManagerAfterUploa
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {

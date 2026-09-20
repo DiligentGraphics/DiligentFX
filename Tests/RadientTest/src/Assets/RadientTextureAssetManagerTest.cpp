@@ -28,6 +28,7 @@
 #include "Core/RadientDataBlobReadAccess.hpp"
 
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "DataBlobImpl.hpp"
 #include "GraphicsAccessories.hpp"
 #include "MemoryFileStream.hpp"
@@ -75,26 +76,18 @@ static constexpr std::array<Uint8, 16> TexturePixels{
     0, 0, 255, 255,
     255, 255, 255, 255};
 
-RadientTextureData MakeTextureData(IRadientDataBlob* pDataBlob, RadientTextureMipData& Mip)
+RadientTextureDataX MakeTextureData(IRadientDataBlob* pDataBlob)
 {
-    RadientTextureData TextureData{};
-    TextureData.Width         = 2;
-    TextureData.Height        = 2;
-    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    Mip.pDataBlob             = pDataBlob;
-    Mip.Stride                = 8;
-    TextureData.pMipLevels    = &Mip;
-    TextureData.MipLevelCount = 1;
-    TextureData.GenerateMips  = True;
+    RadientTextureDataX TextureData{2, 2, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    TextureData.AddMip(pDataBlob, 0, 8);
     return TextureData;
 }
 
-RadientTextureLoadInfo MakeTextureDataLoadInfo(const RadientTextureData& TextureData,
-                                               Bool                      IsSRGB = True)
+RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& TextureData,
+                                                Bool                      IsSRGB = True)
 {
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pTextureData = &TextureData;
-    LoadInfo.IsSRGB       = IsSRGB;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetTextureData(TextureData).SetSRGB(IsSRGB);
     return LoadInfo;
 }
 
@@ -194,11 +187,9 @@ TEST(RadientTextureAssetManagerTest, LoadTextureCreatesLightHandleBeforeWorkerRu
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
     ASSERT_NE(pManager, nullptr);
 
-    auto pBlob = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-
-    RadientTextureMipData        TextureDataMip;
-    const RadientTextureData     TextureData = MakeTextureData(pBlob, TextureDataMip);
-    const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+    auto                          pBlob       = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+    const RadientTextureDataX     TextureData = MakeTextureData(pBlob);
+    const RadientTextureLoadInfoX LoadInfo    = MakeTextureDataLoadInfo(TextureData);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
@@ -232,11 +223,10 @@ TEST(RadientTextureAssetManagerTest, LoadTextureFailsWhenThreadPoolIsStopped)
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
     ASSERT_NE(pManager, nullptr);
 
-    Uint32                   ReadReleases = 0;
-    auto                     pBlob        = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size(), CountBlobReadReleases, &ReadReleases);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pBlob, TextureDataMip);
-    RadientTextureLoadInfo   LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+    Uint32                    ReadReleases = 0;
+    auto                      pBlob        = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size(), CountBlobReadReleases, &ReadReleases);
+    const RadientTextureDataX TextureData  = MakeTextureData(pBlob);
+    RadientTextureLoadInfoX   LoadInfo     = MakeTextureDataLoadInfo(TextureData);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
@@ -267,10 +257,8 @@ TEST(RadientTextureAssetManagerTest, DeduplicatesIdenticalMemoryTextures)
     std::array<Uint8, TexturePixels.size()> TexturePixels1 = TexturePixels;
     auto                                    pBlob0         = MakeTestDataBlob(TexturePixels0.data(), TexturePixels0.size());
     auto                                    pBlob1         = MakeTestDataBlob(TexturePixels1.data(), TexturePixels1.size());
-    RadientTextureMipData                   TextureData0Mip;
-    const RadientTextureData                TextureData0 = MakeTextureData(pBlob0, TextureData0Mip);
-    RadientTextureMipData                   TextureData1Mip;
-    const RadientTextureData                TextureData1 = MakeTextureData(pBlob1, TextureData1Mip);
+    const RadientTextureDataX               TextureData0   = MakeTextureData(pBlob0);
+    const RadientTextureDataX               TextureData1   = MakeTextureData(pBlob1);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
     ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData0), &pTexture0));
@@ -312,14 +300,14 @@ TEST(RadientTextureAssetManagerTest, CanonicalURIAliasesSharePayload)
     RadientTextureAssetManagerSharedPtr pManager = RadientTextureAssetManager::Create(ManagerCI);
     ASSERT_NE(pManager, nullptr);
 
-    RadientTextureLoadInfo LoadInfo0;
-    LoadInfo0.URI = "textures/albedo.png";
+    RadientTextureLoadInfoX LoadInfo0;
+    LoadInfo0.SetURI("textures/albedo.png");
     RefCntAutoPtr<IRadientTextureAsset> pTexture0;
     ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo0, &pTexture0));
     ASSERT_NE(pTexture0, nullptr);
 
-    RadientTextureLoadInfo LoadInfo1;
-    LoadInfo1.URI = "textures/../textures/albedo.png";
+    RadientTextureLoadInfoX LoadInfo1;
+    LoadInfo1.SetURI("textures/../textures/albedo.png");
     RefCntAutoPtr<IRadientTextureAsset> pTexture1;
     ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo1, &pTexture1));
     ASSERT_NE(pTexture1, nullptr);
@@ -354,8 +342,8 @@ TEST(RadientTextureAssetManagerTest, PreservesAssetOpenFailureStatus)
     RadientTextureAssetManagerSharedPtr pManager = RadientTextureAssetManager::Create(ManagerCI);
     ASSERT_NE(pManager, nullptr);
 
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.URI = "textures/missing.png";
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetURI("textures/missing.png");
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture));
@@ -377,10 +365,8 @@ TEST(RadientTextureAssetManagerTest, DifferentTextureOptionsUseDifferentPayloads
     RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
     ASSERT_NE(pManager, nullptr);
 
-    auto pBlob = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pBlob, TextureDataMip);
+    auto                      pBlob       = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+    const RadientTextureDataX TextureData = MakeTextureData(pBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pSRGBTexture;
     ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData, True), &pSRGBTexture));
@@ -408,9 +394,8 @@ TEST(RadientTextureAssetManagerTest, ReflectsEncodedPNGColorSpaceWithoutGPUResou
     std::array<RefCntAutoPtr<IRadientTextureAsset>, 2> Textures;
     for (Uint32 i = 0; i < Textures.size(); ++i)
     {
-        RadientTextureLoadInfo LoadInfo;
-        LoadInfo.pDataBlob = pBlob;
-        LoadInfo.IsSRGB    = i != 0 ? True : False;
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetDataBlob(pBlob).SetSRGB(i != 0 ? True : False);
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(Textures[i]);
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
@@ -439,8 +424,10 @@ TEST(RadientTextureAssetManagerTest, ReflectsDecodedDimensionsFormatAndGenerated
     Data.Height   = 4;
     Data.Format   = RADIENT_TEXTURE_FORMAT_R8_UNORM;
     Mip.pDataBlob = pBlob;
+    RadientTextureLoadInfo LoadInfo;
+    LoadInfo.pTextureData = &Data;
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
-    ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
     // The load request copies the input descriptor.
     Data.Width  = 1;
     Data.Height = 1;
@@ -465,25 +452,18 @@ TEST(RadientTextureAssetManagerTest, ReflectsRawCompressedTextureDataWithoutGene
     for (const auto& [Format, BlockSize] : Formats)
     {
         SCOPED_TRACE(static_cast<Uint32>(Format));
-        const Uint32          Stride = 2 * BlockSize + 3;
-        auto                  pBlob  = MakeTestDataBlob(Blocks.data(), Stride + 2 * BlockSize);
-        RadientTextureMipData Mip;
-        RadientTextureData    Data;
-        Data.pMipLevels    = &Mip;
-        Data.MipLevelCount = 1;
-        Data.GenerateMips  = False;
-        Data.Width         = 8;
-        Data.Height        = 8;
-        Data.Format        = Format;
-        Mip.pDataBlob      = pBlob;
-        Mip.Stride         = Stride;
+        const Uint32        Stride = 2 * BlockSize + 3;
+        auto                pBlob  = MakeTestDataBlob(Blocks.data(), Stride + 2 * BlockSize);
+        RadientTextureDataX Data{8, 8, Format};
+        Data.SetGenerateMips(False);
+        Data.AddMip(pBlob, 0, Stride);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(pTexture);
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
         EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
         EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_NO_GPU_DATA);
-        ExpectTextureDesc(pTexture, Data.Width, Data.Height, Format, 1);
+        ExpectTextureDesc(pTexture, Data.Get().Width, Data.Get().Height, Format, 1);
     }
     pThreadPool->StopThreads();
 }
@@ -498,12 +478,12 @@ TEST(RadientTextureAssetManagerTest, ReflectsSuppliedCompressedMipChains)
     for (Uint32 MipCount : {2u, 4u})
     {
         SCOPED_TRACE(MipCount);
-        RadientTextureData Data;
-        Data.Width = Data.Height = 8;
-        Data.Format              = RADIENT_TEXTURE_FORMAT_BC1_UNORM;
-        Data.pMipLevels          = Mips;
-        Data.MipLevelCount       = MipCount;
-        Data.GenerateMips        = False;
+        RadientTextureDataX Data{8, 8, RADIENT_TEXTURE_FORMAT_BC1_UNORM};
+        Data.SetGenerateMips(False);
+        for (Uint32 Mip = 0; Mip < MipCount; ++Mip)
+        {
+            Data.AddMip(Mips[Mip]);
+        }
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(pTexture);
@@ -534,8 +514,10 @@ TEST(RadientTextureAssetManagerTest, RetainsQueuedMipDescriptorsAndReflectsOptio
         Data.pMipLevels          = Mips;
         Data.MipLevelCount       = 2;
         Data.GenerateMips        = Generate;
+        RadientTextureLoadInfo LoadInfo;
+        LoadInfo.pTextureData = &Data;
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
-        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(Data, False), &pTexture), RADIENT_STATUS_PENDING);
+        ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         void* pWrite = nullptr;
         EXPECT_EQ(pBase->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
         EXPECT_EQ(pTail->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
@@ -583,9 +565,8 @@ TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCou
         Desc.MipLevels = 4;
         auto pBlob     = MakeDDSTestBlob(Desc);
         ASSERT_NE(pBlob, nullptr);
-        RadientTextureLoadInfo LoadInfo;
-        LoadInfo.pDataBlob = pBlob;
-        LoadInfo.IsSRGB    = Case.IsSRGB;
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetDataBlob(pBlob).SetSRGB(Case.IsSRGB);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
@@ -616,8 +597,8 @@ TEST(RadientTextureAssetManagerTest, RejectsCompressedDDSWithPartialBlockMipZero
             Desc.MipLevels = 1;
             auto pBlob     = MakeDDSTestBlob(Desc);
             ASSERT_NE(pBlob, nullptr);
-            RadientTextureLoadInfo LoadInfo;
-            LoadInfo.pDataBlob = pBlob;
+            RadientTextureLoadInfoX LoadInfo;
+            LoadInfo.SetDataBlob(pBlob);
             RefCntAutoPtr<IRadientTextureAsset> pTexture;
             ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
             {
@@ -661,8 +642,8 @@ TEST(RadientTextureAssetManagerTest, PreservesDDSLoadingForUnreflectedFormats)
         Desc.MipLevels = 2;
         auto pBlob     = MakeDDSTestBlob(Desc);
         ASSERT_NE(pBlob, nullptr);
-        RadientTextureLoadInfo LoadInfo;
-        LoadInfo.pDataBlob = pBlob;
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetDataBlob(pBlob);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(pTexture);
@@ -707,8 +688,8 @@ TEST(RadientTextureAssetManagerTest, ReflectsEncodedTextureDimensionsWithoutRest
             EXPECT_EQ(pLoader->GetTextureDesc().Type, Dimension);
             EXPECT_EQ(pLoader->GetTextureDesc().GetArraySize(), ArraySize);
         }
-        RadientTextureLoadInfo LoadInfo;
-        LoadInfo.pDataBlob = pBlob;
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetDataBlob(pBlob);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(pTexture);
@@ -745,11 +726,9 @@ TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
                 ReadyCount.fetch_add(1, std::memory_order_release);
                 StartSignal.Wait(true, ThreadCount);
 
-                auto pBlob = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-
-                RadientTextureMipData        TextureDataMip;
-                const RadientTextureData     TextureData = MakeTextureData(pBlob, TextureDataMip);
-                const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+                auto                          pBlob       = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+                const RadientTextureDataX     TextureData = MakeTextureData(pBlob);
+                const RadientTextureLoadInfoX LoadInfo    = MakeTextureDataLoadInfo(TextureData);
 
                 RefCntAutoPtr<IRadientTextureAsset> pTexture;
                 ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture));
@@ -789,11 +768,9 @@ TEST(RadientTextureAssetManagerTest, TextureHandleMayOutliveManager)
         RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
         ASSERT_NE(pManager, nullptr);
 
-        auto pBlob = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-
-        RadientTextureMipData        TextureDataMip;
-        const RadientTextureData     TextureData = MakeTextureData(pBlob, TextureDataMip);
-        const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+        auto                          pBlob       = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+        const RadientTextureDataX     TextureData = MakeTextureData(pBlob);
+        const RadientTextureLoadInfoX LoadInfo    = MakeTextureDataLoadInfo(TextureData);
         ExpectStatusOkOrPending(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture));
         ASSERT_NE(pTexture, nullptr);
 
@@ -821,11 +798,9 @@ TEST(RadientTextureAssetManagerTest, ManagerMayDieBeforeWorkerRuns)
         RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager();
         ASSERT_NE(pManager, nullptr);
 
-        auto pBlob = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-
-        RadientTextureMipData        TextureDataMip;
-        const RadientTextureData     TextureData = MakeTextureData(pBlob, TextureDataMip);
-        const RadientTextureLoadInfo LoadInfo    = MakeTextureDataLoadInfo(TextureData);
+        auto                          pBlob       = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+        const RadientTextureDataX     TextureData = MakeTextureData(pBlob);
+        const RadientTextureLoadInfoX LoadInfo    = MakeTextureDataLoadInfo(TextureData);
         EXPECT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         EXPECT_NE(pTexture, nullptr);
         if (pTexture != nullptr)
@@ -849,14 +824,15 @@ TEST(RadientTextureAssetManagerTest, RetainsQueuedBlobUntilWorkerFinishes)
     auto   pBlob        = MakeTestMutableDataBlob(TransparentPng.data(), TransparentPng.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
     RefCntWeakPtr<IRadientDataBlob> WeakBlob{pBlob.RawPtr()};
-    RadientTextureLoadInfo          LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX         LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
     void* pWriteData = nullptr;
     EXPECT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pBlob->Resize(TransparentPng.size() + 1), RADIENT_STATUS_INVALID_OPERATION);
     pBlob.Release();
+    LoadInfo.Clear();
     EXPECT_NE(WeakBlob.Lock(), nullptr);
     EXPECT_EQ(ReadReleases, 0u);
     ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
@@ -875,8 +851,8 @@ TEST(RadientTextureAssetManagerTest, SharedBlobReadAccessEndsAfterCacheHit)
     Uint32 ReadReleases = 0;
     auto   pBlob        = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pFirst, pSecond;
     ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pFirst), RADIENT_STATUS_PENDING);
     ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pSecond), RADIENT_STATUS_PENDING);
@@ -900,8 +876,8 @@ TEST(RadientTextureAssetManagerTest, RejectsActiveBlobWriterBeforeQueuingLoad)
     ASSERT_NE(pBlob, nullptr);
     void* pWriteData = nullptr;
     ASSERT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to encoded texture data blob."};
@@ -927,8 +903,8 @@ TEST(RadientTextureAssetManagerTest, ReleasesBlobReadAccessOnDecodeFailure)
     const std::array<Uint8, 4> InvalidImage{1, 2, 3, 4};
     auto                       pBlob = MakeTestMutableDataBlob(InvalidImage.data(), InvalidImage.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
     {
@@ -952,8 +928,8 @@ TEST(RadientTextureAssetManagerTest, ReleasesBlobReadAccessWhenEnqueueFails)
     Uint32 ReadReleases = 0;
     auto   pBlob        = MakeTestMutableDataBlob(TransparentPng.data(), TransparentPng.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Enqueue on a stopped ThreadPool"};
@@ -973,9 +949,9 @@ TEST(RadientTextureAssetManagerTest, ReleasesReadAccessWhenBlobIsEmpty)
     Uint32 ReadReleases = 0;
     auto   pBlob        = MakeTestDataBlob(nullptr, 0, CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pDataBlob = pBlob;
-    LoadInfo.URI       = "textures/albedo.png";
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
+    LoadInfo.SetURI("textures/albedo.png");
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Encoded texture data blob must not be empty."};
@@ -996,8 +972,7 @@ TEST(RadientTextureAssetManagerTest, RetainsQueuedPixelBlobUntilWorkerFinishes)
     auto   pBlob        = MakeTestMutableDataBlob(TexturePixels.data(), TexturePixels.size(), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
     RefCntWeakPtr<IRadientDataBlob>     WeakBlob{pBlob.RawPtr()};
-    RadientTextureMipData               TextureDataMip;
-    RadientTextureData                  TextureData = MakeTextureData(pBlob, TextureDataMip);
+    RadientTextureDataX                 TextureData = MakeTextureData(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ASSERT_EQ(pManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture), RADIENT_STATUS_PENDING);
 
@@ -1029,16 +1004,15 @@ TEST(RadientTextureAssetManagerTest, PaddedPixelBlobsSharePayloadWithPackedPixel
         5, 6, 7, 8,
         0, 0, 255, 255, 255, 255, 255, 255,
         9, 10, 11, 12};
-    auto                                 pThreadPool  = CreateTestThreadPool(0);
-    auto                                 pManager     = CreateTextureManager();
-    auto                                 pMinimalBlob = MakeTestDataBlob(MinimalPixels.data(), MinimalPixels.size());
-    auto                                 pPaddedBlob  = MakeTestDataBlob(PaddedPixels.data(), PaddedPixels.size());
-    auto                                 pPackedBlob  = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
-    std::array<RadientTextureMipData, 3> Mips;
-    std::array<RadientTextureData, 3>    TextureData{
-        MakeTextureData(pMinimalBlob, Mips[0]), MakeTextureData(pPaddedBlob, Mips[1]), MakeTextureData(pPackedBlob, Mips[2])};
-    Mips[0].Stride = 12;
-    Mips[1].Stride = 12;
+    auto                               pThreadPool  = CreateTestThreadPool(0);
+    auto                               pManager     = CreateTextureManager();
+    auto                               pMinimalBlob = MakeTestDataBlob(MinimalPixels.data(), MinimalPixels.size());
+    auto                               pPaddedBlob  = MakeTestDataBlob(PaddedPixels.data(), PaddedPixels.size());
+    auto                               pPackedBlob  = MakeTestDataBlob(TexturePixels.data(), TexturePixels.size());
+    std::array<RadientTextureDataX, 3> TextureData{
+        MakeTextureData(pMinimalBlob), MakeTextureData(pPaddedBlob), MakeTextureData(pPackedBlob)};
+    TextureData[0].SetMip(0, pMinimalBlob, 0, 12);
+    TextureData[1].SetMip(0, pPaddedBlob, 0, 12);
     std::array<RefCntAutoPtr<IRadientTextureAsset>, 3> Textures;
     for (size_t i = 0; i < Textures.size(); ++i)
     {
@@ -1062,8 +1036,7 @@ TEST(RadientTextureAssetManagerTest, RejectsActivePixelBlobWriterBeforeQueuingLo
     ASSERT_NE(pBlob, nullptr);
     void* pWriteData = nullptr;
     ASSERT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
-    RadientTextureMipData               TextureDataMip;
-    const auto                          TextureData = MakeTextureData(pBlob, TextureDataMip);
+    const RadientTextureDataX           TextureData = MakeTextureData(pBlob);
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     {
         TestingEnvironment::ErrorScope ExpectedErrors{"Unable to acquire read access to texture mip 0 data blob."};
@@ -1093,9 +1066,8 @@ TEST(RadientTextureAssetManagerTest, RejectsPixelBlobsShorterThanActiveSpan)
         Uint32 ReadReleases = 0;
         auto   pBlob        = MakeTestMutableDataBlob(nullptr, Size, CountBlobReadReleases, &ReadReleases);
         ASSERT_NE(pBlob, nullptr);
-        RadientTextureMipData TextureDataMip;
-        auto                  TextureData = MakeTextureData(pBlob, TextureDataMip);
-        TextureDataMip.Stride             = 12;
+        RadientTextureDataX TextureData = MakeTextureData(pBlob);
+        TextureData.SetMip(0, pBlob, 0, 12);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         {
             TestingEnvironment::ErrorScope ExpectedErrors{"Invalid texture mip 0: ByteOffset (0) and required data size (20) exceed data blob size"};

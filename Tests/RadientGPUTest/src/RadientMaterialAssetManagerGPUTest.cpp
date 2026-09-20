@@ -27,6 +27,7 @@
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientTypesX.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientGPUTestHelpers.hpp"
@@ -232,8 +233,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -303,8 +303,7 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -370,8 +369,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersAfterTe
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;
@@ -424,8 +422,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     RefCntAutoPtr<IRadientTextureAsset>  pTexture;

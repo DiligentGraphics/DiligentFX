@@ -29,6 +29,7 @@
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
@@ -365,17 +366,12 @@ TEST(RadientTesseraMaterialCacheTest, RequiresGPUReadyMaterialDependencies)
 
     auto pPixelBlob = Testing::MakeTestDataBlob(Pixels.data(), Pixels.size());
     ASSERT_NE(pPixelBlob, nullptr);
-    const RadientTextureMipData TextureDataMip{pPixelBlob, 0, 0};
-    RadientTextureData          TextureData{};
-    TextureData.Width         = 1;
-    TextureData.Height        = 1;
-    TextureData.Format        = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
-    TextureData.pMipLevels    = &TextureDataMip;
-    TextureData.MipLevelCount = 1;
-    TextureData.GenerateMips  = True;
+    RadientTextureDataX TextureData{1, 1, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    TextureData.SetGenerateMips(True);
+    TextureData.AddMip(pPixelBlob);
 
-    RadientTextureLoadInfo TextureLoadInfo{};
-    TextureLoadInfo.pTextureData = &TextureData;
+    RadientTextureLoadInfoX TextureLoadInfo{};
+    TextureLoadInfo.SetTextureData(TextureData);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     ASSERT_EQ(pTextureManager->LoadTexture(

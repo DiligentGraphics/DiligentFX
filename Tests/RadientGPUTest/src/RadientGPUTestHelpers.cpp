@@ -25,6 +25,7 @@
  */
 
 #include "RadientGPUTestHelpers.hpp"
+#include "RadientTypesX.hpp"
 
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
@@ -101,27 +102,18 @@ RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   See
     return pBlob;
 }
 
-RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
-                                   RadientTextureMipData&   MipData,
-                                   const TestTextureParams& Params)
+RadientTextureDataX MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                    const TestTextureParams& Params)
 {
-    MipData = {pDataBlob, 0, GetTextureStride(Params)};
-    RadientTextureData TextureData{
-        Params.Width,
-        Params.Height,
-        RADIENT_TEXTURE_FORMAT_RGBA8_UNORM,
-        &MipData,
-        1,
-        True,
-    };
+    RadientTextureDataX TextureData{Params.Width, Params.Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+    TextureData.AddMip(pDataBlob, 0, GetTextureStride(Params));
     return TextureData;
 }
 
-RadientTextureLoadInfo MakeTextureDataLoadInfo(const RadientTextureData& TextureData)
+RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& TextureData)
 {
-    RadientTextureLoadInfo LoadInfo;
-    LoadInfo.pTextureData = &TextureData;
-    LoadInfo.IsSRGB       = False;
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetTextureData(TextureData).SetSRGB(False);
     return LoadInfo;
 }
 

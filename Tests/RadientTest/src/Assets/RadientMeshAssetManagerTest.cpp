@@ -33,6 +33,7 @@
 #include "ThreadSignal.hpp"
 #include "TestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "gtest/gtest.h"
@@ -92,18 +93,9 @@ MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientD
         RadientFloat3{0.f, 0.f, 0.f},
         RadientFloat3{1.f, 0.f, 0.f},
         RadientFloat3{0.f, 1.f, 0.f}};
-    RadientMeshCreateInfo            MeshCI{};
-    const RadientVertexAttributeDesc VertexAttributes[]{
-        {
-            "POSITION",
-            0,
-            RADIENT_VERTEX_AUTO_OFFSET,
-            RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32,
-            3,
-            false,
-        },
-    };
-    const RadientVertexBufferLayoutDesc VertexBuffers[1]{};
+    RadientMeshCreateInfo    MeshCI{};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
 
     const RefCntAutoPtr<IRadientDataBlob> pVertexBlob = pBlob != nullptr ?
         RefCntAutoPtr<IRadientDataBlob>{pBlob} :
@@ -114,9 +106,8 @@ MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientD
         Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
 
     IRadientDataBlob* const VertexData[]{pVertexBlob};
-    const Uint32            VertexBufferCount = 1;
 
-    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.VertexLayout    = VertexLayout;
     MeshCI.ppVertexBuffers = VertexData;
     MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
     MeshCI.pIndexBuffer    = pIndexBlob;
@@ -378,17 +369,16 @@ TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
     auto                               pMeshManager = RadientMeshAssetManager::Create({});
     const std::array<RadientFloat3, 3> Positions{
         RadientFloat3{0, 0, 0}, RadientFloat3{1, 0, 0}, RadientFloat3{0, 1, 0}};
-    const std::array<Uint16, 3>      Indices{0, 1, 2};
-    auto                             pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
-    auto                             pIndexBlob  = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
-    IRadientDataBlob* const          VertexBuffers[]{pVertexBlob};
-    const RadientVertexAttributeDesc Attribute{
-        "POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
-    const RadientVertexBufferLayoutDesc Buffer{};
-    RadientMeshPrimitiveCreateInfo      Primitive{};
+    const std::array<Uint16, 3> Indices{0, 1, 2};
+    auto                        pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
+    auto                        pIndexBlob  = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
+    IRadientDataBlob* const     VertexBuffers[]{pVertexBlob};
+    RadientVertexLayoutDescX    Layout;
+    Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    RadientMeshPrimitiveCreateInfo Primitive{};
     Primitive.IndexCount = static_cast<Uint32>(Indices.size());
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.VertexLayout    = {&Attribute, 1, &Buffer, 1};
+    MeshCI.VertexLayout    = Layout;
     MeshCI.ppVertexBuffers = VertexBuffers;
     MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
     MeshCI.pIndexBuffer    = pIndexBlob;
@@ -553,13 +543,13 @@ TEST(RadientMeshAssetManagerTest, RejectsUnreadableIndexBlobBeforeQueuingLoad)
     auto         pIndexBlob = Testing::MakeTestMutableDataBlob(Indices, sizeof(Indices));
     ASSERT_NE(pVertexBlob, nullptr);
     ASSERT_NE(pIndexBlob, nullptr);
-    const RadientVertexAttributeDesc    Attribute{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
-    const RadientVertexBufferLayoutDesc BufferLayout{};
-    IRadientDataBlob* const             VertexBuffers[]{pVertexBlob};
-    RadientMeshPrimitiveCreateInfo      Primitive;
+    RadientVertexLayoutDescX Layout;
+    Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    IRadientDataBlob* const        VertexBuffers[]{pVertexBlob};
+    RadientMeshPrimitiveCreateInfo Primitive;
     Primitive.IndexCount = 3;
     RadientMeshCreateInfo MeshCI;
-    MeshCI.VertexLayout    = {&Attribute, 1, &BufferLayout, 1};
+    MeshCI.VertexLayout    = Layout;
     MeshCI.ppVertexBuffers = VertexBuffers;
     MeshCI.VertexCount     = 3;
     MeshCI.pIndexBuffer    = pIndexBlob;
@@ -605,15 +595,15 @@ TEST(RadientMeshAssetManagerTest, RejectsActiveVertexBlobWriterBeforeQueuingLoad
     Uint32 ReadReleases = 0;
     auto   pBlob        = Testing::MakeTestMutableDataBlob(nullptr, 3 * sizeof(RadientFloat3), Testing::CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    const RadientVertexAttributeDesc    Attribute{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False};
-    const RadientVertexBufferLayoutDesc BufferLayout{};
-    IRadientDataBlob* const             VertexBuffers[]{pBlob};
-    const Uint32                        Indices[]{0, 1, 2};
-    const auto                          pIndexBlob = Testing::MakeTestDataBlob(Indices, sizeof(Indices));
-    RadientMeshPrimitiveCreateInfo      Primitive;
+    RadientVertexLayoutDescX Layout;
+    Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    IRadientDataBlob* const        VertexBuffers[]{pBlob};
+    const Uint32                   Indices[]{0, 1, 2};
+    const auto                     pIndexBlob = Testing::MakeTestDataBlob(Indices, sizeof(Indices));
+    RadientMeshPrimitiveCreateInfo Primitive;
     Primitive.IndexCount = 3;
     RadientMeshCreateInfo MeshCI;
-    MeshCI.VertexLayout    = {&Attribute, 1, &BufferLayout, 1};
+    MeshCI.VertexLayout    = Layout;
     MeshCI.ppVertexBuffers = VertexBuffers;
     MeshCI.VertexCount     = 3;
     MeshCI.pIndexBuffer    = pIndexBlob;

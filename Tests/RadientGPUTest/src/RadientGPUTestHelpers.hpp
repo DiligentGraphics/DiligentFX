@@ -29,6 +29,7 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "GLTFResourceManager.hpp"
 #include "RadientAssets.h"
+#include "RadientTypesX.hpp"
 #include "RefCntAutoPtr.hpp"
 
 namespace Threading
@@ -65,14 +66,12 @@ struct TestTextureParams
 RefCntAutoPtr<IRadientDataBlob> MakeTextureDataBlob(Uint32                   Seed   = 0,
                                                     const TestTextureParams& Params = {});
 
-// Creates a texture descriptor with mip generation enabled. The caller retains
-// MipData and the blob until LoadTexture returns.
-RadientTextureData MakeTextureData(IRadientDataBlob*        pDataBlob,
-                                   RadientTextureMipData&   MipData,
-                                   const TestTextureParams& Params = {});
+// Creates an owning texture descriptor with mip generation enabled.
+RadientTextureDataX MakeTextureData(IRadientDataBlob*        pDataBlob,
+                                    const TestTextureParams& Params = {});
 
 // Wraps texture data into a memory-based texture load request.
-RadientTextureLoadInfo MakeTextureDataLoadInfo(const RadientTextureData& TextureData);
+RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& TextureData);
 
 // Enqueues a worker task that blocks until ReleaseWorker is triggered.
 RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&         ThreadPool,

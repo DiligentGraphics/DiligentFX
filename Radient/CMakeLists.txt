@@ -164,6 +164,7 @@ set(INTERFACE
     interface/RadientSkinning.h
     interface/RadientStandardMaterialParameters.h
     interface/RadientTypes.h
+    interface/RadientTypesX.hpp
     interface/RadientVertexLayout.h
     interface/RadientView.h
 )

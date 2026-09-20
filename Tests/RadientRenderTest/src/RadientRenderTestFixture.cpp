@@ -25,6 +25,7 @@
  */
 
 #include "RadientRenderTestFixture.hpp"
+#include "RadientTypesX.hpp"
 
 #include "RadientRenderTestOptions.hpp"
 
@@ -77,9 +78,9 @@ public:
         if (RADIENT_FAILED(m_Status))
             return;
 
-        RadientTextureLoadInfo EnvironmentLoadInfo{};
-        EnvironmentLoadInfo.URI = EnvironmentMapPath;
-        m_Status                = m_pAssetManager->LoadTexture(EnvironmentLoadInfo, &m_pEnvironmentMap);
+        RadientTextureLoadInfoX EnvironmentLoadInfo{};
+        EnvironmentLoadInfo.SetURI(EnvironmentMapPath);
+        m_Status = m_pAssetManager->LoadTexture(EnvironmentLoadInfo, &m_pEnvironmentMap);
         if (m_Status != RADIENT_STATUS_OK && m_Status != RADIENT_STATUS_PENDING)
             return;
         if (m_pEnvironmentMap == nullptr)

@@ -29,6 +29,7 @@
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientTypesX.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientGPUTestHelpers.hpp"
@@ -125,8 +126,7 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
-    RadientTextureMipData    TextureDataMip;
-    const RadientTextureData TextureData = MakeTextureData(pTextureDataBlob, TextureDataMip);
+    const RadientTextureDataX TextureData = MakeTextureData(pTextureDataBlob);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_TRUE(IsPendingOrOK(pTextureManager->LoadTexture(*pThreadPool, MakeTextureDataLoadInfo(TextureData), &pTexture)));
@@ -179,10 +179,9 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name = "Radient mesh waiting for material";
-    const RadientVertexAttributeDesc VertexAttributes[]{
-        {"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false},
-        {"COLOR_0", 1, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true}};
-    const RadientVertexBufferLayoutDesc VertexBuffers[2]{};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    VertexLayout.AddBuffer().AddAttribute("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, 1, RADIENT_VERTEX_AUTO_OFFSET, True);
 
     RadientDataBlobCreateInfo BlobCI;
     BlobCI.Size  = sizeof(Positions);
@@ -198,9 +197,8 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob};
-    const Uint32            VertexBufferCount = 2;
 
-    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.VertexLayout    = VertexLayout;
     MeshCI.ppVertexBuffers = VertexData;
     MeshCI.VertexCount     = 3;
     MeshCI.pIndexBuffer    = pIndexBlob;
@@ -335,9 +333,8 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name = "Radient morph target GPU upload";
-    const RadientVertexAttributeDesc VertexAttributes[]{
-        {"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false}};
-    const RadientVertexBufferLayoutDesc VertexBuffers[1]{};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
 
     RadientDataBlobCreateInfo BlobCI;
     BlobCI.Size  = sizeof(Positions);
@@ -349,9 +346,8 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob};
-    const Uint32            VertexBufferCount = 1;
 
-    MeshCI.VertexLayout     = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.VertexLayout     = VertexLayout;
     MeshCI.ppVertexBuffers  = VertexData;
     MeshCI.VertexCount      = 3;
     MeshCI.pMorphTargets    = &MorphTargetCI;
