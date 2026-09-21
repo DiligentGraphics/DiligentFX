@@ -176,7 +176,8 @@ public:
                               0,
                               Desc.Width,
                               Desc.Height,
-                              Desc.MipLevels);
+                              Desc.MipLevels,
+                              true);
         }
         else
             ClearTextureAttribs();
@@ -196,13 +197,16 @@ public:
     {
         if (pAtlasSuballocation != nullptr)
         {
-            const float4 UVScaleBias = pAtlasSuballocation->GetUVScaleBias();
-            const uint2  Size        = pAtlasSuballocation->GetSize();
+            const float4 UVScaleBias         = pAtlasSuballocation->GetUVScaleBias();
+            const uint2  Size                = pAtlasSuballocation->GetSize();
+            const bool   CoversWholeSlice    = UVScaleBias == float4{1.f, 1.f, 0.f, 0.f};
+            const bool   HasAllViewMipLevels = UploadedMipLevels >= pAtlasSuballocation->GetAtlas()->GetAtlasDesc().MipLevels;
             SetTextureAttribs(UVScaleBias,
                               pAtlasSuballocation->GetSlice(),
                               Size.x,
                               Size.y,
-                              UploadedMipLevels);
+                              UploadedMipLevels,
+                              CoversWholeSlice && HasAllViewMipLevels);
         }
         else
         {
@@ -274,10 +278,11 @@ public:
             m_AtlasUVBiasX.load(std::memory_order_relaxed),
             m_AtlasUVBiasY.load(std::memory_order_relaxed),
         };
-        SamplingInfo.TextureSlice = m_TextureSlice.load(std::memory_order_relaxed);
-        SamplingInfo.Width        = m_TextureWidth.load(std::memory_order_relaxed);
-        SamplingInfo.Height       = m_TextureHeight.load(std::memory_order_relaxed);
-        SamplingInfo.MipLevels    = m_TextureMipLevels.load(std::memory_order_relaxed);
+        SamplingInfo.TextureSlice      = m_TextureSlice.load(std::memory_order_relaxed);
+        SamplingInfo.Width             = m_TextureWidth.load(std::memory_order_relaxed);
+        SamplingInfo.Height            = m_TextureHeight.load(std::memory_order_relaxed);
+        SamplingInfo.MipLevels         = m_TextureMipLevels.load(std::memory_order_relaxed);
+        SamplingInfo.CoversEntireSlice = m_CoversEntireSlice.load(std::memory_order_relaxed);
         return true;
     }
 
@@ -343,7 +348,8 @@ private:
                            Uint32        TextureSlice,
                            Uint32        Width,
                            Uint32        Height,
-                           Uint32        MipLevels) noexcept
+                           Uint32        MipLevels,
+                           bool          CoversEntireSlice) noexcept
     {
         m_TextureSlice.store(static_cast<float>(TextureSlice), std::memory_order_relaxed);
         m_AtlasUVScaleX.store(AtlasUVScaleAndBias.x, std::memory_order_relaxed);
@@ -353,6 +359,7 @@ private:
         m_TextureWidth.store(Width, std::memory_order_relaxed);
         m_TextureHeight.store(Height, std::memory_order_relaxed);
         m_TextureMipLevels.store(MipLevels, std::memory_order_relaxed);
+        m_CoversEntireSlice.store(CoversEntireSlice, std::memory_order_relaxed);
         m_TextureAttribsInitialized.store(true, std::memory_order_release);
     }
 
@@ -367,6 +374,7 @@ private:
         m_TextureWidth.store(0, std::memory_order_relaxed);
         m_TextureHeight.store(0, std::memory_order_relaxed);
         m_TextureMipLevels.store(0, std::memory_order_relaxed);
+        m_CoversEntireSlice.store(false, std::memory_order_relaxed);
     }
 
 private:
@@ -398,6 +406,7 @@ private:
     std::atomic<Uint32> m_TextureWidth{0};
     std::atomic<Uint32> m_TextureHeight{0};
     std::atomic<Uint32> m_TextureMipLevels{0};
+    std::atomic_bool    m_CoversEntireSlice{false};
 
     // True when no deferred copy is required or all required copy callbacks
     // have enqueued commands. This is not a GPU completion fence.

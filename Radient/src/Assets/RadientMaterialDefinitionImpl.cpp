@@ -867,7 +867,13 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
             VERIFY_EXPR(SamplingInfoAvailable);
             if (SamplingInfoAvailable)
             {
-                TextureAttribs.SetMipLevelCount(SamplingInfo.MipLevels);
+                // Entire slices have every mip exposed by the view populated, so the view already
+                // prevents sampling unavailable mips. Keep the default ATLAS_MAX_MIP_LEVEL_COUNT
+                // sentinel so SampleTextureAtlas uses the effective, view/sampler-clamped LOD
+                // from native queries. An explicit count would select the unclamped LOD path and
+                // could needlessly shrink gradients, changing the filtering footprint and UV margins.
+                if (!SamplingInfo.CoversEntireSlice)
+                    TextureAttribs.SetMipLevelCount(SamplingInfo.MipLevels);
                 std::memcpy(pShaderData + Command.Offset + ShaderTextureSliceOffset,
                             &SamplingInfo.TextureSlice,
                             sizeof(SamplingInfo.TextureSlice));

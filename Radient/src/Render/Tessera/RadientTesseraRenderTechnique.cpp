@@ -79,10 +79,11 @@ bool GetTextureViewSamplingInfo(ITextureView*               pTextureView,
     if (pTexture == nullptr)
         return false;
 
-    const TextureDesc& Desc = pTexture->GetDesc();
-    SamplingInfo.Width      = Desc.Width;
-    SamplingInfo.Height     = Desc.Height;
-    SamplingInfo.MipLevels  = Desc.MipLevels;
+    const TextureDesc& Desc        = pTexture->GetDesc();
+    SamplingInfo.Width             = Desc.Width;
+    SamplingInfo.Height            = Desc.Height;
+    SamplingInfo.MipLevels         = Desc.MipLevels;
+    SamplingInfo.CoversEntireSlice = true;
     return SamplingInfo.MipLevels != 0;
 }
 

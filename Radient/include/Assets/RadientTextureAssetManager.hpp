@@ -74,6 +74,10 @@ struct RadientTextureSamplingInfo
     Uint32 Width     = 0;
     Uint32 Height    = 0;
     Uint32 MipLevels = 0;
+
+    /// True if the texture occupies an entire slice of the backing view,
+    /// with every mip level exposed by that view populated.
+    bool CoversEntireSlice = false;
 };
 
 /// Stable identity of the logical resource and typed view used by a texture binding.
