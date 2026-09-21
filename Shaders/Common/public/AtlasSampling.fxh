@@ -60,8 +60,9 @@ struct SampleTextureAtlasAttribs
     
     /// Maximum anisotropy.
     ///
-    /// \remarks    This value is only used on GLES where textureQueryLod is not
-    ///             supported and we have to manually compute the LOD.
+    /// \remarks    This value is only used on GLES and WebGPU, where we manually
+    ///             compute the LOD. It must match the sampler's maximum anisotropy
+    ///             when anisotropic filtering is enabled, and be 1 otherwise.
     float fMaxAnisotropy;
 };
 

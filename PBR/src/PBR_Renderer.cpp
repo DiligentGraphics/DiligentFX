@@ -1738,6 +1738,32 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
+    // GL material texture arrays use the color sampler for every texture.
+    const bool UseSharedMaterialSampler = m_Device.GetDeviceInfo().IsGLDevice() &&
+        m_Settings.ShaderTexturesArrayMode != SHADER_TEXTURE_ARRAY_MODE_NONE;
+    const auto AddSamplerMaxAnisotropy = [&](const char* MacroName, const SamplerDesc& SamDesc) {
+        const SamplerDesc& EffectiveSamDesc = UseSharedMaterialSampler ? m_Settings.ColorMapImmutableSampler : SamDesc;
+        Uint32             MaxAnisotropy    = 1;
+        if (IsAnisotropicFilter(EffectiveSamDesc.MinFilter))
+        {
+            MaxAnisotropy = std::min(EffectiveSamDesc.MaxAnisotropy, Uint32{m_Device.GetAdapterInfo().Sampler.MaxAnisotropy});
+            MaxAnisotropy = std::max(MaxAnisotropy, 1u);
+        }
+        Macros.Add(MacroName, MaxAnisotropy);
+    };
+    AddSamplerMaxAnisotropy("PBR_BASE_COLOR_MAX_ANISOTROPY", m_Settings.ColorMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_NORMAL_MAX_ANISOTROPY", m_Settings.NormalMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_PHYS_DESC_MAX_ANISOTROPY", m_Settings.PhysDescMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_OCCLUSION_MAX_ANISOTROPY", m_Settings.AOMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_EMISSIVE_MAX_ANISOTROPY", m_Settings.EmissiveMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_CLEAR_COAT_MAX_ANISOTROPY", m_Settings.ClearCoatMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_SHEEN_MAX_ANISOTROPY", m_Settings.SheenMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_SPECULAR_MAX_ANISOTROPY", m_Settings.SpecularMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_ANISOTROPY_MAX_ANISOTROPY", m_Settings.AnisotropyMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_IRIDESCENCE_MAX_ANISOTROPY", m_Settings.IridescenceMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_TRANSMISSION_MAX_ANISOTROPY", m_Settings.TransmissionMapImmutableSampler);
+    AddSamplerMaxAnisotropy("PBR_THICKNESS_MAX_ANISOTROPY", m_Settings.ThicknessMapImmutableSampler);
+
     StaticShaderTextureIdsArrayType MaterialTextureIds;
     MaterialTextureIds.fill(decltype(PBR_Renderer::InvalidMaterialTextureId){InvalidMaterialTextureId});
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
