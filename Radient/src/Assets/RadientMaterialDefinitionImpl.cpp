@@ -857,9 +857,6 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         TextureAttribs.SetUVSelector(UVSelector);
         TextureAttribs.SetWrapUMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapU));
         TextureAttribs.SetWrapVMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapV));
-        std::memcpy(pShaderData + Command.Offset + ShaderTexturePackedPropsOffset,
-                    &TextureAttribs.PackedProps,
-                    sizeof(TextureAttribs.PackedProps));
 
         IRadientTextureAsset* const pTexture = MaterialData.GetTexture(Command.TextureParameterIndex, 0);
         if (pTexture != nullptr)
@@ -870,6 +867,7 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
             VERIFY_EXPR(SamplingInfoAvailable);
             if (SamplingInfoAvailable)
             {
+                TextureAttribs.SetMipLevelCount(SamplingInfo.MipLevels);
                 std::memcpy(pShaderData + Command.Offset + ShaderTextureSliceOffset,
                             &SamplingInfo.TextureSlice,
                             sizeof(SamplingInfo.TextureSlice));
@@ -878,6 +876,9 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
                             sizeof(SamplingInfo.UVScaleBias));
             }
         }
+        std::memcpy(pShaderData + Command.Offset + ShaderTexturePackedPropsOffset,
+                    &TextureAttribs.PackedProps,
+                    sizeof(TextureAttribs.PackedProps));
     }
 }
 

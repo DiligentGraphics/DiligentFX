@@ -345,6 +345,12 @@ INLINE uint UnpackPBRMaterialTextureWrapVMode(uint PackedProps)
     return ((PackedProps >> 6u) & 7u) + 1u;
 }
 
+INLINE uint UnpackPBRMaterialTextureMipLevelCount(uint PackedProps)
+{
+    // See GLTF::Material::TextureShaderAttribs::SetMipLevelCount.
+    return (PackedProps >> 9u) & 15u;
+}
+
 struct PBRMaterialShaderInfo
 {
     PBRMaterialBasicAttribs Basic;

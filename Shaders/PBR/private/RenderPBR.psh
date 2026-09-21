@@ -80,7 +80,7 @@ Texture2D<float4>      g_OITTail;
 PBRMaterialTextureAttribs GetDefaultTextureAttribs()
 {
     PBRMaterialTextureAttribs Attribs;
-    Attribs.PackedProps  = 0u;
+    Attribs.PackedProps  = 15u << 9u; // UV selector = -1, repeat wrapping, no additional mip limit.
     Attribs.TextureSlice = 0.0;
     Attribs.UBias        = 0.0;
     Attribs.VBias        = 0.0;

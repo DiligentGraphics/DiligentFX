@@ -431,6 +431,7 @@ float4 SampleTexture(Texture2DArray            Tex,
                 SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
                 SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
+                SampleAttribs.MipLevelCount          = UnpackPBRMaterialTextureMipLevelCount(TexAttribs.PackedProps);
                 SampleAttribs.IsNonFilterable        = false;
                 SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
     
@@ -513,6 +514,7 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
             SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
             SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
             SampleAttribs.fSmallestValidLevelDim = 4.0;
+            SampleAttribs.MipLevelCount          = UnpackPBRMaterialTextureMipLevelCount(TexAttribs.PackedProps);
             SampleAttribs.IsNonFilterable        = false;
             SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
 
