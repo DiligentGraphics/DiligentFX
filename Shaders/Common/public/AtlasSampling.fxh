@@ -85,10 +85,13 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float  fElements;
     Atlas.GetDimensions(f2AtlasDim.x, f2AtlasDim.y, fElements);
     
-    // Compute gradient lengths in pixels
-    float fGradX   = max(length(f2dUV_dx * f2AtlasDim.xy), 1e-5);
-    float fGradY   = max(length(f2dUV_dy * f2AtlasDim.xy), 1e-5);
-    float fMaxGrad = max(fGradX, fGradY);
+    // Compute the maximum gradient length in pixels
+    float2 f2GradX   = f2dUV_dx * f2AtlasDim;
+    float2 f2GradY   = f2dUV_dy * f2AtlasDim;
+    float  fGradXSqr = dot(f2GradX, f2GradX);
+    float  fGradYSqr = dot(f2GradY, f2GradY);
+    float  fMaxGrad  = max(sqrt(max(fGradXSqr, fGradYSqr)), 1e-5);
+    float  fMinGrad  = max(sqrt(min(fGradXSqr, fGradYSqr)), 1e-5); // Only used on GLES and WebGPU
     
     float LOD;
     float UnclampedLOD;
@@ -103,8 +106,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     {
         // textureQueryLod is not supported even in GLES3.2.
         // Follow Section 8.14 (Texture Minification) from OpenGL4.6 spec.
-        float fMinGrad = min(fGradX, fGradY);
-        float Aniso    = min(fMaxGrad / fMinGrad, Attribs.fMaxAnisotropy);
+        float Aniso  = min(fMaxGrad / fMinGrad, Attribs.fMaxAnisotropy);
         UnclampedLOD = log2(fMaxGrad / Aniso);
         LOD = UnclampedLOD;
     }
