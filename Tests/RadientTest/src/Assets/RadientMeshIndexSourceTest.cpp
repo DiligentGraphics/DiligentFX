@@ -81,17 +81,18 @@ private:
 template <typename IndexType>
 RadientMeshIndexSource MakeIndexSource(const std::array<IndexType, 3>& Indices)
 {
-    auto                               pBlob = MakeTestDataBlob(Indices.data(), sizeof(Indices));
-    RadientMeshIndexSource::CreateInfo CI{};
-    CI.pDataBlob  = pBlob;
-    CI.IndexCount = static_cast<Uint32>(Indices.size());
+    const RefCntAutoPtr<IRadientDataBlob> pBlob = MakeTestDataBlob(Indices.data(), sizeof(Indices));
+
+    RadientMeshCreateInfo CI;
+    CI.pIndexBuffer = pBlob;
+    CI.IndexCount   = static_cast<Uint32>(Indices.size());
 
     if constexpr (sizeof(IndexType) == sizeof(Uint8))
-        CI.Type = VT_UINT8;
+        CI.IndexType = RADIENT_INDEX_TYPE_UINT8;
     else if constexpr (sizeof(IndexType) == sizeof(Uint16))
-        CI.Type = VT_UINT16;
+        CI.IndexType = RADIENT_INDEX_TYPE_UINT16;
     else
-        CI.Type = VT_UINT32;
+        CI.IndexType = RADIENT_INDEX_TYPE_UINT32;
 
     return RadientMeshIndexSource{CI};
 }
@@ -158,7 +159,7 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidRadientCreateInfo)
 
 TEST(RadientMeshIndexSourceTest, PacksUint8Uint16AndUint32AsUint32)
 {
-    std::array<Uint8, 3>  Indices8{2, 1, 0};
+    std::array<Uint8, 3>  Indices8{255, 1, 0};
     std::array<Uint16, 3> Indices16{3, 4, 5};
     std::array<Uint32, 3> Indices32{6, 7, 8};
 
@@ -170,7 +171,7 @@ TEST(RadientMeshIndexSourceTest, PacksUint8Uint16AndUint32AsUint32)
     ASSERT_EQ(Source16.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source32.GetStatus(), RADIENT_STATUS_OK);
 
-    ExpectPackedIndices(Source8, {2, 1, 0});
+    ExpectPackedIndices(Source8, {255, 1, 0});
     ExpectPackedIndices(Source16, {3, 4, 5});
     ExpectPackedIndices(Source32, {6, 7, 8});
 }

@@ -43,8 +43,9 @@ static_assert(RADIENT_SCENE_FORMAT_AUTO == 0, "Unexpected RADIENT_SCENE_FORMAT_A
 static_assert(RADIENT_SCENE_FORMAT_GLTF == 1, "Unexpected RADIENT_SCENE_FORMAT_GLTF value");
 
 static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
-static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
-static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
+static_assert(RADIENT_INDEX_TYPE_UINT8 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT8 value");
+static_assert(RADIENT_INDEX_TYPE_UINT16 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
+static_assert(RADIENT_INDEX_TYPE_UINT32 == 3, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
 
 static_assert(std::is_standard_layout<RadientTextureAssetDesc>::value, "RadientTextureAssetDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientTextureAssetDesc>::value, "RadientTextureAssetDesc must be trivially copyable");

@@ -104,6 +104,9 @@ DILIGENT_TYPED_ENUM(RADIENT_INDEX_TYPE, Uint8)
     /// The geometry has no index buffer and is drawn directly from its vertices.
     RADIENT_INDEX_TYPE_NONE = 0,
 
+    /// 8-bit unsigned indices.
+    RADIENT_INDEX_TYPE_UINT8,
+
     /// 16-bit unsigned indices.
     RADIENT_INDEX_TYPE_UINT16,
 
@@ -287,8 +290,8 @@ struct RadientMeshCreateInfo
     /// Number of indices in pIndexBuffer. Must be nonzero.
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
-    /// Encoding of each index in pIndexBuffer. Mesh creation requires UINT16 or
-    /// UINT32; the default NONE is invalid. The renderer selects its stored format.
+    /// Encoding of each index in pIndexBuffer: UINT8, UINT16, or UINT32.
+    /// The default NONE is invalid. The renderer selects its stored format.
     RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
 
     /// Mesh primitives.

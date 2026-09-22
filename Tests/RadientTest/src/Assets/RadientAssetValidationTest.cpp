@@ -172,6 +172,12 @@ TEST(RadientAssetValidationTest, ValidatesMeshCreateInfo)
     RadientMeshCreateInfo MeshCI = Data.MakeMeshCI();
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
 
+    const std::array<Uint8, 3>            Indices8{0, 1, 2};
+    const RefCntAutoPtr<IRadientDataBlob> pIndexBlob8 = MakeTestDataBlob(Indices8.data(), sizeof(Indices8));
+    MeshCI.pIndexBuffer                               = pIndexBlob8;
+    MeshCI.IndexType                                  = RADIENT_INDEX_TYPE_UINT8;
+    EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
+
     MeshCI.pIndexBuffer = Data.IndexBlob32;
     MeshCI.IndexType    = RADIENT_INDEX_TYPE_UINT32;
     EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
@@ -194,7 +200,7 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMissingRequiredData)
     ExpectInvalidMeshCreateInfo("pIndexBuffer must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.pIndexBuffer = nullptr;
     });
-    ExpectInvalidMeshCreateInfo("IndexType must be RADIENT_INDEX_TYPE_UINT16 or RADIENT_INDEX_TYPE_UINT32", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+    ExpectInvalidMeshCreateInfo("IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexType = RADIENT_INDEX_TYPE_NONE;
     });
     ExpectInvalidMeshCreateInfo("PrimitiveCount must not be zero", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {

@@ -214,11 +214,12 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     if (MeshCI.pIndexBuffer == nullptr)
         return LogValidationError("RadientMeshCreateInfo", "pIndexBuffer must not be null.");
 
-    if (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
+    if (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT8 &&
+        MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
         MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32)
     {
         return LogValidationError("RadientMeshCreateInfo",
-                                  "IndexType must be RADIENT_INDEX_TYPE_UINT16 or RADIENT_INDEX_TYPE_UINT32.");
+                                  "IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32.");
     }
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)

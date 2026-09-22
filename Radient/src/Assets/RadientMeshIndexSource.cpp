@@ -47,6 +47,9 @@ VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
 {
     switch (IndexType)
     {
+        case RADIENT_INDEX_TYPE_UINT8:
+            return VT_UINT8;
+
         case RADIENT_INDEX_TYPE_UINT16:
             return VT_UINT16;
 
