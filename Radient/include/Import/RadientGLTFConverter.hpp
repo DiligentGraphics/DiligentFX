@@ -27,15 +27,13 @@
 #pragma once
 
 #include "BasicMath.hpp"
-#include "Import/RadientImportedScene.hpp"
-#include "RadientSceneImporter.h"
+#include "RadientImportedDocument.hpp"
 
 #include <memory>
 
 namespace Diligent
 {
 
-struct IRadientSceneWriter;
 struct IRadientMaterialDefinitionAsset;
 struct IRadientMaterialWriter;
 struct IRadientTextureAsset;
@@ -130,12 +128,6 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
 RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                                  RadientImport::ImportedDocument& Scene,
                                  IRadientAssetManager*            pAssetManager = nullptr);
-
-RADIENT_STATUS InstantiateSceneGraph(const RadientImport::ImportedDocument& Scene,
-                                     Uint32                                 SceneIndex,
-                                     IRadientSceneWriter&                   Writer,
-                                     RadientEntityID                        RootEntity,
-                                     IRadientAnimationRegistry*             pAnimationRegistry = nullptr);
 
 } // namespace RadientGLTFConverter
 

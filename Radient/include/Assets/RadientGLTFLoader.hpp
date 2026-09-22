@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "Import/RadientImportedScene.hpp"
+#include "RadientImportedDocument.hpp"
 
 #include <memory>
 #include <string>

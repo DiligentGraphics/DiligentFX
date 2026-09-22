@@ -26,7 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
-#include "Import/RadientImportedScene.hpp"
+#include "RadientImportedDocument.hpp"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTypesX.hpp"

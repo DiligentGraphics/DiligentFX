@@ -27,7 +27,7 @@
 #include "Import/RadientSceneImporterImpl.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
-#include "Import/RadientGLTFConverter.hpp"
+#include "Import/RadientSceneInstantiation.hpp"
 
 #include "Cast.hpp"
 #include "Errors.hpp"
@@ -210,7 +210,7 @@ RADIENT_STATUS RadientSceneImporterImpl::PopulateSceneRoot(IRadientSceneAsset*  
     if (pImportedScene == nullptr)
         return RADIENT_STATUS_FAILED;
 
-    return RadientGLTFConverter::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity, pAnimationRegistry);
+    return RadientImport::InstantiateSceneGraph(*pImportedScene, SceneIndex, *m_pWriter, RootEntity, pAnimationRegistry);
 }
 
 void RadientSceneImporterImpl::AddPendingSceneInstantiation(IRadientSceneAsset*                pModel,

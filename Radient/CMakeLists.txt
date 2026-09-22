@@ -44,6 +44,7 @@ set(SOURCE
     src/Import/RadientGLTFConverter.cpp
     src/Import/RadientGLTFMaterialConverter.cpp
     src/Import/RadientSceneImporterImpl.cpp
+    src/Import/RadientSceneInstantiation.cpp
     src/Math/RadientMath.cpp
     src/Render/RadientDrawList.cpp
     src/Render/RadientFrameSRBCache.cpp
@@ -111,7 +112,7 @@ set(INCLUDE
     include/Core/RadientValidation.hpp
     include/Core/RadientViewImpl.hpp
     include/Import/RadientGLTFConverter.hpp
-    include/Import/RadientImportedScene.hpp
+    include/Import/RadientSceneInstantiation.hpp
     include/Import/RadientSceneImporterImpl.hpp
     include/Math/RadientMath.hpp
     include/Render/RadientDrawableMesh.hpp
@@ -154,6 +155,7 @@ set(INTERFACE
     interface/RadientMaterials.h
     interface/RadientBackend.h
     interface/RadientEngine.h
+    interface/RadientImportedDocument.hpp
     interface/RadientMath.h
     interface/RadientMeshPrimitives.h
     interface/RadientMorphTargets.h
