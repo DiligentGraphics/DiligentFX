@@ -42,6 +42,7 @@ set(SOURCE
     src/Core/RadientEngineImpl.cpp
     src/Core/RadientViewImpl.cpp
     src/Import/RadientGLTFConverter.cpp
+    src/Import/RadientGLTFSceneAssetImporter.cpp
     src/Import/RadientGLTFMaterialConverter.cpp
     src/Import/RadientSceneImporterImpl.cpp
     src/Import/RadientSceneInstantiation.cpp
@@ -112,6 +113,7 @@ set(INCLUDE
     include/Core/RadientValidation.hpp
     include/Core/RadientViewImpl.hpp
     include/Import/RadientGLTFConverter.hpp
+    include/Import/RadientGLTFSceneAssetImporter.hpp
     include/Import/RadientSceneInstantiation.hpp
     include/Import/RadientSceneImporterImpl.hpp
     include/Math/RadientMath.hpp

@@ -31,10 +31,8 @@
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientCacheKeyBuilder.hpp"
-#include "Assets/RadientGLTFLoader.hpp"
+#include "Import/RadientGLTFSceneAssetImporter.hpp"
 #include "Errors.hpp"
-#include "GLTFDocument.hpp"
-#include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
@@ -50,7 +48,6 @@
 #endif
 
 #include <atomic>
-#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -331,39 +328,6 @@ std::string MakeSceneCacheKey(const IRadientSceneAssetImporter* pImporter, const
     return Builder.GetKey();
 }
 
-bool EndsWithCaseInsensitive(const std::string& Text, const char* Suffix)
-{
-    const size_t SuffixLength = std::char_traits<char>::length(Suffix);
-    if (Text.size() < SuffixLength)
-        return false;
-
-    const size_t Offset = Text.size() - SuffixLength;
-    for (size_t Index = 0; Index < SuffixLength; ++Index)
-    {
-        const unsigned char Lhs = static_cast<unsigned char>(Text[Offset + Index]);
-        const unsigned char Rhs = static_cast<unsigned char>(Suffix[Index]);
-        if (std::tolower(Lhs) != std::tolower(Rhs))
-            return false;
-    }
-
-    return true;
-}
-
-RADIENT_SCENE_FORMAT DetectSceneFormatFromURI(const char* URI)
-{
-    if (URI == nullptr)
-        return RADIENT_SCENE_FORMAT_AUTO;
-
-    std::string  Path{URI};
-    const size_t QueryPos = Path.find_first_of("?#");
-    if (QueryPos != std::string::npos)
-        Path.resize(QueryPos);
-
-    if (EndsWithCaseInsensitive(Path, ".gltf") || EndsWithCaseInsensitive(Path, ".glb"))
-        return RADIENT_SCENE_FORMAT_GLTF;
-
-    return RADIENT_SCENE_FORMAT_AUTO;
-}
 
 } // namespace
 
@@ -424,42 +388,6 @@ public:
 };
 
 } // namespace
-
-// The built-in importer follows the same selection and cache path as plugins.
-// Its manager is borrowed: scene jobs lock the manager before invoking Import.
-class RadientAssetManagerImpl::GLTFSceneAssetImporter final : public ObjectBase<IRadientSceneAssetImporter>
-{
-public:
-    using TBase = ObjectBase<IRadientSceneAssetImporter>;
-
-    GLTFSceneAssetImporter(IReferenceCounters*      pRefCounters,
-                           RadientAssetManagerImpl* pAssetManager) :
-        TBase{pRefCounters},
-        m_pAssetManager{pAssetManager}
-    {
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneAssetImporter, TBase)
-
-    virtual const Char* DILIGENT_CALL_TYPE GetIdentifier() const override final
-    {
-        return "gltf";
-    }
-
-    virtual Bool DILIGENT_CALL_TYPE CanImport(const Char* URI) const override final
-    {
-        return DetectSceneFormatFromURI(URI) == RADIENT_SCENE_FORMAT_GLTF;
-    }
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Import(const RadientSceneAssetImportContext& Context,
-                                                     RadientImport::ImportedDocument&      Document) override final
-    {
-        return m_pAssetManager->LoadGLTFSceneAsset(Document, Context.pSourceData);
-    }
-
-private:
-    RadientAssetManagerImpl* const m_pAssetManager;
-};
 
 // Import services are separate from IRadientAssetManager. Retaining a service
 // keeps its manager alive, while Stop() still prevents new import work.
@@ -610,7 +538,7 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     if (RADIENT_FAILED(DefaultMaterialStatus) || m_pDefaultMaterial == nullptr)
         LOG_ERROR_AND_THROW("Failed to create the default Radient material");
 
-    RefCntAutoPtr<IRadientSceneAssetImporter> pGLTFImporter{MakeNewRCObj<GLTFSceneAssetImporter>()(this)};
+    RefCntAutoPtr<IRadientSceneAssetImporter> pGLTFImporter = CreateRadientGLTFSceneAssetImporter();
     if (RegisterSceneAssetImporter(pGLTFImporter) != RADIENT_STATUS_OK)
         LOG_ERROR_AND_THROW("Failed to register the built-in Radient GLTF importer");
 }
@@ -1083,77 +1011,6 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
         default:
             return RADIENT_STATUS_OK;
     }
-}
-
-RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
-                                                           IRadientAssetData*               pSceneData)
-{
-    const char* ResolvedSourceURI = pSceneData->GetResolvedURI();
-
-    GLTF::DocumentLoadInfo DocLoadInfo;
-    DocLoadInfo.FileName           = ResolvedSourceURI;
-    DocLoadInfo.DecodeImages       = false;
-    DocLoadInfo.FileExistsCallback = [pAssetResolver = m_pAssetResolver,
-                                      pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
-                                      ResolvedSourceURI](const char* FilePath) {
-        if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
-            return true;
-
-        return CheckAsset(pAssetResolver, {FilePath, ResolvedSourceURI}) == RADIENT_STATUS_OK;
-    };
-    DocLoadInfo.ReadWholeFileCallback = [pAssetResolver = m_pAssetResolver,
-                                         pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
-                                         ResolvedSourceURI](const char* FilePath, std::vector<unsigned char>& Data, std::string& Error) {
-        RefCntAutoPtr<IRadientAssetData> pData;
-        if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
-        {
-            pData = pSceneData;
-        }
-        else
-        {
-            const RADIENT_STATUS Status =
-                OpenAsset(pAssetResolver,
-                          {FilePath, ResolvedSourceURI},
-                          pData.GetAddressOfEmpty());
-            if (Status != RADIENT_STATUS_OK || pData == nullptr)
-            {
-                Error += FormatString("Failed to open asset '", FilePath != nullptr ? FilePath : "", "'\n");
-                return false;
-            }
-        }
-
-        const size_t Size = pData->GetSize();
-        if (Size == 0)
-        {
-            Error += FormatString("Asset is empty: ", FilePath != nullptr ? FilePath : "", "\n");
-            return false;
-        }
-        Data.resize(Size);
-        std::memcpy(Data.data(), pData->GetData(), Size);
-        return true;
-    };
-
-    std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocLoadInfo);
-
-    ImportedScene.Textures =
-        RadientGLTFLoader::LoadTextures(*m_pThreadPool,
-                                        *m_pTextureManager,
-                                        ResolvedSourceURI,
-                                        pDocument);
-
-    ImportedScene.Materials =
-        RadientGLTFLoader::LoadMaterials(*m_pMaterialManager,
-                                         pDocument,
-                                         ImportedScene.Textures);
-
-    return RadientGLTFLoader::LoadScene(*m_pThreadPool,
-                                        *m_pMeshManager,
-                                        ResolvedSourceURI,
-                                        pDocument,
-                                        ImportedScene.Materials,
-                                        m_pDefaultMaterial,
-                                        this,
-                                        ImportedScene);
 }
 
 void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&           Scene,

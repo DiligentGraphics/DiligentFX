@@ -28,6 +28,7 @@
 
 #include "BasicMath.hpp"
 #include "RadientImportedDocument.hpp"
+#include "RadientMeshImportServices.h"
 
 #include <memory>
 
@@ -38,8 +39,6 @@ struct IRadientMaterialDefinitionAsset;
 struct IRadientMaterialWriter;
 struct IRadientTextureAsset;
 struct RadientStandardMaterialDefinitionCreateInfo;
-class RadientMeshIndexSource;
-class RadientMeshVertexSource;
 
 namespace GLTF
 {
@@ -71,55 +70,70 @@ RADIENT_STATUS PopulateMaterial(
     IRadientMaterialDefinitionAsset& Definition,
     IRadientMaterialWriter&          Writer);
 
-struct MeshVertexSourceResult
+struct MeshVertexDataResult
 {
-    /// Conversion status. On failure, the whole result remains default-initialized.
+    /// Conversion or mesh-data creation status. Successful creation may be pending.
     RADIENT_STATUS Status = RADIENT_STATUS_INVALID_DATA;
 
-    /// CPU vertex source created from the GLTF primitive.
-    std::unique_ptr<RadientMeshVertexSource> pSource;
+    /// Vertex-data handle created by the import services, or null on failure.
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+
+    /// Number of vertices described by the POSITION accessor, or zero on failure.
+    Uint32 VertexCount = 0;
 
     /// Primitive bounds computed from the POSITION accessor.
     float3 BBMin{};
     float3 BBMax{};
 };
 
-struct MeshIndexSourceResult
+struct MeshIndexDataResult
 {
-    /// Conversion status. On failure, the whole result remains default-initialized.
+    /// Conversion or mesh-data creation status. Successful creation may be pending.
     RADIENT_STATUS Status = RADIENT_STATUS_INVALID_DATA;
 
-    /// CPU index source created from the GLTF primitive.
-    std::unique_ptr<RadientMeshIndexSource> pSource;
+    /// Index-data handle created by the import services, or null on failure.
+    RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
+
+    /// Number of accessor or generated indices, or zero on failure.
+    Uint32 IndexCount = 0;
 };
 
-/// Creates a Radient vertex source for a GLTF primitive.
+/// Creates reusable Radient vertex data for a GLTF primitive.
 ///
 /// The primitive must have a valid POSITION accessor. Other supported default
-/// GLTF attributes are added when present. The returned source copies attribute
-/// metadata and retains \p pDocument while referencing its vertex bytes without
-/// copying them. The caller may release its document reference after this
-/// function succeeds.
+/// GLTF attributes are added when present. The import services copy attribute
+/// metadata and retain source blobs that reference the document's vertex bytes
+/// without copying them. The caller may release its document reference after
+/// this function succeeds, even if processing is still pending.
 ///
-/// Returns a default MeshVertexSourceResult on failure.
-MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&               GltfModel,
-                                              const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                              const std::shared_ptr<const GLTF::Document>& pDocument);
+/// Conversion failures return a default result, except for a null document,
+/// which returns RADIENT_STATUS_INVALID_ARGUMENT. Mesh-data creation failures
+/// return their status with no handle, count, or bounds; rejected mesh data is
+/// reported as RADIENT_STATUS_INVALID_DATA.
+MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&                  MeshImportServices,
+                                          const GLTF::TinyGltfModelView&               GltfModel,
+                                          const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                          const std::shared_ptr<const GLTF::Document>& pDocument);
 
-/// Creates a Radient index source for a GLTF primitive.
+/// Creates reusable Radient index data for a GLTF primitive.
 ///
 /// If the primitive has an index accessor, it must use a supported tightly
 /// packed unsigned index type. If the primitive is not indexed, sequential
-/// Uint32 indices are generated directly in an owning data blob for \p VertexCount
+/// Uint32 indices are generated directly in an owning data blob for VertexCount
 /// vertices. Accessor data is referenced without copying through a blob that
-/// retains \p pDocument. The returned source retains its blob and holds read
-/// access; the caller may release its document reference after this function succeeds.
+/// retains the document. The import services retain the blob with read access;
+/// the caller may release its document reference after this function succeeds,
+/// even if processing is still pending.
 ///
-/// Returns a default MeshIndexSourceResult on failure.
-MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&               GltfModel,
-                                            const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                            const std::shared_ptr<const GLTF::Document>& pDocument,
-                                            Uint32                                       VertexCount);
+/// Conversion failures return a default result, except for a null document,
+/// which returns RADIENT_STATUS_INVALID_ARGUMENT. Mesh-data creation failures
+/// return their status with no handle or count; rejected mesh data is reported
+/// as RADIENT_STATUS_INVALID_DATA.
+MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&                  MeshImportServices,
+                                        const GLTF::TinyGltfModelView&               GltfModel,
+                                        const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                        const std::shared_ptr<const GLTF::Document>& pDocument,
+                                        Uint32                                       VertexCount);
 
 /// Converts GLTF scene metadata and immutable animation and skin resources.
 /// pAssetManager is required when GLTFModel contains animations or skins.

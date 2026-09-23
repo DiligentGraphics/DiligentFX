@@ -26,8 +26,6 @@
 
 #include "Import/RadientGLTFConverter.hpp"
 
-#include "Assets/RadientMeshIndexSource.hpp"
-#include "Assets/RadientMeshVertexSource.hpp"
 #include "Core/RadientValidation.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientAnimation.h"
@@ -1333,13 +1331,14 @@ RefCntAutoPtr<IRadientMeshAsset> GetRadientMeshAsset(const GLTF::Mesh& Mesh)
 namespace RadientGLTFConverter
 {
 
-MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&               GltfModel,
-                                              const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                              const std::shared_ptr<const GLTF::Document>& pDocument)
+MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&                  MeshImportServices,
+                                          const GLTF::TinyGltfModelView&               GltfModel,
+                                          const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                          const std::shared_ptr<const GLTF::Document>& pDocument)
 {
     if (pDocument == nullptr)
     {
-        MeshVertexSourceResult Result;
+        MeshVertexDataResult Result;
         Result.Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return Result;
     }
@@ -1396,8 +1395,8 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
         }
         DataSize += ElementSize;
 
-        const auto View   = GltfModel.GetBufferView(GltfData.Accessor.GetBufferViewId());
-        const auto Buffer = GltfModel.GetBuffer(View.GetBufferId());
+        const GLTF::TinyGltfBufferViewView View   = GltfModel.GetBufferView(GltfData.Accessor.GetBufferViewId());
+        const GLTF::TinyGltfBufferView     Buffer = GltfModel.GetBuffer(View.GetBufferId());
         if (!RadientValidation::IsValidSubrange(GltfData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
             !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
         {
@@ -1436,26 +1435,31 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
     VertexCI.ppVertexBuffers = SourceBuffers.data();
     VertexCI.VertexCount     = VertexCount;
 
-    std::unique_ptr<RadientMeshVertexSource> pSource = std::make_unique<RadientMeshVertexSource>(VertexCI);
-    if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)
-        return {};
+    MeshVertexDataResult Result;
+    Result.Status = MeshImportServices.CreateMeshVertexData(VertexCI, &Result.pVertexData);
+    if (RADIENT_FAILED(Result.Status))
+    {
+        Result.pVertexData.Release();
+        if (Result.Status == RADIENT_STATUS_INVALID_ARGUMENT)
+            Result.Status = RADIENT_STATUS_INVALID_DATA;
+        return Result;
+    }
 
-    MeshVertexSourceResult Result;
-    Result.Status  = RADIENT_STATUS_OK;
-    Result.pSource = std::move(pSource);
-    Result.BBMin   = BBMin;
-    Result.BBMax   = BBMax;
+    Result.VertexCount = VertexCount;
+    Result.BBMin       = BBMin;
+    Result.BBMax       = BBMax;
     return Result;
 }
 
-MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&               GltfModel,
-                                            const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                            const std::shared_ptr<const GLTF::Document>& pDocument,
-                                            Uint32                                       VertexCount)
+MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&                  MeshImportServices,
+                                        const GLTF::TinyGltfModelView&               GltfModel,
+                                        const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
+                                        const std::shared_ptr<const GLTF::Document>& pDocument,
+                                        Uint32                                       VertexCount)
 {
     if (pDocument == nullptr)
     {
-        MeshIndexSourceResult Result;
+        MeshIndexDataResult Result;
         Result.Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return Result;
     }
@@ -1485,9 +1489,9 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
             return {};
         }
 
-        const Uint64 DataSize = Uint64{GltfIndexData.Count} * IndexValueSize;
-        const auto   View     = GltfModel.GetBufferView(GltfIndexData.Accessor.GetBufferViewId());
-        const auto   Buffer   = GltfModel.GetBuffer(View.GetBufferId());
+        const Uint64                       DataSize = Uint64{GltfIndexData.Count} * IndexValueSize;
+        const GLTF::TinyGltfBufferViewView View     = GltfModel.GetBufferView(GltfIndexData.Accessor.GetBufferViewId());
+        const GLTF::TinyGltfBufferView     Buffer   = GltfModel.GetBuffer(View.GetBufferId());
         if (!RadientValidation::IsValidSubrange(GltfIndexData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
             !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
         {
@@ -1526,13 +1530,17 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
 
     IndexCI.pIndexBuffer = pIndexBlob;
 
-    std::unique_ptr<RadientMeshIndexSource> pSource = std::make_unique<RadientMeshIndexSource>(IndexCI);
-    if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)
-        return {};
+    MeshIndexDataResult Result;
+    Result.Status = MeshImportServices.CreateMeshIndexData(IndexCI, &Result.pIndexData);
+    if (RADIENT_FAILED(Result.Status))
+    {
+        Result.pIndexData.Release();
+        if (Result.Status == RADIENT_STATUS_INVALID_ARGUMENT)
+            Result.Status = RADIENT_STATUS_INVALID_DATA;
+        return Result;
+    }
 
-    MeshIndexSourceResult Result;
-    Result.Status  = RADIENT_STATUS_OK;
-    Result.pSource = std::move(pSource);
+    Result.IndexCount = IndexCI.IndexCount;
     return Result;
 }
 

@@ -26,43 +26,13 @@
 
 #pragma once
 
-#include "RadientImportedDocument.hpp"
-
-#include <memory>
-#include <string>
-#include <vector>
+#include "RadientSceneAssetImporter.hpp"
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
-struct IRadientMeshImportServices;
-
-namespace GLTF
-{
-
-class Document;
-
-} // namespace GLTF
-
-namespace RadientGLTFLoader
-{
-
-RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&                  AssetManager,
-                                             const std::string&                     SourceURI,
-                                             const std::shared_ptr<GLTF::Document>& pDocument);
-
-RadientImport::MaterialAssetList LoadMaterials(IRadientAssetManager&                  AssetManager,
-                                               const std::shared_ptr<GLTF::Document>& pDocument,
-                                               const RadientImport::TextureAssetList& Textures);
-
-RADIENT_STATUS LoadScene(IRadientMeshImportServices&             MeshImportServices,
-                         const std::string&                      SourceURI,
-                         const std::shared_ptr<GLTF::Document>&  pDocument,
-                         const RadientImport::MaterialAssetList& Materials,
-                         IRadientMaterialAsset*                  pDefaultMaterial,
-                         IRadientAssetManager*                   pAssetManager,
-                         RadientImport::ImportedDocument&        Scene);
-
-} // namespace RadientGLTFLoader
+/// Creates the built-in GLTF importer. All asset services are supplied per import call.
+RefCntAutoPtr<IRadientSceneAssetImporter> CreateRadientGLTFSceneAssetImporter();
 
 } // namespace Diligent

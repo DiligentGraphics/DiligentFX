@@ -506,18 +506,95 @@ const RadientAnimationDestinationMappingDesc* FindJointMapping(
     return nullptr;
 }
 
-void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexSourceResult& Result)
+// These handles retain the converted descriptors in the same source objects
+// used by the asset manager, so packing and document lifetimes remain observable.
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID, RADIENT_ASSET_TYPE AssetType, typename SourceType, typename DataType>
+class ConvertedMeshData final : public TestRadientAssetBase<InterfaceType, InterfaceID, AssetType>
+{
+public:
+    using TBase = TestRadientAssetBase<InterfaceType, InterfaceID, AssetType>;
+
+    ConvertedMeshData(IReferenceCounters* pRefCounters, const DataType& Data) :
+        TBase{pRefCounters, nullptr, 0},
+        Source{Data}
+    {}
+
+    SourceType Source;
+};
+
+using ConvertedVertexData = ConvertedMeshData<IRadientMeshVertexData, IID_RadientMeshVertexData, RADIENT_ASSET_TYPE_MESH_VERTEX_DATA, RadientMeshVertexSource, RadientMeshVertexData>;
+using ConvertedIndexData  = ConvertedMeshData<IRadientMeshIndexData, IID_RadientMeshIndexData, RADIENT_ASSET_TYPE_MESH_INDEX_DATA, RadientMeshIndexSource, RadientMeshIndexData>;
+
+class ConverterMeshImportServices final : public ObjectBase<IRadientMeshImportServices>
+{
+public:
+    using TBase = ObjectBase<IRadientMeshImportServices>;
+    using TBase::TBase;
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMeshImportServices, TBase)
+
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshVertexData(const RadientMeshVertexData& Data,
+                                                           IRadientMeshVertexData**     ppData) override
+    {
+        ++VertexCallCount;
+        *ppData = nullptr;
+        if (RADIENT_FAILED(Status))
+            return Status;
+        const RefCntAutoPtr<ConvertedVertexData> pData{MakeNewRCObj<ConvertedVertexData>()(Data)};
+        if (RADIENT_FAILED(pData->Source.GetStatus()))
+            return pData->Source.GetStatus();
+        pData->QueryInterface(IID_RadientMeshVertexData, ppData);
+        return Status;
+    }
+
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshIndexData(const RadientMeshIndexData& Data,
+                                                          IRadientMeshIndexData**     ppData) override
+    {
+        ++IndexCallCount;
+        *ppData = nullptr;
+        if (RADIENT_FAILED(Status))
+            return Status;
+        const RefCntAutoPtr<ConvertedIndexData> pData{MakeNewRCObj<ConvertedIndexData>()(Data)};
+        if (RADIENT_FAILED(pData->Source.GetStatus()))
+            return pData->Source.GetStatus();
+        pData->QueryInterface(IID_RadientMeshIndexData, ppData);
+        return Status;
+    }
+
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshMorphTargetData(const RadientMeshMorphTargetData&,
+                                                                Uint32,
+                                                                IRadientMeshMorphTargetData**) override
+    {
+        ADD_FAILURE() << "The converter must not create morph data through this helper";
+        return RADIENT_STATUS_UNSUPPORTED;
+    }
+
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshView(const RadientMeshViewCreateInfo&,
+                                                     IRadientMeshAsset**) override
+    {
+        ADD_FAILURE() << "The converter must not create mesh views through this helper";
+        return RADIENT_STATUS_UNSUPPORTED;
+    }
+
+    RADIENT_STATUS Status          = RADIENT_STATUS_OK;
+    Uint32         VertexCallCount = 0;
+    Uint32         IndexCallCount  = 0;
+};
+
+void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexDataResult& Result)
 {
     EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_DATA);
-    EXPECT_EQ(Result.pSource, nullptr);
+    EXPECT_EQ(Result.pVertexData, nullptr);
+    EXPECT_EQ(Result.VertexCount, 0u);
     ExpectFloat3Eq(Result.BBMin, float3{0.f, 0.f, 0.f});
     ExpectFloat3Eq(Result.BBMax, float3{0.f, 0.f, 0.f});
 }
 
-void ExpectDefaultResult(const RadientGLTFConverter::MeshIndexSourceResult& Result)
+void ExpectDefaultResult(const RadientGLTFConverter::MeshIndexDataResult& Result)
 {
     EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_DATA);
-    EXPECT_EQ(Result.pSource, nullptr);
+    EXPECT_EQ(Result.pIndexData, nullptr);
+    EXPECT_EQ(Result.IndexCount, 0u);
 }
 
 struct AttributeData
@@ -746,8 +823,10 @@ std::vector<Uint8> PackAttributeBuffer(const RadientMeshVertexSource& Source, Ui
 }
 
 template <typename ValidateType>
-void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, ValidateType&& Validate)
+void ExpectCreateMeshVertexDataPacksAttribute(const AttributeData& Attribute, ValidateType&& Validate)
 {
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
     std::vector<AttributeData> Attributes;
     Attributes.emplace_back(MakePositionAttribute());
     if (Attribute.Name != GLTF::PositionAttributeName)
@@ -772,29 +851,30 @@ void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, 
             MakeBytes(TestJoints)});
     }
 
-    RadientGLTFConverter::MeshVertexSourceResult Result;
-    std::weak_ptr<GLTF::Document>                WeakDocument;
+    RadientGLTFConverter::MeshVertexDataResult Result;
+    std::weak_ptr<GLTF::Document>              WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument(Attributes);
         WeakDocument                              = pDocument;
         GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshVertexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument);
+        Result = RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
-    ASSERT_NE(Result.pSource, nullptr);
+    ASSERT_NE(Result.pVertexData, nullptr);
     EXPECT_FALSE(WeakDocument.expired());
-    EXPECT_EQ(Result.pSource->GetVertexCount(), TestVertexCount);
+    EXPECT_EQ(Result.VertexCount, TestVertexCount);
 
+    RadientMeshVertexSource&                     Source        = static_cast<ConvertedVertexData*>(Result.pVertexData.RawPtr())->Source;
     const std::vector<GLTF::VertexAttributeDesc> DstAttributes = MakeDestinationLayout(Attribute.Name.c_str());
-    ASSERT_EQ(Result.pSource->SetVertexAttributes(DstAttributes.data(), static_cast<Uint32>(DstAttributes.size())),
+    ASSERT_EQ(Source.SetVertexAttributes(DstAttributes.data(), static_cast<Uint32>(DstAttributes.size())),
               RADIENT_STATUS_OK);
 
     const Uint32             BufferIndex = Attribute.Name == GLTF::PositionAttributeName ? 0u : 1u;
-    const std::vector<Uint8> Buffer      = PackAttributeBuffer(*Result.pSource, BufferIndex);
+    const std::vector<Uint8> Buffer      = PackAttributeBuffer(Source, BufferIndex);
     Validate(Buffer);
 
-    Result.pSource.reset();
+    Result.pVertexData.Release();
     EXPECT_TRUE(WeakDocument.expired());
 }
 
@@ -804,23 +884,26 @@ IndexData MakeIndexData(const std::array<IndexType, Size>& Indices, int Componen
     return IndexData{ComponentType, MakeBytes(Indices)};
 }
 
-void ExpectCreateMeshIndexSourcePacksIndices(const IndexData&              Indices,
-                                             std::initializer_list<Uint32> ExpectedIndices)
+void ExpectCreateMeshIndexDataPacksIndices(const IndexData&              Indices,
+                                           std::initializer_list<Uint32> ExpectedIndices)
 {
-    RadientGLTFConverter::MeshIndexSourceResult Result;
-    std::weak_ptr<GLTF::Document>               WeakDocument;
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
+    RadientGLTFConverter::MeshIndexDataResult Result;
+    std::weak_ptr<GLTF::Document>             WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
         WeakDocument                              = pDocument;
         GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
+        Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
-    ASSERT_NE(Result.pSource, nullptr);
+    ASSERT_NE(Result.pIndexData, nullptr);
     EXPECT_FALSE(WeakDocument.expired());
-    ExpectPackedIndices(*Result.pSource, ExpectedIndices);
-    Result.pSource.reset();
+    EXPECT_EQ(Result.IndexCount, ExpectedIndices.size());
+    ExpectPackedIndices(static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source, ExpectedIndices);
+    Result.pIndexData.Release();
     EXPECT_TRUE(WeakDocument.expired());
 }
 
@@ -1124,8 +1207,10 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
               RADIENT_STATUS_NOT_FOUND);
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourceRejectsInvalidArguments)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataRejectsInvalidArguments)
 {
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
     const AttributeData Normal{
         GLTF::NormalAttributeName,
         TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1138,17 +1223,20 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourceRejectsInvalidArguments)
 
     const GLTF::TinyGltfPrimitiveView Primitive = GetFirstPrimitive(pDocument);
 
-    RadientGLTFConverter::MeshVertexSourceResult Result =
-        RadientGLTFConverter::CreateMeshVertexSource(GltfModel, Primitive, {});
+    RadientGLTFConverter::MeshVertexDataResult Result =
+        RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, Primitive, {});
     EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(Result.pSource, nullptr);
+    EXPECT_EQ(Result.pVertexData, nullptr);
 
-    Result = RadientGLTFConverter::CreateMeshVertexSource(GltfModel, Primitive, pDocument);
+    Result = RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, Primitive, pDocument);
     ExpectDefaultResult(Result);
+    EXPECT_EQ(pServices->VertexCallCount, 0u);
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourceReturnsDefaultResultAfterPartialFailure)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataReturnsDefaultResultAfterPartialFailure)
 {
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
     const std::array<float, 6> ShortNormals{
         0.f, 0.f, 1.f,
         0.f, 1.f, 0.f};
@@ -1164,8 +1252,8 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourceReturnsDefaultResultAfterPa
     });
     GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
 
-    RadientGLTFConverter::MeshVertexSourceResult Result =
-        RadientGLTFConverter::CreateMeshVertexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument);
+    RadientGLTFConverter::MeshVertexDataResult Result =
+        RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
 
     // The position accessor is valid and bounding-box computation succeeds
     // before the mismatched normal count is detected. The failed result should
@@ -1173,33 +1261,35 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourceReturnsDefaultResultAfterPa
     ExpectDefaultResult(Result);
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourceComputesBoundingBox)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataComputesBoundingBox)
 {
-    RadientGLTFConverter::MeshVertexSourceResult Result;
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
+    RadientGLTFConverter::MeshVertexDataResult Result;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()});
         GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshVertexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument);
+        Result = RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
-    ASSERT_NE(Result.pSource, nullptr);
+    ASSERT_NE(Result.pVertexData, nullptr);
     ExpectFloat3Eq(Result.BBMin, float3{-1.f, -2.f, -3.f});
     ExpectFloat3Eq(Result.BBMax, float3{4.f, 5.f, 6.f});
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksPositionAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksPositionAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         MakePositionAttribute(),
         [](const std::vector<Uint8>& Buffer) {
             ExpectFloat3Eq(ReadValue<float3>(Buffer, 0), float3{-1.f, 2.f, 3.f});
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksNormalAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksNormalAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::NormalAttributeName,
             TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1211,9 +1301,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksNormalAttribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTexCoord0Attribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksTexCoord0Attribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::Texcoord0AttributeName,
             TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1225,9 +1315,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTexCoord0Attribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTexCoord1Attribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksTexCoord1Attribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::Texcoord1AttributeName,
             TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1239,9 +1329,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTexCoord1Attribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksJointsAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksJointsAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::JointsAttributeName,
             TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
@@ -1253,9 +1343,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksJointsAttribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksWeightsAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksWeightsAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::WeightsAttributeName,
             TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1267,9 +1357,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksWeightsAttribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksColorAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksColorAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::VertexColorAttributeName,
             TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
@@ -1282,9 +1372,9 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksColorAttribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTangentAttribute)
+TEST(RadientGLTFConverterTest, CreateMeshVertexDataPacksTangentAttribute)
 {
-    ExpectCreateMeshVertexSourcePacksAttribute(
+    ExpectCreateMeshVertexDataPacksAttribute(
         AttributeData{
             GLTF::TangentAttributeName,
             TINYGLTF_COMPONENT_TYPE_FLOAT,
@@ -1296,60 +1386,110 @@ TEST(RadientGLTFConverterTest, CreateMeshVertexSourcePacksTangentAttribute)
         });
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexSourcePacksUint8Indices)
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataPacksUint8Indices)
 {
     const std::array<Uint8, 3> Indices{2, 1, 0};
-    ExpectCreateMeshIndexSourcePacksIndices(
+    ExpectCreateMeshIndexDataPacksIndices(
         MakeIndexData(Indices, TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE),
         {2, 1, 0});
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexSourceReturnsDefaultResultOnFailure)
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataReturnsDefaultResultOnFailure)
 {
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
     std::shared_ptr<GLTF::Document>   pDocument = MakePrimitiveDocument({MakePositionAttribute()});
     GLTF::TinyGltfModelView           GltfModel{pDocument->GetModel()};
     const GLTF::TinyGltfPrimitiveView Primitive = GetFirstPrimitive(pDocument);
 
-    RadientGLTFConverter::MeshIndexSourceResult Result =
-        RadientGLTFConverter::CreateMeshIndexSource(GltfModel, Primitive, {}, TestVertexCount);
+    RadientGLTFConverter::MeshIndexDataResult Result =
+        RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, {}, TestVertexCount);
     EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(Result.pSource, nullptr);
+    EXPECT_EQ(Result.pIndexData, nullptr);
 
-    Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, Primitive, pDocument, 0);
+    Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument, 0);
     ExpectDefaultResult(Result);
+    EXPECT_EQ(pServices->IndexCallCount, 0u);
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexSourcePacksUint16Indices)
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataPacksUint16Indices)
 {
     const std::array<Uint16, 3> Indices{0, 2, 1};
-    ExpectCreateMeshIndexSourcePacksIndices(
+    ExpectCreateMeshIndexDataPacksIndices(
         MakeIndexData(Indices, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT),
         {0, 2, 1});
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexSourcePacksUint32Indices)
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataPacksUint32Indices)
 {
     const std::array<Uint32, 3> Indices{1, 0, 2};
-    ExpectCreateMeshIndexSourcePacksIndices(
+    ExpectCreateMeshIndexDataPacksIndices(
         MakeIndexData(Indices, TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT),
         {1, 0, 2});
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexSourceGeneratesSequentialIndices)
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataGeneratesSequentialIndices)
 {
-    RadientGLTFConverter::MeshIndexSourceResult Result;
-    std::weak_ptr<GLTF::Document>               WeakDocument;
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+
+    RadientGLTFConverter::MeshIndexDataResult Result;
+    std::weak_ptr<GLTF::Document>             WeakDocument;
     {
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()});
         WeakDocument                              = pDocument;
         GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshIndexSource(GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
+        Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
-    ASSERT_NE(Result.pSource, nullptr);
+    ASSERT_NE(Result.pIndexData, nullptr);
     EXPECT_TRUE(WeakDocument.expired());
-    ExpectPackedIndices(*Result.pSource, {0, 1, 2});
+    EXPECT_EQ(Result.IndexCount, TestVertexCount);
+    ExpectPackedIndices(static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source, {0, 1, 2});
+}
+
+TEST(RadientGLTFConverterTest, MeshDataConversionPreservesServiceStatusAndPendingHandles)
+{
+    const std::array<Uint16, 3>           Indices{2, 0, 1};
+    const IndexData                       IndexSource = MakeIndexData(Indices, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    const std::shared_ptr<GLTF::Document> pDocument   = MakePrimitiveDocument({MakePositionAttribute()}, &IndexSource);
+    const GLTF::TinyGltfModelView         GltfModel{pDocument->GetModel()};
+    const GLTF::TinyGltfPrimitiveView     Primitive = GetFirstPrimitive(pDocument);
+
+    for (RADIENT_STATUS Status : {RADIENT_STATUS_PENDING, RADIENT_STATUS_INVALID_ARGUMENT, RADIENT_STATUS_INVALID_OPERATION})
+    {
+        const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+        pServices->Status = Status;
+        const RadientGLTFConverter::MeshVertexDataResult Vertices =
+            RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, Primitive, pDocument);
+        const RadientGLTFConverter::MeshIndexDataResult IndicesResult =
+            RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument, TestVertexCount);
+        const RADIENT_STATUS ExpectedStatus = Status == RADIENT_STATUS_INVALID_ARGUMENT ? RADIENT_STATUS_INVALID_DATA : Status;
+        EXPECT_EQ(Vertices.Status, ExpectedStatus);
+        EXPECT_EQ(IndicesResult.Status, ExpectedStatus);
+        EXPECT_EQ(pServices->VertexCallCount, 1u);
+        EXPECT_EQ(pServices->IndexCallCount, 1u);
+
+        if (Status == RADIENT_STATUS_PENDING)
+        {
+            ASSERT_NE(Vertices.pVertexData, nullptr);
+            ASSERT_NE(IndicesResult.pIndexData, nullptr);
+            EXPECT_EQ(Vertices.VertexCount, TestVertexCount);
+            EXPECT_EQ(IndicesResult.IndexCount, Indices.size());
+            ExpectFloat3Eq(Vertices.BBMin, float3{-1.f, -2.f, -3.f});
+            ExpectFloat3Eq(Vertices.BBMax, float3{4.f, 5.f, 6.f});
+            ExpectPackedIndices(static_cast<ConvertedIndexData*>(IndicesResult.pIndexData.RawPtr())->Source, {2, 0, 1});
+        }
+        else
+        {
+            EXPECT_EQ(Vertices.pVertexData, nullptr);
+            EXPECT_EQ(IndicesResult.pIndexData, nullptr);
+            EXPECT_EQ(Vertices.VertexCount, 0u);
+            EXPECT_EQ(IndicesResult.IndexCount, 0u);
+            ExpectFloat3Eq(Vertices.BBMin, float3{});
+            ExpectFloat3Eq(Vertices.BBMax, float3{});
+        }
+    }
 }
 
 TEST(RadientGLTFConverterTest, ExtractSceneGraphCopiesScenesNodesMeshesAndTransforms)

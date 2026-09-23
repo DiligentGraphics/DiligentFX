@@ -26,13 +26,6 @@
 
 #include "Assets/RadientGLTFLoader.hpp"
 
-#include "Assets/RadientMaterialAssetManager.hpp"
-#include "Assets/RadientMeshIndexSource.hpp"
-#include "Assets/RadientMeshAssetManager.hpp"
-#include "Assets/RadientMeshVertexSource.hpp"
-#include "Assets/RadientMeshViewSource.hpp"
-#include "Assets/RadientMorphTargetSource.hpp"
-#include "Assets/RadientTextureAssetManager.hpp"
 #include "Core/RadientValidation.hpp"
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
@@ -42,6 +35,7 @@
 #include "Import/RadientGLTFConverter.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientDataBlob.h"
+#include "RadientMeshImportServices.h"
 
 #define TINYGLTF_NO_STB_IMAGE
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -79,8 +73,8 @@ struct TextureColorSpaceUsage
     bool SRGB   = false;
 };
 
-RadientTextureViewType GetGLTFMaterialTextureViewType(const GLTF::Material& Material,
-                                                      Uint32                TextureAttribId) noexcept
+bool IsGLTFMaterialTextureSRGB(const GLTF::Material& Material,
+                               Uint32                TextureAttribId) noexcept
 {
     const bool IsSRGB =
         TextureAttribId == GLTF::DefaultBaseColorTextureAttribId ||
@@ -90,7 +84,7 @@ RadientTextureViewType GetGLTFMaterialTextureViewType(const GLTF::Material& Mate
         (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS &&
          TextureAttribId == GLTF::DefaultSpecularGlossinessTextureAttibId);
 
-    return IsSRGB ? RadientTextureViewType::SRGB : RadientTextureViewType::Linear;
+    return IsSRGB;
 }
 
 std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Document& Document)
@@ -105,7 +99,7 @@ std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Docum
                 if (TextureIndex >= 0 && static_cast<size_t>(TextureIndex) < TextureUsages.size())
                 {
                     TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
-                    if (GetGLTFMaterialTextureViewType(Material, TextureAttribId) == RadientTextureViewType::SRGB)
+                    if (IsGLTFMaterialTextureSRGB(Material, TextureAttribId))
                         Usage.SRGB = true;
                     else
                         Usage.Linear = true;
@@ -211,12 +205,10 @@ class RadientGLTFGeometryPlan
 {
 public:
     RadientGLTFGeometryPlan(const GLTF::TinyGltfModelView&        GltfModel,
-                            IThreadPool&                          ThreadPool,
-                            RadientMeshAssetManager&              MeshManager,
+                            IRadientMeshImportServices&           MeshImportServices,
                             std::shared_ptr<const GLTF::Document> pDocument) :
         m_GltfModel{GltfModel},
-        m_ThreadPool{ThreadPool},
-        m_MeshManager{MeshManager},
+        m_MeshImportServices{MeshImportServices},
         m_pDocument{std::move(pDocument)}
     {
     }
@@ -367,21 +359,16 @@ private:
             return RADIENT_STATUS_OK;
         }
 
-        RadientGLTFConverter::MeshVertexSourceResult VertexSource =
-            RadientGLTFConverter::CreateMeshVertexSource(m_GltfModel, GltfPrimitive, m_pDocument);
-        if (RADIENT_FAILED(VertexSource.Status) || VertexSource.pSource == nullptr)
-            return RADIENT_FAILED(VertexSource.Status) ? VertexSource.Status : RADIENT_STATUS_FAILED;
+        RadientGLTFConverter::MeshVertexDataResult Result =
+            RadientGLTFConverter::CreateMeshVertexData(m_MeshImportServices, m_GltfModel, GltfPrimitive, m_pDocument);
+        if (RADIENT_FAILED(Result.Status) || Result.pVertexData == nullptr)
+            return RADIENT_FAILED(Result.Status) ? Result.Status : RADIENT_STATUS_FAILED;
 
         PlannedVertexData VertexData;
-        VertexData.VertexCount = VertexSource.pSource->GetVertexCount();
-        VertexData.BBMin       = VertexSource.BBMin;
-        VertexData.BBMax       = VertexSource.BBMax;
-
-        RADIENT_STATUS Status = m_MeshManager.CreateMeshVertexData(m_ThreadPool,
-                                                                   std::move(VertexSource.pSource),
-                                                                   VertexData.pVertexData.GetAddressOfEmpty());
-        if (RADIENT_FAILED(Status) || VertexData.pVertexData == nullptr)
-            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+        VertexData.pVertexData = std::move(Result.pVertexData);
+        VertexData.VertexCount = Result.VertexCount;
+        VertexData.BBMin       = Result.BBMin;
+        VertexData.BBMax       = Result.BBMax;
 
         VertexDataIndex = static_cast<Uint32>(m_VertexData.size());
         m_VertexData.emplace_back(std::move(VertexData));
@@ -402,19 +389,14 @@ private:
             return RADIENT_STATUS_OK;
         }
 
-        RadientGLTFConverter::MeshIndexSourceResult IndexSource =
-            RadientGLTFConverter::CreateMeshIndexSource(m_GltfModel, GltfPrimitive, m_pDocument, VertexCount);
-        if (RADIENT_FAILED(IndexSource.Status) || IndexSource.pSource == nullptr)
-            return RADIENT_FAILED(IndexSource.Status) ? IndexSource.Status : RADIENT_STATUS_FAILED;
+        RadientGLTFConverter::MeshIndexDataResult Result =
+            RadientGLTFConverter::CreateMeshIndexData(m_MeshImportServices, m_GltfModel, GltfPrimitive, m_pDocument, VertexCount);
+        if (RADIENT_FAILED(Result.Status) || Result.pIndexData == nullptr)
+            return RADIENT_FAILED(Result.Status) ? Result.Status : RADIENT_STATUS_FAILED;
 
         PlannedIndexData IndexData;
-        IndexData.IndexCount = IndexSource.pSource->GetIndexCount();
-
-        RADIENT_STATUS Status = m_MeshManager.CreateMeshIndexData(m_ThreadPool,
-                                                                  std::move(IndexSource.pSource),
-                                                                  IndexData.pIndexData.GetAddressOfEmpty());
-        if (RADIENT_FAILED(Status) || IndexData.pIndexData == nullptr)
-            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+        IndexData.pIndexData = std::move(Result.pIndexData);
+        IndexData.IndexCount = Result.IndexCount;
 
         IndexDataIndex = static_cast<Uint32>(m_IndexData.size());
         m_IndexData.emplace_back(std::move(IndexData));
@@ -424,8 +406,7 @@ private:
 
 private:
     const GLTF::TinyGltfModelView&        m_GltfModel;
-    IThreadPool&                          m_ThreadPool;
-    RadientMeshAssetManager&              m_MeshManager;
+    IRadientMeshImportServices&           m_MeshImportServices;
     std::shared_ptr<const GLTF::Document> m_pDocument;
 
     std::vector<PlannedVertexData>                                             m_VertexData;
@@ -449,10 +430,12 @@ struct MorphTargetSchema
     std::vector<MorphTargetAttributeSchema> Attributes;
 };
 
-std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(const GLTF::Mesh& Mesh)
+RADIENT_STATUS CreateMorphTargetDataAssets(const GLTF::Mesh&                                        Mesh,
+                                           IRadientMeshImportServices&                              MeshImportServices,
+                                           std::vector<RefCntAutoPtr<IRadientMeshMorphTargetData>>& MorphTargetDataAssets)
 {
     if (Mesh.Primitives.empty())
-        return {};
+        return RADIENT_STATUS_OK;
 
     const size_t TargetCount = Mesh.Primitives.front().MorphTargets.size();
     for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
@@ -463,16 +446,16 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
             LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                 "' because primitive ", PrimitiveIndex, " has ", Primitive.MorphTargets.size(),
                                 " targets, while primitive 0 has ", TargetCount);
-            return {};
+            return RADIENT_STATUS_OK;
         }
     }
     if (TargetCount == 0)
-        return {};
+        return RADIENT_STATUS_OK;
     if (TargetCount > (std::numeric_limits<Uint32>::max)())
     {
         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                             "' because the target count exceeds the supported range");
-        return {};
+        return RADIENT_STATUS_OK;
     }
 
     if (!Mesh.Weights.empty() && Mesh.Weights.size() != TargetCount)
@@ -496,7 +479,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                 {
                     LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                         "' because default weight ", TargetIndex, " is not finite");
-                    return {};
+                    return RADIENT_STATUS_OK;
                 }
                 Target.DefaultWeight = Mesh.Weights[TargetIndex];
             }
@@ -518,7 +501,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                                                 "' because target ", TargetIndex, " attribute '",
                                                 SourceAttribute.Semantic,
                                                 "' has inconsistent component counts between primitives");
-                            return {};
+                            return RADIENT_STATUS_OK;
                         }
                         continue;
                     }
@@ -533,7 +516,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                             "' because target ", TargetIndex, " attribute '",
                                             SourceAttribute.Semantic, "' has an unsupported size");
-                        return {};
+                        return RADIENT_STATUS_OK;
                     }
 
                     MorphTargetAttributeSchema& Attribute = Target.Attributes.emplace_back();
@@ -543,13 +526,13 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
             }
         }
 
-        std::vector<std::unique_ptr<RadientMorphTargetSource>> Sources;
-        Sources.reserve(Mesh.Primitives.size());
+        std::vector<RefCntAutoPtr<IRadientMeshMorphTargetData>> Assets;
+        Assets.reserve(Mesh.Primitives.size());
         for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
         {
             const GLTF::Primitive& Primitive = Mesh.Primitives[PrimitiveIndex];
             if (Primitive.VertexCount == 0)
-                return {};
+                return RADIENT_STATUS_OK;
 
             std::vector<std::vector<RadientMorphTargetAttributeDesc>>       AttributeDescs(TargetCount);
             std::vector<std::vector<RadientMorphTargetAttributeCreateInfo>> AttributeCreateInfos(TargetCount);
@@ -574,7 +557,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                             "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
                                             " attribute '", Attribute.Semantic, "' exceeds the supported size");
-                        return {};
+                        return RADIENT_STATUS_OK;
                     }
                     const size_t ValueCount = size_t{Primitive.VertexCount} * Attribute.ComponentCount;
 
@@ -589,7 +572,7 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                             LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                                 "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
                                                 " attribute '", Attribute.Semantic, "' has an invalid value range");
-                            return {};
+                            return RADIENT_STATUS_OK;
                         }
                         AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltas =
                             SourceTarget.GetAttributeData(*pSourceAttribute);
@@ -610,39 +593,44 @@ std::vector<std::unique_ptr<RadientMorphTargetSource>> BuildMorphTargetSources(c
                 TargetCI.pAttributeData                = AttributeCreateInfos[TargetIndex].empty() ? nullptr : AttributeCreateInfos[TargetIndex].data();
             }
 
-            auto pSource = std::make_unique<RadientMorphTargetSource>(
-                TargetCreateInfos.data(), static_cast<Uint32>(TargetCreateInfos.size()), Primitive.VertexCount);
-            if (RADIENT_FAILED(pSource->GetStatus()))
+            const RadientMeshMorphTargetData MorphTargetData{
+                TargetCreateInfos.data(), static_cast<Uint32>(TargetCreateInfos.size())};
+            RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
+            const RADIENT_STATUS                       Status = MeshImportServices.CreateMeshMorphTargetData(
+                MorphTargetData, Primitive.VertexCount, &pMorphTargetData);
+            if (Status == RADIENT_STATUS_INVALID_ARGUMENT && pMorphTargetData == nullptr)
             {
                 LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                     "' because primitive ", PrimitiveIndex, " could not be packed");
-                return {};
+                return RADIENT_STATUS_OK;
             }
-            Sources.emplace_back(std::move(pSource));
+            if (RADIENT_FAILED(Status) || pMorphTargetData == nullptr)
+                return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+
+            Assets.emplace_back(std::move(pMorphTargetData));
         }
 
-        return Sources;
+        MorphTargetDataAssets = std::move(Assets);
+        return RADIENT_STATUS_OK;
     }
     catch (const std::exception& Error)
     {
         LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                             "' because their data could not be packed: ", Error.what());
-        return {};
+        return RADIENT_STATUS_OK;
     }
 }
 
 class RadientMeshLoader
 {
 public:
-    RadientMeshLoader(IThreadPool&                   ThreadPool,
-                      RadientMeshAssetManager&       MeshManager,
+    RadientMeshLoader(IRadientMeshImportServices&    MeshImportServices,
                       GLTF::Model&                   Model,
                       const RadientGLTFGeometryPlan& GeometryPlan,
                       const MaterialAssetList&       Materials,
                       IRadientMaterialAsset*         pDefaultMaterial,
                       MeshAssetList&                 Meshes) :
-        m_ThreadPool{ThreadPool},
-        m_MeshManager{MeshManager},
+        m_MeshImportServices{MeshImportServices},
         m_Model{Model},
         m_GeometryPlan{GeometryPlan},
         m_Materials{Materials},
@@ -787,36 +775,26 @@ public:
 
         pNewMesh->UpdateBoundingBox();
 
-        std::vector<std::unique_ptr<RadientMorphTargetSource>> MorphTargetSources;
-        if (MorphTargetsLoaded)
-            MorphTargetSources = BuildMorphTargetSources(*pNewMesh);
-
-        if (HasMorphTargets && MorphTargetSources.size() != pNewMesh->Primitives.size())
-            MorphTargetsLoaded = false;
-
         // MeshGeometryData stores borrowed pointers. Retain the assets until
-        // CreateMeshView has captured its own strong references.
+        // CreateMeshView has captured its own strong references. Attach morph
+        // data only when every primitive has the complete common target schema.
         std::vector<RefCntAutoPtr<IRadientMeshMorphTargetData>> MorphTargetDataAssets;
         if (MorphTargetsLoaded && HasMorphTargets)
         {
-            VERIFY_EXPR(MorphTargetSources.size() == MeshGeometryData.size());
-            MorphTargetDataAssets.reserve(MorphTargetSources.size());
-            for (size_t GeometryIndex = 0; GeometryIndex < MorphTargetSources.size(); ++GeometryIndex)
+            const RADIENT_STATUS Status = CreateMorphTargetDataAssets(*pNewMesh, m_MeshImportServices, MorphTargetDataAssets);
+            if (RADIENT_FAILED(Status))
             {
-                RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
-                const RADIENT_STATUS Status =
-                    m_MeshManager.CreateMeshMorphTargetData(m_ThreadPool,
-                                                            std::move(MorphTargetSources[GeometryIndex]),
-                                                            pMorphTargetData.GetAddressOfEmpty());
-                if (RADIENT_FAILED(Status) || pMorphTargetData == nullptr)
-                {
-                    m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
-                    return pNewMesh;
-                }
-
-                MeshGeometryData[GeometryIndex].pMorphTargetData = pMorphTargetData;
-                MorphTargetDataAssets.emplace_back(std::move(pMorphTargetData));
+                m_Status = Status;
+                return pNewMesh;
             }
+            MorphTargetsLoaded = MorphTargetDataAssets.size() == pNewMesh->Primitives.size();
+        }
+
+        if (MorphTargetsLoaded && HasMorphTargets)
+        {
+            VERIFY_EXPR(MorphTargetDataAssets.size() == MeshGeometryData.size());
+            for (size_t GeometryIndex = 0; GeometryIndex < MorphTargetDataAssets.size(); ++GeometryIndex)
+                MeshGeometryData[GeometryIndex].pMorphTargetData = MorphTargetDataAssets[GeometryIndex];
         }
         else if (!MorphTargetsLoaded)
         {
@@ -828,14 +806,12 @@ public:
         ViewCI.pPrimitives      = Primitives.data();
         ViewCI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
         ViewCI.pGeometryIndices = GeometryIndices.data();
+        ViewCI.pGeometryData    = MeshGeometryData.data();
+        ViewCI.GeometryCount    = static_cast<Uint32>(MeshGeometryData.size());
 
         RefCntAutoPtr<IRadientMeshAsset> pMeshAsset;
 
-        RADIENT_STATUS Status = m_MeshManager.CreateMeshView(m_ThreadPool,
-                                                             MeshGeometryData.data(),
-                                                             static_cast<Uint32>(MeshGeometryData.size()),
-                                                             ViewCI,
-                                                             pMeshAsset.GetAddressOfEmpty());
+        const RADIENT_STATUS Status = m_MeshImportServices.CreateMeshView(ViewCI, pMeshAsset.GetAddressOfEmpty());
         if (RADIENT_FAILED(Status) || pMeshAsset == nullptr)
         {
             m_Status = RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
@@ -851,8 +827,7 @@ public:
     }
 
 private:
-    IThreadPool&                   m_ThreadPool;
-    RadientMeshAssetManager&       m_MeshManager;
+    IRadientMeshImportServices&    m_MeshImportServices;
     GLTF::Model&                   m_Model;
     const RadientGLTFGeometryPlan& m_GeometryPlan;
     const MaterialAssetList&       m_Materials;
@@ -866,8 +841,7 @@ private:
 namespace RadientGLTFLoader
 {
 
-RadientImport::TextureAssetList LoadTextures(IThreadPool&                           ThreadPool,
-                                             RadientTextureAssetManager&            TextureManager,
+RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&                  AssetManager,
                                              const std::string&                     SourceURI,
                                              const std::shared_ptr<GLTF::Document>& pDocument)
 {
@@ -928,7 +902,7 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
             LoadInfo.pDataBlob = pDataBlob;
         }
 
-        TextureManager.LoadTexture(ThreadPool, LoadInfo, Textures[TextureIndex].GetAddressOfEmpty());
+        AssetManager.LoadTexture(LoadInfo, Textures[TextureIndex].GetAddressOfEmpty());
         if (Textures[TextureIndex] == nullptr)
         {
             LOG_ERROR_MESSAGE("Failed to create Radient texture asset for GLTF texture ", TextureIndex, " in '", SourceURI, "'");
@@ -939,7 +913,7 @@ RadientImport::TextureAssetList LoadTextures(IThreadPool&                       
     return Textures;
 }
 
-RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManager,
+RADIENT_STATUS CreateImportedMaterial(IRadientAssetManager&        AssetManager,
                                       const GLTF::Material&        Material,
                                       IRadientTextureAsset* const* ppTextures,
                                       Uint32                       TextureCount,
@@ -957,13 +931,13 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
         return Status;
 
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
-    Status = MaterialManager.CreateStandardMaterialDefinition(
+    Status = AssetManager.CreateStandardMaterialDefinition(
         DefinitionCI, pDefinition.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-    Status = MaterialManager.CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty());
+    Status = AssetManager.CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty());
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
@@ -985,7 +959,7 @@ RADIENT_STATUS CreateImportedMaterial(RadientMaterialAssetManager& MaterialManag
     return RADIENT_STATUS_OK;
 }
 
-RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&           MaterialManager,
+RadientImport::MaterialAssetList LoadMaterials(IRadientAssetManager&                  AssetManager,
                                                const std::shared_ptr<GLTF::Document>& pDocument,
                                                const RadientImport::TextureAssetList& Textures)
 {
@@ -1005,7 +979,7 @@ RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&     
         const GLTF::Material Material = GLTF::LoadMaterial(*pDocument, MaterialIndex);
 
         const RADIENT_STATUS Status =
-            CreateImportedMaterial(MaterialManager,
+            CreateImportedMaterial(AssetManager,
                                    Material,
                                    RawTextures.empty() ? nullptr : RawTextures.data(),
                                    static_cast<Uint32>(RawTextures.size()),
@@ -1020,8 +994,7 @@ RadientImport::MaterialAssetList LoadMaterials(RadientMaterialAssetManager&     
     return Materials;
 }
 
-RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
-                         RadientMeshAssetManager&                MeshManager,
+RADIENT_STATUS LoadScene(IRadientMeshImportServices&             MeshImportServices,
                          const std::string&                      SourceURI,
                          const std::shared_ptr<GLTF::Document>&  pDocument,
                          const RadientImport::MaterialAssetList& Materials,
@@ -1037,13 +1010,12 @@ RADIENT_STATUS LoadScene(IThreadPool&                            ThreadPool,
     GLTF::Model             MetadataModel{ModelCI};
     GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
 
-    RadientGLTFGeometryPlan GeometryPlan{GltfModel, ThreadPool, MeshManager, pDocument};
+    RadientGLTFGeometryPlan GeometryPlan{GltfModel, MeshImportServices, pDocument};
     RADIENT_STATUS          Status = GeometryPlan.Build(-1);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    RadientMeshLoader MeshLoader{ThreadPool,
-                                 MeshManager,
+    RadientMeshLoader MeshLoader{MeshImportServices,
                                  MetadataModel,
                                  GeometryPlan,
                                  Materials,

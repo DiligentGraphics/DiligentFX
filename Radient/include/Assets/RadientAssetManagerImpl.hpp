@@ -166,7 +166,6 @@ public:
 
 private:
     class MeshImportServicesImpl;
-    class GLTFSceneAssetImporter;
 
     RADIENT_STATUS SelectSceneImporter(const RadientSceneLoadInfo&                LoadInfo,
                                        RefCntAutoPtr<IRadientSceneAssetImporter>& pImporter) const;
@@ -179,9 +178,6 @@ private:
                         IRadientSceneAssetImporter& Importer,
                         const std::string&          SourceURI,
                         IRadientAssetData*          pSceneData);
-
-    RADIENT_STATUS LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
-                                      IRadientAssetData*               pSceneData);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
