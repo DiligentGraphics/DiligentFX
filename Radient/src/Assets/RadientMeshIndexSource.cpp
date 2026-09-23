@@ -85,12 +85,7 @@ void UpdateStridedRaw(XXH128State& Hasher, const Uint8* pData, Uint32 Count, Uin
 
 } // namespace
 
-RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI) :
-    RadientMeshIndexSource{RadientMeshIndexDataCreateInfo{MeshCI.pIndexBuffer, MeshCI.IndexCount, MeshCI.IndexType}}
-{
-}
-
-RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshIndexDataCreateInfo& CI)
+RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshIndexData& CI)
 {
     const VALUE_TYPE IndexType = GetSourceIndexType(CI.IndexType);
     if (CI.pIndexBuffer == nullptr || CI.IndexCount == 0 || IndexType == VT_UNDEFINED ||

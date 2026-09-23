@@ -75,17 +75,18 @@ public:
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
 
-    RADIENT_STATUS CreateMeshIndexData(IThreadPool&                          ThreadPool,
-                                       const RadientMeshIndexDataCreateInfo& CI,
-                                       IRadientMeshIndexData**               ppIndexData);
+    RADIENT_STATUS CreateMeshIndexData(IThreadPool&                ThreadPool,
+                                       const RadientMeshIndexData& CI,
+                                       IRadientMeshIndexData**     ppIndexData);
 
-    RADIENT_STATUS CreateMeshVertexData(IThreadPool&                           ThreadPool,
-                                        const RadientMeshVertexDataCreateInfo& CI,
-                                        IRadientMeshVertexData**               ppVertexData);
+    RADIENT_STATUS CreateMeshVertexData(IThreadPool&                 ThreadPool,
+                                        const RadientMeshVertexData& CI,
+                                        IRadientMeshVertexData**     ppVertexData);
 
-    RADIENT_STATUS CreateMeshMorphTargetData(IThreadPool&                                ThreadPool,
-                                             const RadientMeshMorphTargetDataCreateInfo& CI,
-                                             IRadientMeshMorphTargetData**               ppMorphTargetData);
+    RADIENT_STATUS CreateMeshMorphTargetData(IThreadPool&                      ThreadPool,
+                                             const RadientMeshMorphTargetData& CI,
+                                             Uint32                            VertexCount,
+                                             IRadientMeshMorphTargetData**     ppMorphTargetData);
 
     RADIENT_STATUS CreateMeshIndexData(IThreadPool&                            ThreadPool,
                                        std::unique_ptr<RadientMeshIndexSource> pIndexSource,

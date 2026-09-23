@@ -83,7 +83,7 @@ RadientMeshIndexSource MakeIndexSource(const std::array<IndexType, 3>& Indices)
 {
     const RefCntAutoPtr<IRadientDataBlob> pBlob = MakeTestDataBlob(Indices.data(), sizeof(Indices));
 
-    RadientMeshCreateInfo CI;
+    RadientMeshIndexData CI;
     CI.pIndexBuffer = pBlob;
     CI.IndexCount   = static_cast<Uint32>(Indices.size());
 
@@ -105,19 +105,19 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidCreateInfo)
 
     auto pBlob = MakeTestDataBlob(Indices.data(), sizeof(Indices));
 
-    RadientMeshIndexDataCreateInfo CI{};
+    RadientMeshIndexData CI{};
     CI.pIndexBuffer = pBlob;
     CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount   = static_cast<Uint32>(Indices.size());
 
-    auto ExpectInvalid = [](const RadientMeshIndexDataCreateInfo& InvalidCI) //
+    auto ExpectInvalid = [](const RadientMeshIndexData& InvalidCI) //
     {
         RadientMeshIndexSource Source{InvalidCI};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
     };
 
-    RadientMeshIndexDataCreateInfo InvalidCI = CI;
-    InvalidCI.pIndexBuffer                   = nullptr;
+    RadientMeshIndexData InvalidCI = CI;
+    InvalidCI.pIndexBuffer         = nullptr;
     ExpectInvalid(InvalidCI);
 
     InvalidCI           = CI;
@@ -130,31 +130,6 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidCreateInfo)
 
     InvalidCI.IndexCount = (std::numeric_limits<Uint32>::max)();
     ExpectInvalid(InvalidCI);
-}
-
-TEST(RadientMeshIndexSourceTest, RejectsInvalidRadientCreateInfo)
-{
-    std::array<Uint16, 3> Indices{0, 1, 2};
-
-    auto pBlob = MakeTestDataBlob(Indices.data(), sizeof(Indices));
-
-    RadientMeshCreateInfo MeshCI{};
-    MeshCI.pIndexBuffer = pBlob;
-    MeshCI.IndexCount   = static_cast<Uint32>(Indices.size());
-    MeshCI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
-
-    RadientMeshIndexSource ValidSource{MeshCI};
-    EXPECT_EQ(ValidSource.GetStatus(), RADIENT_STATUS_OK);
-
-    RadientMeshCreateInfo InvalidMeshCI = MeshCI;
-    InvalidMeshCI.pIndexBuffer          = nullptr;
-    RadientMeshIndexSource MissingIndices{InvalidMeshCI};
-    EXPECT_EQ(MissingIndices.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
-
-    InvalidMeshCI           = MeshCI;
-    InvalidMeshCI.IndexType = RADIENT_INDEX_TYPE_NONE;
-    RadientMeshIndexSource InvalidType{InvalidMeshCI};
-    EXPECT_EQ(InvalidType.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(RadientMeshIndexSourceTest, PacksUint8Uint16AndUint32AsUint32)
@@ -203,7 +178,7 @@ TEST(RadientMeshIndexSourceTest, RetainsReferencedBlobAndKeepsOwnerAlive)
         ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob), RADIENT_STATUS_OK);
         Owner.release();
 
-        RadientMeshIndexDataCreateInfo CI{};
+        RadientMeshIndexData CI{};
         CI.pIndexBuffer = pBlob;
         CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
         CI.IndexCount   = static_cast<Uint32>(Data->Indices.size());
@@ -225,18 +200,14 @@ TEST(RadientMeshIndexSourceTest, RetainsMutableBlobReadAccessUntilAllSourcesAreD
     auto                        pBlob        = MakeTestMutableDataBlob(Indices.data(), sizeof(Indices), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
 
-    RadientMeshIndexDataCreateInfo CI;
+    RadientMeshIndexData CI;
     CI.pIndexBuffer = pBlob;
     CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount   = static_cast<Uint32>(Indices.size());
     auto Source     = std::make_unique<RadientMeshIndexSource>(CI);
     ASSERT_EQ(Source->GetStatus(), RADIENT_STATUS_OK);
 
-    RadientMeshCreateInfo MeshCI;
-    MeshCI.pIndexBuffer = pBlob;
-    MeshCI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
-    MeshCI.IndexCount   = CI.IndexCount;
-    auto OtherSource    = std::make_unique<RadientMeshIndexSource>(MeshCI);
+    std::unique_ptr<RadientMeshIndexSource> OtherSource = std::make_unique<RadientMeshIndexSource>(CI);
     ASSERT_EQ(OtherSource->GetStatus(), RADIENT_STATUS_OK);
     ExpectPackedIndices(*OtherSource, {0, 1, 2});
 
@@ -262,7 +233,7 @@ TEST(RadientMeshIndexSourceTest, RejectsBusyBlobWithoutRetainingReadAccess)
     void* pWrite = nullptr;
     ASSERT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
 
-    RadientMeshCreateInfo MeshCI;
+    RadientMeshIndexData MeshCI;
     MeshCI.pIndexBuffer = pBlob;
     MeshCI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
     MeshCI.IndexCount   = static_cast<Uint32>(Indices.size());
@@ -279,7 +250,7 @@ TEST(RadientMeshIndexSourceTest, QueriesBlobSizeUnderRetainedReadAccess)
 {
     const std::array<Uint16, 3>          Indices{0, 1, 2};
     RefCntAutoPtr<ScopeCheckedIndexBlob> pBlob{MakeNewRCObj<ScopeCheckedIndexBlob>()(Indices.data(), sizeof(Indices))};
-    RadientMeshIndexDataCreateInfo       CI;
+    RadientMeshIndexData                 CI;
     CI.pIndexBuffer = pBlob;
     CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount   = static_cast<Uint32>(Indices.size());
@@ -300,7 +271,7 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidBlobStorageAndImmediatelyReleases
 
     auto Check = [&Indices](const void* pData, Uint64 Size, RADIENT_STATUS ExpectedStatus) {
         RefCntAutoPtr<ScopeCheckedIndexBlob> pBlob{MakeNewRCObj<ScopeCheckedIndexBlob>()(pData, Size)};
-        RadientMeshIndexDataCreateInfo       CI;
+        RadientMeshIndexData                 CI;
         CI.pIndexBuffer = pBlob;
         CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
         CI.IndexCount   = static_cast<Uint32>(Indices.size());
@@ -327,7 +298,7 @@ TEST(RadientMeshIndexSourceTest, PacksUnalignedIndicesAndIgnoresTrailingBlobByte
     BlobCI.pData = Bytes.data() + 1;
     RefCntAutoPtr<IRadientDataBlob> pBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob), RADIENT_STATUS_OK);
-    RadientMeshIndexDataCreateInfo CI;
+    RadientMeshIndexData CI;
     CI.pIndexBuffer = pBlob;
     CI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
     CI.IndexCount   = static_cast<Uint32>(Indices.size());

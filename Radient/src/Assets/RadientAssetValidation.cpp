@@ -67,25 +67,17 @@ bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout)
     return ResolveVertexLayout(Layout, Resolved);
 }
 
-std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
+std::string ValidateMeshVertexData(const RadientMeshVertexData& VertexData,
                                    ResolvedVertexLayout&        Resolved)
 {
-    return ValidateMeshVertexData(
-        RadientMeshVertexDataCreateInfo{MeshCI.VertexLayout, MeshCI.ppVertexBuffers, MeshCI.VertexCount},
-        Resolved);
-}
-
-std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& MeshCI,
-                                   ResolvedVertexLayout&                  Resolved)
-{
-    if (MeshCI.VertexCount == 0)
+    if (VertexData.VertexCount == 0)
         return "VertexCount must not be zero.";
-    const RadientVertexLayoutDesc& Layout = MeshCI.VertexLayout;
+    const RadientVertexLayoutDesc& Layout = VertexData.VertexLayout;
     if (!ResolveVertexLayout(Layout, Resolved))
         return "VertexLayout is invalid.";
     if (Layout.AttributeCount == 0)
         return "VertexLayout requires a three-component POSITION attribute.";
-    if (MeshCI.ppVertexBuffers == nullptr)
+    if (VertexData.ppVertexBuffers == nullptr)
         return "ppVertexBuffers must not be null.";
     if (!IsAddressableArray(Layout.BufferCount, sizeof(IRadientDataBlob*)))
         return "Vertex buffer array exceeds the addressable range.";
@@ -96,7 +88,7 @@ std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& MeshCI
     for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
     {
         const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[AttributeIndex];
-        if (MeshCI.ppVertexBuffers[Attribute.BufferIndex] == nullptr)
+        if (VertexData.ppVertexBuffers[Attribute.BufferIndex] == nullptr)
             return "Referenced vertex buffer blob must not be null.";
         if (std::strcmp(Attribute.Semantic, "POSITION") == 0)
             Position = &Attribute;
@@ -126,9 +118,9 @@ std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& MeshCI
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
 {
     ResolvedVertexLayout Resolved;
-    const std::string    Error = ValidateMeshVertexData(MeshCI, Resolved);
+    const std::string    Error = ValidateMeshVertexData(MeshCI.VertexData, Resolved);
     if (!Error.empty())
-        return LogValidationError("RadientMeshCreateInfo", Error);
+        return LogValidationError("RadientMeshCreateInfo", "VertexData: ", Error);
 
     if (MeshCI.PrimitiveCount == 0)
         return LogValidationError("RadientMeshCreateInfo", "PrimitiveCount must not be zero.");
@@ -136,31 +128,31 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
     if (MeshCI.pPrimitives == nullptr)
         return LogValidationError("RadientMeshCreateInfo", "pPrimitives must not be null.");
 
-    if (MeshCI.MorphTargetCount != 0 && MeshCI.pMorphTargets == nullptr)
+    if (MeshCI.MorphTargetData.MorphTargetCount != 0 && MeshCI.MorphTargetData.pMorphTargets == nullptr)
     {
         return LogValidationError("RadientMeshCreateInfo",
-                                  "pMorphTargets must not be null when MorphTargetCount is nonzero.");
+                                  "MorphTargetData.pMorphTargets must not be null when MorphTargetData.MorphTargetCount is nonzero.");
     }
 
-    for (Uint32 TargetIndex = 0; TargetIndex < MeshCI.MorphTargetCount; ++TargetIndex)
+    for (Uint32 TargetIndex = 0; TargetIndex < MeshCI.MorphTargetData.MorphTargetCount; ++TargetIndex)
     {
-        const RadientMorphTargetCreateInfo& TargetCI = MeshCI.pMorphTargets[TargetIndex];
+        const RadientMorphTargetCreateInfo& TargetCI = MeshCI.MorphTargetData.pMorphTargets[TargetIndex];
         const RadientMorphTargetDesc&       Target   = TargetCI.Desc;
         if (!RadientMath::IsFinite(Target.DefaultWeight))
         {
             return LogValidationError("RadientMeshCreateInfo",
-                                      "pMorphTargets[", TargetIndex, "].Desc.DefaultWeight must be finite.");
+                                      "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.DefaultWeight must be finite.");
         }
         if (Target.AttributeCount != 0 && Target.pAttributes == nullptr)
         {
             return LogValidationError("RadientMeshCreateInfo",
-                                      "pMorphTargets[", TargetIndex,
+                                      "MorphTargetData.pMorphTargets[", TargetIndex,
                                       "].Desc.pAttributes must not be null when AttributeCount is nonzero.");
         }
         if (Target.AttributeCount != 0 && TargetCI.pAttributeData == nullptr)
         {
             return LogValidationError("RadientMeshCreateInfo",
-                                      "pMorphTargets[", TargetIndex,
+                                      "MorphTargetData.pMorphTargets[", TargetIndex,
                                       "].pAttributeData must not be null when Desc.AttributeCount is nonzero.");
         }
 
@@ -172,19 +164,19 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
             if (Attribute.Semantic == nullptr || *Attribute.Semantic == '\0')
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
                                           "].Semantic must not be null or empty.");
             }
             if (TargetCI.pAttributeData[AttributeIndex].pDeltas == nullptr)
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex, "].pAttributeData[", AttributeIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex, "].pAttributeData[", AttributeIndex,
                                           "].pDeltas must not be null.");
             }
             if (Attribute.ComponentCount == 0 || Attribute.ComponentCount > 4)
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
                                           "].ComponentCount must be in [1, 4].");
             }
 
@@ -195,7 +187,7 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
             if (IsStandardSemantic && Attribute.ComponentCount != 3)
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
                                           "] standard semantic '", Attribute.Semantic,
                                           "' requires ComponentCount equal to 3.");
             }
@@ -203,31 +195,31 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
             if (!Semantics.emplace(Attribute.Semantic).second)
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex,
                                           "].Desc contains duplicate attribute semantic '", Attribute.Semantic, "'.");
             }
 
-            if (!IsAddressableArray(MeshCI.VertexCount, Uint64{Attribute.ComponentCount} * sizeof(Float32)))
+            if (!IsAddressableArray(MeshCI.VertexData.VertexCount, Uint64{Attribute.ComponentCount} * sizeof(Float32)))
             {
                 return LogValidationError("RadientMeshCreateInfo",
-                                          "pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
+                                          "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
                                           "] data size exceeds the addressable range.");
             }
         }
     }
 
-    if (MeshCI.IndexCount == 0)
-        return LogValidationError("RadientMeshCreateInfo", "IndexCount must not be zero.");
+    if (MeshCI.IndexData.IndexCount == 0)
+        return LogValidationError("RadientMeshCreateInfo", "IndexData.IndexCount must not be zero.");
 
-    if (MeshCI.pIndexBuffer == nullptr)
-        return LogValidationError("RadientMeshCreateInfo", "pIndexBuffer must not be null.");
+    if (MeshCI.IndexData.pIndexBuffer == nullptr)
+        return LogValidationError("RadientMeshCreateInfo", "IndexData.pIndexBuffer must not be null.");
 
-    if (MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT8 &&
-        MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
-        MeshCI.IndexType != RADIENT_INDEX_TYPE_UINT32)
+    if (MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT8 &&
+        MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
+        MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT32)
     {
         return LogValidationError("RadientMeshCreateInfo",
-                                  "IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32.");
+                                  "IndexData.IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32.");
     }
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
@@ -239,19 +231,19 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
                                       "pPrimitives[", PrimitiveIndex, "].IndexCount must not be zero.");
         }
 
-        if (PrimitiveCI.FirstIndex >= MeshCI.IndexCount)
+        if (PrimitiveCI.FirstIndex >= MeshCI.IndexData.IndexCount)
         {
             return LogValidationError("RadientMeshCreateInfo",
                                       "pPrimitives[", PrimitiveIndex, "].FirstIndex (", PrimitiveCI.FirstIndex,
-                                      ") must be less than IndexCount (", MeshCI.IndexCount, ").");
+                                      ") must be less than IndexData.IndexCount (", MeshCI.IndexData.IndexCount, ").");
         }
 
-        if (!IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, MeshCI.IndexCount))
+        if (!IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, MeshCI.IndexData.IndexCount))
         {
             return LogValidationError("RadientMeshCreateInfo",
                                       "pPrimitives[", PrimitiveIndex,
-                                      "] range [FirstIndex, FirstIndex + IndexCount) exceeds mesh IndexCount (",
-                                      MeshCI.IndexCount, ").");
+                                      "] range [FirstIndex, FirstIndex + IndexCount) exceeds IndexData.IndexCount (",
+                                      MeshCI.IndexData.IndexCount, ").");
         }
     }
 

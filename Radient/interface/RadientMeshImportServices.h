@@ -40,96 +40,6 @@ typedef struct IRadientMeshVertexData       IRadientMeshVertexData;
 typedef struct IRadientMeshIndexData        IRadientMeshIndexData;
 typedef struct IRadientMeshMorphTargetData  IRadientMeshMorphTargetData;
 
-/// Source vertex data for a reusable, immutable mesh vertex-data asset.
-///
-/// CreateMeshVertexData copies the layout arrays and semantic strings and retains
-/// each referenced blob under shared read access before returning. The caller can
-/// then release its descriptors and blob references. End write access before the
-/// call; an active writer returns RADIENT_STATUS_INVALID_OPERATION. Source bytes
-/// are read without an additional input-buffer copy. Read access ends when source
-/// processing finishes, independently of GPU upload completion. Reference blobs
-/// retain their usual external-storage lifetime requirements.
-///
-/// VertexLayout describes the supplied CPU bytes. The renderer chooses its stored
-/// layout and converts the source attributes as needed, as it does for CreateMesh.
-struct RadientMeshVertexDataCreateInfo
-{
-    /// Layout of the source vertex buffers. Automatic offsets and strides are
-    /// resolved before reading. A three-component POSITION attribute is required.
-    /// JOINTS_0 and WEIGHTS_0, when present, occur together with four components
-    /// each; JOINTS_0 uses non-normalized unsigned integers or FLOAT32 components.
-    /// Integer and FLOAT32 source components support conversion to the renderer's
-    /// layout; FLOAT16 conversion is unsupported by the current renderer.
-    RadientVertexLayoutDesc VertexLayout DEFAULT_INITIALIZER({});
-
-    /// Array of VertexLayout.BufferCount source blobs. Each attribute's
-    /// BufferIndex selects a blob, and its ByteOffset is relative to that blob.
-    /// The array and each referenced entry must be non-null. A referenced blob
-    /// contains all values through the last vertex: (VertexCount - 1) times the
-    /// resolved stride, plus the attribute offset and element size. Trailing
-    /// padding is optional. Unreferenced entries are ignored and may be null;
-    /// multiple entries may reference the same blob. Both read-only and mutable
-    /// blobs are accepted. Size and data are inspected under shared read access.
-    IRadientDataBlob* const* ppVertexBuffers DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of vertex records in every referenced buffer. Must be nonzero.
-    /// This defines the vertex domain of geometries that use this data.
-    Uint32 VertexCount DEFAULT_INITIALIZER(0);
-};
-typedef struct RadientMeshVertexDataCreateInfo RadientMeshVertexDataCreateInfo;
-
-
-/// Source indices for a reusable, immutable mesh index-data asset.
-///
-/// CreateMeshIndexData retains the blob and acquires shared read access before
-/// returning, without copying the input buffer. The caller can then release its
-/// blob reference. End write access before the call; an active writer returns
-/// RADIENT_STATUS_INVALID_OPERATION. Read access ends when index processing
-/// finishes, independently of GPU upload completion. Reference blobs retain their
-/// usual external-storage lifetime requirements. The renderer selects the stored
-/// index encoding; the source encoding does not dictate GPU storage.
-struct RadientMeshIndexDataCreateInfo
-{
-    /// Blob containing IndexCount tightly packed indices, starting at its first
-    /// byte. Must be non-null and contain at least IndexCount times the source
-    /// element size bytes. Additional bytes are ignored. Both read-only and
-    /// mutable blobs are accepted. Size and data are checked under read access.
-    IRadientDataBlob* pIndexBuffer DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of source index elements. Must be nonzero. These indices are local
-    /// to the vertex domain of each geometry that uses this index data.
-    Uint32 IndexCount DEFAULT_INITIALIZER(0);
-
-    /// Encoding of the source indices: UINT8, UINT16, or UINT32. NONE is invalid.
-    RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
-};
-typedef struct RadientMeshIndexDataCreateInfo RadientMeshIndexDataCreateInfo;
-
-
-/// Source morph targets for a reusable, immutable morph-target data asset.
-///
-/// CreateMeshMorphTargetData copies the descriptions, names, attribute semantics,
-/// and all delta values before returning. The caller can then release the source
-/// arrays and strings. Delta values use transient source and upload storage;
-/// retaining the data handle does not keep a persistent CPU copy of the deltas.
-struct RadientMeshMorphTargetDataCreateInfo
-{
-    /// Array of MorphTargetCount morph targets. Must be non-null. Every attribute
-    /// contains VertexCount times its ComponentCount tightly packed FLOAT32
-    /// values. The validation rules in RadientMorphTargetCreateInfo apply to each
-    /// target, including unique attribute semantics and finite default weights.
-    const RadientMorphTargetCreateInfo* pMorphTargets DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of elements in pMorphTargets. Must be nonzero.
-    Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
-
-    /// Number of vertex deltas per attribute. Must be nonzero and match the vertex
-    /// count of each geometry to which this morph-target data is attached.
-    Uint32 VertexCount DEFAULT_INITIALIZER(0);
-};
-typedef struct RadientMeshMorphTargetDataCreateInfo RadientMeshMorphTargetDataCreateInfo;
-
-
 /// Shared data forming one drawable geometry in a mesh view.
 ///
 /// All handles used by a mesh view belong to the service's associated asset manager.
@@ -311,7 +221,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     /// shared read access before returning. The renderer chooses the stored
     /// layout. Data can be used by CreateMeshView while loading is pending.
     ///
-    /// \param [in] VertexDataCI - Source data; see RadientMeshVertexDataCreateInfo.
+    /// \param [in] VertexData - Source data; see RadientMeshVertexData.
     /// \param [out] ppVertexData - Address of a null pointer that receives a strong
     ///                            reference when an asset is created. Synchronous
     ///                            validation failures leave the pointer null. A
@@ -325,8 +235,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///         active blob writers or a stopped manager return
     ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshVertexData)(THIS_
-                                                        const RadientMeshVertexDataCreateInfo REF VertexDataCI,
-                                                        IRadientMeshVertexData**                  ppVertexData) PURE;
+                                                        const RadientMeshVertexData REF VertexData,
+                                                        IRadientMeshVertexData**        ppVertexData) PURE;
 
     /// Creates reusable, immutable index data from a tightly packed source blob.
     ///
@@ -334,7 +244,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     /// UINT8, UINT16, and UINT32 encodings are accepted; the renderer selects the
     /// stored encoding. Data can be used by CreateMeshView while loading is pending.
     ///
-    /// \param [in] IndexDataCI - Source data; see RadientMeshIndexDataCreateInfo.
+    /// \param [in] IndexData - Source data; see RadientMeshIndexData.
     /// \param [out] ppIndexData - Address of a null pointer that receives a strong
     ///                           reference when an asset is created. Synchronous
     ///                           validation failures leave the pointer null. A
@@ -348,15 +258,18 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///         an active blob writer or a stopped manager returns
     ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshIndexData)(THIS_
-                                                       const RadientMeshIndexDataCreateInfo REF IndexDataCI,
-                                                       IRadientMeshIndexData**                  ppIndexData) PURE;
+                                                       const RadientMeshIndexData REF IndexData,
+                                                       IRadientMeshIndexData**        ppIndexData) PURE;
 
     /// Creates reusable, immutable morph-target data for a vertex domain.
     ///
     /// All descriptions, strings, and delta values are copied before returning.
     /// Data can be used by CreateMeshView while loading is pending.
     ///
-    /// \param [in] MorphTargetDataCI - Source data; see RadientMeshMorphTargetDataCreateInfo.
+    /// \param [in] MorphTargetData - Source targets; see RadientMeshMorphTargetData.
+    ///                              MorphTargetCount must be nonzero.
+    /// \param [in] VertexCount - Number of vertex deltas per attribute. Must be
+    ///                          nonzero and match each geometry that uses the data.
     /// \param [out] ppMorphTargetData - Address of a null pointer that receives a
     ///                                 strong reference when an asset is created.
     ///                                 Synchronous validation failures leave it null.
@@ -369,8 +282,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///         errors. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
     ///         a stopped manager returns RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshMorphTargetData)(THIS_
-                                                             const RadientMeshMorphTargetDataCreateInfo REF MorphTargetDataCI,
-                                                             IRadientMeshMorphTargetData**                  ppMorphTargetData) PURE;
+                                                             const RadientMeshMorphTargetData REF MorphTargetData,
+                                                             Uint32                               VertexCount,
+                                                             IRadientMeshMorphTargetData**        ppMorphTargetData) PURE;
 
     /// Creates a mesh view over geometry data belonging to the associated asset manager.
     ///

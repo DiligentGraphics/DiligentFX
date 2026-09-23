@@ -137,18 +137,13 @@ void UpdateString(XXH128State& Hasher, const Char* Str)
 
 } // namespace
 
-RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI) :
-    RadientMeshVertexSource{RadientMeshVertexDataCreateInfo{MeshCI.VertexLayout, MeshCI.ppVertexBuffers, MeshCI.VertexCount}}
-{
-}
-
-RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshVertexDataCreateInfo& MeshCI)
+RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshVertexData& VertexData)
 {
     ResolvedVertexLayout Resolved;
-    if (!ValidateMeshVertexData(MeshCI, Resolved).empty())
+    if (!ValidateMeshVertexData(VertexData, Resolved).empty())
         return;
 
-    const RadientVertexLayoutDesc&         Layout = MeshCI.VertexLayout;
+    const RadientVertexLayoutDesc&         Layout = VertexData.VertexLayout;
     decltype(m_SrcAttributes)              SrcAttributes;
     std::vector<RadientDataBlobReadAccess> Buffers(Layout.BufferCount);
     for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
@@ -162,14 +157,14 @@ RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshVertexDataCrea
         RadientDataBlobReadAccess& Buffer = Buffers[Attribute.BufferIndex];
         if (!Buffer)
         {
-            Buffer = RadientDataBlobReadAccess{MeshCI.ppVertexBuffers[Attribute.BufferIndex]};
+            Buffer = RadientDataBlobReadAccess{VertexData.ppVertexBuffers[Attribute.BufferIndex]};
             if (!Buffer)
             {
                 m_Status = RADIENT_STATUS_INVALID_OPERATION;
                 return;
             }
         }
-        const Uint64 DataSize = Uint64{MeshCI.VertexCount - 1} * SrcStride + ElementSize;
+        const Uint64 DataSize = Uint64{VertexData.VertexCount - 1} * SrcStride + ElementSize;
         if (!RadientValidation::IsAddressableSize(Buffer.GetSize()) ||
             ByteOffset > Buffer.GetSize() || DataSize > Buffer.GetSize() - ByteOffset)
         {
@@ -207,7 +202,7 @@ RadientMeshVertexSource::RadientMeshVertexSource(const RadientMeshVertexDataCrea
         Attribute.ByteOffset                  = Resolved.AttributeOffsets[AttributeIndex];
     }
 
-    m_VertexCount   = MeshCI.VertexCount;
+    m_VertexCount   = VertexData.VertexCount;
     m_SrcAttributes = std::move(SrcAttributes);
     m_SrcBuffers    = std::move(Buffers);
     m_Status        = RADIENT_STATUS_OK;

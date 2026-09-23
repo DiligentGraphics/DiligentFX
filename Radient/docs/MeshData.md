@@ -10,6 +10,13 @@ Include the C-compatible `RadientMeshImportServices.h` explicitly to use this
 interface. It is not included by `Radient.h`. Applications can create meshes
 through the regular `IRadientAssetManager::CreateMesh` method.
 
+The input descriptors `RadientMeshVertexData`, `RadientMeshIndexData`, and
+`RadientMeshMorphTargetData` are defined in `RadientAssets.h`. Regular mesh
+creation uses them as `RadientMeshCreateInfo::VertexData`, `IndexData`, and
+`MorphTargetData`. Morph targets use `VertexData.VertexCount`, so a complete
+mesh specifies its vertex count only once. The `IRadientMesh*Data` interfaces
+are the reusable asset handles returned by the import service.
+
 The examples below assume the importer has received `pMeshImportServices`.
 There is currently no public acquisition API for this service.
 
@@ -25,23 +32,23 @@ Layout.AddBuffer()
       .AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
 
 IRadientDataBlob* VertexBuffers[] = {pPositionBlob};
-RadientMeshVertexDataCreateInfo VertexCI;
-VertexCI.VertexLayout    = Layout;
-VertexCI.ppVertexBuffers = VertexBuffers;
-VertexCI.VertexCount     = VertexCount;
+RadientMeshVertexData VertexData;
+VertexData.VertexLayout    = Layout;
+VertexData.ppVertexBuffers = VertexBuffers;
+VertexData.VertexCount     = VertexCount;
 
 RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
-RADIENT_STATUS Status = pMeshImportServices->CreateMeshVertexData(VertexCI, &pVertexData);
+RADIENT_STATUS Status = pMeshImportServices->CreateMeshVertexData(VertexData, &pVertexData);
 if (RADIENT_FAILED(Status))
     return Status;
 
-RadientMeshIndexDataCreateInfo IndexCI;
-IndexCI.pIndexBuffer = pIndexBlob;
-IndexCI.IndexCount   = IndexCount;
-IndexCI.IndexType    = RADIENT_INDEX_TYPE_UINT16;
+RadientMeshIndexData IndexData;
+IndexData.pIndexBuffer = pIndexBlob;
+IndexData.IndexCount   = IndexCount;
+IndexData.IndexType    = RADIENT_INDEX_TYPE_UINT16;
 
 RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
-Status = pMeshImportServices->CreateMeshIndexData(IndexCI, &pIndexData);
+Status = pMeshImportServices->CreateMeshIndexData(IndexData, &pIndexData);
 if (RADIENT_FAILED(Status))
     return Status;
 ```
@@ -53,10 +60,10 @@ Radient retains the blobs until source processing finishes. Reference-mode
 blobs still require their external storage to remain valid for the blob's
 lifetime.
 
-Optional `CreateMeshMorphTargetData` takes a `RadientMeshMorphTargetDataCreateInfo`
-containing target descriptions and a vertex count. It copies names, attribute
-descriptions, and delta arrays during the call. Attach the resulting handle to
-any geometry with the same vertex count.
+Optional `CreateMeshMorphTargetData` takes a `RadientMeshMorphTargetData`
+containing the target array and count, plus a separate vertex count. It copies
+names, attribute descriptions, and delta arrays during the call. Attach the
+resulting handle to any geometry with the same vertex count.
 
 ## Assemble a mesh view
 

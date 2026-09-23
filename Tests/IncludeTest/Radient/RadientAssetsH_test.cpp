@@ -52,6 +52,9 @@ static_assert(std::is_trivially_copyable<RadientTextureAssetDesc>::value, "Radie
 
 static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
 static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
+static_assert(std::is_standard_layout<RadientMeshVertexData>::value, "Vertex data must have a C-compatible layout");
+static_assert(std::is_standard_layout<RadientMeshIndexData>::value, "Index data must have a C-compatible layout");
+static_assert(std::is_standard_layout<RadientMeshMorphTargetData>::value, "Morph target data must have a C-compatible layout");
 static_assert(std::is_standard_layout<RadientMeshGeometryDesc>::value, "RadientMeshGeometryDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientMeshGeometryDesc>::value, "RadientMeshGeometryDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientMeshPrimitiveDesc>::value, "RadientMeshPrimitiveDesc must be a standard-layout type");
@@ -76,14 +79,22 @@ void RadientAssets_CPP_UseMeshCreateInfo()
         0,
     };
     const RadientVertexBufferLayoutDesc VertexBuffer = {DILIGENT_RADIENT_VERTEX_AUTO_STRIDE};
-    IRadientDataBlob* const             VertexData   = 0;
-    MeshCI.VertexLayout.pAttributes                  = &VertexAttribute;
-    MeshCI.VertexLayout.AttributeCount               = 1;
-    MeshCI.VertexLayout.pBuffers                     = &VertexBuffer;
-    MeshCI.VertexLayout.BufferCount                  = 1;
-    MeshCI.ppVertexBuffers                           = &VertexData;
-    MeshCI.VertexCount                               = 1;
-    MeshCI.pIndexBuffer                              = VertexData;
+    IRadientDataBlob* const             pVertexBlob  = 0;
+    RadientMeshVertexData               VertexData;
+    RadientMeshIndexData                IndexData;
+    RadientMeshMorphTargetData          MorphTargetData;
+    VertexData.VertexLayout.pAttributes    = &VertexAttribute;
+    VertexData.VertexLayout.AttributeCount = 1;
+    VertexData.VertexLayout.pBuffers       = &VertexBuffer;
+    VertexData.VertexLayout.BufferCount    = 1;
+    VertexData.ppVertexBuffers             = &pVertexBlob;
+    VertexData.VertexCount                 = 1;
+    IndexData.pIndexBuffer                 = pVertexBlob;
+    IndexData.IndexCount                   = 3;
+    IndexData.IndexType                    = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.VertexData                      = VertexData;
+    MeshCI.IndexData                       = IndexData;
+    MeshCI.MorphTargetData                 = MorphTargetData;
     (void)MeshCI;
     IRadientDataBlob* pBlob   = TextureLoadInfo.pDataBlob;
     TextureLoadInfo.pDataBlob = pBlob;

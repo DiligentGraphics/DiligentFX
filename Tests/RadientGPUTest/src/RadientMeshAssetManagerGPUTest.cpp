@@ -198,14 +198,14 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob};
 
-    MeshCI.VertexLayout    = VertexLayout;
-    MeshCI.ppVertexBuffers = VertexData;
-    MeshCI.VertexCount     = 3;
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = 3;
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.VertexData.VertexLayout    = VertexLayout;
+    MeshCI.VertexData.ppVertexBuffers = VertexData;
+    MeshCI.VertexData.VertexCount     = 3;
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = 3;
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives                = &PrimitiveCI;
+    MeshCI.PrimitiveCount             = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));
@@ -347,16 +347,16 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
     IRadientDataBlob* const VertexData[]{pPositionsBlob};
 
-    MeshCI.VertexLayout     = VertexLayout;
-    MeshCI.ppVertexBuffers  = VertexData;
-    MeshCI.VertexCount      = 3;
-    MeshCI.pMorphTargets    = &MorphTargetCI;
-    MeshCI.MorphTargetCount = 1;
-    MeshCI.pIndexBuffer     = pIndexBlob;
-    MeshCI.IndexCount       = 3;
-    MeshCI.IndexType        = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives      = &PrimitiveCI;
-    MeshCI.PrimitiveCount   = 1;
+    MeshCI.VertexData.VertexLayout          = VertexLayout;
+    MeshCI.VertexData.ppVertexBuffers       = VertexData;
+    MeshCI.VertexData.VertexCount           = 3;
+    MeshCI.MorphTargetData.pMorphTargets    = &MorphTargetCI;
+    MeshCI.MorphTargetData.MorphTargetCount = 1;
+    MeshCI.IndexData.pIndexBuffer           = pIndexBlob;
+    MeshCI.IndexData.IndexCount             = 3;
+    MeshCI.IndexData.IndexType              = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives                      = &PrimitiveCI;
+    MeshCI.PrimitiveCount                   = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh)));

@@ -112,9 +112,9 @@ struct VertexMeshData
         Data.push_back(Blobs.back());
     }
 
-    RadientMeshCreateInfo GetCreateInfo() const
+    RadientMeshVertexData GetVertexData() const
     {
-        RadientMeshCreateInfo CI;
+        RadientMeshVertexData CI;
         CI.VertexLayout    = Layout;
         CI.ppVertexBuffers = Data.data();
         CI.VertexCount     = VertexCount;
@@ -122,7 +122,7 @@ struct VertexMeshData
     }
 };
 
-VertexMeshData MakeVertexMeshCI(const std::array<RadientFloat3, 2>& Positions)
+VertexMeshData MakeVertexMeshData(const std::array<RadientFloat3, 2>& Positions)
 {
     VertexMeshData Data;
     Data.Add("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, Positions);
@@ -170,7 +170,7 @@ struct PackedDefaultAttribute
 
 PackedDefaultAttribute PackDefaultAttribute(GLTF::VertexAttributeDesc DstAttrib)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     if (std::strcmp(DstAttrib.Name, GLTF::NormalAttributeName) == 0)
         MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, false, DefaultNormals);
     else if (std::strcmp(DstAttrib.Name, GLTF::TangentAttributeName) == 0)
@@ -187,7 +187,7 @@ PackedDefaultAttribute PackDefaultAttribute(GLTF::VertexAttributeDesc DstAttrib)
     }
 
     PackedDefaultAttribute Result;
-    Result.Source.reset(new RadientMeshVertexSource{MeshData.GetCreateInfo()});
+    Result.Source.reset(new RadientMeshVertexSource{MeshData.GetVertexData()});
     EXPECT_EQ(Result.Source->GetStatus(), RADIENT_STATUS_OK);
     if (Result.Source->GetStatus() != RADIENT_STATUS_OK)
         return Result;
@@ -228,31 +228,31 @@ PackedDefaultAttribute PackDefaultAttribute(GLTF::VertexAttributeDesc DstAttrib)
 
 } // namespace
 
-TEST(RadientMeshVertexSourceTest, RejectsInvalidRadientCreateInfo)
+TEST(RadientMeshVertexSourceTest, RejectsMissingRequiredVertexData)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
 
-    RadientMeshVertexSource ValidSource{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource ValidSource{MeshData.GetVertexData()};
     EXPECT_EQ(ValidSource.GetStatus(), RADIENT_STATUS_OK);
 
-    RadientMeshCreateInfo InvalidMeshCI = MeshData.GetCreateInfo();
+    RadientMeshVertexData InvalidMeshCI = MeshData.GetVertexData();
     InvalidMeshCI.ppVertexBuffers       = nullptr;
     RadientMeshVertexSource MissingPositions{InvalidMeshCI};
     EXPECT_EQ(MissingPositions.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    InvalidMeshCI             = MeshData.GetCreateInfo();
+    InvalidMeshCI             = MeshData.GetVertexData();
     InvalidMeshCI.VertexCount = 0;
     RadientMeshVertexSource EmptyVertices{InvalidMeshCI};
     EXPECT_EQ(EmptyVertices.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 
     std::array<RadientBoneIndices4, 2> BoneIndices{};
     MeshData.Add("JOINTS_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT16, 4, false, BoneIndices);
-    InvalidMeshCI = MeshData.GetCreateInfo();
+    InvalidMeshCI = MeshData.GetVertexData();
     RadientMeshVertexSource MissingWeights{InvalidMeshCI};
     EXPECT_EQ(MissingWeights.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
-TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexDataCreateInfo)
+TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexLayout)
 {
     struct SourceVertex
     {
@@ -270,19 +270,19 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexDataCreateInfo)
     RadientVertexBufferLayoutDesc Buffer{sizeof(SourceVertex)};
     IRadientDataBlob*             pData = pBlob;
 
-    RadientMeshVertexDataCreateInfo CI;
+    RadientMeshVertexData CI;
     CI.VertexLayout    = {Attributes.data(), static_cast<Uint32>(Attributes.size()), &Buffer, 1};
     CI.ppVertexBuffers = &pData;
     CI.VertexCount     = static_cast<Uint32>(Vertices.size());
 
-    auto ExpectInvalid = [](const RadientMeshVertexDataCreateInfo& InvalidCI) //
+    auto ExpectInvalid = [](const RadientMeshVertexData& InvalidCI) //
     {
         RadientMeshVertexSource Source{InvalidCI};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
     };
 
-    RadientMeshVertexDataCreateInfo InvalidCI = CI;
-    InvalidCI.VertexLayout.pAttributes        = nullptr;
+    RadientMeshVertexData InvalidCI    = CI;
+    InvalidCI.VertexLayout.pAttributes = nullptr;
     ExpectInvalid(InvalidCI);
 
     Buffer.ByteStride = sizeof(RadientFloat3) - 1;
@@ -298,7 +298,7 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
     auto ExpectInvalidAttributes =
         [](const GLTF::VertexAttributeDesc* pDstAttributes, Uint32 NumDstAttributes, const char* ExpectedError) //
     {
-        RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+        RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
         ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
         Testing::TestingEnvironment::ErrorScope ExpectedErrors{ExpectedError};
         EXPECT_EQ(Source.SetVertexAttributes(pDstAttributes, NumDstAttributes), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -341,9 +341,9 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
 
 TEST(RadientMeshVertexSourceTest, RejectsStoredStrideMatchingAutomaticSentinel)
 {
-    auto MeshData        = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData        = MakeVertexMeshData(DefaultPositions);
     MeshData.VertexCount = 1;
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     const GLTF::VertexAttributeDesc Position{
         "POSITION", 0, VT_FLOAT32, 3, RADIENT_VERTEX_AUTO_STRIDE - Uint32{12}};
@@ -370,8 +370,8 @@ TEST(RadientMeshVertexSourceTest, PacksStridedSourceAttributes)
         .AddAttribute(GLTF::PositionAttributeName, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, 0, offsetof(SourceVertex, Position))
         .AddAttribute(GLTF::VertexColorAttributeName, RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, 0, offsetof(SourceVertex, Color), True)
         .AddAttribute(GLTF::Texcoord0AttributeName, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, 0, offsetof(SourceVertex, TexCoord0));
-    IRadientDataBlob*               pData = pBlob;
-    RadientMeshVertexDataCreateInfo CI;
+    IRadientDataBlob*     pData = pBlob;
+    RadientMeshVertexData CI;
     CI.VertexLayout    = Layout;
     CI.ppVertexBuffers = &pData;
     CI.VertexCount     = static_cast<Uint32>(Vertices.size());
@@ -455,7 +455,7 @@ TEST(RadientMeshVertexSourceTest, RetainsReferencedAttributeStorageAndCopiesMeta
         RadientVertexBufferLayoutDesc Buffer{sizeof(SourceVertex)};
         IRadientDataBlob*             pData = pBlob;
 
-        RadientMeshVertexDataCreateInfo CI;
+        RadientMeshVertexData CI;
         CI.VertexLayout    = {SourceAttributes.data(), static_cast<Uint32>(SourceAttributes.size()), &Buffer, 1};
         CI.ppVertexBuffers = &pData;
         CI.VertexCount     = static_cast<Uint32>(Data->Vertices.size());
@@ -490,12 +490,12 @@ TEST(RadientMeshVertexSourceTest, RetainsReferencedAttributeStorageAndCopiesMeta
 
 TEST(RadientMeshVertexSourceTest, RejectsInvalidPackDestination)
 {
-    RadientMeshVertexSource SourceWithoutLayout{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    RadientMeshVertexSource SourceWithoutLayout{MakeVertexMeshData(DefaultPositions).GetVertexData()};
     EXPECT_EQ(SourceWithoutLayout.PackVertexData(0,
                                                  RadientMeshVertexSource::PackDestination{nullptr, 0}),
               RADIENT_STATUS_INVALID_ARGUMENT);
 
-    RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
     ASSERT_EQ(Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
               RADIENT_STATUS_OK);
@@ -564,10 +564,10 @@ TEST(RadientMeshVertexSourceTest, PacksFloat32Joints)
     const std::array<RadientFloat4, 2> Expected{
         RadientFloat4{0.f, 1.f, 255.f, 1024.f},
         RadientFloat4{2.f, 31.f, 512.f, 2048.f}};
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("JOINTS_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, False, Expected);
     MeshData.Add("WEIGHTS_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, False, DefaultWeights);
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
 
     // Merge the separate source attributes into one renderer-selected buffer.
@@ -615,10 +615,10 @@ TEST(RadientMeshVertexSourceDefaultAttributesTest, PacksDefaultTangentAttribute)
 
 TEST(RadientMeshVertexSourceTest, StagesOnlyPresentAttributeBuffers)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true, DefaultColors);
 
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
                                          static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
@@ -641,14 +641,14 @@ TEST(RadientMeshVertexSourceTest, StagesOnlyPresentAttributeBuffers)
 
 TEST(RadientMeshVertexSourceTest, PacksCustomVertexAttributeLayout)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true, DefaultColors);
 
     const std::array<GLTF::VertexAttributeDesc, 2> Attributes{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{16}},
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 3, VT_FLOAT32, 4}};
 
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())), RADIENT_STATUS_OK);
 
@@ -684,9 +684,9 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIncludesDestinationVertexLayout)
     std::array<GLTF::VertexAttributeDesc, 1> PaddedPosition{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{16}}};
 
-    RadientMeshVertexSource TightSource{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
-    RadientMeshVertexSource SameTightSource{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
-    RadientMeshVertexSource PaddedSource{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    RadientMeshVertexSource TightSource{MakeVertexMeshData(DefaultPositions).GetVertexData()};
+    RadientMeshVertexSource SameTightSource{MakeVertexMeshData(DefaultPositions).GetVertexData()};
+    RadientMeshVertexSource PaddedSource{MakeVertexMeshData(DefaultPositions).GetVertexData()};
 
     EXPECT_TRUE(TightSource.MakeCacheKey().empty());
 
@@ -714,7 +714,7 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIncludesZeroFilledAttributeMetadata)
     std::memcpy(Expected.data() + 44, &DefaultPositions[1], sizeof(RadientFloat3));
     auto GetKey = [&Expected](const std::array<GLTF::VertexAttributeDesc, 3>& Layout) //
     {
-        RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+        RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
         EXPECT_EQ(Source.SetVertexAttributes(Layout.data(), static_cast<Uint32>(Layout.size())), RADIENT_STATUS_OK);
         std::vector<Uint8> Packed(Source.GetVertexBufferDataSize(2));
         EXPECT_EQ(Source.PackVertexData(2, {Packed.data(), static_cast<Uint32>(Packed.size())}), RADIENT_STATUS_OK);
@@ -746,7 +746,7 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIncludesZeroFilledAttributeMetadata)
 
 TEST(RadientMeshVertexSourceTest, CacheKeyIgnoresUnusedMeshInputs)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
 
     auto MeshDataWithUnusedColor = MeshData;
     MeshDataWithUnusedColor.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, True, DefaultColors);
@@ -757,9 +757,9 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIgnoresUnusedMeshInputs)
     const std::array<GLTF::VertexAttributeDesc, 1> PositionOnly{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3}};
 
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
-    RadientMeshVertexSource SourceWithUnusedColor{MeshDataWithUnusedColor.GetCreateInfo()};
-    RadientMeshVertexSource SourceWithUnusedHalf{MeshDataWithUnusedHalf.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
+    RadientMeshVertexSource SourceWithUnusedColor{MeshDataWithUnusedColor.GetVertexData()};
+    RadientMeshVertexSource SourceWithUnusedHalf{MeshDataWithUnusedHalf.GetVertexData()};
     ASSERT_EQ(SourceWithUnusedHalf.GetStatus(), RADIENT_STATUS_OK);
 
     ASSERT_EQ(Source.SetVertexAttributes(PositionOnly.data(), static_cast<Uint32>(PositionOnly.size())),
@@ -787,8 +787,8 @@ TEST(RadientMeshVertexSourceTest, CacheKeyIgnoresUnusedMeshInputs)
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}},
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 3, VT_FLOAT32, 4, Uint32{0}, &Green}};
 
-    RadientMeshVertexSource RedInactiveDefaultSource{MeshData.GetCreateInfo()};
-    RadientMeshVertexSource GreenInactiveDefaultSource{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource RedInactiveDefaultSource{MeshData.GetVertexData()};
+    RadientMeshVertexSource GreenInactiveDefaultSource{MeshData.GetVertexData()};
 
     ASSERT_EQ(RedInactiveDefaultSource.SetVertexAttributes(RedInactiveDefaultColor.data(), static_cast<Uint32>(RedInactiveDefaultColor.size())),
               RADIENT_STATUS_OK);
@@ -807,7 +807,7 @@ TEST(RadientMeshVertexSourceTest, CopiesDestinationVertexAttributeDescriptors)
         GLTF::VertexAttributeDesc{PositionName.c_str(), 0, VT_FLOAT32, 3, Uint32{0}},
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{12}, &DefaultColor}};
 
-    RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())),
               RADIENT_STATUS_OK);
@@ -832,10 +832,10 @@ TEST(RadientMeshVertexSourceTest, CopiesDestinationVertexAttributeDescriptors)
 
 TEST(RadientMeshVertexSourceTest, ReflectsStoredVertexLayout)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, True, DefaultColors);
     MeshData.Add("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     {
         std::string                     PositionName = "POSITION";
@@ -883,7 +883,7 @@ TEST(RadientMeshVertexSourceTest, ReflectsStoredVertexLayout)
 
 TEST(RadientMeshVertexSourceTest, RefreshesStoredVertexLayout)
 {
-    RadientMeshVertexSource Source{MakeVertexMeshCI(DefaultPositions).GetCreateInfo()};
+    RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     const GLTF::VertexAttributeDesc InitialAttributes[]{
         {"POSITION", 2, VT_FLOAT32, 3, Uint32{8}},
@@ -905,14 +905,14 @@ TEST(RadientMeshVertexSourceTest, RefreshesStoredVertexLayout)
 
 TEST(RadientMeshVertexSourceTest, PacksUnsortedExplicitVertexAttributeOffsets)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, true, DefaultColors);
 
     const std::array<GLTF::VertexAttributeDesc, 2> Attributes{
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4, Uint32{16}},
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{0}}};
 
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source.SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())), RADIENT_STATUS_OK);
 
@@ -957,7 +957,7 @@ TEST(RadientMeshVertexSourceTest, CopiesLayoutMetadataAndRetainsInterleavedBlob)
         RadientVertexBufferLayoutDesc Buffers[]{{1}, {28}};
         auto                          pBlob = MakeTestDataBlob(Expected.data(), Expected.size());
         IRadientDataBlob*             Data[]{nullptr, pBlob};
-        RadientMeshCreateInfo         CI;
+        RadientMeshVertexData         CI;
         CI.VertexLayout    = {Attributes, 2, Buffers, 2};
         CI.ppVertexBuffers = Data;
         CI.VertexCount     = 2;
@@ -974,9 +974,9 @@ TEST(RadientMeshVertexSourceTest, CopiesLayoutMetadataAndRetainsInterleavedBlob)
     ASSERT_EQ(Source->PackVertexData(0, {Packed.data(), 56}), RADIENT_STATUS_OK);
     EXPECT_EQ(Packed, Expected);
 
-    auto Separate = MakeVertexMeshCI(DefaultPositions);
+    auto Separate = MakeVertexMeshData(DefaultPositions);
     Separate.Add("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
-    RadientMeshVertexSource Repacked{Separate.GetCreateInfo()};
+    RadientMeshVertexSource Repacked{Separate.GetVertexData()};
     ASSERT_EQ(Repacked.SetVertexAttributes(Destination.data(), 2), RADIENT_STATUS_OK);
     ASSERT_EQ(Repacked.PackVertexData(0, {Packed.data(), 56}), RADIENT_STATUS_OK);
     // Padding differs between copying and repacking, but has no vertex-data meaning.
@@ -994,7 +994,7 @@ TEST(RadientMeshVertexSourceTest, CopiesLayoutMetadataAndRetainsInterleavedBlob)
         .AddAttribute("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, 0, 20);
     auto                  pBlob = MakeTestDataBlob(Expected.data(), Expected.size());
     IRadientDataBlob*     Data  = pBlob;
-    RadientMeshCreateInfo CI;
+    RadientMeshVertexData CI;
     CI.VertexLayout    = Layout;
     CI.ppVertexBuffers = &Data;
     CI.VertexCount     = 2;
@@ -1004,9 +1004,9 @@ TEST(RadientMeshVertexSourceTest, CopiesLayoutMetadataAndRetainsInterleavedBlob)
 
     auto ChangedPositions = DefaultPositions;
     ChangedPositions[0]   = {9.f, 2.f, 3.f};
-    auto ChangedData      = MakeVertexMeshCI(ChangedPositions);
+    auto ChangedData      = MakeVertexMeshData(ChangedPositions);
     ChangedData.Add("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
-    RadientMeshVertexSource Changed{ChangedData.GetCreateInfo()};
+    RadientMeshVertexSource Changed{ChangedData.GetVertexData()};
     ASSERT_EQ(Changed.SetVertexAttributes(Destination.data(), 2), RADIENT_STATUS_OK);
     EXPECT_NE(Changed.MakeCacheKey(), Repacked.MakeCacheKey());
 }
@@ -1024,7 +1024,7 @@ TEST(RadientMeshVertexSourceTest, ConvertsSupportedComponentTypesFromUnalignedBu
         Layout.AddBuffer(Stride).AddAttribute("POSITION", Type, 3, 0, 1, Normalized);
         auto                  pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
         IRadientDataBlob*     Data  = pBlob;
-        RadientMeshCreateInfo CI;
+        RadientMeshVertexData CI;
         CI.VertexLayout    = Layout;
         CI.ppVertexBuffers = &Data;
         CI.VertexCount     = 2;
@@ -1061,7 +1061,7 @@ TEST(RadientMeshVertexSourceTest, RejectsFloat16ToFloat32Conversion)
         MeshData.Add(Semantic, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT16, 3, False,
                      std::array<Uint16, 6>{0x3C00, 0x4000, 0x4200, 0x4400, 0x4500, 0x4600});
 
-        RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+        RadientMeshVertexSource Source{MeshData.GetVertexData()};
         ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
 
         const GLTF::VertexAttributeDesc Destination[]{
@@ -1083,7 +1083,7 @@ TEST(RadientMeshVertexSourceTest, RepackagesSourceWithOmittedFinalPadding)
     Layout.AddBuffer(16).AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, 0, 0);
     auto                  pBlob = MakeReferencedDataBlob(Bytes.data(), Bytes.size());
     IRadientDataBlob*     Data  = pBlob;
-    RadientMeshCreateInfo CI;
+    RadientMeshVertexData CI;
     CI.VertexLayout    = Layout;
     CI.ppVertexBuffers = &Data;
     CI.VertexCount     = 2;
@@ -1098,11 +1098,11 @@ TEST(RadientMeshVertexSourceTest, RepackagesSourceWithOmittedFinalPadding)
 
 TEST(RadientMeshVertexSourceTest, PacksAdditionalSemanticsIntoIndependentBuffers)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("TEXCOORD_1", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
     const std::array<RadientFloat4, 2> Custom{{{1, 2, 3, 4}, {5, 6, 7, 8}}};
     MeshData.Add("_CUSTOM", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, False, Custom);
-    RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
     const GLTF::VertexAttributeDesc Destination[]{
         {"POSITION", 0, VT_FLOAT32, 3},
@@ -1125,27 +1125,22 @@ TEST(RadientMeshVertexSourceTest, RetainsMutableBlobReadAccessUntilAllSourcesAre
     Uint32 ReadReleases = 0;
     auto   pBlob        = MakeTestMutableDataBlob(DefaultPositions.data(), sizeof(DefaultPositions), CountBlobReadReleases, &ReadReleases);
     ASSERT_NE(pBlob, nullptr);
-    auto MeshData     = MakeVertexMeshCI(DefaultPositions);
-    MeshData.Data[0]  = pBlob;
-    auto PublicSource = std::make_unique<RadientMeshVertexSource>(MeshData.GetCreateInfo());
-    ASSERT_EQ(PublicSource->GetStatus(), RADIENT_STATUS_OK);
+    auto MeshData    = MakeVertexMeshData(DefaultPositions);
+    MeshData.Data[0] = pBlob;
+    auto Source      = std::make_unique<RadientMeshVertexSource>(MeshData.GetVertexData());
+    ASSERT_EQ(Source->GetStatus(), RADIENT_STATUS_OK);
 
-    RadientMeshVertexDataCreateInfo CI;
-    CI.VertexLayout    = MeshData.Layout;
-    CI.ppVertexBuffers = MeshData.Data.data();
-    CI.VertexCount     = MeshData.VertexCount;
-
-    std::unique_ptr<RadientMeshVertexSource> ImportSource = std::make_unique<RadientMeshVertexSource>(CI);
-    ASSERT_EQ(ImportSource->GetStatus(), RADIENT_STATUS_OK);
+    std::unique_ptr<RadientMeshVertexSource> OtherSource = std::make_unique<RadientMeshVertexSource>(MeshData.GetVertexData());
+    ASSERT_EQ(OtherSource->GetStatus(), RADIENT_STATUS_OK);
 
     void* pWrite = nullptr;
     EXPECT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pBlob->Resize(1), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(ReadReleases, 0u);
-    PublicSource.reset();
+    Source.reset();
     EXPECT_EQ(ReadReleases, 0u);
     EXPECT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_INVALID_OPERATION);
-    ImportSource.reset();
+    OtherSource.reset();
     EXPECT_EQ(ReadReleases, 1u);
     ASSERT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
     EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
@@ -1154,39 +1149,29 @@ TEST(RadientMeshVertexSourceTest, RetainsMutableBlobReadAccessUntilAllSourcesAre
 
 TEST(RadientMeshVertexSourceTest, RejectsBusyBlobAndReleasesEarlierReads)
 {
-    for (bool UseVertexDataCreateInfo : {false, true})
-    {
-        SCOPED_TRACE(UseVertexDataCreateInfo ? "RadientMeshVertexDataCreateInfo" : "RadientMeshCreateInfo");
-        Uint32 ReadReleases = 0;
-        auto   pPositions   = MakeTestMutableDataBlob(DefaultPositions.data(), sizeof(DefaultPositions), CountBlobReadReleases, &ReadReleases);
-        auto   pNormals     = MakeTestMutableDataBlob(DefaultNormals.data(), sizeof(DefaultNormals));
-        auto   MeshData     = MakeVertexMeshCI(DefaultPositions);
-        MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, DefaultNormals);
-        MeshData.Data[0] = pPositions;
-        MeshData.Data[1] = pNormals;
+    Uint32 ReadReleases = 0;
+    auto   pPositions   = MakeTestMutableDataBlob(DefaultPositions.data(), sizeof(DefaultPositions), CountBlobReadReleases, &ReadReleases);
+    auto   pNormals     = MakeTestMutableDataBlob(DefaultNormals.data(), sizeof(DefaultNormals));
+    auto   MeshData     = MakeVertexMeshData(DefaultPositions);
+    MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, DefaultNormals);
+    MeshData.Data[0] = pPositions;
+    MeshData.Data[1] = pNormals;
 
-        const RadientMeshVertexDataCreateInfo CI{MeshData.Layout, MeshData.Data.data(), MeshData.VertexCount};
-        const auto                            CreateSource = [&]() {
-            return UseVertexDataCreateInfo ? std::make_unique<RadientMeshVertexSource>(CI) :
-                                             std::make_unique<RadientMeshVertexSource>(MeshData.GetCreateInfo());
-        };
+    void* pWrite = nullptr;
+    ASSERT_EQ(pNormals->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    RadientMeshVertexSource BusySource{MeshData.GetVertexData()};
+    EXPECT_EQ(BusySource.GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(ReadReleases, 1u);
+    ASSERT_EQ(pPositions->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    EXPECT_EQ(pPositions->EndWrite(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pNormals->EndWrite(), RADIENT_STATUS_OK);
 
-        void* pWrite = nullptr;
-        ASSERT_EQ(pNormals->BeginWrite(&pWrite), RADIENT_STATUS_OK);
-        auto BusySource = CreateSource();
-        EXPECT_EQ(BusySource->GetStatus(), RADIENT_STATUS_INVALID_OPERATION);
-        EXPECT_EQ(ReadReleases, 1u);
-        ASSERT_EQ(pPositions->BeginWrite(&pWrite), RADIENT_STATUS_OK);
-        EXPECT_EQ(pPositions->EndWrite(), RADIENT_STATUS_OK);
-        EXPECT_EQ(pNormals->EndWrite(), RADIENT_STATUS_OK);
-
-        ASSERT_EQ(pNormals->Resize(sizeof(DefaultNormals) - 1), RADIENT_STATUS_OK);
-        auto ShortSource = CreateSource();
-        EXPECT_EQ(ShortSource->GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
-        EXPECT_EQ(ReadReleases, 2u);
-        EXPECT_EQ(pPositions->Resize(0), RADIENT_STATUS_OK);
-        EXPECT_EQ(pNormals->Resize(0), RADIENT_STATUS_OK);
-    }
+    ASSERT_EQ(pNormals->Resize(sizeof(DefaultNormals) - 1), RADIENT_STATUS_OK);
+    RadientMeshVertexSource ShortSource{MeshData.GetVertexData()};
+    EXPECT_EQ(ShortSource.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(ReadReleases, 2u);
+    EXPECT_EQ(pPositions->Resize(0), RADIENT_STATUS_OK);
+    EXPECT_EQ(pNormals->Resize(0), RADIENT_STATUS_OK);
 }
 
 TEST(RadientMeshVertexSourceTest, AcceptsAddressableSourceSpanLargerThanUint32)
@@ -1194,7 +1179,7 @@ TEST(RadientMeshVertexSourceTest, AcceptsAddressableSourceSpanLargerThanUint32)
     if (sizeof(size_t) <= sizeof(Uint32))
         GTEST_SKIP() << "Requires an address space larger than Uint32.";
 
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Layout.SetBuffer(0, (std::numeric_limits<Uint32>::max)() - 3);
     const Uint64 RequiredSize = Uint64{MeshData.Layout.GetBuffer(0).ByteStride} + sizeof(RadientFloat3);
     ASSERT_GT(RequiredSize, (std::numeric_limits<Uint32>::max)());
@@ -1203,7 +1188,7 @@ TEST(RadientMeshVertexSourceTest, AcceptsAddressableSourceSpanLargerThanUint32)
     RefCntAutoPtr<ScopeCheckedDataBlob> pBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(DefaultPositions.data(), RequiredSize)};
     MeshData.Data[0] = pBlob;
     {
-        RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+        RadientMeshVertexSource Source{MeshData.GetVertexData()};
         EXPECT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
         EXPECT_EQ(Source.GetVertexCount(), 2u);
         EXPECT_EQ(pBlob->ReaderCount, 1u);
@@ -1214,7 +1199,7 @@ TEST(RadientMeshVertexSourceTest, AcceptsAddressableSourceSpanLargerThanUint32)
 TEST(RadientMeshVertexSourceTest, QueriesSharedBlobSizeUnderReadAccessAndIgnoresUnusedSlots)
 {
     RefCntAutoPtr<ScopeCheckedDataBlob> pBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(DefaultPositions.data(), sizeof(DefaultPositions))};
-    auto                                MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto                                MeshData = MakeVertexMeshData(DefaultPositions);
     MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, DefaultNormals);
     MeshData.Data[0] = pBlob;
     MeshData.Data[1] = pBlob;
@@ -1224,7 +1209,7 @@ TEST(RadientMeshVertexSourceTest, QueriesSharedBlobSizeUnderReadAccessAndIgnores
     void* pWrite = nullptr;
     ASSERT_EQ(pUnused->BeginWrite(&pWrite), RADIENT_STATUS_OK);
     {
-        RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+        RadientMeshVertexSource Source{MeshData.GetVertexData()};
         ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
         EXPECT_GT(pBlob->ReaderCount, 0u);
         const GLTF::VertexAttributeDesc Destination[]{
@@ -1241,11 +1226,11 @@ TEST(RadientMeshVertexSourceTest, QueriesSharedBlobSizeUnderReadAccessAndIgnores
 
 TEST(RadientMeshVertexSourceTest, RejectsInvalidBlobStorageAfterAcquiringReadAccess)
 {
-    auto MeshData = MakeVertexMeshCI(DefaultPositions);
+    auto MeshData = MakeVertexMeshData(DefaultPositions);
     auto Check    = [&MeshData](const void* pData, Uint64 Size, RADIENT_STATUS ExpectedStatus) {
         RefCntAutoPtr<ScopeCheckedDataBlob> pBlob{MakeNewRCObj<ScopeCheckedDataBlob>()(pData, Size)};
         MeshData.Data[0] = pBlob;
-        RadientMeshVertexSource Source{MeshData.GetCreateInfo()};
+        RadientMeshVertexSource Source{MeshData.GetVertexData()};
         EXPECT_EQ(Source.GetStatus(), ExpectedStatus);
         EXPECT_EQ(pBlob->ReaderCount, 0u);
     };

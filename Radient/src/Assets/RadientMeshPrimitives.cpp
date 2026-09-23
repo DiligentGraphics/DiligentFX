@@ -308,15 +308,15 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
     PrimitiveCI.pMaterial  = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name            = Name;
-    MeshCI.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
-    MeshCI.ppVertexBuffers = VertexData;
-    MeshCI.VertexCount     = static_cast<Uint32>(MeshData.Positions.size());
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = IndexCount;
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.Name                      = Name;
+    MeshCI.VertexData.VertexLayout    = {VertexAttributes, VertexBufferCount, VertexBuffers, VertexBufferCount};
+    MeshCI.VertexData.ppVertexBuffers = VertexData;
+    MeshCI.VertexData.VertexCount     = static_cast<Uint32>(MeshData.Positions.size());
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = IndexCount;
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives               = &PrimitiveCI;
+    MeshCI.PrimitiveCount            = 1;
 
     return pAssetManager->CreateMesh(MeshCI, ppMesh);
 }

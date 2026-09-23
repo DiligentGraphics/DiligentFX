@@ -106,26 +106,26 @@ public:
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         *ppMesh         = nullptr;
-        VertexCount     = MeshCI.VertexCount;
+        VertexCount     = MeshCI.VertexData.VertexCount;
         HasVertexColors = false;
         CapturedVertexColors.clear();
         ResolvedVertexLayout Resolved;
-        EXPECT_TRUE(ResolveVertexLayout(MeshCI.VertexLayout, Resolved));
-        for (Uint32 Index = 0; Index < MeshCI.VertexLayout.AttributeCount; ++Index)
+        EXPECT_TRUE(ResolveVertexLayout(MeshCI.VertexData.VertexLayout, Resolved));
+        for (Uint32 Index = 0; Index < MeshCI.VertexData.VertexLayout.AttributeCount; ++Index)
         {
-            const auto& Attribute = MeshCI.VertexLayout.pAttributes[Index];
+            const auto& Attribute = MeshCI.VertexData.VertexLayout.pAttributes[Index];
             if (std::strcmp(Attribute.Semantic, "COLOR_0") != 0)
                 continue;
             HasVertexColors = true;
             EXPECT_EQ(Attribute.ComponentType, RADIENT_VERTEX_COMPONENT_TYPE_UINT8);
             EXPECT_EQ(Attribute.ComponentCount, 4u);
-            CapturedVertexColors.resize(MeshCI.VertexCount);
-            const RadientDataBlobReadAccess ReadAccess{MeshCI.ppVertexBuffers[Attribute.BufferIndex]};
+            CapturedVertexColors.resize(MeshCI.VertexData.VertexCount);
+            const RadientDataBlobReadAccess ReadAccess{MeshCI.VertexData.ppVertexBuffers[Attribute.BufferIndex]};
             EXPECT_TRUE(ReadAccess);
             if (!ReadAccess)
                 return RADIENT_STATUS_INVALID_OPERATION;
             const auto* Bytes = static_cast<const Uint8*>(ReadAccess.GetData());
-            for (Uint32 Vertex = 0; Vertex < MeshCI.VertexCount; ++Vertex)
+            for (Uint32 Vertex = 0; Vertex < MeshCI.VertexData.VertexCount; ++Vertex)
                 std::memcpy(&CapturedVertexColors[Vertex], Bytes + Resolved.AttributeOffsets[Index] + size_t{Vertex} * Resolved.BufferStrides[Attribute.BufferIndex], sizeof(RadientColorRGBA8));
         }
 

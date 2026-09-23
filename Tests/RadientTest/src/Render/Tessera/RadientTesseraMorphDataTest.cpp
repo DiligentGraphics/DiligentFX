@@ -95,16 +95,16 @@ struct MorphMeshData
     RadientMeshCreateInfo MakeCreateInfo() const
     {
         RadientMeshCreateInfo CI{};
-        CI.VertexLayout     = VertexLayout;
-        CI.ppVertexBuffers  = &VertexData;
-        CI.VertexCount      = static_cast<Uint32>(Positions.size());
-        CI.pMorphTargets    = Targets.data();
-        CI.MorphTargetCount = static_cast<Uint32>(Targets.size());
-        CI.pIndexBuffer     = pIndexBlob;
-        CI.IndexCount       = static_cast<Uint32>(Indices.size());
-        CI.IndexType        = RADIENT_INDEX_TYPE_UINT32;
-        CI.pPrimitives      = &Primitive;
-        CI.PrimitiveCount   = 1;
+        CI.VertexData.VertexLayout          = VertexLayout;
+        CI.VertexData.ppVertexBuffers       = &VertexData;
+        CI.VertexData.VertexCount           = static_cast<Uint32>(Positions.size());
+        CI.MorphTargetData.pMorphTargets    = Targets.data();
+        CI.MorphTargetData.MorphTargetCount = static_cast<Uint32>(Targets.size());
+        CI.IndexData.pIndexBuffer           = pIndexBlob;
+        CI.IndexData.IndexCount             = static_cast<Uint32>(Indices.size());
+        CI.IndexData.IndexType              = RADIENT_INDEX_TYPE_UINT32;
+        CI.pPrimitives                      = &Primitive;
+        CI.PrimitiveCount                   = 1;
         return CI;
     }
 };

@@ -132,7 +132,7 @@ A null attribute pointer returns zero.
 
 ## Creating a mesh
 
-`RadientMeshCreateInfo::VertexLayout` describes the supplied CPU data.
+`RadientMeshCreateInfo::VertexData.VertexLayout` describes the supplied CPU data.
 `ppVertexBuffers` points to one `IRadientDataBlob*` per layout buffer,
 and `VertexCount` is shared by all attributes. Attribute offsets are relative
 to the start of the corresponding blob. For each attribute, the blob contains
@@ -190,12 +190,12 @@ FillIndices(static_cast<Uint32*>(pIndexData), IndexCount);
 IndexBlob->EndWrite();
 
 RadientMeshCreateInfo MeshCI;
-MeshCI.VertexLayout = Layout;
-MeshCI.ppVertexBuffers = VertexData;
-MeshCI.VertexCount = VertexCount;
-MeshCI.pIndexBuffer = IndexBlob;
-MeshCI.IndexCount = IndexCount;
-MeshCI.IndexType = RADIENT_INDEX_TYPE_UINT32;
+MeshCI.VertexData.VertexLayout    = Layout;
+MeshCI.VertexData.ppVertexBuffers = VertexData;
+MeshCI.VertexData.VertexCount     = VertexCount;
+MeshCI.IndexData.pIndexBuffer     = IndexBlob;
+MeshCI.IndexData.IndexCount       = IndexCount;
+MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
 // Set primitives, then call CreateMesh.
 ```
 

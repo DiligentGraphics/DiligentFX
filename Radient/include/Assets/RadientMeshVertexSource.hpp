@@ -32,7 +32,6 @@
 #include "GraphicsTypes.h"
 #include "HashUtils.hpp"
 #include "RadientAssets.h"
-#include "RadientMeshImportServices.h"
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
@@ -54,8 +53,7 @@ public:
         Uint32 DataSize = 0;
     };
 
-    explicit RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI);
-    explicit RadientMeshVertexSource(const RadientMeshVertexDataCreateInfo& CI);
+    explicit RadientMeshVertexSource(const RadientMeshVertexData& CI);
 
     // clang-format off
     RadientMeshVertexSource(const RadientMeshVertexSource&)            = delete;

@@ -19,7 +19,7 @@ Layout.AddBuffer()
       .AddAttribute("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
 
 RadientMeshCreateInfo MeshCI;
-MeshCI.VertexLayout = Layout;
+MeshCI.VertexData.VertexLayout = Layout;
 // Supply the mesh's vertex blobs, counts, indices, and primitives before CreateMesh.
 ```
 

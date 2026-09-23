@@ -426,14 +426,15 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMeshImportServices, TBase)
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshVertexData(const RadientMeshVertexDataCreateInfo& VertexCI,
-                                                                   IRadientMeshVertexData**               ppVertexData) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshVertexData(const RadientMeshVertexData& VertexCI,
+                                                                   IRadientMeshVertexData**     ppVertexData) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshIndexData(const RadientMeshIndexDataCreateInfo& IndexCI,
-                                                                  IRadientMeshIndexData**               ppIndexData) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshIndexData(const RadientMeshIndexData& IndexCI,
+                                                                  IRadientMeshIndexData**     ppIndexData) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshMorphTargetData(const RadientMeshMorphTargetDataCreateInfo& MorphCI,
-                                                                        IRadientMeshMorphTargetData**               ppMorphData) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshMorphTargetData(const RadientMeshMorphTargetData& MorphCI,
+                                                                        Uint32                            VertexCount,
+                                                                        IRadientMeshMorphTargetData**     ppMorphData) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshView(const RadientMeshViewCreateInfo& ViewCI,
                                                              IRadientMeshAsset**              ppMesh) override final;
@@ -442,8 +443,8 @@ private:
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 };
 
-RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshVertexData(const RadientMeshVertexDataCreateInfo& VertexCI,
-                                                                                     IRadientMeshVertexData**               ppVertexData)
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshVertexData(const RadientMeshVertexData& VertexCI,
+                                                                                     IRadientMeshVertexData**     ppVertexData)
 {
     if (ppVertexData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -458,8 +459,8 @@ RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshVertex
         RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshIndexData(const RadientMeshIndexDataCreateInfo& IndexCI,
-                                                                                    IRadientMeshIndexData**               ppIndexData)
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshIndexData(const RadientMeshIndexData& IndexCI,
+                                                                                    IRadientMeshIndexData**     ppIndexData)
 {
     if (ppIndexData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -474,8 +475,9 @@ RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshIndexD
         RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshMorphTargetData(const RadientMeshMorphTargetDataCreateInfo& MorphCI,
-                                                                                          IRadientMeshMorphTargetData**               ppMorphData)
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshMorphTargetData(const RadientMeshMorphTargetData& MorphCI,
+                                                                                          Uint32                            VertexCount,
+                                                                                          IRadientMeshMorphTargetData**     ppMorphData)
 {
     if (ppMorphData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -486,7 +488,7 @@ RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshMorphT
         return RADIENT_STATUS_INVALID_OPERATION;
 
     return m_pAssetManager->m_pThreadPool ?
-        m_pAssetManager->m_pMeshManager->CreateMeshMorphTargetData(*m_pAssetManager->m_pThreadPool, MorphCI, ppMorphData) :
+        m_pAssetManager->m_pMeshManager->CreateMeshMorphTargetData(*m_pAssetManager->m_pThreadPool, MorphCI, VertexCount, ppMorphData) :
         RADIENT_STATUS_INVALID_OPERATION;
 }
 

@@ -28,7 +28,6 @@
 
 #include "GraphicsTypes.h"
 #include "RadientAssets.h"
-#include "RadientMeshImportServices.h"
 #include "Core/RadientDataBlobReadAccess.hpp"
 
 #include <string>
@@ -46,8 +45,7 @@ public:
         Uint32 DataSize = 0;
     };
 
-    explicit RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI);
-    explicit RadientMeshIndexSource(const RadientMeshIndexDataCreateInfo& CI);
+    explicit RadientMeshIndexSource(const RadientMeshIndexData& CI);
 
     // clang-format off
     RadientMeshIndexSource(const RadientMeshIndexSource&)            = delete;

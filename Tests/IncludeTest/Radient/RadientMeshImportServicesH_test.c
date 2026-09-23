@@ -28,16 +28,16 @@
 
 void RadientMeshImportServices_C_UseInterfaces(IRadientAssetManager* pManager, IRadientMeshImportServices* pServices)
 {
-    RadientMeshVertexDataCreateInfo      VertexCI   = {0};
-    RadientMeshIndexDataCreateInfo       IndexCI    = {0};
-    RadientMeshMorphTargetDataCreateInfo MorphCI    = {0};
-    IRadientMeshVertexData*              pVertices  = 0;
-    IRadientMeshIndexData*               pIndices   = 0;
-    IRadientMeshMorphTargetData*         pMorphData = 0;
-    IndexCI.IndexType                               = RADIENT_INDEX_TYPE_UINT8;
+    RadientMeshVertexData        VertexCI   = {0};
+    RadientMeshIndexData         IndexCI    = {0};
+    RadientMeshMorphTargetData   MorphCI    = {0};
+    IRadientMeshVertexData*      pVertices  = 0;
+    IRadientMeshIndexData*       pIndices   = 0;
+    IRadientMeshMorphTargetData* pMorphData = 0;
+    IndexCI.IndexType                       = RADIENT_INDEX_TYPE_UINT8;
     (void)IRadientMeshImportServices_CreateMeshVertexData(pServices, &VertexCI, &pVertices);
     (void)IRadientMeshImportServices_CreateMeshIndexData(pServices, &IndexCI, &pIndices);
-    (void)IRadientMeshImportServices_CreateMeshMorphTargetData(pServices, &MorphCI, &pMorphData);
+    (void)IRadientMeshImportServices_CreateMeshMorphTargetData(pServices, &MorphCI, VertexCI.VertexCount, &pMorphData);
     (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pVertices);
     (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pIndices);
     (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pMorphData);

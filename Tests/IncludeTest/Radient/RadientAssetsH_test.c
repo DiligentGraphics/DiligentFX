@@ -58,18 +58,26 @@ void RadientAssets_C_UseTypes(void)
         3,
         0,
     };
-    const RadientVertexBufferLayoutDesc VertexBuffer = {DILIGENT_RADIENT_VERTEX_AUTO_STRIDE};
-    IRadientDataBlob* const             VertexData   = 0;
-    MeshCI.VertexLayout.pAttributes                  = &VertexAttribute;
-    MeshCI.VertexLayout.AttributeCount               = 1;
-    MeshCI.VertexLayout.pBuffers                     = &VertexBuffer;
-    MeshCI.VertexLayout.BufferCount                  = 1;
-    MeshCI.ppVertexBuffers                           = &VertexData;
-    MeshCI.VertexCount                               = 1;
-    MeshCI.pIndexBuffer                              = VertexData;
+    const RadientVertexBufferLayoutDesc VertexBuffer    = {DILIGENT_RADIENT_VERTEX_AUTO_STRIDE};
+    IRadientDataBlob* const             pVertexBlob     = 0;
+    RadientMeshVertexData               VertexData      = {0};
+    RadientMeshIndexData                IndexData       = {0};
+    RadientMeshMorphTargetData          MorphTargetData = {0};
+    VertexData.VertexLayout.pAttributes                 = &VertexAttribute;
+    VertexData.VertexLayout.AttributeCount              = 1;
+    VertexData.VertexLayout.pBuffers                    = &VertexBuffer;
+    VertexData.VertexLayout.BufferCount                 = 1;
+    VertexData.ppVertexBuffers                          = &pVertexBlob;
+    VertexData.VertexCount                              = 1;
+    IndexData.pIndexBuffer                              = pVertexBlob;
+    IndexData.IndexCount                                = 3;
+    IndexData.IndexType                                 = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.VertexData                                   = VertexData;
+    MeshCI.IndexData                                    = IndexData;
+    MeshCI.MorphTargetData                              = MorphTargetData;
     (void)MeshCI;
-    GeometryDesc.VertexLayout   = MeshCI.VertexLayout;
-    GeometryDesc.VertexCount    = MeshCI.VertexCount;
+    GeometryDesc.VertexLayout   = MeshCI.VertexData.VertexLayout;
+    GeometryDesc.VertexCount    = MeshCI.VertexData.VertexCount;
     GeometryDesc.IndexType      = RADIENT_INDEX_TYPE_UINT32;
     GeometryDesc.IndexCount     = 3;
     PrimitiveDesc.Name          = "Primitive";

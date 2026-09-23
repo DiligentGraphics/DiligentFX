@@ -1431,7 +1431,7 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
     if (!GLTF::ComputePrimitiveBoundingBox(PositionData, BBMin, BBMax))
         return {};
 
-    RadientMeshVertexDataCreateInfo VertexCI;
+    RadientMeshVertexData VertexCI;
     VertexCI.VertexLayout    = {SourceAttributes.data(), AttributeCount, SourceBufferLayouts.data(), AttributeCount};
     VertexCI.ppVertexBuffers = SourceBuffers.data();
     VertexCI.VertexCount     = VertexCount;
@@ -1461,7 +1461,7 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
     }
 
     RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
-    RadientMeshIndexDataCreateInfo  IndexCI;
+    RadientMeshIndexData            IndexCI;
     const int                       IndexAccessor = GltfPrimitive.GetIndicesId();
     if (IndexAccessor >= 0)
     {

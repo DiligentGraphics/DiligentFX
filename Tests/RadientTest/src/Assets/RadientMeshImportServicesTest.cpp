@@ -74,7 +74,7 @@ protected:
         Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
         const RefCntAutoPtr<IRadientDataBlob> pBlob  = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
         IRadientDataBlob* const               Buffer = pBlob;
-        RadientMeshVertexDataCreateInfo       CI;
+        RadientMeshVertexData                 CI;
         CI.VertexLayout    = Layout;
         CI.ppVertexBuffers = &Buffer;
         CI.VertexCount     = static_cast<Uint32>(Positions.size());
@@ -87,7 +87,7 @@ protected:
     {
         const std::array<Uint8, 3>            Indices = Reverse ? std::array<Uint8, 3>{0, 2, 1} : std::array<Uint8, 3>{0, 1, 2};
         const RefCntAutoPtr<IRadientDataBlob> pBlob   = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
-        RadientMeshIndexDataCreateInfo        CI;
+        RadientMeshIndexData                  CI;
         CI.pIndexBuffer = pBlob;
         CI.IndexCount   = static_cast<Uint32>(Indices.size());
         CI.IndexType    = RADIENT_INDEX_TYPE_UINT8;
@@ -170,14 +170,14 @@ TEST_F(RadientMeshImportServicesTest, PendingViewsRetainSourcesAndCopyDescriptor
         std::string              Semantic{"POSITION"};
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer().AddAttribute(Semantic.c_str(), RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
-        IRadientDataBlob*               Buffer = pVertexBlob;
-        RadientMeshVertexDataCreateInfo VertexCI;
+        IRadientDataBlob*     Buffer = pVertexBlob;
+        RadientMeshVertexData VertexCI;
         VertexCI.VertexLayout    = Layout;
         VertexCI.ppVertexBuffers = &Buffer;
         VertexCI.VertexCount     = static_cast<Uint32>(Positions.size());
         ASSERT_EQ(pMeshImportServices->CreateMeshVertexData(VertexCI, &pVertices), RADIENT_STATUS_PENDING);
 
-        RadientMeshIndexDataCreateInfo IndexCI;
+        RadientMeshIndexData IndexCI;
         IndexCI.pIndexBuffer = pIndexBlob;
         IndexCI.IndexCount   = static_cast<Uint32>(Indices.size());
         IndexCI.IndexType    = RADIENT_INDEX_TYPE_UINT8;
@@ -305,11 +305,10 @@ TEST_F(RadientMeshImportServicesTest, CopiesMorphDataBeforeReturningAndPreserves
         Target.Desc.AttributeCount = 1;
         Target.Desc.DefaultWeight  = 0.25f;
         Target.pAttributeData      = &AttributeData;
-        RadientMeshMorphTargetDataCreateInfo CI;
+        RadientMeshMorphTargetData CI;
         CI.pMorphTargets    = &Target;
         CI.MorphTargetCount = 1;
-        CI.VertexCount      = 3;
-        ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, &pMorphData), RADIENT_STATUS_PENDING);
+        ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, 3, &pMorphData), RADIENT_STATUS_PENDING);
         // An independent source with unchanged bytes must deduplicate with the
         // first call even after the first call's delta array is overwritten.
         RadientMorphTargetAttributeCreateInfo DuplicateAttributeData;
@@ -317,7 +316,7 @@ TEST_F(RadientMeshImportServicesTest, CopiesMorphDataBeforeReturningAndPreserves
         RadientMorphTargetCreateInfo DuplicateTarget = Target;
         DuplicateTarget.pAttributeData               = &DuplicateAttributeData;
         CI.pMorphTargets                             = &DuplicateTarget;
-        ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, &pDuplicateMorphData), RADIENT_STATUS_PENDING);
+        ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, 3, &pDuplicateMorphData), RADIENT_STATUS_PENDING);
         Deltas.fill(999.f);
         Name[0]                   = 'X';
         Semantic[0]               = 'X';
@@ -352,7 +351,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsMissingOutputAndInvalidViewReferenc
 {
     EXPECT_EQ(pMeshImportServices->CreateMeshVertexData({}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMeshImportServices->CreateMeshIndexData({}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData({}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData({}, 3, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMeshImportServices->CreateMeshView({}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 
     RefCntAutoPtr<IRadientMeshVertexData> pVertices = CreateVertices();
@@ -380,7 +379,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsInvalidIndexAndMorphSourcesWithoutQ
 {
     const std::array<Uint8, 3>            Indices{0, 1, 2};
     const RefCntAutoPtr<IRadientDataBlob> pBlob = Testing::MakeTestDataBlob(Indices.data(), sizeof(Indices));
-    RadientMeshIndexDataCreateInfo        IndexCI;
+    RadientMeshIndexData                  IndexCI;
     IndexCI.pIndexBuffer = pBlob;
     IndexCI.IndexCount   = 3;
     IndexCI.IndexType    = RADIENT_INDEX_TYPE_NONE;
@@ -392,11 +391,10 @@ TEST_F(RadientMeshImportServicesTest, RejectsInvalidIndexAndMorphSourcesWithoutQ
     EXPECT_EQ(pMeshImportServices->CreateMeshIndexData(IndexCI, &pIndices), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pIndices, nullptr);
 
-    RadientMeshMorphTargetDataCreateInfo MorphCI;
+    RadientMeshMorphTargetData MorphCI;
     MorphCI.MorphTargetCount = 1;
-    MorphCI.VertexCount      = 3;
     RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphData;
-    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData(MorphCI, &pMorphData), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData(MorphCI, 3, &pMorphData), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMorphData, nullptr);
     EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
 }
@@ -408,12 +406,12 @@ TEST_F(RadientMeshImportServicesTest, RejectsActiveWritersBeforeQueuingWork)
     ASSERT_EQ(pBlob->BeginWrite(&pData), RADIENT_STATUS_OK);
     RadientVertexLayoutDescX Layout;
     Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
-    IRadientDataBlob* const         Buffer = pBlob;
-    RadientMeshVertexDataCreateInfo VertexCI;
+    IRadientDataBlob* const Buffer = pBlob;
+    RadientMeshVertexData   VertexCI;
     VertexCI.VertexLayout    = Layout;
     VertexCI.ppVertexBuffers = &Buffer;
     VertexCI.VertexCount     = 3;
-    RadientMeshIndexDataCreateInfo IndexCI;
+    RadientMeshIndexData IndexCI;
     IndexCI.pIndexBuffer = pBlob;
     IndexCI.IndexCount   = 3;
     IndexCI.IndexType    = RADIENT_INDEX_TYPE_UINT8;
@@ -457,7 +455,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsCreationAfterManagerStops)
     RefCntAutoPtr<IRadientMeshAsset>           pMesh;
     EXPECT_EQ(pMeshImportServices->CreateMeshVertexData({}, &pVertices), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMeshImportServices->CreateMeshIndexData({}, &pIndices), RADIENT_STATUS_INVALID_OPERATION);
-    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData({}, &pMorphData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData({}, 3, &pMorphData), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMeshImportServices->CreateMeshView({}, &pMesh), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pVertices, nullptr);
     EXPECT_EQ(pIndices, nullptr);

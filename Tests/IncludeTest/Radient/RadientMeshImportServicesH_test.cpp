@@ -34,24 +34,21 @@ static_assert(std::is_base_of<IObject, IRadientMeshImportServices>::value, "Mesh
 static_assert(std::is_base_of<IRadientAsset, IRadientMeshVertexData>::value, "Vertex data must implement IRadientAsset");
 static_assert(std::is_base_of<IRadientAsset, IRadientMeshIndexData>::value, "Index data must implement IRadientAsset");
 static_assert(std::is_base_of<IRadientAsset, IRadientMeshMorphTargetData>::value, "Morph data must implement IRadientAsset");
-static_assert(std::is_standard_layout<RadientMeshVertexDataCreateInfo>::value, "Vertex data create info must have a C-compatible layout");
-static_assert(std::is_standard_layout<RadientMeshIndexDataCreateInfo>::value, "Index data create info must have a C-compatible layout");
-static_assert(std::is_standard_layout<RadientMeshMorphTargetDataCreateInfo>::value, "Morph data create info must have a C-compatible layout");
 static_assert(std::is_standard_layout<RadientMeshViewCreateInfo>::value, "Mesh view create info must have a C-compatible layout");
 static_assert(std::is_trivially_copyable<RadientMeshGeometryData>::value, "Geometry data must be trivially copyable");
 
 void RadientMeshImportServices_CPP_UseInterfaces(IRadientAssetManager* pManager, IRadientMeshImportServices* pServices)
 {
-    RadientMeshVertexDataCreateInfo      VertexCI;
-    RadientMeshIndexDataCreateInfo       IndexCI;
-    RadientMeshMorphTargetDataCreateInfo MorphCI;
+    RadientMeshVertexData      VertexCI;
+    RadientMeshIndexData       IndexCI;
+    RadientMeshMorphTargetData MorphCI;
     IndexCI.IndexType                       = RADIENT_INDEX_TYPE_UINT8;
     IRadientMeshVertexData*      pVertices  = nullptr;
     IRadientMeshIndexData*       pIndices   = nullptr;
     IRadientMeshMorphTargetData* pMorphData = nullptr;
     (void)pServices->CreateMeshVertexData(VertexCI, &pVertices);
     (void)pServices->CreateMeshIndexData(IndexCI, &pIndices);
-    (void)pServices->CreateMeshMorphTargetData(MorphCI, &pMorphData);
+    (void)pServices->CreateMeshMorphTargetData(MorphCI, VertexCI.VertexCount, &pMorphData);
     (void)pManager->WaitForAssetLoad(pVertices);
     (void)pManager->WaitForAssetLoad(pIndices);
     (void)pManager->WaitForAssetLoad(pMorphData);

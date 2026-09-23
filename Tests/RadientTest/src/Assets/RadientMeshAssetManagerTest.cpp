@@ -107,16 +107,16 @@ MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientD
 
     IRadientDataBlob* const VertexData[]{pVertexBlob};
 
-    MeshCI.VertexLayout    = VertexLayout;
-    MeshCI.ppVertexBuffers = VertexData;
-    MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.VertexData.VertexLayout    = VertexLayout;
+    MeshCI.VertexData.ppVertexBuffers = VertexData;
+    MeshCI.VertexData.VertexCount     = static_cast<Uint32>(Positions.size());
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = static_cast<Uint32>(Indices.size());
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
 
     MeshSources Sources;
-    Sources.pVertexSource = std::make_unique<RadientMeshVertexSource>(MeshCI);
-    Sources.pIndexSource  = std::make_unique<RadientMeshIndexSource>(MeshCI);
+    Sources.pVertexSource = std::make_unique<RadientMeshVertexSource>(MeshCI.VertexData);
+    Sources.pIndexSource  = std::make_unique<RadientMeshIndexSource>(MeshCI.IndexData);
     return Sources;
 }
 
@@ -378,14 +378,14 @@ TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
     RadientMeshPrimitiveCreateInfo Primitive{};
     Primitive.IndexCount = static_cast<Uint32>(Indices.size());
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.VertexLayout    = Layout;
-    MeshCI.ppVertexBuffers = VertexBuffers;
-    MeshCI.VertexCount     = static_cast<Uint32>(Positions.size());
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = static_cast<Uint32>(Indices.size());
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT16;
-    MeshCI.pPrimitives     = &Primitive;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.VertexData.VertexLayout    = Layout;
+    MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
+    MeshCI.VertexData.VertexCount     = static_cast<Uint32>(Positions.size());
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = static_cast<Uint32>(Indices.size());
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT16;
+    MeshCI.pPrimitives                = &Primitive;
+    MeshCI.PrimitiveCount             = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ASSERT_EQ(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh), RADIENT_STATUS_PENDING);
@@ -549,14 +549,14 @@ TEST(RadientMeshAssetManagerTest, RejectsUnreadableIndexBlobBeforeQueuingLoad)
     RadientMeshPrimitiveCreateInfo Primitive;
     Primitive.IndexCount = 3;
     RadientMeshCreateInfo MeshCI;
-    MeshCI.VertexLayout    = Layout;
-    MeshCI.ppVertexBuffers = VertexBuffers;
-    MeshCI.VertexCount     = 3;
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = 3;
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives     = &Primitive;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.VertexData.VertexLayout    = Layout;
+    MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
+    MeshCI.VertexData.VertexCount     = 3;
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = 3;
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives                = &Primitive;
+    MeshCI.PrimitiveCount             = 1;
 
     void* pWriteData = nullptr;
     ASSERT_EQ(pIndexBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);
@@ -579,7 +579,7 @@ TEST(RadientMeshAssetManagerTest, RejectsUnreadableIndexBlobBeforeQueuingLoad)
 
     pIndexBlob = Testing::MakeTestMutableDataBlob(Indices, sizeof(Indices));
     ASSERT_NE(pIndexBlob, nullptr);
-    MeshCI.pIndexBuffer = pIndexBlob;
+    MeshCI.IndexData.pIndexBuffer = pIndexBlob;
     EXPECT_EQ(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &pMesh), RADIENT_STATUS_PENDING);
     DrainThreadPool(*pThreadPool);
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
@@ -603,14 +603,14 @@ TEST(RadientMeshAssetManagerTest, RejectsActiveVertexBlobWriterBeforeQueuingLoad
     RadientMeshPrimitiveCreateInfo Primitive;
     Primitive.IndexCount = 3;
     RadientMeshCreateInfo MeshCI;
-    MeshCI.VertexLayout    = Layout;
-    MeshCI.ppVertexBuffers = VertexBuffers;
-    MeshCI.VertexCount     = 3;
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = 3;
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives     = &Primitive;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.VertexData.VertexLayout    = Layout;
+    MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
+    MeshCI.VertexData.VertexCount     = 3;
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = 3;
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives                = &Primitive;
+    MeshCI.PrimitiveCount             = 1;
 
     void* pWriteData = nullptr;
     ASSERT_EQ(pBlob->BeginWrite(&pWriteData), RADIENT_STATUS_OK);

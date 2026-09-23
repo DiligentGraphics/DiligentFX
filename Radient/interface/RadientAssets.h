@@ -210,13 +210,108 @@ struct RadientBoneIndices4
 typedef struct RadientBoneIndices4 RadientBoneIndices4;
 
 
+/// CPU vertex data supplied to CreateMesh or CreateMeshVertexData.
+///
+/// Both calls copy the layout arrays and semantic strings and retain each
+/// referenced blob under shared read access before returning. The caller can then
+/// release its descriptors and blob references. End write access before the call;
+/// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Source bytes are
+/// read without an additional input-buffer copy. Read access ends when source
+/// processing finishes, independently of GPU upload completion. Reference blobs
+/// retain their usual external-storage lifetime requirements.
+///
+/// VertexLayout describes the supplied CPU bytes. The renderer chooses its stored
+/// layout and converts the source attributes as needed.
+struct RadientMeshVertexData
+{
+    /// Layout of the source vertex buffers. Automatic offsets and strides are
+    /// resolved before reading. A three-component POSITION attribute is required.
+    /// JOINTS_0 and WEIGHTS_0, when present, occur together with four components
+    /// each; JOINTS_0 uses non-normalized unsigned integers or FLOAT32 components.
+    /// Integer and FLOAT32 source components support conversion to the renderer's
+    /// layout; FLOAT16 conversion is unsupported by the current renderer.
+    /// The default empty layout is invalid for vertex-data creation.
+    RadientVertexLayoutDesc VertexLayout DEFAULT_INITIALIZER({});
+
+    /// Array of VertexLayout.BufferCount source blobs. Each attribute's
+    /// BufferIndex selects a blob, and its ByteOffset is relative to that blob.
+    /// The array and each referenced entry must be non-null. A referenced blob
+    /// contains all values through the last vertex: (VertexCount - 1) times the
+    /// resolved stride, plus the attribute offset and element size. Trailing
+    /// padding is optional. Unreferenced entries are ignored and may be null;
+    /// multiple entries may reference the same blob. Both read-only and mutable
+    /// blobs are accepted. Size and data are inspected under shared read access.
+    /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
+    IRadientDataBlob* const* ppVertexBuffers DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of vertex records in every referenced buffer. Must be nonzero.
+    /// This defines the vertex domain for indices and morph targets in each
+    /// geometry that uses this data.
+    Uint32 VertexCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientMeshVertexData RadientMeshVertexData;
+
+
+/// CPU indices supplied to CreateMesh or CreateMeshIndexData.
+///
+/// Both calls retain the blob and acquire shared read access before returning,
+/// without copying the input buffer. The caller can then release its blob
+/// reference. End write access before the call; an active writer returns
+/// RADIENT_STATUS_INVALID_OPERATION. Read access ends when index processing
+/// finishes, independently of GPU upload completion. Reference blobs retain their
+/// usual external-storage lifetime requirements. The renderer selects the stored
+/// index encoding; the source encoding does not dictate GPU storage.
+struct RadientMeshIndexData
+{
+    /// Blob containing IndexCount tightly packed indices, starting at its first
+    /// byte. Must be non-null and contain at least IndexCount times the source
+    /// element size bytes. Additional bytes are ignored. Both read-only and
+    /// mutable blobs are accepted. Size and data are checked under read access.
+    /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
+    IRadientDataBlob* pIndexBuffer DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of source index elements. Must be nonzero. These indices are local
+    /// to the vertex domain of each geometry that uses this index data.
+    Uint32 IndexCount DEFAULT_INITIALIZER(0);
+
+    /// Encoding of the source indices: UINT8, UINT16, or UINT32. The default NONE
+    /// is invalid for index-data creation.
+    RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
+};
+typedef struct RadientMeshIndexData RadientMeshIndexData;
+
+
+/// CPU morph targets supplied to CreateMesh or CreateMeshMorphTargetData.
+///
+/// Both calls copy descriptions, names, attribute semantics, and all delta values
+/// before returning. The caller can then release the source arrays and strings.
+/// Delta values use transient source and upload storage; retaining the resulting
+/// asset does not keep a persistent CPU copy of the deltas.
+struct RadientMeshMorphTargetData
+{
+    /// Array of MorphTargetCount morph targets. Must be non-null when
+    /// MorphTargetCount is nonzero. Every attribute contains the vertex count
+    /// times its ComponentCount tightly packed FLOAT32 values. CreateMesh uses
+    /// VertexData.VertexCount; CreateMeshMorphTargetData takes the count as a
+    /// separate argument. The validation rules in RadientMorphTargetCreateInfo
+    /// apply to each target, including unique attribute semantics and finite
+    /// default weights.
+    const RadientMorphTargetCreateInfo* pMorphTargets DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of elements in pMorphTargets. Zero means no morph targets in
+    /// CreateMesh; CreateMeshMorphTargetData requires a nonzero count.
+    Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientMeshMorphTargetData RadientMeshMorphTargetData;
+
+
 /// CPU-side mesh primitive creation attributes.
 struct RadientMeshPrimitiveCreateInfo
 {
     /// Optional primitive name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Zero-based index element offset in RadientMeshCreateInfo::pIndexBuffer,
+    /// Zero-based index element offset in RadientMeshCreateInfo::IndexData.pIndexBuffer,
     /// or in the selected geometry's index data when creating a mesh view.
     Uint32 FirstIndex DEFAULT_INITIALIZER(0);
 
@@ -232,83 +327,37 @@ typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
 
 /// CPU-side mesh creation attributes.
 ///
-/// Vertex data is described by VertexLayout and ppVertexBuffers; index data is
-/// supplied through pIndexBuffer. Radient copies the layout arrays and semantic
-/// strings and retains the referenced blobs before CreateMesh returns, including
+/// CreateMesh copies descriptor metadata and morph-target deltas and retains
+/// vertex and index blobs under shared read access before returning, including
 /// when uploads are asynchronous. The caller can then modify or release the
-/// descriptors and its blob references. Vertex and index bytes are read without
-/// copying the input buffers and remain under shared read access
-/// until source processing finishes. End write access before calling CreateMesh;
-/// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Writes and resizing
-/// are unavailable while Radient is reading a mutable blob. OnLastReaderReleased
-/// can be used to recycle its storage after acquiring write access; it does not
-/// signal GPU completion. Reference blobs follow their normal storage-lifetime
-/// requirements. The renderer selects its storage layout and converts source
-/// attributes as needed; VertexLayout describes only the supplied CPU bytes.
+/// descriptors and its blob references. Source vertex and index bytes are read
+/// without copying the input buffers. End blob write access before calling;
+/// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Read access lasts
+/// until source processing finishes. OnLastReaderReleased can be used to recycle
+/// blob storage after acquiring write access; it does not signal GPU completion.
+/// Reference blobs follow their normal storage-lifetime requirements.
 struct RadientMeshCreateInfo
 {
-    /// Mesh name.
+    /// Optional mesh name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Layout of the source vertex buffers. Automatic offsets and strides are
-    /// resolved before reading the data. A nonempty layout with a three-component
-    /// POSITION attribute is required. JOINTS_0 and WEIGHTS_0, when present, occur
-    /// together and each has four components; JOINTS_0 uses non-normalized unsigned
-    /// integers or FLOAT32 components. Conversion to the renderer's storage format
-    /// supports integer and FLOAT32 source components. FLOAT16 conversion is
-    /// unsupported by the current renderer.
-    /// The default empty layout is invalid for mesh creation.
-    RadientVertexLayoutDesc VertexLayout;
+    /// Required source vertex data. Its vertex count defines the shared vertex
+    /// domain for the mesh's indices and optional morph-target deltas.
+    /// The renderer selects the stored vertex layout.
+    RadientMeshVertexData VertexData DEFAULT_INITIALIZER({});
 
-    /// Array of VertexLayout.BufferCount source data blobs. Required and non-null
-    /// for mesh creation. An attribute's BufferIndex selects its blob; ByteOffset
-    /// is relative to the blob's first byte. Each referenced entry must be non-null
-    /// and contain every attribute value through the last vertex:
-    /// (VertexCount - 1) * resolved ByteStride + resolved ByteOffset + element size.
-    /// Trailing padding after the final attribute value is optional. Insufficient
-    /// or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT. Size and
-    /// data are inspected under read access. Unreferenced entries are ignored and
-    /// may be null. The same blob may appear in multiple entries. Radient retains
-    /// the blobs, so the pointer array and caller references can be released after
-    /// CreateMesh returns. Both read-only and mutable blobs are accepted. The
-    /// default is nullptr.
-    IRadientDataBlob* const* ppVertexBuffers DEFAULT_INITIALIZER(nullptr);
+    /// Required source index data. Primitive ranges select elements of this data.
+    RadientMeshIndexData IndexData DEFAULT_INITIALIZER({});
 
-    /// Number of vertex records in every referenced buffer. Must be nonzero.
-    /// This count also defines the vertex domain for indices and morph targets.
-    Uint32 VertexCount DEFAULT_INITIALIZER(0);
+    /// Optional morph targets. Each target attribute contains VertexData.VertexCount
+    /// vertex deltas. The default empty descriptor creates a mesh without morphing.
+    RadientMeshMorphTargetData MorphTargetData DEFAULT_INITIALIZER({});
 
-    /// Morph targets whose attribute streams use the mesh vertex domain. Each
-    /// target attribute contains VertexCount vertex deltas. Must not be null
-    /// when MorphTargetCount is nonzero.
-    const RadientMorphTargetCreateInfo* pMorphTargets DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of elements in pMorphTargets.
-    Uint32 MorphTargetCount DEFAULT_INITIALIZER(0);
-
-    /// Blob containing IndexCount tightly packed indices starting at its first byte.
-    /// Required and non-null. IndexType determines the element size; the blob must
-    /// contain at least IndexCount * element size bytes. Additional bytes are ignored.
-    /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
-    /// Radient retains the blob and acquires shared read access before CreateMesh
-    /// returns, without copying the source bytes. Size and data are checked under
-    /// read access, which lasts until index processing finishes. Both read-only and
-    /// mutable blobs are accepted; an active writer returns RADIENT_STATUS_INVALID_OPERATION.
-    /// The caller may release its blob reference after CreateMesh returns. Reference
-    /// blobs retain their usual external-storage lifetime requirements.
-    IRadientDataBlob* pIndexBuffer DEFAULT_INITIALIZER(nullptr);
-
-    /// Number of indices in pIndexBuffer. Must be nonzero.
-    Uint32 IndexCount DEFAULT_INITIALIZER(0);
-
-    /// Encoding of each index in pIndexBuffer: UINT8, UINT16, or UINT32.
-    /// The default NONE is invalid. The renderer selects its stored format.
-    RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
-
-    /// Mesh primitives.
+    /// Array of PrimitiveCount mesh primitives. Must be non-null. Each primitive
+    /// selects a nonempty index range and an optional material.
     const RadientMeshPrimitiveCreateInfo* pPrimitives DEFAULT_INITIALIZER(nullptr);
 
-    /// Number of primitives.
+    /// Number of elements in pPrimitives. Must be nonzero.
     Uint32 PrimitiveCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientMeshCreateInfo RadientMeshCreateInfo;

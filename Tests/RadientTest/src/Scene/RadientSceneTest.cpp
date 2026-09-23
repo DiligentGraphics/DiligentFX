@@ -185,14 +185,14 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
     const auto              pIndexBlob       = MakeTestDataBlob(Indices, sizeof(Indices));
     IRadientDataBlob* const VertexData[]{pPositionsBlob, pColorsBlob, pBoneIndicesBlob, pBoneWeightsBlob};
 
-    MeshCI.VertexLayout    = VertexLayout;
-    MeshCI.ppVertexBuffers = VertexData;
-    MeshCI.VertexCount     = 3;
-    MeshCI.pIndexBuffer    = pIndexBlob;
-    MeshCI.IndexCount      = 3;
-    MeshCI.IndexType       = RADIENT_INDEX_TYPE_UINT32;
-    MeshCI.pPrimitives     = &PrimitiveCI;
-    MeshCI.PrimitiveCount  = 1;
+    MeshCI.VertexData.VertexLayout    = VertexLayout;
+    MeshCI.VertexData.ppVertexBuffers = VertexData;
+    MeshCI.VertexData.VertexCount     = 3;
+    MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+    MeshCI.IndexData.IndexCount       = 3;
+    MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+    MeshCI.pPrimitives                = &PrimitiveCI;
+    MeshCI.PrimitiveCount             = 1;
 
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     const RADIENT_STATUS             CreateStatus = AssetManager.CreateMesh(MeshCI, &pMesh);

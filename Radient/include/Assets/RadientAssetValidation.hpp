@@ -27,7 +27,6 @@
 #pragma once
 
 #include "RadientAssets.h"
-#include "RadientMeshImportServices.h"
 
 #include <string>
 
@@ -55,10 +54,8 @@ bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout);
 /// after acquiring read access. Returns an empty string on success or an error
 /// message on failure. Does not log or retain input; Resolved is only usable on
 /// success.
-std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
+std::string ValidateMeshVertexData(const RadientMeshVertexData& CI,
                                    ResolvedVertexLayout&        Resolved);
-std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& CI,
-                                   ResolvedVertexLayout&                  Resolved);
 
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI);
 bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo);
