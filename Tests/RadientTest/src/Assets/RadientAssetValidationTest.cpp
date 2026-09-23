@@ -375,6 +375,20 @@ TEST(RadientAssetValidationTest, ValidatesSceneLoadInfo)
         TestingEnvironment::ErrorScope ExpectedErrors{"Format is invalid"};
         EXPECT_FALSE(ValidateSceneLoadInfo(LoadInfo));
     }
+
+    // An explicit importer overrides the legacy format selector. Empty and null
+    // identifiers fall back to that selector, including its validation.
+    LoadInfo.ImporterId = "custom";
+    EXPECT_TRUE(ValidateSceneLoadInfo(LoadInfo));
+    LoadInfo.ImporterId = "";
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"Format is invalid"};
+        EXPECT_FALSE(ValidateSceneLoadInfo(LoadInfo));
+    }
+    LoadInfo.Format = RADIENT_SCENE_FORMAT_GLTF;
+    EXPECT_TRUE(ValidateSceneLoadInfo(LoadInfo));
+    LoadInfo.ImporterId = nullptr;
+    EXPECT_TRUE(ValidateSceneLoadInfo(LoadInfo));
 }
 
 TEST(RadientAssetValidationTest, ValidatesTextureLoadInfo)

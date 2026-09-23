@@ -39,10 +39,23 @@
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/inlined_vector.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #include <atomic>
+#include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -305,13 +318,15 @@ RadientMaterialDefaultTextures CreateDefaultMaterialTextures(IThreadPool&       
     return DefaultTextures;
 }
 
-std::string MakeSceneCacheKey(RADIENT_SCENE_FORMAT Format, const char* Location)
+std::string MakeSceneCacheKey(const IRadientSceneAssetImporter* pImporter, const char* Location)
 {
     if (Location == nullptr || Location[0] == '\0')
         return {};
 
-    RadientCacheKeyBuilder Builder{"scene", 1};
-    Builder.AddInteger("format", Format)
+    RadientCacheKeyBuilder Builder{"scene", 2};
+    // The manager retains every registered importer for the cache's lifetime,
+    // so its address identifies the importer without a separate ID.
+    Builder.AddInteger("importer", reinterpret_cast<std::uintptr_t>(pImporter))
         .AddString("location", Location);
     return Builder.GetKey();
 }
@@ -409,6 +424,42 @@ public:
 };
 
 } // namespace
+
+// The built-in importer follows the same selection and cache path as plugins.
+// Its manager is borrowed: scene jobs lock the manager before invoking Import.
+class RadientAssetManagerImpl::GLTFSceneAssetImporter final : public ObjectBase<IRadientSceneAssetImporter>
+{
+public:
+    using TBase = ObjectBase<IRadientSceneAssetImporter>;
+
+    GLTFSceneAssetImporter(IReferenceCounters*      pRefCounters,
+                           RadientAssetManagerImpl* pAssetManager) :
+        TBase{pRefCounters},
+        m_pAssetManager{pAssetManager}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneAssetImporter, TBase)
+
+    virtual const Char* DILIGENT_CALL_TYPE GetIdentifier() const override final
+    {
+        return "gltf";
+    }
+
+    virtual Bool DILIGENT_CALL_TYPE CanImport(const Char* URI) const override final
+    {
+        return DetectSceneFormatFromURI(URI) == RADIENT_SCENE_FORMAT_GLTF;
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Import(const RadientSceneAssetImportContext& Context,
+                                                     RadientImport::ImportedDocument&      Document) override final
+    {
+        return m_pAssetManager->LoadGLTFSceneAsset(Document, Context.pSourceData);
+    }
+
+private:
+    RadientAssetManagerImpl* const m_pAssetManager;
+};
 
 // Import services are separate from IRadientAssetManager. Retaining a service
 // keeps its manager alive, while Stop() still prevents new import work.
@@ -558,12 +609,114 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     }
     if (RADIENT_FAILED(DefaultMaterialStatus) || m_pDefaultMaterial == nullptr)
         LOG_ERROR_AND_THROW("Failed to create the default Radient material");
+
+    RefCntAutoPtr<IRadientSceneAssetImporter> pGLTFImporter{MakeNewRCObj<GLTFSceneAssetImporter>()(this)};
+    if (RegisterSceneAssetImporter(pGLTFImporter) != RADIENT_STATUS_OK)
+        LOG_ERROR_AND_THROW("Failed to register the built-in Radient GLTF importer");
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
     DEV_CHECK_ERR(m_pUploadManager == nullptr || m_Stopped.load(std::memory_order_acquire),
                   "RadientAssetManagerImpl::Stop() must be called before destroying a GPU-backed asset manager");
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::RegisterSceneAssetImporter(IRadientSceneAssetImporter* pImporter)
+{
+    if (m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+    if (pImporter == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    try
+    {
+        const Char* Identifier = pImporter->GetIdentifier();
+        if (Identifier == nullptr || *Identifier == '\0')
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        std::unique_lock<std::shared_mutex> Lock{m_SceneImportersMutex};
+        if (m_Stopped.load(std::memory_order_acquire))
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        const auto InsertResult = m_SceneImporterIndices.emplace(Identifier, m_SceneImporters.size());
+        if (!InsertResult.second)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        m_SceneImporters.emplace_back(pImporter);
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to register Radient scene importer: ", Error.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to register Radient scene importer");
+    }
+    return RADIENT_STATUS_FAILED;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::SelectSceneImporter(const RadientSceneLoadInfo&                LoadInfo,
+                                                            RefCntAutoPtr<IRadientSceneAssetImporter>& pImporter) const
+{
+    try
+    {
+        const Char* RequestedId = LoadInfo.ImporterId;
+        if ((RequestedId == nullptr || *RequestedId == '\0') && LoadInfo.Format == RADIENT_SCENE_FORMAT_GLTF)
+            RequestedId = "gltf";
+
+        if (RequestedId != nullptr && *RequestedId != '\0')
+        {
+            {
+                std::shared_lock<std::shared_mutex> Lock{m_SceneImportersMutex};
+                const auto                          It = m_SceneImporterIndices.find(RequestedId);
+                if (It != m_SceneImporterIndices.end())
+                {
+                    pImporter = m_SceneImporters[It->second];
+                    return RADIENT_STATUS_OK;
+                }
+            }
+            LOG_ERROR_MESSAGE("Radient scene importer '", RequestedId, "' is not registered.");
+            return RADIENT_STATUS_UNSUPPORTED;
+        }
+
+        absl::InlinedVector<IRadientSceneAssetImporter*, 8> Importers;
+        {
+            std::shared_lock<std::shared_mutex> Lock{m_SceneImportersMutex};
+            Importers.assign(m_SceneImporters.begin(), m_SceneImporters.end());
+        }
+
+        // Keep callbacks outside the lock. The snapshot preserves registration
+        // order; the manager retains all registered importers for its lifetime.
+        Uint32 MatchCount = 0;
+        for (IRadientSceneAssetImporter* pCandidate : Importers)
+        {
+            if (pCandidate->CanImport(LoadInfo.URI))
+            {
+                if (MatchCount == 0)
+                    pImporter = pCandidate;
+                ++MatchCount;
+            }
+        }
+        if (MatchCount == 0)
+        {
+            LOG_ERROR_MESSAGE("No Radient scene importer supports URI '", LoadInfo.URI, "'.");
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+        if (MatchCount > 1)
+            LOG_INFO_MESSAGE("Multiple Radient scene importers support URI '", LoadInfo.URI, "'; using the first match '", pImporter->GetIdentifier(), "'.");
+
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to select Radient scene importer for '", LoadInfo.URI, "': ", Error.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to select Radient scene importer for '", LoadInfo.URI, "'");
+    }
+    return RADIENT_STATUS_FAILED;
 }
 
 RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const CreateInfo& CreateInfo)
@@ -661,22 +814,10 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
 
     const std::string SourceURI = LoadInfo.URI;
 
-    const RADIENT_SCENE_FORMAT SceneFormat =
-        LoadInfo.Format == RADIENT_SCENE_FORMAT_AUTO ?
-        DetectSceneFormatFromURI(SourceURI.c_str()) :
-        LoadInfo.Format;
-
-    if (SceneFormat == RADIENT_SCENE_FORMAT_AUTO)
-    {
-        LOG_ERROR_MESSAGE("Failed to infer scene format from URI '", SourceURI, "'");
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    if (SceneFormat != RADIENT_SCENE_FORMAT_GLTF)
-    {
-        LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(SceneFormat), " is not supported yet.");
-        return RADIENT_STATUS_UNSUPPORTED;
-    }
+    RefCntAutoPtr<IRadientSceneAssetImporter> pImporter;
+    const RADIENT_STATUS                      SelectionStatus = SelectSceneImporter(LoadInfo, pImporter);
+    if (SelectionStatus != RADIENT_STATUS_OK)
+        return SelectionStatus;
 
     RefCntWeakPtr<RadientAssetManagerImpl> pWeakSelf{this};
     RefCntAutoPtr<SceneAssetImpl>          pModelAsset =
@@ -689,7 +830,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
 
     RefCntAutoPtr<IAsyncTask> pLoadTask =
         CreateAsyncWorkTask(
-            [pWeakSelf, pModelAsset, SourceURI, SceneFormat](Uint32) mutable //
+            [pWeakSelf, pModelAsset, SourceURI, pImporter = std::move(pImporter)](Uint32) mutable //
             {
                 RefCntAutoPtr<RadientAssetManagerImpl> pSelf = pWeakSelf.Lock();
                 if (pSelf == nullptr)
@@ -727,7 +868,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
 
-                const std::string CacheKey = MakeSceneCacheKey(SceneFormat, ResolvedSourceURI);
+                const std::string CacheKey = MakeSceneCacheKey(pImporter, ResolvedSourceURI);
 
                 auto [pModelPayload, PayloadCreated] =
                     pSelf->m_SceneAssetCache.GetOrCreate(
@@ -752,7 +893,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
                     return ASYNC_TASK_STATUS_COMPLETE;
                 }
 
-                pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), SceneFormat, SourceURI, pSceneData);
+                pSelf->LoadSceneAsset(*pModelAsset->GetPayload(), *pImporter, SourceURI, pSceneData);
                 return ASYNC_TASK_STATUS_COMPLETE;
             });
 
@@ -795,8 +936,11 @@ RADIENT_STATUS RadientAssetManagerImpl::Stop(IDeviceContext* pContext)
 
     // Publish the stopped state before stopping uploads so queued scene tasks
     // do not fan out into new texture/material/mesh work during shutdown.
-    if (m_Stopped.exchange(true, std::memory_order_acq_rel))
-        return RADIENT_STATUS_OK;
+    {
+        std::unique_lock<std::shared_mutex> Lock{m_SceneImportersMutex};
+        if (m_Stopped.exchange(true, std::memory_order_acq_rel))
+            return RADIENT_STATUS_OK;
+    }
 
     if (m_pUploadManager != nullptr)
         m_pUploadManager->Stop(pContext);
@@ -1012,10 +1156,10 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTFSceneAsset(RadientImport::Import
                                         ImportedScene);
 }
 
-void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
-                                             RADIENT_SCENE_FORMAT Format,
-                                             const std::string&   SourceURI,
-                                             IRadientAssetData*   pSceneData)
+void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&           Scene,
+                                             IRadientSceneAssetImporter& Importer,
+                                             const std::string&          SourceURI,
+                                             IRadientAssetData*          pSceneData)
 {
     ImportedSceneStorage& SceneStorage = Scene.GetStorage();
 
@@ -1023,16 +1167,20 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
     RADIENT_STATUS                  Status = RADIENT_STATUS_FAILED;
     try
     {
-        switch (Format)
+        const RefCntAutoPtr<IRadientMeshImportServices> pMeshImportServices = CreateMeshImportServices();
+        const RadientSceneAssetImportContext            Context{
+            pSceneData,
+            m_pAssetResolver,
+            this,
+            pMeshImportServices,
+            m_pDefaultMaterial,
+        };
+        Status = Importer.Import(Context, ImportedScene);
+        if (Status != RADIENT_STATUS_OK && RADIENT_SUCCEEDED(Status))
         {
-            case RADIENT_SCENE_FORMAT_GLTF:
-                Status = LoadGLTFSceneAsset(ImportedScene, pSceneData);
-                break;
-
-            default:
-                LOG_ERROR_MESSAGE("Scene format ", static_cast<Int32>(Format), " is not supported yet.");
-                Status = RADIENT_STATUS_UNSUPPORTED;
-                break;
+            LOG_ERROR_MESSAGE("Radient scene importer must finish document conversion synchronously and return RADIENT_STATUS_OK; returned ",
+                              static_cast<Int32>(Status), " for '", SourceURI, "'.");
+            Status = RADIENT_STATUS_FAILED;
         }
     }
     catch (const std::exception& Error)
@@ -1044,7 +1192,7 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&    Scene,
         LOG_ERROR_MESSAGE("Failed to load Radient scene asset '", SourceURI, "'");
     }
 
-    if (RADIENT_FAILED(Status))
+    if (Status != RADIENT_STATUS_OK)
     {
         SceneStorage.SetFailedStatus(Status);
         return;

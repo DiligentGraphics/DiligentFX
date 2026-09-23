@@ -162,6 +162,7 @@ set(INTERFACE
     interface/RadientMorphTargets.h
     interface/RadientRenderer.h
     interface/RadientScene.h
+    interface/RadientSceneAssetImporter.hpp
     interface/RadientSceneImporter.h
     interface/RadientSceneWriter.h
     interface/RadientSkinning.h

@@ -108,6 +108,7 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     PixelData.GenerateMips       = True;
     TextureLoadInfo.pTextureData = &PixelData;
     (void)TextureLoadInfo;
+    SceneLoadInfo.ImporterId = "gltf";
     (void)SceneLoadInfo;
 }
 
@@ -168,4 +169,10 @@ void RadientAssets_CPP_UseSceneAnimationClips(IRadientSceneAsset* pScene)
         IRadientAnimationClipAsset* pClip = Desc.ppAnimationClips[0];
         (void)pClip;
     }
+}
+
+void RadientAssets_CPP_UseSceneAssetImporterRegistration(IRadientAssetManager*       pAssetManager,
+                                                         IRadientSceneAssetImporter* pImporter)
+{
+    (void)pAssetManager->RegisterSceneAssetImporter(pImporter);
 }

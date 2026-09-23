@@ -6,3 +6,5 @@ This folder contains design and usage notes for Radient.
 - [Light Conventions](LightConventions.md)
 - [Vertex Layouts](VertexLayouts.md)
 - [Texture Assets](TextureAssets.md)
+- [Scene Asset Importers](SceneAssetImporters.md)
+- [Mesh Import Services](MeshData.md)

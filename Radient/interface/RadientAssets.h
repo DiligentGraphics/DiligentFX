@@ -44,6 +44,7 @@ typedef struct IRadientMaterialAsset           IRadientMaterialAsset;
 typedef struct IRadientMaterialDefinitionAsset IRadientMaterialDefinitionAsset;
 typedef struct IRadientTextureAsset            IRadientTextureAsset;
 typedef struct IRadientSceneAsset              IRadientSceneAsset;
+typedef struct IRadientSceneAssetImporter      IRadientSceneAssetImporter;
 typedef struct IRadientSkeletonAsset           IRadientSkeletonAsset;
 typedef struct IRadientSkinAsset               IRadientSkinAsset;
 typedef struct IRadientAnimationClipAsset      IRadientAnimationClipAsset;
@@ -99,7 +100,8 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
 /// Authored scene/model source format.
 DILIGENT_TYPED_ENUM(RADIENT_SCENE_FORMAT, Uint8)
 {
-    /// Infer the source format from the URI or source metadata.
+    /// Select the first registered scene-asset importer that recognizes the URI.
+    /// Use RadientSceneLoadInfo::ImporterId to select a particular importer.
     RADIENT_SCENE_FORMAT_AUTO = 0,
 
     /// GL Transmission Format (.gltf/.glb).
@@ -800,8 +802,16 @@ struct RadientSceneLoadInfo
     /// Source URI. The scheme may identify a local file, remote resource, or memory-backed source.
     const Char* URI DEFAULT_INITIALIZER(nullptr);
 
-    /// Source format. AUTO infers the format from the URI.
+    /// Source format used when ImporterId is null or empty. AUTO selects the first
+    /// registered importer that recognizes URI; GLTF explicitly selects "gltf".
     RADIENT_SCENE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_SCENE_FORMAT_AUTO);
+
+    /// Optional case-sensitive importer identifier. A nonempty identifier selects
+    /// that registered importer, takes precedence over Format, and bypasses URI
+    /// recognition. Null or empty uses Format. Importer selection completes and
+    /// URI is copied during LoadScene; caller strings can be released after it returns.
+    /// An unregistered identifier returns RADIENT_STATUS_UNSUPPORTED.
+    const Char* ImporterId DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientSceneLoadInfo RadientSceneLoadInfo;
 
@@ -1052,6 +1062,31 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                const RadientTextureLoadInfo REF LoadInfo,
                                                IRadientTextureAsset**           ppTexture) PURE;
 
+    /// Registers a scene-format importer and retains it for this manager's lifetime.
+    ///
+    /// The importer provides a nonempty, immutable, case-sensitive identifier
+    /// whose string remains valid for the importer's lifetime. The manager retains
+    /// the importer and copies its identifier. The built-in GLTF importer
+    /// is registered first as "gltf". Automatic selection checks importers in
+    /// registration order and uses the first match, logging an informational
+    /// message when more than one matches. Set RadientSceneLoadInfo::ImporterId
+    /// to select a particular importer explicitly.
+    ///
+    /// This method is thread-safe and may be called concurrently with LoadScene().
+    /// Registering an importer does not change importer selection already in progress.
+    /// Importers remain registered for the manager's lifetime; unregistration and
+    /// replacement are not supported.
+    ///
+    /// Returns RADIENT_STATUS_OK on success, RADIENT_STATUS_INVALID_ARGUMENT for
+    /// a null importer, null/empty identifier, or duplicate identifier,
+    /// RADIENT_STATUS_INVALID_OPERATION after Stop(), and RADIENT_STATUS_FAILED
+    /// if registration fails, including when an importer callback throws.
+    ///
+    /// Importer implementations use the C++ interface in RadientSceneAssetImporter.hpp.
+    /// This header only forward-declares the importer, keeping the manager C-compatible.
+    VIRTUAL RADIENT_STATUS METHOD(RegisterSceneAssetImporter)(THIS_
+                                                              IRadientSceneAssetImporter* pImporter) PURE;
+
     /// Starts loading an authored scene asset from a URI.
     ///
     /// The returned status reports scene loading and GPU upload scheduling. A successful status
@@ -1092,6 +1127,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_CreateStandardMaterialDefinition(This, ...) CALL_IFACE_METHOD(RadientAssetManager, CreateStandardMaterialDefinition, This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
+#    define IRadientAssetManager_RegisterSceneAssetImporter(This, ...) CALL_IFACE_METHOD(RadientAssetManager, RegisterSceneAssetImporter, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 #    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)

@@ -255,7 +255,8 @@ bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo)
     if (LoadInfo.URI == nullptr || *LoadInfo.URI == 0)
         return LogValidationError("RadientSceneLoadInfo", "URI must not be null or empty.");
 
-    if (LoadInfo.Format != RADIENT_SCENE_FORMAT_AUTO &&
+    if ((LoadInfo.ImporterId == nullptr || *LoadInfo.ImporterId == '\0') &&
+        LoadInfo.Format != RADIENT_SCENE_FORMAT_AUTO &&
         LoadInfo.Format != RADIENT_SCENE_FORMAT_GLTF)
     {
         return LogValidationError("RadientSceneLoadInfo", "Format is invalid.");

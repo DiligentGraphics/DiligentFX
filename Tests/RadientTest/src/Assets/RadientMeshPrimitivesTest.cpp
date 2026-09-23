@@ -164,6 +164,11 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RegisterSceneAssetImporter(IRadientSceneAssetImporter*) override final
+    {
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadScene(const RadientSceneLoadInfo&,
                                                         IRadientSceneAsset**) override final
     {

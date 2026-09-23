@@ -17,8 +17,17 @@ creation uses them as `RadientMeshCreateInfo::VertexData`, `IndexData`, and
 mesh specifies its vertex count only once. The `IRadientMesh*Data` interfaces
 are the reusable asset handles returned by the import service.
 
-The examples below assume the importer has received `pMeshImportServices`.
-There is currently no public acquisition API for this service.
+Scene importers receive the service in
+`RadientSceneAssetImportContext::pMeshImportServices` during `Import`. See
+[scene asset importers](SceneAssetImporters.md) for registration and importer
+selection. The examples below use that borrowed service:
+
+```cpp
+IRadientMeshImportServices* const pMeshImportServices = Context.pMeshImportServices;
+```
+
+Use it during the import call. A registered importer does not retain the
+service or its asset manager, which would create an ownership cycle.
 
 ## Create geometry data
 

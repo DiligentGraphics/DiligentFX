@@ -28,6 +28,7 @@
 
 #include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
+#include "RadientSceneAssetImporter.hpp"
 #include "RadientMaterialAssetManager.hpp"
 #include "RadientMeshAssetManager.hpp"
 #include "RadientTextureAssetManager.hpp"
@@ -36,8 +37,20 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4702) // unreachable code in Abseil templates
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #include <atomic>
+#include <cstddef>
+#include <shared_mutex>
 #include <string>
+#include <vector>
 
 namespace Diligent
 {
@@ -107,6 +120,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
                                                           IRadientTextureAsset**        ppTexture) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RegisterSceneAssetImporter(IRadientSceneAssetImporter* pImporter) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadScene(const RadientSceneLoadInfo& LoadInfo,
                                                         IRadientSceneAsset**        ppScene) override final;
 
@@ -151,15 +166,19 @@ public:
 
 private:
     class MeshImportServicesImpl;
+    class GLTFSceneAssetImporter;
+
+    RADIENT_STATUS SelectSceneImporter(const RadientSceneLoadInfo&                LoadInfo,
+                                       RefCntAutoPtr<IRadientSceneAssetImporter>& pImporter) const;
 
     // Dispatches to the asset-type-specific load status. OK means source data
     // has been processed.
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
-    void LoadSceneAsset(ScenePayloadImpl&    Scene,
-                        RADIENT_SCENE_FORMAT Format,
-                        const std::string&   SourceURI,
-                        IRadientAssetData*   pSceneData);
+    void LoadSceneAsset(ScenePayloadImpl&           Scene,
+                        IRadientSceneAssetImporter& Importer,
+                        const std::string&          SourceURI,
+                        IRadientAssetData*          pSceneData);
 
     RADIENT_STATUS LoadGLTFSceneAsset(RadientImport::ImportedDocument& ImportedScene,
                                       IRadientAssetData*               pSceneData);
@@ -180,6 +199,10 @@ private:
     RadientMeshAssetManagerSharedPtr     m_pMeshManager;
 
     RadientAssetCache<ScenePayloadImpl> m_SceneAssetCache;
+
+    mutable std::shared_mutex                              m_SceneImportersMutex;
+    std::vector<RefCntAutoPtr<IRadientSceneAssetImporter>> m_SceneImporters;
+    absl::flat_hash_map<std::string, size_t>               m_SceneImporterIndices;
 
     std::atomic_bool m_Stopped{false};
 };

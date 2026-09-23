@@ -107,6 +107,7 @@ void RadientAssets_C_UseTypes(void)
     TextureDesc.Format    = RADIENT_TEXTURE_FORMAT_RGBA8_UNORM;
     TextureDesc.MipLevels = 5;
     (void)TextureDesc;
+    SceneLoadInfo.ImporterId = "gltf";
     (void)SceneLoadInfo;
     (void)SceneAssetDesc;
     (void)Asset;
@@ -190,4 +191,10 @@ void RadientAssets_C_TestAnimationClipFactory(IRadientAssetManager*           pA
                                               IRadientAnimationClipAsset**    ppClip)
 {
     (void)IRadientAssetManager_CreateAnimationClip(pAssetManager, pClipDesc, ppClip);
+}
+
+void RadientAssets_C_TestSceneAssetImporterRegistration(IRadientAssetManager*       pAssetManager,
+                                                        IRadientSceneAssetImporter* pImporter)
+{
+    (void)IRadientAssetManager_RegisterSceneAssetImporter(pAssetManager, pImporter);
 }
