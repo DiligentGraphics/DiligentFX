@@ -28,6 +28,7 @@
 
 #include "DebugUtilities.hpp"
 #include "RadientAssets.h"
+#include "RadientMeshImportServices.h"
 #include "RadientMaterials.h"
 #include "RefCntAutoPtr.hpp"
 
@@ -36,15 +37,6 @@
 
 namespace Diligent
 {
-
-struct RadientMeshViewCreateInfo
-{
-    const RadientMeshPrimitiveCreateInfo* pPrimitives    = nullptr;
-    Uint32                                PrimitiveCount = 0;
-
-    /// Optional per-primitive geometry indices. If null, all primitives use geometry 0.
-    const Uint32* pGeometryIndices = nullptr;
-};
 
 struct RadientMeshViewGeometryRemap
 {

@@ -114,6 +114,10 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
 
+    // Creates the mesh services supplied to importer implementations. This
+    // capability is not exposed by the public asset-manager interface.
+    RefCntAutoPtr<IRadientMeshImportServices> CreateMeshImportServices();
+
     // Must be called from the render thread.
     static RadientDrawableMeshResolveResult GetDrawableMesh(IRadientMeshAsset* pMesh,
                                                             bool               RequireGPUResourcesReady);
@@ -146,6 +150,8 @@ public:
     }
 
 private:
+    class MeshImportServicesImpl;
+
     // Dispatches to the asset-type-specific load status. OK means source data
     // has been processed.
     static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);

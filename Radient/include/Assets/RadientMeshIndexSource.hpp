@@ -28,6 +28,7 @@
 
 #include "GraphicsTypes.h"
 #include "RadientAssets.h"
+#include "RadientMeshImportServices.h"
 #include "Core/RadientDataBlobReadAccess.hpp"
 
 #include <string>
@@ -39,27 +40,14 @@ namespace Diligent
 class RadientMeshIndexSource final
 {
 public:
-    struct CreateInfo
-    {
-        /// Blob containing tightly packed source indices. The source retains the
-        /// blob and read access to its bytes until destruction, without copying.
-        IRadientDataBlob* pDataBlob = nullptr;
-
-        /// Source index type. VT_UINT8, VT_UINT16, and VT_UINT32 are supported.
-        VALUE_TYPE Type = VT_UNDEFINED;
-
-        /// Number of source indices.
-        Uint32 IndexCount = 0;
-    };
-
     struct PackDestination
     {
         void*  pData    = nullptr;
         Uint32 DataSize = 0;
     };
 
-    explicit RadientMeshIndexSource(const CreateInfo& CI);
     explicit RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI);
+    explicit RadientMeshIndexSource(const RadientMeshIndexDataCreateInfo& CI);
 
     // clang-format off
     RadientMeshIndexSource(const RadientMeshIndexSource&)            = delete;
@@ -83,15 +71,10 @@ public:
         return m_IndexCount * sizeof(Uint32);
     }
 
-    static bool IsSupportedIndexType(VALUE_TYPE IndexType);
-
     RADIENT_STATUS PackIndexData(PackDestination Destination) const noexcept;
 
     /// Returns a key for packed GPU index data.
     std::string MakeCacheKey() const;
-
-private:
-    void Initialize(const CreateInfo& CI);
 
 private:
     RADIENT_STATUS m_Status = RADIENT_STATUS_INVALID_ARGUMENT;

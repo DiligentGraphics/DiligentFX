@@ -410,6 +410,102 @@ public:
 
 } // namespace
 
+// Import services are separate from IRadientAssetManager. Retaining a service
+// keeps its manager alive, while Stop() still prevents new import work.
+class RadientAssetManagerImpl::MeshImportServicesImpl final : public ObjectBase<IRadientMeshImportServices>
+{
+public:
+    using TBase = ObjectBase<IRadientMeshImportServices>;
+
+    MeshImportServicesImpl(IReferenceCounters*      pRefCounters,
+                           RadientAssetManagerImpl* pAssetManager) :
+        TBase{pRefCounters},
+        m_pAssetManager{pAssetManager}
+    {
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientMeshImportServices, TBase)
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshVertexData(const RadientMeshVertexDataCreateInfo& VertexCI,
+                                                                   IRadientMeshVertexData**               ppVertexData) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshIndexData(const RadientMeshIndexDataCreateInfo& IndexCI,
+                                                                  IRadientMeshIndexData**               ppIndexData) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshMorphTargetData(const RadientMeshMorphTargetDataCreateInfo& MorphCI,
+                                                                        IRadientMeshMorphTargetData**               ppMorphData) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMeshView(const RadientMeshViewCreateInfo& ViewCI,
+                                                             IRadientMeshAsset**              ppMesh) override final;
+
+private:
+    RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
+};
+
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshVertexData(const RadientMeshVertexDataCreateInfo& VertexCI,
+                                                                                     IRadientMeshVertexData**               ppVertexData)
+{
+    if (ppVertexData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppVertexData == nullptr, "Output vertex data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppVertexData = nullptr;
+
+    if (m_pAssetManager->m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pAssetManager->m_pThreadPool ?
+        m_pAssetManager->m_pMeshManager->CreateMeshVertexData(*m_pAssetManager->m_pThreadPool, VertexCI, ppVertexData) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshIndexData(const RadientMeshIndexDataCreateInfo& IndexCI,
+                                                                                    IRadientMeshIndexData**               ppIndexData)
+{
+    if (ppIndexData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppIndexData == nullptr, "Output index data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppIndexData = nullptr;
+
+    if (m_pAssetManager->m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pAssetManager->m_pThreadPool ?
+        m_pAssetManager->m_pMeshManager->CreateMeshIndexData(*m_pAssetManager->m_pThreadPool, IndexCI, ppIndexData) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshMorphTargetData(const RadientMeshMorphTargetDataCreateInfo& MorphCI,
+                                                                                          IRadientMeshMorphTargetData**               ppMorphData)
+{
+    if (ppMorphData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMorphData == nullptr, "Output morph target data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMorphData = nullptr;
+
+    if (m_pAssetManager->m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pAssetManager->m_pThreadPool ?
+        m_pAssetManager->m_pMeshManager->CreateMeshMorphTargetData(*m_pAssetManager->m_pThreadPool, MorphCI, ppMorphData) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::MeshImportServicesImpl::CreateMeshView(const RadientMeshViewCreateInfo& ViewCI,
+                                                                               IRadientMeshAsset**              ppMesh)
+{
+    if (ppMesh == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMesh = nullptr;
+
+    if (m_pAssetManager->m_Stopped.load(std::memory_order_acquire))
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    return m_pAssetManager->m_pThreadPool ?
+        m_pAssetManager->m_pMeshManager->CreateMeshView(*m_pAssetManager->m_pThreadPool, ViewCI.pGeometryData, ViewCI.GeometryCount, ViewCI, ppMesh) :
+        RADIENT_STATUS_INVALID_OPERATION;
+}
+
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
@@ -471,6 +567,11 @@ RadientAssetManagerImpl::~RadientAssetManagerImpl()
 RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const CreateInfo& CreateInfo)
 {
     return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo)};
+}
+
+RefCntAutoPtr<IRadientMeshImportServices> RadientAssetManagerImpl::CreateMeshImportServices()
+{
+    return RefCntAutoPtr<IRadientMeshImportServices>{MakeNewRCObj<MeshImportServicesImpl>()(this)};
 }
 
 const RadientAssetManagerDesc& RadientAssetManagerImpl::GetDesc() const
@@ -794,6 +895,24 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
     {
         case RADIENT_ASSET_TYPE_MESH:
             return RadientMeshAssetManager::GetLoadStatus(pAsset);
+
+        case RADIENT_ASSET_TYPE_MESH_VERTEX_DATA:
+        {
+            RefCntAutoPtr<IRadientMeshVertexData> pVertexData{pAsset, IID_RadientMeshVertexData};
+            return pVertexData != nullptr ? RadientMeshAssetManager::GetLoadStatus(pVertexData.RawPtr()) : RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        case RADIENT_ASSET_TYPE_MESH_INDEX_DATA:
+        {
+            RefCntAutoPtr<IRadientMeshIndexData> pIndexData{pAsset, IID_RadientMeshIndexData};
+            return pIndexData != nullptr ? RadientMeshAssetManager::GetLoadStatus(pIndexData.RawPtr()) : RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
+        case RADIENT_ASSET_TYPE_MESH_MORPH_TARGET_DATA:
+        {
+            RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphData{pAsset, IID_RadientMeshMorphTargetData};
+            return pMorphData != nullptr ? RadientMeshAssetManager::GetLoadStatus(pMorphData.RawPtr()) : RADIENT_STATUS_INVALID_ARGUMENT;
+        }
 
         case RADIENT_ASSET_TYPE_SCENE:
             return SceneAssetImpl::GetLoadStatus(pAsset);

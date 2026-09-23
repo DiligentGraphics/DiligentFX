@@ -752,6 +752,25 @@ void ExpectCreateMeshVertexSourcePacksAttribute(const AttributeData& Attribute, 
     Attributes.emplace_back(MakePositionAttribute());
     if (Attribute.Name != GLTF::PositionAttributeName)
         Attributes.emplace_back(Attribute);
+    // Skin attributes must occur together, including when only one is packed below.
+    if (Attribute.Name == GLTF::JointsAttributeName)
+    {
+        Attributes.push_back(AttributeData{
+            GLTF::WeightsAttributeName,
+            TINYGLTF_COMPONENT_TYPE_FLOAT,
+            "VEC4",
+            false,
+            MakeBytes(TestWeights)});
+    }
+    else if (Attribute.Name == GLTF::WeightsAttributeName)
+    {
+        Attributes.push_back(AttributeData{
+            GLTF::JointsAttributeName,
+            TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+            "VEC4",
+            false,
+            MakeBytes(TestJoints)});
+    }
 
     RadientGLTFConverter::MeshVertexSourceResult Result;
     std::weak_ptr<GLTF::Document>                WeakDocument;

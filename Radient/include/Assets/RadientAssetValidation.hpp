@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "RadientMeshImportServices.h"
 
 #include <string>
 
@@ -56,6 +57,8 @@ bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout);
 /// success.
 std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
                                    ResolvedVertexLayout&        Resolved);
+std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& CI,
+                                   ResolvedVertexLayout&                  Resolved);
 
 bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI);
 bool ValidateSceneLoadInfo(const RadientSceneLoadInfo& LoadInfo);

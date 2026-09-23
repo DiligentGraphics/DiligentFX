@@ -29,6 +29,7 @@
 #include "Render/RadientDrawableMesh.hpp"
 #include "RadientAssetCache.hpp"
 #include "RadientAssets.h"
+#include "RadientMeshImportServices.h"
 #include "RefCntAutoPtr.hpp"
 
 #include <memory>
@@ -53,36 +54,8 @@ class MeshVertexDataPayloadImpl;
 class MeshMorphTargetDataPayloadImpl;
 class MeshPayloadImpl;
 class RadientMeshAssetManager;
-struct RadientMeshViewCreateInfo;
 
 using RadientMeshAssetManagerSharedPtr = std::shared_ptr<RadientMeshAssetManager>;
-
-// Opaque handle to shared mesh index data. The implementation details are
-// private to RadientMeshAssetManager.
-class IRadientMeshIndexData : public IRadientAsset
-{
-};
-
-// Opaque handle to shared mesh vertex data. The implementation details are
-// private to RadientMeshAssetManager.
-class IRadientMeshVertexData : public IRadientAsset
-{
-};
-
-// Opaque handle to shared mesh morph-target data. The implementation details
-// are private to RadientMeshAssetManager.
-class IRadientMeshMorphTargetData : public IRadientAsset
-{
-};
-
-struct RadientMeshGeometryData
-{
-    /// Vertex, index, and optional morph-target data that together form one
-    /// drawable geometry. Morph-target deltas use the vertex data's domain.
-    IRadientMeshVertexData*      pVertexData      = nullptr;
-    IRadientMeshIndexData*       pIndexData       = nullptr;
-    IRadientMeshMorphTargetData* pMorphTargetData = nullptr;
-};
 
 class RadientMeshAssetManager final : public std::enable_shared_from_this<RadientMeshAssetManager>
 {
@@ -101,6 +74,18 @@ public:
     RADIENT_STATUS CreateMesh(IThreadPool&                 ThreadPool,
                               const RadientMeshCreateInfo& MeshCI,
                               IRadientMeshAsset**          ppMesh);
+
+    RADIENT_STATUS CreateMeshIndexData(IThreadPool&                          ThreadPool,
+                                       const RadientMeshIndexDataCreateInfo& CI,
+                                       IRadientMeshIndexData**               ppIndexData);
+
+    RADIENT_STATUS CreateMeshVertexData(IThreadPool&                           ThreadPool,
+                                        const RadientMeshVertexDataCreateInfo& CI,
+                                        IRadientMeshVertexData**               ppVertexData);
+
+    RADIENT_STATUS CreateMeshMorphTargetData(IThreadPool&                                ThreadPool,
+                                             const RadientMeshMorphTargetDataCreateInfo& CI,
+                                             IRadientMeshMorphTargetData**               ppMorphTargetData);
 
     RADIENT_STATUS CreateMeshIndexData(IThreadPool&                            ThreadPool,
                                        std::unique_ptr<RadientMeshIndexSource> pIndexSource,

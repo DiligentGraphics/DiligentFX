@@ -32,6 +32,7 @@
 #include "GraphicsTypes.h"
 #include "HashUtils.hpp"
 #include "RadientAssets.h"
+#include "RadientMeshImportServices.h"
 
 #include "../../../PBR/interface/PBR_Renderer.hpp"
 
@@ -47,50 +48,14 @@ namespace Diligent
 class RadientMeshVertexSource final
 {
 public:
-    struct SourceAttribute
-    {
-        /// Attribute name (`"POSITION"`, `"NORMAL"`, `"TEXCOORD_0"`, etc.).
-        const Char* Name = nullptr;
-
-        /// Source component type.
-        VALUE_TYPE Type = VT_UNDEFINED;
-
-        /// Number of source components.
-        Uint8 NumComponents = 0;
-
-        /// Indicates if integer source values are normalized.
-        bool IsNormalized = false;
-
-        /// Blob containing the attribute elements. Retained with read access.
-        IRadientDataBlob* pDataBlob = nullptr;
-
-        /// Distance, in bytes, between consecutive elements. Zero means tightly packed.
-        Uint32 Stride = 0;
-
-        /// Offset of the first attribute element from the blob's first byte.
-        Uint64 ByteOffset = 0;
-    };
-
-    struct CreateInfo
-    {
-        /// Source attributes. Metadata and names are copied; blobs retain read access.
-        const SourceAttribute* pAttributes = nullptr;
-
-        /// Number of source vertex attributes.
-        Uint32 AttributeCount = 0;
-
-        /// Number of source vertices.
-        Uint32 VertexCount = 0;
-    };
-
     struct PackDestination
     {
         void*  pData    = nullptr;
         Uint32 DataSize = 0;
     };
 
-    explicit RadientMeshVertexSource(const CreateInfo& CI);
     explicit RadientMeshVertexSource(const RadientMeshCreateInfo& MeshCI);
+    explicit RadientMeshVertexSource(const RadientMeshVertexDataCreateInfo& CI);
 
     // clang-format off
     RadientMeshVertexSource(const RadientMeshVertexSource&)            = delete;
@@ -185,11 +150,6 @@ private:
 
         const Uint8* pData = nullptr;
     };
-
-    // Both constructors validate their metadata before calling this function.
-    // pLayout supplies public buffer-slot mapping; source offsets and strides are
-    // already resolved in CI. Without a layout, each attribute has its own slot.
-    void Initialize(const CreateInfo& CI, const RadientVertexLayoutDesc* pLayout = nullptr);
 
     void VerifyVertexAttributesSet() const
     {

@@ -61,13 +61,6 @@ VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
     }
 }
 
-bool ValidateMeshIndexSourceCI(const RadientMeshIndexSource::CreateInfo& CI)
-{
-    return CI.pDataBlob != nullptr && CI.IndexCount != 0 &&
-        RadientMeshIndexSource::IsSupportedIndexType(CI.Type) &&
-        IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32));
-}
-
 void UpdateRawIfNotEmpty(XXH128State& Hasher, const void* pData, size_t Size)
 {
     if (pData != nullptr && Size != 0)
@@ -92,40 +85,28 @@ void UpdateStridedRaw(XXH128State& Hasher, const Uint8* pData, Uint32 Count, Uin
 
 } // namespace
 
-RadientMeshIndexSource::RadientMeshIndexSource(const CreateInfo& CI)
+RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI) :
+    RadientMeshIndexSource{RadientMeshIndexDataCreateInfo{MeshCI.pIndexBuffer, MeshCI.IndexCount, MeshCI.IndexType}}
 {
-    Initialize(CI);
 }
 
-RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshCreateInfo& MeshCI)
+RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshIndexDataCreateInfo& CI)
 {
-    CreateInfo CI;
-    CI.pDataBlob  = MeshCI.pIndexBuffer;
-    CI.Type       = GetSourceIndexType(MeshCI.IndexType);
-    CI.IndexCount = MeshCI.IndexCount;
-    Initialize(CI);
-}
-
-bool RadientMeshIndexSource::IsSupportedIndexType(VALUE_TYPE IndexType)
-{
-    return (IndexType == VT_UINT8 ||
-            IndexType == VT_UINT16 ||
-            IndexType == VT_UINT32);
-}
-
-void RadientMeshIndexSource::Initialize(const CreateInfo& CI)
-{
-    if (!ValidateMeshIndexSourceCI(CI))
+    const VALUE_TYPE IndexType = GetSourceIndexType(CI.IndexType);
+    if (CI.pIndexBuffer == nullptr || CI.IndexCount == 0 || IndexType == VT_UNDEFINED ||
+        !IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32)))
+    {
         return;
+    }
 
-    RadientDataBlobReadAccess Buffer{CI.pDataBlob};
+    RadientDataBlobReadAccess Buffer{CI.pIndexBuffer};
     if (!Buffer)
     {
         m_Status = RADIENT_STATUS_INVALID_OPERATION;
         return;
     }
 
-    const Uint64 DataSize = Uint64{CI.IndexCount} * GetValueSize(CI.Type);
+    const Uint64 DataSize = Uint64{CI.IndexCount} * GetValueSize(IndexType);
     if (!RadientValidation::IsAddressableSize(Buffer.GetSize()) || DataSize > Buffer.GetSize())
         return;
 
@@ -136,7 +117,7 @@ void RadientMeshIndexSource::Initialize(const CreateInfo& CI)
     }
 
     m_IndexCount  = CI.IndexCount;
-    m_IndexType   = CI.Type;
+    m_IndexType   = IndexType;
     m_pIndexData  = static_cast<const Uint8*>(Buffer.GetData());
     m_IndexBuffer = std::move(Buffer);
     m_Status      = RADIENT_STATUS_OK;

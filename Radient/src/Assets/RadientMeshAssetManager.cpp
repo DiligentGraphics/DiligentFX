@@ -61,11 +61,8 @@ namespace
 {
 
 static constexpr INTERFACE_ID IID_MeshAssetImpl              = {0xee010529, 0xc9ad, 0x4044, {0xbb, 0x1a, 0x7c, 0x3e, 0x5f, 0x63, 0xc1, 0x5a}};
-static constexpr INTERFACE_ID IID_RadientMeshIndexData       = {0xeb134756, 0x0bac, 0x4bb9, {0x85, 0x84, 0xd5, 0x5f, 0x83, 0x6e, 0x7e, 0x7f}};
 static constexpr INTERFACE_ID IID_MeshIndexDataImpl          = {0xdb8786a7, 0xe63e, 0x4128, {0x92, 0xce, 0x22, 0x86, 0xa4, 0x76, 0x9d, 0x14}};
-static constexpr INTERFACE_ID IID_RadientMeshVertexData      = {0x33b53b79, 0x66b9, 0x44ae, {0x82, 0xd6, 0xc4, 0x7f, 0xe3, 0x06, 0x34, 0xa3}};
 static constexpr INTERFACE_ID IID_MeshVertexDataImpl         = {0x059bbe7e, 0x96ed, 0x4213, {0xb6, 0x90, 0xa4, 0x28, 0x60, 0xb0, 0x34, 0xa7}};
-static constexpr INTERFACE_ID IID_RadientMeshMorphTargetData = {0xdc6645d7, 0x7bff, 0x4964, {0x83, 0xaf, 0x18, 0x1c, 0x25, 0x2f, 0x3b, 0xed}};
 static constexpr INTERFACE_ID IID_MeshMorphTargetDataImpl    = {0x2d315efd, 0x3fd0, 0x4904, {0x8a, 0x15, 0xb6, 0x5f, 0xfd, 0x55, 0x53, 0x1b}};
 
 } // namespace
@@ -231,24 +228,35 @@ namespace
 template <typename InterfaceType,
           const INTERFACE_ID& InterfaceID,
           const INTERFACE_ID& ImplID,
+          RADIENT_ASSET_TYPE  AssetType,
           typename PayloadType>
 class MeshDataAssetImpl final :
     public RadientAssetImpl<InterfaceType,
                             InterfaceID,
                             ImplID,
-                            RADIENT_ASSET_TYPE_MESH,
+                            AssetType,
                             PayloadType,
-                            MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, PayloadType>>
+                            MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, AssetType, PayloadType>>
 {
 public:
     using TBase = RadientAssetImpl<InterfaceType,
                                    InterfaceID,
                                    ImplID,
-                                   RADIENT_ASSET_TYPE_MESH,
+                                   AssetType,
                                    PayloadType,
-                                   MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, PayloadType>>;
+                                   MeshDataAssetImpl<InterfaceType, InterfaceID, ImplID, AssetType, PayloadType>>;
     using TBase::TBase;
     using TBase::Create;
+
+    void SetOwner(const RadientMeshAssetManagerSharedPtr& pOwner)
+    {
+        m_pOwner = pOwner;
+    }
+
+    bool IsOwnedBy(const RadientMeshAssetManager* pOwner) const
+    {
+        return m_pOwner.lock().get() == pOwner;
+    }
 
     void SetLoadTask(IAsyncTask* pTask)
     {
@@ -263,22 +271,28 @@ public:
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(ImplID, TBase)
 
 private:
-    RefCntWeakPtr<IAsyncTask> m_pLoadTask;
+    // Data allocations belong to one manager; the weak reference also rejects
+    // handles whose manager has already been destroyed.
+    std::weak_ptr<RadientMeshAssetManager> m_pOwner;
+    RefCntWeakPtr<IAsyncTask>              m_pLoadTask;
 };
 
 using MeshIndexDataAssetImpl = MeshDataAssetImpl<IRadientMeshIndexData,
                                                  IID_RadientMeshIndexData,
                                                  IID_MeshIndexDataImpl,
+                                                 RADIENT_ASSET_TYPE_MESH_INDEX_DATA,
                                                  MeshIndexDataPayloadImpl>;
 
 using MeshVertexDataAssetImpl = MeshDataAssetImpl<IRadientMeshVertexData,
                                                   IID_RadientMeshVertexData,
                                                   IID_MeshVertexDataImpl,
+                                                  RADIENT_ASSET_TYPE_MESH_VERTEX_DATA,
                                                   MeshVertexDataPayloadImpl>;
 
 using MeshMorphTargetDataAssetImpl = MeshDataAssetImpl<IRadientMeshMorphTargetData,
                                                        IID_RadientMeshMorphTargetData,
                                                        IID_MeshMorphTargetDataImpl,
+                                                       RADIENT_ASSET_TYPE_MESH_MORPH_TARGET_DATA,
                                                        MeshMorphTargetDataPayloadImpl>;
 
 struct MeshGeometryStorage
@@ -1006,6 +1020,8 @@ RADIENT_STATUS CreateMeshDataAsset(IThreadPool&                    ThreadPool,
     if (pDataAsset == nullptr)
         return RADIENT_STATUS_FAILED;
 
+    pDataAsset->SetOwner(Context.pManager);
+
     auto                      CacheAccessor = Cache.GetAccessor();
     RefCntAutoPtr<IAsyncTask> pLoadTask =
         CreateAsyncWorkTask(
@@ -1180,6 +1196,55 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
 }
 
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&                          ThreadPool,
+                                                            const RadientMeshIndexDataCreateInfo& CI,
+                                                            IRadientMeshIndexData**               ppIndexData)
+{
+    if (ppIndexData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppIndexData == nullptr, "Output mesh index data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppIndexData = nullptr;
+
+    std::unique_ptr<RadientMeshIndexSource> pSource = std::make_unique<RadientMeshIndexSource>(CI);
+    if (RADIENT_FAILED(pSource->GetStatus()))
+        return pSource->GetStatus();
+
+    return CreateMeshIndexData(ThreadPool, std::move(pSource), ppIndexData);
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&                           ThreadPool,
+                                                             const RadientMeshVertexDataCreateInfo& CI,
+                                                             IRadientMeshVertexData**               ppVertexData)
+{
+    if (ppVertexData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppVertexData == nullptr, "Output mesh vertex data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppVertexData = nullptr;
+
+    std::unique_ptr<RadientMeshVertexSource> pSource = std::make_unique<RadientMeshVertexSource>(CI);
+    if (RADIENT_FAILED(pSource->GetStatus()))
+        return pSource->GetStatus();
+
+    return CreateMeshVertexData(ThreadPool, std::move(pSource), ppVertexData);
+}
+
+RADIENT_STATUS RadientMeshAssetManager::CreateMeshMorphTargetData(IThreadPool&                                ThreadPool,
+                                                                  const RadientMeshMorphTargetDataCreateInfo& CI,
+                                                                  IRadientMeshMorphTargetData**               ppMorphTargetData)
+{
+    if (ppMorphTargetData == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    DEV_CHECK_ERR(*ppMorphTargetData == nullptr, "Output mesh morph-target data pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+    *ppMorphTargetData = nullptr;
+
+    std::unique_ptr<RadientMorphTargetSource> pSource =
+        std::make_unique<RadientMorphTargetSource>(CI.pMorphTargets, CI.MorphTargetCount, CI.VertexCount);
+    if (RADIENT_FAILED(pSource->GetStatus()))
+        return pSource->GetStatus();
+
+    return CreateMeshMorphTargetData(ThreadPool, std::move(pSource), ppMorphTargetData);
+}
+
 RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&                            ThreadPool,
                                                             std::unique_ptr<RadientMeshIndexSource> pIndexSource,
                                                             IRadientMeshIndexData**                 ppIndexData)
@@ -1300,7 +1365,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
         RefCntAutoPtr<MeshVertexDataAssetImpl> pVertexData{pGeometryData[GeometryIndex].pVertexData, IID_MeshVertexDataImpl};
         RefCntAutoPtr<MeshIndexDataAssetImpl>  pIndexData{pGeometryData[GeometryIndex].pIndexData, IID_MeshIndexDataImpl};
         if (pVertexData == nullptr ||
-            pIndexData == nullptr)
+            pIndexData == nullptr ||
+            !pVertexData->IsOwnedBy(this) ||
+            !pIndexData->IsOwnedBy(this))
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
@@ -1309,7 +1376,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
             pGeometryData[GeometryIndex].pMorphTargetData,
             IID_MeshMorphTargetDataImpl};
         if (pGeometryData[GeometryIndex].pMorphTargetData != nullptr &&
-            pMorphTargetData == nullptr)
+            (pMorphTargetData == nullptr || !pMorphTargetData->IsOwnedBy(this)))
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
         MeshGeometryStorage& Geometry  = ConcreteGeometries.emplace_back();
@@ -1519,9 +1586,9 @@ namespace
 {
 
 template <typename AssetImplType, typename DataInterfaceType>
-RADIENT_STATUS GetMeshDataLoadStatus(DataInterfaceType* pData)
+RADIENT_STATUS GetMeshDataLoadStatus(DataInterfaceType* pData, const INTERFACE_ID& ImplID)
 {
-    const AssetImplType* const pDataAsset = ClassPtrCast<AssetImplType>(pData);
+    RefCntAutoPtr<AssetImplType> pDataAsset{pData, ImplID};
     return pDataAsset != nullptr ?
         pDataAsset->GetLoadStatus() :
         RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1548,17 +1615,17 @@ const PayloadType* GetMeshGeometryDataPayload(
 
 RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientMeshIndexData* pMeshIndexData)
 {
-    return GetMeshDataLoadStatus<MeshIndexDataAssetImpl>(pMeshIndexData);
+    return GetMeshDataLoadStatus<MeshIndexDataAssetImpl>(pMeshIndexData, IID_MeshIndexDataImpl);
 }
 
 RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientMeshVertexData* pMeshVertexData)
 {
-    return GetMeshDataLoadStatus<MeshVertexDataAssetImpl>(pMeshVertexData);
+    return GetMeshDataLoadStatus<MeshVertexDataAssetImpl>(pMeshVertexData, IID_MeshVertexDataImpl);
 }
 
 RADIENT_STATUS RadientMeshAssetManager::GetLoadStatus(IRadientMeshMorphTargetData* pMorphTargetData)
 {
-    return GetMeshDataLoadStatus<MeshMorphTargetDataAssetImpl>(pMorphTargetData);
+    return GetMeshDataLoadStatus<MeshMorphTargetDataAssetImpl>(pMorphTargetData, IID_MeshMorphTargetDataImpl);
 }
 
 RADIENT_STATUS RadientMeshAssetManager::GetGPUResourceStatus(IRadientAsset* pMeshAsset)

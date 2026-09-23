@@ -70,6 +70,14 @@ bool ValidateVertexLayout(const RadientVertexLayoutDesc& Layout)
 std::string ValidateMeshVertexData(const RadientMeshCreateInfo& MeshCI,
                                    ResolvedVertexLayout&        Resolved)
 {
+    return ValidateMeshVertexData(
+        RadientMeshVertexDataCreateInfo{MeshCI.VertexLayout, MeshCI.ppVertexBuffers, MeshCI.VertexCount},
+        Resolved);
+}
+
+std::string ValidateMeshVertexData(const RadientMeshVertexDataCreateInfo& MeshCI,
+                                   ResolvedVertexLayout&                  Resolved)
+{
     if (MeshCI.VertexCount == 0)
         return "VertexCount must not be zero.";
     const RadientVertexLayoutDesc& Layout = MeshCI.VertexLayout;

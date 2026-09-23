@@ -46,6 +46,7 @@
 #include "TinyGltfModelView.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -79,6 +80,33 @@ RefCntAutoPtr<IRadientDataBlob> CreateDocumentDataBlob(const std::shared_ptr<con
         return {};
     pDocumentOwner.release();
     return pBlob;
+}
+
+RADIENT_VERTEX_COMPONENT_TYPE ToRadientVertexComponentType(VALUE_TYPE Type)
+{
+    switch (Type)
+    {
+        case VT_INT8: return RADIENT_VERTEX_COMPONENT_TYPE_INT8;
+        case VT_UINT8: return RADIENT_VERTEX_COMPONENT_TYPE_UINT8;
+        case VT_INT16: return RADIENT_VERTEX_COMPONENT_TYPE_INT16;
+        case VT_UINT16: return RADIENT_VERTEX_COMPONENT_TYPE_UINT16;
+        case VT_INT32: return RADIENT_VERTEX_COMPONENT_TYPE_INT32;
+        case VT_UINT32: return RADIENT_VERTEX_COMPONENT_TYPE_UINT32;
+        case VT_FLOAT16: return RADIENT_VERTEX_COMPONENT_TYPE_FLOAT16;
+        case VT_FLOAT32: return RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32;
+        default: return RADIENT_VERTEX_COMPONENT_TYPE_UNKNOWN;
+    }
+}
+
+RADIENT_INDEX_TYPE ToRadientIndexType(VALUE_TYPE Type)
+{
+    switch (Type)
+    {
+        case VT_UINT8: return RADIENT_INDEX_TYPE_UINT8;
+        case VT_UINT16: return RADIENT_INDEX_TYPE_UINT16;
+        case VT_UINT32: return RADIENT_INDEX_TYPE_UINT32;
+        default: return RADIENT_INDEX_TYPE_NONE;
+    }
 }
 
 RadientTransform ToRadientTransform(const GLTF::Node& Node)
@@ -1329,10 +1357,11 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
         return {};
     }
 
-    std::vector<RadientMeshVertexSource::SourceAttribute> SourceAttributes;
-    std::vector<RefCntAutoPtr<IRadientDataBlob>>          SourceBlobs;
-    SourceAttributes.reserve(GLTF::DefaultVertexAttributes.size());
-    SourceBlobs.reserve(GLTF::DefaultVertexAttributes.size());
+    std::array<RadientVertexAttributeDesc, GLTF::DefaultVertexAttributes.size()>      SourceAttributes;
+    std::array<RadientVertexBufferLayoutDesc, GLTF::DefaultVertexAttributes.size()>   SourceBufferLayouts;
+    std::array<RefCntAutoPtr<IRadientDataBlob>, GLTF::DefaultVertexAttributes.size()> SourceBlobs;
+    std::array<IRadientDataBlob*, GLTF::DefaultVertexAttributes.size()>               SourceBuffers{};
+    Uint32                                                                            AttributeCount = 0;
 
     const Uint32 VertexCount = static_cast<Uint32>(PositionData.Count);
 
@@ -1351,9 +1380,9 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
             return {};
         }
 
-        const VALUE_TYPE ComponentType = GltfData.Accessor.GetComponentType();
-        const int        NumComponents = GltfData.Accessor.GetNumComponents();
-        const Uint32     ComponentSize = GetValueSize(ComponentType);
+        const RADIENT_VERTEX_COMPONENT_TYPE ComponentType = ToRadientVertexComponentType(GltfData.Accessor.GetComponentType());
+        const int                           NumComponents = GltfData.Accessor.GetNumComponents();
+        const Uint32                        ComponentSize = GetRadientVertexComponentSize(ComponentType);
         if (ComponentSize == 0 || NumComponents < 1 || NumComponents > 4)
             return {};
 
@@ -1379,17 +1408,22 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
         if (pBlob == nullptr)
             return {};
 
-        RadientMeshVertexSource::SourceAttribute& SrcAttrib = SourceAttributes.emplace_back();
-        SrcAttrib.Name                                      = DstAttrib.Name;
-        SrcAttrib.Type                                      = ComponentType;
-        SrcAttrib.NumComponents                             = static_cast<Uint8>(NumComponents);
-        SrcAttrib.IsNormalized                              = GltfData.Accessor.IsNormalized();
-        SrcAttrib.pDataBlob                                 = pBlob;
-        SrcAttrib.Stride                                    = static_cast<Uint32>(GltfData.ByteStride);
-        SourceBlobs.push_back(std::move(pBlob));
+        const Uint32 BufferIndex         = AttributeCount;
+        SourceAttributes[AttributeCount] = {
+            DstAttrib.Name,
+            BufferIndex,
+            0,
+            ComponentType,
+            static_cast<Uint32>(NumComponents),
+            GltfData.Accessor.IsNormalized(),
+        };
+        SourceBufferLayouts[BufferIndex].ByteStride = static_cast<Uint32>(GltfData.ByteStride);
+        SourceBlobs[BufferIndex]                    = std::move(pBlob);
+        SourceBuffers[BufferIndex]                  = SourceBlobs[BufferIndex];
+        ++AttributeCount;
     }
 
-    if (SourceAttributes.empty())
+    if (AttributeCount == 0)
         return {};
 
     float3 BBMin;
@@ -1397,10 +1431,10 @@ MeshVertexSourceResult CreateMeshVertexSource(const GLTF::TinyGltfModelView&    
     if (!GLTF::ComputePrimitiveBoundingBox(PositionData, BBMin, BBMax))
         return {};
 
-    RadientMeshVertexSource::CreateInfo VertexCI;
-    VertexCI.pAttributes    = SourceAttributes.data();
-    VertexCI.AttributeCount = static_cast<Uint32>(SourceAttributes.size());
-    VertexCI.VertexCount    = VertexCount;
+    RadientMeshVertexDataCreateInfo VertexCI;
+    VertexCI.VertexLayout    = {SourceAttributes.data(), AttributeCount, SourceBufferLayouts.data(), AttributeCount};
+    VertexCI.ppVertexBuffers = SourceBuffers.data();
+    VertexCI.VertexCount     = VertexCount;
 
     std::unique_ptr<RadientMeshVertexSource> pSource = std::make_unique<RadientMeshVertexSource>(VertexCI);
     if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)
@@ -1426,9 +1460,9 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
         return Result;
     }
 
-    RefCntAutoPtr<IRadientDataBlob>    pIndexBlob;
-    RadientMeshIndexSource::CreateInfo IndexCI;
-    const int                          IndexAccessor = GltfPrimitive.GetIndicesId();
+    RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+    RadientMeshIndexDataCreateInfo  IndexCI;
+    const int                       IndexAccessor = GltfPrimitive.GetIndicesId();
     if (IndexAccessor >= 0)
     {
         const auto GltfIndexData = GLTF::GetGltfDataInfo(GltfModel, IndexAccessor);
@@ -1443,7 +1477,8 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
         const VALUE_TYPE IndexType       = GltfIndexData.Accessor.GetComponentType();
         const Uint32     IndexValueSize  = GetValueSize(IndexType);
         const Uint32     IndexByteStride = static_cast<Uint32>(GltfIndexData.ByteStride);
-        if (!RadientMeshIndexSource::IsSupportedIndexType(IndexType) ||
+        IndexCI.IndexType                = ToRadientIndexType(IndexType);
+        if (IndexCI.IndexType == RADIENT_INDEX_TYPE_NONE ||
             IndexValueSize == 0 ||
             IndexByteStride != IndexValueSize)
         {
@@ -1463,7 +1498,6 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
         if (pIndexBlob == nullptr)
             return {};
 
-        IndexCI.Type       = IndexType;
         IndexCI.IndexCount = static_cast<Uint32>(GltfIndexData.Count);
     }
     else
@@ -1479,18 +1513,18 @@ MeshIndexSourceResult CreateMeshIndexSource(const GLTF::TinyGltfModelView&      
         void* pData = nullptr;
         if (pMutableBlob->BeginWrite(&pData) != RADIENT_STATUS_OK)
             return {};
-        auto* pIndices = static_cast<Uint32*>(pData);
+        Uint32* pIndices = static_cast<Uint32*>(pData);
         for (Uint32 Index = 0; Index < VertexCount; ++Index)
             pIndices[Index] = Index;
         if (pMutableBlob->EndWrite() != RADIENT_STATUS_OK)
             return {};
 
         pIndexBlob         = pMutableBlob;
-        IndexCI.Type       = VT_UINT32;
+        IndexCI.IndexType  = RADIENT_INDEX_TYPE_UINT32;
         IndexCI.IndexCount = VertexCount;
     }
 
-    IndexCI.pDataBlob = pIndexBlob;
+    IndexCI.pIndexBuffer = pIndexBlob;
 
     std::unique_ptr<RadientMeshIndexSource> pSource = std::make_unique<RadientMeshIndexSource>(IndexCI);
     if (pSource == nullptr || pSource->GetStatus() != RADIENT_STATUS_OK)

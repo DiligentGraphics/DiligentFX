@@ -84,7 +84,16 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_SKIN,
 
     /// Immutable, unbound animation clip.
-    RADIENT_ASSET_TYPE_ANIMATION_CLIP
+    RADIENT_ASSET_TYPE_ANIMATION_CLIP,
+
+    /// Immutable vertex data shared by one or more mesh geometries.
+    RADIENT_ASSET_TYPE_MESH_VERTEX_DATA,
+
+    /// Immutable index data shared by one or more mesh geometries.
+    RADIENT_ASSET_TYPE_MESH_INDEX_DATA,
+
+    /// Immutable morph-target data shared by one or more mesh geometries.
+    RADIENT_ASSET_TYPE_MESH_MORPH_TARGET_DATA
 };
 
 /// Authored scene/model source format.
@@ -207,10 +216,12 @@ struct RadientMeshPrimitiveCreateInfo
     /// Optional primitive name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Zero-based index element offset in RadientMeshCreateInfo::pIndexBuffer.
+    /// Zero-based index element offset in RadientMeshCreateInfo::pIndexBuffer,
+    /// or in the selected geometry's index data when creating a mesh view.
     Uint32 FirstIndex DEFAULT_INITIALIZER(0);
 
-    /// Number of indices in RadientMeshCreateInfo::pIndexBuffer.
+    /// Number of indices to draw from the source index buffer or the selected
+    /// geometry's index data. Must be nonzero.
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
     /// Default material for this primitive.
