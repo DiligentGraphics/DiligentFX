@@ -2,7 +2,7 @@
 
 Applications can register C++ importers for additional scene and model formats.
 An importer converts its source into `RadientImport::ImportedDocument`, the same
-format-independent representation used by the built-in GLTF importer. Radient
+format-independent representation used by the built-in GLTF and OBJ importers. Radient
 then loads its asset dependencies and instantiates scenes from that document.
 
 Include `RadientSceneAssetImporter.hpp` explicitly to implement an importer.
@@ -17,19 +17,19 @@ Implement `IRadientSceneAssetImporter` and register it directly with the asset
 manager:
 
 ```cpp
-RADIENT_STATUS Status = pAssetManager->RegisterSceneAssetImporter(pObjImporter);
+RADIENT_STATUS Status = pAssetManager->RegisterSceneAssetImporter(pCustomImporter);
 if (RADIENT_FAILED(Status))
     return Status;
 
 RadientSceneLoadInfo LoadInfo;
-LoadInfo.URI = "models/scene.obj";
+LoadInfo.URI = "models/scene.custom";
 
 RefCntAutoPtr<IRadientSceneAsset> pScene;
 Status = pAssetManager->LoadScene(LoadInfo, &pScene);
 ```
 
 `GetIdentifier()` returns the importer's immutable, nonempty, case-sensitive
-identifier, such as `"obj"`. Its string remains valid and unchanged for the
+identifier, such as `"custom"`. Its string remains valid and unchanged for the
 importer's lifetime. Registration copies the identifier and retains a strong
 reference to the importer until the asset manager is destroyed. A null
 importer, an empty identifier, or an already registered identifier returns
@@ -39,14 +39,15 @@ With the default `Format = RADIENT_SCENE_FORMAT_AUTO`, `LoadScene` calls
 `CanImport(URI)` in registration order. This receives the original requested URI,
 before the asset resolver opens it. Keep it a quick format-selection predicate,
 such as checking a file extension. If several importers match, Radient logs an
-informational message and uses the first. The built-in importer has identifier
-`"gltf"` and is registered first.
+informational message and uses the first. The built-in importers have identifiers
+`"gltf"` and `"obj"` and are registered first, in that order. OBJ files can be
+loaded directly without registering another importer; see [OBJ import](OBJImporter.md).
 
 Importer callbacks run without the manager's registration lock held. Automatic
 selection uses a fixed snapshot of registered importers, so later registrations
 do not affect that selection. `Import` also runs without the registration lock held.
 
-To select a particular importer, set `LoadInfo.ImporterId = "obj"`. A nonempty
+To select a particular importer, set `LoadInfo.ImporterId = "custom"`. A nonempty
 identifier selects that exact registered importer and overrides `Format`;
 `CanImport` is not consulted. A null or empty identifier uses `Format` instead.
 `RADIENT_SCENE_FORMAT_GLTF` continues to select the built-in `"gltf"` importer.

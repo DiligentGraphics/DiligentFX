@@ -1066,8 +1066,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     ///
     /// The importer provides a nonempty, immutable, case-sensitive identifier
     /// whose string remains valid for the importer's lifetime. The manager retains
-    /// the importer and copies its identifier. The built-in GLTF importer
-    /// is registered first as "gltf". Automatic selection checks importers in
+    /// the importer and copies its identifier. Built-in importers are registered
+    /// first as "gltf" and "obj", in that order. Automatic selection checks importers in
     /// registration order and uses the first match, logging an informational
     /// message when more than one matches. Set RadientSceneLoadInfo::ImporterId
     /// to select a particular importer explicitly.

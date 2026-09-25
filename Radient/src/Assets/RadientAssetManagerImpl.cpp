@@ -32,6 +32,7 @@
 #include "Assets/RadientAssetValidation.hpp"
 #include "Assets/RadientCacheKeyBuilder.hpp"
 #include "Import/RadientGLTFSceneAssetImporter.hpp"
+#include "Import/RadientOBJSceneAssetImporter.hpp"
 #include "Errors.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
@@ -541,6 +542,10 @@ RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounter
     RefCntAutoPtr<IRadientSceneAssetImporter> pGLTFImporter = CreateRadientGLTFSceneAssetImporter();
     if (RegisterSceneAssetImporter(pGLTFImporter) != RADIENT_STATUS_OK)
         LOG_ERROR_AND_THROW("Failed to register the built-in Radient GLTF importer");
+
+    RefCntAutoPtr<IRadientSceneAssetImporter> pOBJImporter = CreateRadientOBJSceneAssetImporter();
+    if (RegisterSceneAssetImporter(pOBJImporter) != RADIENT_STATUS_OK)
+        LOG_ERROR_MESSAGE("Failed to register the built-in Radient OBJ importer. OBJ import will be unavailable.");
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()

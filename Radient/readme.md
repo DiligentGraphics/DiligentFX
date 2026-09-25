@@ -7,7 +7,7 @@ owned metadata and retained data blobs.
 C++ [scene asset importers](docs/SceneAssetImporters.md) can register support for
 additional formats and produce `RadientImport::ImportedDocument`. Register an
 importer with `IRadientAssetManager::RegisterSceneAssetImporter`; the built-in
-GLTF importer participates in the same selection process. Import calls receive
+GLTF and [OBJ](docs/OBJImporter.md) importers participate in the same selection process. Import calls receive
 the asset manager, resolver, source data, default material, and mesh import
 services in their context. Include `RadientSceneAssetImporter.hpp` explicitly to
 implement importers.
