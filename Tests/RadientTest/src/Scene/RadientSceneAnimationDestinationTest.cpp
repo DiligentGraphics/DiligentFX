@@ -38,6 +38,7 @@
 
 #include <array>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -47,7 +48,7 @@ using namespace Diligent::Testing;
 namespace
 {
 
-static constexpr RadientAnimationPropertyID UnknownAnimationProperty = 0xffffffffffffffffull;
+static constexpr Char UnknownAnimationProperty[] = "UnknownProperty";
 
 class RadientSceneAnimationDestinationTest : public testing::Test
 {
@@ -69,7 +70,7 @@ protected:
 
     static RadientAnimationPropertyBindingDesc MakeNodeProperty(
         RadientEntityID              Entity,
-        RadientAnimationPropertyID   Property,
+        const Char*                  Property,
         RADIENT_ANIMATION_VALUE_TYPE Type,
         Uint32                       FirstArrayElement = 0,
         Uint32                       ArraySize         = 1,
@@ -81,7 +82,7 @@ protected:
     static RadientAnimationPropertyBindingDesc MakeProperty(
         RadientEntityID              Entity,
         RadientAnimationSchemaID     Schema,
-        RadientAnimationPropertyID   Property,
+        const Char*                  Property,
         RADIENT_ANIMATION_VALUE_TYPE Type,
         Uint32                       FirstArrayElement = 0,
         Uint32                       ArraySize         = 1)
@@ -206,9 +207,9 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesTransformPropertiesAndPrese
     ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const std::vector Properties = {
-        MakeNodeProperty(SecondEntity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(FirstEntity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
-        MakeNodeProperty(FirstEntity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(SecondEntity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(FirstEntity, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(FirstEntity, RadientNodeScalePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
     std::vector<RadientAnimationResolvedPropertyDesc>  Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding(Properties, &Resolved);
@@ -290,16 +291,16 @@ TEST_F(RadientSceneAnimationDestinationTest, ResolvesSupportedSubsetWithCompactO
 
     const std::array Properties = {
         MakeNodeProperty(FirstEntity, UnknownAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(SecondEntity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(SecondEntity, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(SecondEntity,
-                         RadientNodeTranslationProperty,
+                         RadientNodeTranslationPropertyName,
                          RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
                          0,
                          1,
                          IID_RadientScene),
-        MakeNodeProperty(FirstEntity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
-        MakeNodeProperty(ThirdEntity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(FirstEntity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(FirstEntity, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
+        MakeNodeProperty(ThirdEntity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(FirstEntity, RadientNodeScalePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 6> Resolved;
     for (RadientAnimationResolvedPropertyDesc& Result : Resolved)
@@ -368,7 +369,7 @@ TEST_F(RadientSceneAnimationDestinationTest, DefersAndThenCommitsDerivedSceneSta
     ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeNodeProperty(Parent, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Parent, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     });
     ASSERT_NE(pBinding, nullptr);
 
@@ -405,7 +406,7 @@ TEST_F(RadientSceneAnimationDestinationTest, StagesVisibilityAndUpdatesOnlyVisib
     ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const std::vector Properties = {
-        MakeNodeProperty(Parent, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
+        MakeNodeProperty(Parent, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
     };
     std::vector<RadientAnimationResolvedPropertyDesc>  Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding(Properties, &Resolved);
@@ -510,7 +511,7 @@ TEST_F(RadientSceneAnimationDestinationTest, EvaluatesStepVisibilityChannel)
 
     RadientAnimationChannelDesc Channel{};
     Channel.TargetIndex  = 0;
-    Channel.Property     = RadientNodeVisibilityProperty;
+    Channel.Property     = RadientNodeVisibilityPropertyName;
     Channel.SamplerIndex = 0;
 
     RadientAnimationClipDesc ClipDesc{};
@@ -578,33 +579,33 @@ TEST_F(RadientSceneAnimationDestinationTest, UpdatesAllSupportedLightPropertiesA
     GetSceneImpl().ClearPendingRenderChanges();
 
     const std::vector Properties = {
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightRangeProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightRangePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightExposureProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightExposurePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightInnerConeAngleProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightInnerConeAnglePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightOuterConeAngleProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightOuterConeAnglePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightDiffuseProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightDiffusePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightSpecularProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightSpecularPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightNormalizeProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightNormalizePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_BOOL),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightEnableColorTemperatureProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightEnableColorTemperaturePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_BOOL),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorTemperatureProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorTemperaturePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightRadiusProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightRadiusPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightAngleProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightAnglePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightShapingFocusProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightShapingFocusPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     };
     std::vector<RadientAnimationResolvedPropertyDesc>  Resolved;
@@ -683,7 +684,7 @@ TEST_F(RadientSceneAnimationDestinationTest, SingleLightPropertyUpdatesPreserveO
 {
     const RadientLightComponent Initial      = MakeFullySpecifiedLight();
     const auto                  TestProperty = [&](const char*                  Name,
-                                  RadientAnimationPropertyID   Property,
+                                  const Char*                  Property,
                                   RADIENT_ANIMATION_VALUE_TYPE Type,
                                   auto                         Member,
                                   const auto&                  Value) {
@@ -711,33 +712,33 @@ TEST_F(RadientSceneAnimationDestinationTest, SingleLightPropertyUpdatesPreserveO
         EXPECT_EQ(GetLight(Entity), Expected);
     };
 
-    TestProperty("Color", RadientLightColorProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+    TestProperty("Color", RadientLightColorPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
                  &RadientLightComponent::Color, RadientFloat3{0.9f, 0.8f, 0.7f});
-    TestProperty("Intensity", RadientLightIntensityProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Intensity", RadientLightIntensityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Intensity, 12.f);
-    TestProperty("Range", RadientLightRangeProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Range", RadientLightRangePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Range, 25.f);
-    TestProperty("Exposure", RadientLightExposureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Exposure", RadientLightExposurePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Exposure, 1.5f);
-    TestProperty("InnerConeAngle", RadientLightInnerConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("InnerConeAngle", RadientLightInnerConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::InnerConeAngle, 0.2f);
-    TestProperty("OuterConeAngle", RadientLightOuterConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("OuterConeAngle", RadientLightOuterConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::OuterConeAngle, 0.6f);
-    TestProperty("Diffuse", RadientLightDiffuseProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Diffuse", RadientLightDiffusePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Diffuse, 0.6f);
-    TestProperty("Specular", RadientLightSpecularProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Specular", RadientLightSpecularPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Specular, 0.4f);
-    TestProperty("Normalize", RadientLightNormalizeProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL,
+    TestProperty("Normalize", RadientLightNormalizePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL,
                  &RadientLightComponent::Normalize, Uint8{0});
-    TestProperty("EnableColorTemperature", RadientLightEnableColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL,
+    TestProperty("EnableColorTemperature", RadientLightEnableColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL,
                  &RadientLightComponent::EnableColorTemperature, Uint8{0});
-    TestProperty("ColorTemperature", RadientLightColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("ColorTemperature", RadientLightColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::ColorTemperature, 3200.f);
-    TestProperty("Radius", RadientLightRadiusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Radius", RadientLightRadiusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Radius, 1.25f);
-    TestProperty("Angle", RadientLightAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("Angle", RadientLightAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::Angle, 1.2f);
-    TestProperty("ShapingFocus", RadientLightShapingFocusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+    TestProperty("ShapingFocus", RadientLightShapingFocusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
                  &RadientLightComponent::ShapingFocus, 0.35f);
 }
 
@@ -771,13 +772,13 @@ TEST_F(RadientSceneAnimationDestinationTest, InterleavedLightPropertiesUseIndepe
     GetSceneImpl().ClearPendingRenderChanges();
 
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeProperty(FirstEntity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(FirstEntity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(SecondEntity, RadientLightAnimationSchemaID, RadientLightNormalizeProperty,
+        MakeProperty(SecondEntity, RadientLightAnimationSchemaID, RadientLightNormalizePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_BOOL),
-        MakeProperty(FirstEntity, RadientLightAnimationSchemaID, RadientLightNormalizeProperty,
+        MakeProperty(FirstEntity, RadientLightAnimationSchemaID, RadientLightNormalizePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_BOOL),
-        MakeProperty(SecondEntity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(SecondEntity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     });
     ASSERT_NE(pBinding, nullptr);
@@ -860,19 +861,19 @@ TEST_F(RadientSceneAnimationDestinationTest, UpdatesAllSupportedCameraProperties
     ASSERT_EQ(m_pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const std::vector Properties = {
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraHorizontalApertureProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraHorizontalAperturePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraVerticalApertureProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraVerticalAperturePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraNearClipProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraNearClipPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFarClipProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFarClipPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFStopProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFStopPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocusDistanceProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocusDistancePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     };
     std::vector<RadientAnimationResolvedPropertyDesc>  Resolved;
@@ -934,44 +935,46 @@ TEST_F(RadientSceneAnimationDestinationTest, EveryPropertyPublishesItsSceneRevis
     struct PropertyCase
     {
         RadientAnimationSchemaID     Schema;
-        RadientAnimationPropertyID   Property;
+        const Char*                  Property;
         RADIENT_ANIMATION_VALUE_TYPE Type;
         RevisionKind                 Revision;
         Float32                      ScalarValue = 1.f;
     };
     const std::array Cases = {
-        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Transform},
-        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, RevisionKind::Transform},
-        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Transform},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightIntensityProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightRangeProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightExposureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightInnerConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 0.2f},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightOuterConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 0.6f},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightDiffuseProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightSpecularProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightNormalizeProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightEnableColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 3200.f},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightRadiusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightShapingFocusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraHorizontalApertureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraVerticalApertureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraNearClipProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera, 0.2f},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFarClipProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera, 2000.f},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFStopProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocusDistanceProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
+        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Transform},
+        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, RevisionKind::Transform},
+        PropertyCase{RadientNodeAnimationSchemaID, RadientNodeScalePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Transform},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightIntensityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightRangePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightExposurePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightInnerConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 0.2f},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightOuterConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 0.6f},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightDiffusePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightSpecularPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightNormalizePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightEnableColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light, 3200.f},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightRadiusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightShapingFocusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Light},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraHorizontalAperturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraVerticalAperturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraNearClipPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera, 0.2f},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFarClipPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera, 2000.f},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFStopPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocusDistancePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RevisionKind::Camera},
     };
 
     for (size_t CaseIndex = 0; CaseIndex < Cases.size(); ++CaseIndex)
     {
         SCOPED_TRACE(CaseIndex);
-        const PropertyCase&                                Case     = Cases[CaseIndex];
+        const PropertyCase& Case = Cases[CaseIndex];
+        const std::string   PropertyName{Case.Property};
+        ASSERT_NE(PropertyName.c_str(), Case.Property);
         RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-            MakeProperty(Entity, Case.Schema, Case.Property, Case.Type),
+            MakeProperty(Entity, Case.Schema, PropertyName.c_str(), Case.Type),
         });
         ASSERT_NE(pBinding, nullptr);
 
@@ -1039,16 +1042,16 @@ TEST_F(RadientSceneAnimationDestinationTest, CompactsInterleavedNodeLightAndCame
     const std::array Properties = {
         MakeProperty(Entity, RadientLightAnimationSchemaID, UnknownAnimationProperty,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraHorizontalApertureProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraHorizontalAperturePropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorProperty,
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightColorPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeProperty(Entity, IID_RadientScene, RadientLightIntensityProperty,
+        MakeProperty(Entity, IID_RadientScene, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraNearClipProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraNearClipPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     };
     std::array<RadientAnimationResolvedPropertyDesc, Properties.size()> Resolved{};
@@ -1116,31 +1119,31 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMalformedLightAndCameraPrope
     struct PropertyCase
     {
         RadientAnimationSchemaID     Schema;
-        RadientAnimationPropertyID   Property;
+        const Char*                  Property;
         RADIENT_ANIMATION_VALUE_TYPE Type;
     };
     const std::array Cases = {
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightIntensityProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightRangeProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightExposureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightInnerConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightOuterConeAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightDiffuseProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightSpecularProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightNormalizeProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightEnableColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorTemperatureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightRadiusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightAngleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientLightAnimationSchemaID, RadientLightShapingFocusProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraHorizontalApertureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraVerticalApertureProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraNearClipProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFarClipProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFStopProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocusDistanceProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightIntensityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightRangePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightExposurePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightInnerConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightOuterConeAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightDiffusePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightSpecularPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightNormalizePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightEnableColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightColorTemperaturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightRadiusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightAnglePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientLightAnimationSchemaID, RadientLightShapingFocusPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraHorizontalAperturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraVerticalAperturePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraNearClipPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFarClipPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFStopPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        PropertyCase{RadientCameraAnimationSchemaID, RadientCameraFocusDistancePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
     };
 
     for (size_t CaseIndex = 0; CaseIndex < Cases.size(); ++CaseIndex)
@@ -1176,9 +1179,9 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMissingOrRemovedLightAndCame
     ASSERT_NE(EmptyEntity, InvalidRadientEntityID);
 
     const std::array MissingProperties = {
-        MakeProperty(EmptyEntity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(EmptyEntity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(EmptyEntity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty,
+        MakeProperty(EmptyEntity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     };
     for (const RadientAnimationPropertyBindingDesc& Property : MissingProperties)
@@ -1212,7 +1215,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMissingOrRemovedLightAndCame
     ASSERT_NE(LightEntity, InvalidRadientEntityID);
     ASSERT_EQ(m_pWriter->SetLight(LightEntity, {}), RADIENT_STATUS_OK);
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pLightBinding = CreateBinding({
-        MakeProperty(LightEntity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(LightEntity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     });
     ASSERT_NE(pLightBinding, nullptr);
@@ -1226,7 +1229,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMissingOrRemovedLightAndCame
     ASSERT_NE(CameraEntity, InvalidRadientEntityID);
     ASSERT_EQ(m_pWriter->SetCamera(CameraEntity, {}), RADIENT_STATUS_OK);
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pCameraBinding = CreateBinding({
-        MakeProperty(CameraEntity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty,
+        MakeProperty(CameraEntity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     });
     ASSERT_NE(pCameraBinding, nullptr);
@@ -1250,9 +1253,9 @@ TEST_F(RadientSceneAnimationDestinationTest, ReacquiresOptionalComponentStorageF
     ASSERT_EQ(m_pWriter->SetCamera(Entity, InitialCamera), RADIENT_STATUS_OK);
 
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityProperty,
+        MakeProperty(Entity, RadientLightAnimationSchemaID, RadientLightIntensityPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
-        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty,
+        MakeProperty(Entity, RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName,
                      RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
     });
     ASSERT_NE(pBinding, nullptr);
@@ -1405,12 +1408,12 @@ TEST_F(RadientSceneAnimationDestinationTest, EvaluatesAndFansOutLightAndCameraCh
     InitializeSampler(Samplers[5], RADIENT_ANIMATION_VALUE_TYPE_FLOAT, NearClips.data(), sizeof(NearClips));
 
     const std::array Channels = {
-        RadientAnimationChannelDesc{0, RadientLightColorProperty, 0, 0},
-        RadientAnimationChannelDesc{0, RadientLightIntensityProperty, 0, 1},
-        RadientAnimationChannelDesc{0, RadientLightNormalizeProperty, 0, 2},
-        RadientAnimationChannelDesc{0, RadientLightEnableColorTemperatureProperty, 0, 3},
-        RadientAnimationChannelDesc{1, RadientCameraFocalLengthProperty, 0, 4},
-        RadientAnimationChannelDesc{1, RadientCameraNearClipProperty, 0, 5},
+        RadientAnimationChannelDesc{0, RadientLightColorPropertyName, 0, 0},
+        RadientAnimationChannelDesc{0, RadientLightIntensityPropertyName, 0, 1},
+        RadientAnimationChannelDesc{0, RadientLightNormalizePropertyName, 0, 2},
+        RadientAnimationChannelDesc{0, RadientLightEnableColorTemperaturePropertyName, 0, 3},
+        RadientAnimationChannelDesc{1, RadientCameraFocalLengthPropertyName, 0, 4},
+        RadientAnimationChannelDesc{1, RadientCameraNearClipPropertyName, 0, 5},
     };
 
     RadientAnimationClipDesc ClipDesc{};
@@ -1496,7 +1499,7 @@ TEST_F(RadientSceneAnimationDestinationTest, ReportsDestroyedBoundEntity)
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     });
     ASSERT_NE(pBinding, nullptr);
 
@@ -1511,7 +1514,7 @@ TEST_F(RadientSceneAnimationDestinationTest, DestinationBindingRetainsWriterAndS
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     });
     ASSERT_NE(pBinding, nullptr);
 
@@ -1554,7 +1557,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsNullResolvedPropertyArray)
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
-        Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+        Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
 
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, nullptr, pBinding.GetAddressOfEmpty()),
@@ -1567,7 +1570,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsInvalidBindingOutput)
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
-        Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+        Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
     RadientAnimationResolvedPropertyDesc Resolved{};
 
     EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, nullptr),
@@ -1588,14 +1591,15 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMalformedPropertyDescriptors
 
     const std::array Properties = {
         MakeNodeProperty(Entity,
-                         RadientNodeTranslationProperty,
+                         RadientNodeTranslationPropertyName,
                          RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
                          0,
                          1,
                          InvalidRadientAnimationSchemaID),
-        MakeNodeProperty(Entity, InvalidRadientAnimationPropertyID, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN),
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 0),
+        MakeNodeProperty(Entity, nullptr, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, "", RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 0),
     };
 
     for (const RadientAnimationPropertyBindingDesc& Property : Properties)
@@ -1615,7 +1619,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsUnsupportedSchema)
     ASSERT_NE(Entity, InvalidRadientEntityID);
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
         Entity,
-        RadientNodeTranslationProperty,
+        RadientNodeTranslationPropertyName,
         RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
         0,
         1,
@@ -1646,19 +1650,57 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsUnsupportedProperty)
     EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
 }
 
+TEST_F(RadientSceneAnimationDestinationTest, ValidatesPropertyNamesForEachSchema)
+{
+    const RadientEntityID Entity = CreateEntity({});
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+    ASSERT_EQ(m_pWriter->SetLight(Entity, {}), RADIENT_STATUS_OK);
+    ASSERT_EQ(m_pWriter->SetCamera(Entity, {}), RADIENT_STATUS_OK);
+
+    struct PropertyCase
+    {
+        RadientAnimationSchemaID     Schema;
+        const Char*                  WrongCaseName;
+        RADIENT_ANIMATION_VALUE_TYPE Type;
+    };
+    const PropertyCase Cases[] = {
+        {RadientNodeAnimationSchemaID, "translation", RADIENT_ANIMATION_VALUE_TYPE_FLOAT3},
+        {RadientLightAnimationSchemaID, "intensity", RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        {RadientCameraAnimationSchemaID, "focalLength", RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+    };
+    for (const PropertyCase& Case : Cases)
+    {
+        const Char* Names[] = {nullptr, "", Case.WrongCaseName};
+        for (const Char* Name : Names)
+        {
+            SCOPED_TRACE(Name);
+            const RadientAnimationPropertyBindingDesc Property =
+                MakeProperty(Entity, Case.Schema, Name, Case.Type);
+            RadientAnimationResolvedPropertyDesc Resolved;
+            Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+            RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+            EXPECT_EQ(m_pDestination->CreateBinding(
+                          &Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+                      Name == nullptr || Name[0] == '\0' ? RADIENT_STATUS_INVALID_ARGUMENT : RADIENT_STATUS_UNSUPPORTED);
+            EXPECT_EQ(pBinding, nullptr);
+            EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+        }
+    }
+}
+
 TEST_F(RadientSceneAnimationDestinationTest, RejectsMalformedSupportedPropertyLayouts)
 {
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
     const std::array Properties = {
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
-        MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeNodeProperty(Entity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1),
-        MakeNodeProperty(Entity, RadientNodeScaleProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2),
-        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_UINT),
-        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1),
-        MakeNodeProperty(Entity, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 0, 2),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(Entity, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, RadientNodeScalePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1),
+        MakeNodeProperty(Entity, RadientNodeScalePropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2),
+        MakeNodeProperty(Entity, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_UINT),
+        MakeNodeProperty(Entity, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1),
+        MakeNodeProperty(Entity, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL, 0, 2),
     };
 
     for (const RadientAnimationPropertyBindingDesc& Property : Properties)
@@ -1679,7 +1721,7 @@ TEST_F(RadientSceneAnimationDestinationTest, ReturnsUnsupportedWhenNoPropertiesA
 
     const std::array Properties = {
         MakeNodeProperty(Entity,
-                         RadientNodeTranslationProperty,
+                         RadientNodeTranslationPropertyName,
                          RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
                          0,
                          1,
@@ -1722,7 +1764,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsMissingEntity)
 {
     const RadientAnimationPropertyBindingDesc Property = MakeNodeProperty(
         InvalidRadientEntityID,
-        RadientNodeTranslationProperty,
+        RadientNodeTranslationPropertyName,
         RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
     RadientAnimationResolvedPropertyDesc               Resolved{};
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
@@ -1738,15 +1780,15 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsDuplicateEntityProperty)
     struct DuplicateCase
     {
         RadientAnimationSchemaID     Schema;
-        RadientAnimationPropertyID   Property;
+        const Char*                  Property;
         RADIENT_ANIMATION_VALUE_TYPE Type;
     };
 
     const DuplicateCase Cases[] = {
-        {RadientNodeAnimationSchemaID, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4},
-        {RadientNodeAnimationSchemaID, RadientNodeVisibilityProperty, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
-        {RadientLightAnimationSchemaID, RadientLightIntensityProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
-        {RadientCameraAnimationSchemaID, RadientCameraFocalLengthProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        {RadientNodeAnimationSchemaID, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4},
+        {RadientNodeAnimationSchemaID, RadientNodeVisibilityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_BOOL},
+        {RadientLightAnimationSchemaID, RadientLightIntensityPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
+        {RadientCameraAnimationSchemaID, RadientCameraFocalLengthPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT},
     };
     ASSERT_EQ(m_pWriter->SetLight(Entity, {}), RADIENT_STATUS_OK);
     ASSERT_EQ(m_pWriter->SetCamera(Entity, {}), RADIENT_STATUS_OK);
@@ -1754,9 +1796,12 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsDuplicateEntityProperty)
     for (const DuplicateCase& Case : Cases)
     {
         SCOPED_TRACE(Case.Property);
+        const std::string FirstName{Case.Property};
+        const std::string SecondName{Case.Property};
+        ASSERT_NE(FirstName.c_str(), SecondName.c_str());
         const std::array Properties = {
-            MakeProperty(Entity, Case.Schema, Case.Property, Case.Type),
-            MakeProperty(Entity, Case.Schema, Case.Property, Case.Type),
+            MakeProperty(Entity, Case.Schema, FirstName.c_str(), Case.Type),
+            MakeProperty(Entity, Case.Schema, SecondName.c_str(), Case.Type),
         };
         std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
         RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
@@ -1775,8 +1820,8 @@ TEST_F(RadientSceneAnimationDestinationTest, UnsupportedPropertyDoesNotMaskDupli
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     const std::array Properties = {
-        MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
-        MakeNodeProperty(Entity, RadientNodeRotationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(Entity, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeNodeProperty(Entity, RadientNodeRotationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
         MakeNodeProperty(Entity, UnknownAnimationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved{};
@@ -1795,7 +1840,7 @@ TEST_F(RadientSceneAnimationDestinationTest, RejectsNullBeginUpdateOutput)
     const RadientEntityID Entity = CreateEntity({});
     ASSERT_NE(Entity, InvalidRadientEntityID);
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateBinding({
-        MakeNodeProperty(Entity, RadientNodeTranslationProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeNodeProperty(Entity, RadientNodeTranslationPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
     });
     ASSERT_NE(pBinding, nullptr);
 

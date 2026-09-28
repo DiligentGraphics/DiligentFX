@@ -53,13 +53,12 @@ typedef struct IRadientScene                       IRadientScene;
 /// provider into (Schema, Object, Property, array range); unknown providers or
 /// properties are reported as unsupported rather than encoded as unstable
 /// process-local IDs.
-typedef INTERFACE_ID RadientAnimationSchemaID;
-
-/// Property identifier scoped by a Radient animation target schema.
 ///
-/// A schema provider assigns stable meanings and value layouts to these IDs.
-/// IDs are compared only within the same schema; zero is reserved as invalid.
-typedef Uint64 RadientAnimationPropertyID;
+/// Each schema defines canonical, nonempty, null-terminated property names
+/// and their value layouts and interpolation semantics. Names are compared
+/// by content, exactly and case-sensitively, within the same schema. The
+/// (Schema, Property) pair identifies a property; its name alone does not.
+typedef INTERFACE_ID RadientAnimationSchemaID;
 
 /// Stable authored-object identifier scoped by an animation target schema.
 ///
@@ -79,9 +78,6 @@ typedef Uint64 RadientAnimationDestinationElement;
 /// than this all-zero value.
 static DILIGENT_CONSTEXPR RadientAnimationSchemaID InvalidRadientAnimationSchemaID =
     {0, 0, 0, {0, 0, 0, 0, 0, 0, 0, 0}};
-
-/// Invalid animation property identifier. This value cannot name a property.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID InvalidRadientAnimationPropertyID = 0;
 
 /// Invalid animation source-object identifier. All other values, including
 /// zero, are available to a schema.
@@ -112,21 +108,21 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientNodeAnimationSchemaID 
     {0xe4add320, 0xeeca, 0x439f, {0xa6, 0xc3, 0x1d, 0x8a, 0x25, 0xae, 0xfb, 0xc3}};
 
 /// FLOAT3[1] local translation property in RadientNodeAnimationSchemaID.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeTranslationProperty = 1;
+static DILIGENT_CONSTEXPR Char RadientNodeTranslationPropertyName[] = "Translation";
 
 /// FLOAT4[1] normalized quaternion local rotation property in
 /// RadientNodeAnimationSchemaID. LINEAR interpolation uses spherical
 /// interpolation; CUBIC_SPLINE results are normalized.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeRotationProperty = 2;
+static DILIGENT_CONSTEXPR Char RadientNodeRotationPropertyName[] = "Rotation";
 
 /// FLOAT3[1] local scale property in RadientNodeAnimationSchemaID.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeScaleProperty = 3;
+static DILIGENT_CONSTEXPR Char RadientNodeScalePropertyName[] = "Scale";
 
 /// BOOL[1] own visibility property in RadientNodeAnimationSchemaID. Zero is
 /// hidden and one is visible. Only STEP interpolation is supported. Effective
 /// visibility is derived by the scene from this property and ancestor
 /// visibility.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientNodeVisibilityProperty = 4;
+static DILIGENT_CONSTEXPR Char RadientNodeVisibilityPropertyName[] = "Visibility";
 
 /// Built-in schema for morph weights owned by an authored scene node.
 ///
@@ -143,7 +139,7 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMorphWeightsAnimationS
 /// destination that addresses scene nodes may use the node's RadientEntityID as
 /// its destination element. A destination wrapping exactly one weight array may
 /// instead use element zero.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientMorphWeightsProperty = 1;
+static DILIGENT_CONSTEXPR Char RadientMorphWeightsPropertyName[] = "Weights";
 
 /// Built-in schema for animatable properties of an authored light.
 ///
@@ -158,69 +154,69 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientLightAnimationSchemaID
 
 /// FLOAT3[1] color property in RadientLightAnimationSchemaID. Components must
 /// be finite and non-negative at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightColorProperty = 1;
+static DILIGENT_CONSTEXPR Char RadientLightColorPropertyName[] = "Color";
 
 /// FLOAT[1] intensity property in RadientLightAnimationSchemaID. Values must
 /// be finite and non-negative at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightIntensityProperty = 2;
+static DILIGENT_CONSTEXPR Char RadientLightIntensityPropertyName[] = "Intensity";
 
 /// FLOAT[1] maximum effective range property in
 /// RadientLightAnimationSchemaID, in scene units. This property applies to
 /// point and spot lights. Values must be finite and non-negative at every
 /// sampled time; zero means unbounded.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightRangeProperty = 3;
+static DILIGENT_CONSTEXPR Char RadientLightRangePropertyName[] = "Range";
 
 /// FLOAT[1] base-2 exposure property in RadientLightAnimationSchemaID. Values
 /// must be finite at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightExposureProperty = 4;
+static DILIGENT_CONSTEXPR Char RadientLightExposurePropertyName[] = "Exposure";
 
 /// FLOAT[1] inner spot-cone angle property in
 /// RadientLightAnimationSchemaID, in radians. Values must be finite,
 /// non-negative, and no greater than the resulting outer cone angle at every
 /// sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightInnerConeAngleProperty = 5;
+static DILIGENT_CONSTEXPR Char RadientLightInnerConeAnglePropertyName[] = "InnerConeAngle";
 
 /// FLOAT[1] outer spot-cone angle property in
 /// RadientLightAnimationSchemaID, in radians. Values must be finite, no less
 /// than the resulting inner cone angle, and no greater than pi/2 at every
 /// sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightOuterConeAngleProperty = 6;
+static DILIGENT_CONSTEXPR Char RadientLightOuterConeAnglePropertyName[] = "OuterConeAngle";
 
 /// FLOAT[1] diffuse-contribution multiplier property in
 /// RadientLightAnimationSchemaID. Values must be finite and non-negative at
 /// every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightDiffuseProperty = 7;
+static DILIGENT_CONSTEXPR Char RadientLightDiffusePropertyName[] = "Diffuse";
 
 /// FLOAT[1] specular-contribution multiplier property in
 /// RadientLightAnimationSchemaID. Values must be finite and non-negative at
 /// every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightSpecularProperty = 8;
+static DILIGENT_CONSTEXPR Char RadientLightSpecularPropertyName[] = "Specular";
 
 /// BOOL[1] power-normalization property in RadientLightAnimationSchemaID. Zero
 /// disables normalization and one enables it. Only STEP interpolation is
 /// supported.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightNormalizeProperty = 9;
+static DILIGENT_CONSTEXPR Char RadientLightNormalizePropertyName[] = "Normalize";
 
 /// BOOL[1] color-temperature-enable property in
 /// RadientLightAnimationSchemaID. Zero disables color temperature and one
 /// enables it. Only STEP interpolation is supported.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightEnableColorTemperatureProperty = 10;
+static DILIGENT_CONSTEXPR Char RadientLightEnableColorTemperaturePropertyName[] = "EnableColorTemperature";
 
 /// FLOAT[1] color-temperature property in RadientLightAnimationSchemaID, in
 /// degrees Kelvin. Values must be finite and positive at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightColorTemperatureProperty = 11;
+static DILIGENT_CONSTEXPR Char RadientLightColorTemperaturePropertyName[] = "ColorTemperature";
 
 /// FLOAT[1] radius property in RadientLightAnimationSchemaID, in scene units.
 /// Values must be finite and non-negative at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightRadiusProperty = 12;
+static DILIGENT_CONSTEXPR Char RadientLightRadiusPropertyName[] = "Radius";
 
 /// FLOAT[1] angular-diameter property in RadientLightAnimationSchemaID, in
 /// degrees. Values must be finite and non-negative at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightAngleProperty = 13;
+static DILIGENT_CONSTEXPR Char RadientLightAnglePropertyName[] = "Angle";
 
 /// FLOAT[1] shaping-focus property in RadientLightAnimationSchemaID. Values
 /// must be finite at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientLightShapingFocusProperty = 14;
+static DILIGENT_CONSTEXPR Char RadientLightShapingFocusPropertyName[] = "ShapingFocus";
 
 /// Built-in schema for animatable properties of an authored camera.
 ///
@@ -237,35 +233,35 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientCameraAnimationSchemaI
 /// FLOAT[1] horizontal aperture property in
 /// RadientCameraAnimationSchemaID, in millimeters. Values must be finite and
 /// positive at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraHorizontalApertureProperty = 1;
+static DILIGENT_CONSTEXPR Char RadientCameraHorizontalAperturePropertyName[] = "HorizontalAperture";
 
 /// FLOAT[1] vertical aperture property in RadientCameraAnimationSchemaID, in
 /// millimeters. Values must be finite and positive at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraVerticalApertureProperty = 2;
+static DILIGENT_CONSTEXPR Char RadientCameraVerticalAperturePropertyName[] = "VerticalAperture";
 
 /// FLOAT[1] focal-length property in RadientCameraAnimationSchemaID, in
 /// millimeters. Values must be finite and positive at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFocalLengthProperty = 3;
+static DILIGENT_CONSTEXPR Char RadientCameraFocalLengthPropertyName[] = "FocalLength";
 
 /// FLOAT[1] near clipping-distance property in
 /// RadientCameraAnimationSchemaID, in scene units. Values must be finite and
 /// positive, and less than the resulting far clipping distance at every
 /// sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraNearClipProperty = 4;
+static DILIGENT_CONSTEXPR Char RadientCameraNearClipPropertyName[] = "NearClip";
 
 /// FLOAT[1] far clipping-distance property in RadientCameraAnimationSchemaID,
 /// in scene units. Values must be finite and greater than the resulting near
 /// clipping distance at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFarClipProperty = 5;
+static DILIGENT_CONSTEXPR Char RadientCameraFarClipPropertyName[] = "FarClip";
 
 /// FLOAT[1] lens f-stop property in RadientCameraAnimationSchemaID. Values
 /// must be finite and non-negative at every sampled time; zero disables depth
 /// of field.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFStopProperty = 6;
+static DILIGENT_CONSTEXPR Char RadientCameraFStopPropertyName[] = "FStop";
 
 /// FLOAT[1] focus-distance property in RadientCameraAnimationSchemaID, in scene
 /// units. Values must be finite and non-negative at every sampled time.
-static DILIGENT_CONSTEXPR RadientAnimationPropertyID RadientCameraFocusDistanceProperty = 7;
+static DILIGENT_CONSTEXPR Char RadientCameraFocusDistancePropertyName[] = "FocusDistance";
 
 
 // clang-format off
@@ -515,11 +511,11 @@ struct RadientAnimationChannelDesc
     /// than RadientAnimationClipDesc::TargetCount.
     Uint32 TargetIndex DEFAULT_INITIALIZER(InvalidRadientAnimationTargetIndex);
 
-    /// Nonzero property identifier interpreted in the namespace of
-    /// RadientAnimationClipDesc::pTargets[TargetIndex].Schema. Property IDs
-    /// only need to be unique and stable within their schema; the same numeric
-    /// ID may mean something else in another schema.
-    RadientAnimationPropertyID Property DEFAULT_INITIALIZER(InvalidRadientAnimationPropertyID);
+    /// Canonical property name in the schema selected by
+    /// RadientAnimationClipDesc::pTargets[TargetIndex].Schema. Must be non-null
+    /// and nonempty. Names are exact and case-sensitive. Clip creation copies
+    /// the string; destination-schema compatibility is established when binding.
+    const Char* Property DEFAULT_INITIALIZER(nullptr);
 
     /// First destination array element addressed by this channel. The channel
     /// covers the half-open range [FirstArrayElement, FirstArrayElement +
@@ -542,11 +538,12 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 
 /// Immutable, unbound animation clip description.
 ///
-/// Creation copies the name and all target, sampler, channel, time, and value
-/// data. TargetIndex and SamplerIndex values in channels index the corresponding
-/// tables below. Duration and all keyframe times are expressed in seconds. An
-/// empty clip is valid only when all three table counts are zero and all three
-/// table pointers are null. A nonempty clip contains at least one record in
+/// Creation copies all strings, including channel property names, and all
+/// target, sampler, channel, time, and value data. TargetIndex and SamplerIndex
+/// values in channels index the corresponding tables below. Duration and all
+/// keyframe times are expressed in seconds. An empty clip is valid only when
+/// all three table counts are zero and all three table pointers are null.
+/// A nonempty clip contains at least one record in
 /// every table, and every target and sampler must be referenced by a channel.
 /// Target records must have unique (Schema, Object) identities. Channels for
 /// one target and property may address adjacent or disjoint ranges, but their
@@ -581,7 +578,7 @@ typedef struct RadientAnimationChannelDesc RadientAnimationChannelDesc;
 ///
 /// RadientAnimationChannelDesc Channel{};
 /// Channel.TargetIndex       = 0; // Target above.
-/// Channel.Property          = RadientNodeTranslationProperty;
+/// Channel.Property          = RadientNodeTranslationPropertyName;
 /// Channel.FirstArrayElement = 0;
 /// Channel.SamplerIndex      = 0; // Sampler above.
 ///
@@ -655,7 +652,7 @@ typedef struct RadientAnimationClipDesc RadientAnimationClipDesc;
 /// applications normally do not create them directly. For example, a node
 /// rotation channel mapped to skeleton joint 42 requests
 /// RadientNodeAnimationSchemaID, element 42,
-/// RadientNodeRotationProperty, FirstArrayElement 0, and FLOAT4[1].
+/// RadientNodeRotationPropertyName, FirstArrayElement 0, and FLOAT4[1].
 struct RadientAnimationPropertyBindingDesc
 {
     /// Schema of the symbolic clip target that owns Property.
@@ -665,8 +662,10 @@ struct RadientAnimationPropertyBindingDesc
     /// Must not equal InvalidRadientAnimationDestinationElement.
     RadientAnimationDestinationElement DestinationElement DEFAULT_INITIALIZER(InvalidRadientAnimationDestinationElement);
 
-    /// Property identifier in Schema's namespace.
-    RadientAnimationPropertyID Property DEFAULT_INITIALIZER(InvalidRadientAnimationPropertyID);
+    /// Canonical property name in Schema's namespace. Must be non-null and
+    /// nonempty. Names are exact and case-sensitive. CreateBinding() resolves
+    /// the name during the call; the caller retains ownership of the string.
+    const Char* Property DEFAULT_INITIALIZER(nullptr);
 
     /// First complete array element written by this property range. Together
     /// with Value.ArraySize, this identifies the half-open destination range.
@@ -682,10 +681,10 @@ typedef struct RadientAnimationPropertyBindingDesc RadientAnimationPropertyBindi
 struct RadientAnimationResolvedPropertyDesc
 {
     /// Semantic used to interpolate a bound property's native values. For
-    /// example, RadientNodeRotationProperty resolves to
+    /// example, RadientNodeRotationPropertyName resolves to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION, while node
     /// translation, scale, visibility, light, camera,
-    /// RadientMorphWeightsProperty, and ordinary numeric properties resolve to
+    /// RadientMorphWeightsPropertyName, and ordinary numeric properties resolve to
     /// RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE.
     /// The same accepted (Schema, Property) contract must resolve to the same
     /// non-UNKNOWN semantic for every element and destination implementation.
@@ -914,7 +913,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
     /// supported results in request order. ppBinding receives a strong reference
     /// to an IRadientAnimationDestinationBinding that retains this destination
     /// and owns the compiled plan for the supported requests. This method does
-    /// not retain either caller-owned array.
+    /// not retain either caller-owned array or any caller-owned property-name
+    /// strings.
     ///
     /// For example, if three requests resolve to COMPONENT_WISE, UNKNOWN, and
     /// NORMALIZED_QUATERNION, BeginUpdate() returns two output addresses: slot 0
@@ -925,7 +925,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientAnimationDestination, IObject)
     /// storage. All other validation remains all-or-nothing: the implementation
     /// rejects malformed requests, incompatible layouts for supported properties,
     /// and requests that resolve to overlapping physical storage, even when
-    /// different schemas or property IDs alias that storage. Outputs are
+    /// different schemas or property names alias that storage. Outputs are
     /// unspecified on failure other than RADIENT_STATUS_UNSUPPORTED, which leaves
     /// every result reset to its unbound state.
     ///

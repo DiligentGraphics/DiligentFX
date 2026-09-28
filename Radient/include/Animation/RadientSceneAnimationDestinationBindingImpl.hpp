@@ -34,6 +34,7 @@
 #include "STDAllocator.hpp"
 
 #include <cstddef>
+#include <cstring>
 #include <memory>
 
 namespace Diligent
@@ -99,20 +100,20 @@ private:
         size_t              DirectStorageAlignment = 0;
     };
 
-    /// Orders the immutable property table by schema and property identifier.
+    /// Orders the immutable property table by schema and property name.
     struct PropertyKey
     {
-        RadientAnimationSchemaID   Schema   = InvalidRadientAnimationSchemaID;
-        RadientAnimationPropertyID Property = InvalidRadientAnimationPropertyID;
+        RadientAnimationSchemaID Schema   = InvalidRadientAnimationSchemaID;
+        const Char*              Property = nullptr;
 
         bool operator==(const PropertyKey& Rhs) const noexcept
         {
-            return Schema == Rhs.Schema && Property == Rhs.Property;
+            return Schema == Rhs.Schema && std::strcmp(Property, Rhs.Property) == 0;
         }
 
         bool operator<(const PropertyKey& Rhs) const noexcept
         {
-            return Schema != Rhs.Schema ? Schema < Rhs.Schema : Property < Rhs.Property;
+            return Schema != Rhs.Schema ? Schema < Rhs.Schema : std::strcmp(Property, Rhs.Property) < 0;
         }
     };
 
@@ -160,8 +161,8 @@ private:
                               RadientAnimationResolvedPropertyDesc*      pResolvedProperties);
 
     /// Looks up the declarative storage mapping for a public animation property.
-    static const PropertyDesc* FindProperty(RadientAnimationSchemaID   Schema,
-                                            RadientAnimationPropertyID Property) noexcept;
+    static const PropertyDesc* FindProperty(RadientAnimationSchemaID Schema,
+                                            const Char*              Property) noexcept;
 
     /// Acquires a component that is present for every scene entity.
     template <typename ComponentType>

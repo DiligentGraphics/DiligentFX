@@ -518,7 +518,7 @@ struct AnimationPointerPropertyDesc
     GLTF::AnimationChannel::OBJECT_TYPE ObjectType;
     const char*                         PropertyPath;
     RadientAnimationSchemaID            Schema;
-    RadientAnimationPropertyID          Property;
+    const Char*                         Property;
     RadientAnimationValueDesc           Value;
     Uint32                              ComponentCount;
     Uint8                               PropertyMask;
@@ -534,7 +534,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
             "/color",
             RadientLightAnimationSchemaID,
-            RadientLightColorProperty,
+            RadientLightColorPropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1},
             3,
             LightColorPropertyMask,
@@ -545,7 +545,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
             "/intensity",
             RadientLightAnimationSchemaID,
-            RadientLightIntensityProperty,
+            RadientLightIntensityPropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1},
             1,
             LightIntensityPropertyMask,
@@ -556,7 +556,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
             "/range",
             RadientLightAnimationSchemaID,
-            RadientLightRangeProperty,
+            RadientLightRangePropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1},
             1,
             LightRangePropertyMask,
@@ -567,7 +567,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
             "/spot/innerConeAngle",
             RadientLightAnimationSchemaID,
-            RadientLightInnerConeAngleProperty,
+            RadientLightInnerConeAnglePropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1},
             1,
             LightInnerConeAnglePropertyMask,
@@ -578,7 +578,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::LIGHT,
             "/spot/outerConeAngle",
             RadientLightAnimationSchemaID,
-            RadientLightOuterConeAngleProperty,
+            RadientLightOuterConeAnglePropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1},
             1,
             LightOuterConeAnglePropertyMask,
@@ -589,7 +589,7 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
             GLTF::AnimationChannel::OBJECT_TYPE::NODE,
             "/extensions/KHR_node_visibility/visible",
             RadientNodeAnimationSchemaID,
-            RadientNodeVisibilityProperty,
+            RadientNodeVisibilityPropertyName,
             {RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1},
             1,
             NodeVisibilityPropertyMask,
@@ -950,7 +950,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
         }
 
         RadientAnimationSchemaID   Schema;
-        RadientAnimationPropertyID Property;
+        const Char*                Property;
         RadientAnimationValueDesc  Value;
         Uint32                     ComponentCount;
         Uint8                      PropertyMask;
@@ -992,12 +992,12 @@ RADIENT_STATUS CreateImportedAnimationClip(
                                             " channel that references an invalid target light");
                         continue;
                     }
-                    if ((Property == RadientLightRangeProperty &&
+                    if ((std::strcmp(Property, RadientLightRangePropertyName) == 0 &&
                          ((pLight->Type != GLTF::Light::TYPE::POINT &&
                            pLight->Type != GLTF::Light::TYPE::SPOT) ||
                           !RadientMath::IsFinitePositive(pLight->Range))) ||
-                        ((Property == RadientLightInnerConeAngleProperty ||
-                          Property == RadientLightOuterConeAngleProperty) &&
+                        ((std::strcmp(Property, RadientLightInnerConeAnglePropertyName) == 0 ||
+                          std::strcmp(Property, RadientLightOuterConeAnglePropertyName) == 0) &&
                          pLight->Type != GLTF::Light::TYPE::SPOT))
                     {
                         LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex, ' ',
@@ -1029,7 +1029,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
             {
                 case GLTF::AnimationChannel::PATH_TYPE::TRANSLATION:
                     Schema          = RadientNodeAnimationSchemaID;
-                    Property        = RadientNodeTranslationProperty;
+                    Property        = RadientNodeTranslationPropertyName;
                     Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
                     Value.ArraySize = 1;
                     ComponentCount  = 3;
@@ -1040,7 +1040,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
 
                 case GLTF::AnimationChannel::PATH_TYPE::ROTATION:
                     Schema          = RadientNodeAnimationSchemaID;
-                    Property        = RadientNodeRotationProperty;
+                    Property        = RadientNodeRotationPropertyName;
                     Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT4;
                     Value.ArraySize = 1;
                     ComponentCount  = 4;
@@ -1051,7 +1051,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
 
                 case GLTF::AnimationChannel::PATH_TYPE::SCALE:
                     Schema          = RadientNodeAnimationSchemaID;
-                    Property        = RadientNodeScaleProperty;
+                    Property        = RadientNodeScalePropertyName;
                     Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT3;
                     Value.ArraySize = 1;
                     ComponentCount  = 3;
@@ -1078,7 +1078,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
                     }
 
                     Schema          = RadientMorphWeightsAnimationSchemaID;
-                    Property        = RadientMorphWeightsProperty;
+                    Property        = RadientMorphWeightsPropertyName;
                     Value.Type      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
                     Value.ArraySize = static_cast<Uint32>(MorphTargetCount);
                     ComponentCount  = 1;

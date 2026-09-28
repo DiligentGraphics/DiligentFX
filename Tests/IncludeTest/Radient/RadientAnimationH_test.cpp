@@ -26,12 +26,16 @@
 
 #include "Radient/interface/RadientAnimation.h"
 
+#include <string_view>
 #include <type_traits>
 
 namespace
 {
 
 using namespace Diligent;
+
+static_assert(std::is_same<decltype(RadientAnimationChannelDesc::Property), const Char*>::value, "Animation channel properties must use strings");
+static_assert(std::is_same<decltype(RadientAnimationPropertyBindingDesc::Property), const Char*>::value, "Animation binding properties must use strings");
 
 static_assert(sizeof(RADIENT_ANIMATION_INTERPOLATION) == sizeof(Uint8), "Unexpected RADIENT_ANIMATION_INTERPOLATION size");
 static_assert(RADIENT_ANIMATION_INTERPOLATION_STEP == 0, "Unexpected STEP animation interpolation value");
@@ -64,13 +68,10 @@ static_assert(RADIENT_ANIMATION_VALUE_SEMANTIC_NORMALIZED_QUATERNION == 2, "Unex
 static_assert(RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT == 3, "Unexpected animation value semantic count");
 static_assert(std::is_same<RadientAnimationSchemaID, INTERFACE_ID>::value, "RadientAnimationSchemaID must use INTERFACE_ID storage");
 static_assert(sizeof(RadientAnimationSchemaID) == sizeof(INTERFACE_ID), "Unexpected RadientAnimationSchemaID size");
-static_assert(std::is_same<RadientAnimationPropertyID, Uint64>::value, "RadientAnimationPropertyID must use Uint64 storage");
-static_assert(sizeof(RadientAnimationPropertyID) == sizeof(Uint64), "Unexpected RadientAnimationPropertyID size");
 static_assert(std::is_same<RadientAnimationObjectID, Uint64>::value, "RadientAnimationObjectID must use Uint64 storage");
 static_assert(sizeof(RadientAnimationObjectID) == sizeof(Uint64), "Unexpected RadientAnimationObjectID size");
 static_assert(std::is_same<RadientAnimationDestinationElement, Uint64>::value, "RadientAnimationDestinationElement must use Uint64 storage");
 static_assert(sizeof(RadientAnimationDestinationElement) == sizeof(Uint64), "Unexpected RadientAnimationDestinationElement size");
-static_assert(InvalidRadientAnimationPropertyID == 0, "Unexpected invalid animation property ID");
 static_assert(InvalidRadientAnimationObject == static_cast<Uint64>(~0ull), "Unexpected invalid animation object ID");
 static_assert(InvalidRadientAnimationTargetIndex == static_cast<Uint32>(~0u), "Unexpected invalid animation target index");
 static_assert(InvalidRadientAnimationSamplerIndex == static_cast<Uint32>(~0u), "Unexpected invalid animation sampler index");
@@ -87,10 +88,10 @@ static_assert(RadientNodeAnimationSchemaID.Data1 == 0xe4add320 &&
                   RadientNodeAnimationSchemaID.Data4[6] == 0xfb &&
                   RadientNodeAnimationSchemaID.Data4[7] == 0xc3,
               "Unexpected node-animation schema ID");
-static_assert(RadientNodeTranslationProperty == 1, "Unexpected node-translation property ID");
-static_assert(RadientNodeRotationProperty == 2, "Unexpected node-rotation property ID");
-static_assert(RadientNodeScaleProperty == 3, "Unexpected node-scale property ID");
-static_assert(RadientNodeVisibilityProperty == 4, "Unexpected node-visibility property ID");
+static_assert(std::string_view{RadientNodeTranslationPropertyName} == "Translation", "Unexpected node-translation property name");
+static_assert(std::string_view{RadientNodeRotationPropertyName} == "Rotation", "Unexpected node-rotation property name");
+static_assert(std::string_view{RadientNodeScalePropertyName} == "Scale", "Unexpected node-scale property name");
+static_assert(std::string_view{RadientNodeVisibilityPropertyName} == "Visibility", "Unexpected node-visibility property name");
 static_assert(RadientMorphWeightsAnimationSchemaID.Data1 == 0x8e3a3b5b &&
                   RadientMorphWeightsAnimationSchemaID.Data2 == 0x2267 &&
                   RadientMorphWeightsAnimationSchemaID.Data3 == 0x4e06 &&
@@ -103,7 +104,7 @@ static_assert(RadientMorphWeightsAnimationSchemaID.Data1 == 0x8e3a3b5b &&
                   RadientMorphWeightsAnimationSchemaID.Data4[6] == 0x9f &&
                   RadientMorphWeightsAnimationSchemaID.Data4[7] == 0x61,
               "Unexpected morph-weights animation schema ID");
-static_assert(RadientMorphWeightsProperty == 1, "Unexpected morph-weights property ID");
+static_assert(std::string_view{RadientMorphWeightsPropertyName} == "Weights", "Unexpected morph-weights property name");
 static_assert(RadientLightAnimationSchemaID.Data1 == 0xbd8b6765 &&
                   RadientLightAnimationSchemaID.Data2 == 0xf0af &&
                   RadientLightAnimationSchemaID.Data3 == 0x4cf9 &&
@@ -116,20 +117,20 @@ static_assert(RadientLightAnimationSchemaID.Data1 == 0xbd8b6765 &&
                   RadientLightAnimationSchemaID.Data4[6] == 0xca &&
                   RadientLightAnimationSchemaID.Data4[7] == 0x99,
               "Unexpected light-animation schema ID");
-static_assert(RadientLightColorProperty == 1, "Unexpected light-color property ID");
-static_assert(RadientLightIntensityProperty == 2, "Unexpected light-intensity property ID");
-static_assert(RadientLightRangeProperty == 3, "Unexpected light-range property ID");
-static_assert(RadientLightExposureProperty == 4, "Unexpected light-exposure property ID");
-static_assert(RadientLightInnerConeAngleProperty == 5, "Unexpected light-inner-cone property ID");
-static_assert(RadientLightOuterConeAngleProperty == 6, "Unexpected light-outer-cone property ID");
-static_assert(RadientLightDiffuseProperty == 7, "Unexpected light-diffuse property ID");
-static_assert(RadientLightSpecularProperty == 8, "Unexpected light-specular property ID");
-static_assert(RadientLightNormalizeProperty == 9, "Unexpected light-normalize property ID");
-static_assert(RadientLightEnableColorTemperatureProperty == 10, "Unexpected light-enable-color-temperature property ID");
-static_assert(RadientLightColorTemperatureProperty == 11, "Unexpected light-color-temperature property ID");
-static_assert(RadientLightRadiusProperty == 12, "Unexpected light-radius property ID");
-static_assert(RadientLightAngleProperty == 13, "Unexpected light-angle property ID");
-static_assert(RadientLightShapingFocusProperty == 14, "Unexpected light-shaping-focus property ID");
+static_assert(std::string_view{RadientLightColorPropertyName} == "Color", "Unexpected light-color property name");
+static_assert(std::string_view{RadientLightIntensityPropertyName} == "Intensity", "Unexpected light-intensity property name");
+static_assert(std::string_view{RadientLightRangePropertyName} == "Range", "Unexpected light-range property name");
+static_assert(std::string_view{RadientLightExposurePropertyName} == "Exposure", "Unexpected light-exposure property name");
+static_assert(std::string_view{RadientLightInnerConeAnglePropertyName} == "InnerConeAngle", "Unexpected light-inner-cone property name");
+static_assert(std::string_view{RadientLightOuterConeAnglePropertyName} == "OuterConeAngle", "Unexpected light-outer-cone property name");
+static_assert(std::string_view{RadientLightDiffusePropertyName} == "Diffuse", "Unexpected light-diffuse property name");
+static_assert(std::string_view{RadientLightSpecularPropertyName} == "Specular", "Unexpected light-specular property name");
+static_assert(std::string_view{RadientLightNormalizePropertyName} == "Normalize", "Unexpected light-normalize property name");
+static_assert(std::string_view{RadientLightEnableColorTemperaturePropertyName} == "EnableColorTemperature", "Unexpected light-enable-color-temperature property name");
+static_assert(std::string_view{RadientLightColorTemperaturePropertyName} == "ColorTemperature", "Unexpected light-color-temperature property name");
+static_assert(std::string_view{RadientLightRadiusPropertyName} == "Radius", "Unexpected light-radius property name");
+static_assert(std::string_view{RadientLightAnglePropertyName} == "Angle", "Unexpected light-angle property name");
+static_assert(std::string_view{RadientLightShapingFocusPropertyName} == "ShapingFocus", "Unexpected light-shaping-focus property name");
 static_assert(RadientCameraAnimationSchemaID.Data1 == 0xfdb7924c &&
                   RadientCameraAnimationSchemaID.Data2 == 0x9096 &&
                   RadientCameraAnimationSchemaID.Data3 == 0x47c7 &&
@@ -142,13 +143,13 @@ static_assert(RadientCameraAnimationSchemaID.Data1 == 0xfdb7924c &&
                   RadientCameraAnimationSchemaID.Data4[6] == 0xfe &&
                   RadientCameraAnimationSchemaID.Data4[7] == 0xd1,
               "Unexpected camera-animation schema ID");
-static_assert(RadientCameraHorizontalApertureProperty == 1, "Unexpected camera-horizontal-aperture property ID");
-static_assert(RadientCameraVerticalApertureProperty == 2, "Unexpected camera-vertical-aperture property ID");
-static_assert(RadientCameraFocalLengthProperty == 3, "Unexpected camera-focal-length property ID");
-static_assert(RadientCameraNearClipProperty == 4, "Unexpected camera-near-clip property ID");
-static_assert(RadientCameraFarClipProperty == 5, "Unexpected camera-far-clip property ID");
-static_assert(RadientCameraFStopProperty == 6, "Unexpected camera-f-stop property ID");
-static_assert(RadientCameraFocusDistanceProperty == 7, "Unexpected camera-focus-distance property ID");
+static_assert(std::string_view{RadientCameraHorizontalAperturePropertyName} == "HorizontalAperture", "Unexpected camera-horizontal-aperture property name");
+static_assert(std::string_view{RadientCameraVerticalAperturePropertyName} == "VerticalAperture", "Unexpected camera-vertical-aperture property name");
+static_assert(std::string_view{RadientCameraFocalLengthPropertyName} == "FocalLength", "Unexpected camera-focal-length property name");
+static_assert(std::string_view{RadientCameraNearClipPropertyName} == "NearClip", "Unexpected camera-near-clip property name");
+static_assert(std::string_view{RadientCameraFarClipPropertyName} == "FarClip", "Unexpected camera-far-clip property name");
+static_assert(std::string_view{RadientCameraFStopPropertyName} == "FStop", "Unexpected camera-f-stop property name");
+static_assert(std::string_view{RadientCameraFocusDistancePropertyName} == "FocusDistance", "Unexpected camera-focus-distance property name");
 static_assert(std::is_standard_layout<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationSamplerDesc>::value, "RadientAnimationSamplerDesc must be a standard-layout type");
@@ -207,7 +208,7 @@ static_assert(DefaultClipTarget.Name == nullptr, "Unexpected RadientAnimationTar
 
 constexpr RadientAnimationChannelDesc DefaultChannel{};
 static_assert(DefaultChannel.TargetIndex == InvalidRadientAnimationTargetIndex, "Unexpected RadientAnimationChannelDesc target index default value");
-static_assert(DefaultChannel.Property == InvalidRadientAnimationPropertyID, "Unexpected RadientAnimationChannelDesc property default value");
+static_assert(DefaultChannel.Property == nullptr, "Unexpected RadientAnimationChannelDesc property default value");
 static_assert(DefaultChannel.FirstArrayElement == 0, "Unexpected RadientAnimationChannelDesc first array element default value");
 static_assert(DefaultChannel.SamplerIndex == InvalidRadientAnimationSamplerIndex, "Unexpected RadientAnimationChannelDesc sampler index default value");
 
@@ -235,7 +236,7 @@ static_assert((DefaultPropertyBinding.Schema.Data1 == InvalidRadientAnimationSch
                DefaultPropertyBinding.Schema.Data4[7] == InvalidRadientAnimationSchemaID.Data4[7]),
               "Unexpected RadientAnimationPropertyBindingDesc schema default value");
 static_assert(DefaultPropertyBinding.DestinationElement == InvalidRadientAnimationDestinationElement, "Unexpected RadientAnimationPropertyBindingDesc destination element default value");
-static_assert(DefaultPropertyBinding.Property == InvalidRadientAnimationPropertyID, "Unexpected RadientAnimationPropertyBindingDesc property default value");
+static_assert(DefaultPropertyBinding.Property == nullptr, "Unexpected RadientAnimationPropertyBindingDesc property default value");
 static_assert(DefaultPropertyBinding.FirstArrayElement == 0, "Unexpected RadientAnimationPropertyBindingDesc first array element default value");
 static_assert(DefaultPropertyBinding.Value.Type == RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN, "Unexpected RadientAnimationPropertyBindingDesc value type default value");
 static_assert(DefaultPropertyBinding.Value.ArraySize == 1, "Unexpected RadientAnimationPropertyBindingDesc array-size default value");

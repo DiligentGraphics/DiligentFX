@@ -138,7 +138,7 @@ RadientAnimationPropertyBindingDesc MakeMorphWeightProperty(
     Uint32                             ArraySize,
     RadientAnimationDestinationElement DestinationElement = 0,
     RadientAnimationSchemaID           Schema             = RadientMorphWeightsAnimationSchemaID,
-    RadientAnimationPropertyID         Property           = RadientMorphWeightsProperty,
+    const Char*                        Property           = RadientMorphWeightsPropertyName,
     RADIENT_ANIMATION_VALUE_TYPE       Type               = RADIENT_ANIMATION_VALUE_TYPE_FLOAT)
 {
     RadientAnimationPropertyBindingDesc Desc;
@@ -365,9 +365,12 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, WeightsExposeAnimation
 
 TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, ResolvesAndUpdatesDisjointWeightRangesInOneBatch)
 {
+    const Char FirstName[]  = "Weights";
+    const Char SecondName[] = "Weights";
+    ASSERT_NE(&FirstName[0], &SecondName[0]);
     const std::array Properties = {
-        MakeMorphWeightProperty(1, 1),
-        MakeMorphWeightProperty(0, 1),
+        MakeMorphWeightProperty(1, 1, 0, RadientMorphWeightsAnimationSchemaID, FirstName),
+        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, SecondName),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
     RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding = CreateDestinationBinding(
@@ -402,7 +405,7 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, IgnoresUnsupportedProp
         MakeMorphWeightProperty(1, 1),
         MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema),
         MakeMorphWeightProperty(0, 1),
-        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2),
+        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, "UnsupportedWeights"),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 4> Resolved;
     for (RadientAnimationResolvedPropertyDesc& Property : Resolved)
@@ -439,7 +442,7 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, ReturnsUnsupportedWhen
         {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
     const std::array Properties = {
         MakeMorphWeightProperty(0, 1, 0, UnsupportedSchema),
-        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, 2),
+        MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, "UnsupportedWeights"),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved;
     for (RadientAnimationResolvedPropertyDesc& Property : Resolved)
@@ -466,7 +469,7 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsInvalidDestinat
         1,
         InvalidRadientAnimationDestinationElement,
         UnsupportedSchema,
-        2);
+        "UnsupportedWeights");
     RadientAnimationResolvedPropertyDesc               Resolved;
     RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
 
@@ -481,9 +484,12 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsInvalidDestinat
 
 TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsOverlappingWeightRanges)
 {
+    const Char FirstName[]  = "Weights";
+    const Char SecondName[] = "Weights";
+    ASSERT_NE(&FirstName[0], &SecondName[0]);
     const std::array Properties = {
-        MakeMorphWeightProperty(0, 2),
-        MakeMorphWeightProperty(1, 1),
+        MakeMorphWeightProperty(0, 2, 0, RadientMorphWeightsAnimationSchemaID, FirstName),
+        MakeMorphWeightProperty(1, 1, 0, RadientMorphWeightsAnimationSchemaID, SecondName),
     };
     std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved{};
     RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
@@ -508,7 +514,10 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, RejectsMalformedWeight
         {0x565498d2, 0xfc54, 0x4b0a, {0xa5, 0xe7, 0x21, 0x1b, 0x30, 0xdf, 0x8b, 0xc6}};
     const std::array Cases = {
         Case{MakeMorphWeightProperty(0, 0, 0, UnsupportedSchema), RADIENT_STATUS_INVALID_ARGUMENT},
-        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, RadientMorphWeightsProperty, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, nullptr), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, ""), RADIENT_STATUS_INVALID_ARGUMENT},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, "weights"), RADIENT_STATUS_UNSUPPORTED},
+        Case{MakeMorphWeightProperty(0, 1, 0, RadientMorphWeightsAnimationSchemaID, RadientMorphWeightsPropertyName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2), RADIENT_STATUS_INVALID_ARGUMENT},
         Case{MakeMorphWeightProperty(0, 0), RADIENT_STATUS_INVALID_ARGUMENT},
         Case{MakeMorphWeightProperty(1, 2), RADIENT_STATUS_INVALID_ARGUMENT},
         Case{MakeMorphWeightProperty(0, 1, 1), RADIENT_STATUS_NOT_FOUND},
@@ -553,7 +562,7 @@ TEST_F(RadientMorphTargetWeightsAnimationDestinationTest, GenericBindingSamplesD
 
     RadientAnimationChannelDesc Channel;
     Channel.TargetIndex  = 0;
-    Channel.Property     = RadientMorphWeightsProperty;
+    Channel.Property     = RadientMorphWeightsPropertyName;
     Channel.SamplerIndex = 0;
 
     RadientAnimationClipDesc ClipDesc;

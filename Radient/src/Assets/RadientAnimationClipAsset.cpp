@@ -104,7 +104,7 @@ bool HaveSameTargetIdentity(const AnimationTargetKey& Lhs, const AnimationTarget
 struct AnimationChannelRange
 {
     Uint32                       TargetIndex  = InvalidRadientAnimationTargetIndex;
-    RadientAnimationPropertyID   Property     = InvalidRadientAnimationPropertyID;
+    const Char*                  Property     = nullptr;
     RADIENT_ANIMATION_VALUE_TYPE Type         = RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN;
     Uint32                       First        = 0;
     Uint32                       End          = 0;
@@ -114,8 +114,9 @@ struct AnimationChannelRange
     {
         if (TargetIndex != Rhs.TargetIndex)
             return TargetIndex < Rhs.TargetIndex;
-        if (Property != Rhs.Property)
-            return Property < Rhs.Property;
+        const int PropertyOrder = std::strcmp(Property, Rhs.Property);
+        if (PropertyOrder != 0)
+            return PropertyOrder < 0;
         if (First != Rhs.First)
             return First < Rhs.First;
         if (End != Rhs.End)
@@ -127,7 +128,7 @@ struct AnimationChannelRange
 bool HaveSameTargetProperty(const AnimationChannelRange& Lhs,
                             const AnimationChannelRange& Rhs) noexcept
 {
-    return Lhs.TargetIndex == Rhs.TargetIndex && Lhs.Property == Rhs.Property;
+    return Lhs.TargetIndex == Rhs.TargetIndex && std::strcmp(Lhs.Property, Rhs.Property) == 0;
 }
 
 RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
@@ -332,9 +333,9 @@ RADIENT_STATUS ValidateAnimationClipDesc(const RadientAnimationClipDesc& Desc)
             LOG_ERROR_MESSAGE("Radient animation clip channel ", ChannelIndex, " references invalid sampler ", Channel.SamplerIndex);
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
-        if (Channel.Property == InvalidRadientAnimationPropertyID)
+        if (Channel.Property == nullptr || Channel.Property[0] == '\0')
         {
-            LOG_ERROR_MESSAGE("Radient animation clip channel ", ChannelIndex, " uses an invalid property identifier");
+            LOG_ERROR_MESSAGE("Radient animation clip channel ", ChannelIndex, " must specify a nonempty property name");
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
@@ -496,8 +497,15 @@ bool CanPackAnimationClip(const RadientAnimationClipDesc& Desc,
         }
     }
 
-    return Size.AddArray<RadientAnimationChannelDesc>(Desc.ChannelCount) &&
-        Size.AddArray<Uint32>(Uint64{Desc.TargetCount} + 1u) &&
+    if (!Size.AddArray<RadientAnimationChannelDesc>(Desc.ChannelCount))
+        return false;
+    for (Uint32 ChannelIndex = 0; ChannelIndex < Desc.ChannelCount; ++ChannelIndex)
+    {
+        if (!Size.AddString(Desc.pChannels[ChannelIndex].Property))
+            return false;
+    }
+
+    return Size.AddArray<Uint32>(Uint64{Desc.TargetCount} + 1u) &&
         Size.AddArray<Uint32>(Desc.ChannelCount) &&
         Size.Finish();
 }
@@ -528,6 +536,10 @@ public:
             Allocator.AddSpace(static_cast<size_t>(Sampler.ValueDataSize), TypeInfo.NativeAlignment);
         }
         Allocator.AddSpace<RadientAnimationChannelDesc>(Desc.ChannelCount);
+        for (Uint32 ChannelIndex = 0; ChannelIndex < Desc.ChannelCount; ++ChannelIndex)
+        {
+            Allocator.AddSpaceForString(Desc.pChannels[ChannelIndex].Property);
+        }
         Allocator.AddSpace<Uint32>(static_cast<size_t>(Desc.TargetCount) + 1u);
         Allocator.AddSpace<Uint32>(Desc.ChannelCount);
 
@@ -562,13 +574,19 @@ public:
                                              TypeInfo.NativeAlignment);
         }
 
+        RadientAnimationChannelDesc* const pChannels = Writer.CopyArray(Desc.pChannels, Desc.ChannelCount);
+        for (Uint32 ChannelIndex = 0; ChannelIndex < Desc.ChannelCount; ++ChannelIndex)
+        {
+            pChannels[ChannelIndex].Property = Writer.CopyString(Desc.pChannels[ChannelIndex].Property);
+        }
+
         m_Reference.Version = 1;
         m_Desc.Duration     = Desc.Duration;
         m_Desc.pTargets     = pTargets;
         m_Desc.TargetCount  = Desc.TargetCount;
         m_Desc.pSamplers    = pSamplers;
         m_Desc.SamplerCount = Desc.SamplerCount;
-        m_Desc.pChannels    = Writer.CopyArray(Desc.pChannels, Desc.ChannelCount);
+        m_Desc.pChannels    = pChannels;
         m_Desc.ChannelCount = Desc.ChannelCount;
 
         const size_t TargetOffsetCount = static_cast<size_t>(Desc.TargetCount) + 1u;

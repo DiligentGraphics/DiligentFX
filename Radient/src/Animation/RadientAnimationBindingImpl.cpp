@@ -512,7 +512,7 @@ struct BoundAnimationPropertyRange
 {
     RadientAnimationSchemaID           Schema       = InvalidRadientAnimationSchemaID;
     RadientAnimationDestinationElement Element      = InvalidRadientAnimationDestinationElement;
-    RadientAnimationPropertyID         Property     = InvalidRadientAnimationPropertyID;
+    const Char*                        Property     = nullptr;
     Uint64                             First        = 0;
     Uint64                             End          = 0;
     Uint32                             RequestIndex = 0;
@@ -523,8 +523,9 @@ struct BoundAnimationPropertyRange
             return Schema < Rhs.Schema;
         if (Element != Rhs.Element)
             return Element < Rhs.Element;
-        if (Property != Rhs.Property)
-            return Property < Rhs.Property;
+        const int PropertyOrder = std::strcmp(Property, Rhs.Property);
+        if (PropertyOrder != 0)
+            return PropertyOrder < 0;
         if (First != Rhs.First)
             return First < Rhs.First;
         if (End != Rhs.End)
@@ -538,7 +539,7 @@ bool HaveSameBoundAnimationProperty(const BoundAnimationPropertyRange& Lhs,
 {
     return Lhs.Schema == Rhs.Schema &&
         Lhs.Element == Rhs.Element &&
-        Lhs.Property == Rhs.Property;
+        std::strcmp(Lhs.Property, Rhs.Property) == 0;
 }
 
 RADIENT_STATUS BuildPendingAnimationDestinations(const RadientAnimationClipDesc&           Clip,
@@ -719,7 +720,7 @@ struct CompiledAnimationDestination
 struct AnimationPropertySemantic
 {
     RadientAnimationSchemaID         Schema   = InvalidRadientAnimationSchemaID;
-    RadientAnimationPropertyID       Property = InvalidRadientAnimationPropertyID;
+    const Char*                      Property = nullptr;
     RADIENT_ANIMATION_VALUE_SEMANTIC Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN;
 };
 
@@ -821,7 +822,7 @@ RADIENT_STATUS ValidateAnimationPropertySemantic(const RadientAnimationPropertyB
 
     for (const AnimationPropertySemantic& Existing : PropertySemantics)
     {
-        if (Existing.Schema == Property.Schema && Existing.Property == Property.Property)
+        if (Existing.Schema == Property.Schema && std::strcmp(Existing.Property, Property.Property) == 0)
         {
             if (Existing.Semantic != Semantic)
             {

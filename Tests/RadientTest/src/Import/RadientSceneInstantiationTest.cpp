@@ -214,7 +214,7 @@ TEST(RadientSceneInstantiationTest, InstantiateSceneGraphAnimatesSceneNodeAndSke
 
     RadientAnimationChannelDesc Channel{};
     Channel.TargetIndex  = 0;
-    Channel.Property     = RadientNodeTranslationProperty;
+    Channel.Property     = RadientNodeTranslationPropertyName;
     Channel.SamplerIndex = 0;
 
     RadientAnimationClipDesc ClipDesc{};
@@ -302,7 +302,7 @@ TEST(RadientSceneInstantiationTest, InstantiateSceneGraphAnimatesSceneNodeAndSke
 
 TEST(RadientSceneInstantiationTest, InstantiateSceneGraphDoesNotRegisterUnsupportedOnlyNodeAnimation)
 {
-    constexpr RadientAnimationPropertyID UnsupportedNodeProperty = 1000;
+    constexpr Char UnsupportedNodeProperty[] = "UnsupportedNodeProperty";
 
     RefCntAutoPtr<IRadientEngine> pEngine;
     ASSERT_EQ(CreateRadientEngine({}, pEngine.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -420,7 +420,7 @@ TEST(RadientSceneInstantiationTest, InstantiateSceneGraphSkipsAnimationBindingFa
 
     RadientAnimationChannelDesc Channel{};
     Channel.TargetIndex  = 0;
-    Channel.Property     = RadientNodeTranslationProperty;
+    Channel.Property     = RadientNodeTranslationPropertyName;
     Channel.SamplerIndex = 0;
 
     RadientAnimationClipDesc ClipDesc{};

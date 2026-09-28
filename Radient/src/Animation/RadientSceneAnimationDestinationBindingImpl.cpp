@@ -258,7 +258,8 @@ RADIENT_STATUS RadientSceneAnimationDestinationBindingImpl::Builder::AddProperty
 {
     if (Property.Schema == InvalidRadientAnimationSchemaID ||
         Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
-        Property.Property == InvalidRadientAnimationPropertyID ||
+        Property.Property == nullptr ||
+        Property.Property[0] == '\0' ||
         Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
         Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
         Property.Value.ArraySize == 0)

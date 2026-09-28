@@ -22,6 +22,15 @@ The [imported document types](interface/RadientImportedDocument.hpp) in
 animations using Radient types. Their C++ containers own the metadata and
 retain referenced assets. Include this header explicitly from C++ code.
 
+## Animation property names
+
+Animation channels and destination bindings identify properties with nonempty,
+case-sensitive strings within their animation schema. Use the built-in constants
+from `RadientAnimation.h`, such as `RadientNodeTranslationPropertyName`
+(`"Translation"`) and `RadientMorphWeightsPropertyName` (`"Weights"`). Custom
+schemas can define their own property names. Names are compared by text, so
+separate strings with identical contents identify the same property.
+
 ## Material parameter updates
 
 Use `IRadientMaterialWriter` to change non-texture material parameters at runtime,

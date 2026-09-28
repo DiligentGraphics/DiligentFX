@@ -301,7 +301,8 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
             const RadientAnimationPropertyBindingDesc& Property = pProperties[PropertyIndex];
             if (Property.Schema == InvalidRadientAnimationSchemaID ||
                 Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
-                Property.Property == InvalidRadientAnimationPropertyID ||
+                Property.Property == nullptr ||
+                Property.Property[0] == '\0' ||
                 Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
                 Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
                 Property.Value.ArraySize == 0)
@@ -322,7 +323,7 @@ RADIENT_STATUS RadientMorphTargetWeightsAnimationDestinationImpl::CreateBinding(
             RadientAnimationResolvedPropertyDesc&      ResolvedProperty = pResolvedProperties[PropertyIndex];
 
             if (Property.Schema != RadientMorphWeightsAnimationSchemaID ||
-                Property.Property != RadientMorphWeightsProperty)
+                std::strcmp(Property.Property, RadientMorphWeightsPropertyName) != 0)
                 continue;
 
             if (Property.Value.Type != RADIENT_ANIMATION_VALUE_TYPE_FLOAT)

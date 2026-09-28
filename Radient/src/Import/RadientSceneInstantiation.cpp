@@ -26,6 +26,7 @@
 
 #include "Import/RadientSceneInstantiation.hpp"
 
+#include "Animation/RadientNodeAnimationProperty.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientAnimation.h"
 #include "RadientMorphTargets.h"
@@ -405,17 +406,9 @@ void RegisterSceneAnimations(
             }
             else if (Target.Schema == RadientNodeAnimationSchemaID)
             {
-                switch (Channel.Property)
+                if (FindRadientNodeAnimationPropertyInfo(Channel.Property) != nullptr)
                 {
-                    case RadientNodeTranslationProperty:
-                    case RadientNodeRotationProperty:
-                    case RadientNodeScaleProperty:
-                    case RadientNodeVisibilityProperty:
-                        HasScenePropertyChannel[Channel.TargetIndex] = true;
-                        break;
-
-                    default:
-                        break;
+                    HasScenePropertyChannel[Channel.TargetIndex] = true;
                 }
             }
         }

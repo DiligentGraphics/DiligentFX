@@ -28,6 +28,8 @@
 
 #include "RadientAnimation.h"
 
+#include <cstring>
+
 namespace Diligent
 {
 
@@ -67,7 +69,7 @@ struct RadientNodeAnimationPropertyResolution
 
 struct RadientNodeAnimationPropertyInfo
 {
-    RadientAnimationPropertyID       Property = InvalidRadientAnimationPropertyID;
+    const Char*                      Property = nullptr;
     RadientNodeAnimationPropertyKind Kind     = RadientNodeAnimationPropertyKind::Unknown;
     RadientNodeTransformField        Field    = RadientNodeTransformField::Unknown;
     RadientAnimationValueDesc        Value;
@@ -75,7 +77,7 @@ struct RadientNodeAnimationPropertyInfo
 };
 
 static constexpr RadientNodeAnimationPropertyInfo RadientNodeTranslationPropertyInfo = {
-    RadientNodeTranslationProperty,
+    RadientNodeTranslationPropertyName,
     RadientNodeAnimationPropertyKind::Transform,
     RadientNodeTransformField::Translation,
     {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1},
@@ -83,7 +85,7 @@ static constexpr RadientNodeAnimationPropertyInfo RadientNodeTranslationProperty
 };
 
 static constexpr RadientNodeAnimationPropertyInfo RadientNodeRotationPropertyInfo = {
-    RadientNodeRotationProperty,
+    RadientNodeRotationPropertyName,
     RadientNodeAnimationPropertyKind::Transform,
     RadientNodeTransformField::Rotation,
     {RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, 1},
@@ -91,7 +93,7 @@ static constexpr RadientNodeAnimationPropertyInfo RadientNodeRotationPropertyInf
 };
 
 static constexpr RadientNodeAnimationPropertyInfo RadientNodeScalePropertyInfo = {
-    RadientNodeScaleProperty,
+    RadientNodeScalePropertyName,
     RadientNodeAnimationPropertyKind::Transform,
     RadientNodeTransformField::Scale,
     {RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1},
@@ -99,7 +101,7 @@ static constexpr RadientNodeAnimationPropertyInfo RadientNodeScalePropertyInfo =
 };
 
 static constexpr RadientNodeAnimationPropertyInfo RadientNodeVisibilityPropertyInfo = {
-    RadientNodeVisibilityProperty,
+    RadientNodeVisibilityPropertyName,
     RadientNodeAnimationPropertyKind::Visibility,
     RadientNodeTransformField::Unknown,
     {RADIENT_ANIMATION_VALUE_TYPE_BOOL, 1},
@@ -107,21 +109,30 @@ static constexpr RadientNodeAnimationPropertyInfo RadientNodeVisibilityPropertyI
 };
 
 inline const RadientNodeAnimationPropertyInfo* FindRadientNodeAnimationPropertyInfo(
-    RadientAnimationPropertyID Property) noexcept
+    const Char* Property) noexcept
 {
-    switch (Property)
+    if (Property == nullptr || Property[0] == '\0')
     {
-        case RadientNodeTranslationProperty:
-            return &RadientNodeTranslationPropertyInfo;
-        case RadientNodeRotationProperty:
-            return &RadientNodeRotationPropertyInfo;
-        case RadientNodeScaleProperty:
-            return &RadientNodeScalePropertyInfo;
-        case RadientNodeVisibilityProperty:
-            return &RadientNodeVisibilityPropertyInfo;
-        default:
-            return nullptr;
+        return nullptr;
     }
+
+    if (std::strcmp(Property, RadientNodeTranslationPropertyName) == 0)
+    {
+        return &RadientNodeTranslationPropertyInfo;
+    }
+    if (std::strcmp(Property, RadientNodeRotationPropertyName) == 0)
+    {
+        return &RadientNodeRotationPropertyInfo;
+    }
+    if (std::strcmp(Property, RadientNodeScalePropertyName) == 0)
+    {
+        return &RadientNodeScalePropertyInfo;
+    }
+    if (std::strcmp(Property, RadientNodeVisibilityPropertyName) == 0)
+    {
+        return &RadientNodeVisibilityPropertyInfo;
+    }
+    return nullptr;
 }
 
 inline RADIENT_STATUS ResolveRadientNodeAnimationProperty(const RadientAnimationPropertyBindingDesc& Property,
@@ -132,7 +143,8 @@ inline RADIENT_STATUS ResolveRadientNodeAnimationProperty(const RadientAnimation
 
     if (Property.Schema == InvalidRadientAnimationSchemaID ||
         Property.DestinationElement == InvalidRadientAnimationDestinationElement ||
-        Property.Property == InvalidRadientAnimationPropertyID ||
+        Property.Property == nullptr ||
+        Property.Property[0] == '\0' ||
         Property.Value.Type <= RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN ||
         Property.Value.Type >= RADIENT_ANIMATION_VALUE_TYPE_COUNT ||
         Property.Value.ArraySize == 0)

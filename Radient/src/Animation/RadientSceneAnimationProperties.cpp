@@ -79,8 +79,8 @@ constexpr RadientAnimationValueDesc MakeAnimationValueDesc() noexcept
 } // namespace
 
 const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAnimationDestinationBindingImpl::FindProperty(
-    RadientAnimationSchemaID   Schema,
-    RadientAnimationPropertyID Property) noexcept
+    RadientAnimationSchemaID Schema,
+    const Char*              Property) noexcept
 {
     static_assert(std::is_standard_layout<RadientSceneState::LocalTransformComponent>::value,
                   "Animated component storage must have a standard layout");
@@ -112,9 +112,9 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
     };
 
     static constexpr auto MakeLightProperty =
-        [](RadientAnimationPropertyID Property,
-           RadientAnimationValueDesc  Value,
-           size_t                     Offset) constexpr noexcept {
+        [](const Char*               Property,
+           RadientAnimationValueDesc Value,
+           size_t                    Offset) constexpr noexcept {
             return PropertyDesc{
                 {RadientLightAnimationSchemaID, Property},
                 Value,
@@ -127,10 +127,10 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
         };
 
     static constexpr auto MakeLightBooleanProperty =
-        [](RadientAnimationPropertyID Property,
-           RadientAnimationValueDesc  Value,
-           size_t                     StagedOffset,
-           Uint32                     FinalizeFlags) constexpr noexcept {
+        [](const Char*               Property,
+           RadientAnimationValueDesc Value,
+           size_t                    StagedOffset,
+           Uint32                    FinalizeFlags) constexpr noexcept {
             return PropertyDesc{
                 {RadientLightAnimationSchemaID, Property},
                 Value,
@@ -173,9 +173,9 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
         };
 
     static constexpr auto MakeCameraProperty =
-        [](RadientAnimationPropertyID Property,
-           RadientAnimationValueDesc  Value,
-           size_t                     Offset) constexpr noexcept {
+        [](const Char*               Property,
+           RadientAnimationValueDesc Value,
+           size_t                    Offset) constexpr noexcept {
             return PropertyDesc{
                 {RadientCameraAnimationSchemaID, Property},
                 Value,
@@ -190,69 +190,65 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
     static constexpr PropertyDesc Properties[] = {
         // Light animation
         MakeLightProperty(
-            RadientLightColorProperty,
+            RadientLightAnglePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Angle)>(),
+            offsetof(RadientLightComponent, Angle)),
+        MakeLightProperty(
+            RadientLightColorPropertyName,
             MakeAnimationValueDesc<decltype(RadientLightComponent::Color)>(),
             offsetof(RadientLightComponent, Color)),
         MakeLightProperty(
-            RadientLightIntensityProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Intensity)>(),
-            offsetof(RadientLightComponent, Intensity)),
+            RadientLightColorTemperaturePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::ColorTemperature)>(),
+            offsetof(RadientLightComponent, ColorTemperature)),
         MakeLightProperty(
-            RadientLightRangeProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Range)>(),
-            offsetof(RadientLightComponent, Range)),
-        MakeLightProperty(
-            RadientLightExposureProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Exposure)>(),
-            offsetof(RadientLightComponent, Exposure)),
-        MakeLightProperty(
-            RadientLightInnerConeAngleProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::InnerConeAngle)>(),
-            offsetof(RadientLightComponent, InnerConeAngle)),
-        MakeLightProperty(
-            RadientLightOuterConeAngleProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::OuterConeAngle)>(),
-            offsetof(RadientLightComponent, OuterConeAngle)),
-        MakeLightProperty(
-            RadientLightDiffuseProperty,
+            RadientLightDiffusePropertyName,
             MakeAnimationValueDesc<decltype(RadientLightComponent::Diffuse)>(),
             offsetof(RadientLightComponent, Diffuse)),
-        MakeLightProperty(
-            RadientLightSpecularProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Specular)>(),
-            offsetof(RadientLightComponent, Specular)),
         MakeLightBooleanProperty(
-            RadientLightNormalizeProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Normalize)>(),
-            LightNormalizeStagedOffset,
-            LightFinalizeNormalize),
-        MakeLightBooleanProperty(
-            RadientLightEnableColorTemperatureProperty,
+            RadientLightEnableColorTemperaturePropertyName,
             MakeAnimationValueDesc<decltype(RadientLightComponent::EnableColorTemperature)>(),
             LightEnableColorTemperatureStagedOffset,
             LightFinalizeEnableColorTemperature),
         MakeLightProperty(
-            RadientLightColorTemperatureProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::ColorTemperature)>(),
-            offsetof(RadientLightComponent, ColorTemperature)),
+            RadientLightExposurePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Exposure)>(),
+            offsetof(RadientLightComponent, Exposure)),
         MakeLightProperty(
-            RadientLightRadiusProperty,
+            RadientLightInnerConeAnglePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::InnerConeAngle)>(),
+            offsetof(RadientLightComponent, InnerConeAngle)),
+        MakeLightProperty(
+            RadientLightIntensityPropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Intensity)>(),
+            offsetof(RadientLightComponent, Intensity)),
+        MakeLightBooleanProperty(
+            RadientLightNormalizePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Normalize)>(),
+            LightNormalizeStagedOffset,
+            LightFinalizeNormalize),
+        MakeLightProperty(
+            RadientLightOuterConeAnglePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::OuterConeAngle)>(),
+            offsetof(RadientLightComponent, OuterConeAngle)),
+        MakeLightProperty(
+            RadientLightRadiusPropertyName,
             MakeAnimationValueDesc<decltype(RadientLightComponent::Radius)>(),
             offsetof(RadientLightComponent, Radius)),
         MakeLightProperty(
-            RadientLightAngleProperty,
-            MakeAnimationValueDesc<decltype(RadientLightComponent::Angle)>(),
-            offsetof(RadientLightComponent, Angle)),
+            RadientLightRangePropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Range)>(),
+            offsetof(RadientLightComponent, Range)),
         MakeLightProperty(
-            RadientLightShapingFocusProperty,
+            RadientLightShapingFocusPropertyName,
             MakeAnimationValueDesc<decltype(RadientLightComponent::ShapingFocus)>(),
             offsetof(RadientLightComponent, ShapingFocus)),
+        MakeLightProperty(
+            RadientLightSpecularPropertyName,
+            MakeAnimationValueDesc<decltype(RadientLightComponent::Specular)>(),
+            offsetof(RadientLightComponent, Specular)),
 
         // Node animation
-        MakeNodeTransformProperty(
-            RadientNodeTranslationPropertyInfo,
-            offsetof(RadientSceneState::LocalTransformComponent, Transform) +
-                offsetof(RadientTransform, Position)),
         MakeNodeTransformProperty(
             RadientNodeRotationPropertyInfo,
             offsetof(RadientSceneState::LocalTransformComponent, Transform) +
@@ -261,37 +257,41 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
             RadientNodeScalePropertyInfo,
             offsetof(RadientSceneState::LocalTransformComponent, Transform) +
                 offsetof(RadientTransform, Scale)),
+        MakeNodeTransformProperty(
+            RadientNodeTranslationPropertyInfo,
+            offsetof(RadientSceneState::LocalTransformComponent, Transform) +
+                offsetof(RadientTransform, Position)),
         MakeNodeVisibilityProperty(RadientNodeVisibilityPropertyInfo),
 
         // Camera animation
         MakeCameraProperty(
-            RadientCameraHorizontalApertureProperty,
-            MakeAnimationValueDesc<decltype(RadientCameraComponent::HorizontalAperture)>(),
-            offsetof(RadientCameraComponent, HorizontalAperture)),
-        MakeCameraProperty(
-            RadientCameraVerticalApertureProperty,
-            MakeAnimationValueDesc<decltype(RadientCameraComponent::VerticalAperture)>(),
-            offsetof(RadientCameraComponent, VerticalAperture)),
-        MakeCameraProperty(
-            RadientCameraFocalLengthProperty,
-            MakeAnimationValueDesc<decltype(RadientCameraComponent::FocalLength)>(),
-            offsetof(RadientCameraComponent, FocalLength)),
-        MakeCameraProperty(
-            RadientCameraNearClipProperty,
-            MakeAnimationValueDesc<decltype(RadientFloat2::x)>(),
-            offsetof(RadientCameraComponent, ClippingRange) + offsetof(RadientFloat2, x)),
-        MakeCameraProperty(
-            RadientCameraFarClipProperty,
-            MakeAnimationValueDesc<decltype(RadientFloat2::y)>(),
-            offsetof(RadientCameraComponent, ClippingRange) + offsetof(RadientFloat2, y)),
-        MakeCameraProperty(
-            RadientCameraFStopProperty,
+            RadientCameraFStopPropertyName,
             MakeAnimationValueDesc<decltype(RadientCameraComponent::FStop)>(),
             offsetof(RadientCameraComponent, FStop)),
         MakeCameraProperty(
-            RadientCameraFocusDistanceProperty,
+            RadientCameraFarClipPropertyName,
+            MakeAnimationValueDesc<decltype(RadientFloat2::y)>(),
+            offsetof(RadientCameraComponent, ClippingRange) + offsetof(RadientFloat2, y)),
+        MakeCameraProperty(
+            RadientCameraFocalLengthPropertyName,
+            MakeAnimationValueDesc<decltype(RadientCameraComponent::FocalLength)>(),
+            offsetof(RadientCameraComponent, FocalLength)),
+        MakeCameraProperty(
+            RadientCameraFocusDistancePropertyName,
             MakeAnimationValueDesc<decltype(RadientCameraComponent::FocusDistance)>(),
             offsetof(RadientCameraComponent, FocusDistance)),
+        MakeCameraProperty(
+            RadientCameraHorizontalAperturePropertyName,
+            MakeAnimationValueDesc<decltype(RadientCameraComponent::HorizontalAperture)>(),
+            offsetof(RadientCameraComponent, HorizontalAperture)),
+        MakeCameraProperty(
+            RadientCameraNearClipPropertyName,
+            MakeAnimationValueDesc<decltype(RadientFloat2::x)>(),
+            offsetof(RadientCameraComponent, ClippingRange) + offsetof(RadientFloat2, x)),
+        MakeCameraProperty(
+            RadientCameraVerticalAperturePropertyName,
+            MakeAnimationValueDesc<decltype(RadientCameraComponent::VerticalAperture)>(),
+            offsetof(RadientCameraComponent, VerticalAperture)),
     };
 
 #ifdef DILIGENT_DEBUG
@@ -306,8 +306,13 @@ const RadientSceneAnimationDestinationBindingImpl::PropertyDesc* RadientSceneAni
     VERIFY_EXPR(PropertiesAreStrictlyOrdered);
 #endif
 
-    const PropertyKey Key{Schema, Property};
-    const auto        It = std::lower_bound(
+    if (Property == nullptr || Property[0] == '\0')
+    {
+        return nullptr;
+    }
+
+    const PropertyKey   Key{Schema, Property};
+    const PropertyDesc* It = std::lower_bound(
         std::begin(Properties), std::end(Properties), Key,
         [](const PropertyDesc& Desc, const PropertyKey& SearchKey) {
             return Desc.Key < SearchKey;

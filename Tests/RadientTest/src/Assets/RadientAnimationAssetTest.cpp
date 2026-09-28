@@ -46,7 +46,7 @@ namespace
 
 static constexpr RadientAnimationSchemaID TestTargetSchemaID =
     {0x5f50a0d8, 0x7984, 0x42f5, {0xb0, 0x2d, 0x76, 0x8f, 0x91, 0x53, 0xd7, 0xa4}};
-static constexpr RadientAnimationPropertyID TestProperty = 17;
+static constexpr Char TestProperty[] = "Custom.Property";
 
 struct AnimationValueTypeCase
 {
@@ -134,7 +134,7 @@ protected:
         Sampler.KeyframeCount   = static_cast<Uint32>(Times.size());
 
         Channel.TargetIndex       = 0;
-        Channel.Property          = TestProperty;
+        Channel.Property          = PropertyName;
         Channel.FirstArrayElement = 0;
         Channel.SamplerIndex      = 0;
 
@@ -192,10 +192,11 @@ protected:
 
 protected:
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
-    std::array<Char, 5>                    ClipName   = {'C', 'l', 'i', 'p', '\0'};
-    std::array<Char, 7>                    TargetName = {'T', 'a', 'r', 'g', 'e', 't', '\0'};
-    std::array<Float32, 2>                 Times      = {0.f, 1.f};
-    std::array<Float32, 4>                 Values     = {1.f, 2.f, 3.f, 4.f};
+    std::array<Char, 5>                    ClipName                           = {'C', 'l', 'i', 'p', '\0'};
+    std::array<Char, 7>                    TargetName                         = {'T', 'a', 'r', 'g', 'e', 't', '\0'};
+    Char                                   PropertyName[sizeof(TestProperty)] = "Custom.Property";
+    std::array<Float32, 2>                 Times                              = {0.f, 1.f};
+    std::array<Float32, 4>                 Values                             = {1.f, 2.f, 3.f, 4.f};
     RadientAnimationTargetDesc             Target;
     RadientAnimationSamplerDesc            Sampler;
     RadientAnimationChannelDesc            Channel;
@@ -245,12 +246,13 @@ TEST_F(RadientAnimationAssetValidationTest, CopiesDescriptionAndReferencedData)
 
     ClipName[0]       = 'X';
     TargetName[0]     = 'X';
+    PropertyName[0]   = 'X';
     Target.Schema     = InvalidRadientAnimationSchemaID;
     Target.Object     = InvalidRadientAnimationObject;
     Times[1]          = 0.f;
     Values[0]         = 99.f;
     Sampler.Value     = {};
-    Channel.Property  = InvalidRadientAnimationPropertyID;
+    Channel.Property  = nullptr;
     Desc.Duration     = 99.f;
     Desc.TargetCount  = 0;
     Desc.SamplerCount = 0;
@@ -291,9 +293,23 @@ TEST_F(RadientAnimationAssetValidationTest, CopiesDescriptionAndReferencedData)
     ASSERT_NE(StoredDesc.pChannels, nullptr);
     EXPECT_NE(StoredDesc.pChannels, &Channel);
     EXPECT_EQ(StoredDesc.pChannels[0].TargetIndex, 0u);
-    EXPECT_EQ(StoredDesc.pChannels[0].Property, TestProperty);
+    EXPECT_STREQ(StoredDesc.pChannels[0].Property, TestProperty);
+    EXPECT_NE(StoredDesc.pChannels[0].Property, PropertyName);
     EXPECT_EQ(StoredDesc.pChannels[0].FirstArrayElement, 0u);
     EXPECT_EQ(StoredDesc.pChannels[0].SamplerIndex, 0u);
+}
+
+TEST_F(RadientAnimationAssetValidationTest, RetainsPropertyNameAfterSourceIsDestroyed)
+{
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    {
+        const std::string TemporaryProperty = "Custom.Property.With.Temporary.Storage";
+        Channel.Property                    = TemporaryProperty.c_str();
+        pClip                               = CreateClip(Desc);
+    }
+
+    ASSERT_NE(pClip, nullptr);
+    EXPECT_STREQ(pClip->GetDesc().pChannels[0].Property, "Custom.Property.With.Temporary.Storage");
 }
 
 TEST_F(RadientAnimationAssetValidationTest, ExposesStableIdentityInterfacesAndAlignedStorage)
@@ -647,10 +663,16 @@ TEST_F(RadientAnimationAssetValidationTest, RejectsInvalidChannelSamplerIndex)
     ExpectInvalidChannel(Channel, "references invalid sampler");
 }
 
-TEST_F(RadientAnimationAssetValidationTest, RejectsInvalidChannelProperty)
+TEST_F(RadientAnimationAssetValidationTest, RejectsNullChannelPropertyName)
 {
-    Channel.Property = InvalidRadientAnimationPropertyID;
-    ExpectInvalidChannel(Channel, "invalid property identifier");
+    Channel.Property = nullptr;
+    ExpectInvalidChannel(Channel, "nonempty property name");
+}
+
+TEST_F(RadientAnimationAssetValidationTest, RejectsEmptyChannelPropertyName)
+{
+    Channel.Property = "";
+    ExpectInvalidChannel(Channel, "nonempty property name");
 }
 
 TEST_F(RadientAnimationAssetValidationTest, RejectsChannelArrayRangeOverflow)
@@ -680,9 +702,11 @@ TEST_F(RadientAnimationAssetValidationTest, RejectsUnreferencedSampler)
 
 TEST_F(RadientAnimationAssetValidationTest, RejectsIdenticalChannelRanges)
 {
+    const std::string                          EqualPropertyName{TestProperty};
     std::array<RadientAnimationSamplerDesc, 2> Samplers = {Sampler, Sampler};
     std::array<RadientAnimationChannelDesc, 2> Channels = {Channel, Channel};
     Channels[1].SamplerIndex                            = 1;
+    Channels[1].Property                                = EqualPropertyName.c_str();
 
     RadientAnimationClipDesc InvalidDesc = Desc;
     InvalidDesc.pSamplers                = Samplers.data();
@@ -694,9 +718,11 @@ TEST_F(RadientAnimationAssetValidationTest, RejectsIdenticalChannelRanges)
 
 TEST_F(RadientAnimationAssetValidationTest, RejectsPartiallyOverlappingChannelRanges)
 {
+    const std::string                          EqualPropertyName{TestProperty};
     std::array<RadientAnimationSamplerDesc, 2> Samplers = {Sampler, Sampler};
     std::array<RadientAnimationChannelDesc, 2> Channels = {Channel, Channel};
     Channels[1].SamplerIndex                            = 1;
+    Channels[1].Property                                = EqualPropertyName.c_str();
     Channels[1].FirstArrayElement                       = 1;
 
     RadientAnimationClipDesc InvalidDesc = Desc;
@@ -709,9 +735,11 @@ TEST_F(RadientAnimationAssetValidationTest, RejectsPartiallyOverlappingChannelRa
 
 TEST_F(RadientAnimationAssetValidationTest, AcceptsAdjacentChannelRangesWithOneValueType)
 {
+    const std::string                          EqualPropertyName{TestProperty};
     std::array<RadientAnimationSamplerDesc, 2> Samplers = {Sampler, Sampler};
     std::array<RadientAnimationChannelDesc, 2> Channels = {Channel, Channel};
     Channels[1].SamplerIndex                            = 1;
+    Channels[1].Property                                = EqualPropertyName.c_str();
     Channels[1].FirstArrayElement                       = 2;
 
     RadientAnimationClipDesc AdjacentDesc = Desc;
@@ -722,13 +750,29 @@ TEST_F(RadientAnimationAssetValidationTest, AcceptsAdjacentChannelRangesWithOneV
     EXPECT_NE(CreateClip(AdjacentDesc), nullptr);
 }
 
+TEST_F(RadientAnimationAssetValidationTest, AcceptsDistinctCaseSensitiveCustomPropertyNames)
+{
+    std::array<RadientAnimationChannelDesc, 2> Channels = {Channel, Channel};
+    Channels[1].Property                                = "custom.Property";
+
+    RadientAnimationClipDesc DistinctDesc           = Desc;
+    DistinctDesc.pChannels                          = Channels.data();
+    DistinctDesc.ChannelCount                       = static_cast<Uint32>(Channels.size());
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = CreateClip(DistinctDesc);
+    ASSERT_NE(pClip, nullptr);
+    EXPECT_STREQ(pClip->GetDesc().pChannels[0].Property, "Custom.Property");
+    EXPECT_STREQ(pClip->GetDesc().pChannels[1].Property, "custom.Property");
+}
+
 TEST_F(RadientAnimationAssetValidationTest, RejectsDisjointChannelRangesWithDifferentValueTypes)
 {
+    const std::string                          EqualPropertyName{TestProperty};
     std::array<RadientAnimationSamplerDesc, 2> Samplers = {Sampler, Sampler};
     Samplers[1].Value.Type                              = RADIENT_ANIMATION_VALUE_TYPE_INT;
     Samplers[1].Interpolation                           = RADIENT_ANIMATION_INTERPOLATION_STEP;
     std::array<RadientAnimationChannelDesc, 2> Channels = {Channel, Channel};
     Channels[1].SamplerIndex                            = 1;
+    Channels[1].Property                                = EqualPropertyName.c_str();
     Channels[1].FirstArrayElement                       = 2;
 
     RadientAnimationClipDesc InvalidDesc = Desc;

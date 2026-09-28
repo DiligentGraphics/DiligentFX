@@ -332,13 +332,15 @@ Uint32 FindAnimationTargetIndex(const RadientAnimationClipDesc& Clip,
 
 const RadientAnimationChannelDesc* FindAnimationChannel(const RadientAnimationClipDesc& Clip,
                                                         Uint32                          TargetIndex,
-                                                        RadientAnimationPropertyID      Property)
+                                                        const Char*                     Property)
 {
     for (Uint32 ChannelIndex = 0; ChannelIndex < Clip.ChannelCount; ++ChannelIndex)
     {
         const RadientAnimationChannelDesc& Channel = Clip.pChannels[ChannelIndex];
-        if (Channel.TargetIndex == TargetIndex && Channel.Property == Property)
+        if (Channel.TargetIndex == TargetIndex && Channel.Property != nullptr && std::strcmp(Channel.Property, Property) == 0)
+        {
             return &Channel;
+        }
     }
 
     return nullptr;
@@ -397,10 +399,10 @@ void ExpectAnimationPointerSkippedWithoutDiscardingCoreChannel(
         ClipDesc, RadientNodeAnimationSchemaID, 0u);
     ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
     EXPECT_EQ(FindAnimationChannel(
-                  ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty),
+                  ClipDesc, NodeTargetIndex, RadientNodeVisibilityPropertyName),
               nullptr);
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
     EXPECT_EQ(ClipDesc.pSamplers[pTranslationChannel->SamplerIndex].Value.Type,
@@ -473,7 +475,7 @@ void ExpectLightAnimationPointerSkippedWithoutDiscardingCoreChannel(
         ClipDesc, RadientNodeAnimationSchemaID, 0u);
     ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
     EXPECT_EQ(ClipDesc.pSamplers[pTranslationChannel->SamplerIndex].Value.Type,
@@ -1796,11 +1798,11 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesSkinWithCompleteJointHier
     EXPECT_STREQ(ClipDesc.pTargets[JointBTargetIndex].Name, "JointB");
 
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, JointATargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, JointATargetIndex, RadientNodeTranslationPropertyName);
     const RadientAnimationChannelDesc* const pRotationChannel =
-        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeRotationProperty);
+        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeRotationPropertyName);
     const RadientAnimationChannelDesc* const pScaleChannel =
-        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeScaleProperty);
+        FindAnimationChannel(ClipDesc, JointBTargetIndex, RadientNodeScalePropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_NE(pRotationChannel, nullptr);
     ASSERT_NE(pScaleChannel, nullptr);
@@ -1915,7 +1917,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
     EXPECT_STREQ(ClipDesc.pTargets[NodeTargetIndex].Name, "AnimatedNode");
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
 
@@ -1929,7 +1931,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesGenericAnimationWithoutSk
     EXPECT_FLOAT_EQ(Sampler.pTimes[1], 2.f);
 
     const RadientAnimationChannelDesc* const pScaleChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScaleProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScalePropertyName);
     ASSERT_NE(pScaleChannel, nullptr);
     ASSERT_LT(pScaleChannel->SamplerIndex, ClipDesc.SamplerCount);
     const RadientAnimationSamplerDesc& ScaleSampler = ClipDesc.pSamplers[pScaleChannel->SamplerIndex];
@@ -1985,7 +1987,7 @@ TEST(RadientGLTFConverterTest, ImportsNodeVisibilityAnimationPointer)
     EXPECT_STREQ(ClipDesc.pTargets[NodeTargetIndex].Name, "AnimatedNode");
 
     const RadientAnimationChannelDesc* const pVisibilityChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityPropertyName);
     ASSERT_NE(pVisibilityChannel, nullptr);
     ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
 
@@ -2074,7 +2076,7 @@ TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
     ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
     EXPECT_STREQ(ClipDesc.pTargets[LightTargetIndex].Name, "AnimatedLight");
 
-    const auto GetPropertySampler = [&](RadientAnimationPropertyID Property) {
+    const auto GetPropertySampler = [&](const Char* Property) {
         const RadientAnimationChannelDesc* const pChannel =
             FindAnimationChannel(ClipDesc, LightTargetIndex, Property);
         EXPECT_NE(pChannel, nullptr);
@@ -2088,7 +2090,7 @@ TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
     };
 
     const RadientAnimationSamplerDesc* const pColorSampler =
-        GetPropertySampler(RadientLightColorProperty);
+        GetPropertySampler(RadientLightColorPropertyName);
     ASSERT_NE(pColorSampler, nullptr);
     EXPECT_EQ(pColorSampler->Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
     EXPECT_EQ(pColorSampler->Value.ArraySize, 1u);
@@ -2100,15 +2102,15 @@ TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
 
     struct ScalarPropertyExpectation
     {
-        RadientAnimationPropertyID Property;
-        Float32                    FirstValue;
-        Float32                    SecondValue;
+        const Char* Property;
+        Float32     FirstValue;
+        Float32     SecondValue;
     };
     const ScalarPropertyExpectation ScalarProperties[] = {
-        {RadientLightIntensityProperty, 2.f, 4.f},
-        {RadientLightRangeProperty, 10.f, 20.f},
-        {RadientLightInnerConeAngleProperty, 0.1f, 0.2f},
-        {RadientLightOuterConeAngleProperty, 0.4f, 0.6f},
+        {RadientLightIntensityPropertyName, 2.f, 4.f},
+        {RadientLightRangePropertyName, 10.f, 20.f},
+        {RadientLightInnerConeAnglePropertyName, 0.1f, 0.2f},
+        {RadientLightOuterConeAnglePropertyName, 0.4f, 0.6f},
     };
     for (const ScalarPropertyExpectation& Property : ScalarProperties)
     {
@@ -2178,9 +2180,9 @@ TEST(RadientGLTFConverterTest, SharedPointerSamplerCreatesDistinctBoolAndFloatSa
     ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
 
     const RadientAnimationChannelDesc* const pVisibilityChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityPropertyName);
     const RadientAnimationChannelDesc* const pIntensityChannel =
-        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityProperty);
+        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityPropertyName);
     ASSERT_NE(pVisibilityChannel, nullptr);
     ASSERT_NE(pIntensityChannel, nullptr);
     ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
@@ -2254,9 +2256,9 @@ TEST(RadientGLTFConverterTest, SharedScalarPointerSamplerValidatesEveryLightProp
         ClipDesc, RadientLightAnimationSchemaID, 0u);
     ASSERT_NE(LightTargetIndex, InvalidRadientAnimationTargetIndex);
     const RadientAnimationChannelDesc* const pIntensityChannel =
-        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityProperty);
+        FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightIntensityPropertyName);
     ASSERT_NE(pIntensityChannel, nullptr);
-    EXPECT_EQ(FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightRangeProperty),
+    EXPECT_EQ(FindAnimationChannel(ClipDesc, LightTargetIndex, RadientLightRangePropertyName),
               nullptr);
     ASSERT_LT(pIntensityChannel->SamplerIndex, ClipDesc.SamplerCount);
     const RadientAnimationSamplerDesc& IntensitySampler =
@@ -2523,9 +2525,9 @@ TEST(RadientGLTFConverterTest, AnimationPointerAndCoreChannelAreRetained)
         ClipDesc, RadientNodeAnimationSchemaID, 0u);
     ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
     const RadientAnimationChannelDesc* const pVisibilityChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeVisibilityPropertyName);
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pVisibilityChannel, nullptr);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_LT(pVisibilityChannel->SamplerIndex, ClipDesc.SamplerCount);
@@ -2667,7 +2669,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
     EXPECT_STREQ(ClipDesc.pTargets[TransformTargetIndex].Name, "AnimatedMesh");
 
     const RadientAnimationChannelDesc* const pWeightChannel =
-        FindAnimationChannel(ClipDesc, MorphTargetIndex, RadientMorphWeightsProperty);
+        FindAnimationChannel(ClipDesc, MorphTargetIndex, RadientMorphWeightsPropertyName);
     ASSERT_NE(pWeightChannel, nullptr);
     EXPECT_EQ(pWeightChannel->FirstArrayElement, 0u);
     ASSERT_LT(pWeightChannel->SamplerIndex, ClipDesc.SamplerCount);
@@ -2688,7 +2690,7 @@ TEST(RadientGLTFConverterTest, ExtractSceneGraphCreatesMorphWeightAnimation)
         EXPECT_FLOAT_EQ(pWeights[ValueIndex], MorphValues.begin()[ValueIndex]);
 
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, TransformTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, TransformTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_LT(pTranslationChannel->SamplerIndex, ClipDesc.SamplerCount);
     const RadientAnimationSamplerDesc& TranslationSampler =
@@ -2743,7 +2745,7 @@ TEST(RadientGLTFConverterTest, NonFiniteMorphChannelDoesNotDiscardValidTransform
 
     const RadientAnimationChannelDesc& Channel = ClipDesc.pChannels[0];
     EXPECT_EQ(Channel.TargetIndex, 0u);
-    EXPECT_EQ(Channel.Property, RadientNodeTranslationProperty);
+    EXPECT_STREQ(Channel.Property, RadientNodeTranslationPropertyName);
     EXPECT_EQ(Channel.SamplerIndex, 0u);
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 1u);
@@ -2916,7 +2918,7 @@ TEST(RadientGLTFConverterTest, MorphAnimationSkipsSharedSamplerWithIncompatibleA
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.ArraySize, 2u);
     EXPECT_EQ(ClipDesc.pChannels[0].TargetIndex, 0u);
-    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientMorphWeightsProperty);
+    EXPECT_STREQ(ClipDesc.pChannels[0].Property, RadientMorphWeightsPropertyName);
     EXPECT_EQ(ClipDesc.pChannels[0].SamplerIndex, 0u);
 }
 
@@ -2972,8 +2974,8 @@ TEST(RadientGLTFConverterTest, GenericAnimationRetainsTargetsOutsideSkeletonMapp
     ASSERT_NE(LooseTargetIndex, InvalidRadientAnimationTargetIndex);
     EXPECT_STREQ(ClipDesc.pTargets[RootTargetIndex].Name, "SkeletonRoot");
     EXPECT_STREQ(ClipDesc.pTargets[LooseTargetIndex].Name, "LooseNode");
-    EXPECT_NE(FindAnimationChannel(ClipDesc, RootTargetIndex, RadientNodeTranslationProperty), nullptr);
-    EXPECT_NE(FindAnimationChannel(ClipDesc, LooseTargetIndex, RadientNodeScaleProperty), nullptr);
+    EXPECT_NE(FindAnimationChannel(ClipDesc, RootTargetIndex, RadientNodeTranslationPropertyName), nullptr);
+    EXPECT_NE(FindAnimationChannel(ClipDesc, LooseTargetIndex, RadientNodeScalePropertyName), nullptr);
 
     ASSERT_EQ(ImportedAnimation.SkinMappings.size(), 1u);
     const RadientImport::ImportedAnimationSkinMapping* const pSkinMapping =
@@ -3024,9 +3026,9 @@ TEST(RadientGLTFConverterTest, GenericAnimationReusesCompatibleSourceSamplerAcro
     ASSERT_NE(NodeTargetIndex, InvalidRadientAnimationTargetIndex);
 
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeTranslationPropertyName);
     const RadientAnimationChannelDesc* const pScaleChannel =
-        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScaleProperty);
+        FindAnimationChannel(ClipDesc, NodeTargetIndex, RadientNodeScalePropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
     ASSERT_NE(pScaleChannel, nullptr);
     EXPECT_EQ(pTranslationChannel->SamplerIndex, pScaleChannel->SamplerIndex);
@@ -3060,7 +3062,7 @@ TEST(RadientGLTFConverterTest, GenericAnimationSkipsChannelWithIncompatibleShare
     ASSERT_EQ(ClipDesc.TargetCount, 1u);
     ASSERT_EQ(ClipDesc.SamplerCount, 1u);
     ASSERT_EQ(ClipDesc.ChannelCount, 1u);
-    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    EXPECT_STREQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationPropertyName);
     EXPECT_EQ(ClipDesc.pSamplers[0].Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
 }
 
@@ -3128,7 +3130,7 @@ TEST(RadientGLTFConverterTest, InvalidAnimationTimeRangeDoesNotDiscardFollowingA
     ASSERT_EQ(ClipDesc.TargetCount, 1u);
     ASSERT_EQ(ClipDesc.SamplerCount, 1u);
     ASSERT_EQ(ClipDesc.ChannelCount, 1u);
-    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    EXPECT_STREQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationPropertyName);
     ASSERT_EQ(ClipDesc.pSamplers[0].KeyframeCount, 2u);
     ASSERT_NE(ClipDesc.pSamplers[0].pTimes, nullptr);
     EXPECT_FLOAT_EQ(ClipDesc.pSamplers[0].pTimes[0], 0.f);
@@ -3206,7 +3208,7 @@ TEST(RadientGLTFConverterTest, OneSourceAnimationTargetsEveryAffectedSkeleton)
     ASSERT_NE(JointTargetIndex, InvalidRadientAnimationTargetIndex);
     EXPECT_STREQ(ClipDesc.pTargets[JointTargetIndex].Name, "Joint");
     const RadientAnimationChannelDesc* const pTranslationChannel =
-        FindAnimationChannel(ClipDesc, JointTargetIndex, RadientNodeTranslationProperty);
+        FindAnimationChannel(ClipDesc, JointTargetIndex, RadientNodeTranslationPropertyName);
     ASSERT_NE(pTranslationChannel, nullptr);
 
     ASSERT_EQ(ImportedAnimation.SkinMappings.size(), 2u);

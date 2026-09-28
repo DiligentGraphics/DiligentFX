@@ -138,7 +138,7 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMorphTargetWeights =
 /// not thread-safe; callers must not read and write it concurrently. Weight
 /// values are copied without clamping or per-value validation. The caller is
 /// responsible for providing finite values. Querying
-/// IID_RadientAnimationDestination exposes RadientMorphWeightsProperty as
+/// IID_RadientAnimationDestination exposes RadientMorphWeightsPropertyName as
 /// component-wise FLOAT ranges on destination element zero.
 DILIGENT_BEGIN_INTERFACE(IRadientMorphTargetWeights, IObject)
 {

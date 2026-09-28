@@ -580,7 +580,7 @@ TEST(RadientSceneImporterTest, ExposesUnskinnedAnimationClip)
     EXPECT_EQ(ClipDesc.pTargets[0].Schema, RadientNodeAnimationSchemaID);
     EXPECT_EQ(ClipDesc.pTargets[0].Object, 0u);
     ASSERT_EQ(ClipDesc.ChannelCount, 1u);
-    EXPECT_EQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationProperty);
+    EXPECT_STREQ(ClipDesc.pChannels[0].Property, RadientNodeTranslationPropertyName);
 }
 
 TEST(RadientSceneImporterTest, RegistersAndEvaluatesUnskinnedRootNodeAnimation)
