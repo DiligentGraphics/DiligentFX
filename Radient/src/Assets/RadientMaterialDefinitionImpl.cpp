@@ -785,13 +785,18 @@ RefCntAutoPtr<IRadientMaterialAsset> RadientMaterialDefinitionImpl::CreateAsset(
     }
 }
 
-void RadientMaterialDefinitionImpl::WriteShaderData(
+Uint64 RadientMaterialDefinitionImpl::WriteShaderData(
     const IRadientMaterialAsset& Material,
     void*                        pData) const noexcept
 {
-    if (m_Data.PackingPlan.Size == 0)
-        return;
+    return UpdateShaderData(Material, 0, pData);
+}
 
+Uint64 RadientMaterialDefinitionImpl::UpdateShaderData(
+    const IRadientMaterialAsset& Material,
+    Uint64                       PreviousVersion,
+    void*                        pData) const noexcept
+{
     Uint8* const                              pShaderData = static_cast<Uint8*>(pData);
     const bool                                IsSurface   = m_Data.GetDesc().Type == RADIENT_MATERIAL_DEFINITION_TYPE_SURFACE;
     const IRadientSurfaceMaterialAsset* const pSurfaceMaterial =
@@ -800,25 +805,36 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         RadientMaterialDetail::TryGetMaterialStorage(&Material);
     VERIFY_EXPR(pStorage != nullptr);
     if (pStorage == nullptr)
-        return;
-    const RadientMaterialDetail::PackedMaterialData& MaterialData =
-        pStorage->GetPackedData();
+        return PreviousVersion;
 
-    std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
-    for (Uint32 InitializationIndex = 0;
-         InitializationIndex < m_Data.PackingPlan.InitializationCount;
-         ++InitializationIndex)
+    const RadientMaterialDetail::MaterialStorage::ReadAccess Access         = pStorage->AcquireReadAccess();
+    const Uint64                                             CurrentVersion = Access.GetShaderDataVersion();
+    if (PreviousVersion == CurrentVersion || m_Data.PackingPlan.Size == 0)
+        return CurrentVersion;
+    VERIFY_EXPR(PreviousVersion < CurrentVersion);
+
+    const RadientMaterialDetail::PackedMaterialData& MaterialData =
+        Access.GetPackedData();
+
+    if (PreviousVersion == 0)
     {
-        const RadientMaterialShaderDataInitialization& Initialization =
-            m_Data.PackingPlan.pInitializations[InitializationIndex];
-        std::memcpy(pShaderData + Initialization.Offset,
-                    Initialization.pData,
-                    Initialization.Size);
+        std::memset(pShaderData, 0, m_Data.PackingPlan.Size);
+        for (Uint32 InitializationIndex = 0;
+             InitializationIndex < m_Data.PackingPlan.InitializationCount;
+             ++InitializationIndex)
+        {
+            const RadientMaterialShaderDataInitialization& Initialization =
+                m_Data.PackingPlan.pInitializations[InitializationIndex];
+            std::memcpy(pShaderData + Initialization.Offset,
+                        Initialization.pData,
+                        Initialization.Size);
+        }
     }
 
     const RadientSurfaceMaterialShaderParameterPacking* const pSurfacePacking =
         m_Data.PackingPlan.pSurfacePacking;
-    if (pSurfacePacking != nullptr && pSurfacePacking->SurfaceModeOffset != ~Uint32{0})
+    const bool SurfaceChanged = Access.GetSurfaceShaderDataVersion() > PreviousVersion;
+    if (SurfaceChanged && pSurfacePacking != nullptr && pSurfacePacking->SurfaceModeOffset != ~Uint32{0})
     {
         VERIFY_EXPR(pSurfaceMaterial != nullptr);
         const Uint32 SurfaceMode = static_cast<Uint32>(pSurfaceMaterial->GetSurfaceMode());
@@ -826,7 +842,7 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
                     &SurfaceMode,
                     sizeof(SurfaceMode));
     }
-    if (pSurfacePacking != nullptr && pSurfacePacking->AlphaCutoffOffset != ~Uint32{0})
+    if (SurfaceChanged && pSurfacePacking != nullptr && pSurfacePacking->AlphaCutoffOffset != ~Uint32{0})
     {
         VERIFY_EXPR(pSurfaceMaterial != nullptr);
         const Float32 AlphaCutoff = pSurfaceMaterial->GetAlphaCutoff();
@@ -838,6 +854,8 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
     for (Uint32 CommandIndex = 0; CommandIndex < m_Data.PackingPlan.CopyCommandCount; ++CommandIndex)
     {
         const ShaderDataCopyCommand& Command = m_Data.PackingPlan.pCopyCommands[CommandIndex];
+        if (MaterialData.GetValueVersion(Command.ParameterIndex) <= PreviousVersion)
+            continue;
         std::memcpy(pShaderData + Command.DestinationOffset,
                     MaterialData.GetValueData(Command.ParameterIndex),
                     Command.Size);
@@ -848,6 +866,15 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         const RadientMaterialShaderTexturePacking& Command =
             m_Data.PackingPlan.pTextureCommands[CommandIndex];
 
+        const bool TextureChanged = MaterialData.GetValueVersion(Command.TextureParameterIndex) > PreviousVersion;
+        if (!TextureChanged &&
+            MaterialData.GetValueVersion(Command.UVSelectorParameterIndex) <= PreviousVersion &&
+            MaterialData.GetValueVersion(Command.WrapUParameterIndex) <= PreviousVersion &&
+            MaterialData.GetValueVersion(Command.WrapVParameterIndex) <= PreviousVersion)
+        {
+            continue;
+        }
+
         const Int32 UVSelector =
             *static_cast<const Int32*>(MaterialData.GetValueData(Command.UVSelectorParameterIndex));
         const Uint32 WrapU =
@@ -855,12 +882,20 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
         const Uint32 WrapV =
             *static_cast<const Uint32*>(MaterialData.GetValueData(Command.WrapVParameterIndex));
         ShaderTextureAttribs TextureAttribs{};
+        // Wrap/UV-selector edits share a packed word with the mip limit. Preserve
+        // the existing limit without querying the unchanged texture again.
+        if (!TextureChanged)
+        {
+            std::memcpy(&TextureAttribs.PackedProps,
+                        pShaderData + Command.Offset + ShaderTexturePackedPropsOffset,
+                        sizeof(TextureAttribs.PackedProps));
+        }
         TextureAttribs.SetUVSelector(UVSelector);
         TextureAttribs.SetWrapUMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapU));
         TextureAttribs.SetWrapVMode(static_cast<TEXTURE_ADDRESS_MODE>(WrapV));
 
         IRadientTextureAsset* const pTexture = MaterialData.GetTexture(Command.TextureParameterIndex, 0);
-        if (pTexture != nullptr)
+        if (TextureChanged && pTexture != nullptr)
         {
             RadientTextureSamplingInfo SamplingInfo{};
             const bool                 SamplingInfoAvailable =
@@ -887,6 +922,7 @@ void RadientMaterialDefinitionImpl::WriteShaderData(
                     &TextureAttribs.PackedProps,
                     sizeof(TextureAttribs.PackedProps));
     }
+    return CurrentVersion;
 }
 
 } // namespace Diligent

@@ -28,9 +28,11 @@
 
 #include "Assets/RadientAssetStatus.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "ThreadPool.hpp"
 
+#include <algorithm>
 #include <exception>
 #include <utility>
 #include <vector>
@@ -254,6 +256,7 @@ RadientTesseraMaterialData::RadientTesseraMaterialData(IRadientMaterialAsset*   
                                                        const RadientMaterialAssetView& MaterialView) :
     m_pMaterial{pMaterial},
     m_MaterialView{MaterialView},
+    m_pMaterialStorage{RadientMaterialDetail::TryGetMaterialStorage(pMaterial)},
     m_UniqueID{s_NextUniqueID.fetch_add(1, std::memory_order_relaxed) + 1}
 {
     m_ShaderTextureIds.fill(PBR_Renderer::InvalidMaterialTextureId);
@@ -270,6 +273,12 @@ RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
 
     if (Status != RADIENT_STATUS_OK)
         return Status;
+
+    // A worker may publish after the refresh pass but before its allocation
+    // is uploaded. Keep initial readiness pending until a refresh checks the
+    // packed version. Later edits retain the already-ready material.
+    if (!m_InitialShaderDataValidated)
+        return RADIENT_STATUS_PENDING;
 
     IShaderResourceBinding* const pSRB = m_MaterialSRB.GetSRB();
     if (pSRB == nullptr)
@@ -297,7 +306,8 @@ void RadientTesseraMaterialData::PublishSuccess(
     Bool                                          IsDoubleSided,
     RadientMaterialSRBLease                       MaterialSRB,
     RadientTesseraBufferAllocation                MaterialBufferAllocation,
-    PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept
+    PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds,
+    Uint64                                        ShaderDataVersion) noexcept
 {
     VERIFY_EXPR(MaterialSRB);
     VERIFY_EXPR(MaterialBufferAllocation);
@@ -307,6 +317,7 @@ void RadientTesseraMaterialData::PublishSuccess(
     m_MaterialSRB              = std::move(MaterialSRB);
     m_MaterialBufferAllocation = std::move(MaterialBufferAllocation);
     m_ShaderTextureIds         = std::move(ShaderTextureIds);
+    m_ShaderDataVersion        = ShaderDataVersion;
 
     m_Status.store(RADIENT_STATUS_OK, std::memory_order_release);
 }
@@ -325,6 +336,7 @@ struct RadientTesseraMaterialCache::ProcessingContext
     RadientMaterialDefaultTextureBindings    DefaultTextures;
     const Uint32                             MaxMaterialAttribsSize;
     RadientTesseraBufferSuballocator         MaterialBuffer;
+    std::atomic<Uint64>                      MaterialProcessingRevision{0};
 
     ProcessingContext(Uint32 ConstantBufferOffsetAlignment,
                       Uint32 MaxMaterialAttribsSize) :
@@ -405,11 +417,16 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
                         LOG_ERROR_MESSAGE("Failed to process Tessera material data");
                         Data->PublishFailure(RADIENT_STATUS_FAILED);
                     }
+                    // Publish the result before notifying the render thread.
+                    pContext->MaterialProcessingRevision.fetch_add(1, std::memory_order_release);
                     return ASYNC_TASK_STATUS_COMPLETE;
                 });
 
         if (!ThreadPool.EnqueueTask(pTask))
+        {
             Data->PublishFailure(RADIENT_STATUS_INVALID_OPERATION);
+            m_pProcessingContext->MaterialProcessingRevision.fetch_add(1, std::memory_order_release);
+        }
     }
 
     const RADIENT_STATUS Status = Data->GetStatus();
@@ -419,7 +436,76 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
 RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice*  pDevice,
                                                                   IDeviceContext* pContext)
 {
+    const RADIENT_STATUS Status = RefreshShaderData();
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
     return m_pProcessingContext->MaterialBuffer.Prepare(pDevice, pContext);
+}
+
+RADIENT_STATUS RadientTesseraMaterialCache::RefreshShaderData()
+{
+    // Observe completed processing before taking the snapshot. A worker
+    // publishing after this load advances the revision for the next preparation,
+    // so unfinished tasks do not require repeated scans of the material cache.
+    const Uint64 MaterialProcessingRevision =
+        m_pProcessingContext->MaterialProcessingRevision.load(std::memory_order_acquire);
+    bool Refresh = m_ShaderDataRefreshPending || MaterialProcessingRevision != m_MaterialProcessingRevision;
+    for (MaterialTracker& Tracker : m_MaterialTrackers)
+    {
+        const Uint64 Revision = Tracker.pTracker->GetRevision();
+        Refresh |= Revision != Tracker.Revision;
+        Tracker.Revision = Revision;
+    }
+    if (!Refresh)
+        return RADIENT_STATUS_OK;
+
+    m_MaterialProcessingRevision = MaterialProcessingRevision;
+    m_MaterialData.GetLiveValues(m_RefreshMaterials);
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (RadientTesseraMaterialDataMap::ValueHandle& Material : m_RefreshMaterials)
+    {
+        const RADIENT_STATUS MaterialStatus = Material->GetStatus();
+        if (MaterialStatus != RADIENT_STATUS_OK)
+            continue;
+
+        VERIFY_EXPR(Material->m_pMaterialStorage != nullptr);
+        VERIFY_EXPR(Material->m_pDefinition != nullptr);
+        const RadientMaterialDetail::MaterialStorage&                        Storage = *Material->m_pMaterialStorage;
+        const std::shared_ptr<RadientMaterialDetail::MaterialChangeTracker>& pTracker =
+            Storage.GetIdentity().pChangeTracker;
+        if (std::find_if(m_MaterialTrackers.begin(), m_MaterialTrackers.end(),
+                         [&pTracker](const MaterialTracker& Tracker) { return Tracker.pTracker == pTracker; }) == m_MaterialTrackers.end())
+        {
+            m_MaterialTrackers.push_back({pTracker, pTracker->GetRevision()});
+        }
+
+        if (Storage.GetChangeVersions().ShaderDataVersion != Material->m_ShaderDataVersion)
+        {
+            // Patch only changed properties in the existing CPU record. The normal
+            // upload below makes the new generation available before any draw uses it.
+            Status = m_pProcessingContext->MaterialBuffer.Update(
+                Material->m_MaterialBufferAllocation,
+                0,
+                Material->m_MaterialBufferAllocation.GetSize(),
+                [](void* pData, Uint32, void* pUserData) {
+                    RadientTesseraMaterialData& MaterialData = *static_cast<RadientTesseraMaterialData*>(pUserData);
+                    MaterialData.m_ShaderDataVersion         = MaterialData.m_pDefinition->UpdateShaderData(
+                        *MaterialData.m_pMaterial, MaterialData.m_ShaderDataVersion, pData);
+                    return RADIENT_STATUS_OK;
+                },
+                Material.Get());
+            if (Status != RADIENT_STATUS_OK)
+                break;
+        }
+        Material->m_InitialShaderDataValidated = true;
+    }
+
+    // Preserve scratch capacity without extending the lifetime of cached data.
+    m_RefreshMaterials.clear();
+    m_ShaderDataRefreshPending = Status != RADIENT_STATUS_OK;
+    return Status;
 }
 
 RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
@@ -428,7 +514,7 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     const CreateSRBCallbackType&         CreateSRB)
 {
     const RadientTesseraBufferSuballocator& MaterialBuffer = m_pProcessingContext->MaterialBuffer;
-    return Prepare(
+    return m_pProcessingContext->pMaterialSRBTable->Prepare(
         TextureVersion,
         MaterialBuffer.GetVersion(),
         MaterialBuffer.GetUploadedGeneration(),
@@ -444,6 +530,12 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
     const ResolveTextureSRVCallbackType& ResolveTextureSRV,
     const CreateSRBCallbackType&         CreateSRB)
 {
+    // The test-supplied buffer snapshot stands in for PrepareMaterialBuffer().
+    // Validate shader data before exposing that synthetic upload to the SRBs.
+    const RADIENT_STATUS Status = RefreshShaderData();
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
     return m_pProcessingContext->pMaterialSRBTable->Prepare(
         TextureVersion,
         MaterialBufferVersion,
@@ -539,8 +631,9 @@ void RadientTesseraMaterialCache::ProcessMaterial(
         return;
     }
 
+    Data.m_pDefinition = pDefinition;
     std::vector<Uint8> MaterialAttribs(MaterialAttribsSize);
-    pDefinition->WriteShaderData(*pMaterial, MaterialAttribs.data());
+    const Uint64       ShaderDataVersion = pDefinition->WriteShaderData(*pMaterial, MaterialAttribs.data());
 
     RadientTesseraBufferAllocation MaterialBufferAllocation =
         pContext->MaterialBuffer.Allocate(MaterialAttribsSize, MaterialAttribs.data());
@@ -555,7 +648,8 @@ void RadientTesseraMaterialCache::ProcessMaterial(
                         pSurfaceMaterial->IsDoubleSided(),
                         std::move(MaterialSRB),
                         std::move(MaterialBufferAllocation),
-                        std::move(ShaderTextureIds));
+                        std::move(ShaderTextureIds),
+                        ShaderDataVersion);
 }
 
 } // namespace Diligent

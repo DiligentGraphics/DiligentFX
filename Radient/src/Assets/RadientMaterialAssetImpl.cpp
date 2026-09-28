@@ -56,6 +56,8 @@ struct PackedMaterialData::MaterialParameterValue
     // Size is the byte size for value parameters and the element count for textures.
     Uint32 Size  = 0;
     void*  pData = nullptr;
+    // Last shader-data version that changed this parameter, including any array element.
+    Uint64 Version = 1;
 };
 
 PackedMaterialData::~PackedMaterialData()
@@ -92,6 +94,11 @@ const void* PackedMaterialData::GetValueData(Uint32 Index) const noexcept
     return GetValue(Index).pData;
 }
 
+Uint64 PackedMaterialData::GetValueVersion(Uint32 Index) const noexcept
+{
+    return GetValue(Index).Version;
+}
+
 bool PackedMaterialData::HasSameValue(Uint32 Index, const void* pData) const noexcept
 {
     const MaterialParameterValue& Value = GetValue(Index);
@@ -99,11 +106,12 @@ bool PackedMaterialData::HasSameValue(Uint32 Index, const void* pData) const noe
     return std::memcmp(Value.pData, pData, Value.Size) == 0;
 }
 
-void PackedMaterialData::CopyValue(Uint32 Index, const void* pData) noexcept
+void PackedMaterialData::CopyValue(Uint32 Index, const void* pData, Uint64 ShaderDataVersion) noexcept
 {
     MaterialParameterValue& Value = GetValue(Index);
     VERIFY_EXPR(!IsTextureParameter(Value.Type));
     std::memcpy(Value.pData, pData, Value.Size);
+    Value.Version = ShaderDataVersion;
 }
 
 IRadientTextureAsset* PackedMaterialData::GetTexture(Uint32 Index, Uint32 ArrayIndex) const noexcept
@@ -115,11 +123,13 @@ IRadientTextureAsset* PackedMaterialData::GetTexture(Uint32 Index, Uint32 ArrayI
 
 void PackedMaterialData::SetTexture(Uint32                Index,
                                     Uint32                ArrayIndex,
-                                    IRadientTextureAsset* pTexture) noexcept
+                                    IRadientTextureAsset* pTexture,
+                                    Uint64                ShaderDataVersion) noexcept
 {
     MaterialParameterValue& Value = GetValue(Index);
     VERIFY_EXPR(IsTextureParameter(Value.Type) && ArrayIndex < Value.Size);
     static_cast<TexturePtr*>(Value.pData)[ArrayIndex] = pTexture;
+    Value.Version                                     = ShaderDataVersion;
 }
 
 PackedMaterialData::MaterialParameterValue& PackedMaterialData::GetValue(Uint32 Index) noexcept
@@ -253,9 +263,8 @@ struct MaterialTextureSource
 
 struct MaterialStorage::TextureState
 {
-    // Terminal statuses and the finalized view are intentionally not invalidated.
-    // The material-asset contract currently requires all writer commits to finish
-    // before the first status or view query.
+    // Texture assignments are frozen by the first status or view query, so
+    // shader-only edits do not invalidate terminal statuses or the finalized view.
     using TextureSourceArray = std::vector<MaterialTextureSource>;
     using TextureEntryArray  = std::vector<RadientMaterialTextureEntry>;
     using TextureIndexArray  = std::vector<Uint32>;
@@ -368,7 +377,8 @@ struct MaterialStorage::TextureState
                     Storage.m_Data.SetTexture(
                         Source.ParameterIndex,
                         Source.ArrayIndex,
-                        pSelectedTexture);
+                        pSelectedTexture,
+                        Storage.m_ChangeVersions.ShaderDataVersion + 1);
                     StateChanged = true;
                 }
             }
@@ -474,16 +484,21 @@ RADIENT_STATUS MaterialStorage::GetTexture(RadientMaterialParameterHandle Handle
 
 RADIENT_STATUS MaterialStorage::GetLoadStatus() const noexcept
 {
+    FinishInitialization();
     return m_pTextureState->GetLoadStatus();
 }
 
 RADIENT_STATUS MaterialStorage::GetGPUResourceStatus() const noexcept
 {
+    FinishInitialization();
     return m_pTextureState->GetGPUResourceStatus();
 }
 
 RadientMaterialAssetView MaterialStorage::GetMaterialView(IRadientMaterialAsset* pMaterial)
 {
+    FinishInitialization();
+    // Finalizing fallbacks can replace texture values read by shader packing.
+    std::lock_guard<std::mutex> Lock{m_DataMutex};
     if (pMaterial == nullptr || m_pTextureState->FinalizeTextureSelection() != RADIENT_STATUS_OK)
         return {};
 
@@ -496,14 +511,32 @@ RadientMaterialAssetView MaterialStorage::GetMaterialView(IRadientMaterialAsset*
     };
 }
 
-PackedMaterialData& MaterialStorage::GetPackedData() noexcept
+MaterialStorage::ReadAccess::ReadAccess(const MaterialStorage& Storage) :
+    m_Storage{Storage},
+    m_Lock{Storage.m_DataMutex}
+{}
+
+const PackedMaterialData& MaterialStorage::ReadAccess::GetPackedData() const noexcept
 {
-    return m_Data;
+    VERIFY_EXPR(m_Lock.owns_lock());
+    return m_Storage.m_Data;
 }
 
-const PackedMaterialData& MaterialStorage::GetPackedData() const noexcept
+Uint64 MaterialStorage::ReadAccess::GetShaderDataVersion() const noexcept
 {
-    return m_Data;
+    VERIFY_EXPR(m_Lock.owns_lock());
+    return m_Storage.m_ChangeVersions.ShaderDataVersion;
+}
+
+Uint64 MaterialStorage::ReadAccess::GetSurfaceShaderDataVersion() const noexcept
+{
+    VERIFY_EXPR(m_Lock.owns_lock());
+    return m_Storage.m_SurfaceShaderDataVersion;
+}
+
+MaterialStorage::ReadAccess MaterialStorage::AcquireReadAccess() const
+{
+    return ReadAccess{*this};
 }
 
 bool MaterialStorage::IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept
@@ -513,13 +546,24 @@ bool MaterialStorage::IsValidHandle(RadientMaterialParameterHandle Handle) const
         Handle.Reserved == 0;
 }
 
-void MaterialStorage::PublishChange(MATERIAL_CHANGE_FLAGS Flags) noexcept
+void MaterialStorage::FinishInitialization() const noexcept
+{
+    if (!IsInitializationFinished())
+    {
+        std::lock_guard<std::mutex> Lock{m_DataMutex};
+        m_InitializationFinished.store(true, std::memory_order_release);
+    }
+}
+
+void MaterialStorage::PublishChange(MATERIAL_CHANGE_FLAGS Flags, MATERIAL_CHANGE_FLAGS SurfaceFlags) noexcept
 {
     VERIFY_EXPR(Flags != MATERIAL_CHANGE_FLAG_NONE);
 
     ++m_ChangeVersions.Version;
     if ((Flags & MATERIAL_CHANGE_FLAG_SHADER_DATA) != 0)
         ++m_ChangeVersions.ShaderDataVersion;
+    if ((SurfaceFlags & MATERIAL_CHANGE_FLAG_SHADER_DATA) != 0)
+        m_SurfaceShaderDataVersion = m_ChangeVersions.ShaderDataVersion;
     if ((Flags & MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS) != 0)
         ++m_ChangeVersions.TextureBindingsVersion;
     if ((Flags & MATERIAL_CHANGE_FLAG_RENDER_STATE) != 0)

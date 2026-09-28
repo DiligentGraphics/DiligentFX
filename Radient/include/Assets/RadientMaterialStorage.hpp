@@ -32,7 +32,9 @@
 #include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 
 namespace Diligent
 {
@@ -64,12 +66,13 @@ public:
     RADIENT_MATERIAL_PARAMETER_TYPE GetValueType(Uint32 Index) const noexcept;
     Uint32                          GetValueSize(Uint32 Index) const noexcept;
     const void*                     GetValueData(Uint32 Index) const noexcept;
+    Uint64                          GetValueVersion(Uint32 Index) const noexcept;
 
     bool HasSameValue(Uint32 Index, const void* pData) const noexcept;
-    void CopyValue(Uint32 Index, const void* pData) noexcept;
+    void CopyValue(Uint32 Index, const void* pData, Uint64 ShaderDataVersion) noexcept;
 
     IRadientTextureAsset* GetTexture(Uint32 Index, Uint32 ArrayIndex) const noexcept;
-    void                  SetTexture(Uint32 Index, Uint32 ArrayIndex, IRadientTextureAsset* pTexture) noexcept;
+    void                  SetTexture(Uint32 Index, Uint32 ArrayIndex, IRadientTextureAsset* pTexture, Uint64 ShaderDataVersion) noexcept;
 
 private:
     struct MaterialParameterValue;
@@ -103,7 +106,10 @@ public:
     IRadientMaterialDefinitionAsset* GetDefinition() const noexcept;
     Uint64                           GetVersion() const noexcept;
     const MaterialAssetIdentity&     GetIdentity() const noexcept;
-    const MaterialChangeVersions&    GetChangeVersions() const noexcept;
+
+    // Render-thread/client-serialized access. Worker packing reads versions
+    // through ReadAccess so they describe the same state as the packed values.
+    const MaterialChangeVersions& GetChangeVersions() const noexcept;
 
     RADIENT_STATUS GetParameter(RadientMaterialParameterHandle Handle,
                                 void*                          pData,
@@ -117,15 +123,69 @@ public:
     RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
     RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
-    PackedMaterialData&       GetPackedData() noexcept;
-    const PackedMaterialData& GetPackedData() const noexcept;
+    /// Holds read access to material values and their versions until destruction.
+    /// The storage must outlive the access object. References obtained from it
+    /// are protected only while the object owns access; moved-from objects may
+    /// only be destroyed. Surface properties read by shader packing are protected
+    /// by the same scope because ApplyChanges() updates them under the same lock.
+    class ReadAccess final
+    {
+    public:
+        // clang-format off
+        ReadAccess           (const ReadAccess&) = delete;
+        ReadAccess& operator=(const ReadAccess&) = delete;
+        ReadAccess           (ReadAccess&&) noexcept = default;
+        ReadAccess& operator=(ReadAccess&&) = delete;
+        // clang-format on
 
-    void PublishChange(MATERIAL_CHANGE_FLAGS Flags) noexcept;
+        const PackedMaterialData& GetPackedData() const noexcept;
+        Uint64                    GetShaderDataVersion() const noexcept;
+        Uint64                    GetSurfaceShaderDataVersion() const noexcept;
+
+    private:
+        friend class MaterialStorage;
+        explicit ReadAccess(const MaterialStorage& Storage);
+
+        const MaterialStorage&       m_Storage;
+        std::unique_lock<std::mutex> m_Lock;
+    };
+
+    /// Acquires a consistent view without copying the material. Keep the returned
+    /// object alive throughout packing, including reads of surface properties.
+    ReadAccess AcquireReadAccess() const;
+
+    /// Validates and applies the complete commit, including specialized state
+    /// and version publication, as one operation coordinated with worker reads.
+    template <typename ChangeSetType, typename SpecializedStateType>
+    RADIENT_STATUS ApplyChanges(const ChangeSetType& Changes, SpecializedStateType& SpecializedState) noexcept
+    {
+        std::lock_guard<std::mutex> Lock{m_DataMutex};
+        // Reject unsupported edits before applying any of the assignments.
+        if (IsInitializationFinished() &&
+            (Changes.Parameters.HasEffectiveTextureChanges(m_Data) ||
+             Changes.Specialized.HasEffectiveRenderStateChanges(SpecializedState)))
+        {
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+
+        MATERIAL_CHANGE_FLAGS       Flags        = Changes.Parameters.ApplyTo(m_Data, m_ChangeVersions.ShaderDataVersion + 1);
+        const MATERIAL_CHANGE_FLAGS SurfaceFlags = Changes.Specialized.ApplyTo(SpecializedState);
+        Flags |= SurfaceFlags;
+        if (Flags == MATERIAL_CHANGE_FLAG_NONE)
+            return RADIENT_STATUS_NO_CHANGE;
+
+        PublishChange(Flags, SurfaceFlags);
+        return RADIENT_STATUS_OK;
+    }
 
 private:
     friend class MaterialParameterChanges;
 
     bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept;
+    bool IsInitializationFinished() const noexcept { return m_InitializationFinished.load(std::memory_order_acquire); }
+    void FinishInitialization() const noexcept;
+    void PublishChange(MATERIAL_CHANGE_FLAGS Flags,
+                       MATERIAL_CHANGE_FLAGS SurfaceFlags = MATERIAL_CHANGE_FLAG_NONE) noexcept;
 
     struct TextureState;
 
@@ -134,6 +194,9 @@ private:
     const MaterialAssetIdentity                    m_Identity;
     PackedMaterialData                             m_Data;
     MaterialChangeVersions                         m_ChangeVersions;
+    Uint64                                         m_SurfaceShaderDataVersion = 1;
+    mutable std::mutex                             m_DataMutex;
+    mutable std::atomic<bool>                      m_InitializationFinished{false};
     std::unique_ptr<TextureState>                  m_pTextureState;
 };
 

@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
@@ -34,10 +35,19 @@
 #include "RadientMaterialTestHelpers.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
+#include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
+#include "GLTFLoader.hpp"
+#include "ObjectBase.hpp"
 
 #include "gtest/gtest.h"
 
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstring>
 #include <initializer_list>
+#include <thread>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -45,6 +55,110 @@ using namespace Diligent::Testing::RadientGPUTest;
 
 namespace
 {
+
+// Keep the actual asset/storage/writer implementation, but stop initial worker
+// publication after its shader data has been packed and allocated. Packing never
+// reads IsDoubleSided(); ProcessMaterial reads it for PublishSuccess() arguments.
+class GatedSurfaceMaterial final : public ObjectBase<IRadientSurfaceMaterialAsset>
+{
+public:
+    GatedSurfaceMaterial(IReferenceCounters*    pRefCounters,
+                         IRadientMaterialAsset* pMaterial,
+                         Threading::Signal&     Allocated,
+                         Threading::Signal&     Release) :
+        ObjectBase<IRadientSurfaceMaterialAsset>{pRefCounters},
+        m_pMaterial{pMaterial, IID_RadientSurfaceMaterialAsset},
+        m_Allocated{Allocated},
+        m_Release{Release}
+    {}
+
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override
+    {
+        if (ppInterface == nullptr)
+            return;
+        if (IID == IID_Unknown || IID == IID_RadientAsset ||
+            IID == IID_RadientMaterialAsset || IID == IID_RadientSurfaceMaterialAsset)
+        {
+            *ppInterface = this;
+            AddRef();
+        }
+        else
+        {
+            // The material cache and packing code obtain the real storage.
+            m_pMaterial->QueryInterface(IID, ppInterface);
+        }
+    }
+
+    const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override
+    {
+        return m_pMaterial->GetReference();
+    }
+    RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE GetType() const override
+    {
+        return m_pMaterial->GetType();
+    }
+    IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override
+    {
+        return m_pMaterial->GetDefinition();
+    }
+    Uint64 DILIGENT_CALL_TYPE GetVersion() const override
+    {
+        return m_pMaterial->GetVersion();
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
+                                                   void*                          pData,
+                                                   Uint32                         DataSize) const override
+    {
+        return m_pMaterial->GetParameter(Handle, pData, DataSize);
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
+                                                 Uint32                         ArrayIndex,
+                                                 IRadientTextureAsset**         ppTexture) const override
+    {
+        return m_pMaterial->GetTexture(Handle, ArrayIndex, ppTexture);
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** ppWriter) override
+    {
+        return m_pMaterial->CreateWriter(ppWriter);
+    }
+    RADIENT_MATERIAL_SURFACE_MODE DILIGENT_CALL_TYPE GetSurfaceMode() const override
+    {
+        return m_pMaterial->GetSurfaceMode();
+    }
+    Float32 DILIGENT_CALL_TYPE GetAlphaCutoff() const override
+    {
+        return m_pMaterial->GetAlphaCutoff();
+    }
+    Bool DILIGENT_CALL_TYPE IsDoubleSided() const override
+    {
+        m_Allocated.Trigger();
+        m_Release.Wait();
+        return m_pMaterial->IsDoubleSided();
+    }
+
+private:
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> m_pMaterial;
+    Threading::Signal&                          m_Allocated;
+    Threading::Signal&                          m_Release;
+};
+
+struct MaterialWorkerReleaseGuard
+{
+    Threading::Signal& ReleaseSignal;
+    IThreadPool&       ThreadPool;
+
+    ~MaterialWorkerReleaseGuard()
+    {
+        ReleaseAndWait();
+    }
+
+    void ReleaseAndWait()
+    {
+        if (!ReleaseSignal.IsTriggered())
+            ReleaseSignal.Trigger();
+        ThreadPool.WaitForAllTasks();
+    }
+};
 
 RadientMaterialParameterHandle FindMaterialParameter(const RadientMaterialAssetView& MaterialData,
                                                      const char*                     Name)
@@ -450,6 +564,260 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     const RadientMaterialAssetView MaterialData = RadientMaterialAssetManager::GetMaterialView(pMaterial);
     ASSERT_TRUE(MaterialData);
     EXPECT_NE(GetMaterialTexture(MaterialData, RadientStandardMaterialBaseColorTextureName), nullptr);
+}
+
+
+std::vector<Uint8> ReadMaterialShaderData(IRenderDevice&                    Device,
+                                          IDeviceContext&                   Context,
+                                          RadientTesseraMaterialCache&      Cache,
+                                          const RadientTesseraMaterialData& Material)
+{
+    const RadientTesseraBufferAllocation& Allocation = Material.GetMaterialBufferAllocation();
+    BufferDesc                            StagingDesc;
+    StagingDesc.Name           = "Material shader data readback";
+    StagingDesc.Size           = Allocation.GetSize();
+    StagingDesc.Usage          = USAGE_STAGING;
+    StagingDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<IBuffer> pStagingBuffer;
+    Device.CreateBuffer(StagingDesc, nullptr, &pStagingBuffer);
+    EXPECT_NE(pStagingBuffer, nullptr);
+    if (pStagingBuffer == nullptr)
+        return {};
+
+    Context.CopyBuffer(Cache.GetMaterialBuffer(), Allocation.GetOffset(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                       pStagingBuffer, 0, Allocation.GetSize(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Context.WaitForIdle();
+    void* pMappedData = nullptr;
+    Context.MapBuffer(pStagingBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT, pMappedData);
+    EXPECT_NE(pMappedData, nullptr);
+    if (pMappedData == nullptr)
+        return {};
+
+    std::vector<Uint8> Bytes(Allocation.GetSize());
+    std::memcpy(Bytes.data(), pMappedData, Bytes.size());
+    Context.UnmapBuffer(pStagingBuffer, MAP_READ);
+    return Bytes;
+}
+
+TEST(RadientMaterialAssetManagerGPUTest, InitialShaderDataMustBeValidatedAfterWorkerPublication)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment* const       pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const               pDevice  = pEnv->GetDevice();
+    IDeviceContext* const              pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard                 StopThreads{pThreadPool};
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI;
+    AssetManagerCI.pDevice                               = pDevice;
+    AssetManagerCI.pThreadPool                           = pThreadPool;
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pMaterial), RADIENT_STATUS_OK);
+
+    const std::chrono::steady_clock::time_point Deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    while (RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial) == RADIENT_STATUS_PENDING &&
+           std::chrono::steady_clock::now() < Deadline)
+    {
+        pAssetManager->UpdateGPUResources(pDevice, pContext);
+        pContext->Flush();
+        pContext->FinishFrame();
+        std::this_thread::yield();
+    }
+    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+
+    RadientMaterialParameterHandle ColorHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &ColorHandle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    const RadientFloat4 OriginalColor = Testing::GetMaterialParameter<RadientFloat4>(*pMaterial, RadientStandardMaterialBaseColorFactorName);
+    const RadientFloat4 UpdatedColor{0.25f, 0.5f, 0.75f, 1.f};
+    const size_t        ColorOffset = offsetof(GLTF::Material::ShaderAttribs, BaseColorFactor);
+
+    {
+        RadientTesseraGeometryRenderer Renderer{8, pAssetManager->GetDefaultMaterialTextures()};
+        ASSERT_EQ(Renderer.BeginFrame(pDevice, pContext), RADIENT_STATUS_OK);
+        ASSERT_NE(Renderer.GetMaterialCache(), nullptr);
+        RadientTesseraMaterialCache&        Cache = *Renderer.GetMaterialCache();
+        Threading::Signal                   Allocated;
+        Threading::Signal                   Release;
+        RefCntAutoPtr<GatedSurfaceMaterial> pGatedMaterial{
+            MakeNewRCObj<GatedSurfaceMaterial>()(pMaterial.RawPtr(), Allocated, Release)};
+        // Release before destroying the renderer or stopping its pool if any
+        // assertion returns while the worker is held at publication.
+        MaterialWorkerReleaseGuard          WorkerGuard{Release, *pThreadPool};
+        RadientTesseraMaterialResolveResult Result = Cache.Resolve(*pThreadPool, pGatedMaterial);
+        ASSERT_TRUE(Result.Data);
+        while (!Allocated.IsTriggered() && Result.Data->GetStatus() == RADIENT_STATUS_PENDING)
+            std::this_thread::yield();
+        ASSERT_TRUE(Allocated.IsTriggered());
+        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_PENDING);
+
+        ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        // Refresh skips the pending record, but the shared buffer already
+        // contains its allocation and uploads the old values.
+        ASSERT_EQ(Cache.PrepareMaterialBuffer(pDevice, pContext), RADIENT_STATUS_OK);
+        WorkerGuard.ReleaseAndWait();
+        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+
+        // Prepare real texture bindings without refreshing shader data again.
+        // This reproduces publication between the refresh and SRB preparation.
+        RadientPBRRenderer& PBRRenderer = *Renderer.GetRenderer();
+        ASSERT_EQ(Cache.Prepare(
+                      pAssetManager->GetResourceManager()->GetTextureVersion(),
+                      [](const RadientMaterialTextureSRBSlot& Binding) {
+                          return RadientMaterialTextureSRVResolveResult{
+                              RadientTextureAssetManager::GetGPUResourceStatus(Binding.pTexture),
+                              RadientTextureAssetManager::GetTextureSRV(Binding.pTexture, Binding.ViewType)};
+                      },
+                      [&Cache, &PBRRenderer](ITextureView* const* ppTextures, Uint32 TextureCount) {
+                          RefCntAutoPtr<IShaderResourceBinding> pSRB;
+                          PBRRenderer.CreateResourceBinding(&pSRB, 1);
+                          if (pSRB != nullptr)
+                          {
+                              PBRRenderer.InitMaterialSRBVars(pSRB, Cache.GetMaterialBuffer(), Cache.GetMaxMaterialAttribsSize());
+                              if (!PBRRenderer.SetMaterialTextures(pSRB, ppTextures, 0, TextureCount))
+                                  pSRB.Release();
+                          }
+                          return pSRB;
+                      }),
+                  RADIENT_STATUS_OK);
+        ASSERT_NE(Result.Data->GetMaterialSRB().GetSRB(), nullptr);
+        EXPECT_TRUE(Result.Data->GetMaterialBufferAllocation().IsUploadedThrough(
+            Result.Data->GetMaterialSRB().GetMaterialBufferGeneration()));
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+        const std::vector<Uint8> BeforeRefresh = ReadMaterialShaderData(*pDevice, *pContext, Cache, *Result.Data);
+        ASSERT_GE(BeforeRefresh.size(), ColorOffset + sizeof(OriginalColor));
+        EXPECT_EQ(std::memcmp(BeforeRefresh.data() + ColorOffset, &OriginalColor, sizeof(OriginalColor)), 0);
+
+        ASSERT_EQ(Renderer.Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+        const std::vector<Uint8> AfterRefresh = ReadMaterialShaderData(*pDevice, *pContext, Cache, *Result.Data);
+        ASSERT_GE(AfterRefresh.size(), ColorOffset + sizeof(UpdatedColor));
+        EXPECT_EQ(std::memcmp(AfterRefresh.data() + ColorOffset, &UpdatedColor, sizeof(UpdatedColor)), 0);
+    }
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+}
+
+TEST(RadientMaterialAssetManagerGPUTest, UpdatesShaderDataInEachRendererWithoutReplacingBindings)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment* const       pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const               pDevice  = pEnv->GetDevice();
+    IDeviceContext* const              pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreads{pThreadPool};
+
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI;
+    AssetManagerCI.pDevice                               = pDevice;
+    AssetManagerCI.pThreadPool                           = pThreadPool;
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
+    ASSERT_NE(pAssetManager, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, {}, &pMaterial), RADIENT_STATUS_OK);
+
+    // Complete the default texture dependencies before the material cache
+    // starts its own packing task.
+    const std::chrono::steady_clock::time_point Deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    while (RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial) == RADIENT_STATUS_PENDING &&
+           std::chrono::steady_clock::now() < Deadline)
+    {
+        pAssetManager->UpdateGPUResources(pDevice, pContext);
+        pContext->Flush();
+        pContext->FinishFrame();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+
+    RadientMaterialParameterHandle ColorHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &ColorHandle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+
+    {
+        RadientTesseraGeometryRenderer                       FirstRenderer{8, pAssetManager->GetDefaultMaterialTextures()};
+        RadientTesseraGeometryRenderer                       SecondRenderer{8, pAssetManager->GetDefaultMaterialTextures()};
+        const std::array<RadientTesseraGeometryRenderer*, 2> Renderers{&FirstRenderer, &SecondRenderer};
+        std::array<RadientTesseraMaterialResolveResult, 2>   Materials;
+        for (size_t Index = 0; Index < Renderers.size(); ++Index)
+        {
+            ASSERT_EQ(Renderers[Index]->BeginFrame(pDevice, pContext), RADIENT_STATUS_OK);
+            ASSERT_NE(Renderers[Index]->GetMaterialCache(), nullptr);
+            Materials[Index] = Renderers[Index]->GetMaterialCache()->Resolve(*pThreadPool, pMaterial);
+            ASSERT_TRUE(Materials[Index].Data);
+        }
+        pThreadPool->WaitForAllTasks();
+
+        // Both workers have already packed the original color. A commit before
+        // the first upload must repair that stale packing in both caches.
+        const RadientFloat4 FirstColor{0.25f, 0.5f, 0.75f, 1.f};
+        ASSERT_EQ(pWriter->SetParameter(ColorHandle, FirstColor), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        const size_t                           ColorOffset = offsetof(GLTF::Material::ShaderAttribs, BaseColorFactor);
+        std::array<IBuffer*, 2>                Buffers{};
+        std::array<IShaderResourceBinding*, 2> SRBs{};
+        std::array<Uint32, 2>                  Offsets{};
+        std::array<Uint64, 2>                  Generations{};
+        std::array<std::vector<Uint8>, 2>      InitialBytes;
+        for (size_t Index = 0; Index < Renderers.size(); ++Index)
+        {
+            ASSERT_EQ(Renderers[Index]->Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+            ASSERT_EQ(Materials[Index].Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+            RadientTesseraMaterialCache& Cache = *Renderers[Index]->GetMaterialCache();
+            InitialBytes[Index]                = ReadMaterialShaderData(*pDevice, *pContext, Cache, *Materials[Index].Data);
+            ASSERT_GE(InitialBytes[Index].size(), ColorOffset + sizeof(FirstColor));
+            EXPECT_EQ(std::memcmp(InitialBytes[Index].data() + ColorOffset, &FirstColor, sizeof(FirstColor)), 0);
+            Buffers[Index]     = Cache.GetMaterialBuffer();
+            SRBs[Index]        = Materials[Index].Data->GetMaterialSRB().GetSRB();
+            Offsets[Index]     = Materials[Index].Data->GetMaterialBufferAllocation().GetOffset();
+            Generations[Index] = Materials[Index].Data->GetMaterialSRB().GetMaterialBufferGeneration();
+        }
+        EXPECT_EQ(InitialBytes[0], InitialBytes[1]);
+
+        // Repeated commits before preparation upload only the latest values.
+        // Preparing one renderer must not consume the other cache's revision.
+        const RadientFloat4 IntermediateColor{0.5f, 0.25f, 0.75f, 1.f};
+        const RadientFloat4 FinalColor{0.75f, 0.5f, 0.25f, 1.f};
+        ASSERT_EQ(pWriter->SetParameter(ColorHandle, IntermediateColor), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(ColorHandle, FinalColor), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        for (size_t Index = 0; Index < Renderers.size(); ++Index)
+        {
+            // An already rendered material stays available while its latest
+            // shader-only edits wait for the next normal buffer upload.
+            EXPECT_EQ(Materials[Index].Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+            ASSERT_EQ(Renderers[Index]->Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+            RadientTesseraMaterialCache&      Cache        = *Renderers[Index]->GetMaterialCache();
+            const RadientTesseraMaterialData& MaterialData = *Materials[Index].Data;
+            EXPECT_EQ(MaterialData.GetGPUResourceStatus(), RADIENT_STATUS_OK);
+            EXPECT_EQ(Cache.GetMaterialBuffer(), Buffers[Index]);
+            EXPECT_EQ(MaterialData.GetMaterialSRB().GetSRB(), SRBs[Index]);
+            EXPECT_EQ(MaterialData.GetMaterialBufferAllocation().GetOffset(), Offsets[Index]);
+            EXPECT_GT(MaterialData.GetMaterialSRB().GetMaterialBufferGeneration(), Generations[Index]);
+
+            std::vector<Uint8> ExpectedBytes = InitialBytes[Index];
+            std::memcpy(ExpectedBytes.data() + ColorOffset, &FinalColor, sizeof(FinalColor));
+            EXPECT_EQ(ReadMaterialShaderData(*pDevice, *pContext, Cache, MaterialData), ExpectedBytes);
+
+            // An unchanged frame must neither allocate nor upload another record.
+            const Uint64 Generation = MaterialData.GetMaterialSRB().GetMaterialBufferGeneration();
+            ASSERT_EQ(Renderers[Index]->Prepare(pDevice, pContext, pAssetManager->GetResourceManager()), RADIENT_STATUS_OK);
+            EXPECT_EQ(MaterialData.GetMaterialSRB().GetMaterialBufferGeneration(), Generation);
+        }
+    }
+    EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
 }
 
 } // namespace

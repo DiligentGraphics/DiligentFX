@@ -21,3 +21,17 @@ The [imported document types](interface/RadientImportedDocument.hpp) in
 `RadientImportedDocument.hpp` describe assets, scene hierarchies, skins, and
 animations using Radient types. Their C++ containers own the metadata and
 retain referenced assets. Include this header explicitly from C++ code.
+
+## Material parameter updates
+
+Use `IRadientMaterialWriter` to change non-texture material parameters at runtime,
+including base color, roughness, and texture-coordinate transforms.
+`IRadientSurfaceMaterialWriter::SetAlphaCutoff()` also supports runtime updates.
+Commit changes on the render thread before rendering a frame. A successful commit
+updates material getters immediately, and the next frame uses the new values
+without reloading the material or changing the scene.
+
+Texture assignments, surface mode, and double-sided state must be configured
+before the material's load status, GPU resource status, or render view is first
+queried. After that, a commit that changes any of these properties returns
+`RADIENT_STATUS_INVALID_OPERATION` and applies none of its assignments.

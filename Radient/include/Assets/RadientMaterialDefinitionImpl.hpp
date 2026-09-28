@@ -208,9 +208,19 @@ public:
     /// least GetShaderDataSize() bytes. Padding and unmapped bytes are set to
     /// zero. Definition-owned initializations are applied before material
     /// parameters. Non-null texture parameters must have initialized sampling
-    /// data.
-    void WriteShaderData(const IRadientMaterialAsset& Material,
-                         void*                        pData) const noexcept;
+    /// data. Returns the shader-data version captured with the packed values.
+    /// Initial packing may run on a worker concurrently with render-thread commits.
+    Uint64 WriteShaderData(const IRadientMaterialAsset& Material,
+                           void*                        pData) const noexcept;
+
+    /// Updates an existing shader-data block from the same material, writing only
+    /// fields changed since PreviousVersion. Initializations, padding, and unchanged
+    /// texture sampling data are preserved. Returns the resulting shader-data version.
+    /// PreviousVersion is the value returned by the last packing/update of this block.
+    /// Texture assignments and render-state properties remain unchanged between calls.
+    Uint64 UpdateShaderData(const IRadientMaterialAsset& Material,
+                            Uint64                       PreviousVersion,
+                            void*                        pData) const noexcept;
 
 private:
     struct ShaderDataCopyCommand

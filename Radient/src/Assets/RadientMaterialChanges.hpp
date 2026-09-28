@@ -61,7 +61,7 @@ public:
                               IRadientTextureAsset*          pTexture);
 
     bool                  HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept;
-    MATERIAL_CHANGE_FLAGS ApplyTo(PackedMaterialData& Target) const noexcept;
+    MATERIAL_CHANGE_FLAGS ApplyTo(PackedMaterialData& Target, Uint64 ShaderDataVersion) const noexcept;
 
 private:
     static constexpr Uint32 ValueArrayIndex = ~Uint32{0};
@@ -88,6 +88,8 @@ struct EmptyMaterialState
 
 struct EmptyMaterialChanges
 {
+    bool HasEffectiveRenderStateChanges(const EmptyMaterialState&) const noexcept { return false; }
+
     MATERIAL_CHANGE_FLAGS ApplyTo(EmptyMaterialState&) const noexcept
     {
         return MATERIAL_CHANGE_FLAG_NONE;

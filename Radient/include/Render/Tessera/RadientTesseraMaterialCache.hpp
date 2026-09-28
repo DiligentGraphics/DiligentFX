@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMaterialChangeTracker.hpp"
 #include "Render/RadientMaterialSRBTable.hpp"
 #include "Render/Tessera/RadientTesseraBufferSuballocator.hpp"
 #include "UniqueIdentifier.hpp"
@@ -35,14 +36,22 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace Diligent
 {
 
 struct IThreadPool;
+class RadientMaterialDefinitionImpl;
 
-/// Immutable Tessera-specific material data produced by a worker task. The
-/// retained material asset keeps the borrowed RadientMaterialAssetView
+namespace RadientMaterialDetail
+{
+class MaterialStorage;
+}
+
+/// Tessera-specific material data initially produced by a worker task. Shader
+/// data is subsequently updated on the render thread without changing bindings.
+/// The retained material asset keeps the borrowed RadientMaterialAssetView
 /// alive. The logical SRB lease is stable even while its GPU SRB is pending.
 class RadientTesseraMaterialData final
 {
@@ -61,8 +70,9 @@ public:
     }
 
     /// Reports aggregate Tessera GPU readiness. The source material tracks its
-    /// selected texture dependencies; Tessera additionally waits for the SRB
-    /// prepared for the logical lease. This method is render-thread-only.
+    /// selected texture dependencies; Tessera additionally waits for initial
+    /// shader-data validation and upload, and the SRB prepared for the logical
+    /// lease. This method is render-thread-only.
     RADIENT_STATUS GetGPUResourceStatus() const noexcept;
 
     const RadientMaterialAssetView& GetMaterialView() const noexcept
@@ -108,7 +118,8 @@ private:
                         Bool                                          IsDoubleSided,
                         RadientMaterialSRBLease                       MaterialSRB,
                         RadientTesseraBufferAllocation                MaterialBufferAllocation,
-                        PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds) noexcept;
+                        PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds,
+                        Uint64                                        ShaderDataVersion) noexcept;
 
     void PublishFailure(RADIENT_STATUS Status) noexcept;
 
@@ -116,6 +127,16 @@ private:
     RadientMaterialAssetView             m_MaterialView;
     RadientMaterialSRBLease              m_MaterialSRB;
     RadientTesseraBufferAllocation       m_MaterialBufferAllocation;
+
+    // The retained asset owns both objects; resolving these once avoids
+    // interface queries when checking shader-data changes.
+    const RadientMaterialDetail::MaterialStorage* const m_pMaterialStorage;
+    const RadientMaterialDefinitionImpl*                m_pDefinition       = nullptr;
+    Uint64                                              m_ShaderDataVersion = 0;
+
+    // Only the render thread reads/writes this flag. Worker publication alone
+    // cannot make a record GPU-ready: its packed version must first be checked.
+    bool m_InitialShaderDataValidated = false;
 
     const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};
@@ -177,8 +198,9 @@ public:
     RadientTesseraMaterialResolveResult Resolve(IThreadPool&           ThreadPool,
                                                 IRadientMaterialAsset* pMaterial);
 
-    /// Creates or grows the shared material buffer and uploads worker-produced
-    /// material records. This method must be called from the render thread.
+    /// Refreshes changed material shader data, creates or grows the shared
+    /// material buffer, and uploads pending records. Existing allocations and
+    /// bindings are preserved. This method must be called from the render thread.
     RADIENT_STATUS PrepareMaterialBuffer(IRenderDevice*  pDevice,
                                          IDeviceContext* pContext);
 
@@ -207,8 +229,20 @@ private:
     static void ProcessMaterial(const std::shared_ptr<ProcessingContext>& pContext,
                                 RadientTesseraMaterialData&               Data);
 
-    std::shared_ptr<ProcessingContext> m_pProcessingContext;
-    RadientTesseraMaterialDataMap      m_MaterialData;
+    RADIENT_STATUS RefreshShaderData();
+
+    struct MaterialTracker
+    {
+        std::shared_ptr<RadientMaterialDetail::MaterialChangeTracker> pTracker;
+        Uint64                                                        Revision = 0;
+    };
+
+    std::shared_ptr<ProcessingContext>              m_pProcessingContext;
+    RadientTesseraMaterialDataMap                   m_MaterialData;
+    std::vector<MaterialTracker>                    m_MaterialTrackers;
+    RadientTesseraMaterialDataMap::ValueHandleArray m_RefreshMaterials;
+    Uint64                                          m_MaterialProcessingRevision = 0;
+    bool                                            m_ShaderDataRefreshPending   = false;
 };
 
 } // namespace Diligent

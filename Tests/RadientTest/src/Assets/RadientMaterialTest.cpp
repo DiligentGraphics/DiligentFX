@@ -34,15 +34,18 @@
 #include "GLTFLoader.hpp"
 #include "RefCntAutoPtr.hpp"
 #include "TestingEnvironment.hpp"
+#include "ThreadSignal.hpp"
 #include "gtest/gtest.h"
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace Diligent;
@@ -326,6 +329,138 @@ TEST(RadientMaterialTest, ParameterAndSurfaceChangesCommitAsOneTransaction)
     EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
 }
 
+TEST(RadientMaterialTest, RuntimeCommitsRejectUnsupportedChangesWithoutPartialApplication)
+{
+    struct ShaderData
+    {
+        Float32 Value;
+        Uint32  SurfaceMode;
+        Float32 AlphaCutoff;
+    };
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name = "Value";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[1].Name = "Texture";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+    const RadientMaterialShaderParameterPacking  Mapping{0, offsetof(ShaderData, Value)};
+    RadientSurfaceMaterialShaderParameterPacking SurfacePacking{};
+    SurfacePacking.SurfaceModeOffset = offsetof(ShaderData, SurfaceMode);
+    SurfacePacking.AlphaCutoffOffset = offsetof(ShaderData, AlphaCutoff);
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size            = sizeof(ShaderData);
+    ShaderDataLayout.pMappings       = &Mapping;
+    ShaderDataLayout.MappingCount    = 1;
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, &pDefinition), RADIENT_STATUS_OK);
+    RadientMaterialDefinitionImpl& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    RadientMaterialParameterHandle ValueHandle;
+    RadientMaterialParameterHandle TextureHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ValueHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &TextureHandle), RADIENT_STATUS_OK);
+    const RefCntAutoPtr<IRadientTextureAsset> pTexture{MakeNewRCObj<TestTextureAsset>()("texture://runtime", Uint64{1})};
+
+    enum class InitializationQuery
+    {
+        LoadStatus,
+        GPUStatus,
+        RenderView
+    };
+    enum class UnsupportedChange
+    {
+        Texture,
+        SurfaceMode,
+        DoubleSided
+    };
+    for (InitializationQuery Query : {InitializationQuery::LoadStatus, InitializationQuery::GPUStatus, InitializationQuery::RenderView})
+    {
+        for (UnsupportedChange Change : {UnsupportedChange::Texture, UnsupportedChange::SurfaceMode, UnsupportedChange::DoubleSided})
+        {
+            SCOPED_TRACE(static_cast<int>(Query));
+            SCOPED_TRACE(static_cast<int>(Change));
+            RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+            ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+            RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{pMaterial, IID_RadientSurfaceMaterialAsset};
+            ASSERT_NE(pSurface, nullptr);
+            switch (Query)
+            {
+                case InitializationQuery::LoadStatus:
+                    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+                    break;
+                case InitializationQuery::GPUStatus:
+                    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+                    break;
+                case InitializationQuery::RenderView:
+                    ASSERT_EQ(RadientMaterialAssetManager::GetMaterialView(pMaterial).pMaterial, pMaterial.RawPtr());
+                    break;
+            }
+            ShaderData                            Packed{};
+            const Uint64                          PackedVersion   = DefinitionImpl.WriteShaderData(*pMaterial, &Packed);
+            const Uint64                          MaterialVersion = pMaterial->GetVersion();
+            RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+            ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+            RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+            ASSERT_NE(pSurfaceWriter, nullptr);
+            ASSERT_EQ(pWriter->SetParameter(ValueHandle, 0.75f), RADIENT_STATUS_OK);
+            ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+            switch (Change)
+            {
+                case UnsupportedChange::Texture:
+                    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
+                    break;
+                case UnsupportedChange::SurfaceMode:
+                    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+                    break;
+                case UnsupportedChange::DoubleSided:
+                    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+                    break;
+            }
+
+            EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
+            EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion);
+            EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.f);
+            EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.5f);
+            EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+            EXPECT_FALSE(pSurface->IsDoubleSided());
+            RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+            EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, &pStoredTexture), RADIENT_STATUS_OK);
+            EXPECT_EQ(pStoredTexture, nullptr);
+            EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion);
+            EXPECT_FLOAT_EQ(Packed.Value, 0.f);
+            EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.5f);
+
+            // Failed commits retain all assignments. Correct only the unsupported
+            // assignment; the numeric value and alpha cutoff must still apply.
+            EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
+            switch (Change)
+            {
+                case UnsupportedChange::Texture:
+                    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
+                    break;
+                case UnsupportedChange::SurfaceMode:
+                    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE), RADIENT_STATUS_OK);
+                    break;
+                case UnsupportedChange::DoubleSided:
+                    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
+                    break;
+            }
+            ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+            EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion + 1);
+            EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.75f);
+            EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.25f);
+            EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion + 1);
+            EXPECT_FLOAT_EQ(Packed.Value, 0.75f);
+            EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.25f);
+            EXPECT_EQ(Packed.SurfaceMode, static_cast<Uint32>(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE));
+            EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+            EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+        }
+    }
+}
+
 TEST(RadientMaterialTest, RevertedSurfaceChangesDoNotAdvanceVersion)
 {
     RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
@@ -573,6 +708,181 @@ TEST(RadientMaterialTest, DefinitionPacksMaterialShaderData)
     EXPECT_EQ(ShaderData, Expected);
 }
 
+TEST(RadientMaterialTest, IncrementalPackingPreservesUnchangedDataAndUpdatesEveryMapping)
+{
+    const RadientFloat4                         DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};
+    const std::array<Float32, 2>                DefaultWeights{0.5f, 0.75f};
+    const Uint32                                FixedValue = 0x12345678u;
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name          = "Color";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+    Parameters[0].pDefaultValue = &DefaultColor;
+    Parameters[1].Name          = "Weights";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[1].ArraySize     = static_cast<Uint32>(DefaultWeights.size());
+    Parameters[1].pDefaultValue = DefaultWeights.data();
+
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+    const std::array<RadientMaterialShaderParameterPacking, 3> Mappings{{
+        {0, 0},
+        {1, 24},
+        {0, 32},
+    }};
+    const RadientMaterialShaderDataInitialization              Initialization{&FixedValue, sizeof(FixedValue), 16};
+    RadientMaterialShaderDataLayoutDesc                        ShaderDataLayout{};
+    ShaderDataLayout.Size                = 64;
+    ShaderDataLayout.pMappings           = Mappings.data();
+    ShaderDataLayout.MappingCount        = static_cast<Uint32>(Mappings.size());
+    ShaderDataLayout.pInitializations    = &Initialization;
+    ShaderDataLayout.InitializationCount = 1;
+
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, &pDefinition), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
+    RadientMaterialDefinitionImpl& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    std::array<Uint8, 64>          ShaderData{};
+    Uint64                         PackedVersion = DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    std::array<Uint8, 64>          Expected{};
+    std::memcpy(Expected.data(), &DefaultColor, sizeof(DefaultColor));
+    std::memcpy(Expected.data() + 16, &FixedValue, sizeof(FixedValue));
+    std::memcpy(Expected.data() + 24, DefaultWeights.data(), sizeof(DefaultWeights));
+    std::memcpy(Expected.data() + 32, &DefaultColor, sizeof(DefaultColor));
+    ASSERT_EQ(ShaderData, Expected);
+
+    // Updates must leave bytes outside the changed mappings intact, including
+    // renderer-owned data stored in otherwise unused space.
+    ShaderData[63] = Expected[63]                  = 0xab;
+    std::array<Uint8, 64>          OlderShaderData = ShaderData;
+    const Uint64                   InitialVersion  = PackedVersion;
+    RadientMaterialParameterHandle ColorHandle;
+    RadientMaterialParameterHandle WeightsHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &ColorHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &WeightsHandle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+
+    const RadientFloat4 UpdatedColor{0.9f, 0.8f, 0.7f, 0.6f};
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    std::memcpy(Expected.data(), &UpdatedColor, sizeof(UpdatedColor));
+    std::memcpy(Expected.data() + 32, &UpdatedColor, sizeof(UpdatedColor));
+    EXPECT_EQ(ShaderData, Expected);
+
+    const std::array<Float32, 2> UpdatedWeights{0.25f, 1.f};
+    ASSERT_EQ(pWriter->SetParameter(WeightsHandle, UpdatedWeights.data(), sizeof(UpdatedWeights)), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    std::memcpy(Expected.data() + 24, UpdatedWeights.data(), sizeof(UpdatedWeights));
+    EXPECT_EQ(ShaderData, Expected);
+
+    // A second renderer can catch up from an older version in one update.
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, InitialVersion, OlderShaderData.data()), PackedVersion);
+    EXPECT_EQ(OlderShaderData, Expected);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion);
+    EXPECT_EQ(ShaderData, Expected);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion);
+    EXPECT_EQ(ShaderData, Expected);
+}
+
+TEST(RadientMaterialTest, InitialPackingReadsOneCommittedVersionDuringRuntimeEdits)
+{
+    struct ShaderValues
+    {
+        Uint32  Sequence;
+        Uint32  Complement;
+        Float32 AlphaCutoff;
+    };
+    struct PackedSnapshot
+    {
+        ShaderValues Values{};
+        Uint64       Version = 0;
+    };
+    const Uint32                                DefaultComplement = ~Uint32{0};
+    std::array<RadientMaterialParameterDesc, 2> Parameters{};
+    Parameters[0].Name          = "Sequence";
+    Parameters[0].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[1].Name          = "Complement";
+    Parameters[1].Type          = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[1].pDefaultValue = &DefaultComplement;
+    RadientSurfaceMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+    const std::array<RadientMaterialShaderParameterPacking, 2> Mappings{{
+        {0, offsetof(ShaderValues, Sequence)},
+        {1, offsetof(ShaderValues, Complement)},
+    }};
+    RadientSurfaceMaterialShaderParameterPacking               SurfacePacking{};
+    SurfacePacking.AlphaCutoffOffset = offsetof(ShaderValues, AlphaCutoff);
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{sizeof(ShaderValues), Mappings.data(), static_cast<Uint32>(Mappings.size())};
+    ShaderDataLayout.pSurfacePacking = &SurfacePacking;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, &pDefinition), RADIENT_STATUS_OK);
+    RadientMaterialDefinitionImpl&       DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    RadientMaterialParameterHandle SequenceHandle;
+    RadientMaterialParameterHandle ComplementHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(0, &SequenceHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(1, &ComplementHandle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{
+        pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+
+    // Only initial packing runs on the worker. Public edits stay on this thread,
+    // and the worker owns every destination buffer until it has been joined.
+    // Generic parameters, surface state, and their version must be read together.
+    std::vector<PackedSnapshot> Snapshots;
+    std::atomic<bool>           Stop{false};
+    Threading::Signal           StartSignal;
+    std::thread                 Worker{[&] {
+        StartSignal.Wait();
+        do
+        {
+            PackedSnapshot Snapshot;
+            Snapshot.Version = DefinitionImpl.WriteShaderData(*pMaterial, &Snapshot.Values);
+            Snapshots.push_back(Snapshot);
+        } while (!Stop.load(std::memory_order_acquire));
+    }};
+    StartSignal.Trigger();
+    constexpr Uint32 CommitCount = 256;
+    for (Uint32 Sequence = 1; Sequence <= CommitCount; ++Sequence)
+    {
+        EXPECT_EQ(pWriter->SetParameter(SequenceHandle, Sequence), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->SetParameter(ComplementHandle, ~Sequence), RADIENT_STATUS_OK);
+        EXPECT_EQ(pSurfaceWriter->SetAlphaCutoff(0.5f + static_cast<Float32>(Sequence) / 1024.f), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    Stop.store(true, std::memory_order_release);
+    Worker.join();
+
+    ASSERT_FALSE(Snapshots.empty());
+    for (const PackedSnapshot& Snapshot : Snapshots)
+    {
+        EXPECT_EQ(Snapshot.Values.Complement, ~Snapshot.Values.Sequence);
+        EXPECT_FLOAT_EQ(Snapshot.Values.AlphaCutoff, 0.5f + static_cast<Float32>(Snapshot.Values.Sequence) / 1024.f);
+        EXPECT_EQ(Snapshot.Version, Uint64{Snapshot.Values.Sequence} + 1);
+        EXPECT_LE(Snapshot.Values.Sequence, CommitCount);
+    }
+    ShaderValues FinalValues{};
+    EXPECT_EQ(DefinitionImpl.WriteShaderData(*pMaterial, &FinalValues), Uint64{CommitCount} + 1);
+    EXPECT_EQ(FinalValues.Sequence, CommitCount);
+    EXPECT_EQ(FinalValues.Complement, ~CommitCount);
+    EXPECT_FLOAT_EQ(FinalValues.AlphaCutoff, 0.5f + static_cast<Float32>(CommitCount) / 1024.f);
+}
+
 TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
 {
     const Uint32 DefaultValue = 0x12345678u;
@@ -685,8 +995,8 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     ASSERT_EQ(CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
-    auto&              DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
-    std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
+    RadientMaterialDefinitionImpl& DefinitionImpl = static_cast<RadientMaterialDefinitionImpl&>(*pDefinition);
+    std::vector<Uint8>             ShaderData(ShaderDataLayout.Size, 0xcd);
 
     GLTF::Material::TextureShaderAttribs Expected{};
     Expected.SetUVSelector(DefaultUVSelector);
@@ -697,8 +1007,16 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
     std::memcpy(&Expected.UVScaleAndRotation, DefaultUVTransform.data(), sizeof(Expected.UVScaleAndRotation));
     Expected.AtlasUVScaleAndBias = float4{};
 
-    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    Uint64 PackedVersion = DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
+
+    // The texture bindings and atlas allocation do not change when editing UVs.
+    // Seed their packed data so an accidental full rewrite would be detected.
+    Expected.SetMipLevelCount(3);
+    Expected.AtlasUVScaleAndBias = float4{0.25f, 0.5f, 0.125f, 0.25f};
+    Expected.TextureSlice        = 2.f;
+    std::memcpy(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected));
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
     RadientMaterialParameterHandle UVSelectorHandle;
     RadientMaterialParameterHandle WrapUHandle;
@@ -717,7 +1035,8 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
 
     Expected.SetUVSelector(UpdatedUVSelector);
     Expected.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
-    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
 
     const RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE RestoredWrapU = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
@@ -730,7 +1049,23 @@ TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
 
     Expected.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
     Expected.SetWrapVMode(TEXTURE_ADDRESS_CLAMP);
-    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
+
+    RadientMaterialParameterHandle UVTransformHandle;
+    RadientMaterialParameterHandle UVBiasHandle;
+    ASSERT_EQ(pDefinition->GetParameterHandle(2, &UVTransformHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->GetParameterHandle(3, &UVBiasHandle), RADIENT_STATUS_OK);
+    const std::array<Float32, 4> UpdatedUVTransform{0.f, -2.f, 3.f, 0.f};
+    const RadientFloat2          UpdatedUVBias{-0.5f, 0.75f};
+    ASSERT_EQ(pWriter->SetParameter(UVTransformHandle, UpdatedUVTransform.data(), sizeof(UpdatedUVTransform)), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(UVBiasHandle, UpdatedUVBias), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    std::memcpy(&Expected.UVScaleAndRotation, UpdatedUVTransform.data(), sizeof(Expected.UVScaleAndRotation));
+    Expected.UBias = UpdatedUVBias.x;
+    Expected.VBias = UpdatedUVBias.y;
     EXPECT_EQ(std::memcmp(ShaderData.data() + TextureOffset, &Expected, sizeof(Expected)), 0);
 }
 
@@ -784,7 +1119,7 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     std::vector<Uint8> ShaderData(ShaderDataLayout.Size, 0xcd);
     std::vector<Uint8> Expected(ShaderDataLayout.Size, 0);
     std::memcpy(Expected.data() + DestinationOffset, DefaultData.data(), DefaultData.size());
-    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    const Uint64 PackedVersion = DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
     EXPECT_EQ(ShaderData, Expected);
 
     RadientMaterialParameterHandle Handle;
@@ -796,7 +1131,7 @@ TEST_P(RadientMaterialShaderParameterPackingTest, PacksParameter)
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
 
     std::memcpy(Expected.data() + DestinationOffset, UpdatedData.data(), UpdatedData.size());
-    DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
     EXPECT_EQ(ShaderData, Expected);
 }
 

@@ -146,7 +146,7 @@ bool MaterialParameterChanges::HasEffectiveTextureChanges(const PackedMaterialDa
     return false;
 }
 
-MATERIAL_CHANGE_FLAGS MaterialParameterChanges::ApplyTo(PackedMaterialData& Target) const noexcept
+MATERIAL_CHANGE_FLAGS MaterialParameterChanges::ApplyTo(PackedMaterialData& Target, Uint64 ShaderDataVersion) const noexcept
 {
     MATERIAL_CHANGE_FLAGS Flags = MATERIAL_CHANGE_FLAG_NONE;
     for (const ParameterChange& Change : m_Changes)
@@ -157,7 +157,7 @@ MATERIAL_CHANGE_FLAGS MaterialParameterChanges::ApplyTo(PackedMaterialData& Targ
             IRadientTextureAsset* const pTexture = m_TextureData[Change.DataOffset];
             if (Target.GetTexture(Change.ParameterIndex, Change.ArrayIndex) != pTexture)
             {
-                Target.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture);
+                Target.SetTexture(Change.ParameterIndex, Change.ArrayIndex, pTexture, ShaderDataVersion);
                 Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA |
                     MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS;
             }
@@ -168,7 +168,7 @@ MATERIAL_CHANGE_FLAGS MaterialParameterChanges::ApplyTo(PackedMaterialData& Targ
             const void* const pChangedData = m_ValueData.data() + Change.DataOffset;
             if (!Target.HasSameValue(Change.ParameterIndex, pChangedData))
             {
-                Target.CopyValue(Change.ParameterIndex, pChangedData);
+                Target.CopyValue(Change.ParameterIndex, pChangedData, ShaderDataVersion);
                 Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA;
             }
         }

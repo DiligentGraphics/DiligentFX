@@ -304,9 +304,23 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_PENDING);
     EXPECT_EQ(pThreadPool->GetQueueSize(), 1u);
 
+    for (Uint32 Preparation = 0; Preparation < 2; ++Preparation)
+    {
+        ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+        EXPECT_EQ(pThreadPool->GetQueueSize(), 1u);
+        EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+    }
+
     ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
     EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
     EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+
+    // No material values changed: worker completion alone must trigger the next
+    // preparation to validate its shader data and publish GPU readiness.
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
     EXPECT_TRUE(Result.Data->GetMaterialSRB());
     EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), ExpectedCoreMaterialPSOFlags);
 
@@ -403,6 +417,20 @@ TEST(RadientTesseraMaterialCacheTest, RequiresGPUReadyMaterialDependencies)
     ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial),
               RADIENT_STATUS_PENDING);
 
+    // Numeric edits remain available while the initial texture dependency is
+    // still loading. They must not restart or finalize that dependency.
+    RadientMaterialParameterHandle ColorHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &ColorHandle),
+              RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    const RadientFloat4 LoadingColor{0.25f, 0.5f, 0.75f, 1.f};
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, LoadingColor), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Testing::GetMaterialParameter<RadientFloat4>(*pMaterial, RadientStandardMaterialBaseColorFactorName), LoadingColor);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_PENDING);
+
     RefCntAutoPtr<IThreadPool>                   pMaterialThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     std::unique_ptr<RadientTesseraMaterialCache> pCache              = MakeMaterialCache();
 
@@ -419,6 +447,13 @@ TEST(RadientTesseraMaterialCacheTest, RequiresGPUReadyMaterialDependencies)
     EXPECT_EQ(pTextureThreadPool->GetQueueSize(), 1u);
 
     EXPECT_TRUE(pTextureThreadPool->ProcessTask(0, false));
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    const RADIENT_STATUS ReadyGPUStatus = RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial);
+    const RadientFloat4  ReadyColor{0.75f, 0.5f, 0.25f, 1.f};
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, ReadyColor), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), ReadyGPUStatus);
     pMaterialThreadPool->StopThreads();
     pTextureThreadPool->StopThreads();
 }

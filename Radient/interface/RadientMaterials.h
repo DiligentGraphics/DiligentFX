@@ -482,13 +482,21 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Definition-backed material asset with writable initialization state.
+/// Definition-backed material asset with editable shader parameters.
 ///
-/// Writers may be used to initialize the asset before its load status, GPU
-/// resource status, or render view is first queried. Runtime mutation after one
-/// of those queries is not currently supported. This restriction is not
-/// enforced by the API. Material assets and their writers are not thread-safe.
-/// The caller is responsible for synchronizing all access to them.
+/// Writers may initialize all properties before the asset's load status, GPU
+/// resource status, or render view is first queried. After that, non-texture
+/// parameters and surface alpha cutoff remain editable; changing textures,
+/// surface mode, or double-sided state returns RADIENT_STATUS_INVALID_OPERATION
+/// from Commit() without applying any of that commit's assignments.
+///
+/// Runtime edits are performed on the render thread before rendering a frame.
+/// Successful commits immediately update values returned by the asset and its
+/// version. Rendering uses the changes during the next frame preparation, without
+/// restarting material loading. Multiple commits before preparation use the latest
+/// values. Material assets and their writers do not support concurrent client
+/// access; the caller serializes its reads and writes. Internal asynchronous
+/// material preparation is coordinated with these edits.
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialAsset, IRadientAsset)
 {
     /// Returns a borrowed pointer to the definition retained by this asset.
@@ -582,15 +590,16 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Reusable material initialization writer.
+/// Reusable material parameter writer.
 ///
 /// A writer records every value explicitly assigned through its setter methods.
 /// Commit() publishes complete non-texture parameters, individual texture array
 /// elements, and any specialized material properties exposed by a derived writer. If
 /// multiple writers modify the same value, the last commit replaces that complete
-/// value. Commits must complete before the asset's load status, GPU resource
-/// status, or render view is first queried. The writer and its material asset are
-/// not thread-safe and must not be accessed concurrently with Commit().
+/// value. After initialization, only non-texture parameters and surface alpha
+/// cutoff may change. Runtime commits are performed on the render thread before
+/// rendering a frame. Client access to the writer and its material asset must not
+/// overlap Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
@@ -625,7 +634,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// null is a valid texture value. Non-texture parameters are not accepted. The
     /// first assignment is always recorded, even if the material currently contains
     /// pTexture. Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
-    /// identical pending assignment.
+    /// identical pending assignment. Changing the texture after material
+    /// initialization is rejected by Commit(); assigning the existing texture is
+    /// accepted as a no-op.
     VIRTUAL RADIENT_STATUS METHOD(SetTexture)(THIS_
                                               RadientMaterialParameterHandle Handle,
                                               Uint32                         ArrayIndex,
@@ -635,7 +646,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// update. This is the authoritative check for whether the assignments change
     /// the material state. The writer remains valid after the call. On success or
     /// RADIENT_STATUS_NO_CHANGE, pending changes are cleared. On failure, pending
-    /// changes are retained so the operation can be retried.
+    /// changes are retained so the operation can be retried. A runtime commit that
+    /// would change a texture, surface mode, or double-sided state returns
+    /// RADIENT_STATUS_INVALID_OPERATION without modifying the material. Shader-only
+    /// edits do not schedule asynchronous preparation or change load status.
     VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
@@ -666,18 +680,20 @@ DILIGENT_END_INTERFACE
 DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialWriter, IRadientMaterialWriter)
 {
     /// Sets the surface coverage and blending mode. Returns RADIENT_STATUS_NO_CHANGE
-    /// only if this writer already has an identical pending assignment.
+    /// only if this writer already has an identical pending assignment. Changes
+    /// are only supported during material initialization.
     VIRTUAL RADIENT_STATUS METHOD(SetSurfaceMode)(THIS_
                                                   RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) PURE;
 
-    /// Sets the alpha cutoff used by masked surfaces. Returns RADIENT_STATUS_NO_CHANGE
+    /// Sets the alpha cutoff used by masked surfaces, including at runtime.
+    /// Returns RADIENT_STATUS_NO_CHANGE
     /// only if this writer already has an identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetAlphaCutoff)(THIS_
                                                   Float32 AlphaCutoff) PURE;
 
     /// Controls whether both sides of the surface are rendered. Returns
     /// RADIENT_STATUS_NO_CHANGE only if this writer already has an identical pending
-    /// assignment.
+    /// assignment. Changes are only supported during material initialization.
     VIRTUAL RADIENT_STATUS METHOD(SetDoubleSided)(THIS_
                                                   Bool DoubleSided) PURE;
 };

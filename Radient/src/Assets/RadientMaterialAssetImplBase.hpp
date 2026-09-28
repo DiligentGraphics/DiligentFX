@@ -168,13 +168,7 @@ public:
 
     RADIENT_STATUS SubmitChanges(ChangeSet& Changes) noexcept
     {
-        MATERIAL_CHANGE_FLAGS Flags = Changes.Parameters.ApplyTo(m_Storage.GetPackedData());
-        Flags |= Changes.Specialized.ApplyTo(m_SpecializedState);
-        if (Flags == MATERIAL_CHANGE_FLAG_NONE)
-            return RADIENT_STATUS_NO_CHANGE;
-
-        m_Storage.PublishChange(Flags);
-        return RADIENT_STATUS_OK;
+        return m_Storage.ApplyChanges(Changes, m_SpecializedState);
     }
 
 protected:
