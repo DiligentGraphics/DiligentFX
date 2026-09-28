@@ -169,9 +169,13 @@ struct ImportedAnimation
     /// - RadientNodeAnimationSchemaID and RadientMorphWeightsAnimationSchemaID
     ///   use zero-based indices in ImportedDocument::Nodes.
     /// - RadientLightAnimationSchemaID uses ImportedNode::LightIndex identifiers.
+    /// - RadientMaterialAnimationSchemaID and RadientSurfaceMaterialAnimationSchemaID
+    ///   use indices in ImportedDocument::Materials.
     /// SkinMappings additionally connects clip targets to skeleton joints.
     /// Target Object values are not runtime entity IDs. Automatic scene binding
-    /// handles node transforms and visibility, light properties, and morph weights.
+    /// handles node transforms and visibility, light properties, morph weights,
+    /// and material parameters. Material bindings are associated with the scene
+    /// root and edit shared material assets; instances do not get private copies.
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
 
     /// Owned mappings for skins affected by pClip. Unaffected skins need no
@@ -205,7 +209,8 @@ struct ImportedDocument
     /// Strong references to imported materials. Meshes carry their primitives'
     /// material references; this array also records the scene's material load
     /// and GPU-resource dependencies. Null entries are permitted and do not
-    /// contribute to those dependencies.
+    /// contribute to those dependencies. Material animation targets index this
+    /// array, so reordering it requires updating their Object identifiers.
     MaterialAssetList Materials;
 
     /// Strong references to imported meshes. Nodes select meshes through pMesh;

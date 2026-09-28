@@ -395,6 +395,41 @@ void RegisterSceneAnimations(
             }
         }
 
+        // Materials remain shared assets. Group reflected parameters and surface
+        // state into one binding so they are committed together for each material.
+        std::vector<std::vector<RadientAnimationDestinationMappingDesc>> MaterialMappings(Scene.Materials.size());
+        for (Uint32 TargetIndex = 0; TargetIndex < ClipDesc.TargetCount; ++TargetIndex)
+        {
+            const RadientAnimationTargetDesc& Target = ClipDesc.pTargets[TargetIndex];
+            if (Target.Schema != RadientMaterialAnimationSchemaID && Target.Schema != RadientSurfaceMaterialAnimationSchemaID)
+                continue;
+            if (Target.Object >= Scene.Materials.size() || Scene.Materials[static_cast<size_t>(Target.Object)] == nullptr)
+            {
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' target because it references an unavailable material");
+                continue;
+            }
+            MaterialMappings[static_cast<size_t>(Target.Object)].push_back({TargetIndex, 0});
+        }
+        for (size_t MaterialIndex = 0; MaterialIndex < MaterialMappings.size(); ++MaterialIndex)
+        {
+            const std::vector<RadientAnimationDestinationMappingDesc>& Mappings = MaterialMappings[MaterialIndex];
+            if (Mappings.empty())
+                continue;
+
+            RefCntAutoPtr<IRadientAnimationDestination> pDestination{
+                Scene.Materials[MaterialIndex], IID_RadientAnimationDestination};
+            if (pDestination == nullptr)
+            {
+                LOG_WARNING_MESSAGE("Skipping imported animation clip '", ClipDesc.Name,
+                                    "' target because its material does not expose an animation destination");
+                continue;
+            }
+            const RadientAnimationDestinationDesc Destination{pDestination, Mappings.data(), static_cast<Uint32>(Mappings.size())};
+            RegisterAnimationDestination(*ImportedAnimation.pClip, Destination,
+                                         &SceneRootEntity, 1, "an imported material", Registry);
+        }
+
         std::vector<bool> HasScenePropertyChannel(ClipDesc.TargetCount, false);
         for (Uint32 ChannelIndex = 0; ChannelIndex < ClipDesc.ChannelCount; ++ChannelIndex)
         {

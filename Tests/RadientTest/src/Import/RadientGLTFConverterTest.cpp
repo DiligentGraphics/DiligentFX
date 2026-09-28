@@ -2007,6 +2007,345 @@ TEST(RadientGLTFConverterTest, ImportsNodeVisibilityAnimationPointer)
     EXPECT_EQ(pVisibilityValues[1], 1u);
 }
 
+
+TEST(RadientGLTFConverterTest, ImportsStandardMaterialAnimationPointerProperties)
+{
+    struct PropertyCase
+    {
+        const char*              Path;
+        const char*              Property;
+        Uint32                   Components;
+        Uint32                   MaterialIndex = 0;
+        RadientAnimationSchemaID Schema        = RadientMaterialAnimationSchemaID;
+    };
+    const PropertyCase Cases[] = {
+        {"/pbrMetallicRoughness/baseColorFactor", RadientStandardMaterialBaseColorFactorName, 4},
+        {"/pbrMetallicRoughness/metallicFactor", RadientStandardMaterialMetallicFactorName, 1},
+        {"/pbrMetallicRoughness/roughnessFactor", RadientStandardMaterialRoughnessFactorName, 1},
+        {"/emissiveFactor", RadientStandardMaterialEmissiveFactorName, 3},
+        {"/normalTexture/scale", RadientStandardMaterialNormalScaleName, 1},
+        {"/occlusionTexture/strength", RadientStandardMaterialOcclusionStrengthName, 1},
+        {"/alphaCutoff", RadientSurfaceMaterialAlphaCutoffPropertyName, 1, 0, RadientSurfaceMaterialAnimationSchemaID},
+        {"/extensions/KHR_materials_clearcoat/clearcoatFactor", RadientStandardMaterialClearCoatFactorName, 1},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessFactor", RadientStandardMaterialClearCoatRoughnessFactorName, 1},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/scale", RadientStandardMaterialClearCoatNormalScaleName, 1},
+        {"/extensions/KHR_materials_sheen/sheenColorFactor", RadientStandardMaterialSheenColorFactorName, 3},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessFactor", RadientStandardMaterialSheenRoughnessFactorName, 1},
+        {"/extensions/KHR_materials_specular/specularFactor", RadientStandardMaterialSpecularWeightName, 1},
+        {"/extensions/KHR_materials_specular/specularColorFactor", RadientStandardMaterialSpecularColorFactorName, 3},
+        {"/extensions/KHR_materials_anisotropy/anisotropyStrength", RadientStandardMaterialAnisotropyStrengthName, 1},
+        {"/extensions/KHR_materials_anisotropy/anisotropyRotation", RadientStandardMaterialAnisotropyRotationName, 1},
+        {"/extensions/KHR_materials_iridescence/iridescenceFactor", RadientStandardMaterialIridescenceFactorName, 1},
+        {"/extensions/KHR_materials_iridescence/iridescenceIor", RadientStandardMaterialIridescenceIORName, 1},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessMinimum", RadientStandardMaterialIridescenceThicknessMinimumName, 1},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessMaximum", RadientStandardMaterialIridescenceThicknessMaximumName, 1},
+        {"/extensions/KHR_materials_transmission/transmissionFactor", RadientStandardMaterialTransmissionFactorName, 1},
+        {"/extensions/KHR_materials_ior/ior", RadientStandardMaterialIORName, 1},
+        {"/extensions/KHR_materials_volume/thicknessFactor", RadientStandardMaterialThicknessFactorName, 1},
+        {"/extensions/KHR_materials_volume/attenuationColor", RadientStandardMaterialAttenuationColorName, 3},
+        {"/extensions/KHR_materials_volume/attenuationDistance", RadientStandardMaterialAttenuationDistanceName, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseFactor", RadientStandardMaterialDiffuseFactorName, 4, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularFactor", RadientStandardMaterialSpecularFactorName, 3, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/glossinessFactor", RadientStandardMaterialGlossinessFactorName, 1, 1},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialBaseColorTextureUVBiasName, 2},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialMetallicRoughnessTextureUVBiasName, 2},
+        {"/normalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialNormalTextureUVBiasName, 2},
+        {"/occlusionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialOcclusionTextureUVBiasName, 2},
+        {"/emissiveTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialEmissiveTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatRoughnessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatNormalTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenColorTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenRoughnessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularColorTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialAnisotropyTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceThicknessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialTransmissionTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialThicknessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialDiffuseTextureUVBiasName, 2, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularGlossinessTextureUVBiasName, 2, 1},
+    };
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    GLTF::Model Model;
+    Model.Materials.emplace_back(MakeExtendedGLTFMaterial(true));
+    Model.Materials.emplace_back();
+    Model.Materials[1].Attribs.Workflow = GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS;
+    GLTF::MaterialBuilder Builder{Model.Materials[1]};
+    Builder.SetTextureId(GLTF::DefaultDiffuseTextureAttribId, 0);
+    Builder.SetTextureId(GLTF::DefaultSpecularGlossinessTextureAttibId, 0);
+    Builder.Finalize();
+
+    RefCntAutoPtr<IRadientTextureAsset> pTexture   = MakeTestTextureAsset("texture://material-pointer");
+    IRadientTextureAsset* const         Textures[] = {pTexture};
+    RadientImport::ImportedDocument     Scene;
+    for (const GLTF::Material& Material : Model.Materials)
+    {
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        Scene.Materials.push_back(ConvertMaterial(Material, Textures, 1, DefinitionCI));
+        ASSERT_NE(Scene.Materials.back(), nullptr);
+    }
+
+    const RADIENT_ANIMATION_VALUE_TYPE ValueTypes[] = {
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT2,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4};
+    for (const PropertyCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.Path);
+        Model.Animations.clear();
+        Model.Animations.resize(1);
+        GLTF::Animation& Animation = Model.Animations[0];
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        GLTF::AnimationSampler& Sampler = Animation.Samplers[0];
+        Sampler.Inputs                  = {2.f, 4.f};
+        Sampler.OutputValueType         = VT_FLOAT32;
+        Sampler.OutputComponentCount    = Case.Components;
+        // Keep index-of-refraction keys in their documented range.
+        const Float32 First = std::strcmp(Case.Property, RadientStandardMaterialIORName) == 0 ||
+                std::strcmp(Case.Property, RadientStandardMaterialIridescenceIORName) == 0 ?
+            1.f :
+            0.25f;
+
+        std::vector<Float32> Values(2 * Case.Components, First);
+        std::fill(Values.begin() + Case.Components, Values.end(), First + 0.5f);
+        Sampler.OutputData.resize(Values.size() * sizeof(Float32));
+        std::memcpy(Sampler.OutputData.data(), Values.data(), Sampler.OutputData.size());
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        &Model.Materials[Case.MaterialIndex], Case.Path, 0);
+
+        ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.Animations.size(), 1u);
+        ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+        const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+        ASSERT_EQ(Clip.TargetCount, 1u);
+        ASSERT_EQ(Clip.ChannelCount, 1u);
+        ASSERT_EQ(Clip.SamplerCount, 1u);
+        EXPECT_EQ(Clip.pTargets[0].Schema, Case.Schema);
+        EXPECT_EQ(Clip.pTargets[0].Object, Case.MaterialIndex);
+        EXPECT_STREQ(Clip.pChannels[0].Property, Case.Property);
+        EXPECT_EQ(Clip.pChannels[0].FirstArrayElement, 0u);
+        const RadientAnimationSamplerDesc& ImportedSampler = Clip.pSamplers[0];
+        EXPECT_EQ(ImportedSampler.Value.Type, ValueTypes[Case.Components - 1]);
+        EXPECT_EQ(ImportedSampler.Value.ArraySize, 1u);
+        EXPECT_EQ(ImportedSampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_LINEAR);
+        ASSERT_EQ(ImportedSampler.KeyframeCount, 2u);
+        EXPECT_FLOAT_EQ(ImportedSampler.pTimes[0], 0.f);
+        EXPECT_FLOAT_EQ(ImportedSampler.pTimes[1], 2.f);
+        ASSERT_EQ(ImportedSampler.ValueDataSize, Values.size() * sizeof(Float32));
+        ASSERT_NE(ImportedSampler.pValues, nullptr);
+        const Float32* pValues = static_cast<const Float32*>(ImportedSampler.pValues);
+        for (size_t i = 0; i < Values.size(); ++i)
+            EXPECT_FLOAT_EQ(pValues[i], Values[i]);
+    }
+}
+
+TEST(RadientGLTFConverterTest, MaterialPointerPreservesNormalizedCubicValuesAndTangents)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    GLTF::Model Model;
+    Model.Materials.resize(1);
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
+    Animation.Samplers[0].Inputs = {2.f, 4.f};
+    SetAnimationSamplerOutputData(Animation.Samplers[0], VT_INT8, 1,
+                                  std::initializer_list<Int8>{-128, 0, 127, 0, 127, -127}, true);
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                    &Model.Materials[0], "/pbrMetallicRoughness/roughnessFactor", 0);
+    RadientImport::ImportedDocument             Scene;
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+    Scene.Materials.push_back(ConvertMaterial(Model.Materials[0], nullptr, 0, DefinitionCI));
+    ASSERT_NE(Scene.Materials[0], nullptr);
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(Clip.SamplerCount, 1u);
+    const RadientAnimationSamplerDesc& Sampler = Clip.pSamplers[0];
+    EXPECT_EQ(Sampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+    ASSERT_EQ(Sampler.ValueDataSize, 6u * sizeof(Float32));
+    const Float32 Expected[] = {-1.f, 0.f, 1.f, 0.f, 1.f, -1.f};
+    ASSERT_NE(Sampler.pValues, nullptr);
+    const Float32* pValues = static_cast<const Float32*>(Sampler.pValues);
+    for (size_t i = 0; i < std::size(Expected); ++i)
+        EXPECT_FLOAT_EQ(pValues[i], Expected[i]);
+}
+
+TEST(RadientGLTFConverterTest, SharedEmissivePointerSamplerSeparatesAndReusesFixedStrengths)
+{
+    TempDirectory                         TempDir{"RadientGLTFConverterTest"};
+    const std::shared_ptr<GLTF::Document> pDocument = LoadDocument(
+        WriteGLTFFile(TempDir, "shared-emissive-sampler.gltf", R"GLTF({
+            "asset": {"version": "2.0"},
+            "extensionsUsed": ["KHR_materials_emissive_strength"],
+            "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{}],
+            "materials": [
+                {"extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 2}}},
+                {"extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 3}}},
+                {},
+                {"extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 2}}}
+            ]
+        })GLTF"));
+    ASSERT_NE(pDocument, nullptr);
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+
+    const std::array<Float32, 4> Strengths{2.f, 3.f, 1.f, 2.f};
+    GLTF::Model                  Model;
+    Model.Materials.resize(Strengths.size());
+    RadientImport::ImportedDocument Scene;
+    for (const GLTF::Material& Material : Model.Materials)
+    {
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        Scene.Materials.push_back(ConvertMaterial(Material, nullptr, 0, DefinitionCI));
+        ASSERT_NE(Scene.Materials.back(), nullptr);
+    }
+
+    Model.Animations.resize(1);
+    GLTF::Animation& Animation = Model.Animations[0];
+    Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE);
+    GLTF::AnimationSampler& SourceSampler = Animation.Samplers[0];
+    SourceSampler.Inputs                  = {2.f, 4.f};
+    const std::initializer_list<Float32> SourceValues{
+        -1.f, -2.f, -3.f, 0.1f, 0.2f, 0.3f, 1.f, 2.f, 3.f,
+        -4.f, -5.f, -6.f, 0.4f, 0.5f, 0.6f, 4.f, 5.f, 6.f};
+    SetFloatAnimationSamplerOutputData(SourceSampler, 3, SourceValues);
+    for (GLTF::Material& Material : Model.Materials)
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        &Material, "/emissiveFactor", 0);
+    // The repeated target/property must not discard the four valid consumers
+    // or add a second channel writing the same material property.
+    Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                    &Model.Materials[0], "/emissiveFactor", 0);
+
+    ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager, pDocument.get()), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Animations.size(), 1u);
+    ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+    const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+    ASSERT_EQ(Clip.TargetCount, Strengths.size());
+    ASSERT_EQ(Clip.ChannelCount, Strengths.size());
+    ASSERT_EQ(Clip.SamplerCount, 3u);
+    std::array<Uint32, 4> SamplerIndices{};
+    for (Uint32 MaterialIndex = 0; MaterialIndex < Strengths.size(); ++MaterialIndex)
+    {
+        SCOPED_TRACE(MaterialIndex);
+        const Uint32 TargetIndex = FindAnimationTargetIndex(Clip, RadientMaterialAnimationSchemaID, MaterialIndex);
+        ASSERT_NE(TargetIndex, InvalidRadientAnimationTargetIndex);
+        const RadientAnimationChannelDesc* pChannel = FindAnimationChannel(Clip, TargetIndex, RadientStandardMaterialEmissiveFactorName);
+        ASSERT_NE(pChannel, nullptr);
+        ASSERT_LT(pChannel->SamplerIndex, Clip.SamplerCount);
+        SamplerIndices[MaterialIndex]              = pChannel->SamplerIndex;
+        const RadientAnimationSamplerDesc& Sampler = Clip.pSamplers[pChannel->SamplerIndex];
+        EXPECT_EQ(Sampler.Interpolation, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE);
+        EXPECT_EQ(Sampler.Value.Type, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+        EXPECT_EQ(Sampler.Value.ArraySize, 1u);
+        ASSERT_EQ(Sampler.KeyframeCount, 2u);
+        ASSERT_EQ(Sampler.ValueDataSize, SourceValues.size() * sizeof(Float32));
+        ASSERT_NE(Sampler.pValues, nullptr);
+        const Float32* pValues = static_cast<const Float32*>(Sampler.pValues);
+        for (size_t i = 0; i < SourceValues.size(); ++i)
+            EXPECT_FLOAT_EQ(pValues[i], SourceValues.begin()[i] * Strengths[MaterialIndex]);
+    }
+    EXPECT_NE(SamplerIndices[0], SamplerIndices[1]);
+    EXPECT_NE(SamplerIndices[0], SamplerIndices[2]);
+    EXPECT_NE(SamplerIndices[1], SamplerIndices[2]);
+    EXPECT_EQ(SamplerIndices[0], SamplerIndices[3]);
+}
+
+TEST(RadientGLTFConverterTest, InvalidMaterialPointersRetainValidMaterialAndNodeChannels)
+{
+    struct InvalidCase
+    {
+        const char* Path;
+        Uint32      Components      = 1;
+        Float32     Value           = 0.f;
+        bool        ForeignMaterial = false;
+        bool        MissingMaterial = false;
+    };
+    const InvalidCase Cases[] = {
+        {"/alphaMode"},
+        {"/extensions/KHR_materials_emissive_strength/emissiveStrength"},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation"},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale", 2},
+        {"/pbrMetallicRoughness/baseColorFactor", 3},
+        {"/pbrMetallicRoughness/baseColorFactor/0"},
+        {"/extensions/KHR_materials_clearcoat/clearcoatFactor"}, // Feature absent.
+        {"/normalTexture/scale"},                                // Texture absent.
+        {"/pbrMetallicRoughness/metallicFactor", 1, -0.1f},
+        {"/pbrMetallicRoughness/metallicFactor", 1, 1.1f},
+        {"/alphaCutoff", 1, -0.1f},
+        {"/pbrMetallicRoughness/metallicFactor", 1, std::numeric_limits<Float32>::quiet_NaN()},
+        {"/pbrMetallicRoughness/metallicFactor", 1, 0.f, true},
+        {"/pbrMetallicRoughness/metallicFactor", 1, 0.f, false, true},
+    };
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFConverterTest"};
+    // Preserve the authored objects: normalTexture/scale is undefined when
+    // normalTexture is absent, even if the runtime schema has NormalScale.
+    const std::shared_ptr<GLTF::Document> pDocument = LoadDocument(
+        WriteGLTFFile(TempDir, "material-pointer-parents.gltf", R"GLTF({
+            "asset": {"version": "2.0"},
+            "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{}],
+            "materials": [{"pbrMetallicRoughness": {}}, {"pbrMetallicRoughness": {}}]
+        })GLTF"));
+    ASSERT_NE(pDocument, nullptr);
+    for (const InvalidCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.Path);
+        GLTF::Model Model;
+        Model.Materials.resize(2);
+        Model.Nodes.emplace_back(0);
+        GLTF::Material ForeignMaterial;
+        Model.Animations.resize(1);
+        GLTF::Animation& Animation = Model.Animations[0];
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers[0].Inputs           = {0.f, 1.f};
+        GLTF::AnimationSampler& InvalidSampler = Animation.Samplers[0];
+        InvalidSampler.OutputValueType         = VT_FLOAT32;
+        InvalidSampler.OutputComponentCount    = Case.Components;
+        const std::vector<Float32> Values(2 * Case.Components, Case.Value);
+        InvalidSampler.OutputData.resize(Values.size() * sizeof(Float32));
+        std::memcpy(InvalidSampler.OutputData.data(), Values.data(), InvalidSampler.OutputData.size());
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        Case.ForeignMaterial ? &ForeignMaterial : &Model.Materials[0], Case.Path, 0);
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers[1].Inputs = {0.f, 1.f};
+        SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 1, {0.25f, 0.75f});
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        &Model.Materials[1], "/pbrMetallicRoughness/roughnessFactor", 1);
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers[2].Inputs = {0.f, 1.f};
+        SetFloatAnimationSamplerOutputData(Animation.Samplers[2], 3, {0.f, 0.f, 0.f, 1.f, 2.f, 3.f});
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::PATH_TYPE::TRANSLATION, &Model.Nodes[0], 2);
+
+        RadientImport::ImportedDocument             Scene;
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        Scene.Materials.push_back(Case.MissingMaterial ? RefCntAutoPtr<IRadientMaterialAsset>{} :
+                                                         ConvertMaterial(Model.Materials[0], nullptr, 0, DefinitionCI));
+        Scene.Materials.push_back(ConvertMaterial(Model.Materials[1], nullptr, 0, DefinitionCI));
+        ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager, pDocument.get()), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.Animations.size(), 1u);
+        const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+        ASSERT_EQ(Clip.TargetCount, 2u);
+        ASSERT_EQ(Clip.ChannelCount, 2u);
+        ASSERT_EQ(Clip.SamplerCount, 2u);
+        EXPECT_EQ(FindAnimationTargetIndex(Clip, RadientMaterialAnimationSchemaID, 0), InvalidRadientAnimationTargetIndex);
+        EXPECT_EQ(FindAnimationTargetIndex(Clip, RadientSurfaceMaterialAnimationSchemaID, 0), InvalidRadientAnimationTargetIndex);
+        const Uint32 MaterialTarget = FindAnimationTargetIndex(Clip, RadientMaterialAnimationSchemaID, 1);
+        const Uint32 NodeTarget     = FindAnimationTargetIndex(Clip, RadientNodeAnimationSchemaID, 0);
+        ASSERT_NE(MaterialTarget, InvalidRadientAnimationTargetIndex);
+        ASSERT_NE(NodeTarget, InvalidRadientAnimationTargetIndex);
+        EXPECT_NE(FindAnimationChannel(Clip, MaterialTarget, RadientStandardMaterialRoughnessFactorName), nullptr);
+        EXPECT_NE(FindAnimationChannel(Clip, NodeTarget, RadientNodeTranslationPropertyName), nullptr);
+    }
+}
+
 TEST(RadientGLTFConverterTest, ImportsPunctualLightAnimationPointers)
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});

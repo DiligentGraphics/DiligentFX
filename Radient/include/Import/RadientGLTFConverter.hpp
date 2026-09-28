@@ -139,9 +139,12 @@ MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&             
 /// pAssetManager is required when GLTFModel contains animations or skins.
 /// Malformed or unsupported animation channels and clips are logged and
 /// skipped; they do not fail conversion of an otherwise usable scene.
+/// Scene.Materials follows the source material order. When provided, pDocument
+/// supplies authored extension objects and the fixed emissive-strength multiplier.
 RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                                  RadientImport::ImportedDocument& Scene,
-                                 IRadientAssetManager*            pAssetManager = nullptr);
+                                 IRadientAssetManager*            pAssetManager = nullptr,
+                                 const GLTF::Document*            pDocument     = nullptr);
 
 } // namespace RadientGLTFConverter
 

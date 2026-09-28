@@ -5,6 +5,7 @@ project(Radient CXX)
 set(SOURCE
     src/Animation/RadientAnimationBindingImpl.cpp
     src/Animation/RadientAnimationRegistryImpl.cpp
+    src/Animation/RadientMaterialAnimationDestinationBinding.cpp
     src/Animation/RadientMorphTargetWeightsImpl.cpp
     src/Animation/RadientSceneAnimationDestinationBindingImpl.cpp
     src/Animation/RadientSceneAnimationDestinationImpl.cpp
@@ -79,6 +80,7 @@ set(SOURCE
 
 set(INCLUDE
     include/Animation/RadientAnimationBindingImpl.hpp
+    include/Animation/RadientMaterialAnimationDestinationBinding.hpp
     include/Animation/RadientNodeAnimationProperty.hpp
     include/Animation/RadientAnimationRegistryImpl.hpp
     include/Animation/RadientSceneAnimationDestinationBindingImpl.hpp

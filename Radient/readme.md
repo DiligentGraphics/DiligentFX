@@ -44,3 +44,24 @@ Texture assignments, surface mode, and double-sided state must be configured
 before the material's load status, GPU resource status, or render view is first
 queried. After that, a commit that changes any of these properties returns
 `RADIENT_STATUS_INVALID_OPERATION` and applies none of its assignments.
+
+Material assets also expose `IRadientAnimationDestination`. Use
+`RadientMaterialAnimationSchemaID` with the parameter's exact, case-sensitive name
+from the material definition, such as `RadientStandardMaterialBaseColorFactorName`.
+Reflection supplies the value type and array size for both standard and custom
+parameters. Non-texture parameters support animation, including array ranges;
+Boolean and integer values use STEP interpolation. Surface alpha cutoff uses
+`RadientSurfaceMaterialAnimationSchemaID` and
+`RadientSurfaceMaterialAlphaCutoffPropertyName`.
+
+Map each clip target to destination element zero, then evaluate the binding on the
+render thread before rendering. Property names are resolved when the binding is
+created. Animation updates follow the same runtime rules as writer commits.
+
+The GLTF importer supports `KHR_animation_pointer` for the corresponding material
+factors, alpha cutoff, and `KHR_texture_transform` offsets. Texture-transform
+scale/rotation and emissive-strength animation are not yet supported. Scene
+instantiation with an animation registry creates material bindings automatically.
+Materials remain shared between scene instances: evaluating a material binding
+affects every instance that uses that asset. Independent playback requires
+distinct material assets.

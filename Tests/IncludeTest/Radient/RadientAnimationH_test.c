@@ -78,6 +78,9 @@ void RadientAnimation_C_UseTypes(void)
     Property                              = RadientCameraFarClipPropertyName;
     Property                              = RadientCameraFStopPropertyName;
     Property                              = RadientCameraFocusDistancePropertyName;
+    Schema                                = RadientMaterialAnimationSchemaID;
+    Schema                                = RadientSurfaceMaterialAnimationSchemaID;
+    Property                              = RadientSurfaceMaterialAlphaCutoffPropertyName;
     Object                                = InvalidRadientAnimationObject;
     DestinationElement                    = InvalidRadientAnimationDestinationElement;
     Semantic                              = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;

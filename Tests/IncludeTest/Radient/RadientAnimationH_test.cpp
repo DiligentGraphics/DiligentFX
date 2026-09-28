@@ -150,6 +150,31 @@ static_assert(std::string_view{RadientCameraNearClipPropertyName} == "NearClip",
 static_assert(std::string_view{RadientCameraFarClipPropertyName} == "FarClip", "Unexpected camera-far-clip property name");
 static_assert(std::string_view{RadientCameraFStopPropertyName} == "FStop", "Unexpected camera-f-stop property name");
 static_assert(std::string_view{RadientCameraFocusDistancePropertyName} == "FocusDistance", "Unexpected camera-focus-distance property name");
+static_assert(RadientMaterialAnimationSchemaID.Data1 == 0xa59f4797 &&
+                  RadientMaterialAnimationSchemaID.Data2 == 0x6124 &&
+                  RadientMaterialAnimationSchemaID.Data3 == 0x4cc1 &&
+                  RadientMaterialAnimationSchemaID.Data4[0] == 0x96 &&
+                  RadientMaterialAnimationSchemaID.Data4[1] == 0x7b &&
+                  RadientMaterialAnimationSchemaID.Data4[2] == 0x04 &&
+                  RadientMaterialAnimationSchemaID.Data4[3] == 0x83 &&
+                  RadientMaterialAnimationSchemaID.Data4[4] == 0x5e &&
+                  RadientMaterialAnimationSchemaID.Data4[5] == 0x75 &&
+                  RadientMaterialAnimationSchemaID.Data4[6] == 0xbb &&
+                  RadientMaterialAnimationSchemaID.Data4[7] == 0x05,
+              "Unexpected material animation schema ID");
+static_assert(RadientSurfaceMaterialAnimationSchemaID.Data1 == 0x0553a242 &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data2 == 0x23c8 &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data3 == 0x4a06 &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[0] == 0xbb &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[1] == 0x85 &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[2] == 0x6d &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[3] == 0xec &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[4] == 0x2e &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[5] == 0xe7 &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[6] == 0x9b &&
+                  RadientSurfaceMaterialAnimationSchemaID.Data4[7] == 0xff,
+              "Unexpected material animation schema ID");
+static_assert(std::string_view{RadientSurfaceMaterialAlphaCutoffPropertyName} == "AlphaCutoff", "Unexpected surface alpha-cutoff property name");
 static_assert(std::is_standard_layout<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAnimationValueDesc>::value, "RadientAnimationValueDesc must be trivially copyable");
 static_assert(std::is_standard_layout<RadientAnimationSamplerDesc>::value, "RadientAnimationSamplerDesc must be a standard-layout type");

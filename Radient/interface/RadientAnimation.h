@@ -141,6 +141,7 @@ static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMorphWeightsAnimationS
 /// instead use element zero.
 static DILIGENT_CONSTEXPR Char RadientMorphWeightsPropertyName[] = "Weights";
 
+
 /// Built-in schema for animatable properties of an authored light.
 ///
 /// A target's Object is the authored light identity. A scene binding may map
@@ -218,6 +219,7 @@ static DILIGENT_CONSTEXPR Char RadientLightAnglePropertyName[] = "Angle";
 /// must be finite at every sampled time.
 static DILIGENT_CONSTEXPR Char RadientLightShapingFocusPropertyName[] = "ShapingFocus";
 
+
 /// Built-in schema for animatable properties of an authored camera.
 ///
 /// A target's Object is the authored camera identity. A scene binding may map
@@ -263,6 +265,50 @@ static DILIGENT_CONSTEXPR Char RadientCameraFStopPropertyName[] = "FStop";
 /// units. Values must be finite and non-negative at every sampled time.
 static DILIGENT_CONSTEXPR Char RadientCameraFocusDistancePropertyName[] = "FocusDistance";
 
+
+/// Built-in schema for reflected, non-texture material parameters.
+///
+/// Property names are the exact, case-sensitive names in the material definition's
+/// RadientMaterialParameterDesc array. Standard material names are declared in
+/// RadientStandardMaterialParameters.h; custom definitions use their own names.
+/// A parameter's reflected Type determines the matching animation value type,
+/// and ArraySize determines the addressable array range. Floating-point scalar,
+/// vector, and matrix values interpolate component-wise. Boolean and integer
+/// values require STEP interpolation. Texture parameters are unsupported.
+///
+/// A target's Object identifies the authored material, such as a glTF material
+/// index. Material assets expose IRadientAnimationDestination through
+/// QueryInterface(), with destination element zero. Binding resolves names and
+/// validates value types and array ranges. Subsequent evaluation uses resolved
+/// parameter handles. Unanimated array elements retain their current values.
+///
+/// Animation edits the shared material asset, including every entity and scene
+/// instance that uses it. Independent playback requires distinct material assets.
+/// Evaluation follows the material writer's render-thread and external
+/// synchronization requirements.
+///
+/// For example, a standard base-color channel uses
+/// RadientStandardMaterialBaseColorFactorName with FLOAT4[1]. Surface state such
+/// as alpha cutoff belongs to RadientSurfaceMaterialAnimationSchemaID instead.
+// {A59F4797-6124-4CC1-967B-04835E75BB05}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientMaterialAnimationSchemaID =
+    {0xa59f4797, 0x6124, 0x4cc1, {0x96, 0x7b, 0x04, 0x83, 0x5e, 0x75, 0xbb, 0x05}};
+
+/// Built-in schema for surface-material state outside the reflected parameters.
+///
+/// Currently exposes RadientSurfaceMaterialAlphaCutoffPropertyName. A target's
+/// Object identifies the authored material, and destination element zero selects
+/// its IRadientSurfaceMaterialAsset. Sharing and synchronization follow
+/// RadientMaterialAnimationSchemaID. This separate schema keeps surface properties
+/// distinct from custom reflected parameters with the same name.
+// {0553A242-23C8-4A06-BB85-6DEC2EE79BFF}
+static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientSurfaceMaterialAnimationSchemaID =
+    {0x0553a242, 0x23c8, 0x4a06, {0xbb, 0x85, 0x6d, 0xec, 0x2e, 0xe7, 0x9b, 0xff}};
+
+/// FLOAT[1] alpha cutoff in RadientSurfaceMaterialAnimationSchemaID.
+/// Present in every surface material asset; see
+/// IRadientSurfaceMaterialWriter::SetAlphaCutoff for value requirements.
+static DILIGENT_CONSTEXPR Char RadientSurfaceMaterialAlphaCutoffPropertyName[] = "AlphaCutoff";
 
 // clang-format off
 
@@ -887,8 +933,10 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAnimationBinding =
 /// visibility, RadientLightAnimationSchemaID, and
 /// RadientCameraAnimationSchemaID for scene entities.
 /// Radient-created morph-target weight objects expose it for morph-weight
-/// array ranges. Custom destinations may implement it for material,
-/// application, or extension properties. The interface is externally
+/// array ranges. Radient-created material assets expose it for
+/// RadientMaterialAnimationSchemaID and RadientSurfaceMaterialAnimationSchemaID.
+/// Custom destinations may implement it for
+/// application or extension properties. The interface is externally
 /// synchronized.
 ///
 /// Destination binding creation is a cold operation. The returned object owns

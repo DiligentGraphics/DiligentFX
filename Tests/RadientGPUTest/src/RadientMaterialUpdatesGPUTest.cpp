@@ -402,4 +402,70 @@ TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneC
     EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
 }
 
+
+// Evaluate a material clip on an already-renderable textured quad. Its color,
+// texture offset, and cutoff must reach the next frame without any scene edits.
+TEST(RadientMaterialUpdatesGPUTest, AnimatesRenderedMaterialPropertiesWithoutSceneChanges)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    MaterialUpdateScene                Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize());
+    const RadientSceneRevisions SceneRevisions = Scene.pScene->GetSceneRevisions();
+    IRadientMaterialAsset&      Material       = *Scene.Materials[0];
+
+    const Float32                    Times[]   = {0.f, 1.f, 2.f, 3.f};
+    const RadientFloat4              Colors[]  = {{1.f, 1.f, 1.f, 1.f}, UpdatedColor, UpdatedColor, UpdatedColor};
+    const RadientFloat2              Offsets[] = {{0.25f, 0.5f}, {0.25f, 0.5f}, {0.75f, 0.5f}, {0.75f, 0.5f}};
+    const Float32                    Cutoffs[] = {0.25f, 0.25f, 0.25f, 0.75f};
+    const RadientAnimationTargetDesc Targets[] = {
+        {RadientMaterialAnimationSchemaID, 0, "Animated quad"},
+        {RadientSurfaceMaterialAnimationSchemaID, 0, "Animated quad"},
+    };
+    const RadientAnimationSamplerDesc Samplers[] = {
+        {{RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, 1}, RADIENT_ANIMATION_INTERPOLATION_LINEAR, Times, Colors, sizeof(Colors), 4},
+        {{RADIENT_ANIMATION_VALUE_TYPE_FLOAT2, 1}, RADIENT_ANIMATION_INTERPOLATION_LINEAR, Times, Offsets, sizeof(Offsets), 4},
+        {{RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1}, RADIENT_ANIMATION_INTERPOLATION_STEP, Times, Cutoffs, sizeof(Cutoffs), 4},
+    };
+    const RadientAnimationChannelDesc Channels[] = {
+        {0, RadientStandardMaterialBaseColorFactorName, 0, 0},
+        {0, RadientStandardMaterialBaseColorTextureUVBiasName, 0, 1},
+        {1, RadientSurfaceMaterialAlphaCutoffPropertyName, 0, 2},
+    };
+    RadientAnimationClipDesc ClipDesc;
+    ClipDesc.Duration     = 3.f;
+    ClipDesc.pTargets     = Targets;
+    ClipDesc.TargetCount  = 2;
+    ClipDesc.pSamplers    = Samplers;
+    ClipDesc.SamplerCount = 3;
+    ClipDesc.pChannels    = Channels;
+    ClipDesc.ChannelCount = 3;
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip;
+    ASSERT_EQ(Scene.pAssets->CreateAnimationClip(ClipDesc, &pClip), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAnimationDestination> pDestination{&Material, IID_RadientAnimationDestination};
+    ASSERT_NE(pDestination, nullptr);
+    const RadientAnimationDestinationMappingDesc Mappings[] = {{0, 0}, {1, 0}};
+    const RadientAnimationDestinationDesc        Destination{pDestination, Mappings, 2};
+    const RadientAnimationBindingDesc            BindingDesc{&Destination, 1};
+    RefCntAutoPtr<IRadientAnimationBinding>      pBinding;
+    ASSERT_EQ(pClip->CreateBinding(BindingDesc, &pBinding), RADIENT_STATUS_OK);
+
+    for (Uint32 Frame = 1; Frame <= 3; ++Frame)
+    {
+        const Uint64                 PreviousVersion = Material.GetVersion();
+        RadientAnimationEvaluateInfo EvaluateInfo;
+        EvaluateInfo.Time = static_cast<Float32>(Frame);
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+        EXPECT_EQ(Material.GetVersion(), PreviousVersion + 1);
+        ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+        SampledColors Result;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Result));
+        ExpectSameColor(Result[0], Result[Frame]);
+        EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
+
+        // Repeating the same animation sample produces no material revision.
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+        EXPECT_EQ(Material.GetVersion(), PreviousVersion + 1);
+    }
+}
+
 } // namespace

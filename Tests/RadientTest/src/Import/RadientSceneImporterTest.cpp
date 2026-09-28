@@ -35,6 +35,8 @@
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Math/RadientMath.hpp"
 #include "RadientMathTestHelpers.hpp"
+#include "RadientMaterialTestHelpers.hpp"
+#include "RadientTestAssetHelpers.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
 #include "RadientTestDataHelpers.hpp"
@@ -1446,6 +1448,208 @@ TEST(RadientSceneImporterTest, AnimatesEveryInstanceOfRemappedSharedPunctualLigh
         EXPECT_EQ(pLight->Light.Type, RADIENT_LIGHT_TYPE_POINT);
         EXPECT_FLOAT_EQ(pLight->Light.Intensity, 8.f);
     }
+}
+
+
+TEST(RadientSceneImporterTest, LoadsAndEvaluatesSharedMaterialAnimationPointers)
+{
+    TempDirectory TempDir{"RadientSceneImporterTest"};
+    WriteBinaryFile(TempDir, "white.png", {WhitePng.begin(), WhitePng.end()});
+    std::vector<Uint8> Buffer;
+    std::ostringstream BufferViews;
+    std::ostringstream Accessors;
+    Uint32             AccessorCount = 0;
+
+    const auto AddAccessor = [&](const auto& Values, const char* Type, Uint32 Count,
+                                 Uint32 ComponentType = 5126, bool Normalized = false) {
+        Buffer.resize((Buffer.size() + 3) & ~size_t{3});
+        const size_t Offset = AppendBytes(Buffer, Values);
+        if (AccessorCount != 0)
+        {
+            BufferViews << ',';
+            Accessors << ',';
+        }
+        BufferViews << "{\"buffer\":0,\"byteOffset\":" << Offset
+                    << ",\"byteLength\":" << sizeof(Values) << '}';
+        Accessors << "{\"bufferView\":" << AccessorCount
+                  << ",\"componentType\":" << ComponentType
+                  << ",\"count\":" << Count << ",\"type\":\"" << Type << '"';
+        if (Normalized)
+            Accessors << ",\"normalized\":true";
+        Accessors << '}';
+        return AccessorCount++;
+    };
+    // clang-format off
+    const Uint32 PositionAccessor    = AddAccessor(std::array<Float32, 9>{0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.f}, "VEC3", 3);
+    const Uint32 TimeAccessor        = AddAccessor(std::array<Float32, 2>{2.f, 4.f}, "SCALAR", 2);
+    const Uint32 ColorAccessor       = AddAccessor(std::array<Uint8, 8>{0, 51, 102, 255, 102, 153, 204, 255}, "VEC4", 2, 5121, true);
+    const Uint32 RoughnessAccessor   = AddAccessor(std::array<Float32, 2>{0.25f, 0.75f}, "SCALAR", 2);
+    const Uint32 EmissiveAccessor    = AddAccessor(std::array<Float32, 18>{0.f, 0.f, 0.f, 0.1f, 0.2f, 0.3f, 0.2f, 0.f, 0.f,
+                                                                           0.f, 0.f, 0.f, 0.5f, 0.6f, 0.7f, 0.f, 0.f, 0.f},
+                                                   "VEC3", 6);
+    const Uint32 OffsetAccessor      = AddAccessor(std::array<Float32, 4>{0.f, 0.f, 0.5f, 0.25f}, "VEC2", 2);
+    const Uint32 CutoffAccessor      = AddAccessor(std::array<Float32, 2>{0.2f, 0.8f}, "SCALAR", 2);
+    const Uint32 TranslationAccessor = AddAccessor(std::array<Float32, 6>{0.f, 0.f, 0.f, 2.f, 4.f, 6.f}, "VEC3", 2);
+    // clang-format on
+    WriteBinaryFile(TempDir, "material-animation.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+        "asset": {"version": "2.0"},
+        "extensionsUsed": ["KHR_animation_pointer", "KHR_texture_transform", "KHR_materials_emissive_strength"],
+        "scene": 0, "scenes": [{"nodes": [0, 1]}],
+        "nodes": [{"name": "Animated node", "mesh": 0}, {"name": "Shared material node", "mesh": 0}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": )GLTF"
+         << PositionAccessor << R"GLTF(}, "material": 1}]}],
+        "images": [{"uri": "white.png"}], "textures": [{"source": 0}],
+        "materials": [
+            {"name": "Unused material"},
+            {"name": "Animated material", "alphaMode": "MASK", "alphaCutoff": 0.4,
+             "pbrMetallicRoughness": {"roughnessFactor": 0.9,
+                 "baseColorTexture": {"index": 0, "extensions": {"KHR_texture_transform": {"offset": [0.1, 0.2]}}}},
+             "emissiveFactor": [0.1, 0.1, 0.1],
+             "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 3}}}
+        ],
+        "animations": [{"name": "Material and node", "samplers": [
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << ColorAccessor << R"GLTF(, "interpolation": "LINEAR"},
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << RoughnessAccessor << R"GLTF(, "interpolation": "LINEAR"},
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << EmissiveAccessor << R"GLTF(, "interpolation": "CUBICSPLINE"},
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << OffsetAccessor << R"GLTF(, "interpolation": "LINEAR"},
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << CutoffAccessor << R"GLTF(, "interpolation": "LINEAR"},
+            {"input": )GLTF"
+         << TimeAccessor << ", \"output\": " << TranslationAccessor << R"GLTF(, "interpolation": "LINEAR"}
+        ], "channels": [
+            {"sampler": 1, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/extensions/KHR_materials_emissive_strength/emissiveStrength"}}}},
+            {"sampler": 0, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/pbrMetallicRoughness/baseColorFactor"}}}},
+            {"sampler": 1, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/pbrMetallicRoughness/roughnessFactor"}}}},
+            {"sampler": 2, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/emissiveFactor"}}}},
+            {"sampler": 3, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset"}}}},
+            {"sampler": 4, "target": {"path": "pointer", "extensions": {"KHR_animation_pointer": {"pointer": "/materials/1/alphaCutoff"}}}},
+            {"sampler": 5, "target": {"node": 0, "path": "translation"}}
+        ]}],
+        "buffers": [{"uri": "material-animation.bin", "byteLength": )GLTF"
+         << Buffer.size() << "}],"
+         << "\"bufferViews\":[" << BufferViews.str() << "],\"accessors\":[" << Accessors.str() << "]}";
+    const std::string GLTFPath = WriteGLTFFile(TempDir, "material-animation.gltf", GLTF.str().c_str());
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pAnimationRegistry, nullptr);
+    RadientSceneLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+    RadientSceneInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.pAnimationRegistry  = Fixture.pAnimationRegistry;
+    const ImportSceneResult FirstImport = ImportSceneAndFinishPending(Fixture, LoadInfo, InstantiateInfo);
+    ASSERT_EQ(FirstImport.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(FirstImport.pModel, nullptr);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    const RadientSceneAssetDesc& SceneDesc = FirstImport.pModel->GetDesc();
+    ASSERT_EQ(SceneDesc.AnimationClipCount, 1u);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip{SceneDesc.ppAnimationClips[0]};
+    ASSERT_NE(pClip, nullptr);
+    const RadientAnimationClipDesc& Clip = pClip->GetDesc();
+    ASSERT_EQ(Clip.TargetCount, 3u);
+    ASSERT_EQ(Clip.ChannelCount, 6u);
+    const RadientAnimationTargetDesc* pMaterialTarget = std::find_if(Clip.pTargets, Clip.pTargets + Clip.TargetCount,
+                                                                     [](const RadientAnimationTargetDesc& Target) { return Target.Schema == RadientMaterialAnimationSchemaID; });
+    ASSERT_NE(pMaterialTarget, Clip.pTargets + Clip.TargetCount);
+    EXPECT_EQ(pMaterialTarget->Object, 1u);
+    EXPECT_STREQ(pMaterialTarget->Name, "Animated material");
+    const RadientAnimationTargetDesc* pSurfaceTarget = std::find_if(Clip.pTargets, Clip.pTargets + Clip.TargetCount,
+                                                                    [](const RadientAnimationTargetDesc& Target) { return Target.Schema == RadientSurfaceMaterialAnimationSchemaID; });
+    ASSERT_NE(pSurfaceTarget, Clip.pTargets + Clip.TargetCount);
+    EXPECT_EQ(pSurfaceTarget->Object, pMaterialTarget->Object);
+    EXPECT_STREQ(pSurfaceTarget->Name, "Animated material");
+
+    const RadientSceneImpl*             pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
+    std::vector<IRadientMaterialAsset*> Materials;
+    const auto                          CaptureMaterials = [&]() {
+        Materials.clear();
+        return pSceneImpl->GetState().EnumerateRenderableMeshes(
+            [&](const RadientSceneState::RenderableMesh& Mesh) {
+                const RadientMeshAssetDesc& Desc = Mesh.Mesh.pMesh->GetDesc();
+                if (Desc.PrimitiveCount == 1)
+                    Materials.push_back(Desc.pPrimitives[0].pMaterial);
+            });
+    };
+    ASSERT_EQ(CaptureMaterials(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Materials.size(), 2u);
+    ASSERT_NE(Materials[0], nullptr);
+    EXPECT_EQ(Materials[0], Materials[1]);
+    RefCntAutoPtr<IRadientMaterialAsset>        pMaterial{Materials[0]};
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "RoughnessFactor"), 0.9f);
+    ExpectFloat3Near(GetMaterialParameter<RadientFloat3>(*pMaterial, "EmissiveFactor"), {0.3f, 0.3f, 0.3f});
+
+    const std::vector<RadientEntityID> FirstNodes = GetChildren(*Fixture.pScene, FirstImport.RootEntity);
+    ASSERT_EQ(FirstNodes.size(), 2u);
+    const RadientAnimationRegistryEntry* pEntry = FindAnimationRegistryEntry(Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pEntry, nullptr);
+    ASSERT_EQ(pEntry->BindingCount, 2u);
+    // Retain the first instance's bindings so later evaluations cannot silently
+    // pass by writing through the second instance's newly registered bindings.
+    std::vector<RefCntAutoPtr<IRadientAnimationBinding>> FirstBindings;
+    for (Uint32 i = 0; i < pEntry->BindingCount; ++i)
+        FirstBindings.emplace_back(pEntry->ppBindings[i]);
+    RadientAnimationEvaluateInfo EvaluateInfo{};
+    EvaluateInfo.Time = 1.f;
+    for (const RefCntAutoPtr<IRadientAnimationBinding>& pBinding : FirstBindings)
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    const RadientFloat4 Color = GetMaterialParameter<RadientFloat4>(*pMaterial, "BaseColorFactor");
+    EXPECT_NEAR(Color.x, 0.2f, EPSILON);
+    EXPECT_NEAR(Color.y, 0.4f, EPSILON);
+    EXPECT_NEAR(Color.z, 0.6f, EPSILON);
+    EXPECT_FLOAT_EQ(Color.w, 1.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "RoughnessFactor"), 0.5f);
+    // Hermite interpolation includes the outgoing tangent before multiplying
+    // both key values and tangents by the static emissive strength of three.
+    ExpectFloat3Near(GetMaterialParameter<RadientFloat3>(*pMaterial, "EmissiveFactor"), {1.05f, 1.2f, 1.5f});
+    const RadientFloat2 Offset = GetMaterialParameter<RadientFloat2>(*pMaterial, "BaseColorTextureUVBias");
+    EXPECT_FLOAT_EQ(Offset.x, 0.25f);
+    EXPECT_FLOAT_EQ(Offset.y, 0.125f);
+    EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.5f);
+    RadientTransform Transform{};
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(FirstNodes[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {1.f, 2.f, 3.f});
+
+    RadientEntityID SecondRoot = InvalidRadientEntityID;
+    ASSERT_EQ(Fixture.pImporter->InstantiateScene(FirstImport.pModel, InstantiateInfo, SecondRoot), RADIENT_STATUS_OK);
+    ASSERT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(CaptureMaterials(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Materials.size(), 4u);
+    for (IRadientMaterialAsset* pSharedMaterial : Materials)
+        EXPECT_EQ(pSharedMaterial, pMaterial);
+    pEntry = FindAnimationRegistryEntry(Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pEntry, nullptr);
+    EXPECT_EQ(pEntry->BindingCount, 4u);
+    EvaluateInfo.Time = 2.f;
+    for (const RefCntAutoPtr<IRadientAnimationBinding>& pBinding : FirstBindings)
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "RoughnessFactor"), 0.75f);
+    ExpectFloat3Near(GetMaterialParameter<RadientFloat3>(*pMaterial, "EmissiveFactor"), {1.5f, 1.8f, 2.1f});
+    const std::vector<RadientEntityID> SecondNodes = GetChildren(*Fixture.pScene, SecondRoot);
+    ASSERT_EQ(SecondNodes.size(), 2u);
+    ASSERT_EQ(Fixture.pScene->GetLocalTransform(SecondNodes[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {});
+
+    // Material bindings use the instance root as a lifetime tag. Removing one
+    // instance keeps the other instance's material and node bindings usable.
+    ASSERT_EQ(Fixture.pAnimationRegistry->RemoveEntity(FirstImport.RootEntity), RADIENT_STATUS_OK);
+    pEntry = FindAnimationRegistryEntry(Fixture.pAnimationRegistry->GetState(), pClip);
+    ASSERT_NE(pEntry, nullptr);
+    ASSERT_EQ(pEntry->BindingCount, 2u);
+    EvaluateInfo.Time = 0.f;
+    for (Uint32 i = 0; i < pEntry->BindingCount; ++i)
+        ASSERT_EQ(pEntry->ppBindings[i]->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "RoughnessFactor"), 0.25f);
+    ASSERT_EQ(Fixture.pAnimationRegistry->RemoveEntity(SecondRoot), RADIENT_STATUS_OK);
+    EXPECT_EQ(FindAnimationRegistryEntry(Fixture.pAnimationRegistry->GetState(), pClip), nullptr);
 }
 
 TEST(RadientSceneImporterTest, RejectsAnimationRegistryForAnotherScene)

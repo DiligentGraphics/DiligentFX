@@ -1022,6 +1022,10 @@ RADIENT_STATUS LoadScene(IRadientMeshImportServices&             MeshImportServi
                                  pDefaultMaterial,
                                  Scene.Meshes};
 
+    // The metadata builder resolves material animation pointers against this
+    // identity table. Material assets have already been loaded separately.
+    MetadataModel.Materials.resize(Materials.size());
+
     GLTF::ModelBuilder Builder{ModelCI, MetadataModel};
     Builder.BuildModel(GltfModel, -1, MeshLoader);
 
@@ -1029,7 +1033,7 @@ RADIENT_STATUS LoadScene(IRadientMeshImportServices&             MeshImportServi
     if (RADIENT_FAILED(MeshStatus))
         return MeshStatus;
 
-    return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene, pAssetManager);
+    return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene, pAssetManager, pDocument.get());
 }
 
 } // namespace RadientGLTFLoader

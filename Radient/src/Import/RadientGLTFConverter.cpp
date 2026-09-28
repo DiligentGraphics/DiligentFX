@@ -31,6 +31,7 @@
 #include "RadientAnimation.h"
 #include "RadientMorphTargets.h"
 #include "RadientSkinning.h"
+#include "RadientStandardMaterialParameters.h"
 
 #include "Errors.hpp"
 #include "GLTFBuilder.hpp"
@@ -48,7 +49,9 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -509,6 +512,7 @@ enum class AnimationPointerValueConstraint : Uint8
     UnitInterval,
     NonNegative,
     Positive,
+    IndexOfRefraction,
     InnerConeAngle,
     OuterConeAngle,
 };
@@ -610,6 +614,181 @@ const AnimationPointerPropertyDesc* FindAnimationPointerProperty(
     return nullptr;
 }
 
+// Material animation addresses the same named parameters as ordinary writer edits.
+// Resolving the destination definition here also omits properties unavailable in
+// the material's shading model or enabled feature set.
+bool FindMaterialAnimationPointerProperty(const std::string&            Path,
+                                          IRadientMaterialAsset&        Material,
+                                          AnimationPointerPropertyDesc& Result)
+{
+    struct PropertyDesc
+    {
+        const char*                     Path;
+        const char*                     ParameterName;
+        Uint32                          ComponentCount;
+        AnimationPointerValueConstraint Constraint;
+    };
+    static const PropertyDesc Properties[] = {
+        {"/pbrMetallicRoughness/baseColorFactor", RadientStandardMaterialBaseColorFactorName, 4, AnimationPointerValueConstraint::UnitInterval},
+        {"/pbrMetallicRoughness/metallicFactor", RadientStandardMaterialMetallicFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/pbrMetallicRoughness/roughnessFactor", RadientStandardMaterialRoughnessFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/emissiveFactor", RadientStandardMaterialEmissiveFactorName, 3, AnimationPointerValueConstraint::UnitInterval},
+        {"/normalTexture/scale", RadientStandardMaterialNormalScaleName, 1, AnimationPointerValueConstraint::None},
+        {"/occlusionTexture/strength", RadientStandardMaterialOcclusionStrengthName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/alphaCutoff", nullptr, 1, AnimationPointerValueConstraint::NonNegative},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseFactor", RadientStandardMaterialDiffuseFactorName, 4, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularFactor", RadientStandardMaterialSpecularFactorName, 3, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/glossinessFactor", RadientStandardMaterialGlossinessFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_clearcoat/clearcoatFactor", RadientStandardMaterialClearCoatFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessFactor", RadientStandardMaterialClearCoatRoughnessFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/scale", RadientStandardMaterialClearCoatNormalScaleName, 1, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenColorFactor", RadientStandardMaterialSheenColorFactorName, 3, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessFactor", RadientStandardMaterialSheenRoughnessFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_specular/specularFactor", RadientStandardMaterialSpecularWeightName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_specular/specularColorFactor", RadientStandardMaterialSpecularColorFactorName, 3, AnimationPointerValueConstraint::NonNegative},
+        {"/extensions/KHR_materials_anisotropy/anisotropyStrength", RadientStandardMaterialAnisotropyStrengthName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_anisotropy/anisotropyRotation", RadientStandardMaterialAnisotropyRotationName, 1, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceFactor", RadientStandardMaterialIridescenceFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_iridescence/iridescenceIor", RadientStandardMaterialIridescenceIORName, 1, AnimationPointerValueConstraint::IndexOfRefraction},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessMinimum", RadientStandardMaterialIridescenceThicknessMinimumName, 1, AnimationPointerValueConstraint::NonNegative},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessMaximum", RadientStandardMaterialIridescenceThicknessMaximumName, 1, AnimationPointerValueConstraint::NonNegative},
+        {"/extensions/KHR_materials_transmission/transmissionFactor", RadientStandardMaterialTransmissionFactorName, 1, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_ior/ior", RadientStandardMaterialIORName, 1, AnimationPointerValueConstraint::IndexOfRefraction},
+        {"/extensions/KHR_materials_volume/thicknessFactor", RadientStandardMaterialThicknessFactorName, 1, AnimationPointerValueConstraint::NonNegative},
+        {"/extensions/KHR_materials_volume/attenuationColor", RadientStandardMaterialAttenuationColorName, 3, AnimationPointerValueConstraint::UnitInterval},
+        {"/extensions/KHR_materials_volume/attenuationDistance", RadientStandardMaterialAttenuationDistanceName, 1, AnimationPointerValueConstraint::Positive},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialBaseColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialMetallicRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/normalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialNormalTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/occlusionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialOcclusionTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/emissiveTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialEmissiveTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialDiffuseTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularGlossinessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatNormalTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialAnisotropyTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceThicknessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialTransmissionTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialThicknessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+    };
+
+    for (const PropertyDesc& Property : Properties)
+    {
+        if (Path != Property.Path)
+            continue;
+
+        if (Property.ParameterName != nullptr)
+        {
+            RadientMaterialParameterHandle Handle;
+            if (Material.GetDefinition()->FindParameter(Property.ParameterName, &Handle) != RADIENT_STATUS_OK)
+                return false;
+        }
+        else
+        {
+            RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{&Material, IID_RadientSurfaceMaterialAsset};
+            if (pSurface == nullptr)
+                return false;
+        }
+
+        static constexpr RADIENT_ANIMATION_VALUE_TYPE Types[] = {
+            RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN,
+            RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+            RADIENT_ANIMATION_VALUE_TYPE_FLOAT2,
+            RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+            RADIENT_ANIMATION_VALUE_TYPE_FLOAT4,
+        };
+        Result = {
+            GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+            Property.Path,
+            Property.ParameterName != nullptr ? RadientMaterialAnimationSchemaID : RadientSurfaceMaterialAnimationSchemaID,
+            Property.ParameterName != nullptr ? Property.ParameterName : RadientSurfaceMaterialAlphaCutoffPropertyName,
+            {Types[Property.ComponentCount], 1},
+            Property.ComponentCount,
+            0,
+            Property.Path,
+            Property.Constraint,
+        };
+        return true;
+    }
+    return false;
+}
+
+// Extension properties with defaults still require their enclosing object.
+// Walk extension-owned JSON directly; core texture-info objects use typed fields.
+bool IsMaterialAnimationPointerDefined(const tinygltf::Material& Material,
+                                       const std::string&        Path)
+{
+    const std::string ExtensionPrefix = "/extensions/";
+    if (Path.compare(0, ExtensionPrefix.size(), ExtensionPrefix) == 0)
+    {
+        const size_t NameEnd   = Path.find('/', ExtensionPrefix.size());
+        const auto   Extension = Material.extensions.find(Path.substr(ExtensionPrefix.size(), NameEnd - ExtensionPrefix.size()));
+        if (Extension == Material.extensions.end())
+            return false;
+        const tinygltf::Value* pParent        = &Extension->second;
+        size_t                 ComponentStart = NameEnd + 1;
+        for (size_t ComponentEnd = Path.find('/', ComponentStart); ComponentEnd != std::string::npos;
+             ComponentEnd        = Path.find('/', ComponentStart))
+        {
+            const std::string Component = Path.substr(ComponentStart, ComponentEnd - ComponentStart);
+            if (!pParent->IsObject() || !pParent->Has(Component))
+                return false;
+            pParent        = &pParent->Get(Component);
+            ComponentStart = ComponentEnd + 1;
+        }
+        return pParent->IsObject();
+    }
+
+    if (Path == "/normalTexture/scale")
+        return Material.normalTexture.index >= 0;
+    if (Path == "/occlusionTexture/strength")
+        return Material.occlusionTexture.index >= 0;
+
+    const tinygltf::ExtensionMap* pTextureExtensions = nullptr;
+    if (Path == "/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset")
+    {
+        if (Material.pbrMetallicRoughness.baseColorTexture.index < 0)
+            return false;
+        pTextureExtensions = &Material.pbrMetallicRoughness.baseColorTexture.extensions;
+    }
+    if (Path == "/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset")
+    {
+        if (Material.pbrMetallicRoughness.metallicRoughnessTexture.index < 0)
+            return false;
+        pTextureExtensions = &Material.pbrMetallicRoughness.metallicRoughnessTexture.extensions;
+    }
+    if (Path == "/normalTexture/extensions/KHR_texture_transform/offset")
+    {
+        if (Material.normalTexture.index < 0)
+            return false;
+        pTextureExtensions = &Material.normalTexture.extensions;
+    }
+    if (Path == "/occlusionTexture/extensions/KHR_texture_transform/offset")
+    {
+        if (Material.occlusionTexture.index < 0)
+            return false;
+        pTextureExtensions = &Material.occlusionTexture.extensions;
+    }
+    if (Path == "/emissiveTexture/extensions/KHR_texture_transform/offset")
+    {
+        if (Material.emissiveTexture.index < 0)
+            return false;
+        pTextureExtensions = &Material.emissiveTexture.extensions;
+    }
+    if (pTextureExtensions != nullptr)
+    {
+        const auto Transform = pTextureExtensions->find("KHR_texture_transform");
+        return Transform != pTextureExtensions->end() && Transform->second.IsObject();
+    }
+    return true;
+}
+
 bool IsValidGLTFFloatAnimationComponentType(VALUE_TYPE Type, bool IsNormalized) noexcept
 {
     switch (Type)
@@ -645,6 +824,9 @@ bool IsValidAnimationPointerKeyValue(AnimationPointerValueConstraint Constraint,
 
         case AnimationPointerValueConstraint::Positive:
             return RadientMath::IsFinitePositive(Value);
+
+        case AnimationPointerValueConstraint::IndexOfRefraction:
+            return RadientMath::IsFinite(Value) && Value >= 1.f;
 
         case AnimationPointerValueConstraint::InnerConeAngle:
             return RadientMath::IsFiniteNonNegative(Value) && Value < PI_F * 0.5f;
@@ -723,9 +905,11 @@ struct AnimationClipSamplerStorage
 
 struct SourceAnimationSamplerMapping
 {
-    Uint32                    ClipSamplerIndex = InvalidRadientAnimationSamplerIndex;
-    RadientAnimationValueDesc Value;
-    bool                      UsesFloatConversion = false;
+    Uint32                          ClipSamplerIndex = InvalidRadientAnimationSamplerIndex;
+    RadientAnimationValueDesc       Value;
+    bool                            UsesFloatConversion = false;
+    Float32                         OutputScale         = 1.f;
+    AnimationPointerValueConstraint Constraint          = AnimationPointerValueConstraint::None;
 };
 
 using SourceAnimationSamplerMappings = std::vector<std::vector<SourceAnimationSamplerMapping>>;
@@ -738,6 +922,7 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
                                                Uint32                                    ComponentCount,
                                                bool                                      AllowFloatConversion,
                                                AnimationPointerValueConstraint           ValueConstraint,
+                                               Float32                                   OutputScale,
                                                SourceAnimationSamplerMappings&           SourceMappings,
                                                std::vector<AnimationClipSamplerStorage>& Samplers,
                                                Uint32&                                   ClipSamplerIndex)
@@ -751,14 +936,17 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
     {
         if (Mapping.Value.Type == Value.Type &&
             Mapping.Value.ArraySize == Value.ArraySize &&
-            (AllowFloatConversion || !Mapping.UsesFloatConversion))
+            (AllowFloatConversion || !Mapping.UsesFloatConversion) &&
+            Mapping.OutputScale == OutputScale &&
+            (OutputScale == 1.f || Mapping.Constraint == ValueConstraint))
         {
             VERIFY_EXPR(Mapping.ClipSamplerIndex < Samplers.size());
             const AnimationClipSamplerStorage& Storage = Samplers[Mapping.ClipSamplerIndex];
             const std::vector<Uint8>&          Values  = Storage.ConvertedValues.empty() ?
                 Sampler.OutputData :
                 Storage.ConvertedValues;
-            if (!ValidateAnimationPointerKeyValues(
+            if (OutputScale == 1.f &&
+                !ValidateAnimationPointerKeyValues(
                     Values, Storage.Interpolation, Value, ComponentCount, ValueConstraint,
                     AnimationIndex, SourceSamplerIndex, ValueName))
             {
@@ -880,6 +1068,26 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
         }
     }
 
+    if (OutputScale != 1.f)
+    {
+        // Emission stores factor * strength. A fixed strength scales both values
+        // and cubic tangents without changing the interpolated curve.
+        if (ConvertedValues.empty())
+            ConvertedValues = Sampler.OutputData;
+        for (size_t Offset = 0; Offset < ConvertedValues.size(); Offset += sizeof(Float32))
+        {
+            Float32 Component;
+            std::memcpy(&Component, ConvertedValues.data() + Offset, sizeof(Component));
+            Component *= OutputScale;
+            if (!RadientMath::IsFinite(Component))
+            {
+                LOG_WARNING_MESSAGE("Skipping non-finite scaled emission in GLTF animation ", AnimationIndex);
+                return RADIENT_STATUS_INVALID_DATA;
+            }
+            std::memcpy(ConvertedValues.data() + Offset, &Component, sizeof(Component));
+        }
+    }
+
     const RADIENT_STATUS TimeStatus = ValidateAnimationSamplerTimes(
         Sampler, AnimationIndex, SourceSamplerIndex);
     if (RADIENT_FAILED(TimeStatus))
@@ -893,7 +1101,7 @@ RADIENT_STATUS GetOrCreateAnimationClipSampler(const GLTF::Animation&           
     Storage.Times                        = Sampler.Inputs;
     Storage.ConvertedValues              = std::move(ConvertedValues);
 
-    Mappings.push_back({ClipSamplerIndex, Value, UsesFloatConversion});
+    Mappings.push_back({ClipSamplerIndex, Value, UsesFloatConversion, OutputScale, ValueConstraint});
     return RADIENT_STATUS_OK;
 }
 
@@ -902,6 +1110,8 @@ RADIENT_STATUS CreateImportedAnimationClip(
     const GLTF::Animation&                                    Animation,
     Uint32                                                    AnimationIndex,
     const std::vector<SkinImportContext>&                     SkinContexts,
+    const RadientImport::MaterialAssetList&                   Materials,
+    const GLTF::Document*                                     pDocument,
     IRadientAssetManager&                                     AssetManager,
     RefCntAutoPtr<IRadientAnimationClipAsset>&                pResult,
     std::vector<RadientImport::ImportedAnimationSkinMapping>& SkinMappings)
@@ -912,11 +1122,17 @@ RADIENT_STATUS CreateImportedAnimationClip(
     std::vector<Uint32>                      NodeToTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
     std::vector<Uint32>                      NodeToMorphTarget(Model.Nodes.size(), InvalidRadientAnimationTargetIndex);
     std::vector<Uint32>                      LightToTarget(Model.Lights.size(), InvalidRadientAnimationTargetIndex);
+    std::vector<Uint32>                      MaterialToTarget(Model.Materials.size(), InvalidRadientAnimationTargetIndex);
+    std::vector<Uint32>                      SurfaceMaterialToTarget(Model.Materials.size(), InvalidRadientAnimationTargetIndex);
     std::vector<RadientAnimationTargetDesc>  Targets;
     std::vector<Uint8>                       TargetPropertyMasks;
     std::vector<AnimationClipSamplerStorage> SamplerStorage;
     std::vector<RadientAnimationChannelDesc> Channels;
     SourceAnimationSamplerMappings           SourceSamplerMappings(Animation.Samplers.size());
+
+    // Clip target indices distinguish the parameter and surface schemas. Compare
+    // property names by content rather than by their string addresses.
+    std::set<std::pair<Uint32, std::string_view>> MaterialProperties;
     Targets.reserve(Animation.Channels.size());
     TargetPropertyMasks.reserve(Animation.Channels.size());
     SamplerStorage.reserve(Animation.Samplers.size());
@@ -937,10 +1153,57 @@ RADIENT_STATUS CreateImportedAnimationClip(
             continue;
         }
 
+        AnimationPointerPropertyDesc        MaterialProperty{};
         const AnimationPointerPropertyDesc* pPointerProperty = nullptr;
+        Uint32                              MaterialIndex    = ~0u;
+        Float32                             OutputScale      = 1.f;
         if (Channel.PathType == GLTF::AnimationChannel::PATH_TYPE::POINTER)
         {
-            pPointerProperty = FindAnimationPointerProperty(Channel);
+            if (Channel.ObjectType == GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL)
+            {
+                for (size_t Index = 0; Index < Model.Materials.size(); ++Index)
+                {
+                    if (&Model.Materials[Index] == Channel.pObject && Index < Materials.size())
+                    {
+                        MaterialIndex = static_cast<Uint32>(Index);
+                        break;
+                    }
+                }
+                if (MaterialIndex == ~0u || Materials[MaterialIndex] == nullptr ||
+                    !FindMaterialAnimationPointerProperty(Channel.PropertyPath, *Materials[MaterialIndex], MaterialProperty))
+                {
+                    LOG_WARNING_MESSAGE("Skipping unsupported material animation-pointer target '",
+                                        Channel.PropertyPath, "' in GLTF animation ", AnimationIndex);
+                    continue;
+                }
+                if (pDocument != nullptr)
+                {
+                    if (MaterialIndex >= pDocument->GetModel().materials.size())
+                    {
+                        LOG_WARNING_MESSAGE("Skipping GLTF animation ", AnimationIndex, " channel with an invalid source material");
+                        continue;
+                    }
+                    const tinygltf::Material& SourceMaterial = pDocument->GetModel().materials[MaterialIndex];
+                    if (!IsMaterialAnimationPointerDefined(SourceMaterial, Channel.PropertyPath))
+                    {
+                        LOG_WARNING_MESSAGE("Skipping undefined material animation-pointer target '",
+                                            Channel.PropertyPath, "' in GLTF animation ", AnimationIndex);
+                        continue;
+                    }
+                    if (Channel.PropertyPath == "/emissiveFactor")
+                    {
+                        const auto Strength = SourceMaterial.extensions.find("KHR_materials_emissive_strength");
+                        if (Strength != SourceMaterial.extensions.end() && Strength->second.IsObject() &&
+                            Strength->second.Has("emissiveStrength") && Strength->second.Get("emissiveStrength").IsNumber())
+                            OutputScale = static_cast<Float32>(Strength->second.Get("emissiveStrength").GetNumberAsDouble());
+                    }
+                }
+                pPointerProperty = &MaterialProperty;
+            }
+            else
+            {
+                pPointerProperty = FindAnimationPointerProperty(Channel);
+            }
             if (pPointerProperty == nullptr)
             {
                 LOG_WARNING_MESSAGE("Skipping unsupported animation-pointer target '",
@@ -949,16 +1212,16 @@ RADIENT_STATUS CreateImportedAnimationClip(
             }
         }
 
-        RadientAnimationSchemaID   Schema;
-        const Char*                Property;
-        RadientAnimationValueDesc  Value;
-        Uint32                     ComponentCount;
-        Uint8                      PropertyMask;
-        const char*                ValueName;
-        Uint32                     ObjectIndex;
-        const char*                ObjectName;
-        std::vector<Uint32>*       pObjectToTarget;
-        const GLTF::Node*          pNode = nullptr;
+        RadientAnimationSchemaID  Schema;
+        const Char*               Property;
+        RadientAnimationValueDesc Value;
+        Uint32                    ComponentCount;
+        Uint8                     PropertyMask;
+        const char*               ValueName;
+        Uint32                    ObjectIndex;
+        const char*               ObjectName;
+        std::vector<Uint32>*      pObjectToTarget;
+        const GLTF::Node*         pNode = nullptr;
         if (pPointerProperty != nullptr)
         {
             Schema         = pPointerProperty->Schema;
@@ -1008,6 +1271,12 @@ RADIENT_STATUS CreateImportedAnimationClip(
                     pObjectToTarget = &LightToTarget;
                     break;
                 }
+
+                case GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL:
+                    ObjectIndex     = MaterialIndex;
+                    ObjectName      = pDocument != nullptr ? pDocument->GetModel().materials[ObjectIndex].name.c_str() : "";
+                    pObjectToTarget = Schema == RadientMaterialAnimationSchemaID ? &MaterialToTarget : &SurfaceMaterialToTarget;
+                    break;
 
                 default:
                     UNEXPECTED("Unsupported animation-pointer object type");
@@ -1096,7 +1365,8 @@ RADIENT_STATUS CreateImportedAnimationClip(
 
         Uint32 ClipTargetIndex = (*pObjectToTarget)[ObjectIndex];
         if (ClipTargetIndex != InvalidRadientAnimationTargetIndex &&
-            (TargetPropertyMasks[ClipTargetIndex] & PropertyMask) != 0)
+            ((TargetPropertyMasks[ClipTargetIndex] & PropertyMask) != 0 ||
+             MaterialProperties.count({ClipTargetIndex, Property}) != 0))
         {
             LOG_WARNING_MESSAGE("Skipping duplicate ", ValueName, " channel in GLTF animation ",
                                 AnimationIndex);
@@ -1124,6 +1394,7 @@ RADIENT_STATUS CreateImportedAnimationClip(
             pPointerProperty != nullptr ?
                 pPointerProperty->ValueConstraint :
                 AnimationPointerValueConstraint::None,
+            OutputScale,
             SourceSamplerMappings,
             SamplerStorage,
             ClipSamplerIndex);
@@ -1143,6 +1414,9 @@ RADIENT_STATUS CreateImportedAnimationClip(
 
         TargetPropertyMasks[ClipTargetIndex] = static_cast<Uint8>(
             TargetPropertyMasks[ClipTargetIndex] | PropertyMask);
+
+        if (Schema == RadientMaterialAnimationSchemaID || Schema == RadientSurfaceMaterialAnimationSchemaID)
+            MaterialProperties.emplace(ClipTargetIndex, Property);
 
         RadientAnimationChannelDesc& ChannelDesc = Channels.emplace_back();
         ChannelDesc.TargetIndex                  = ClipTargetIndex;
@@ -1258,7 +1532,8 @@ RADIENT_STATUS CreateImportedAnimationClip(
 RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
                                  IRadientAssetManager*                 pAssetManager,
                                  const std::vector<SkinImportContext>& SkinContexts,
-                                 RadientImport::ImportedDocument&      Scene)
+                                 RadientImport::ImportedDocument&      Scene,
+                                 const GLTF::Document*                 pDocument)
 {
     Scene.Animations.clear();
     if (Model.Animations.empty())
@@ -1289,6 +1564,8 @@ RADIENT_STATUS ExtractAnimations(const GLTF::Model&                    Model,
             Animation,
             AnimationIndex,
             SkinContexts,
+            Scene.Materials,
+            pDocument,
             *pAssetManager,
             ImportedAnimation.pClip,
             ImportedAnimation.SkinMappings);
@@ -1546,14 +1823,15 @@ MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&             
 
 RADIENT_STATUS ExtractSceneGraph(const GLTF::Model&               GLTFModel,
                                  RadientImport::ImportedDocument& Scene,
-                                 IRadientAssetManager*            pAssetManager)
+                                 IRadientAssetManager*            pAssetManager,
+                                 const GLTF::Document*            pDocument)
 {
     std::vector<SkinImportContext> SkinContexts;
     RADIENT_STATUS                 Status = ExtractSkins(GLTFModel, pAssetManager, Scene, SkinContexts);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = ExtractAnimations(GLTFModel, pAssetManager, SkinContexts, Scene);
+    Status = ExtractAnimations(GLTFModel, pAssetManager, SkinContexts, Scene, pDocument);
     if (RADIENT_FAILED(Status))
         return Status;
 

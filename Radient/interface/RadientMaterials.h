@@ -497,6 +497,14 @@ DILIGENT_END_INTERFACE
 /// values. Material assets and their writers do not support concurrent client
 /// access; the caller serializes its reads and writes. Internal asynchronous
 /// material preparation is coordinated with these edits.
+///
+/// Radient-created material assets expose IRadientAnimationDestination through
+/// QueryInterface(). RadientMaterialAnimationSchemaID addresses non-texture
+/// parameters by their reflected names, including custom parameters and array
+/// ranges. RadientSurfaceMaterialAnimationSchemaID exposes surface alpha cutoff.
+/// Both schemas use destination element zero.
+/// These animation declarations are provided by RadientAnimation.h. Animation
+/// edits the shared asset and follows the runtime update requirements above.
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialAsset, IRadientAsset)
 {
     /// Returns a borrowed pointer to the definition retained by this asset.

@@ -25,9 +25,12 @@
  */
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientMaterialAssetManager.hpp"
+#include "RadientMaterialTestHelpers.hpp"
 
 #include "RadientAnimation.h"
 #include "RadientSkinning.h"
+#include "RadientStandardMaterialParameters.h"
 
 #include "ObjectBase.hpp"
 #include "RadientMathTestHelpers.hpp"
@@ -3388,6 +3391,691 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, RejectsNullBeginUpdateOutput
 
     RadientMatrix4x4 Matrix;
     EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &Matrix), RADIENT_STATUS_OK);
+}
+
+
+class RadientMaterialAnimationDestinationTest : public RadientAnimationBindingTest
+{
+protected:
+    void SetUp() override
+    {
+        RadientAnimationBindingTest::SetUp();
+        RadientStandardMaterialDefinitionCreateInfo Definition;
+        ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(Definition, m_pDefinition.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(pAssetManager->CreateMaterial(m_pDefinition, m_pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_NE(m_pMaterial, nullptr);
+        m_pMaterial->QueryInterface(IID_RadientAnimationDestination, m_pDestination.GetAddressOfEmpty());
+        ASSERT_NE(m_pDestination, nullptr);
+    }
+
+    static RadientAnimationPropertyBindingDesc MakeMaterialProperty(
+        const Char*                  PropertyName,
+        RADIENT_ANIMATION_VALUE_TYPE Type,
+        Uint32                       FirstArrayElement = 0,
+        Uint32                       ArraySize         = 1)
+    {
+        RadientAnimationPropertyBindingDesc Property;
+        Property.Schema             = RadientMaterialAnimationSchemaID;
+        Property.DestinationElement = 0;
+        Property.Property           = PropertyName;
+        Property.FirstArrayElement  = FirstArrayElement;
+        Property.Value.Type         = Type;
+        Property.Value.ArraySize    = ArraySize;
+        return Property;
+    }
+
+    static RadientAnimationPropertyBindingDesc MakeSurfaceProperty(
+        RADIENT_ANIMATION_VALUE_TYPE Type,
+        Uint32                       FirstArrayElement = 0,
+        Uint32                       ArraySize         = 1)
+    {
+        RadientAnimationPropertyBindingDesc Property = MakeMaterialProperty(
+            RadientSurfaceMaterialAlphaCutoffPropertyName, Type, FirstArrayElement, ArraySize);
+        Property.Schema = RadientSurfaceMaterialAnimationSchemaID;
+        return Property;
+    }
+
+    void CreateCustomMaterial(const RadientMaterialParameterDesc* pParameters, Uint32 ParameterCount)
+    {
+        RadientSurfaceMaterialDefinitionDesc Definition;
+        Definition.pParameters    = pParameters;
+        Definition.ParameterCount = ParameterCount;
+        m_pDestination.Release();
+        m_pMaterial.Release();
+        m_pDefinition.Release();
+        ASSERT_EQ(RadientMaterialAssetManager::CreateDefinition(Definition, m_pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_EQ(pAssetManager->CreateMaterial(m_pDefinition, m_pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        m_pMaterial->QueryInterface(IID_RadientAnimationDestination, m_pDestination.GetAddressOfEmpty());
+        ASSERT_NE(m_pDestination, nullptr);
+    }
+
+    template <typename ValueType>
+    void VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE ParameterType,
+                                RADIENT_ANIMATION_VALUE_TYPE    AnimationType,
+                                const ValueType&                Value)
+    {
+        SCOPED_TRACE(ParameterType);
+        RadientMaterialParameterDesc Parameter;
+        Parameter.Name = "User.Value";
+        Parameter.Type = ParameterType;
+        CreateCustomMaterial(&Parameter, 1);
+        ASSERT_NE(m_pDestination, nullptr);
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
+            {MakeMaterialProperty(Parameter.Name, AnimationType)});
+        ASSERT_NE(pBinding, nullptr);
+        void* const* pOutputs = nullptr;
+        ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+        ASSERT_NE(pOutputs, nullptr);
+        std::memcpy(pOutputs[0], &Value, sizeof(Value));
+        ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+        EXPECT_EQ(GetMaterialParameter<ValueType>(*m_pMaterial, Parameter.Name), Value);
+    }
+
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> CreateDestinationBinding(
+        const std::vector<RadientAnimationPropertyBindingDesc>& Properties)
+    {
+        std::vector<RadientAnimationResolvedPropertyDesc>  Resolved(Properties.size());
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(Properties.data(), static_cast<Uint32>(Properties.size()),
+                                                Resolved.data(), pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_OK);
+        return pBinding;
+    }
+
+    template <typename ValueType>
+    void SetParameter(const char* Name, const ValueType& Value)
+    {
+        RadientMaterialParameterHandle Handle;
+        ASSERT_EQ(m_pDefinition->FindParameter(Name, &Handle), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(m_pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetParameter(Handle, &Value, static_cast<Uint32>(sizeof(Value))), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    }
+
+protected:
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> m_pDefinition;
+    RefCntAutoPtr<IRadientMaterialAsset>           m_pMaterial;
+    RefCntAutoPtr<IRadientAnimationDestination>    m_pDestination;
+};
+
+TEST_F(RadientMaterialAnimationDestinationTest, DestinationSharesMaterialIdentity)
+{
+    RefCntAutoPtr<IObject> pMaterialIdentity;
+    RefCntAutoPtr<IObject> pDestinationIdentity;
+    m_pMaterial->QueryInterface(IID_Unknown, pMaterialIdentity.GetAddressOfEmpty());
+    m_pDestination->QueryInterface(IID_Unknown, pDestinationIdentity.GetAddressOfEmpty());
+    EXPECT_EQ(pMaterialIdentity, pDestinationIdentity);
+    RefCntAutoPtr<IRadientMaterialAsset> pRoundTripMaterial{m_pDestination, IID_RadientMaterialAsset};
+    EXPECT_EQ(pRoundTripMaterial, m_pMaterial);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, ResolvesReflectedAndSurfaceMaterialProperties)
+{
+    const std::vector<RadientAnimationPropertyBindingDesc> Properties = {
+        MakeMaterialProperty(RadientStandardMaterialBaseColorFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVBiasName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2),
+        MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVScaleAndRotationName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVSelectorName, RADIENT_ANIMATION_VALUE_TYPE_INT),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureWrapUName, RADIENT_ANIMATION_VALUE_TYPE_UINT),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureWrapVName, RADIENT_ANIMATION_VALUE_TYPE_UINT),
+        MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+    };
+    std::vector<RadientAnimationResolvedPropertyDesc>  Resolved(Properties.size());
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    ASSERT_EQ(m_pDestination->CreateBinding(Properties.data(), static_cast<Uint32>(Properties.size()),
+                                            Resolved.data(), pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pBinding, nullptr);
+    for (const RadientAnimationResolvedPropertyDesc& Property : Resolved)
+        EXPECT_EQ(Property.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, EvaluatesNativeClipAfterMaterialInitialization)
+{
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(m_pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientMaterialAssetManager::GetMaterialView(m_pMaterial).pMaterial, m_pMaterial.RawPtr());
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target        = Builder.AddTarget(7, RadientMaterialAnimationSchemaID);
+    const Uint32             SurfaceTarget = Builder.AddTarget(7, RadientSurfaceMaterialAnimationSchemaID);
+    const Uint32             Color         = Builder.AddSampler<RadientFloat4>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{0.f, 0.2f, 0.4f, 0.6f}, {0.2f, 0.4f, 0.6f, 0.8f}});
+    const Uint32 NormalScale = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_CUBIC_SPLINE,
+        {0.f, 1.f}, {0.f, 2.f, 4.f, 0.f, 6.f, 0.f});
+    const Uint32 UVBias = Builder.AddSampler<RadientFloat2>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT2, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{0.f, 0.2f}, {0.4f, 0.6f}});
+    const Uint32 Emission = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{0.f, 2.f, 4.f}, {2.f, 4.f, 6.f}});
+    const Uint32 UVSelector = Builder.AddSampler<Int32>(
+        RADIENT_ANIMATION_VALUE_TYPE_INT, RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f, 1.f}, {0, 1});
+    const Uint32 Wrap = Builder.AddSampler<Uint32>(
+        RADIENT_ANIMATION_VALUE_TYPE_UINT, RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f, 1.f}, {RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP, RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP});
+    const Uint32 Matrix = Builder.AddSampler<std::array<Float32, 4>>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{{0.f, 1.f, 2.f, 3.f}}, {{4.f, 5.f, 6.f, 7.f}}});
+    const Uint32 AlphaCutoff = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {0.2f, 0.6f});
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorFactorName, Color);
+    Builder.AddChannel(Target, RadientStandardMaterialNormalScaleName, NormalScale);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVBiasName, UVBias);
+    Builder.AddChannel(Target, RadientStandardMaterialEmissiveFactorName, Emission);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVSelectorName, UVSelector);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureWrapUName, Wrap);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVScaleAndRotationName, Matrix);
+    Builder.AddChannel(SurfaceTarget, RadientSurfaceMaterialAlphaCutoffPropertyName, AlphaCutoff);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex    = Target;
+    Mapping.DestinationElement = 0;
+    RadientAnimationDestinationMappingDesc SurfaceMapping;
+    SurfaceMapping.ClipTargetIndex                   = SurfaceTarget;
+    SurfaceMapping.DestinationElement                = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping, SurfaceMapping});
+    ASSERT_NE(pBinding, nullptr);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{m_pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time                   = 0.5f;
+    Info.UpdateDerivedState     = False;
+    const Uint64 InitialVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), InitialVersion + 1);
+    const RadientFloat4 ColorValue = GetMaterialParameter<RadientFloat4>(*m_pMaterial, "BaseColorFactor");
+    EXPECT_FLOAT_EQ(ColorValue.x, 0.1f);
+    EXPECT_FLOAT_EQ(ColorValue.y, 0.3f);
+    EXPECT_FLOAT_EQ(ColorValue.z, 0.5f);
+    EXPECT_FLOAT_EQ(ColorValue.w, 0.7f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, "NormalScale"), 4.5f);
+    const RadientFloat2 BiasValue = GetMaterialParameter<RadientFloat2>(*m_pMaterial, "BaseColorTextureUVBias");
+    EXPECT_FLOAT_EQ(BiasValue.x, 0.2f);
+    EXPECT_FLOAT_EQ(BiasValue.y, 0.4f);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat3>(*m_pMaterial, "EmissiveFactor"), (RadientFloat3{1.f, 3.f, 5.f}));
+    EXPECT_EQ(GetMaterialParameter<Int32>(*m_pMaterial, "BaseColorTextureUVSelector"), 0);
+    EXPECT_EQ(GetMaterialParameter<Uint32>(*m_pMaterial, "BaseColorTextureWrapU"), RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP);
+    EXPECT_EQ((GetMaterialParameter<std::array<Float32, 4>>(*m_pMaterial, "BaseColorTextureUVScaleAndRotation")),
+              (std::array<Float32, 4>{{2.f, 3.f, 4.f, 5.f}}));
+    EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.4f);
+    EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FALSE(pSurface->IsDoubleSided());
+
+    Info.UpdateDerivedState = True;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), InitialVersion + 1);
+    Info.Time = 1.f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), InitialVersion + 2);
+    EXPECT_EQ(GetMaterialParameter<Int32>(*m_pMaterial, "BaseColorTextureUVSelector"), 1);
+    EXPECT_EQ(GetMaterialParameter<Uint32>(*m_pMaterial, "BaseColorTextureWrapU"), RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP);
+    EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.6f);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, PreservesExternalChangesToUnboundProperties)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target   = Builder.AddTarget(3, RadientMaterialAnimationSchemaID);
+    const Uint32             Emission = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{2.f, 3.f, 4.f}, {4.f, 5.f, 6.f}});
+    Builder.AddChannel(Target, RadientStandardMaterialEmissiveFactorName, Emission);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.5f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat3>(*m_pMaterial, "EmissiveFactor"), (RadientFloat3{3.f, 4.f, 5.f}));
+
+    SetParameter("EmissiveFactor", RadientFloat3{7.f, 8.f, 9.f});
+    SetParameter("RoughnessFactor", 0.75f);
+    const RadientFloat4 Color = {0.25f, 0.5f, 0.75f, 1.f};
+    SetParameter("BaseColorFactor", Color);
+    const Uint64 ExternalVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), ExternalVersion + 1);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat3>(*m_pMaterial, "EmissiveFactor"), (RadientFloat3{3.f, 4.f, 5.f}));
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, "RoughnessFactor"), 0.75f);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat4>(*m_pMaterial, "BaseColorFactor"), Color);
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), ExternalVersion + 1);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, SamePropertyWorksAcrossCompatibleDefinitions)
+{
+    for (RADIENT_SURFACE_SHADING_MODEL ShadingModel :
+         {RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS, RADIENT_SURFACE_SHADING_MODEL_UNLIT})
+    {
+        SCOPED_TRACE(ShadingModel);
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
+        DefinitionCI.ShadingModel = ShadingModel;
+        if (ShadingModel == RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS)
+            DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS_ALL;
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        ASSERT_EQ(CreateStandardMaterialAsset(*pAssetManager, DefinitionCI, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientAnimationDestination> pDestination{pMaterial, IID_RadientAnimationDestination};
+        ASSERT_NE(pDestination, nullptr);
+        const RadientAnimationPropertyBindingDesc Property =
+            MakeMaterialProperty(RadientStandardMaterialBaseColorFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+        RadientAnimationResolvedPropertyDesc               Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        ASSERT_EQ(pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+        void* const* pOutputs = nullptr;
+        ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+        ASSERT_NE(pOutputs, nullptr);
+        const RadientFloat4 Color = {0.1f, 0.2f, 0.3f, 0.4f};
+        std::memcpy(pOutputs[0], &Color, sizeof(Color));
+        ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+        EXPECT_EQ(GetMaterialParameter<RadientFloat4>(*pMaterial, "BaseColorFactor"), Color);
+    }
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, SamePropertyDoesNotDependOnParameterOrder)
+{
+    for (Uint32 ColorIndex : {0u, 1u})
+    {
+        SCOPED_TRACE(ColorIndex);
+        std::array<RadientMaterialParameterDesc, 2> Parameters;
+        Parameters[ColorIndex].Name     = "BaseColorFactor";
+        Parameters[ColorIndex].Type     = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4;
+        Parameters[1 - ColorIndex].Name = "CustomValue";
+        Parameters[1 - ColorIndex].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+        RadientSurfaceMaterialDefinitionDesc Definition;
+        Definition.pParameters    = Parameters.data();
+        Definition.ParameterCount = static_cast<Uint32>(Parameters.size());
+        RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+        ASSERT_EQ(RadientMaterialAssetManager::CreateDefinition(Definition, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        ASSERT_EQ(pAssetManager->CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        RadientMaterialParameterHandle ColorHandle;
+        ASSERT_EQ(pDefinition->FindParameter("BaseColorFactor", &ColorHandle), RADIENT_STATUS_OK);
+        EXPECT_EQ(ColorHandle.Index, ColorIndex);
+
+        RefCntAutoPtr<IRadientAnimationDestination> pDestination{pMaterial, IID_RadientAnimationDestination};
+        ASSERT_NE(pDestination, nullptr);
+        const RadientAnimationPropertyBindingDesc Property =
+            MakeMaterialProperty(RadientStandardMaterialBaseColorFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4);
+        RadientAnimationResolvedPropertyDesc               Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        ASSERT_EQ(pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        void* const* pOutputs = nullptr;
+        ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+        ASSERT_NE(pOutputs, nullptr);
+        const RadientFloat4 Color = {0.1f, 0.2f, 0.3f, 0.4f};
+        std::memcpy(pOutputs[0], &Color, sizeof(Color));
+        ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+        EXPECT_EQ(GetParameter<RadientFloat4>(*pMaterial, ColorHandle), Color);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, "CustomValue"), 0.f);
+    }
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, WritesEveryReflectedNumericType)
+{
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_BOOL, RADIENT_ANIMATION_VALUE_TYPE_BOOL, True);
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_INT, RADIENT_ANIMATION_VALUE_TYPE_INT, Int32{-1});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_INT2, RADIENT_ANIMATION_VALUE_TYPE_INT2, std::array<Int32, 2>{{-1, 2}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_INT3, RADIENT_ANIMATION_VALUE_TYPE_INT3, std::array<Int32, 3>{{-1, 2, -3}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_INT4, RADIENT_ANIMATION_VALUE_TYPE_INT4, std::array<Int32, 4>{{-1, 2, -3, 4}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_UINT, RADIENT_ANIMATION_VALUE_TYPE_UINT, Uint32{3});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_UINT2, RADIENT_ANIMATION_VALUE_TYPE_UINT2, std::array<Uint32, 2>{{1, 2}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_UINT3, RADIENT_ANIMATION_VALUE_TYPE_UINT3, std::array<Uint32, 3>{{1, 2, 3}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_UINT4, RADIENT_ANIMATION_VALUE_TYPE_UINT4, std::array<Uint32, 4>{{1, 2, 3, 4}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 0.25f);
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2, std::array<Float32, 2>{{0.1f, 0.2f}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, std::array<Float32, 3>{{0.1f, 0.2f, 0.3f}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4, std::array<Float32, 4>{{0.1f, 0.2f, 0.3f, 0.4f}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2, std::array<Float32, 4>{{1, 2, 3, 4}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3X3, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3X3, std::array<Float32, 9>{{1, 2, 3, 4, 5, 6, 7, 8, 9}});
+    VerifyNumericParameter(RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4X4, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4X4, std::array<Float32, 16>{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}});
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, UsesReflectedTypeInsteadOfStandardNameContract)
+{
+    // A custom definition may give this name a different type than the standard definition.
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name = RadientStandardMaterialBaseColorFactorName;
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
+        {MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3)});
+    ASSERT_NE(pBinding, nullptr);
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    const RadientFloat3 Value{0.2f, 0.4f, 0.6f};
+    std::memcpy(pOutputs[0], &Value, sizeof(Value));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat3>(*m_pMaterial, Parameter.Name), Value);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, SkipsTexturesAndCaseMismatchedNames)
+{
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name = "User.Texture";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    const Char* Names[] = {"User.Texture", "user.texture", "Missing"};
+    for (const Char* Name : Names)
+    {
+        SCOPED_TRACE(Name);
+        const RadientAnimationPropertyBindingDesc          Property = MakeMaterialProperty(Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+        RadientAnimationResolvedPropertyDesc               Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_UNSUPPORTED);
+        EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+        EXPECT_EQ(pBinding, nullptr);
+    }
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, ResolvesNamesByContentAndDoesNotRetainThem)
+{
+    const RadientAnimationPropertyBindingDesc          WrongCase = MakeMaterialProperty("normalscale", RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&WrongCase, 1, &Resolved, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_EQ(pBinding, nullptr);
+    std::string Name{RadientStandardMaterialNormalScaleName};
+    pBinding = CreateDestinationBinding({MakeMaterialProperty(Name.c_str(), RADIENT_ANIMATION_VALUE_TYPE_FLOAT)});
+    ASSERT_NE(pBinding, nullptr);
+    Name.assign(Name.size(), 'x');
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    const Float32 Value = 0.75f;
+    std::memcpy(pOutputs[0], &Value, sizeof(Value));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, RadientStandardMaterialNormalScaleName), Value);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, KeepsCustomAlphaCutoffSeparateFromSurfaceState)
+{
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name = "AlphaCutoff";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding({
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+    });
+    ASSERT_NE(pBinding, nullptr);
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    const Float32 ParameterValue = 0.25f;
+    const Float32 SurfaceValue   = 0.75f;
+    std::memcpy(pOutputs[0], &ParameterValue, sizeof(ParameterValue));
+    std::memcpy(pOutputs[1], &SurfaceValue, sizeof(SurfaceValue));
+    const Uint64 BeforeVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), BeforeVersion + 1);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, Parameter.Name), ParameterValue);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{m_pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+    EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), SurfaceValue);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, PartialArrayChannelsPreserveExternalChangesToUnboundElements)
+{
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name      = "User.Weights";
+    Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.ArraySize = 6;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    SetParameter(Parameter.Name, std::array<Float32, 6>{{1, 2, 3, 4, 5, 6}});
+
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target = Builder.AddTarget(0, RadientMaterialAnimationSchemaID);
+    const Uint32             Tail   = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {40.f, 50.f, 60.f, 70.f}, 2);
+    const Uint32 Middle = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {10.f, 20.f, 30.f, 40.f}, 2);
+    // Disjoint ranges intentionally arrive in reverse array order.
+    Builder.AddChannel(Target, Parameter.Name, Tail, 4);
+    Builder.AddChannel(Target, Parameter.Name, Middle, 1);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+    RadientAnimationDestinationMappingDesc Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, m_pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+    RadientAnimationEvaluateInfo Info;
+    Info.Time                  = 0.5f;
+    const Uint64 BeforeVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), BeforeVersion + 1);
+    EXPECT_EQ((GetMaterialParameter<std::array<Float32, 6>>(*m_pMaterial, Parameter.Name)),
+              (std::array<Float32, 6>{{1, 20, 30, 4, 50, 60}}));
+
+    SetParameter(Parameter.Name, std::array<Float32, 6>{{11, 12, 13, 14, 15, 16}});
+    const Uint64 ExternalVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), ExternalVersion + 1);
+    EXPECT_EQ((GetMaterialParameter<std::array<Float32, 6>>(*m_pMaterial, Parameter.Name)),
+              (std::array<Float32, 6>{{11, 20, 30, 14, 50, 60}}));
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), ExternalVersion + 1);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, DisjointRangesCanCoverAnEntireArray)
+{
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name      = "User.Vectors";
+    Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT3;
+    Parameter.ArraySize = 3;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding({
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 2, 1),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2),
+    });
+    ASSERT_NE(pBinding, nullptr);
+    const std::array<RadientFloat3, 3> Values   = {{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
+    void* const*                       pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    std::memcpy(pOutputs[0], &Values[2], sizeof(Values[2]));
+    std::memcpy(pOutputs[1], Values.data(), 2 * sizeof(Values[0]));
+    const Uint64 BeforeVersion = m_pMaterial->GetVersion();
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pMaterial->GetVersion(), BeforeVersion + 1);
+    EXPECT_EQ((GetMaterialParameter<std::array<RadientFloat3, 3>>(*m_pMaterial, Parameter.Name)), Values);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, RejectsOverlappingAndOutOfBoundsArrayRanges)
+{
+    RadientMaterialParameterDesc Parameter;
+    Parameter.Name      = "User.Weights";
+    Parameter.Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameter.ArraySize = 6;
+    CreateCustomMaterial(&Parameter, 1);
+    ASSERT_NE(m_pDestination, nullptr);
+    const RadientAnimationPropertyBindingDesc First   = MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1, 3);
+    const RadientAnimationPropertyBindingDesc Cases[] = {
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 0, 2),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 2, 1),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 3, 2),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 0, 6),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 5, 2),
+        MakeMaterialProperty(Parameter.Name, RADIENT_ANIMATION_VALUE_TYPE_FLOAT, std::numeric_limits<Uint32>::max(), 2),
+    };
+    for (const RadientAnimationPropertyBindingDesc& Property : Cases)
+    {
+        SCOPED_TRACE(Property.FirstArrayElement);
+        SCOPED_TRACE(Property.Value.ArraySize);
+        const RadientAnimationPropertyBindingDesc           Properties[] = {First, Property};
+        std::array<RadientAnimationResolvedPropertyDesc, 2> Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(Properties, 2, Resolved.data(), pBinding.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pBinding, nullptr);
+    }
+}
+
+
+TEST_F(RadientMaterialAnimationDestinationTest, BindingRetainsMaterialAndDefinition)
+{
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
+        {MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT)});
+    ASSERT_NE(pBinding, nullptr);
+    IRadientMaterialAsset* const pRawMaterial = m_pMaterial;
+    m_pDestination.Release();
+    m_pMaterial.Release();
+    m_pDefinition.Release();
+    pAssetManager.Release();
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    const Float32 Value = 0.625f;
+    std::memcpy(pOutputs[0], &Value, sizeof(Value));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pRawMaterial, "NormalScale"), Value);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, SkipsUnsupportedPropertiesInOutputOrder)
+{
+    RadientAnimationPropertyBindingDesc Foreign                       = MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    Foreign.Schema                                                    = RadientNodeAnimationSchemaID;
+    const std::vector<RadientAnimationPropertyBindingDesc> Properties = {
+        MakeMaterialProperty(RadientStandardMaterialBaseColorFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4),
+        MakeMaterialProperty(RadientStandardMaterialClearCoatFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        Foreign,
+        MakeMaterialProperty("UnknownParameter", RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+    };
+    std::vector<RadientAnimationResolvedPropertyDesc>  Resolved(Properties.size());
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    ASSERT_EQ(m_pDestination->CreateBinding(Properties.data(), static_cast<Uint32>(Properties.size()),
+                                            Resolved.data(), pBinding.GetAddressOfEmpty()),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(Resolved[0].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    EXPECT_EQ(Resolved[1].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[2].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[3].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    EXPECT_EQ(Resolved[4].Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE);
+    void* const* pOutputs = nullptr;
+    ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+    ASSERT_NE(pOutputs, nullptr);
+    ASSERT_NE(pOutputs[0], nullptr);
+    ASSERT_NE(pOutputs[1], nullptr);
+    const RadientFloat4 Color  = {0.1f, 0.2f, 0.3f, 0.4f};
+    const Float32       Cutoff = 0.25f;
+    std::memcpy(pOutputs[0], &Color, sizeof(Color));
+    std::memcpy(pOutputs[1], &Cutoff, sizeof(Cutoff));
+    ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat4>(*m_pMaterial, "BaseColorFactor"), Color);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{m_pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+    EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), Cutoff);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, RejectsUnsupportedAndInvalidPropertyRequests)
+{
+    struct RejectionCase
+    {
+        RadientAnimationPropertyBindingDesc Property;
+        RADIENT_STATUS                      ExpectedStatus;
+    };
+    const RadientAnimationPropertyBindingDesc Valid = MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3);
+    std::vector<RejectionCase>                Cases;
+    Cases.push_back({MakeMaterialProperty("UnknownParameter", RADIENT_ANIMATION_VALUE_TYPE_FLOAT), RADIENT_STATUS_UNSUPPORTED});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialClearCoatFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT), RADIENT_STATUS_UNSUPPORTED});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialDiffuseFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4), RADIENT_STATUS_UNSUPPORTED});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT4), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 2), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 1, std::numeric_limits<Uint32>::max()), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, 0, 0), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_UNKNOWN), RADIENT_STATUS_INVALID_ARGUMENT});
+    RadientAnimationPropertyBindingDesc Invalid = Valid;
+    Invalid.Schema                              = RadientNodeAnimationSchemaID;
+    Cases.push_back({Invalid, RADIENT_STATUS_UNSUPPORTED});
+    Invalid.Schema = InvalidRadientAnimationSchemaID;
+    Cases.push_back({Invalid, RADIENT_STATUS_INVALID_ARGUMENT});
+    Invalid          = Valid;
+    Invalid.Property = nullptr;
+    Cases.push_back({Invalid, RADIENT_STATUS_INVALID_ARGUMENT});
+    Invalid.Property = "";
+    Cases.push_back({Invalid, RADIENT_STATUS_INVALID_ARGUMENT});
+    Invalid                    = Valid;
+    Invalid.DestinationElement = 1;
+    Cases.push_back({Invalid, RADIENT_STATUS_NOT_FOUND});
+    Invalid.DestinationElement = InvalidRadientAnimationDestinationElement;
+    Cases.push_back({Invalid, RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT4), RADIENT_STATUS_INVALID_ARGUMENT});
+    Cases.push_back({MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1), RADIENT_STATUS_INVALID_ARGUMENT});
+    for (size_t Index = 0; Index < Cases.size(); ++Index)
+    {
+        SCOPED_TRACE(Index);
+        RadientAnimationResolvedPropertyDesc Resolved;
+        Resolved.Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(&Cases[Index].Property, 1, &Resolved, pBinding.GetAddressOfEmpty()),
+                  Cases[Index].ExpectedStatus);
+        EXPECT_EQ(pBinding, nullptr);
+        if (Cases[Index].ExpectedStatus == RADIENT_STATUS_UNSUPPORTED)
+            EXPECT_EQ(Resolved.Semantic, RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN);
+    }
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, RejectsDuplicatePropertyWrites)
+{
+    const RadientAnimationPropertyBindingDesc Cases[] = {
+        MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+    };
+    for (const RadientAnimationPropertyBindingDesc& Property : Cases)
+    {
+        SCOPED_TRACE(Property.Property);
+        // Equal names in different allocations still identify the same property.
+        const std::string                                  DuplicateName{Property.Property};
+        std::array<RadientAnimationPropertyBindingDesc, 3> Properties = {{
+            Property,
+            Property,
+            MakeMaterialProperty("UnknownParameter", RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        }};
+        Properties[1].Property                                        = DuplicateName.c_str();
+        std::array<RadientAnimationResolvedPropertyDesc, 3> Resolved;
+        RefCntAutoPtr<IRadientAnimationDestinationBinding>  pBinding;
+        EXPECT_EQ(m_pDestination->CreateBinding(Properties.data(), static_cast<Uint32>(Properties.size()),
+                                                Resolved.data(), pBinding.GetAddressOfEmpty()),
+                  RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pBinding, nullptr);
+    }
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, RejectsInvalidBindingArguments)
+{
+    const RadientAnimationPropertyBindingDesc          Property = MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    RadientAnimationResolvedPropertyDesc               Resolved;
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(nullptr, 0, nullptr, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(m_pDestination->CreateBinding(nullptr, 1, &Resolved, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, nullptr, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    pBinding = CreateDestinationBinding({Property});
+    ASSERT_NE(pBinding, nullptr);
+    IRadientAnimationDestinationBinding* pOutput = pBinding;
+    EXPECT_EQ(m_pDestination->CreateBinding(&Property, 1, &Resolved, &pOutput), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pOutput, pBinding.RawPtr());
+    EXPECT_EQ(pBinding->BeginUpdate(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
 } // namespace

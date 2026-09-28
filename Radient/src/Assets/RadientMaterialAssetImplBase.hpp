@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "Animation/RadientMaterialAnimationDestinationBinding.hpp"
 #include "Assets/RadientAssetURI.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
 
@@ -56,6 +57,7 @@ struct IMaterialStorageProvider : IObject
 template <typename InterfaceType>
 struct MaterialAssetCombinedInterface :
     InterfaceType,
+    IRadientAnimationDestination,
     IMaterialStorageProvider
 {};
 
@@ -91,6 +93,10 @@ public:
         if (IID == IID_MaterialStorageProvider)
         {
             *ppInterface = static_cast<IMaterialStorageProvider*>(this);
+        }
+        else if (IID == IID_RadientAnimationDestination)
+        {
+            *ppInterface = static_cast<IRadientAnimationDestination*>(this);
         }
         else if (IID == InterfaceID)
         {
@@ -159,6 +165,17 @@ public:
             LOG_ERROR_MESSAGE("Failed to create Radient material writer: ", Error.what());
             return RADIENT_STATUS_FAILED;
         }
+    }
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateBinding(
+        const RadientAnimationPropertyBindingDesc* pProperties,
+        Uint32                                     PropertyCount,
+        RadientAnimationResolvedPropertyDesc*      pResolvedProperties,
+        IRadientAnimationDestinationBinding**      ppBinding) override final
+    {
+        return CreateRadientMaterialAnimationBinding(
+            static_cast<InterfaceType*>(this), pProperties, PropertyCount,
+            pResolvedProperties, ppBinding);
     }
 
     virtual MaterialStorage& DILIGENT_CALL_TYPE GetStorage() noexcept override final
