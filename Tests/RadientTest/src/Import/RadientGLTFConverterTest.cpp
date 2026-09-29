@@ -2257,6 +2257,104 @@ TEST(RadientGLTFConverterTest, SharedEmissivePointerSamplerSeparatesAndReusesFix
     EXPECT_EQ(SamplerIndices[0], SamplerIndices[3]);
 }
 
+TEST(RadientGLTFConverterTest, IORAnimationPreservesAuthoredCompatibilityMode)
+{
+    struct TestCase
+    {
+        const char* IORExtension;
+        Float32     InitialIOR;
+        Float32     FirstKey;
+        bool        AnimateIOR;
+    };
+    const TestCase Cases[] = {
+        {R"({"ior": 0})", 0.f, 1.5f, false},
+        {R"({"ior": 0.0})", 0.f, 1.5f, false},
+        {R"({"ior": 1.5})", 1.5f, 1.5f, true},
+        {"{}", 1.5f, 1.5f, true}, // An omitted IOR uses the default, not compatibility mode.
+        {R"({"ior": 1.5})", 1.5f, 0.f, false},
+        {R"({"ior": 1.5})", 1.5f, 0.5f, false},
+    };
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFConverterTest"};
+    for (const TestCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.IORExtension);
+        SCOPED_TRACE(Case.FirstKey);
+        std::ostringstream JSON;
+        JSON << R"GLTF({
+            "asset": {"version": "2.0"},
+            "extensionsUsed": ["KHR_materials_transmission", "KHR_materials_ior"],
+            "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{}],
+            "materials": [{
+                "pbrMetallicRoughness": {},
+                "extensions": {
+                    "KHR_materials_transmission": {"transmissionFactor": 1},
+                    "KHR_materials_ior": )GLTF"
+             << Case.IORExtension << R"GLTF(}
+            }]
+        })GLTF";
+        const std::shared_ptr<GLTF::Document> pDocument = LoadDocument(
+            WriteGLTFFile(TempDir, "ior-animation.gltf", JSON.str().c_str()));
+        ASSERT_NE(pDocument, nullptr);
+
+        GLTF::Model Model;
+        Model.Materials.push_back(GLTF::LoadMaterial(*pDocument, 0));
+        RadientImport::ImportedDocument             Scene;
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        Scene.Materials.push_back(ConvertMaterial(Model.Materials[0], nullptr, 0, DefinitionCI));
+        ASSERT_NE(Scene.Materials[0], nullptr);
+        IRadientMaterialAsset& Material = *Scene.Materials[0];
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, RadientStandardMaterialIORName), Case.InitialIOR);
+
+        Model.Animations.resize(1);
+        GLTF::Animation& Animation = Model.Animations[0];
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers[0].Inputs = {0.f, 1.f};
+        SetFloatAnimationSamplerOutputData(Animation.Samplers[0], 1, {Case.FirstKey, 2.f});
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        &Model.Materials[0], "/extensions/KHR_materials_ior/ior", 0);
+        Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+        Animation.Samplers[1].Inputs = {0.f, 1.f};
+        SetFloatAnimationSamplerOutputData(Animation.Samplers[1], 1, {0.25f, 0.75f});
+        Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                        &Model.Materials[0], "/pbrMetallicRoughness/roughnessFactor", 1);
+
+        ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager, pDocument.get()), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.Animations.size(), 1u);
+        ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+        const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+        ASSERT_EQ(Clip.TargetCount, 1u);
+        EXPECT_EQ(Clip.ChannelCount, Case.AnimateIOR ? 2u : 1u);
+        EXPECT_EQ(Clip.SamplerCount, Case.AnimateIOR ? 2u : 1u);
+        const Uint32 TargetIndex = FindAnimationTargetIndex(Clip, RadientMaterialAnimationSchemaID, 0);
+        ASSERT_NE(TargetIndex, InvalidRadientAnimationTargetIndex);
+        EXPECT_EQ(FindAnimationChannel(Clip, TargetIndex, RadientStandardMaterialIORName) != nullptr, Case.AnimateIOR);
+        EXPECT_NE(FindAnimationChannel(Clip, TargetIndex, RadientStandardMaterialRoughnessFactorName), nullptr);
+
+        RefCntAutoPtr<IRadientAnimationDestination> pDestination{&Material, IID_RadientAnimationDestination};
+        ASSERT_NE(pDestination, nullptr);
+        RadientAnimationDestinationMappingDesc Mapping{};
+        Mapping.ClipTargetIndex    = TargetIndex;
+        Mapping.DestinationElement = 0;
+        RadientAnimationDestinationDesc Destination{};
+        Destination.pDestination = pDestination;
+        Destination.pMappings    = &Mapping;
+        Destination.MappingCount = 1;
+        RadientAnimationBindingDesc BindingDesc{};
+        BindingDesc.pDestinations    = &Destination;
+        BindingDesc.DestinationCount = 1;
+        RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+        ASSERT_EQ(Scene.Animations[0].pClip->CreateBinding(BindingDesc, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_NE(pBinding, nullptr);
+        RadientAnimationEvaluateInfo EvaluateInfo{};
+        EvaluateInfo.Time = 1.f;
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, RadientStandardMaterialIORName), Case.AnimateIOR ? 2.f : Case.InitialIOR);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, RadientStandardMaterialRoughnessFactorName), 0.75f);
+    }
+}
+
 TEST(RadientGLTFConverterTest, InvalidMaterialPointersRetainValidMaterialAndNodeChannels)
 {
     struct InvalidCase

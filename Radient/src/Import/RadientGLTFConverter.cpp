@@ -1190,6 +1190,19 @@ RADIENT_STATUS CreateImportedAnimationClip(
                                             Channel.PropertyPath, "' in GLTF animation ", AnimationIndex);
                         continue;
                     }
+                    if (Channel.PropertyPath == "/extensions/KHR_materials_ior/ior")
+                    {
+                        const auto IOR = SourceMaterial.extensions.find("KHR_materials_ior");
+                        if (IOR != SourceMaterial.extensions.end() && IOR->second.IsObject() &&
+                            IOR->second.Has("ior") && IOR->second.Get("ior").IsNumber() &&
+                            IOR->second.Get("ior").GetNumberAsDouble() == 0.0)
+                        {
+                            // Authored zero permanently selects compatibility mode;
+                            // KHR_materials_ior requires object-model updates to be ignored.
+                            LOG_WARNING_MESSAGE("Skipping IOR animation for a GLTF material authored with ior: 0 in animation ", AnimationIndex);
+                            continue;
+                        }
+                    }
                     if (Channel.PropertyPath == "/emissiveFactor")
                     {
                         const auto Strength = SourceMaterial.extensions.find("KHR_materials_emissive_strength");
