@@ -16,6 +16,31 @@
       }
     },
     {
+      "name": "AnimatedColorsCube",
+      "model": "Models/AnimatedColorsCube/glTF-Binary/AnimatedColorsCube.glb",
+      "camera": {
+        "eye": [0.0, 4.0, 13.0],
+        "target": [0.0, 1.5, 0.0]
+      },
+      "animation": {
+        "name": "Cube Animation",
+        "captures": [
+          {
+            "name": "LeftRed",
+            "time": 0.0
+          },
+          {
+            "name": "MiddleGreen",
+            "time": 1.0
+          },
+          {
+            "name": "RightBlue",
+            "time": 2.0
+          }
+        ]
+      }
+    },
+    {
       "name": "AnisotropyDiscTest",
       "model": "Models/AnisotropyDiscTest/glTF-Binary/AnisotropyDiscTest.glb",
       "camera": {
