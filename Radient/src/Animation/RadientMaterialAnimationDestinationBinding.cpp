@@ -31,8 +31,10 @@
 
 #include "DebugUtilities.hpp"
 #include "EngineMemory.h"
+#include "FixedLinearAllocator.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "STDAllocator.hpp"
 
 #include <cstring>
 #include <exception>
@@ -114,9 +116,17 @@ public:
         if (pDefinition == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        m_Updates.reserve(PropertyCount);
-        m_Values.reserve(PropertyCount);
-        m_Outputs.reserve(PropertyCount);
+        struct BoundOutput
+        {
+            Uint32 UpdateIndex; // ~0u denotes the surface alpha cutoff.
+            Uint32 Size;
+            Uint32 Alignment;
+        };
+        std::vector<MaterialParameterUpdate> Updates;
+        std::vector<BoundOutput>             Outputs;
+        Updates.reserve(PropertyCount);
+        Outputs.reserve(PropertyCount);
+        bool HasAlphaCutoff = false;
         for (Uint32 Index = 0; Index < PropertyCount; ++Index)
         {
             const RadientAnimationPropertyBindingDesc& Property = pProperties[Index];
@@ -165,18 +175,20 @@ public:
             {
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
-            const Uint32 ElementSize = GetAnimationValueTypeInfo(ValueType).NativeSize;
+            const AnimationValueTypeInfo TypeInfo    = GetAnimationValueTypeInfo(ValueType);
+            const Uint32                 ElementSize = TypeInfo.NativeSize;
             if (!RadientValidation::IsProductRepresentable<Uint32>(ElementSize, ArraySize) ||
                 !RadientValidation::IsAddressableArray(ArraySize, ElementSize))
             {
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
 
+            const Uint32 Size        = Property.Value.ArraySize * ElementSize;
+            Uint32       UpdateIndex = ~0u;
             if (Handle)
             {
-                MaterialParameterUpdate Update{Handle.Index, Property.FirstArrayElement * ElementSize,
-                                               Property.Value.ArraySize * ElementSize, nullptr};
-                for (const MaterialParameterUpdate& Existing : m_Updates)
+                const MaterialParameterUpdate Update{Handle.Index, Property.FirstArrayElement * ElementSize, Size, nullptr};
+                for (const MaterialParameterUpdate& Existing : Updates)
                 {
                     if (Existing.ParameterIndex == Update.ParameterIndex &&
                         Existing.Offset < Update.Offset + Update.Size && Update.Offset < Existing.Offset + Existing.Size)
@@ -185,24 +197,47 @@ public:
                     }
                 }
 
-                // Allocate only the animated range. These addresses remain stable
-                // for the binding's lifetime, with no writer batch to rebuild.
-                m_Values.emplace_back(std::make_unique<Uint8[]>(Update.Size));
-                Update.pData = m_Values.back().get();
-                m_Updates.push_back(Update);
-                m_Outputs.push_back(m_Values.back().get());
+                UpdateIndex = static_cast<Uint32>(Updates.size());
+                Updates.push_back(Update);
             }
             else
             {
-                if (m_HasAlphaCutoff)
+                if (HasAlphaCutoff)
                     return RADIENT_STATUS_INVALID_ARGUMENT;
-                m_HasAlphaCutoff = true;
-                m_Outputs.push_back(&m_AlphaCutoff);
+                HasAlphaCutoff = true;
             }
+            Outputs.push_back({UpdateIndex, Size, TypeInfo.NativeAlignment});
             pResolvedProperties[Index].Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
         }
 
-        return m_Outputs.empty() ? RADIENT_STATUS_UNSUPPORTED : RADIENT_STATUS_OK;
+        if (Outputs.empty())
+            return RADIENT_STATUS_UNSUPPORTED;
+
+        FixedLinearAllocator Allocator{GetRawAllocator()};
+        Allocator.AddSpace<MaterialParameterUpdate>(Updates.size());
+        Allocator.AddSpace<void*>(Outputs.size());
+        // Reserve and allocate the same regions in the same order; the allocator
+        // handles all padding within the single runtime allocation.
+        for (const BoundOutput& Output : Outputs)
+            Allocator.AddSpace(Output.Size, Output.Alignment);
+        Allocator.Reserve();
+
+        m_pUpdates    = Allocator.CopyArray(Updates.data(), Updates.size());
+        m_UpdateCount = static_cast<Uint32>(Updates.size());
+        m_ppOutputs   = Allocator.ConstructArray<void*>(Outputs.size());
+        for (size_t Index = 0; Index < Outputs.size(); ++Index)
+        {
+            const BoundOutput& Output = Outputs[Index];
+            void* const        pValue = Allocator.Allocate(Output.Size, Output.Alignment);
+            std::memset(pValue, 0, Output.Size);
+            m_ppOutputs[Index] = pValue;
+            if (Output.UpdateIndex != ~0u)
+                m_pUpdates[Output.UpdateIndex].pData = pValue;
+            else
+                m_pNewAlphaCutoff = new (pValue) Float32{0};
+        }
+        m_RuntimeMemory = decltype(m_RuntimeMemory){Allocator.Release(), STDDeleterRawMem<void>{GetRawAllocator()}};
+        return RADIENT_STATUS_OK;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE BeginUpdate(void* const** ppOutputs) override final
@@ -214,7 +249,7 @@ public:
             return RADIENT_STATUS_INVALID_OPERATION;
 
         m_UpdateActive = true;
-        *ppOutputs     = m_Outputs.data();
+        *ppOutputs     = m_ppOutputs;
         return RADIENT_STATUS_OK;
     }
 
@@ -229,8 +264,7 @@ public:
         // the sampled values repeat. Publish the entire batch under one lock;
         // unanimated array elements are never read back or overwritten.
         const RADIENT_STATUS Status = m_Storage.ApplyAnimationUpdates(
-            m_Updates.data(), static_cast<Uint32>(m_Updates.size()),
-            m_pAlphaCutoff, m_HasAlphaCutoff ? &m_AlphaCutoff : nullptr);
+            m_pUpdates, m_UpdateCount, m_pAlphaCutoff, m_pNewAlphaCutoff);
         // Publication is a primary write even when derived updates are deferred.
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_OK;
     }
@@ -240,12 +274,13 @@ private:
     const RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
     MaterialStorage&                           m_Storage;
     Float32* const                             m_pAlphaCutoff;
-    std::vector<MaterialParameterUpdate>       m_Updates;
-    std::vector<std::unique_ptr<Uint8[]>>      m_Values;
-    std::vector<void*>                         m_Outputs;
-    Float32                                    m_AlphaCutoff    = 0;
-    bool                                       m_HasAlphaCutoff = false;
-    bool                                       m_UpdateActive   = false;
+    // The descriptors, output pointers, and aligned sampled values share one block.
+    std::unique_ptr<void, STDDeleterRawMem<void>> m_RuntimeMemory;
+    MaterialParameterUpdate*                      m_pUpdates        = nullptr;
+    void**                                        m_ppOutputs       = nullptr;
+    Float32*                                      m_pNewAlphaCutoff = nullptr;
+    Uint32                                        m_UpdateCount     = 0;
+    bool                                          m_UpdateActive    = false;
 };
 
 } // namespace

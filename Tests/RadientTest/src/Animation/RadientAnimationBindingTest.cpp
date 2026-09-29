@@ -3457,20 +3457,44 @@ protected:
                                 const ValueType&                Value)
     {
         SCOPED_TRACE(ParameterType);
-        RadientMaterialParameterDesc Parameter;
-        Parameter.Name = "User.Value";
-        Parameter.Type = ParameterType;
-        CreateCustomMaterial(&Parameter, 1);
+        std::array<RadientMaterialParameterDesc, 3> Parameters;
+        Parameters[0].Name = "User.Prefix";
+        Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_BOOL;
+        Parameters[1].Name = "User.Value";
+        Parameters[1].Type = ParameterType;
+        Parameters[2].Name = "User.Suffix";
+        Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_BOOL;
+        CreateCustomMaterial(Parameters.data(), static_cast<Uint32>(Parameters.size()));
         ASSERT_NE(m_pDestination, nullptr);
         RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding(
-            {MakeMaterialProperty(Parameter.Name, AnimationType)});
+            {MakeMaterialProperty(Parameters[0].Name, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
+             MakeMaterialProperty(Parameters[1].Name, AnimationType),
+             MakeMaterialProperty(Parameters[2].Name, RADIENT_ANIMATION_VALUE_TYPE_BOOL),
+             MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT)});
         ASSERT_NE(pBinding, nullptr);
         void* const* pOutputs = nullptr;
         ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
         ASSERT_NE(pOutputs, nullptr);
-        std::memcpy(pOutputs[0], &Value, sizeof(Value));
+        for (Uint32 Index = 0; Index < 4; ++Index)
+            ASSERT_NE(pOutputs[Index], nullptr);
+
+        // One-byte values precede both the numeric parameter and alpha cutoff,
+        // so packed output storage must preserve each value's native alignment.
+        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pOutputs[1]) % alignof(ValueType), 0u);
+        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pOutputs[3]) % alignof(Float32), 0u);
+        const Bool    Flag   = True;
+        const Float32 Cutoff = 0.25f;
+        std::memcpy(pOutputs[0], &Flag, sizeof(Flag));
+        std::memcpy(pOutputs[1], &Value, sizeof(Value));
+        std::memcpy(pOutputs[2], &Flag, sizeof(Flag));
+        std::memcpy(pOutputs[3], &Cutoff, sizeof(Cutoff));
         ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
-        EXPECT_EQ(GetMaterialParameter<ValueType>(*m_pMaterial, Parameter.Name), Value);
+        EXPECT_EQ(GetMaterialParameter<Bool>(*m_pMaterial, Parameters[0].Name), Flag);
+        EXPECT_EQ(GetMaterialParameter<ValueType>(*m_pMaterial, Parameters[1].Name), Value);
+        EXPECT_EQ(GetMaterialParameter<Bool>(*m_pMaterial, Parameters[2].Name), Flag);
+        RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{m_pMaterial, IID_RadientSurfaceMaterialAsset};
+        ASSERT_NE(pSurface, nullptr);
+        EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), Cutoff);
     }
 
     RefCntAutoPtr<IRadientAnimationDestinationBinding> CreateDestinationBinding(
