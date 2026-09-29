@@ -114,6 +114,20 @@ void PackedMaterialData::CopyValue(Uint32 Index, const void* pData, Uint64 Shade
     Value.Version = ShaderDataVersion;
 }
 
+bool PackedMaterialData::UpdateValueRange(Uint32 Index, Uint32 Offset, const void* pData, Uint32 Size, Uint64 ShaderDataVersion) noexcept
+{
+    MaterialParameterValue& Value = GetValue(Index);
+    VERIFY_EXPR(!IsTextureParameter(Value.Type));
+    VERIFY_EXPR(pData != nullptr && Size != 0 && Offset <= Value.Size && Size <= Value.Size - Offset);
+    Uint8* const pDestination = static_cast<Uint8*>(Value.pData) + Offset;
+    if (std::memcmp(pDestination, pData, Size) == 0)
+        return false;
+
+    std::memcpy(pDestination, pData, Size);
+    Value.Version = ShaderDataVersion;
+    return true;
+}
+
 IRadientTextureAsset* PackedMaterialData::GetTexture(Uint32 Index, Uint32 ArrayIndex) const noexcept
 {
     const MaterialParameterValue& Value = GetValue(Index);
@@ -553,6 +567,38 @@ void MaterialStorage::FinishInitialization() const noexcept
         std::lock_guard<std::mutex> Lock{m_DataMutex};
         m_InitializationFinished.store(true, std::memory_order_release);
     }
+}
+
+RADIENT_STATUS MaterialStorage::ApplyAnimationUpdates(const MaterialParameterUpdate* pUpdates,
+                                                      Uint32                         UpdateCount,
+                                                      Float32*                       pAlphaCutoff,
+                                                      const Float32*                 pNewAlphaCutoff) noexcept
+{
+    VERIFY_EXPR(pUpdates != nullptr || UpdateCount == 0);
+    VERIFY_EXPR(pNewAlphaCutoff == nullptr || pAlphaCutoff != nullptr);
+    std::lock_guard<std::mutex> Lock{m_DataMutex};
+
+    MATERIAL_CHANGE_FLAGS Flags             = MATERIAL_CHANGE_FLAG_NONE;
+    const Uint64          ShaderDataVersion = m_ChangeVersions.ShaderDataVersion + 1;
+    for (Uint32 Index = 0; Index < UpdateCount; ++Index)
+    {
+        const MaterialParameterUpdate& Update = pUpdates[Index];
+        if (m_Data.UpdateValueRange(Update.ParameterIndex, Update.Offset, Update.pData, Update.Size, ShaderDataVersion))
+            Flags |= MATERIAL_CHANGE_FLAG_SHADER_DATA;
+    }
+
+    MATERIAL_CHANGE_FLAGS SurfaceFlags = MATERIAL_CHANGE_FLAG_NONE;
+    if (pNewAlphaCutoff != nullptr && *pAlphaCutoff != *pNewAlphaCutoff)
+    {
+        *pAlphaCutoff = *pNewAlphaCutoff;
+        SurfaceFlags  = MATERIAL_CHANGE_FLAG_SHADER_DATA;
+        Flags |= SurfaceFlags;
+    }
+    if (Flags == MATERIAL_CHANGE_FLAG_NONE)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    PublishChange(Flags, SurfaceFlags);
+    return RADIENT_STATUS_OK;
 }
 
 void MaterialStorage::PublishChange(MATERIAL_CHANGE_FLAGS Flags, MATERIAL_CHANGE_FLAGS SurfaceFlags) noexcept

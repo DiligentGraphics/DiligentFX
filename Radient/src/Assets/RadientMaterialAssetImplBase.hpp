@@ -174,8 +174,8 @@ public:
         IRadientAnimationDestinationBinding**      ppBinding) override final
     {
         return CreateRadientMaterialAnimationBinding(
-            static_cast<InterfaceType*>(this), pProperties, PropertyCount,
-            pResolvedProperties, ppBinding);
+            static_cast<InterfaceType*>(this), m_Storage, m_SpecializedState.GetAnimationAlphaCutoff(),
+            pProperties, PropertyCount, pResolvedProperties, ppBinding);
     }
 
     virtual MaterialStorage& DILIGENT_CALL_TYPE GetStorage() noexcept override final

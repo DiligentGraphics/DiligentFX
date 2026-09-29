@@ -26,6 +26,7 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 
 #include "RadientAnimation.h"
@@ -3897,6 +3898,105 @@ TEST_F(RadientMaterialAnimationDestinationTest, DisjointRangesCanCoverAnEntireAr
     ASSERT_EQ(pBinding->EndUpdate(True), RADIENT_STATUS_OK);
     EXPECT_EQ(m_pMaterial->GetVersion(), BeforeVersion + 1);
     EXPECT_EQ((GetMaterialParameter<std::array<RadientFloat3, 3>>(*m_pMaterial, Parameter.Name)), Values);
+}
+
+TEST_F(RadientMaterialAnimationDestinationTest, ReusesStagingAndPublishesOnlyChangedRanges)
+{
+    const std::array<RadientMaterialParameterDesc, 2> Parameters = {{
+        {"User.Weights", RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, 6},
+        {"User.Unbound", RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, 1},
+    }};
+    CreateCustomMaterial(Parameters.data(), static_cast<Uint32>(Parameters.size()));
+    ASSERT_NE(m_pDestination, nullptr);
+    SetParameter("User.Weights", std::array<Float32, 6>{{1, 2, 3, 4, 5, 6}});
+    SetParameter("User.Unbound", 13.f);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{m_pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+    RefCntAutoPtr<IRadientAnimationDestinationBinding> pBinding = CreateDestinationBinding({
+        MakeMaterialProperty("User.Weights", RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 4, 2),
+        MakeSurfaceProperty(RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
+        MakeMaterialProperty("User.Weights", RADIENT_ANIMATION_VALUE_TYPE_FLOAT, 1, 2),
+    });
+    ASSERT_NE(pBinding, nullptr);
+    const RadientMaterialDetail::MaterialStorage* const pStorage =
+        RadientMaterialDetail::TryGetMaterialStorage(m_pMaterial);
+    ASSERT_NE(pStorage, nullptr);
+    const RadientMaterialDetail::MaterialChangeVersions InitialVersions = pStorage->GetChangeVersions();
+    const Uint64                                        InitialRevision = pStorage->GetIdentity().pChangeTracker->GetRevision();
+    Uint64                                              UnboundVersion;
+    {
+        const RadientMaterialDetail::MaterialStorage::ReadAccess Access = pStorage->AcquireReadAccess();
+        UnboundVersion                                                  = Access.GetPackedData().GetValueVersion(1);
+    }
+
+    struct Sample
+    {
+        std::array<Float32, 4> Weights;
+        Float32                AlphaCutoff;
+        Uint64                 Publication;
+        Uint64                 WeightsPublication;
+        Uint64                 SurfacePublication;
+    };
+    // Repeating a sample publishes nothing. Changing one kind of property must
+    // leave the other kind's shader-data version untouched.
+    const Sample Samples[] = {
+        {{{20, 30, 50, 60}}, 0.25f, 1, 1, 1},
+        {{{20, 30, 50, 60}}, 0.25f, 1, 1, 1},
+        {{{21, 31, 50, 60}}, 0.25f, 2, 2, 1},
+        {{{21, 31, 50, 60}}, 0.75f, 3, 2, 3},
+        {{{22, 32, 52, 62}}, 0.50f, 4, 4, 4},
+        {{{22, 32, 52, 62}}, 0.50f, 4, 4, 4},
+    };
+    std::array<std::uintptr_t, 3> OutputAddresses{};
+    std::uintptr_t                OutputArrayAddress = 0;
+    for (const Sample& Current : Samples)
+    {
+        SCOPED_TRACE(Current.Publication);
+        const std::array<Float32, 6> BeforeWeights =
+            GetMaterialParameter<std::array<Float32, 6>>(*m_pMaterial, "User.Weights");
+        const Float32 BeforeAlpha   = pSurface->GetAlphaCutoff();
+        const Uint64  BeforeVersion = m_pMaterial->GetVersion();
+        void* const*  pOutputs      = nullptr;
+        ASSERT_EQ(pBinding->BeginUpdate(&pOutputs), RADIENT_STATUS_OK);
+        ASSERT_NE(pOutputs, nullptr);
+        if (OutputArrayAddress == 0)
+        {
+            OutputArrayAddress = reinterpret_cast<std::uintptr_t>(pOutputs);
+            for (size_t Index = 0; Index < OutputAddresses.size(); ++Index)
+            {
+                ASSERT_NE(pOutputs[Index], nullptr);
+                OutputAddresses[Index] = reinterpret_cast<std::uintptr_t>(pOutputs[Index]);
+            }
+        }
+        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pOutputs), OutputArrayAddress);
+        for (size_t Index = 0; Index < OutputAddresses.size(); ++Index)
+        {
+            EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pOutputs[Index]), OutputAddresses[Index]);
+        }
+        std::memcpy(pOutputs[0], Current.Weights.data() + 2, 2 * sizeof(Float32));
+        std::memcpy(pOutputs[1], &Current.AlphaCutoff, sizeof(Current.AlphaCutoff));
+        std::memcpy(pOutputs[2], Current.Weights.data(), 2 * sizeof(Float32));
+
+        // Sampling into staging must not expose a partially updated material.
+        EXPECT_EQ((GetMaterialParameter<std::array<Float32, 6>>(*m_pMaterial, "User.Weights")), BeforeWeights);
+        EXPECT_EQ(pSurface->GetAlphaCutoff(), BeforeAlpha);
+        EXPECT_EQ(m_pMaterial->GetVersion(), BeforeVersion);
+        ASSERT_EQ(pBinding->EndUpdate(False), RADIENT_STATUS_OK);
+        EXPECT_EQ((GetMaterialParameter<std::array<Float32, 6>>(*m_pMaterial, "User.Weights")),
+                  (std::array<Float32, 6>{{1, Current.Weights[0], Current.Weights[1], 4, Current.Weights[2], Current.Weights[3]}}));
+        EXPECT_EQ(pSurface->GetAlphaCutoff(), Current.AlphaCutoff);
+        EXPECT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, "User.Unbound"), 13.f);
+        EXPECT_EQ(m_pMaterial->GetVersion(), InitialVersions.Version + Current.Publication);
+        EXPECT_EQ(pStorage->GetIdentity().pChangeTracker->GetRevision(), InitialRevision + Current.Publication);
+        const RadientMaterialDetail::MaterialChangeVersions& Versions = pStorage->GetChangeVersions();
+        EXPECT_EQ(Versions.ShaderDataVersion, InitialVersions.ShaderDataVersion + Current.Publication);
+        EXPECT_EQ(Versions.RenderStateVersion, InitialVersions.RenderStateVersion);
+        EXPECT_EQ(Versions.TextureBindingsVersion, InitialVersions.TextureBindingsVersion);
+        const RadientMaterialDetail::MaterialStorage::ReadAccess Access = pStorage->AcquireReadAccess();
+        EXPECT_EQ(Access.GetPackedData().GetValueVersion(0), InitialVersions.ShaderDataVersion + Current.WeightsPublication);
+        EXPECT_EQ(Access.GetPackedData().GetValueVersion(1), UnboundVersion);
+        EXPECT_EQ(Access.GetSurfaceShaderDataVersion(), InitialVersions.ShaderDataVersion + Current.SurfacePublication);
+    }
 }
 
 TEST_F(RadientMaterialAnimationDestinationTest, RejectsOverlappingAndOutOfBoundsArrayRanges)

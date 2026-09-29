@@ -26,6 +26,7 @@
 
 #include "Animation/RadientMaterialAnimationDestinationBinding.hpp"
 #include "Animation/RadientAnimationValueType.hpp"
+#include "Assets/RadientMaterialStorage.hpp"
 #include "Core/RadientValidation.hpp"
 
 #include "DebugUtilities.hpp"
@@ -43,6 +44,9 @@ namespace Diligent
 
 namespace
 {
+
+using RadientMaterialDetail::MaterialParameterUpdate;
+using RadientMaterialDetail::MaterialStorage;
 
 RADIENT_ANIMATION_VALUE_TYPE GetParameterAnimationValueType(RADIENT_MATERIAL_PARAMETER_TYPE Type) noexcept
 {
@@ -90,9 +94,14 @@ class MaterialAnimationBinding final : public ObjectBase<IRadientAnimationDestin
 public:
     using TBase = ObjectBase<IRadientAnimationDestinationBinding>;
 
-    MaterialAnimationBinding(IReferenceCounters* pRefCounters, IRadientMaterialAsset* pMaterial) :
+    MaterialAnimationBinding(IReferenceCounters*    pRefCounters,
+                             IRadientMaterialAsset* pMaterial,
+                             MaterialStorage&       Storage,
+                             Float32*               pAlphaCutoff) :
         TBase{pRefCounters},
-        m_pMaterial{pMaterial}
+        m_pMaterial{pMaterial},
+        m_Storage{Storage},
+        m_pAlphaCutoff{pAlphaCutoff}
     {}
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAnimationDestinationBinding, TBase)
@@ -105,16 +114,9 @@ public:
         if (pDefinition == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        struct BoundRange
-        {
-            Uint32 StorageIndex;
-            Uint32 Offset;
-            Uint32 Size;
-        };
-        std::vector<BoundRange> Ranges;
-        Ranges.reserve(PropertyCount);
-        m_Storage.reserve(PropertyCount);
-        bool HasAlphaCutoff = false;
+        m_Updates.reserve(PropertyCount);
+        m_Values.reserve(PropertyCount);
+        m_Outputs.reserve(PropertyCount);
         for (Uint32 Index = 0; Index < PropertyCount; ++Index)
         {
             const RadientAnimationPropertyBindingDesc& Property = pProperties[Index];
@@ -147,12 +149,9 @@ public:
             else if (Property.Schema == RadientSurfaceMaterialAnimationSchemaID &&
                      std::strcmp(Property.Property, RadientSurfaceMaterialAlphaCutoffPropertyName) == 0)
             {
-                RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
-                    m_pMaterial, IID_RadientSurfaceMaterialAsset};
-                if (!pSurfaceMaterial)
+                if (m_pAlphaCutoff == nullptr)
                     continue;
-                HasAlphaCutoff = true;
-                ValueType      = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
+                ValueType = RADIENT_ANIMATION_VALUE_TYPE_FLOAT;
             }
             else
             {
@@ -173,47 +172,37 @@ public:
                 return RADIENT_STATUS_INVALID_ARGUMENT;
             }
 
-            Uint32 StorageIndex = 0;
-            while (StorageIndex < m_Storage.size() && m_Storage[StorageIndex].Handle != Handle)
-                ++StorageIndex;
-            if (StorageIndex == m_Storage.size())
+            if (Handle)
             {
-                PropertyStorage& Storage = m_Storage.emplace_back();
-                Storage.Handle           = Handle;
-                Storage.Size             = ElementSize * ArraySize;
-                Storage.Values           = std::make_unique<Uint8[]>(Storage.Size);
-            }
-
-            const BoundRange Range{StorageIndex, Property.FirstArrayElement * ElementSize, Property.Value.ArraySize * ElementSize};
-            for (const BoundRange& Existing : Ranges)
-            {
-                if (Existing.StorageIndex == Range.StorageIndex &&
-                    Existing.Offset < Range.Offset + Range.Size && Range.Offset < Existing.Offset + Existing.Size)
+                MaterialParameterUpdate Update{Handle.Index, Property.FirstArrayElement * ElementSize,
+                                               Property.Value.ArraySize * ElementSize, nullptr};
+                for (const MaterialParameterUpdate& Existing : m_Updates)
                 {
-                    return RADIENT_STATUS_INVALID_ARGUMENT;
+                    if (Existing.ParameterIndex == Update.ParameterIndex &&
+                        Existing.Offset < Update.Offset + Update.Size && Update.Offset < Existing.Offset + Existing.Size)
+                    {
+                        return RADIENT_STATUS_INVALID_ARGUMENT;
+                    }
                 }
+
+                // Allocate only the animated range. These addresses remain stable
+                // for the binding's lifetime, with no writer batch to rebuild.
+                m_Values.emplace_back(std::make_unique<Uint8[]>(Update.Size));
+                Update.pData = m_Values.back().get();
+                m_Updates.push_back(Update);
+                m_Outputs.push_back(m_Values.back().get());
             }
-            Ranges.push_back(Range);
-            m_Storage[StorageIndex].WrittenSize += Range.Size;
+            else
+            {
+                if (m_HasAlphaCutoff)
+                    return RADIENT_STATUS_INVALID_ARGUMENT;
+                m_HasAlphaCutoff = true;
+                m_Outputs.push_back(&m_AlphaCutoff);
+            }
             pResolvedProperties[Index].Semantic = RADIENT_ANIMATION_VALUE_SEMANTIC_COMPONENT_WISE;
         }
 
-        if (m_Storage.empty())
-            return RADIENT_STATUS_UNSUPPORTED;
-
-        const RADIENT_STATUS Status = m_pMaterial->CreateWriter(&m_pWriter);
-        if (RADIENT_FAILED(Status))
-            return Status;
-        if (HasAlphaCutoff)
-        {
-            m_pSurfaceWriter = RefCntAutoPtr<IRadientSurfaceMaterialWriter>{m_pWriter, IID_RadientSurfaceMaterialWriter};
-            if (!m_pSurfaceWriter)
-                return RADIENT_STATUS_INVALID_OPERATION;
-        }
-        m_Outputs.reserve(Ranges.size());
-        for (const BoundRange& Range : Ranges)
-            m_Outputs.push_back(m_Storage[Range.StorageIndex].Values.get() + Range.Offset);
-        return RADIENT_STATUS_OK;
+        return m_Outputs.empty() ? RADIENT_STATUS_UNSUPPORTED : RADIENT_STATUS_OK;
     }
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE BeginUpdate(void* const** ppOutputs) override final
@@ -224,17 +213,6 @@ public:
         if (m_UpdateActive)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        // Writers replace whole parameters. Preserve current values in array elements
-        // outside the animated ranges, including edits made since the last evaluation.
-        for (PropertyStorage& Storage : m_Storage)
-        {
-            if (Storage.WrittenSize != Storage.Size)
-            {
-                const RADIENT_STATUS Status = m_pMaterial->GetParameter(Storage.Handle, Storage.Values.get(), Storage.Size);
-                if (RADIENT_FAILED(Status))
-                    return Status;
-            }
-        }
         m_UpdateActive = true;
         *ppOutputs     = m_Outputs.data();
         return RADIENT_STATUS_OK;
@@ -247,49 +225,35 @@ public:
             return RADIENT_STATUS_INVALID_OPERATION;
         m_UpdateActive = false;
 
-        for (const PropertyStorage& Storage : m_Storage)
-        {
-            RADIENT_STATUS Status;
-            if (Storage.Handle)
-            {
-                Status = m_pWriter->SetParameter(Storage.Handle, Storage.Values.get(), Storage.Size);
-            }
-            else
-            {
-                Float32 AlphaCutoff;
-                std::memcpy(&AlphaCutoff, Storage.Values.get(), sizeof(AlphaCutoff));
-                Status = m_pSurfaceWriter->SetAlphaCutoff(AlphaCutoff);
-            }
-            if (RADIENT_FAILED(Status))
-                return Status;
-        }
+        // Compare against live values so external edits are respected even when
+        // the sampled values repeat. Publish the entire batch under one lock;
+        // unanimated array elements are never read back or overwritten.
+        const RADIENT_STATUS Status = m_Storage.ApplyAnimationUpdates(
+            m_Updates.data(), static_cast<Uint32>(m_Updates.size()),
+            m_pAlphaCutoff, m_HasAlphaCutoff ? &m_AlphaCutoff : nullptr);
         // Publication is a primary write even when derived updates are deferred.
-        const RADIENT_STATUS Status = m_pWriter->Commit();
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_OK;
     }
 
 private:
-    struct PropertyStorage
-    {
-        // An invalid handle denotes the specialized alpha-cutoff property.
-        RadientMaterialParameterHandle Handle;
-        Uint32                         Size        = 0;
-        Uint32                         WrittenSize = 0;
-        std::unique_ptr<Uint8[]>       Values;
-    };
-
-    const RefCntAutoPtr<IRadientMaterialAsset>   m_pMaterial;
-    RefCntAutoPtr<IRadientMaterialWriter>        m_pWriter;
-    RefCntAutoPtr<IRadientSurfaceMaterialWriter> m_pSurfaceWriter;
-    std::vector<PropertyStorage>                 m_Storage;
-    std::vector<void*>                           m_Outputs;
-    bool                                         m_UpdateActive = false;
+    // The retained asset owns both the storage and the optional alpha-cutoff field.
+    const RefCntAutoPtr<IRadientMaterialAsset> m_pMaterial;
+    MaterialStorage&                           m_Storage;
+    Float32* const                             m_pAlphaCutoff;
+    std::vector<MaterialParameterUpdate>       m_Updates;
+    std::vector<std::unique_ptr<Uint8[]>>      m_Values;
+    std::vector<void*>                         m_Outputs;
+    Float32                                    m_AlphaCutoff    = 0;
+    bool                                       m_HasAlphaCutoff = false;
+    bool                                       m_UpdateActive   = false;
 };
 
 } // namespace
 
 RADIENT_STATUS CreateRadientMaterialAnimationBinding(
     IRadientMaterialAsset*                     pMaterial,
+    MaterialStorage&                           Storage,
+    Float32*                                   pAlphaCutoff,
     const RadientAnimationPropertyBindingDesc* pProperties,
     Uint32                                     PropertyCount,
     RadientAnimationResolvedPropertyDesc*      pResolvedProperties,
@@ -312,7 +276,7 @@ RADIENT_STATUS CreateRadientMaterialAnimationBinding(
 
     try
     {
-        RefCntAutoPtr<MaterialAnimationBinding> pBinding{MakeNewRCObj<MaterialAnimationBinding>()(pMaterial)};
+        RefCntAutoPtr<MaterialAnimationBinding> pBinding{MakeNewRCObj<MaterialAnimationBinding>()(pMaterial, Storage, pAlphaCutoff)};
         const RADIENT_STATUS                    Status = pBinding->Initialize(pProperties, PropertyCount, pResolvedProperties);
         if (Status != RADIENT_STATUS_OK)
             return Status;

@@ -32,8 +32,17 @@
 namespace Diligent
 {
 
+namespace RadientMaterialDetail
+{
+class MaterialStorage;
+}
+
+// Storage and the optional surface alpha-cutoff field are owned by pMaterial.
+// The binding retains that asset and publishes both through the storage lock.
 RADIENT_STATUS CreateRadientMaterialAnimationBinding(
     IRadientMaterialAsset*                     pMaterial,
+    RadientMaterialDetail::MaterialStorage&    Storage,
+    Float32*                                   pAlphaCutoff,
     const RadientAnimationPropertyBindingDesc* pProperties,
     Uint32                                     PropertyCount,
     RadientAnimationResolvedPropertyDesc*      pResolvedProperties,

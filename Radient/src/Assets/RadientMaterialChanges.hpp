@@ -84,7 +84,9 @@ private:
 };
 
 struct EmptyMaterialState
-{};
+{
+    Float32* GetAnimationAlphaCutoff() noexcept { return nullptr; }
+};
 
 struct EmptyMaterialChanges
 {

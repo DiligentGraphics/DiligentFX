@@ -41,6 +41,8 @@ struct SurfaceMaterialState
     RADIENT_MATERIAL_SURFACE_MODE SurfaceMode   = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
     Float32                       AlphaCutoff   = 0.5f;
     Bool                          IsDoubleSided = False;
+
+    Float32* GetAnimationAlphaCutoff() noexcept { return &AlphaCutoff; }
 };
 
 class SurfaceMaterialChanges final

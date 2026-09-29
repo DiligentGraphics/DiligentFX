@@ -70,6 +70,7 @@ public:
 
     bool HasSameValue(Uint32 Index, const void* pData) const noexcept;
     void CopyValue(Uint32 Index, const void* pData, Uint64 ShaderDataVersion) noexcept;
+    bool UpdateValueRange(Uint32 Index, Uint32 Offset, const void* pData, Uint32 Size, Uint64 ShaderDataVersion) noexcept;
 
     IRadientTextureAsset* GetTexture(Uint32 Index, Uint32 ArrayIndex) const noexcept;
     void                  SetTexture(Uint32 Index, Uint32 ArrayIndex, IRadientTextureAsset* pTexture, Uint64 ShaderDataVersion) noexcept;
@@ -86,6 +87,16 @@ private:
 };
 
 class MaterialParameterChanges;
+
+// A nontexture byte range validated when the animation binding is created.
+// The caller owns the source bytes and keeps them valid while applying updates.
+struct MaterialParameterUpdate
+{
+    Uint32      ParameterIndex;
+    Uint32      Offset;
+    Uint32      Size;
+    const void* pData;
+};
 
 class MaterialStorage final
 {
@@ -127,7 +138,7 @@ public:
     /// The storage must outlive the access object. References obtained from it
     /// are protected only while the object owns access; moved-from objects may
     /// only be destroyed. Surface properties read by shader packing are protected
-    /// by the same scope because ApplyChanges() updates them under the same lock.
+    /// by the same scope because writers and animation update them under the same lock.
     class ReadAccess final
     {
     public:
@@ -153,6 +164,15 @@ public:
     /// Acquires a consistent view without copying the material. Keep the returned
     /// object alive throughout packing, including reads of surface properties.
     ReadAccess AcquireReadAccess() const;
+
+    /// Applies prevalidated animation ranges and an optional alpha-cutoff assignment
+    /// atomically with respect to worker reads, publishing at most one change.
+    /// A null pNewAlphaCutoff leaves alpha cutoff unchanged; otherwise pAlphaCutoff
+    /// points to the owning material's live surface state.
+    RADIENT_STATUS ApplyAnimationUpdates(const MaterialParameterUpdate* pUpdates,
+                                         Uint32                         UpdateCount,
+                                         Float32*                       pAlphaCutoff,
+                                         const Float32*                 pNewAlphaCutoff) noexcept;
 
     /// Validates and applies the complete commit, including specialized state
     /// and version publication, as one operation coordinated with worker reads.
