@@ -1045,7 +1045,7 @@ void* GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(void*                    
 
                                  static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
                                                "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
-                                 memcpy(pDstTextures + CurrIndex, &Material.GetTextureAttrib(SrcAttribIndex), sizeof(HLSL::PBRMaterialTextureAttribs));
+                                 memcpy(pDstTextures + CurrIndex, &Material.GetTextureAttrib(SrcAttribIndex).ShaderAttribs, sizeof(HLSL::PBRMaterialTextureAttribs));
                                  ++NumTextureAttribs;
                              });
 

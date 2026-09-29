@@ -174,7 +174,7 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
 {
     // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
     // are intentionally not part of the imported material asset.
-    const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
+    const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId).ShaderAttribs;
     RadientStandardMaterialTextureParameters    Parameters{pTexture};
     Parameters.UVSelector         = TextureAttribs.GetUVSelector();
     Parameters.UVScaleAndRotation = {{

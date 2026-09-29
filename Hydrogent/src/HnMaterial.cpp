@@ -279,7 +279,7 @@ void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
         const pxr::TfToken& Name = ParamInfo.Name;
         const int           Idx  = TexAttribIndices[ParamInfo.TextureAttribId];
 
-        GLTF::Material::TextureShaderAttribs& TexAttribs = MatBuilder.GetTextureAttrib(Idx);
+        GLTF::Material::TextureShaderAttribs& TexAttribs = MatBuilder.GetTextureAttrib(Idx).ShaderAttribs;
 
         auto coord_it = TexNameToCoordSetMap.find(Name);
         TexAttribs.SetUVSelector(coord_it != TexNameToCoordSetMap.end() ? coord_it->second : 0);
@@ -366,7 +366,7 @@ bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer,
         }
 
         const int                             Idx        = TexAttribIndices[ParamInfo.TextureAttribId];
-        GLTF::Material::TextureShaderAttribs& TexAttribs = m_MaterialData.GetTextureAttrib(Idx);
+        GLTF::Material::TextureShaderAttribs& TexAttribs = m_MaterialData.GetTextureAttrib(Idx).ShaderAttribs;
         if (ITextureAtlasSuballocation* pAtlasSuballocation = pTexHandle->GetAtlasSuballocation())
         {
             TexAttribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());

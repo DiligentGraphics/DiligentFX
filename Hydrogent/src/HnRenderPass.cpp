@@ -1265,8 +1265,9 @@ PBR_Renderer::PSO_FLAGS HnRenderPass::GetMaterialPSOFlags(const HnMaterial& Mate
     PSOFlags |= PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
 
     MaterialData.ProcessActiveTextureAttibs(
-        [&PSOFlags](Uint32, const GLTF::Material::TextureShaderAttribs& TexAttrib, int) //
+        [&PSOFlags](Uint32, const GLTF::Material::TextureAttribs& Texture, int) //
         {
+            const GLTF::Material::TextureShaderAttribs& TexAttrib = Texture.ShaderAttribs;
             if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
                 TexAttrib.UBias != 0 ||
                 TexAttrib.VBias != 0)

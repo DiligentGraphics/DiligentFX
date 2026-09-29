@@ -95,7 +95,7 @@ std::vector<TextureColorSpaceUsage> GetTextureColorSpaceUsages(const GLTF::Docum
     {
         const GLTF::Material Material = GLTF::LoadMaterial(Document, MaterialIndex);
         Material.ProcessActiveTextureAttibs(
-            [&](Uint32 TextureAttribId, const GLTF::Material::TextureShaderAttribs&, int TextureIndex) {
+            [&](Uint32 TextureAttribId, const GLTF::Material::TextureAttribs&, int TextureIndex) {
                 if (TextureIndex >= 0 && static_cast<size_t>(TextureIndex) < TextureUsages.size())
                 {
                     TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];

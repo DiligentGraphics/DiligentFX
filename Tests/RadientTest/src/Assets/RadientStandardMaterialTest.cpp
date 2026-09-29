@@ -132,7 +132,7 @@ GLTF::Material MakeExtendedPBRMaterial()
         const Uint32 TextureAttribId = StandardMaterialTextureAttribIds[TextureIndex];
         Builder.SetTextureId(TextureAttribId, 0);
 
-        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId);
+        GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId).ShaderAttribs;
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
         TextureAttribs.UVScaleAndRotation = float2x2{
             1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
@@ -174,7 +174,7 @@ GLTF::Material MakeSpecularGlossinessMaterial()
         Builder.SetTextureId(TextureAttribId, 0);
 
         GLTF::Material::TextureShaderAttribs& TextureAttribs =
-            Builder.GetTextureAttrib(TextureAttribId);
+            Builder.GetTextureAttrib(TextureAttribId).ShaderAttribs;
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
         TextureAttribs.UVScaleAndRotation = float2x2{
             1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
@@ -677,7 +677,7 @@ TEST(RadientStandardMaterialTest, UnlitPBRShaderDataMatchesGLTFPacking)
     GLTF::MaterialBuilder Builder{Material};
     Builder.SetTextureId(GLTF::DefaultBaseColorTextureAttribId, 0);
     GLTF::Material::TextureShaderAttribs& TextureAttribs =
-        Builder.GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId);
+        Builder.GetTextureAttrib(GLTF::DefaultBaseColorTextureAttribId).ShaderAttribs;
     TextureAttribs.SetUVSelector(1);
     TextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
     TextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);

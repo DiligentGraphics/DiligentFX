@@ -1011,7 +1011,7 @@ TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSe
     for (size_t TextureIndex = 0; TextureIndex < StandardMaterialTextureTestInfos.size(); ++TextureIndex)
     {
         const StandardMaterialTextureTestInfo& TextureInfo    = StandardMaterialTextureTestInfos[TextureIndex];
-        GLTF::Material::TextureShaderAttribs&  TextureAttribs = Builder.GetTextureAttrib(TextureInfo.TextureAttribId);
+        GLTF::Material::TextureShaderAttribs&  TextureAttribs = Builder.GetTextureAttrib(TextureInfo.TextureAttribId).ShaderAttribs;
 
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
         TextureAttribs.UVScaleAndRotation = float2x2{
@@ -1031,7 +1031,7 @@ TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSe
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
     {
-        const GLTF::Material::TextureShaderAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId);
+        const GLTF::Material::TextureShaderAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId).ShaderAttribs;
         const std::string                           Name{TextureInfo.ParameterName};
 
         EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, (Name + "UVSelector").c_str()), Expected.GetUVSelector());
@@ -1107,7 +1107,7 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
     Builder.SetTextureId(GLTF::DefaultSpecularGlossinessTextureAttibId, 1);
 
     GLTF::Material::TextureShaderAttribs& DiffuseTextureAttribs =
-        Builder.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId);
+        Builder.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId).ShaderAttribs;
     DiffuseTextureAttribs.SetUVSelector(1);
     DiffuseTextureAttribs.UVScaleAndRotation = float2x2{2.f, 0.1f, 0.2f, 3.f};
     DiffuseTextureAttribs.UBias              = 0.11f;
@@ -1116,7 +1116,7 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
     DiffuseTextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
 
     GLTF::Material::TextureShaderAttribs& SpecularGlossinessTextureAttribs =
-        Builder.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId);
+        Builder.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId).ShaderAttribs;
     SpecularGlossinessTextureAttribs.SetUVSelector(0);
     SpecularGlossinessTextureAttribs.UVScaleAndRotation = float2x2{4.f, 0.3f, 0.4f, 5.f};
     SpecularGlossinessTextureAttribs.UBias              = 0.33f;
@@ -1198,9 +1198,9 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
     };
 
     ExpectTextureBinding(RadientStandardMaterialDiffuseTextureParameterNames,
-                         Material.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId));
+                         Material.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId).ShaderAttribs);
     ExpectTextureBinding(RadientStandardMaterialSpecularGlossinessTextureParameterNames,
-                         Material.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId));
+                         Material.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId).ShaderAttribs);
 
     RadientMaterialParameterHandle Handle;
     EXPECT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &Handle),
