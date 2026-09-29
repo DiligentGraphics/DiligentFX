@@ -658,24 +658,62 @@ bool FindMaterialAnimationPointerProperty(const std::string&            Path,
         {"/extensions/KHR_materials_volume/attenuationColor", RadientStandardMaterialAttenuationColorName, 3, AnimationPointerValueConstraint::UnitInterval},
         {"/extensions/KHR_materials_volume/attenuationDistance", RadientStandardMaterialAttenuationDistanceName, 1, AnimationPointerValueConstraint::Positive},
         {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialBaseColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialBaseColorTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialBaseColorTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialMetallicRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialMetallicRoughnessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialMetallicRoughnessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/normalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialNormalTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/normalTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialNormalTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/normalTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialNormalTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/occlusionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialOcclusionTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/occlusionTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialOcclusionTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/occlusionTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialOcclusionTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/emissiveTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialEmissiveTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/emissiveTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialEmissiveTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/emissiveTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialEmissiveTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialDiffuseTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialDiffuseTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialDiffuseTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularGlossinessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularGlossinessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularGlossinessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatRoughnessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatRoughnessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatNormalTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatNormalTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatNormalTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSheenColorTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSheenColorTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenRoughnessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSheenRoughnessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSheenRoughnessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularColorTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularColorTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularColorTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialAnisotropyTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialAnisotropyTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialAnisotropyTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialIridescenceTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialIridescenceTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceThicknessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialIridescenceThicknessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialIridescenceThicknessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialTransmissionTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialTransmissionTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialTransmissionTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
         {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialThicknessTextureUVBiasName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialThicknessTextureUVScaleName, 2, AnimationPointerValueConstraint::None},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialThicknessTextureUVRotationName, 1, AnimationPointerValueConstraint::None},
     };
 
     for (const PropertyDesc& Property : Properties)
@@ -750,32 +788,33 @@ bool IsMaterialAnimationPointerDefined(const tinygltf::Material& Material,
     if (Path == "/occlusionTexture/strength")
         return Material.occlusionTexture.index >= 0;
 
-    const tinygltf::ExtensionMap* pTextureExtensions = nullptr;
-    if (Path == "/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset")
+    const std::string             TextureTransformPath = Path.substr(0, Path.find_last_of('/'));
+    const tinygltf::ExtensionMap* pTextureExtensions   = nullptr;
+    if (TextureTransformPath == "/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform")
     {
         if (Material.pbrMetallicRoughness.baseColorTexture.index < 0)
             return false;
         pTextureExtensions = &Material.pbrMetallicRoughness.baseColorTexture.extensions;
     }
-    if (Path == "/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset")
+    if (TextureTransformPath == "/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform")
     {
         if (Material.pbrMetallicRoughness.metallicRoughnessTexture.index < 0)
             return false;
         pTextureExtensions = &Material.pbrMetallicRoughness.metallicRoughnessTexture.extensions;
     }
-    if (Path == "/normalTexture/extensions/KHR_texture_transform/offset")
+    if (TextureTransformPath == "/normalTexture/extensions/KHR_texture_transform")
     {
         if (Material.normalTexture.index < 0)
             return false;
         pTextureExtensions = &Material.normalTexture.extensions;
     }
-    if (Path == "/occlusionTexture/extensions/KHR_texture_transform/offset")
+    if (TextureTransformPath == "/occlusionTexture/extensions/KHR_texture_transform")
     {
         if (Material.occlusionTexture.index < 0)
             return false;
         pTextureExtensions = &Material.occlusionTexture.extensions;
     }
-    if (Path == "/emissiveTexture/extensions/KHR_texture_transform/offset")
+    if (TextureTransformPath == "/emissiveTexture/extensions/KHR_texture_transform")
     {
         if (Material.emissiveTexture.index < 0)
             return false;

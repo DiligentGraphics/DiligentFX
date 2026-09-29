@@ -174,18 +174,15 @@ RADIENT_STATUS SetTextureBindingParameters(const GLTF::Material&                
 {
     // TextureSlice and AtlasUVScaleAndBias are runtime allocation state and
     // are intentionally not part of the imported material asset.
-    const GLTF::Material::TextureShaderAttribs& TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId).ShaderAttribs;
+    const GLTF::Material::TextureAttribs&       TextureAttribs = Material.GetTextureAttrib(Semantic.TextureAttribId);
+    const GLTF::Material::TextureShaderAttribs& ShaderAttribs  = TextureAttribs.ShaderAttribs;
     RadientStandardMaterialTextureParameters    Parameters{pTexture};
-    Parameters.UVSelector         = TextureAttribs.GetUVSelector();
-    Parameters.UVScaleAndRotation = {{
-        TextureAttribs.UVScaleAndRotation._11,
-        TextureAttribs.UVScaleAndRotation._12,
-        TextureAttribs.UVScaleAndRotation._21,
-        TextureAttribs.UVScaleAndRotation._22,
-    }};
-    Parameters.UVBias             = {TextureAttribs.UBias, TextureAttribs.VBias};
-    Parameters.WrapU              = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapUMode());
-    Parameters.WrapV              = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(TextureAttribs.GetWrapVMode());
+    Parameters.UVSelector = ShaderAttribs.GetUVSelector();
+    Parameters.UVScale    = {TextureAttribs.UVScale.x, TextureAttribs.UVScale.y};
+    Parameters.UVRotation = TextureAttribs.UVRotation;
+    Parameters.UVBias     = {ShaderAttribs.UBias, ShaderAttribs.VBias};
+    Parameters.WrapU      = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(ShaderAttribs.GetWrapUMode());
+    Parameters.WrapV      = static_cast<RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE>(ShaderAttribs.GetWrapVMode());
 
     return SetStandardMaterialTextureParameters(
         Definition, Writer, *Semantic.pParameterNames, Parameters);

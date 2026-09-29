@@ -40,11 +40,12 @@ void RadientStandardMaterialParameters_CPP_TestHelpers(
     IRadientTextureAsset*                  pTexture)
 {
     RadientStandardMaterialTextureParameters Parameters{pTexture};
-    Parameters.UVSelector         = 1;
-    Parameters.UVScaleAndRotation = {{2.f, 0.f, 0.f, 2.f}};
-    Parameters.UVBias             = {0.25f, 0.5f};
-    Parameters.WrapU              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
-    Parameters.WrapV              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+    Parameters.UVSelector = 1;
+    Parameters.UVScale    = {2.f, 2.f};
+    Parameters.UVRotation = 0.5f;
+    Parameters.UVBias     = {0.25f, 0.5f};
+    Parameters.WrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    Parameters.WrapV      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
 
     const RADIENT_STATUS Status = SetStandardMaterialTextureParameters(
         *pDefinition,

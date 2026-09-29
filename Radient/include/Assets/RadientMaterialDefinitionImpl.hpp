@@ -82,8 +82,8 @@ struct RadientMaterialShaderParameterPacking
 };
 
 /// Packs one texture parameter and its UV selector and address modes into a
-/// shader texture-attribute record. UV transform and bias parameters use
-/// ordinary RadientMaterialShaderParameterPacking mappings.
+/// shader texture-attribute record. Optional scale and rotation parameters are
+/// composed into its UV matrix; bias uses an ordinary parameter mapping.
 struct RadientMaterialShaderTexturePacking
 {
     Uint32 TextureParameterIndex    = 0;
@@ -91,6 +91,12 @@ struct RadientMaterialShaderTexturePacking
     Uint32 WrapUParameterIndex      = 0;
     Uint32 WrapVParameterIndex      = 0;
     Uint32 Offset                   = 0;
+
+    /// Optional FLOAT2 scale and FLOAT rotation (radians). Both indices must be
+    /// specified together. If omitted, this command leaves the UV matrix intact,
+    /// allowing a custom material to supply it through an ordinary mapping.
+    Uint32 UVScaleParameterIndex    = ~Uint32{0};
+    Uint32 UVRotationParameterIndex = ~Uint32{0};
 };
 
 /// Initializes a fixed byte range in the shader-readable material data block.

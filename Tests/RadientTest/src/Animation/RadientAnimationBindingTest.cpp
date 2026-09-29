@@ -3543,7 +3543,8 @@ TEST_F(RadientMaterialAnimationDestinationTest, ResolvesReflectedAndSurfaceMater
         MakeMaterialProperty(RadientStandardMaterialNormalScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
         MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVBiasName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2),
         MakeMaterialProperty(RadientStandardMaterialEmissiveFactorName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT3),
-        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVScaleAndRotationName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVScaleName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT2),
+        MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVRotationName, RADIENT_ANIMATION_VALUE_TYPE_FLOAT),
         MakeMaterialProperty(RadientStandardMaterialBaseColorTextureUVSelectorName, RADIENT_ANIMATION_VALUE_TYPE_INT),
         MakeMaterialProperty(RadientStandardMaterialBaseColorTextureWrapUName, RADIENT_ANIMATION_VALUE_TYPE_UINT),
         MakeMaterialProperty(RadientStandardMaterialBaseColorTextureWrapVName, RADIENT_ANIMATION_VALUE_TYPE_UINT),
@@ -3584,9 +3585,14 @@ TEST_F(RadientMaterialAnimationDestinationTest, EvaluatesNativeClipAfterMaterial
     const Uint32 Wrap = Builder.AddSampler<Uint32>(
         RADIENT_ANIMATION_VALUE_TYPE_UINT, RADIENT_ANIMATION_INTERPOLATION_STEP,
         {0.f, 1.f}, {RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP, RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP});
-    const Uint32 Matrix = Builder.AddSampler<std::array<Float32, 4>>(
-        RADIENT_ANIMATION_VALUE_TYPE_FLOAT2X2, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
-        {0.f, 1.f}, {{{0.f, 1.f, 2.f, 3.f}}, {{4.f, 5.f, 6.f, 7.f}}});
+    const Uint32 UVScale = Builder.AddSampler<RadientFloat2>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT2, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {{1.f, 2.f}, {3.f, 4.f}});
+    // Rotation is an unwrapped scalar: halfway through one complete turn is pi,
+    // rather than zero as shortest-arc interpolation would produce.
+    const Uint32 UVRotation = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f}, {0.f, 2.f * PI_F});
     const Uint32 AlphaCutoff = Builder.AddSampler<Float32>(
         RADIENT_ANIMATION_VALUE_TYPE_FLOAT, RADIENT_ANIMATION_INTERPOLATION_LINEAR,
         {0.f, 1.f}, {0.2f, 0.6f});
@@ -3596,7 +3602,8 @@ TEST_F(RadientMaterialAnimationDestinationTest, EvaluatesNativeClipAfterMaterial
     Builder.AddChannel(Target, RadientStandardMaterialEmissiveFactorName, Emission);
     Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVSelectorName, UVSelector);
     Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureWrapUName, Wrap);
-    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVScaleAndRotationName, Matrix);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVScaleName, UVScale);
+    Builder.AddChannel(Target, RadientStandardMaterialBaseColorTextureUVRotationName, UVRotation);
     Builder.AddChannel(SurfaceTarget, RadientSurfaceMaterialAlphaCutoffPropertyName, AlphaCutoff);
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
     ASSERT_NE(pClip, nullptr);
@@ -3629,8 +3636,8 @@ TEST_F(RadientMaterialAnimationDestinationTest, EvaluatesNativeClipAfterMaterial
     EXPECT_EQ(GetMaterialParameter<RadientFloat3>(*m_pMaterial, "EmissiveFactor"), (RadientFloat3{1.f, 3.f, 5.f}));
     EXPECT_EQ(GetMaterialParameter<Int32>(*m_pMaterial, "BaseColorTextureUVSelector"), 0);
     EXPECT_EQ(GetMaterialParameter<Uint32>(*m_pMaterial, "BaseColorTextureWrapU"), RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP);
-    EXPECT_EQ((GetMaterialParameter<std::array<Float32, 4>>(*m_pMaterial, "BaseColorTextureUVScaleAndRotation")),
-              (std::array<Float32, 4>{{2.f, 3.f, 4.f, 5.f}}));
+    EXPECT_EQ(GetMaterialParameter<RadientFloat2>(*m_pMaterial, "BaseColorTextureUVScale"), (RadientFloat2{2.f, 3.f}));
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, "BaseColorTextureUVRotation"), PI_F);
     EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.4f);
     EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
     EXPECT_FALSE(pSurface->IsDoubleSided());
@@ -3644,6 +3651,7 @@ TEST_F(RadientMaterialAnimationDestinationTest, EvaluatesNativeClipAfterMaterial
     EXPECT_EQ(GetMaterialParameter<Int32>(*m_pMaterial, "BaseColorTextureUVSelector"), 1);
     EXPECT_EQ(GetMaterialParameter<Uint32>(*m_pMaterial, "BaseColorTextureWrapU"), RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP);
     EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.6f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*m_pMaterial, "BaseColorTextureUVRotation"), 2.f * PI_F);
 }
 
 TEST_F(RadientMaterialAnimationDestinationTest, PreservesExternalChangesToUnboundProperties)

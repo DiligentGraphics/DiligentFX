@@ -356,10 +356,10 @@ private:
         }
 
         RadientStandardMaterialTextureParameters Parameters{Texture->second};
-        Parameters.UVScaleAndRotation = {{Map.Scale.x, 0.f, 0.f, Map.Scale.y}};
-        Parameters.UVBias             = {Map.Offset.x, Map.Offset.y};
-        Parameters.WrapU              = Map.Clamp ? RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP : RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
-        Parameters.WrapV              = Parameters.WrapU;
+        Parameters.UVScale = {Map.Scale.x, Map.Scale.y};
+        Parameters.UVBias  = {Map.Offset.x, Map.Offset.y};
+        Parameters.WrapU   = Map.Clamp ? RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP : RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
+        Parameters.WrapV   = Parameters.WrapU;
         return SetStandardMaterialTextureParameters(Definition, Writer, Names, Parameters);
     }
 

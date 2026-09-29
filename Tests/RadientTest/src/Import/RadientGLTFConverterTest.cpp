@@ -1013,12 +1013,12 @@ TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSe
         const StandardMaterialTextureTestInfo& TextureInfo    = StandardMaterialTextureTestInfos[TextureIndex];
         GLTF::Material::TextureShaderAttribs&  TextureAttribs = Builder.GetTextureAttrib(TextureInfo.TextureAttribId).ShaderAttribs;
 
+        Builder.SetTextureUVTransform(
+            TextureInfo.TextureAttribId,
+            float2{1.f + static_cast<float>(TextureIndex), -2.f - static_cast<float>(TextureIndex)},
+            7.5f + static_cast<float>(TextureIndex),
+            float2{0.01f * static_cast<float>(TextureIndex + 1), 0.02f * static_cast<float>(TextureIndex + 1)});
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
-        TextureAttribs.UVScaleAndRotation = float2x2{
-            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
-            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
-        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
-        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
         TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_MIRROR : TEXTURE_ADDRESS_CLAMP);
         TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
     }
@@ -1031,26 +1031,25 @@ TEST(RadientGLTFConverterTest, ConvertsTextureBindingParametersForAllSupportedSe
 
     for (const StandardMaterialTextureTestInfo& TextureInfo : StandardMaterialTextureTestInfos)
     {
-        const GLTF::Material::TextureShaderAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId).ShaderAttribs;
-        const std::string                           Name{TextureInfo.ParameterName};
+        const GLTF::Material::TextureAttribs& Expected = Material.GetTextureAttrib(TextureInfo.TextureAttribId);
+        const std::string                     Name{TextureInfo.ParameterName};
 
-        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, (Name + "UVSelector").c_str()), Expected.GetUVSelector());
+        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, (Name + "UVSelector").c_str()), Expected.ShaderAttribs.GetUVSelector());
 
-        const float2x2 ActualUVScaleAndRotation =
-            GetMaterialParameter<float2x2>(*pMaterial, (Name + "UVScaleAndRotation").c_str());
-        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._11, Expected.UVScaleAndRotation._11);
-        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._12, Expected.UVScaleAndRotation._12);
-        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._21, Expected.UVScaleAndRotation._21);
-        EXPECT_FLOAT_EQ(ActualUVScaleAndRotation._22, Expected.UVScaleAndRotation._22);
+        const RadientFloat2 ActualUVScale =
+            GetMaterialParameter<RadientFloat2>(*pMaterial, (Name + "UVScale").c_str());
+        EXPECT_FLOAT_EQ(ActualUVScale.x, Expected.UVScale.x);
+        EXPECT_FLOAT_EQ(ActualUVScale.y, Expected.UVScale.y);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, (Name + "UVRotation").c_str()), Expected.UVRotation);
 
         const RadientFloat2 ActualUVBias =
             GetMaterialParameter<RadientFloat2>(*pMaterial, (Name + "UVBias").c_str());
-        EXPECT_FLOAT_EQ(ActualUVBias.x, Expected.UBias);
-        EXPECT_FLOAT_EQ(ActualUVBias.y, Expected.VBias);
+        EXPECT_FLOAT_EQ(ActualUVBias.x, Expected.ShaderAttribs.UBias);
+        EXPECT_FLOAT_EQ(ActualUVBias.y, Expected.ShaderAttribs.VBias);
         EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, (Name + "WrapU").c_str()),
-                  static_cast<Uint32>(Expected.GetWrapUMode()));
+                  static_cast<Uint32>(Expected.ShaderAttribs.GetWrapUMode()));
         EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, (Name + "WrapV").c_str()),
-                  static_cast<Uint32>(Expected.GetWrapVMode()));
+                  static_cast<Uint32>(Expected.ShaderAttribs.GetWrapVMode()));
         EXPECT_EQ(GetMaterialTexture(*pMaterial, Name.c_str()), nullptr);
     }
 }
@@ -1108,19 +1107,15 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
 
     GLTF::Material::TextureShaderAttribs& DiffuseTextureAttribs =
         Builder.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId).ShaderAttribs;
+    Builder.SetTextureUVTransform(GLTF::DefaultDiffuseTextureAttribId, float2{-2.f, 3.f}, 7.5f, float2{0.11f, 0.22f});
     DiffuseTextureAttribs.SetUVSelector(1);
-    DiffuseTextureAttribs.UVScaleAndRotation = float2x2{2.f, 0.1f, 0.2f, 3.f};
-    DiffuseTextureAttribs.UBias              = 0.11f;
-    DiffuseTextureAttribs.VBias              = 0.22f;
     DiffuseTextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
     DiffuseTextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
 
     GLTF::Material::TextureShaderAttribs& SpecularGlossinessTextureAttribs =
         Builder.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId).ShaderAttribs;
+    Builder.SetTextureUVTransform(GLTF::DefaultSpecularGlossinessTextureAttibId, float2{4.f, -5.f}, -8.5f, float2{0.33f, 0.44f});
     SpecularGlossinessTextureAttribs.SetUVSelector(0);
-    SpecularGlossinessTextureAttribs.UVScaleAndRotation = float2x2{4.f, 0.3f, 0.4f, 5.f};
-    SpecularGlossinessTextureAttribs.UBias              = 0.33f;
-    SpecularGlossinessTextureAttribs.VBias              = 0.44f;
     SpecularGlossinessTextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_WRAP);
     SpecularGlossinessTextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_CLAMP);
     Builder.Finalize();
@@ -1177,30 +1172,28 @@ TEST(RadientGLTFConverterTest, ConvertsSpecularGlossinessMaterialDefinitionAndVa
               pSpecularGlossinessTexture);
 
     const auto ExpectTextureBinding = [&](const RadientStandardMaterialTextureParameterNames& Names,
-                                          const GLTF::Material::TextureShaderAttribs&         Expected) {
-        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, Names.UVSelector), Expected.GetUVSelector());
+                                          const GLTF::Material::TextureAttribs&               Expected) {
+        EXPECT_EQ(GetMaterialParameter<Int32>(*pMaterial, Names.UVSelector), Expected.ShaderAttribs.GetUVSelector());
 
-        const float2x2 UVScaleAndRotation =
-            GetMaterialParameter<float2x2>(*pMaterial, Names.UVScaleAndRotation);
-        EXPECT_FLOAT_EQ(UVScaleAndRotation._11, Expected.UVScaleAndRotation._11);
-        EXPECT_FLOAT_EQ(UVScaleAndRotation._12, Expected.UVScaleAndRotation._12);
-        EXPECT_FLOAT_EQ(UVScaleAndRotation._21, Expected.UVScaleAndRotation._21);
-        EXPECT_FLOAT_EQ(UVScaleAndRotation._22, Expected.UVScaleAndRotation._22);
+        const RadientFloat2 UVScale = GetMaterialParameter<RadientFloat2>(*pMaterial, Names.UVScale);
+        EXPECT_FLOAT_EQ(UVScale.x, Expected.UVScale.x);
+        EXPECT_FLOAT_EQ(UVScale.y, Expected.UVScale.y);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*pMaterial, Names.UVRotation), Expected.UVRotation);
 
         const RadientFloat2 UVBias =
             GetMaterialParameter<RadientFloat2>(*pMaterial, Names.UVBias);
-        EXPECT_FLOAT_EQ(UVBias.x, Expected.UBias);
-        EXPECT_FLOAT_EQ(UVBias.y, Expected.VBias);
+        EXPECT_FLOAT_EQ(UVBias.x, Expected.ShaderAttribs.UBias);
+        EXPECT_FLOAT_EQ(UVBias.y, Expected.ShaderAttribs.VBias);
         EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, Names.WrapU),
-                  static_cast<Uint32>(Expected.GetWrapUMode()));
+                  static_cast<Uint32>(Expected.ShaderAttribs.GetWrapUMode()));
         EXPECT_EQ(GetMaterialParameter<Uint32>(*pMaterial, Names.WrapV),
-                  static_cast<Uint32>(Expected.GetWrapVMode()));
+                  static_cast<Uint32>(Expected.ShaderAttribs.GetWrapVMode()));
     };
 
     ExpectTextureBinding(RadientStandardMaterialDiffuseTextureParameterNames,
-                         Material.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId).ShaderAttribs);
+                         Material.GetTextureAttrib(GLTF::DefaultDiffuseTextureAttribId));
     ExpectTextureBinding(RadientStandardMaterialSpecularGlossinessTextureParameterNames,
-                         Material.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId).ShaderAttribs);
+                         Material.GetTextureAttrib(GLTF::DefaultSpecularGlossinessTextureAttibId));
 
     RadientMaterialParameterHandle Handle;
     EXPECT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &Handle),
@@ -2048,24 +2041,62 @@ TEST(RadientGLTFConverterTest, ImportsStandardMaterialAnimationPointerProperties
         {"/extensions/KHR_materials_pbrSpecularGlossiness/specularFactor", RadientStandardMaterialSpecularFactorName, 3, 1},
         {"/extensions/KHR_materials_pbrSpecularGlossiness/glossinessFactor", RadientStandardMaterialGlossinessFactorName, 1, 1},
         {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialBaseColorTextureUVBiasName, 2},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialBaseColorTextureUVScaleName, 2},
+        {"/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialBaseColorTextureUVRotationName, 1},
         {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialMetallicRoughnessTextureUVBiasName, 2},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialMetallicRoughnessTextureUVScaleName, 2},
+        {"/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialMetallicRoughnessTextureUVRotationName, 1},
         {"/normalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialNormalTextureUVBiasName, 2},
+        {"/normalTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialNormalTextureUVScaleName, 2},
+        {"/normalTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialNormalTextureUVRotationName, 1},
         {"/occlusionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialOcclusionTextureUVBiasName, 2},
+        {"/occlusionTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialOcclusionTextureUVScaleName, 2},
+        {"/occlusionTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialOcclusionTextureUVRotationName, 1},
         {"/emissiveTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialEmissiveTextureUVBiasName, 2},
+        {"/emissiveTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialEmissiveTextureUVScaleName, 2},
+        {"/emissiveTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialEmissiveTextureUVRotationName, 1},
         {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatTextureUVRotationName, 1},
         {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatRoughnessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatRoughnessTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatRoughnessTextureUVRotationName, 1},
         {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialClearCoatNormalTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialClearCoatNormalTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_clearcoat/clearcoatNormalTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialClearCoatNormalTextureUVRotationName, 1},
         {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenColorTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSheenColorTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_sheen/sheenColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSheenColorTextureUVRotationName, 1},
         {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSheenRoughnessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSheenRoughnessTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_sheen/sheenRoughnessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSheenRoughnessTextureUVRotationName, 1},
         {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_specular/specularTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularTextureUVRotationName, 1},
         {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularColorTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularColorTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_specular/specularColorTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularColorTextureUVRotationName, 1},
         {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialAnisotropyTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialAnisotropyTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_anisotropy/anisotropyTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialAnisotropyTextureUVRotationName, 1},
         {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialIridescenceTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialIridescenceTextureUVRotationName, 1},
         {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialIridescenceThicknessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialIridescenceThicknessTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_iridescence/iridescenceThicknessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialIridescenceThicknessTextureUVRotationName, 1},
         {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialTransmissionTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialTransmissionTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_transmission/transmissionTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialTransmissionTextureUVRotationName, 1},
         {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialThicknessTextureUVBiasName, 2},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialThicknessTextureUVScaleName, 2},
+        {"/extensions/KHR_materials_volume/thicknessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialThicknessTextureUVRotationName, 1},
         {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialDiffuseTextureUVBiasName, 2, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialDiffuseTextureUVScaleName, 2, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/diffuseTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialDiffuseTextureUVRotationName, 1, 1},
         {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/offset", RadientStandardMaterialSpecularGlossinessTextureUVBiasName, 2, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/scale", RadientStandardMaterialSpecularGlossinessTextureUVScaleName, 2, 1},
+        {"/extensions/KHR_materials_pbrSpecularGlossiness/specularGlossinessTexture/extensions/KHR_texture_transform/rotation", RadientStandardMaterialSpecularGlossinessTextureUVRotationName, 1, 1},
     };
 
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
@@ -2141,6 +2172,122 @@ TEST(RadientGLTFConverterTest, ImportsStandardMaterialAnimationPointerProperties
         const Float32* pValues = static_cast<const Float32*>(ImportedSampler.pValues);
         for (size_t i = 0; i < Values.size(); ++i)
             EXPECT_FLOAT_EQ(pValues[i], Values[i]);
+    }
+}
+
+TEST(RadientGLTFConverterTest, TextureTransformPointersAnimateIndependentComponents)
+{
+    static constexpr Float32 Pi = 3.14159265358979323846f;
+    struct TestCase
+    {
+        bool                                       AnimateScale;
+        bool                                       AnimateRotation;
+        GLTF::AnimationSampler::INTERPOLATION_TYPE RotationInterpolation;
+        Float32                                    ExpectedRotation;
+    };
+    const TestCase Cases[] = {
+        {true, false, GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR, 7.5f},
+        {false, true, GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR, Pi},
+        {true, true, GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR, Pi},
+        {true, true, GLTF::AnimationSampler::INTERPOLATION_TYPE::STEP, 0.f},
+        {true, true, GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE, Pi + 0.5f},
+    };
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory                         TempDir{"RadientGLTFConverterTest"};
+    const std::shared_ptr<GLTF::Document> pDocument = LoadDocument(
+        WriteGLTFFile(TempDir, "animated-texture-transform.gltf", R"GLTF({
+            "asset": {"version": "2.0"},
+            "extensionsUsed": ["KHR_texture_transform"],
+            "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {
+                "index": 0, "extensions": {"KHR_texture_transform": {
+                    "scale": [-2, 0], "rotation": 7.5, "offset": [0.125, 0.25]
+                }}
+            }}}]
+        })GLTF"));
+    ASSERT_NE(pDocument, nullptr);
+    ASSERT_EQ(pDocument->GetMaterialCount(), 1u);
+    for (const TestCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.AnimateScale);
+        SCOPED_TRACE(Case.AnimateRotation);
+        SCOPED_TRACE(static_cast<int>(Case.RotationInterpolation));
+        GLTF::Model Model;
+        Model.Materials.push_back(GLTF::LoadMaterial(*pDocument, 0));
+        RadientImport::ImportedDocument             Scene;
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        Scene.Materials.push_back(ConvertMaterial(Model.Materials[0], nullptr, 0, DefinitionCI));
+        ASSERT_NE(Scene.Materials[0], nullptr);
+        IRadientMaterialAsset& Material = *Scene.Materials[0];
+        Model.Animations.resize(1);
+        GLTF::Animation& Animation = Model.Animations[0];
+        if (Case.AnimateScale)
+        {
+            const Uint32 SamplerIndex = static_cast<Uint32>(Animation.Samplers.size());
+            Animation.Samplers.emplace_back(GLTF::AnimationSampler::INTERPOLATION_TYPE::LINEAR);
+            GLTF::AnimationSampler& Sampler = Animation.Samplers.back();
+            Sampler.Inputs                  = {0.f, 1.f, 3.f};
+            SetFloatAnimationSamplerOutputData(Sampler, 2, {-2.f, 0.f, 2.f, 4.f, -4.f, 0.f});
+            Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                            &Model.Materials[0],
+                                            "/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale",
+                                            SamplerIndex);
+        }
+        if (Case.AnimateRotation)
+        {
+            const Uint32 SamplerIndex = static_cast<Uint32>(Animation.Samplers.size());
+            Animation.Samplers.emplace_back(Case.RotationInterpolation);
+            GLTF::AnimationSampler& Sampler = Animation.Samplers.back();
+            // Different key times from scale require independent scalar/vector
+            // sampling. A full turn must retain its authored direction and extent.
+            Sampler.Inputs = {0.f, 4.f};
+            if (Case.RotationInterpolation == GLTF::AnimationSampler::INTERPOLATION_TYPE::CUBICSPLINE)
+            {
+                // At the midpoint, the outgoing tangent contributes 4 * 1/8.
+                SetFloatAnimationSamplerOutputData(Sampler, 1, {0.f, 0.f, 1.f, 0.f, 2.f * Pi, 0.f});
+            }
+            else
+            {
+                SetFloatAnimationSamplerOutputData(Sampler, 1, {0.f, 2.f * Pi});
+            }
+            Animation.Channels.emplace_back(GLTF::AnimationChannel::OBJECT_TYPE::MATERIAL,
+                                            &Model.Materials[0],
+                                            "/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation",
+                                            SamplerIndex);
+        }
+        ASSERT_EQ(RadientGLTFConverter::ExtractSceneGraph(Model, Scene, pAssetManager, pDocument.get()), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.Animations.size(), 1u);
+        ASSERT_NE(Scene.Animations[0].pClip, nullptr);
+        const RadientAnimationClipDesc& Clip = Scene.Animations[0].pClip->GetDesc();
+        ASSERT_EQ(Clip.TargetCount, 1u);
+        EXPECT_EQ(Clip.ChannelCount, static_cast<Uint32>(Case.AnimateScale) + static_cast<Uint32>(Case.AnimateRotation));
+        const Uint32 TargetIndex = FindAnimationTargetIndex(Clip, RadientMaterialAnimationSchemaID, 0);
+        ASSERT_NE(TargetIndex, InvalidRadientAnimationTargetIndex);
+        RefCntAutoPtr<IRadientAnimationDestination> pDestination{&Material, IID_RadientAnimationDestination};
+        ASSERT_NE(pDestination, nullptr);
+        RadientAnimationDestinationMappingDesc Mapping{};
+        Mapping.ClipTargetIndex    = TargetIndex;
+        Mapping.DestinationElement = 0;
+        RadientAnimationDestinationDesc Destination{};
+        Destination.pDestination = pDestination;
+        Destination.pMappings    = &Mapping;
+        Destination.MappingCount = 1;
+        RadientAnimationBindingDesc BindingDesc{};
+        BindingDesc.pDestinations    = &Destination;
+        BindingDesc.DestinationCount = 1;
+        RefCntAutoPtr<IRadientAnimationBinding> pBinding;
+        ASSERT_EQ(Scene.Animations[0].pClip->CreateBinding(BindingDesc, pBinding.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+        ASSERT_NE(pBinding, nullptr);
+        RadientAnimationEvaluateInfo EvaluateInfo{};
+        EvaluateInfo.Time = 2.f;
+        ASSERT_EQ(pBinding->Evaluate(EvaluateInfo), RADIENT_STATUS_OK);
+        const RadientFloat2 Scale = GetMaterialParameter<RadientFloat2>(Material, RadientStandardMaterialBaseColorTextureUVScaleName);
+        EXPECT_FLOAT_EQ(Scale.x, Case.AnimateScale ? -1.f : -2.f);
+        EXPECT_FLOAT_EQ(Scale.y, Case.AnimateScale ? 2.f : 0.f);
+        EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, RadientStandardMaterialBaseColorTextureUVRotationName), Case.ExpectedRotation);
+        const RadientFloat2 Bias = GetMaterialParameter<RadientFloat2>(Material, RadientStandardMaterialBaseColorTextureUVBiasName);
+        EXPECT_FLOAT_EQ(Bias.x, 0.125f);
+        EXPECT_FLOAT_EQ(Bias.y, 0.25f);
     }
 }
 

@@ -104,12 +104,13 @@ static constexpr Uint32 InvalidParameterIndex = ~Uint32{0};
 
 struct StandardMaterialTextureParameterIndices
 {
-    Uint32 Texture            = InvalidParameterIndex;
-    Uint32 UVSelector         = InvalidParameterIndex;
-    Uint32 UVScaleAndRotation = InvalidParameterIndex;
-    Uint32 UVBias             = InvalidParameterIndex;
-    Uint32 WrapU              = InvalidParameterIndex;
-    Uint32 WrapV              = InvalidParameterIndex;
+    Uint32 Texture    = InvalidParameterIndex;
+    Uint32 UVSelector = InvalidParameterIndex;
+    Uint32 UVScale    = InvalidParameterIndex;
+    Uint32 UVRotation = InvalidParameterIndex;
+    Uint32 UVBias     = InvalidParameterIndex;
+    Uint32 WrapU      = InvalidParameterIndex;
+    Uint32 WrapV      = InvalidParameterIndex;
 };
 
 struct StandardMaterialParameters
@@ -168,7 +169,8 @@ StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     IRadientTextureAsset*                      pDefaultTexture,
     const Char*                                TextureName,
     const Char*                                UVSelectorName,
-    const Char*                                UVScaleAndRotationName,
+    const Char*                                UVScaleName,
+    const Char*                                UVRotationName,
     const Char*                                UVBiasName,
     const Char*                                WrapUName,
     const Char*                                WrapVName)
@@ -180,15 +182,18 @@ StandardMaterialTextureParameterIndices AddStandardMaterialTextureParameters(
     Desc.Type                          = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
     Desc.pDefaultTexture               = pDefaultTexture;
 
-    static constexpr Int32                                 DefaultUVSelector           = -1;
-    static constexpr Float32                               DefaultUVScaleAndRotation[] = {1.f, 0.f, 0.f, 1.f};
+    static constexpr Int32                                 DefaultUVSelector = -1;
+    static constexpr RadientFloat2                         DefaultUVScale{1.f, 1.f};
+    static constexpr Float32                               DefaultUVRotation = 0.f;
     static constexpr RadientFloat2                         DefaultUVBias{0.f, 0.f};
     static constexpr RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE DefaultWrapMode = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
 
     Indices.UVSelector = AddStandardMaterialValueParameter(
         Parameters, UVSelectorName, RADIENT_MATERIAL_PARAMETER_TYPE_INT, &DefaultUVSelector);
-    Indices.UVScaleAndRotation = AddStandardMaterialValueParameter(
-        Parameters, UVScaleAndRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2, &DefaultUVScaleAndRotation);
+    Indices.UVScale = AddStandardMaterialValueParameter(
+        Parameters, UVScaleName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2, &DefaultUVScale);
+    Indices.UVRotation = AddStandardMaterialValueParameter(
+        Parameters, UVRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT, &DefaultUVRotation);
     Indices.UVBias = AddStandardMaterialValueParameter(
         Parameters, UVBiasName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2, &DefaultUVBias);
     Indices.WrapU = AddStandardMaterialValueParameter(
@@ -217,7 +222,7 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
 
     StandardMaterialParameters                 Result;
     std::vector<RadientMaterialParameterDesc>& Parameters = Result.Parameters;
-    Parameters.reserve(32 + 6 * PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT);
+    Parameters.reserve(32 + 7 * PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT);
 
     switch (CreateInfo.ShadingModel)
     {
@@ -301,15 +306,16 @@ StandardMaterialParameters BuildStandardMaterialParameters(const RadientStandard
         }
     }
 
-#define ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PBRName, Name, DefaultTexture)                            \
-    Result.TextureIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_##PBRName] =                                     \
-        AddStandardMaterialTextureParameters(Parameters,                                                   \
-                                             DefaultTextures.DefaultTexture,                               \
-                                             RadientStandardMaterial##Name##TextureName,                   \
-                                             RadientStandardMaterial##Name##TextureUVSelectorName,         \
-                                             RadientStandardMaterial##Name##TextureUVScaleAndRotationName, \
-                                             RadientStandardMaterial##Name##TextureUVBiasName,             \
-                                             RadientStandardMaterial##Name##TextureWrapUName,              \
+#define ADD_STANDARD_MATERIAL_TEXTURE_PARAMETERS(PBRName, Name, DefaultTexture)                    \
+    Result.TextureIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_##PBRName] =                             \
+        AddStandardMaterialTextureParameters(Parameters,                                           \
+                                             DefaultTextures.DefaultTexture,                       \
+                                             RadientStandardMaterial##Name##TextureName,           \
+                                             RadientStandardMaterial##Name##TextureUVSelectorName, \
+                                             RadientStandardMaterial##Name##TextureUVScaleName,    \
+                                             RadientStandardMaterial##Name##TextureUVRotationName, \
+                                             RadientStandardMaterial##Name##TextureUVBiasName,     \
+                                             RadientStandardMaterial##Name##TextureWrapUName,      \
                                              RadientStandardMaterial##Name##TextureWrapVName)
 
     switch (CreateInfo.ShadingModel)
@@ -474,7 +480,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
     static const Material::TextureShaderAttribs DefaultTextureAttribs{};
 
     StandardMaterialShaderDataLayout Layout;
-    Layout.ParameterPackings.reserve(32 + PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT * 2);
+    Layout.ParameterPackings.reserve(32 + PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT);
     Layout.TexturePackings.reserve(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT);
     Layout.Initializations.reserve(16 + PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT * 2);
 
@@ -602,8 +608,6 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                 MaterialParameters.TextureIndices[AttribId];
             if (TextureIndices.Texture != InvalidParameterIndex)
             {
-                AddParameterPacking(Layout, TextureIndices.UVScaleAndRotation,
-                                    Offset + offsetof(Material::TextureShaderAttribs, UVScaleAndRotation));
                 AddParameterPacking(Layout, TextureIndices.UVBias,
                                     Offset + offsetof(Material::TextureShaderAttribs, UBias));
                 Layout.TexturePackings.push_back(
@@ -611,7 +615,9 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                      TextureIndices.UVSelector,
                      TextureIndices.WrapU,
                      TextureIndices.WrapV,
-                     Offset});
+                     Offset,
+                     TextureIndices.UVScale,
+                     TextureIndices.UVRotation});
             }
 
             Offset += sizeof(Material::TextureShaderAttribs);

@@ -40,6 +40,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -134,11 +135,10 @@ GLTF::Material MakeExtendedPBRMaterial()
 
         GLTF::Material::TextureShaderAttribs& TextureAttribs = Builder.GetTextureAttrib(TextureAttribId).ShaderAttribs;
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
-        TextureAttribs.UVScaleAndRotation = float2x2{
-            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
-            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
-        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
-        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
+        Builder.SetTextureUVTransform(TextureAttribId,
+                                      float2{1.f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)},
+                                      0.1f * static_cast<float>(TextureIndex + 1),
+                                      float2{0.01f * static_cast<float>(TextureIndex + 1), 0.02f * static_cast<float>(TextureIndex + 1)});
         TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_MIRROR : TEXTURE_ADDRESS_CLAMP);
         TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
     }
@@ -176,11 +176,10 @@ GLTF::Material MakeSpecularGlossinessMaterial()
         GLTF::Material::TextureShaderAttribs& TextureAttribs =
             Builder.GetTextureAttrib(TextureAttribId).ShaderAttribs;
         TextureAttribs.SetUVSelector(static_cast<int>(TextureIndex % 2));
-        TextureAttribs.UVScaleAndRotation = float2x2{
-            1.f + static_cast<float>(TextureIndex), 0.1f + static_cast<float>(TextureIndex),
-            0.2f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)};
-        TextureAttribs.UBias = 0.01f * static_cast<float>(TextureIndex + 1);
-        TextureAttribs.VBias = 0.02f * static_cast<float>(TextureIndex + 1);
+        Builder.SetTextureUVTransform(TextureAttribId,
+                                      float2{1.f + static_cast<float>(TextureIndex), 2.f + static_cast<float>(TextureIndex)},
+                                      0.1f * static_cast<float>(TextureIndex + 1),
+                                      float2{0.01f * static_cast<float>(TextureIndex + 1), 0.02f * static_cast<float>(TextureIndex + 1)});
         TextureAttribs.SetWrapUMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_WRAP : TEXTURE_ADDRESS_CLAMP);
         TextureAttribs.SetWrapVMode(TextureIndex % 2 == 0 ? TEXTURE_ADDRESS_CLAMP : TEXTURE_ADDRESS_WRAP);
     }
@@ -506,7 +505,8 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
         const Char* ParameterNames[] = {
             pNames->Texture,
             pNames->UVSelector,
-            pNames->UVScaleAndRotation,
+            pNames->UVScale,
+            pNames->UVRotation,
             pNames->UVBias,
             pNames->WrapU,
             pNames->WrapV,
@@ -526,11 +526,12 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
     ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
 
     RadientStandardMaterialTextureParameters Parameters{pUpdatedTexture};
-    Parameters.UVSelector         = 3;
-    Parameters.UVScaleAndRotation = {{2.f, 0.1f, 0.2f, 3.f}};
-    Parameters.UVBias             = {0.25f, 0.5f};
-    Parameters.WrapU              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
-    Parameters.WrapV              = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    Parameters.UVSelector = 3;
+    Parameters.UVScale    = {2.f, 3.f};
+    Parameters.UVRotation = 0.5f;
+    Parameters.UVBias     = {0.25f, 0.5f};
+    Parameters.WrapU      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
+    Parameters.WrapV      = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP;
 
     EXPECT_EQ(SetStandardMaterialTextureParameters(
                   *pDefinition,
@@ -560,8 +561,8 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
     ASSERT_EQ(pMaterial->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture, pUpdatedTexture);
     EXPECT_EQ(GetParameter<Int32>(*pMaterial, FindHandle(Names.UVSelector)), Parameters.UVSelector);
-    EXPECT_EQ((GetParameter<std::array<Float32, 4>>(*pMaterial, FindHandle(Names.UVScaleAndRotation))),
-              Parameters.UVScaleAndRotation);
+    EXPECT_EQ(GetParameter<RadientFloat2>(*pMaterial, FindHandle(Names.UVScale)), Parameters.UVScale);
+    EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, FindHandle(Names.UVRotation)), Parameters.UVRotation);
 
     const RadientFloat2 UVBias = GetParameter<RadientFloat2>(*pMaterial, FindHandle(Names.UVBias));
     EXPECT_FLOAT_EQ(UVBias.x, Parameters.UVBias.x);
@@ -615,6 +616,68 @@ TEST(RadientStandardMaterialTest, StandardTextureParameterHelper)
     pStoredTexture.Release();
     ASSERT_EQ(pMaterial->GetTexture(TextureHandle, 0, pStoredTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     EXPECT_EQ(pStoredTexture, pDefaultTexture);
+}
+
+TEST(RadientStandardMaterialTest, TextureTransformPackingTracksScaleAndRotation)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
+    ASSERT_NE(pAssetManager, nullptr);
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+    RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+    ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, &pDefinition), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    ASSERT_EQ(pAssetManager->CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+
+    RadientMaterialParameterHandle ScaleHandle;
+    RadientMaterialParameterHandle RotationHandle;
+    ASSERT_EQ(pDefinition->FindParameter(RadientStandardMaterialBaseColorTextureUVScaleName, &ScaleHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pDefinition->FindParameter(RadientStandardMaterialBaseColorTextureUVRotationName, &RotationHandle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ScaleHandle, RadientFloat2{2.f, 3.f}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    const RadientMaterialDefinitionImpl& DefinitionImpl = static_cast<const RadientMaterialDefinitionImpl&>(*pDefinition);
+    std::vector<Uint8>                   ShaderData(DefinitionImpl.GetShaderDataSize());
+    Uint64                               PackedVersion   = DefinitionImpl.WriteShaderData(*pMaterial, ShaderData.data());
+    const auto                           ExpectTransform = [&](float M00, float M01, float M10, float M11) {
+        GLTF::Material::TextureShaderAttribs TextureAttribs;
+        std::memcpy(&TextureAttribs, ShaderData.data() + sizeof(GLTF::Material::ShaderAttribs), sizeof(TextureAttribs));
+        EXPECT_NEAR(TextureAttribs.UVScaleAndRotation._11, M00, 1e-6f);
+        EXPECT_NEAR(TextureAttribs.UVScaleAndRotation._12, M01, 1e-6f);
+        EXPECT_NEAR(TextureAttribs.UVScaleAndRotation._21, M10, 1e-6f);
+        EXPECT_NEAR(TextureAttribs.UVScaleAndRotation._22, M11, 1e-6f);
+    };
+    ExpectTransform(2.f, 0.f, 0.f, 3.f);
+
+    // Editing only rotation must compose with the current, unequal scale.
+    ASSERT_EQ(pWriter->SetParameter(RotationHandle, PI_F / 2.f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    ExpectTransform(0.f, -2.f, 3.f, 0.f);
+
+    // Editing only scale must preserve rotation, including negative and zero scale.
+    ASSERT_EQ(pWriter->SetParameter(ScaleHandle, RadientFloat2{-4.f, 0.f}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    ExpectTransform(0.f, 4.f, 0.f, 0.f);
+
+    ASSERT_EQ(pWriter->SetParameter(RotationHandle, PI_F), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion + 1);
+    ++PackedVersion;
+    ExpectTransform(4.f, 0.f, 0.f, 0.f);
+
+    const std::vector<Uint8> UnchangedShaderData = ShaderData;
+    const Uint64             UnchangedVersion    = pMaterial->GetVersion();
+    ASSERT_EQ(pWriter->SetParameter(RotationHandle, PI_F), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pMaterial->GetVersion(), UnchangedVersion);
+    EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion);
+    EXPECT_EQ(ShaderData, UnchangedShaderData);
 }
 
 TEST(RadientStandardMaterialTest, ExtendedPBRShaderDataMatchesGLTFPacking)
@@ -681,9 +744,7 @@ TEST(RadientStandardMaterialTest, UnlitPBRShaderDataMatchesGLTFPacking)
     TextureAttribs.SetUVSelector(1);
     TextureAttribs.SetWrapUMode(TEXTURE_ADDRESS_CLAMP);
     TextureAttribs.SetWrapVMode(TEXTURE_ADDRESS_WRAP);
-    TextureAttribs.UVScaleAndRotation = float2x2{2.f, 0.1f, 0.2f, 3.f};
-    TextureAttribs.UBias              = 0.15f;
-    TextureAttribs.VBias              = 0.25f;
+    Builder.SetTextureUVTransform(GLTF::DefaultBaseColorTextureAttribId, float2{2.f, 3.f}, 0.5f, float2{0.15f, 0.25f});
     Builder.Finalize();
 
     RefCntAutoPtr<IRadientMaterialAsset> pMaterial =
@@ -705,7 +766,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
     {
         const Char* Texture;
         const Char* UVSelector;
-        const Char* UVScaleAndRotation;
+        const Char* UVScale;
+        const Char* UVRotation;
         const Char* UVBias;
         const Char* WrapU;
         const Char* WrapV;
@@ -714,12 +776,13 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
 #define EXPECTED_PARAMETER(Name, Type) \
     ExpectedParameter { Name, Type }
 
-#define STANDARD_TEXTURE_PARAMETERS(Name)                                                                                           \
-    EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureName, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE),                        \
-        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVSelectorName, RADIENT_MATERIAL_PARAMETER_TYPE_INT),              \
-        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVScaleAndRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2), \
-        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVBiasName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2),               \
-        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureWrapUName, RADIENT_MATERIAL_PARAMETER_TYPE_UINT),                  \
+#define STANDARD_TEXTURE_PARAMETERS(Name)                                                                                \
+    EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureName, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE),             \
+        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVSelectorName, RADIENT_MATERIAL_PARAMETER_TYPE_INT),   \
+        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVScaleName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2),   \
+        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVRotationName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT), \
+        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureUVBiasName, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2),    \
+        EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureWrapUName, RADIENT_MATERIAL_PARAMETER_TYPE_UINT),       \
         EXPECTED_PARAMETER(RadientStandardMaterial##Name##TextureWrapVName, RADIENT_MATERIAL_PARAMETER_TYPE_UINT)
 
     static constexpr ExpectedParameter ExpectedParameters[] = {
@@ -766,15 +829,16 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         STANDARD_TEXTURE_PARAMETERS(Thickness),
     };
 
-#define TEXTURE_SEMANTIC_PARAMETERS(Name)                                 \
-    TextureSemanticParameters                                             \
-    {                                                                     \
-        RadientStandardMaterial##Name##TextureName,                       \
-            RadientStandardMaterial##Name##TextureUVSelectorName,         \
-            RadientStandardMaterial##Name##TextureUVScaleAndRotationName, \
-            RadientStandardMaterial##Name##TextureUVBiasName,             \
-            RadientStandardMaterial##Name##TextureWrapUName,              \
-            RadientStandardMaterial##Name##TextureWrapVName               \
+#define TEXTURE_SEMANTIC_PARAMETERS(Name)                         \
+    TextureSemanticParameters                                     \
+    {                                                             \
+        RadientStandardMaterial##Name##TextureName,               \
+            RadientStandardMaterial##Name##TextureUVSelectorName, \
+            RadientStandardMaterial##Name##TextureUVScaleName,    \
+            RadientStandardMaterial##Name##TextureUVRotationName, \
+            RadientStandardMaterial##Name##TextureUVBiasName,     \
+            RadientStandardMaterial##Name##TextureWrapUName,      \
+            RadientStandardMaterial##Name##TextureWrapVName       \
     }
 
     static constexpr std::array TextureSemantics{
@@ -830,8 +894,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
     ASSERT_EQ(pAssetManager->CreateMaterial(pDefinition, pMaterial.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pMaterial, nullptr);
 
-    const std::array<Float32, 4> ExpectedUVScaleAndRotation{1.f, 0.f, 0.f, 1.f};
-    const RadientFloat2          ExpectedUVBias{0.f, 0.f};
+    const RadientFloat2 ExpectedUVScale{1.f, 1.f};
+    const RadientFloat2 ExpectedUVBias{0.f, 0.f};
     for (const TextureSemanticParameters& Semantic : TextureSemantics)
     {
         const auto FindHandle = [&](const Char* Name) {
@@ -844,7 +908,8 @@ TEST(RadientStandardMaterialTest, DefinitionUsesPublishedParameterSchema)
         ASSERT_EQ(pMaterial->GetTexture(FindHandle(Semantic.Texture), 0, pTexture.GetAddressOfEmpty()), RADIENT_STATUS_OK);
         EXPECT_EQ(pTexture, nullptr);
         EXPECT_EQ(GetParameter<Int32>(*pMaterial, FindHandle(Semantic.UVSelector)), -1);
-        EXPECT_EQ((GetParameter<std::array<Float32, 4>>(*pMaterial, FindHandle(Semantic.UVScaleAndRotation))), ExpectedUVScaleAndRotation);
+        EXPECT_EQ(GetParameter<RadientFloat2>(*pMaterial, FindHandle(Semantic.UVScale)), ExpectedUVScale);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, FindHandle(Semantic.UVRotation)), 0.f);
 
         const RadientFloat2 UVBias = GetParameter<RadientFloat2>(*pMaterial, FindHandle(Semantic.UVBias));
         EXPECT_FLOAT_EQ(UVBias.x, ExpectedUVBias.x);
@@ -882,31 +947,36 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialOcclusionStrengthName,
         RadientStandardMaterialBaseColorTextureName,
         RadientStandardMaterialBaseColorTextureUVSelectorName,
-        RadientStandardMaterialBaseColorTextureUVScaleAndRotationName,
+        RadientStandardMaterialBaseColorTextureUVScaleName,
+        RadientStandardMaterialBaseColorTextureUVRotationName,
         RadientStandardMaterialBaseColorTextureUVBiasName,
         RadientStandardMaterialBaseColorTextureWrapUName,
         RadientStandardMaterialBaseColorTextureWrapVName,
         RadientStandardMaterialMetallicRoughnessTextureName,
         RadientStandardMaterialMetallicRoughnessTextureUVSelectorName,
-        RadientStandardMaterialMetallicRoughnessTextureUVScaleAndRotationName,
+        RadientStandardMaterialMetallicRoughnessTextureUVScaleName,
+        RadientStandardMaterialMetallicRoughnessTextureUVRotationName,
         RadientStandardMaterialMetallicRoughnessTextureUVBiasName,
         RadientStandardMaterialMetallicRoughnessTextureWrapUName,
         RadientStandardMaterialMetallicRoughnessTextureWrapVName,
         RadientStandardMaterialNormalTextureName,
         RadientStandardMaterialNormalTextureUVSelectorName,
-        RadientStandardMaterialNormalTextureUVScaleAndRotationName,
+        RadientStandardMaterialNormalTextureUVScaleName,
+        RadientStandardMaterialNormalTextureUVRotationName,
         RadientStandardMaterialNormalTextureUVBiasName,
         RadientStandardMaterialNormalTextureWrapUName,
         RadientStandardMaterialNormalTextureWrapVName,
         RadientStandardMaterialOcclusionTextureName,
         RadientStandardMaterialOcclusionTextureUVSelectorName,
-        RadientStandardMaterialOcclusionTextureUVScaleAndRotationName,
+        RadientStandardMaterialOcclusionTextureUVScaleName,
+        RadientStandardMaterialOcclusionTextureUVRotationName,
         RadientStandardMaterialOcclusionTextureUVBiasName,
         RadientStandardMaterialOcclusionTextureWrapUName,
         RadientStandardMaterialOcclusionTextureWrapVName,
         RadientStandardMaterialEmissiveTextureName,
         RadientStandardMaterialEmissiveTextureUVSelectorName,
-        RadientStandardMaterialEmissiveTextureUVScaleAndRotationName,
+        RadientStandardMaterialEmissiveTextureUVScaleName,
+        RadientStandardMaterialEmissiveTextureUVRotationName,
         RadientStandardMaterialEmissiveTextureUVBiasName,
         RadientStandardMaterialEmissiveTextureWrapUName,
         RadientStandardMaterialEmissiveTextureWrapVName,
@@ -921,31 +991,36 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialOcclusionStrengthName,
         RadientStandardMaterialDiffuseTextureName,
         RadientStandardMaterialDiffuseTextureUVSelectorName,
-        RadientStandardMaterialDiffuseTextureUVScaleAndRotationName,
+        RadientStandardMaterialDiffuseTextureUVScaleName,
+        RadientStandardMaterialDiffuseTextureUVRotationName,
         RadientStandardMaterialDiffuseTextureUVBiasName,
         RadientStandardMaterialDiffuseTextureWrapUName,
         RadientStandardMaterialDiffuseTextureWrapVName,
         RadientStandardMaterialSpecularGlossinessTextureName,
         RadientStandardMaterialSpecularGlossinessTextureUVSelectorName,
-        RadientStandardMaterialSpecularGlossinessTextureUVScaleAndRotationName,
+        RadientStandardMaterialSpecularGlossinessTextureUVScaleName,
+        RadientStandardMaterialSpecularGlossinessTextureUVRotationName,
         RadientStandardMaterialSpecularGlossinessTextureUVBiasName,
         RadientStandardMaterialSpecularGlossinessTextureWrapUName,
         RadientStandardMaterialSpecularGlossinessTextureWrapVName,
         RadientStandardMaterialNormalTextureName,
         RadientStandardMaterialNormalTextureUVSelectorName,
-        RadientStandardMaterialNormalTextureUVScaleAndRotationName,
+        RadientStandardMaterialNormalTextureUVScaleName,
+        RadientStandardMaterialNormalTextureUVRotationName,
         RadientStandardMaterialNormalTextureUVBiasName,
         RadientStandardMaterialNormalTextureWrapUName,
         RadientStandardMaterialNormalTextureWrapVName,
         RadientStandardMaterialOcclusionTextureName,
         RadientStandardMaterialOcclusionTextureUVSelectorName,
-        RadientStandardMaterialOcclusionTextureUVScaleAndRotationName,
+        RadientStandardMaterialOcclusionTextureUVScaleName,
+        RadientStandardMaterialOcclusionTextureUVRotationName,
         RadientStandardMaterialOcclusionTextureUVBiasName,
         RadientStandardMaterialOcclusionTextureWrapUName,
         RadientStandardMaterialOcclusionTextureWrapVName,
         RadientStandardMaterialEmissiveTextureName,
         RadientStandardMaterialEmissiveTextureUVSelectorName,
-        RadientStandardMaterialEmissiveTextureUVScaleAndRotationName,
+        RadientStandardMaterialEmissiveTextureUVScaleName,
+        RadientStandardMaterialEmissiveTextureUVRotationName,
         RadientStandardMaterialEmissiveTextureUVBiasName,
         RadientStandardMaterialEmissiveTextureWrapUName,
         RadientStandardMaterialEmissiveTextureWrapVName,
@@ -960,31 +1035,36 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
         RADIENT_MATERIAL_PARAMETER_TYPE_INT,
-        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
         RADIENT_MATERIAL_PARAMETER_TYPE_INT,
-        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
         RADIENT_MATERIAL_PARAMETER_TYPE_INT,
-        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
         RADIENT_MATERIAL_PARAMETER_TYPE_INT,
-        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE,
         RADIENT_MATERIAL_PARAMETER_TYPE_INT,
-        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
+        RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT,
         RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
         RADIENT_MATERIAL_PARAMETER_TYPE_UINT,
@@ -1080,7 +1160,8 @@ TEST(RadientStandardMaterialTest, MinimalSchemasAreExact)
         RadientStandardMaterialBaseColorFactorName,
         RadientStandardMaterialBaseColorTextureName,
         RadientStandardMaterialBaseColorTextureUVSelectorName,
-        RadientStandardMaterialBaseColorTextureUVScaleAndRotationName,
+        RadientStandardMaterialBaseColorTextureUVScaleName,
+        RadientStandardMaterialBaseColorTextureUVRotationName,
         RadientStandardMaterialBaseColorTextureUVBiasName,
         RadientStandardMaterialBaseColorTextureWrapUName,
         RadientStandardMaterialBaseColorTextureWrapVName,
@@ -1105,13 +1186,14 @@ TEST(RadientStandardMaterialTest, UnlitMaterialHasOnlyApplicableSchema)
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(pAssetManager->CreateStandardMaterialDefinition(DefinitionCI, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
-    EXPECT_EQ(pDefinition->GetParameterCount(), 7u);
+    EXPECT_EQ(pDefinition->GetParameterCount(), 8u);
 
     static constexpr std::array ExpectedParameters{
         RadientStandardMaterialBaseColorFactorName,
         RadientStandardMaterialBaseColorTextureName,
         RadientStandardMaterialBaseColorTextureUVSelectorName,
-        RadientStandardMaterialBaseColorTextureUVScaleAndRotationName,
+        RadientStandardMaterialBaseColorTextureUVScaleName,
+        RadientStandardMaterialBaseColorTextureUVRotationName,
         RadientStandardMaterialBaseColorTextureUVBiasName,
         RadientStandardMaterialBaseColorTextureWrapUName,
         RadientStandardMaterialBaseColorTextureWrapVName,

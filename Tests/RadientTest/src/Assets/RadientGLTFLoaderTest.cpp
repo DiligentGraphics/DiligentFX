@@ -881,7 +881,12 @@ public:
         const std::string URI      = ResolveInfo.URI;
         const size_t      SlashPos = URI.find_last_of("/\\");
         const std::string FileName = SlashPos != std::string::npos ? URI.substr(SlashPos + 1) : URI;
-        const Uint32      Index    = FileName == "transparent.png" ? 0u : FileName == "white.png" ? 1u : 2u;
+
+        // clang-format off
+        const Uint32 Index = FileName == "transparent.png" ? 0u :
+                             FileName == "white.png"      ?  1u : 
+                                                             2u;
+        // clang-format on
         if (Index >= m_Data.size())
             return RADIENT_STATUS_NOT_FOUND;
 
@@ -1477,6 +1482,80 @@ TEST(RadientGLTFLoaderTest, LoadMaterialsPreservesSpecularGlossinessFactors)
         pMaterial, IID_RadientSurfaceMaterialAsset};
     ASSERT_NE(pSurfaceMaterial, nullptr);
     EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
+}
+
+TEST(RadientGLTFLoaderTest, LoadMaterialsPreservesTextureTransformComponents)
+{
+    struct TextureCase
+    {
+        const char*                                         MaterialPrefix;
+        const char*                                         MaterialSuffix;
+        const RadientStandardMaterialTextureParameterNames* pNames;
+    };
+    const TextureCase Textures[] = {
+        {R"({"pbrMetallicRoughness":{"baseColorTexture":)", "}}", &RadientStandardMaterialBaseColorTextureParameterNames},
+        {R"({"pbrMetallicRoughness":{"metallicRoughnessTexture":)", "}}", &RadientStandardMaterialMetallicRoughnessTextureParameterNames},
+        {R"({"normalTexture":)", "}", &RadientStandardMaterialNormalTextureParameterNames},
+        {R"({"occlusionTexture":)", "}", &RadientStandardMaterialOcclusionTextureParameterNames},
+        {R"({"emissiveTexture":)", "}", &RadientStandardMaterialEmissiveTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,"clearcoatTexture":)", "}}}", &RadientStandardMaterialClearCoatTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,"clearcoatRoughnessTexture":)", "}}}", &RadientStandardMaterialClearCoatRoughnessTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,"clearcoatNormalTexture":)", "}}}", &RadientStandardMaterialClearCoatNormalTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_sheen":{"sheenColorTexture":)", "}}}", &RadientStandardMaterialSheenColorTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_sheen":{"sheenRoughnessTexture":)", "}}}", &RadientStandardMaterialSheenRoughnessTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_specular":{"specularTexture":)", "}}}", &RadientStandardMaterialSpecularTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_specular":{"specularColorTexture":)", "}}}", &RadientStandardMaterialSpecularColorTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_anisotropy":{"anisotropyTexture":)", "}}}", &RadientStandardMaterialAnisotropyTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_iridescence":{"iridescenceTexture":)", "}}}", &RadientStandardMaterialIridescenceTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_iridescence":{"iridescenceThicknessTexture":)", "}}}", &RadientStandardMaterialIridescenceThicknessTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_transmission":{"transmissionTexture":)", "}}}", &RadientStandardMaterialTransmissionTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_volume":{"thicknessTexture":)", "}}}", &RadientStandardMaterialThicknessTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_pbrSpecularGlossiness":{"diffuseTexture":)", "}}}", &RadientStandardMaterialDiffuseTextureParameterNames},
+        {R"({"extensions":{"KHR_materials_pbrSpecularGlossiness":{"specularGlossinessTexture":)", "}}}", &RadientStandardMaterialSpecularGlossinessTextureParameterNames},
+    };
+    struct TransformCase
+    {
+        const char*   Extension;
+        RadientFloat2 Scale;
+        Float32       Rotation;
+    };
+    const TransformCase Transforms[] = {
+        {"", {1.f, 1.f}, 0.f},
+        {R"(,"extensions":{"KHR_texture_transform":{}})", {1.f, 1.f}, 0.f},
+        {R"(,"extensions":{"KHR_texture_transform":{"scale":[-2,0]}})", {-2.f, 0.f}, 0.f},
+        {R"(,"extensions":{"KHR_texture_transform":{"rotation":7.5}})", {1.f, 1.f}, 7.5f},
+        {R"(,"extensions":{"KHR_texture_transform":{"scale":[0,-3],"rotation":-8}})", {0.f, -3.f}, -8.f},
+    };
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(nullptr);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFLoaderTest"};
+    for (const TextureCase& Texture : Textures)
+    {
+        SCOPED_TRACE(Texture.pNames->Texture);
+        for (const TransformCase& Transform : Transforms)
+        {
+            SCOPED_TRACE(Transform.Extension);
+            std::ostringstream JSON;
+            JSON << R"GLTF({"asset":{"version":"2.0"},
+                "textures":[{"source":0}],
+                "images":[{"uri":"data:image/png;base64,)GLTF"
+                 << TransparentPngBase64 << R"GLTF("}],"materials":[)GLTF"
+                 << Texture.MaterialPrefix << R"({"index":0)" << Transform.Extension << "}"
+                 << Texture.MaterialSuffix << "]}";
+            const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(
+                WriteGLTFFile(TempDir, "texture-transform.gltf", JSON.str().c_str()));
+            ASSERT_NE(pDocument, nullptr);
+            const RadientImport::MaterialAssetList Materials = LoadMaterials(*pAssetManager, pDocument, {});
+            ASSERT_EQ(Materials.size(), 1u);
+            ASSERT_NE(Materials[0], nullptr);
+            // Signed/zero scales and unwrapped angles cannot be recovered reliably
+            // from the combined matrix. Preserve the original authored components.
+            const RadientFloat2 Scale = GetMaterialParameter<RadientFloat2>(*Materials[0], Texture.pNames->UVScale);
+            EXPECT_FLOAT_EQ(Scale.x, Transform.Scale.x);
+            EXPECT_FLOAT_EQ(Scale.y, Transform.Scale.y);
+            EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*Materials[0], Texture.pNames->UVRotation), Transform.Rotation);
+        }
+    }
 }
 
 TEST(RadientGLTFLoaderTest, LoadSceneAssignsDefaultMaterialToUnassignedPrimitive)

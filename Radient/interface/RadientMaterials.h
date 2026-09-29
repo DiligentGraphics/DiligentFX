@@ -385,8 +385,9 @@ struct RadientStandardMaterialDefinitionCreateInfo
 
     /// Every SemanticTexture parameter supplied by the model and its features
     /// is accompanied by mutable SemanticTextureUVSelector (INT),
-    /// SemanticTextureUVScaleAndRotation (FLOAT2X2), SemanticTextureUVBias
-    /// (FLOAT2), and SemanticTextureWrapU and SemanticTextureWrapV (UINT)
+    /// SemanticTextureUVScale (FLOAT2), SemanticTextureUVRotation (FLOAT, radians),
+    /// SemanticTextureUVBias (FLOAT2), and SemanticTextureWrapU and
+    /// SemanticTextureWrapV (UINT)
     /// parameters. Wrap values use RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE.
 };
 typedef struct RadientStandardMaterialDefinitionCreateInfo RadientStandardMaterialDefinitionCreateInfo;

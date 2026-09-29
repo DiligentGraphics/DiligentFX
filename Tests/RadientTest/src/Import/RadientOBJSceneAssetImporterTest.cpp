@@ -297,9 +297,10 @@ TEST_F(RadientOBJSceneAssetImporterTest, ResolvesTexturesRelativeToMTLAndPreserv
     const RadientFloat2    Bias     = GetMaterialParameter<RadientFloat2>(Material, "DiffuseTextureUVBias");
     EXPECT_FLOAT_EQ(Bias.x, 0.1f);
     EXPECT_FLOAT_EQ(Bias.y, 0.2f);
-    const float2x2 Scale = GetMaterialParameter<float2x2>(Material, "DiffuseTextureUVScaleAndRotation");
-    EXPECT_FLOAT_EQ(Scale._11, 2.f);
-    EXPECT_FLOAT_EQ(Scale._22, 3.f);
+    const RadientFloat2 Scale = GetMaterialParameter<RadientFloat2>(Material, "DiffuseTextureUVScale");
+    EXPECT_FLOAT_EQ(Scale.x, 2.f);
+    EXPECT_FLOAT_EQ(Scale.y, 3.f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, "DiffuseTextureUVRotation"), 0.f);
     EXPECT_EQ(GetMaterialParameter<Uint32>(Material, "DiffuseTextureWrapU"), static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP));
     ASSERT_EQ(pManager->WaitForAssetLoad(Document.Textures[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(pResolver->GetStats().LastBaseURI, "memory://materials/surface.mtl");

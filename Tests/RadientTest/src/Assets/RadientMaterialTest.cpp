@@ -1376,6 +1376,62 @@ TEST(RadientMaterialTest, RejectsShaderParameterOverlappingTextureAtlasData)
                                   "parameter 'Value' and texture parameter 'Texture' atlas data overlap");
 }
 
+TEST(RadientMaterialTest, ValidatesTextureTransformPacking)
+{
+    std::array<RadientMaterialParameterDesc, 6> Parameters{};
+    Parameters[0].Name = "Texture";
+    Parameters[0].Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+    Parameters[1].Name = "UVSelector";
+    Parameters[1].Type = RADIENT_MATERIAL_PARAMETER_TYPE_INT;
+    Parameters[2].Name = "Wrap";
+    Parameters[2].Type = RADIENT_MATERIAL_PARAMETER_TYPE_UINT;
+    Parameters[3].Name = "UVScale";
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2;
+    Parameters[4].Name = "UVRotation";
+    Parameters[4].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    Parameters[5].Name = "UVMatrix";
+    Parameters[5].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2;
+
+    RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+    DefinitionDesc.pParameters    = Parameters.data();
+    DefinitionDesc.ParameterCount = static_cast<Uint32>(Parameters.size());
+
+    RadientMaterialShaderTexturePacking TexturePacking{0, 1, 2, 2, 0, 3, 4};
+    RadientMaterialShaderDataLayoutDesc ShaderDataLayout{};
+    ShaderDataLayout.Size                = static_cast<Uint32>(sizeof(GLTF::Material::TextureShaderAttribs));
+    ShaderDataLayout.pTexturePackings    = &TexturePacking;
+    ShaderDataLayout.TexturePackingCount = 1;
+    EXPECT_EQ(RadientMaterialDetail::ValidateMaterialShaderDataLayout(DefinitionDesc, ShaderDataLayout), RADIENT_STATUS_OK);
+
+    // Both components must be present and have their declared scalar/vector types.
+    TexturePacking.UVRotationParameterIndex = ~Uint32{0};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "references UV rotation parameter index");
+    TexturePacking.UVRotationParameterIndex = 4;
+    TexturePacking.UVScaleParameterIndex    = ~Uint32{0};
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "references UV scale parameter index");
+    TexturePacking.UVScaleParameterIndex = 3;
+
+    Parameters[3].Type = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "UV scale parameter 'UVScale' has an incompatible type");
+    Parameters[3].Type      = RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2;
+    Parameters[4].ArraySize = 2;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout, "UV rotation parameter 'UVRotation' has an incompatible type or array size");
+    Parameters[4].ArraySize = 1;
+
+    // A derived transform and a directly packed matrix cannot own the same bytes.
+    const RadientMaterialShaderParameterPacking Mapping{
+        5, static_cast<Uint32>(offsetof(GLTF::Material::TextureShaderAttribs, UVScaleAndRotation))};
+    ShaderDataLayout.pMappings    = &Mapping;
+    ShaderDataLayout.MappingCount = 1;
+    ExpectInvalidShaderDataLayout(DefinitionDesc, ShaderDataLayout,
+                                  "parameter 'UVMatrix' and texture parameter 'Texture' UV transform overlap");
+
+    // Custom definitions can continue to pack a matrix when component packing is absent.
+    TexturePacking.UVScaleParameterIndex    = ~Uint32{0};
+    TexturePacking.UVRotationParameterIndex = ~Uint32{0};
+    EXPECT_EQ(RadientMaterialDetail::ValidateMaterialShaderDataLayout(DefinitionDesc, ShaderDataLayout), RADIENT_STATUS_OK);
+}
+
 TEST(RadientMaterialTest, RejectsOverlappingShaderTexturePackings)
 {
     std::array<RadientMaterialParameterDesc, 5> Parameters{};

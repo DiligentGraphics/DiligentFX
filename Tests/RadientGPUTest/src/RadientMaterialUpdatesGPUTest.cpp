@@ -142,8 +142,8 @@ public:
                           [&](IRadientMaterialDefinitionAsset& Definition, IRadientMaterialWriter& Writer) {
                               RADIENT_STATUS                           Status = SetParameter(Definition, Writer, RadientStandardMaterialBaseColorFactorName, Color);
                               RadientStandardMaterialTextureParameters TextureParameters{pTexture};
-                              TextureParameters.UVScaleAndRotation = {0.f, 0.f, 0.f, 0.f};
-                              TextureParameters.UVBias             = Bias;
+                              TextureParameters.UVScale = {0.f, 0.f};
+                              TextureParameters.UVBias  = Bias;
                               if (RADIENT_SUCCEEDED(Status))
                                   Status = SetStandardMaterialTextureParameters(Definition, Writer, RadientStandardMaterialBaseColorTextureParameterNames, TextureParameters);
                               RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurface{&Writer, IID_RadientSurfaceMaterialWriter};
@@ -357,15 +357,28 @@ TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneC
 
     // UV scale and bias are shader data too; move from the white band to the colored band
     // without replacing the texture or changing the pre-existing drawables.
-    const std::array<Float32, 4> UpdatedTransform{0.5f, 0.f, 0.f, 0.5f};
-    const RadientFloat2          UpdatedBias{0.5f, 0.25f};
-    ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVScaleAndRotationName, UpdatedTransform), RADIENT_STATUS_OK);
+    const RadientFloat2 UpdatedScale{0.5f, 0.5f};
+    const RadientFloat2 UpdatedBias{0.5f, 0.25f};
+    ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVScaleName, UpdatedScale), RADIENT_STATUS_OK);
     ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVBiasName, UpdatedBias), RADIENT_STATUS_OK);
     ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
     ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
     ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
     ExpectSameColor(Colors[0], Colors[2]);
     EXPECT_GT(Colors[1][0], Colors[0][0] + 20);
+
+    // Rotate the scaled UVs into the white band, then restore the previous
+    // rotation. Both edits retain the same texture, scale, bias, and drawables.
+    ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVRotationName, -PI_F / 2.f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+    ExpectSameColor(Colors[0], Colors[1]);
+    ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVRotationName, 0.f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+    ExpectSameColor(Colors[0], Colors[2]);
 
     // Unsupported texture/render-state changes reject the complete commit. The
     // valid color assignment in the same commit must not leak into rendering.

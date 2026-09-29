@@ -137,6 +137,7 @@ static_assert(sizeof(ShaderTextureAttribs) <= std::numeric_limits<Uint32>::max()
 
 static constexpr Uint32 ShaderTexturePackedPropsOffset = static_cast<Uint32>(offsetof(ShaderTextureAttribs, PackedProps));
 static constexpr Uint32 ShaderTextureSliceOffset       = static_cast<Uint32>(offsetof(ShaderTextureAttribs, TextureSlice));
+static constexpr Uint32 ShaderTextureUVTransformOffset = static_cast<Uint32>(offsetof(ShaderTextureAttribs, UVScaleAndRotation));
 static constexpr Uint32 ShaderTextureAtlasUVOffset     = static_cast<Uint32>(offsetof(ShaderTextureAttribs, AtlasUVScaleAndBias));
 static constexpr Uint32 ShaderTextureDataSize          = static_cast<Uint32>(sizeof(ShaderTextureAttribs));
 
@@ -508,6 +509,15 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
+        const bool HasUVTransform = Packing.UVScaleParameterIndex != ~Uint32{0} ||
+            Packing.UVRotationParameterIndex != ~Uint32{0};
+        if (HasUVTransform &&
+            (!ValidateScalarParameter(Packing.UVScaleParameterIndex, "UV scale", RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
+             !ValidateScalarParameter(Packing.UVRotationParameterIndex, "UV rotation", RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT)))
+        {
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
+
         if (!RadientValidation::IsValidSubrange(Packing.Offset, ShaderTextureDataSize, ShaderDataLayout.Size))
         {
             LOG_ERROR_MESSAGE("Material shader texture packing ", PackingIndex, " uses byte range [",
@@ -517,6 +527,12 @@ RADIENT_STATUS RadientMaterialDetail::ValidateMaterialShaderDataLayout(
         }
 
         const std::string TextureName = "texture parameter '" + std::string{pTexture->Name} + "'";
+        if (HasUVTransform &&
+            !RangeTracker.Add(Packing.Offset + ShaderTextureUVTransformOffset,
+                              sizeof(float2x2), TextureName + " UV transform"))
+        {
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        }
         if (!RangeTracker.Add(
                 Packing.Offset + ShaderTexturePackedPropsOffset,
                 ShaderTextureSliceOffset + sizeof(Float32) - ShaderTexturePackedPropsOffset,
@@ -865,6 +881,23 @@ Uint64 RadientMaterialDefinitionImpl::UpdateShaderData(
     {
         const RadientMaterialShaderTexturePacking& Command =
             m_Data.PackingPlan.pTextureCommands[CommandIndex];
+
+        if (Command.UVScaleParameterIndex != ~Uint32{0} &&
+            (MaterialData.GetValueVersion(Command.UVScaleParameterIndex) > PreviousVersion ||
+             MaterialData.GetValueVersion(Command.UVRotationParameterIndex) > PreviousVersion))
+        {
+            const RadientFloat2& Scale =
+                *static_cast<const RadientFloat2*>(MaterialData.GetValueData(Command.UVScaleParameterIndex));
+            const Float32 Rotation =
+                *static_cast<const Float32*>(MaterialData.GetValueData(Command.UVRotationParameterIndex));
+
+            // Compose the sampled components only after interpolation. Angles
+            // remain unwrapped so authored rotations can include complete turns.
+            // Match the existing shader's UV matrix convention.
+            const float2x2 UVTransform = float2x2::Scale(Scale.x, Scale.y) * float2x2::Rotation(-Rotation);
+            std::memcpy(pShaderData + Command.Offset + ShaderTextureUVTransformOffset,
+                        &UVTransform, sizeof(UVTransform));
+        }
 
         const bool TextureChanged = MaterialData.GetValueVersion(Command.TextureParameterIndex) > PreviousVersion;
         if (!TextureChanged &&

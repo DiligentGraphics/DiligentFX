@@ -59,8 +59,10 @@ render thread before rendering. Property names are resolved when the binding is
 created. Animation updates follow the same runtime rules as writer commits.
 
 The GLTF importer supports `KHR_animation_pointer` for the corresponding material
-factors, alpha cutoff, and `KHR_texture_transform` offsets. Texture-transform
-scale/rotation and emissive-strength animation are not yet supported. Scene
+factors, alpha cutoff, and `KHR_texture_transform` offset, scale, and rotation.
+Texture rotations are scalar angles in radians: interpolation preserves the
+authored angles, including complete turns, without selecting the shortest arc.
+Emissive-strength animation is not yet supported. Scene
 instantiation with an animation registry creates material bindings automatically.
 Materials remain shared between scene instances: evaluating a material binding
 affects every instance that uses that asset. Independent playback requires

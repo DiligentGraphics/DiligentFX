@@ -37,8 +37,6 @@
 
 #if DILIGENT_CPP_INTERFACE
 #    include "RadientMaterials.h"
-
-#    include <array>
 #endif
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
@@ -172,14 +170,17 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationColorName[] = "
 /// value, which represents no attenuation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationDistanceName[] = "AttenuationDistance";
 
-/// Every declared texture semantic has the following six parameters:
+/// Every declared texture semantic has the following seven parameters:
 ///
 /// - `Texture`: TEXTURE, with a definition-provided semantic fallback that may
 ///   be null.
 /// - `TextureUVSelector`: INT texture-coordinate set index. Non-negative values
 ///   enable sampling from the selected UV set; -1 disables sampling. The default
 ///   is -1.
-/// - `TextureUVScaleAndRotation`: FLOAT2X2 transform, default identity.
+/// - `TextureUVScale`: FLOAT2 scale applied before rotation, default (1, 1).
+/// - `TextureUVRotation`: FLOAT counter-clockwise UV rotation in radians, default
+///   zero. Angles are unwrapped: animation interpolates the supplied values
+///   directly, without choosing the shortest arc.
 /// - `TextureUVBias`: FLOAT2 translation applied after the transform, default zero.
 /// - `TextureWrapU` and `TextureWrapV`: UINT
 ///   RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE values, default
@@ -190,8 +191,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialAttenuationDistanceName[] 
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureName[] = "BaseColorTexture";
 /// Name of the base-color texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureUVSelectorName[] = "BaseColorTextureUVSelector";
-/// Name of the base-color texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureUVScaleAndRotationName[] = "BaseColorTextureUVScaleAndRotation";
+/// Name of the base-color texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureUVScaleName[] = "BaseColorTextureUVScale";
+/// Name of the base-color texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureUVRotationName[] = "BaseColorTextureUVRotation";
 /// Name of the base-color texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureUVBiasName[] = "BaseColorTextureUVBias";
 /// Name of the base-color texture UINT U address mode.
@@ -204,8 +207,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialBaseColorTextureWrapVName[
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureName[] = "DiffuseTexture";
 /// Name of the diffuse texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVSelectorName[] = "DiffuseTextureUVSelector";
-/// Name of the diffuse texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVScaleAndRotationName[] = "DiffuseTextureUVScaleAndRotation";
+/// Name of the diffuse texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVScaleName[] = "DiffuseTextureUVScale";
+/// Name of the diffuse texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVRotationName[] = "DiffuseTextureUVRotation";
 /// Name of the diffuse texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureUVBiasName[] = "DiffuseTextureUVBias";
 /// Name of the diffuse texture UINT U address mode.
@@ -218,8 +223,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialDiffuseTextureWrapVName[] 
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureName[] = "MetallicRoughnessTexture";
 /// Name of the metallic-roughness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUVSelectorName[] = "MetallicRoughnessTextureUVSelector";
-/// Name of the metallic-roughness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUVScaleAndRotationName[] = "MetallicRoughnessTextureUVScaleAndRotation";
+/// Name of the metallic-roughness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUVScaleName[] = "MetallicRoughnessTextureUVScale";
+/// Name of the metallic-roughness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUVRotationName[] = "MetallicRoughnessTextureUVRotation";
 /// Name of the metallic-roughness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureUVBiasName[] = "MetallicRoughnessTextureUVBias";
 /// Name of the metallic-roughness texture UINT U address mode.
@@ -233,8 +240,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialMetallicRoughnessTextureWr
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureName[] = "SpecularGlossinessTexture";
 /// Name of the specular-glossiness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVSelectorName[] = "SpecularGlossinessTextureUVSelector";
-/// Name of the specular-glossiness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVScaleAndRotationName[] = "SpecularGlossinessTextureUVScaleAndRotation";
+/// Name of the specular-glossiness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVScaleName[] = "SpecularGlossinessTextureUVScale";
+/// Name of the specular-glossiness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVRotationName[] = "SpecularGlossinessTextureUVRotation";
 /// Name of the specular-glossiness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureUVBiasName[] = "SpecularGlossinessTextureUVBias";
 /// Name of the specular-glossiness texture UINT U address mode.
@@ -247,8 +256,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularGlossinessTextureW
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureName[] = "NormalTexture";
 /// Name of the normal texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureUVSelectorName[] = "NormalTextureUVSelector";
-/// Name of the normal texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureUVScaleAndRotationName[] = "NormalTextureUVScaleAndRotation";
+/// Name of the normal texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureUVScaleName[] = "NormalTextureUVScale";
+/// Name of the normal texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureUVRotationName[] = "NormalTextureUVRotation";
 /// Name of the normal texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureUVBiasName[] = "NormalTextureUVBias";
 /// Name of the normal texture UINT U address mode.
@@ -261,8 +272,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialNormalTextureWrapVName[] =
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureName[] = "OcclusionTexture";
 /// Name of the occlusion texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureUVSelectorName[] = "OcclusionTextureUVSelector";
-/// Name of the occlusion texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureUVScaleAndRotationName[] = "OcclusionTextureUVScaleAndRotation";
+/// Name of the occlusion texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureUVScaleName[] = "OcclusionTextureUVScale";
+/// Name of the occlusion texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureUVRotationName[] = "OcclusionTextureUVRotation";
 /// Name of the occlusion texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureUVBiasName[] = "OcclusionTextureUVBias";
 /// Name of the occlusion texture UINT U address mode.
@@ -275,8 +288,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialOcclusionTextureWrapVName[
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureName[] = "EmissiveTexture";
 /// Name of the emissive texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureUVSelectorName[] = "EmissiveTextureUVSelector";
-/// Name of the emissive texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureUVScaleAndRotationName[] = "EmissiveTextureUVScaleAndRotation";
+/// Name of the emissive texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureUVScaleName[] = "EmissiveTextureUVScale";
+/// Name of the emissive texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureUVRotationName[] = "EmissiveTextureUVRotation";
 /// Name of the emissive texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureUVBiasName[] = "EmissiveTextureUVBias";
 /// Name of the emissive texture UINT U address mode.
@@ -289,8 +304,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialEmissiveTextureWrapVName[]
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureName[] = "ClearCoatTexture";
 /// Name of the clear-coat texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureUVSelectorName[] = "ClearCoatTextureUVSelector";
-/// Name of the clear-coat texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureUVScaleAndRotationName[] = "ClearCoatTextureUVScaleAndRotation";
+/// Name of the clear-coat texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureUVScaleName[] = "ClearCoatTextureUVScale";
+/// Name of the clear-coat texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureUVRotationName[] = "ClearCoatTextureUVRotation";
 /// Name of the clear-coat texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureUVBiasName[] = "ClearCoatTextureUVBias";
 /// Name of the clear-coat texture UINT U address mode.
@@ -303,8 +320,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatTextureWrapVName[
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureName[] = "ClearCoatRoughnessTexture";
 /// Name of the clear-coat roughness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureUVSelectorName[] = "ClearCoatRoughnessTextureUVSelector";
-/// Name of the clear-coat roughness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureUVScaleAndRotationName[] = "ClearCoatRoughnessTextureUVScaleAndRotation";
+/// Name of the clear-coat roughness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureUVScaleName[] = "ClearCoatRoughnessTextureUVScale";
+/// Name of the clear-coat roughness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureUVRotationName[] = "ClearCoatRoughnessTextureUVRotation";
 /// Name of the clear-coat roughness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureUVBiasName[] = "ClearCoatRoughnessTextureUVBias";
 /// Name of the clear-coat roughness texture UINT U address mode.
@@ -317,8 +336,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatRoughnessTextureW
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureName[] = "ClearCoatNormalTexture";
 /// Name of the clear-coat normal texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureUVSelectorName[] = "ClearCoatNormalTextureUVSelector";
-/// Name of the clear-coat normal texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureUVScaleAndRotationName[] = "ClearCoatNormalTextureUVScaleAndRotation";
+/// Name of the clear-coat normal texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureUVScaleName[] = "ClearCoatNormalTextureUVScale";
+/// Name of the clear-coat normal texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureUVRotationName[] = "ClearCoatNormalTextureUVRotation";
 /// Name of the clear-coat normal texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureUVBiasName[] = "ClearCoatNormalTextureUVBias";
 /// Name of the clear-coat normal texture UINT U address mode.
@@ -331,8 +352,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialClearCoatNormalTextureWrap
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureName[] = "SheenColorTexture";
 /// Name of the sheen-color texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureUVSelectorName[] = "SheenColorTextureUVSelector";
-/// Name of the sheen-color texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureUVScaleAndRotationName[] = "SheenColorTextureUVScaleAndRotation";
+/// Name of the sheen-color texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureUVScaleName[] = "SheenColorTextureUVScale";
+/// Name of the sheen-color texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureUVRotationName[] = "SheenColorTextureUVRotation";
 /// Name of the sheen-color texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureUVBiasName[] = "SheenColorTextureUVBias";
 /// Name of the sheen-color texture UINT U address mode.
@@ -345,8 +368,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenColorTextureWrapVName
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureName[] = "SheenRoughnessTexture";
 /// Name of the sheen-roughness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureUVSelectorName[] = "SheenRoughnessTextureUVSelector";
-/// Name of the sheen-roughness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureUVScaleAndRotationName[] = "SheenRoughnessTextureUVScaleAndRotation";
+/// Name of the sheen-roughness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureUVScaleName[] = "SheenRoughnessTextureUVScale";
+/// Name of the sheen-roughness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureUVRotationName[] = "SheenRoughnessTextureUVRotation";
 /// Name of the sheen-roughness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureUVBiasName[] = "SheenRoughnessTextureUVBias";
 /// Name of the sheen-roughness texture UINT U address mode.
@@ -359,8 +384,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSheenRoughnessTextureWrapV
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureName[] = "SpecularTexture";
 /// Name of the specular-weight texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVSelectorName[] = "SpecularTextureUVSelector";
-/// Name of the specular-weight texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVScaleAndRotationName[] = "SpecularTextureUVScaleAndRotation";
+/// Name of the specular-weight texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVScaleName[] = "SpecularTextureUVScale";
+/// Name of the specular-weight texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVRotationName[] = "SpecularTextureUVRotation";
 /// Name of the specular-weight texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureUVBiasName[] = "SpecularTextureUVBias";
 /// Name of the specular-weight texture UINT U address mode.
@@ -373,8 +400,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularTextureWrapVName[]
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureName[] = "SpecularColorTexture";
 /// Name of the specular-color texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVSelectorName[] = "SpecularColorTextureUVSelector";
-/// Name of the specular-color texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVScaleAndRotationName[] = "SpecularColorTextureUVScaleAndRotation";
+/// Name of the specular-color texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVScaleName[] = "SpecularColorTextureUVScale";
+/// Name of the specular-color texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVRotationName[] = "SpecularColorTextureUVRotation";
 /// Name of the specular-color texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureUVBiasName[] = "SpecularColorTextureUVBias";
 /// Name of the specular-color texture UINT U address mode.
@@ -388,8 +417,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialSpecularColorTextureWrapVN
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureName[] = "AnisotropyTexture";
 /// Name of the anisotropy texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureUVSelectorName[] = "AnisotropyTextureUVSelector";
-/// Name of the anisotropy texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureUVScaleAndRotationName[] = "AnisotropyTextureUVScaleAndRotation";
+/// Name of the anisotropy texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureUVScaleName[] = "AnisotropyTextureUVScale";
+/// Name of the anisotropy texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureUVRotationName[] = "AnisotropyTextureUVRotation";
 /// Name of the anisotropy texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureUVBiasName[] = "AnisotropyTextureUVBias";
 /// Name of the anisotropy texture UINT U address mode.
@@ -402,8 +433,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialAnisotropyTextureWrapVName
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureName[] = "IridescenceTexture";
 /// Name of the iridescence texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureUVSelectorName[] = "IridescenceTextureUVSelector";
-/// Name of the iridescence texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureUVScaleAndRotationName[] = "IridescenceTextureUVScaleAndRotation";
+/// Name of the iridescence texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureUVScaleName[] = "IridescenceTextureUVScale";
+/// Name of the iridescence texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureUVRotationName[] = "IridescenceTextureUVRotation";
 /// Name of the iridescence texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureUVBiasName[] = "IridescenceTextureUVBias";
 /// Name of the iridescence texture UINT U address mode.
@@ -416,8 +449,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceTextureWrapVNam
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureName[] = "IridescenceThicknessTexture";
 /// Name of the iridescence-thickness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureUVSelectorName[] = "IridescenceThicknessTextureUVSelector";
-/// Name of the iridescence-thickness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureUVScaleAndRotationName[] = "IridescenceThicknessTextureUVScaleAndRotation";
+/// Name of the iridescence-thickness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureUVScaleName[] = "IridescenceThicknessTextureUVScale";
+/// Name of the iridescence-thickness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureUVRotationName[] = "IridescenceThicknessTextureUVRotation";
 /// Name of the iridescence-thickness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextureUVBiasName[] = "IridescenceThicknessTextureUVBias";
 /// Name of the iridescence-thickness texture UINT U address mode.
@@ -430,8 +465,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialIridescenceThicknessTextur
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureName[] = "TransmissionTexture";
 /// Name of the transmission texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureUVSelectorName[] = "TransmissionTextureUVSelector";
-/// Name of the transmission texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureUVScaleAndRotationName[] = "TransmissionTextureUVScaleAndRotation";
+/// Name of the transmission texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureUVScaleName[] = "TransmissionTextureUVScale";
+/// Name of the transmission texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureUVRotationName[] = "TransmissionTextureUVRotation";
 /// Name of the transmission texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureUVBiasName[] = "TransmissionTextureUVBias";
 /// Name of the transmission texture UINT U address mode.
@@ -444,8 +481,10 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialTransmissionTextureWrapVNa
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureName[] = "ThicknessTexture";
 /// Name of the thickness texture INT UV-set selector.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVSelectorName[] = "ThicknessTextureUVSelector";
-/// Name of the thickness texture FLOAT2X2 UV scale-and-rotation transform.
-static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVScaleAndRotationName[] = "ThicknessTextureUVScaleAndRotation";
+/// Name of the thickness texture FLOAT2 UV scale.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVScaleName[] = "ThicknessTextureUVScale";
+/// Name of the thickness texture FLOAT counter-clockwise UV rotation in radians.
+static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVRotationName[] = "ThicknessTextureUVRotation";
 /// Name of the thickness texture FLOAT2 UV translation.
 static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureUVBiasName[] = "ThicknessTextureUVBias";
 /// Name of the thickness texture UINT U address mode.
@@ -455,19 +494,20 @@ static DILIGENT_CONSTEXPR Char RadientStandardMaterialThicknessTextureWrapVName[
 
 #if DILIGENT_CPP_INTERFACE
 
-/// Canonical names of the six parameters that define one standard-material
+/// Canonical names of the seven parameters that define one standard-material
 /// texture semantic.
 struct RadientStandardMaterialTextureParameterNames
 {
-    const Char* Texture            = nullptr;
-    const Char* UVSelector         = nullptr;
-    const Char* UVScaleAndRotation = nullptr;
-    const Char* UVBias             = nullptr;
-    const Char* WrapU              = nullptr;
-    const Char* WrapV              = nullptr;
+    const Char* Texture    = nullptr;
+    const Char* UVSelector = nullptr;
+    const Char* UVScale    = nullptr;
+    const Char* UVRotation = nullptr;
+    const Char* UVBias     = nullptr;
+    const Char* WrapU      = nullptr;
+    const Char* WrapV      = nullptr;
 };
 
-/// Values of the six parameters that define one standard-material texture
+/// Values of the seven parameters that define one standard-material texture
 /// semantic. Constructing the values with a texture selects UV set 0 by default;
 /// constructing them without a texture disables sampling by setting UVSelector
 /// to -1. SetStandardMaterialTextureParameters uses the definition-provided
@@ -483,7 +523,8 @@ struct RadientStandardMaterialTextureParameters
 
     IRadientTextureAsset*                 pTexture   = nullptr;
     Int32                                 UVSelector = -1;
-    std::array<Float32, 4>                UVScaleAndRotation{{1.f, 0.f, 0.f, 1.f}};
+    RadientFloat2                         UVScale{1.f, 1.f};
+    Float32                               UVRotation = 0.f;
     RadientFloat2                         UVBias{};
     RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE WrapU = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
     RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE WrapV = RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP;
@@ -495,7 +536,8 @@ struct RadientStandardMaterialTextureParameters
         {                                                                      \
             RadientStandardMaterial##Name##TextureName,                        \
                 RadientStandardMaterial##Name##TextureUVSelectorName,          \
-                RadientStandardMaterial##Name##TextureUVScaleAndRotationName,  \
+                RadientStandardMaterial##Name##TextureUVScaleName,             \
+                RadientStandardMaterial##Name##TextureUVRotationName,          \
                 RadientStandardMaterial##Name##TextureUVBiasName,              \
                 RadientStandardMaterial##Name##TextureWrapUName,               \
                 RadientStandardMaterial##Name##TextureWrapVName                \
@@ -523,10 +565,10 @@ RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES(Thickness);
 
 #    undef RADIENT_STANDARD_MATERIAL_TEXTURE_PARAMETER_NAMES
 
-/// Sets all six parameters of one standard-material texture semantic on Writer.
+/// Sets all seven parameters of one standard-material texture semantic on Writer.
 /// The function resolves every parameter before recording any change. It returns
 /// RADIENT_STATUS_OK when at least one assignment was newly recorded and
-/// RADIENT_STATUS_NO_CHANGE when Writer already had all six identical assignments
+/// RADIENT_STATUS_NO_CHANGE when Writer already had all seven identical assignments
 /// pending. Commit() determines whether the assignments change the material. When
 /// Parameters.pTexture is null, the texture is reset to the definition-provided
 /// fallback. If a writer setter fails, earlier changes remain pending; retry the
@@ -539,7 +581,8 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
 {
     RadientMaterialParameterHandle Texture;
     RadientMaterialParameterHandle UVSelector;
-    RadientMaterialParameterHandle UVScaleAndRotation;
+    RadientMaterialParameterHandle UVScale;
+    RadientMaterialParameterHandle UVRotation;
     RadientMaterialParameterHandle UVBias;
     RadientMaterialParameterHandle WrapU;
     RadientMaterialParameterHandle WrapV;
@@ -550,7 +593,10 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     Status = Definition.FindParameter(Names.UVSelector, &UVSelector);
     if (Status != RADIENT_STATUS_OK)
         return Status;
-    Status = Definition.FindParameter(Names.UVScaleAndRotation, &UVScaleAndRotation);
+    Status = Definition.FindParameter(Names.UVScale, &UVScale);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVRotation, &UVRotation);
     if (Status != RADIENT_STATUS_OK)
         return Status;
     Status = Definition.FindParameter(Names.UVBias, &UVBias);
@@ -570,7 +616,8 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     };
     if (!HasExpectedType(Texture, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE) ||
         !HasExpectedType(UVSelector, RADIENT_MATERIAL_PARAMETER_TYPE_INT) ||
-        !HasExpectedType(UVScaleAndRotation, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2X2) ||
+        !HasExpectedType(UVScale, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
+        !HasExpectedType(UVRotation, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT) ||
         !HasExpectedType(UVBias, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
         !HasExpectedType(WrapU, RADIENT_MATERIAL_PARAMETER_TYPE_UINT) ||
         !HasExpectedType(WrapV, RADIENT_MATERIAL_PARAMETER_TYPE_UINT))
@@ -594,7 +641,12 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
         return Status;
     Changed |= Status == RADIENT_STATUS_OK;
 
-    Status = Writer.SetParameter(UVScaleAndRotation, Parameters.UVScaleAndRotation);
+    Status = Writer.SetParameter(UVScale, Parameters.UVScale);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVRotation, Parameters.UVRotation);
     if (RADIENT_FAILED(Status))
         return Status;
     Changed |= Status == RADIENT_STATUS_OK;
@@ -617,6 +669,6 @@ inline RADIENT_STATUS SetStandardMaterialTextureParameters(
     return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
 }
 
-#endif                 // DILIGENT_CPP_INTERFACE
+#endif // DILIGENT_CPP_INTERFACE
 
 DILIGENT_END_NAMESPACE // Diligent
