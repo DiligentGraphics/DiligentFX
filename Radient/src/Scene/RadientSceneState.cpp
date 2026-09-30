@@ -337,6 +337,22 @@ RADIENT_STATUS RadientSceneState::GetCamera(RadientEntityID Entity, RadientCamer
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::GetMesh(RadientEntityID Entity, RadientMeshComponent& Mesh) const
+{
+    Mesh = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const MeshComponentStorage* pMesh = m_Registry.try_get<MeshComponentStorage>(E);
+    if (pMesh == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Mesh = pMesh->Component;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const
 {
     Skin = {};
@@ -366,6 +382,54 @@ RADIENT_STATUS RadientSceneState::GetMorph(RadientEntityID Entity, RadientMorphC
         return RADIENT_STATUS_NOT_FOUND;
 
     Morph = pMorph->Component;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::GetMeshRenderer(RadientEntityID Entity, RadientMeshRendererComponent& Renderer) const
+{
+    Renderer = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const RadientMeshRendererComponent* pRenderer = m_Registry.try_get<RadientMeshRendererComponent>(E);
+    if (pRenderer == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Renderer = *pRenderer;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::GetMaterialBindings(RadientEntityID Entity, RadientMaterialBindingsComponent& Bindings) const
+{
+    Bindings = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const MaterialBindingsStorage* pBindings = m_Registry.try_get<MaterialBindingsStorage>(E);
+    if (pBindings == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Bindings = pBindings->Component;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::GetLight(RadientEntityID Entity, RadientLightComponent& Light) const
+{
+    Light = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const RadientLightComponent* pLight = m_Registry.try_get<RadientLightComponent>(E);
+    if (pLight == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Light = *pLight;
     return RADIENT_STATUS_OK;
 }
 

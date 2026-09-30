@@ -576,6 +576,15 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                              RadientEntityID            Entity,
                                              RadientCameraComponent REF Camera) CONST PURE;
 
+    /// Gets a copy of the mesh component. Returns RADIENT_STATUS_NOT_FOUND
+    /// and resets Mesh to its default values if the entity or component is absent.
+    /// The mesh pointer is borrowed from the scene and remains valid until the
+    /// component is changed or removed, the entity is destroyed, or the scene is
+    /// released. The caller may retain the mesh when a longer lifetime is required.
+    VIRTUAL RADIENT_STATUS METHOD(GetMesh)(THIS_
+                                           RadientEntityID          Entity,
+                                           RadientMeshComponent REF Mesh) CONST PURE;
+
     /// Gets skin component. The returned skin and pose pointers are borrowed
     /// from the scene and remain valid until the component is changed or
     /// removed. The caller may retain either object when a longer lifetime is
@@ -590,6 +599,32 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     VIRTUAL RADIENT_STATUS METHOD(GetMorph)(THIS_
                                             RadientEntityID           Entity,
                                             RadientMorphComponent REF Morph) CONST PURE;
+
+    /// Gets a copy of the mesh renderer component. Returns RADIENT_STATUS_NOT_FOUND
+    /// and resets Renderer to its default values if the entity or component is absent.
+    VIRTUAL RADIENT_STATUS METHOD(GetMeshRenderer)(THIS_
+                                                   RadientEntityID                  Entity,
+                                                   RadientMeshRendererComponent REF Renderer) CONST PURE;
+
+    /// Gets the entity's per-primitive material overrides. This does not include
+    /// the default materials exposed by IRadientMeshAsset::GetDesc(). Returns
+    /// RADIENT_STATUS_NOT_FOUND and resets Bindings to its default values if the
+    /// entity or component is absent. An existing empty component returns
+    /// RADIENT_STATUS_OK with a null pBindings and zero BindingCount.
+    /// The returned array and material pointers are borrowed from the scene and
+    /// remain valid until this component is changed or removed, the entity is
+    /// destroyed, or the scene is released. To keep the bindings longer, copy
+    /// the array and retain the referenced material assets.
+    VIRTUAL RADIENT_STATUS METHOD(GetMaterialBindings)(THIS_
+                                                       RadientEntityID                      Entity,
+                                                       RadientMaterialBindingsComponent REF Bindings) CONST PURE;
+
+    /// Gets a copy of the light component in entity-local space. Returns
+    /// RADIENT_STATUS_NOT_FOUND and resets Light to its default values if the
+    /// entity or component is absent.
+    VIRTUAL RADIENT_STATUS METHOD(GetLight)(THIS_
+                                            RadientEntityID           Entity,
+                                            RadientLightComponent REF Light) CONST PURE;
 
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
@@ -620,8 +655,12 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
+#    define IRadientScene_GetMesh(This, ...)                     CALL_IFACE_METHOD(RadientScene, GetMesh,                     This, __VA_ARGS__)
 #    define IRadientScene_GetSkin(This, ...)                     CALL_IFACE_METHOD(RadientScene, GetSkin,                     This, __VA_ARGS__)
 #    define IRadientScene_GetMorph(This, ...)                    CALL_IFACE_METHOD(RadientScene, GetMorph,                    This, __VA_ARGS__)
+#    define IRadientScene_GetMeshRenderer(This, ...)             CALL_IFACE_METHOD(RadientScene, GetMeshRenderer,             This, __VA_ARGS__)
+#    define IRadientScene_GetMaterialBindings(This, ...)         CALL_IFACE_METHOD(RadientScene, GetMaterialBindings,         This, __VA_ARGS__)
+#    define IRadientScene_GetLight(This, ...)                    CALL_IFACE_METHOD(RadientScene, GetLight,                    This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetSceneRevisions(This)                CALL_IFACE_METHOD(RadientScene, GetSceneRevisions,           This)
 

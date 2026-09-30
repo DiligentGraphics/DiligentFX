@@ -75,6 +75,67 @@ TEST(RadientMaterialBindingsStorageTest, AssignKeepsStrongMaterialReferences)
     EXPECT_EQ(Storage.Materials[1], nullptr);
 }
 
+TEST(RadientMaterialBindingsStorageTest, AssignFromOwnComponent)
+{
+    // The descriptor itself may alias Component, not just the binding array.
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://self", 1);
+    RefCntWeakPtr<IRadientMaterialAsset> WeakMaterial{pMaterial.RawPtr()};
+    RadientMaterialBinding               Bindings[] = {{3, pMaterial}, {5, nullptr}};
+    MaterialBindingsStorage              Storage;
+    Storage.Assign(MakeBindings(Bindings, 2));
+    pMaterial.Release();
+
+    Storage.Assign(Storage.Component);
+
+    ASSERT_NE(WeakMaterial.Lock(), nullptr);
+    ASSERT_EQ(Storage.Component.BindingCount, 2u);
+    ASSERT_EQ(Storage.Materials.size(), 2u);
+    EXPECT_EQ(Storage.Component.pBindings, Storage.Bindings.data());
+    EXPECT_EQ(Storage.Component.pBindings[0].PrimitiveIndex, 3u);
+    EXPECT_EQ(Storage.Component.pBindings[0].pMaterial, Storage.Materials[0].RawPtr());
+    EXPECT_STREQ(Storage.Component.pBindings[0].pMaterial->GetReference().URI, "material://self");
+    EXPECT_EQ(Storage.Component.pBindings[1].PrimitiveIndex, 5u);
+    EXPECT_EQ(Storage.Component.pBindings[1].pMaterial, nullptr);
+
+    Storage.Assign({});
+    EXPECT_EQ(WeakMaterial.Lock(), nullptr);
+}
+
+TEST(RadientMaterialBindingsStorageTest, AssignCopiedBindingsWithBorrowedMaterials)
+{
+    // A separate input array can still depend on materials owned exclusively
+    // by the destination. Reordering it must acquire references before release.
+    RefCntAutoPtr<IRadientMaterialAsset> pFirst  = MakeTestMaterialAsset("material://first", 1);
+    RefCntAutoPtr<IRadientMaterialAsset> pSecond = MakeTestMaterialAsset("material://second", 1);
+    RefCntWeakPtr<IRadientMaterialAsset> WeakFirst{pFirst.RawPtr()};
+    RefCntWeakPtr<IRadientMaterialAsset> WeakSecond{pSecond.RawPtr()};
+    RadientMaterialBinding               Bindings[] = {{2, pFirst}, {4, pSecond}};
+    MaterialBindingsStorage              Storage;
+    Storage.Assign(MakeBindings(Bindings, 2));
+    pFirst.Release();
+    pSecond.Release();
+
+    RadientMaterialBinding Reordered[] = {Storage.Component.pBindings[1], Storage.Component.pBindings[0]};
+    Storage.Assign(MakeBindings(Reordered, 2));
+
+    ASSERT_NE(WeakFirst.Lock(), nullptr);
+    ASSERT_NE(WeakSecond.Lock(), nullptr);
+    ASSERT_EQ(Storage.Component.BindingCount, 2u);
+    ASSERT_EQ(Storage.Materials.size(), 2u);
+    EXPECT_EQ(Storage.Component.pBindings, Storage.Bindings.data());
+    for (Uint32 Index = 0; Index < 2; ++Index)
+    {
+        EXPECT_EQ(Storage.Component.pBindings[Index], Reordered[Index]);
+        EXPECT_EQ(Storage.Component.pBindings[Index].pMaterial, Storage.Materials[Index].RawPtr());
+    }
+    EXPECT_STREQ(Storage.Component.pBindings[0].pMaterial->GetReference().URI, "material://second");
+    EXPECT_STREQ(Storage.Component.pBindings[1].pMaterial->GetReference().URI, "material://first");
+
+    Storage.Assign({});
+    EXPECT_EQ(WeakFirst.Lock(), nullptr);
+    EXPECT_EQ(WeakSecond.Lock(), nullptr);
+}
+
 TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsMaterialPointers)
 {
     // Moving storage must repair both the binding-array pointer and each

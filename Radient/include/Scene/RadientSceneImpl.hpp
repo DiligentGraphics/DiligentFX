@@ -95,11 +95,23 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetCamera(RadientEntityID         Entity,
                                                         RadientCameraComponent& Camera) const override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetMesh(RadientEntityID       Entity,
+                                                      RadientMeshComponent& Mesh) const override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetSkin(RadientEntityID       Entity,
                                                       RadientSkinComponent& Skin) const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetMorph(RadientEntityID        Entity,
                                                        RadientMorphComponent& Morph) const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetMeshRenderer(RadientEntityID               Entity,
+                                                              RadientMeshRendererComponent& Renderer) const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetMaterialBindings(RadientEntityID                   Entity,
+                                                                  RadientMaterialBindingsComponent& Bindings) const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetLight(RadientEntityID        Entity,
+                                                       RadientLightComponent& Light) const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
                                                            RadientComponentTypeID ComponentType,

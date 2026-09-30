@@ -67,24 +67,21 @@ bool MaterialBindingsStorage::Equals(const RadientMaterialBindingsComponent& Rhs
 
 void MaterialBindingsStorage::Assign(const RadientMaterialBindingsComponent& Rhs)
 {
-    Component = Rhs;
+    // The input may reference our own binding array, and we may own the last
+    // material references even when the caller copied that array. Copy and
+    // retain the replacement before releasing any of the current storage.
+    MaterialBindingsStorage NewStorage;
+    NewStorage.Bindings.reserve(Rhs.BindingCount);
+    NewStorage.Materials.reserve(Rhs.BindingCount);
 
-    Bindings.clear();
-    Materials.clear();
-
-    Bindings.reserve(Rhs.BindingCount);
-    Materials.reserve(Rhs.BindingCount);
-
-    if (Rhs.BindingCount != 0)
+    for (Uint32 BindingIndex = 0; BindingIndex < Rhs.BindingCount; ++BindingIndex)
     {
-        Bindings.assign(Rhs.pBindings, Rhs.pBindings + Rhs.BindingCount);
-        for (Uint32 BindingIndex = 0; BindingIndex < Rhs.BindingCount; ++BindingIndex)
-        {
-            Materials.emplace_back(Rhs.pBindings[BindingIndex].pMaterial);
-        }
+        const RadientMaterialBinding& Binding = Rhs.pBindings[BindingIndex];
+        NewStorage.Bindings.push_back(Binding);
+        NewStorage.Materials.emplace_back(Binding.pMaterial);
     }
 
-    FixupPointers();
+    *this = std::move(NewStorage);
 }
 
 void MaterialBindingsStorage::FixupPointers()

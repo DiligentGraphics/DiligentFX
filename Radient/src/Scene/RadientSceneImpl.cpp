@@ -125,6 +125,11 @@ RADIENT_STATUS RadientSceneImpl::GetCamera(RadientEntityID Entity, RadientCamera
     return m_pState->GetCamera(Entity, Camera);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetMesh(RadientEntityID Entity, RadientMeshComponent& Mesh) const
+{
+    return m_pState->GetMesh(Entity, Mesh);
+}
+
 RADIENT_STATUS RadientSceneImpl::GetSkin(RadientEntityID Entity, RadientSkinComponent& Skin) const
 {
     return m_pState->GetSkin(Entity, Skin);
@@ -133,6 +138,21 @@ RADIENT_STATUS RadientSceneImpl::GetSkin(RadientEntityID Entity, RadientSkinComp
 RADIENT_STATUS RadientSceneImpl::GetMorph(RadientEntityID Entity, RadientMorphComponent& Morph) const
 {
     return m_pState->GetMorph(Entity, Morph);
+}
+
+RADIENT_STATUS RadientSceneImpl::GetMeshRenderer(RadientEntityID Entity, RadientMeshRendererComponent& Renderer) const
+{
+    return m_pState->GetMeshRenderer(Entity, Renderer);
+}
+
+RADIENT_STATUS RadientSceneImpl::GetMaterialBindings(RadientEntityID Entity, RadientMaterialBindingsComponent& Bindings) const
+{
+    return m_pState->GetMaterialBindings(Entity, Bindings);
+}
+
+RADIENT_STATUS RadientSceneImpl::GetLight(RadientEntityID Entity, RadientLightComponent& Light) const
+{
+    return m_pState->GetLight(Entity, Light);
 }
 
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const

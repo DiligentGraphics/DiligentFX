@@ -121,23 +121,27 @@ void RadientScene_C_UseMorphComponent(void)
 
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
-    RadientEntityID              Entity          = 0;
-    RadientEntityID              Parent          = 0;
-    const Char*                  EntityName      = 0;
-    RadientEntityID              Children[1]     = {0};
-    RADIENT_ENTITY_FLAGS         EntityFlags     = 0;
-    Uint32                       ChildCount      = 1;
-    Uint32                       NumChildren     = 0;
-    Bool                         Visible         = False;
-    Bool                         HasComponent    = False;
-    RadientTransform             Transform       = {0};
-    RadientMatrix4x4             WorldMatrix     = {0};
-    RadientCameraComponent       Camera          = {0};
-    RadientSkinComponent         Skin            = {0};
-    RadientMorphComponent        Morph           = {0};
-    RadientCustomComponentData   CustomComponent = {0};
-    const RadientSceneRevisions* pRevisions      = 0;
-    RADIENT_STATUS               Status          = RADIENT_STATUS_OK;
+    RadientEntityID                  Entity          = 0;
+    RadientEntityID                  Parent          = 0;
+    const Char*                      EntityName      = 0;
+    RadientEntityID                  Children[1]     = {0};
+    RADIENT_ENTITY_FLAGS             EntityFlags     = 0;
+    Uint32                           ChildCount      = 1;
+    Uint32                           NumChildren     = 0;
+    Bool                             Visible         = False;
+    Bool                             HasComponent    = False;
+    RadientTransform                 Transform       = {0};
+    RadientMatrix4x4                 WorldMatrix     = {0};
+    RadientCameraComponent           Camera          = {0};
+    RadientMeshComponent             Mesh            = {0};
+    RadientMeshRendererComponent     Renderer        = {0};
+    RadientMaterialBindingsComponent Bindings        = {0};
+    RadientLightComponent            Light           = {0};
+    RadientSkinComponent             Skin            = {0};
+    RadientMorphComponent            Morph           = {0};
+    RadientCustomComponentData       CustomComponent = {0};
+    const RadientSceneRevisions*     pRevisions      = 0;
+    RADIENT_STATUS                   Status          = RADIENT_STATUS_OK;
 
     EntityFlags = RADIENT_ENTITY_FLAGS_ALL;
 
@@ -155,6 +159,10 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Status     = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
     Status     = IRadientScene_GetCachedWorldMatrix(pScene, Entity, &WorldMatrix);
     Status     = IRadientScene_GetCamera(pScene, Entity, &Camera);
+    Status     = IRadientScene_GetMesh(pScene, Entity, &Mesh);
+    Status     = IRadientScene_GetMeshRenderer(pScene, Entity, &Renderer);
+    Status     = IRadientScene_GetMaterialBindings(pScene, Entity, &Bindings);
+    Status     = IRadientScene_GetLight(pScene, Entity, &Light);
     Status     = IRadientScene_GetSkin(pScene, Entity, &Skin);
     Status     = IRadientScene_GetMorph(pScene, Entity, &Morph);
     Status     = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);

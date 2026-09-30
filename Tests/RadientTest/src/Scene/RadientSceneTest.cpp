@@ -390,6 +390,313 @@ TEST(RadientSceneTest, GetEntityName)
     EXPECT_EQ(Name, nullptr);
 }
 
+TEST(RadientSceneTest, GetMesh)
+{
+    // Mesh inspection borrows the asset, reflects replacement immediately,
+    // and clears the output for missing components and destroyed entities.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh{MakeNewRCObj<TestMeshAsset>()("mesh", 1u)};
+    RefCntAutoPtr<IRadientMeshAsset> pReplacement{MakeNewRCObj<TestMeshAsset>()("replacement", 1u)};
+
+    RadientMeshComponent Mesh{pMesh};
+    EXPECT_EQ(pScene->GetMesh(InvalidRadientEntityID, Mesh), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Mesh.pMesh, nullptr);
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    Mesh.pMesh = pMesh;
+    EXPECT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Mesh.pMesh, nullptr);
+
+    ASSERT_EQ(pWriter->SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions      = pScene->GetSceneRevisions();
+    const Int32                 ReferenceCount = pMesh->GetReferenceCounters()->GetNumStrongRefs();
+    ASSERT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(Mesh.pMesh, pMesh.RawPtr());
+    EXPECT_EQ(pMesh->GetReferenceCounters()->GetNumStrongRefs(), ReferenceCount);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    // Retaining a borrowed asset keeps it usable after its component changes.
+    RefCntAutoPtr<IRadientMeshAsset> pRetainedMesh{Mesh.pMesh};
+    ASSERT_EQ(pWriter->SetMesh(Entity, {pReplacement}), RADIENT_STATUS_OK);
+    pMesh.Release();
+    EXPECT_STREQ(pRetainedMesh->GetReference().URI, "mesh");
+    ASSERT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(Mesh.pMesh, pReplacement.RawPtr());
+
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH), RADIENT_STATUS_OK);
+    EXPECT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Mesh.pMesh, nullptr);
+
+    ASSERT_EQ(pWriter->SetMesh(Entity, {pReplacement}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    Mesh.pMesh = pReplacement;
+    EXPECT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Mesh.pMesh, nullptr);
+}
+
+TEST(RadientSceneTest, GetMeshRenderer)
+{
+    // Read back renderer settings before and after changes, without needing
+    // a mesh or a scene commit. Missing renderers return default values.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    RadientMeshRendererComponent Renderer{0x1234u};
+    EXPECT_EQ(pScene->GetMeshRenderer(InvalidRadientEntityID, Renderer), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Renderer, RadientMeshRendererComponent{});
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    Renderer.VisibilityMask = 0;
+    EXPECT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Renderer, RadientMeshRendererComponent{});
+
+    const RadientMeshRendererComponent Expected{Uint64{1} << 42};
+    ASSERT_EQ(pWriter->SetMeshRenderer(Entity, Expected), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+    ASSERT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    EXPECT_EQ(Renderer, Expected);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    Renderer.VisibilityMask = 0;
+    ASSERT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    EXPECT_EQ(Renderer, Expected);
+    ASSERT_EQ(pWriter->SetMeshRenderer(Entity, {0}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    EXPECT_EQ(Renderer.VisibilityMask, 0u);
+
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    EXPECT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Renderer, RadientMeshRendererComponent{});
+
+    ASSERT_EQ(pWriter->SetMeshRenderer(Entity, Expected), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    Renderer = Expected;
+    EXPECT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Renderer, RadientMeshRendererComponent{});
+}
+
+TEST(RadientSceneTest, GetMaterialBindings)
+{
+    // Expose the scene-owned override array and distinguish an empty component
+    // from an absent one. The getter does not retain the returned materials.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial{MakeNewRCObj<TestMaterialAsset>()("material", 1u)};
+    RefCntAutoPtr<IRadientMaterialAsset> pReplacement{MakeNewRCObj<TestMaterialAsset>()("replacement", 1u)};
+
+    std::array<RadientMaterialBinding, 3> Source{{{2, pMaterial}, {0, nullptr}, {1, pReplacement}}};
+    RadientMaterialBindingsComponent      Bindings{Source.data(), static_cast<Uint32>(Source.size())};
+    EXPECT_EQ(pScene->GetMaterialBindings(InvalidRadientEntityID, Bindings), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+
+    RadientEntityID Other = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Other), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMaterialBindings(Other, {Source.data(), 1}), RADIENT_STATUS_OK);
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    Bindings = {Source.data(), static_cast<Uint32>(Source.size())};
+    EXPECT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, {Source.data(), static_cast<Uint32>(Source.size())}), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions      = pScene->GetSceneRevisions();
+    const Int32                 ReferenceCount = pMaterial->GetReferenceCounters()->GetNumStrongRefs();
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_EQ(Bindings.BindingCount, Source.size());
+    ASSERT_NE(Bindings.pBindings, nullptr);
+    EXPECT_NE(Bindings.pBindings, Source.data());
+    for (Uint32 Index = 0; Index < Bindings.BindingCount; ++Index)
+    {
+        EXPECT_EQ(Bindings.pBindings[Index], Source[Index]);
+    }
+    EXPECT_EQ(pMaterial->GetReferenceCounters()->GetNumStrongRefs(), ReferenceCount);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    // Mutating the input array cannot change the scene's copy. An unrelated
+    // component removal may compact storage but must preserve these bindings.
+    Source[0] = {3, pReplacement};
+    ASSERT_EQ(pWriter->RemoveComponent(Other, RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS), RADIENT_STATUS_OK);
+    EXPECT_EQ(Bindings.pBindings[0].PrimitiveIndex, 2u);
+    EXPECT_EQ(Bindings.pBindings[0].pMaterial, pMaterial.RawPtr());
+    const RadientMaterialBinding* pBorrowedBindings = Bindings.pBindings;
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    EXPECT_EQ(Bindings.pBindings, pBorrowedBindings);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pRetainedMaterial{Bindings.pBindings[0].pMaterial};
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, {Source.data(), 1}), RADIENT_STATUS_OK);
+    pMaterial.Release();
+    EXPECT_STREQ(pRetainedMaterial->GetReference().URI, "material");
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_EQ(Bindings.BindingCount, 1u);
+    EXPECT_EQ(Bindings.pBindings[0], Source[0]);
+
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, {}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS), RADIENT_STATUS_OK);
+    Bindings = {Source.data(), 1};
+    EXPECT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, {Source.data(), 1}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    Bindings = {Source.data(), 1};
+    EXPECT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+}
+
+TEST(RadientSceneTest, SetMaterialBindingsFromBorrowedArray)
+{
+    // Round-trip the getter's array through the setter while the scene owns
+    // the only strong references. Shrinking either end must retain survivors
+    // and release only the removed overrides.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    RefCntAutoPtr<IRadientMaterialAsset> pFirst  = MakeTestMaterialAsset("material://first", 1);
+    RefCntAutoPtr<IRadientMaterialAsset> pMiddle = MakeTestMaterialAsset("material://middle", 1);
+    RefCntAutoPtr<IRadientMaterialAsset> pLast   = MakeTestMaterialAsset("material://last", 1);
+    RefCntWeakPtr<IRadientMaterialAsset> WeakFirst{pFirst.RawPtr()};
+    RefCntWeakPtr<IRadientMaterialAsset> WeakMiddle{pMiddle.RawPtr()};
+    RefCntWeakPtr<IRadientMaterialAsset> WeakLast{pLast.RawPtr()};
+
+    const RadientMaterialBinding Source[] = {{2, pFirst}, {4, pMiddle}, {6, pLast}};
+    RadientEntityID              Entity   = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, {Source, 3}), RADIENT_STATUS_OK);
+    pFirst.Release();
+    pMiddle.Release();
+    pLast.Release();
+
+    RadientMaterialBindingsComponent Bindings;
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+    EXPECT_EQ(pWriter->SetMaterialBindings(Entity, Bindings), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    --Bindings.BindingCount;
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_NE(WeakFirst.Lock(), nullptr);
+    ASSERT_NE(WeakMiddle.Lock(), nullptr);
+    EXPECT_EQ(WeakLast.Lock(), nullptr);
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_EQ(Bindings.BindingCount, 2u);
+    EXPECT_EQ(Bindings.pBindings[0].PrimitiveIndex, 2u);
+    EXPECT_STREQ(Bindings.pBindings[0].pMaterial->GetReference().URI, "material://first");
+    EXPECT_EQ(Bindings.pBindings[1].PrimitiveIndex, 4u);
+    EXPECT_STREQ(Bindings.pBindings[1].pMaterial->GetReference().URI, "material://middle");
+
+    ++Bindings.pBindings;
+    --Bindings.BindingCount;
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    EXPECT_EQ(WeakFirst.Lock(), nullptr);
+    ASSERT_NE(WeakMiddle.Lock(), nullptr);
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_EQ(Bindings.BindingCount, 1u);
+    EXPECT_EQ(Bindings.pBindings[0].PrimitiveIndex, 4u);
+    EXPECT_STREQ(Bindings.pBindings[0].pMaterial->GetReference().URI, "material://middle");
+
+    Bindings.BindingCount = 0;
+    ASSERT_EQ(pWriter->SetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    EXPECT_EQ(WeakMiddle.Lock(), nullptr);
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    EXPECT_EQ(Bindings.BindingCount, 0u);
+    EXPECT_EQ(Bindings.pBindings, nullptr);
+}
+
+TEST(RadientSceneTest, GetLight)
+{
+    // Light inspection returns authored component values, independently of
+    // visibility and transforms, and does not change scene revisions.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    RadientLightComponent Light;
+    Light.Intensity = 42.f;
+    EXPECT_EQ(pScene->GetLight(InvalidRadientEntityID, Light), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Light, RadientLightComponent{});
+
+    RadientEntityDesc Desc;
+    Desc.Flags              = RADIENT_ENTITY_FLAG_NONE;
+    Desc.Transform.Position = {1.f, 2.f, 3.f};
+    RadientEntityID Entity  = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Entity), RADIENT_STATUS_OK);
+    Light.Intensity = 42.f;
+    EXPECT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Light, RadientLightComponent{});
+
+    RadientLightComponent Expected;
+    Expected.Type                   = RADIENT_LIGHT_TYPE_SPOT;
+    Expected.Color                  = {0.2f, 0.4f, 0.6f};
+    Expected.Intensity              = 42.f;
+    Expected.Range                  = 20.f;
+    Expected.Exposure               = 2.f;
+    Expected.Diffuse                = 0.5f;
+    Expected.Specular               = 0.75f;
+    Expected.Normalize              = True;
+    Expected.EnableColorTemperature = True;
+    Expected.ColorTemperature       = 5000.f;
+    Expected.Radius                 = 0.25f;
+    Expected.Angle                  = 1.f;
+    Expected.InnerConeAngle         = 0.1f;
+    Expected.OuterConeAngle         = 0.4f;
+    Expected.ShapingFocus           = 0.3f;
+    ASSERT_EQ(pWriter->SetLight(Entity, Expected), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+    ASSERT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(Light, Expected);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    Light.Intensity = 0.f;
+    ASSERT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(Light, Expected);
+    Expected.Type      = RADIENT_LIGHT_TYPE_POINT;
+    Expected.Intensity = 17.f;
+    ASSERT_EQ(pWriter->SetLight(Entity, Expected), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(Light, Expected);
+
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    EXPECT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Light, RadientLightComponent{});
+
+    ASSERT_EQ(pWriter->SetLight(Entity, Expected), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    Light = Expected;
+    EXPECT_EQ(pScene->GetLight(Entity, Light), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Light, RadientLightComponent{});
+}
+
 TEST(RadientEngineTest, CreateBackend)
 {
     // The default engine should expose a local backend instance.
@@ -943,6 +1250,25 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
 
     const RadientEntityID Entity = CreateTestRenderableEntity(*pWriter, pMesh, pMaterial);
     EXPECT_NE(Entity, InvalidRadientEntityID);
+
+    // Inspect the live entity and follow its mesh to the default material.
+    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+    RadientMeshComponent Mesh;
+    ASSERT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    ASSERT_EQ(Mesh.pMesh, pMesh.RawPtr());
+    const RadientMeshAssetDesc& MeshDesc = Mesh.pMesh->GetDesc();
+    ASSERT_EQ(MeshDesc.PrimitiveCount, 1u);
+    EXPECT_EQ(MeshDesc.pPrimitives[0].pMaterial, pMaterial.RawPtr());
+
+    RadientMeshRendererComponent Renderer;
+    EXPECT_EQ(pScene->GetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    EXPECT_EQ(Renderer, RadientMeshRendererComponent{});
+
+    RadientMaterialBindingsComponent Bindings;
+    ASSERT_EQ(pScene->GetMaterialBindings(Entity, Bindings), RADIENT_STATUS_OK);
+    ASSERT_EQ(Bindings.BindingCount, 1u);
+    EXPECT_EQ(Bindings.pBindings[0].PrimitiveIndex, 0u);
+    EXPECT_EQ(Bindings.pBindings[0].pMaterial, pMaterial.RawPtr());
 }
 
 TEST(RadientEngineTest, CreateRenderer)
