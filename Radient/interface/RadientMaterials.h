@@ -483,13 +483,13 @@ DILIGENT_END_INTERFACE
 
 // clang-format off
 
-/// Definition-backed material asset with editable shader parameters.
+/// Definition-backed material asset with editable parameters and surface state.
 ///
 /// Writers may initialize all properties before the asset's load status, GPU
 /// resource status, or render view is first queried. After that, non-texture
-/// parameters and surface alpha cutoff remain editable; changing textures,
-/// surface mode, or double-sided state returns RADIENT_STATUS_INVALID_OPERATION
-/// from Commit() without applying any of that commit's assignments.
+/// parameters, surface mode, alpha cutoff, and double-sided state remain editable.
+/// Changing textures returns RADIENT_STATUS_INVALID_OPERATION from Commit()
+/// without applying any of that commit's assignments.
 ///
 /// Runtime edits are performed on the render thread before rendering a frame.
 /// Successful commits immediately update values returned by the asset and its
@@ -498,6 +498,9 @@ DILIGENT_END_INTERFACE
 /// values. Material assets and their writers do not support concurrent client
 /// access; the caller serializes its reads and writes. Internal asynchronous
 /// material preparation is coordinated with these edits.
+/// Surface-mode and double-sided changes may require new renderer pipelines.
+/// With asynchronous pipeline compilation, affected geometry is skipped until
+/// its pipelines are ready.
 ///
 /// Radient-created material assets expose IRadientAnimationDestination through
 /// QueryInterface(). RadientMaterialAnimationSchemaID addresses non-texture
@@ -605,10 +608,10 @@ DILIGENT_END_INTERFACE
 /// Commit() publishes complete non-texture parameters, individual texture array
 /// elements, and any specialized material properties exposed by a derived writer. If
 /// multiple writers modify the same value, the last commit replaces that complete
-/// value. After initialization, only non-texture parameters and surface alpha
-/// cutoff may change. Runtime commits are performed on the render thread before
-/// rendering a frame. Client access to the writer and its material asset must not
-/// overlap Commit().
+/// value. After initialization, non-texture parameters and surface properties may
+/// change. Runtime commits are performed on the render thread before rendering a
+/// frame. Client access to the writer and its material asset must not overlap
+/// Commit().
 DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
 {
     /// Replaces the complete value or value array identified by Handle. pData
@@ -656,9 +659,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// the material state. The writer remains valid after the call. On success or
     /// RADIENT_STATUS_NO_CHANGE, pending changes are cleared. On failure, pending
     /// changes are retained so the operation can be retried. A runtime commit that
-    /// would change a texture, surface mode, or double-sided state returns
-    /// RADIENT_STATUS_INVALID_OPERATION without modifying the material. Shader-only
-    /// edits do not schedule asynchronous preparation or change load status.
+    /// would change a texture returns RADIENT_STATUS_INVALID_OPERATION without
+    /// modifying the material. Runtime parameter and surface-state edits are used
+    /// by the next frame preparation without restarting material loading.
     VIRTUAL RADIENT_STATUS METHOD(Commit)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
@@ -688,9 +691,9 @@ DILIGENT_END_INTERFACE
 /// Writer for mutable surface-material state.
 DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialWriter, IRadientMaterialWriter)
 {
-    /// Sets the surface coverage and blending mode. Returns RADIENT_STATUS_NO_CHANGE
-    /// only if this writer already has an identical pending assignment. Changes
-    /// are only supported during material initialization.
+    /// Sets the surface coverage and blending mode, including at runtime.
+    /// Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
+    /// identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetSurfaceMode)(THIS_
                                                   RADIENT_MATERIAL_SURFACE_MODE SurfaceMode) PURE;
 
@@ -700,9 +703,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSurfaceMaterialWriter, IRadientMaterialWriter)
     VIRTUAL RADIENT_STATUS METHOD(SetAlphaCutoff)(THIS_
                                                   Float32 AlphaCutoff) PURE;
 
-    /// Controls whether both sides of the surface are rendered. Returns
-    /// RADIENT_STATUS_NO_CHANGE only if this writer already has an identical pending
-    /// assignment. Changes are only supported during material initialization.
+    /// Controls whether both sides of the surface are rendered, including at runtime.
+    /// Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
+    /// identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetDoubleSided)(THIS_
                                                   Bool DoubleSided) PURE;
 };

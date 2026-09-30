@@ -335,6 +335,202 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);
 }
 
+TEST(RadientTesseraMaterialCacheTest, RefreshesSurfaceStateWithoutReplacingBindings)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial   = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult          Result      = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(Result.Data);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    ASSERT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+
+    const Uint64                  InitialMaterialRevision = Result.Data->GetRenderStateRevision();
+    const Uint64                  InitialCacheRevision    = pCache->GetRenderStateRevision();
+    const Uint32                  InitialOffset           = Result.Data->GetMaterialBufferAllocation().GetOffset();
+    IShaderResourceBinding* const pInitialSRB             = Result.Data->GetMaterialSRB().GetSRB();
+    const PBR_Renderer::PSO_FLAGS InitialFlags            = Result.Data->GetMaterialPSOFlags();
+    EXPECT_EQ(InitialMaterialRevision, 0u);
+    EXPECT_EQ(Result.Data->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_FALSE(Result.Data->IsDoubleSided());
+
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_MASKED), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+    // Committing does not restart asset loading or schedule material processing.
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    EXPECT_TRUE(Result.Data->IsDoubleSided());
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), InitialMaterialRevision + 1);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision + 1);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetMaterialBufferAllocation().GetOffset(), InitialOffset);
+    EXPECT_EQ(Result.Data->GetMaterialSRB().GetSRB(), pInitialSRB);
+    EXPECT_EQ(Result.Data->GetMaterialPSOFlags(), InitialFlags);
+
+    // Numeric and alpha-cutoff edits update shader data without invalidating PSOs.
+    RadientMaterialParameterHandle ColorHandle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter(RadientStandardMaterialBaseColorFactorName, &ColorHandle), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParameter(ColorHandle, RadientFloat4{0.25f, 0.5f, 0.75f, 1.f}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), InitialMaterialRevision + 1);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision + 1);
+
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_MASKED), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+    for (Uint32 Preparation = 0; Preparation < 3; ++Preparation)
+    {
+        ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetRenderStateRevision(), InitialMaterialRevision + 1);
+        EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision + 1);
+        EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    }
+
+    // A double-sided-only change has no shader-data changes, but still needs a new PSO.
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_FALSE(Result.Data->IsDoubleSided());
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), InitialMaterialRevision + 2);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision + 2);
+
+    // Intermediate commits that return to the cached state need no drawable refresh.
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_MASKED), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), InitialMaterialRevision + 2);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), InitialCacheRevision + 2);
+    EXPECT_EQ(Result.Data->GetMaterialBufferAllocation().GetOffset(), InitialOffset);
+    EXPECT_EQ(Result.Data->GetMaterialSRB().GetSRB(), pInitialSRB);
+}
+
+TEST(RadientTesseraMaterialCacheTest, ValidatesSurfaceEditsAroundInitialWorkerProcessing)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial   = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult          Result      = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(Result.Data);
+
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), 0u);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), 0u);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), 0u);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+
+    // A newer edit after the worker packed its data must be reflected before the
+    // record becomes GPU-ready. The worker does not publish mutable surface state.
+    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_MASKED), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+    EXPECT_FALSE(Result.Data->IsDoubleSided());
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), 0u);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), 0u);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+
+    // The initial state needs no invalidation. A later effective edit must
+    // advance both revisions so existing drawables refresh their PSOs.
+    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    EXPECT_TRUE(Result.Data->IsDoubleSided());
+    EXPECT_EQ(Result.Data->GetRenderStateRevision(), 1u);
+    EXPECT_EQ(pCache->GetRenderStateRevision(), 1u);
+}
+
+TEST(RadientTesseraMaterialCacheTest, InitialSurfaceStateDoesNotInvalidatePublishedMaterials)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pExisting   = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult          Existing    = pCache->Resolve(*pThreadPool, pExisting);
+    ASSERT_TRUE(Existing.Data);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    ASSERT_EQ(Existing.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+
+    // Start from a nonzero revision: adding a new record must neither advance
+    // nor reset the revision already observed by existing scene drawables.
+    RefCntAutoPtr<IRadientMaterialWriter> pExistingWriter;
+    ASSERT_EQ(pExisting->CreateWriter(&pExistingWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pExistingSurfaceWriter{pExistingWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pExistingSurfaceWriter, nullptr);
+    ASSERT_EQ(pExistingSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+    ASSERT_EQ(pExistingWriter->Commit(), RADIENT_STATUS_OK);
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    ASSERT_EQ(Existing.Data->GetRenderStateRevision(), 1u);
+    ASSERT_EQ(pCache->GetRenderStateRevision(), 1u);
+
+    struct InitialState
+    {
+        RADIENT_MATERIAL_SURFACE_MODE SurfaceMode;
+        Bool                          DoubleSided;
+    };
+    const InitialState States[] = {
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, False},
+        {RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT, False},
+        {RADIENT_MATERIAL_SURFACE_MODE_OPAQUE, True},
+        {RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT, True},
+    };
+    for (const InitialState& State : States)
+    {
+        SCOPED_TRACE(State.SurfaceMode);
+        SCOPED_TRACE(State.DoubleSided);
+        RefCntAutoPtr<IRadientMaterialAsset>  pMaterial = MakeMaterialAsset();
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+        ASSERT_NE(pSurfaceWriter, nullptr);
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(State.SurfaceMode), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(State.DoubleSided), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+
+        RadientTesseraMaterialResolveResult Result = pCache->Resolve(*pThreadPool, pMaterial);
+        ASSERT_TRUE(Result.Data);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
+        ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetSurfaceMode(), State.SurfaceMode);
+        EXPECT_EQ(Result.Data->IsDoubleSided(), State.DoubleSided);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetRenderStateRevision(), 0u);
+        EXPECT_EQ(Existing.Data->GetRenderStateRevision(), 1u);
+        EXPECT_EQ(pCache->GetRenderStateRevision(), 1u);
+    }
+}
+
 TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialOnWorkerThread)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});

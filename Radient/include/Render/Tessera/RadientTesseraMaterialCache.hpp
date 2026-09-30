@@ -50,7 +50,7 @@ class MaterialStorage;
 }
 
 /// Tessera-specific material data initially produced by a worker task. Shader
-/// data is subsequently updated on the render thread without changing bindings.
+/// data and surface state are refreshed on the render thread without changing bindings.
 /// The retained material asset keeps the borrowed RadientMaterialAssetView
 /// alive. The logical SRB lease is stable even while its GPU SRB is pending.
 class RadientTesseraMaterialData final
@@ -110,12 +110,16 @@ public:
         return m_IsDoubleSided;
     }
 
+    /// Changes only when preparation updates the cached surface mode or double-sided flag.
+    Uint64 GetRenderStateRevision() const noexcept
+    {
+        return m_RenderStateRevision;
+    }
+
 private:
     bool TryScheduleProcessing() noexcept;
 
     void PublishSuccess(PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
-                        RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
-                        Bool                                          IsDoubleSided,
                         RadientMaterialSRBLease                       MaterialSRB,
                         RadientTesseraBufferAllocation                MaterialBufferAllocation,
                         PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds,
@@ -134,9 +138,13 @@ private:
     const RadientMaterialDefinitionImpl*                m_pDefinition       = nullptr;
     Uint64                                              m_ShaderDataVersion = 0;
 
-    // Only the render thread reads/writes this flag. Worker publication alone
-    // cannot make a record GPU-ready: its packed version must first be checked.
-    bool m_InitialShaderDataValidated = false;
+    // Only the render thread reads/writes these fields. Worker publication alone
+    // cannot make a record GPU-ready: shader and surface state must first be refreshed.
+    // Keep the observed asset version separate from the effective cached-state revision:
+    // edits reverted before preparation must not invalidate dependent drawables.
+    Uint64 m_ObservedRenderStateVersion = 0;
+    Uint64 m_RenderStateRevision        = 0;
+    bool   m_InitialDataValidated       = false;
 
     const UniqueIdentifier                        m_UniqueID;
     PBR_Renderer::StaticShaderTextureIdsArrayType m_ShaderTextureIds{};
@@ -198,7 +206,7 @@ public:
     RadientTesseraMaterialResolveResult Resolve(IThreadPool&           ThreadPool,
                                                 IRadientMaterialAsset* pMaterial);
 
-    /// Refreshes changed material shader data, creates or grows the shared
+    /// Refreshes changed material shader data and surface state, creates or grows the shared
     /// material buffer, and uploads pending records. Existing allocations and
     /// bindings are preserved. This method must be called from the render thread.
     RADIENT_STATUS PrepareMaterialBuffer(IRenderDevice*  pDevice,
@@ -223,13 +231,20 @@ public:
     IBuffer* GetMaterialBuffer() const noexcept;
     Uint32   GetMaxMaterialAttribsSize() const noexcept;
 
+    /// Changes when preparation updates a cached surface mode or double-sided flag.
+    /// Shader-only edits do not advance this render-thread revision.
+    Uint64 GetRenderStateRevision() const noexcept
+    {
+        return m_RenderStateRevision;
+    }
+
 private:
     struct ProcessingContext;
 
     static void ProcessMaterial(const std::shared_ptr<ProcessingContext>& pContext,
                                 RadientTesseraMaterialData&               Data);
 
-    RADIENT_STATUS RefreshShaderData();
+    RADIENT_STATUS RefreshMaterialData();
 
     struct MaterialTracker
     {
@@ -242,7 +257,8 @@ private:
     std::vector<MaterialTracker>                    m_MaterialTrackers;
     RadientTesseraMaterialDataMap::ValueHandleArray m_RefreshMaterials;
     Uint64                                          m_MaterialProcessingRevision = 0;
-    bool                                            m_ShaderDataRefreshPending   = false;
+    Uint64                                          m_RenderStateRevision        = 0;
+    bool                                            m_MaterialDataRefreshPending = false;
 };
 
 } // namespace Diligent

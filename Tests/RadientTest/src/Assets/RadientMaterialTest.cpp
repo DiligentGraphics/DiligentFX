@@ -309,6 +309,8 @@ TEST(RadientMaterialTest, ParameterAndSurfaceChangesCommitAsOneTransaction)
         pMaterial, IID_RadientSurfaceMaterialAsset};
     ASSERT_NE(pSurfaceMaterial, nullptr);
 
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+
     const Uint64                          InitialVersion = pMaterial->GetVersion();
     RefCntAutoPtr<IRadientMaterialWriter> pWriter;
     ASSERT_EQ(pMaterial->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
@@ -329,7 +331,7 @@ TEST(RadientMaterialTest, ParameterAndSurfaceChangesCommitAsOneTransaction)
     EXPECT_TRUE(pSurfaceMaterial->IsDoubleSided());
 }
 
-TEST(RadientMaterialTest, RuntimeCommitsRejectUnsupportedChangesWithoutPartialApplication)
+TEST(RadientMaterialTest, RuntimeCommitsRejectTextureChangesWithoutPartialApplication)
 {
     struct ShaderData
     {
@@ -369,95 +371,67 @@ TEST(RadientMaterialTest, RuntimeCommitsRejectUnsupportedChangesWithoutPartialAp
         GPUStatus,
         RenderView
     };
-    enum class UnsupportedChange
-    {
-        Texture,
-        SurfaceMode,
-        DoubleSided
-    };
     for (InitializationQuery Query : {InitializationQuery::LoadStatus, InitializationQuery::GPUStatus, InitializationQuery::RenderView})
     {
-        for (UnsupportedChange Change : {UnsupportedChange::Texture, UnsupportedChange::SurfaceMode, UnsupportedChange::DoubleSided})
+        SCOPED_TRACE(static_cast<int>(Query));
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{pMaterial, IID_RadientSurfaceMaterialAsset};
+        ASSERT_NE(pSurface, nullptr);
+        switch (Query)
         {
-            SCOPED_TRACE(static_cast<int>(Query));
-            SCOPED_TRACE(static_cast<int>(Change));
-            RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
-            ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
-            RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{pMaterial, IID_RadientSurfaceMaterialAsset};
-            ASSERT_NE(pSurface, nullptr);
-            switch (Query)
-            {
-                case InitializationQuery::LoadStatus:
-                    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
-                    break;
-                case InitializationQuery::GPUStatus:
-                    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
-                    break;
-                case InitializationQuery::RenderView:
-                    ASSERT_EQ(RadientMaterialAssetManager::GetMaterialView(pMaterial).pMaterial, pMaterial.RawPtr());
-                    break;
-            }
-            ShaderData                            Packed{};
-            const Uint64                          PackedVersion   = DefinitionImpl.WriteShaderData(*pMaterial, &Packed);
-            const Uint64                          MaterialVersion = pMaterial->GetVersion();
-            RefCntAutoPtr<IRadientMaterialWriter> pWriter;
-            ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
-            RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
-            ASSERT_NE(pSurfaceWriter, nullptr);
-            ASSERT_EQ(pWriter->SetParameter(ValueHandle, 0.75f), RADIENT_STATUS_OK);
-            ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
-            switch (Change)
-            {
-                case UnsupportedChange::Texture:
-                    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
-                    break;
-                case UnsupportedChange::SurfaceMode:
-                    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
-                    break;
-                case UnsupportedChange::DoubleSided:
-                    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
-                    break;
-            }
-
-            EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
-            EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion);
-            EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.f);
-            EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.5f);
-            EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
-            EXPECT_FALSE(pSurface->IsDoubleSided());
-            RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
-            EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, &pStoredTexture), RADIENT_STATUS_OK);
-            EXPECT_EQ(pStoredTexture, nullptr);
-            EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion);
-            EXPECT_FLOAT_EQ(Packed.Value, 0.f);
-            EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.5f);
-
-            // Failed commits retain all assignments. Correct only the unsupported
-            // assignment; the numeric value and alpha cutoff must still apply.
-            EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
-            switch (Change)
-            {
-                case UnsupportedChange::Texture:
-                    ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
-                    break;
-                case UnsupportedChange::SurfaceMode:
-                    ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE), RADIENT_STATUS_OK);
-                    break;
-                case UnsupportedChange::DoubleSided:
-                    ASSERT_EQ(pSurfaceWriter->SetDoubleSided(False), RADIENT_STATUS_OK);
-                    break;
-            }
-            ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-            EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion + 1);
-            EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.75f);
-            EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.25f);
-            EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion + 1);
-            EXPECT_FLOAT_EQ(Packed.Value, 0.75f);
-            EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.25f);
-            EXPECT_EQ(Packed.SurfaceMode, static_cast<Uint32>(RADIENT_MATERIAL_SURFACE_MODE_OPAQUE));
-            EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
-            EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+            case InitializationQuery::LoadStatus:
+                ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+                break;
+            case InitializationQuery::GPUStatus:
+                ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+                break;
+            case InitializationQuery::RenderView:
+                ASSERT_EQ(RadientMaterialAssetManager::GetMaterialView(pMaterial).pMaterial, pMaterial.RawPtr());
+                break;
         }
+        ShaderData                            Packed{};
+        const Uint64                          PackedVersion   = DefinitionImpl.WriteShaderData(*pMaterial, &Packed);
+        const Uint64                          MaterialVersion = pMaterial->GetVersion();
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+        ASSERT_NE(pSurfaceWriter, nullptr);
+        ASSERT_EQ(pWriter->SetParameter(ValueHandle, 0.75f), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(0.25f), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, pTexture), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(True), RADIENT_STATUS_OK);
+
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
+        EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.f);
+        EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.5f);
+        EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
+        EXPECT_FALSE(pSurface->IsDoubleSided());
+        RefCntAutoPtr<IRadientTextureAsset> pStoredTexture;
+        EXPECT_EQ(pMaterial->GetTexture(TextureHandle, 0, &pStoredTexture), RADIENT_STATUS_OK);
+        EXPECT_EQ(pStoredTexture, nullptr);
+        EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion);
+        EXPECT_FLOAT_EQ(Packed.Value, 0.f);
+        EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.5f);
+
+        // Failed commits retain all assignments. Correct only the unsupported
+        // texture assignment; parameter and surface changes must still apply.
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_INVALID_OPERATION);
+        ASSERT_EQ(pWriter->SetTexture(TextureHandle, 0, nullptr), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion + 1);
+        EXPECT_FLOAT_EQ(GetParameter<Float32>(*pMaterial, ValueHandle), 0.75f);
+        EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), 0.25f);
+        EXPECT_EQ(pSurface->GetSurfaceMode(), RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT);
+        EXPECT_TRUE(pSurface->IsDoubleSided());
+        EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, &Packed), PackedVersion + 1);
+        EXPECT_FLOAT_EQ(Packed.Value, 0.75f);
+        EXPECT_FLOAT_EQ(Packed.AlphaCutoff, 0.25f);
+        EXPECT_EQ(Packed.SurfaceMode, static_cast<Uint32>(RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT));
+        EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
     }
 }
 
@@ -477,6 +451,8 @@ TEST(RadientMaterialTest, RevertedSurfaceChangesDoNotAdvanceVersion)
     RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurfaceMaterial{
         pMaterial, IID_RadientSurfaceMaterialAsset};
     ASSERT_NE(pSurfaceMaterial, nullptr);
+
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
 
     const Uint64                          InitialVersion = pMaterial->GetVersion();
     RefCntAutoPtr<IRadientMaterialWriter> pWriter;

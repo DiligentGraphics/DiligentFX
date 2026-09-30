@@ -56,20 +56,18 @@ using namespace Diligent::Testing::RadientGPUTest;
 namespace
 {
 
-// Keep the actual asset/storage/writer implementation, but stop initial worker
-// publication after its shader data has been packed and allocated. Packing never
-// reads IsDoubleSided(); ProcessMaterial reads it for PublishSuccess() arguments.
+// Keep the actual asset/storage/writer implementation, but pause the worker
+// after it publishes the packed record and before it notifies the cache that
+// processing finished. ProcessMaterial releases its local surface-interface
+// reference at that point, without holding the material storage lock.
 class GatedSurfaceMaterial final : public ObjectBase<IRadientSurfaceMaterialAsset>
 {
 public:
     GatedSurfaceMaterial(IReferenceCounters*    pRefCounters,
-                         IRadientMaterialAsset* pMaterial,
-                         Threading::Signal&     Allocated,
-                         Threading::Signal&     Release) :
+                         IRadientMaterialAsset* pMaterial) :
         ObjectBase<IRadientSurfaceMaterialAsset>{pRefCounters},
         m_pMaterial{pMaterial, IID_RadientSurfaceMaterialAsset},
-        m_Allocated{Allocated},
-        m_Release{Release}
+        m_RenderThreadId{std::this_thread::get_id()}
     {}
 
     void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override
@@ -87,6 +85,27 @@ public:
             // The material cache and packing code obtain the real storage.
             m_pMaterial->QueryInterface(IID, ppInterface);
         }
+    }
+
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
+    {
+        if (std::this_thread::get_id() != m_RenderThreadId && !m_Published.IsTriggered())
+        {
+            m_Published.Trigger();
+            m_Release.Wait();
+        }
+        return ObjectBase<IRadientSurfaceMaterialAsset>::Release();
+    }
+
+    bool IsPublished() const
+    {
+        return m_Published.IsTriggered();
+    }
+
+    void ResumeWorker()
+    {
+        if (!m_Release.IsTriggered())
+            m_Release.Trigger();
     }
 
     const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override
@@ -131,21 +150,23 @@ public:
     }
     Bool DILIGENT_CALL_TYPE IsDoubleSided() const override
     {
-        m_Allocated.Trigger();
-        m_Release.Wait();
         return m_pMaterial->IsDoubleSided();
     }
 
 private:
     RefCntAutoPtr<IRadientSurfaceMaterialAsset> m_pMaterial;
-    Threading::Signal&                          m_Allocated;
-    Threading::Signal&                          m_Release;
+    const std::thread::id                       m_RenderThreadId;
+
+    // Task destruction can release this wrapper after WaitForAllTasks() returns.
+    // Owning the signals keeps them valid through that final Release().
+    Threading::Signal m_Published;
+    Threading::Signal m_Release;
 };
 
 struct MaterialWorkerReleaseGuard
 {
-    Threading::Signal& ReleaseSignal;
-    IThreadPool&       ThreadPool;
+    GatedSurfaceMaterial& Material;
+    IThreadPool&          ThreadPool;
 
     ~MaterialWorkerReleaseGuard()
     {
@@ -154,8 +175,7 @@ struct MaterialWorkerReleaseGuard
 
     void ReleaseAndWait()
     {
-        if (!ReleaseSignal.IsTriggered())
-            ReleaseSignal.Trigger();
+        Material.ResumeWorker();
         ThreadPool.WaitForAllTasks();
     }
 };
@@ -644,30 +664,33 @@ TEST(RadientMaterialAssetManagerGPUTest, InitialShaderDataMustBeValidatedAfterWo
         ASSERT_EQ(Renderer.BeginFrame(pDevice, pContext), RADIENT_STATUS_OK);
         ASSERT_NE(Renderer.GetMaterialCache(), nullptr);
         RadientTesseraMaterialCache&        Cache = *Renderer.GetMaterialCache();
-        Threading::Signal                   Allocated;
-        Threading::Signal                   Release;
         RefCntAutoPtr<GatedSurfaceMaterial> pGatedMaterial{
-            MakeNewRCObj<GatedSurfaceMaterial>()(pMaterial.RawPtr(), Allocated, Release)};
+            MakeNewRCObj<GatedSurfaceMaterial>()(pMaterial.RawPtr())};
         // Release before destroying the renderer or stopping its pool if any
-        // assertion returns while the worker is held at publication.
-        MaterialWorkerReleaseGuard          WorkerGuard{Release, *pThreadPool};
+        // assertion returns while the worker's completion notification is held.
+        MaterialWorkerReleaseGuard          WorkerGuard{*pGatedMaterial, *pThreadPool};
         RadientTesseraMaterialResolveResult Result = Cache.Resolve(*pThreadPool, pGatedMaterial);
         ASSERT_TRUE(Result.Data);
-        while (!Allocated.IsTriggered() && Result.Data->GetStatus() == RADIENT_STATUS_PENDING)
+        const std::chrono::steady_clock::time_point PublicationDeadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds{10};
+        while (!pGatedMaterial->IsPublished() && std::chrono::steady_clock::now() < PublicationDeadline)
             std::this_thread::yield();
-        ASSERT_TRUE(Allocated.IsTriggered());
-        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_PENDING);
+        ASSERT_TRUE(pGatedMaterial->IsPublished());
+        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+        ASSERT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
 
         ASSERT_EQ(pWriter->SetParameter(ColorHandle, UpdatedColor), RADIENT_STATUS_OK);
         ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
-        // Refresh skips the pending record, but the shared buffer already
-        // contains its allocation and uploads the old values.
+        // No worker completion has been announced and this fresh cache has not
+        // discovered the material's change tracker yet, so refresh does no work.
+        // The shared buffer already contains the allocation and uploads old values.
         ASSERT_EQ(Cache.PrepareMaterialBuffer(pDevice, pContext), RADIENT_STATUS_OK);
         WorkerGuard.ReleaseAndWait();
         ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
 
         // Prepare real texture bindings without refreshing shader data again.
-        // This reproduces publication between the refresh and SRB preparation.
+        // Completion was announced between refresh and SRB preparation, so the
+        // packed data has still not been validated against the committed edit.
         RadientPBRRenderer& PBRRenderer = *Renderer.GetRenderer();
         ASSERT_EQ(Cache.Prepare(
                       pAssetManager->GetResourceManager()->GetTextureVersion(),

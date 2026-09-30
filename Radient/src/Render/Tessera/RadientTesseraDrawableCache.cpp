@@ -186,6 +186,40 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientTesseraDrawableCache::SyncMaterialState(const RadientTesseraMaterialCache& MaterialCache)
+{
+    const Uint64 Revision = MaterialCache.GetRenderStateRevision();
+    if (m_MaterialRenderStateRevision == Revision)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    bool Changed = false;
+    for (MaterialDrawablesMap::value_type& Entry : m_MaterialDrawables)
+    {
+        const RadientTesseraMaterialData& Material   = *Entry.first;
+        MaterialDrawables&                Dependents = Entry.second;
+        if (Dependents.RenderStateRevision == Material.GetRenderStateRevision())
+            continue;
+
+        const PBR_Renderer::ALPHA_MODE AlphaMode = ToPBRAlphaMode(Material.GetSurfaceMode());
+        for (const RadientDrawableID DrawableID : Dependents.DrawableIDs)
+        {
+            RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
+            if (Slot.AlphaMode != AlphaMode)
+            {
+                RemoveDrawableFromDrawList(DrawableID);
+                Slot.AlphaMode     = AlphaMode;
+                Slot.DrawListIndex = m_DrawLists.Add(AlphaMode, DrawableID);
+            }
+            // Double-sided changes keep the alpha list but still select a new PSO.
+            RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
+        }
+        Dependents.RenderStateRevision = Material.GetRenderStateRevision();
+        Changed                        = true;
+    }
+    m_MaterialRenderStateRevision = Revision;
+    return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
+}
+
 RADIENT_STATUS RadientTesseraDrawableCache::PrepareSkinningData(RadientFrameID RenderFrameID, bool PackMatrixRowMajor)
 {
     RADIENT_STATUS Status     = RADIENT_STATUS_OK;
@@ -682,6 +716,7 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         Slot.AlphaMode          = ToPBRAlphaMode(Slot.MaterialData->GetSurfaceMode());
 
         Slot.DrawListIndex = m_DrawLists.Add(Slot.AlphaMode, DrawableID);
+        AttachDrawableMaterial(DrawableID);
         Record.DrawableIDs.push_back(DrawableID);
         RecordDrawableChange(DrawableID, RadientDrawableChangeType::Added);
     }
@@ -723,6 +758,20 @@ void RadientTesseraDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
     VERIFY(Slot.IsValid(), "Trying to free an invalid drawable slot");
     VERIFY(Slot.IsInDrawList(), "Trying to free a drawable slot that is not in a draw list");
 
+    RemoveDrawableFromDrawList(DrawableID);
+    DetachDrawableMaterial(DrawableID);
+
+    const Uint32 Generation = Slot.Generation + 1u;
+    Slot                    = {};
+    Slot.Generation         = Generation;
+
+    RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
+    m_FreeDrawableIDs.push_back(DrawableID);
+}
+
+void RadientTesseraDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
+{
+    RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
     // Remove the drawable from its draw list.
     const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(Slot.AlphaMode, Slot.DrawListIndex);
     if (MovedDrawableID != InvalidRadientDrawableID && MovedDrawableID != DrawableID)
@@ -734,12 +783,34 @@ void RadientTesseraDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
         MovedSlot.DrawListIndex = Slot.DrawListIndex;
     }
 
-    const Uint32 Generation = Slot.Generation + 1u;
-    Slot                    = {};
-    Slot.Generation         = Generation;
+    Slot.DrawListIndex = RadientDrawableSlot::InvalidDrawListIndex;
+}
 
-    RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
-    m_FreeDrawableIDs.push_back(DrawableID);
+void RadientTesseraDrawableCache::AttachDrawableMaterial(RadientDrawableID DrawableID)
+{
+    RadientDrawableSlot& Slot       = m_DrawableSlots[DrawableID];
+    MaterialDrawables&   Dependents = m_MaterialDrawables[Slot.MaterialData.Get()];
+    if (Dependents.DrawableIDs.empty())
+        Dependents.RenderStateRevision = Slot.MaterialData->GetRenderStateRevision();
+    Slot.MaterialDrawableIndex = Dependents.DrawableIDs.size();
+    Dependents.DrawableIDs.push_back(DrawableID);
+}
+
+void RadientTesseraDrawableCache::DetachDrawableMaterial(RadientDrawableID DrawableID)
+{
+    RadientDrawableSlot& Slot  = m_DrawableSlots[DrawableID];
+    const auto           Entry = m_MaterialDrawables.find(Slot.MaterialData.Get());
+    VERIFY_EXPR(Entry != m_MaterialDrawables.end());
+    std::vector<RadientDrawableID>& DrawableIDs = Entry->second.DrawableIDs;
+    VERIFY_EXPR(Slot.MaterialDrawableIndex < DrawableIDs.size());
+    VERIFY_EXPR(DrawableIDs[Slot.MaterialDrawableIndex] == DrawableID);
+    const RadientDrawableID MovedDrawableID                = DrawableIDs.back();
+    DrawableIDs[Slot.MaterialDrawableIndex]                = MovedDrawableID;
+    m_DrawableSlots[MovedDrawableID].MaterialDrawableIndex = Slot.MaterialDrawableIndex;
+    DrawableIDs.pop_back();
+    if (DrawableIDs.empty())
+        m_MaterialDrawables.erase(Entry);
+    Slot.MaterialDrawableIndex = ~size_t{0};
 }
 
 void RadientTesseraDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)

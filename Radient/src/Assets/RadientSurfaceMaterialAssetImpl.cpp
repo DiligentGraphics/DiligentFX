@@ -82,12 +82,6 @@ public:
         return RADIENT_STATUS_OK;
     }
 
-    bool HasEffectiveRenderStateChanges(const SurfaceMaterialState& Target) const noexcept
-    {
-        return (m_HasSurfaceMode && Target.SurfaceMode != m_SurfaceMode) ||
-            (m_HasDoubleSided && Target.IsDoubleSided != m_IsDoubleSided);
-    }
-
     MATERIAL_CHANGE_FLAGS ApplyTo(SurfaceMaterialState& Target) const noexcept
     {
         MATERIAL_CHANGE_FLAGS Flags = MATERIAL_CHANGE_FLAG_NONE;

@@ -201,6 +201,12 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
         return GeometryRendererStatus;
     FrameStatus = CombineDependencyStatus(FrameStatus, GeometryRendererStatus);
 
+    // Material preparation refreshes surface state after SyncScene(). Update
+    // dependent draw lists before the geometry pass selects replacement PSOs.
+    // Compiling PSOs use the normal pending path, temporarily skipping their draws.
+    if (const RadientTesseraMaterialCache* pMaterialCache = m_GeometryRenderer.GetMaterialCache())
+        pSceneState->DrawableCache.SyncMaterialState(*pMaterialCache);
+
     RadientPBRRenderer* const pPBRRenderer = m_GeometryRenderer.GetRenderer();
     if (pPBRRenderer == nullptr || pPBRRenderer->GetFrameAttribsCB() == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;

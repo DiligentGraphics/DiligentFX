@@ -181,9 +181,7 @@ public:
     {
         std::lock_guard<std::mutex> Lock{m_DataMutex};
         // Reject unsupported edits before applying any of the assignments.
-        if (IsInitializationFinished() &&
-            (Changes.Parameters.HasEffectiveTextureChanges(m_Data) ||
-             Changes.Specialized.HasEffectiveRenderStateChanges(SpecializedState)))
+        if (IsInitializationFinished() && Changes.Parameters.HasEffectiveTextureChanges(m_Data))
         {
             return RADIENT_STATUS_INVALID_OPERATION;
         }

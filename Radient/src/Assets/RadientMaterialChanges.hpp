@@ -90,8 +90,6 @@ struct EmptyMaterialState
 
 struct EmptyMaterialChanges
 {
-    bool HasEffectiveRenderStateChanges(const EmptyMaterialState&) const noexcept { return false; }
-
     MATERIAL_CHANGE_FLAGS ApplyTo(EmptyMaterialState&) const noexcept
     {
         return MATERIAL_CHANGE_FLAG_NONE;

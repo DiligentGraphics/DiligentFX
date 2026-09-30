@@ -116,6 +116,9 @@ struct RadientDrawableSlot
 
     size_t DrawListIndex = InvalidDrawListIndex;
 
+    // Position in the material's dependent drawable list, for constant-time removal.
+    size_t MaterialDrawableIndex = ~size_t{0};
+
     bool IsValid() const
     {
         return Entity != InvalidRadientEntityID;
@@ -212,6 +215,11 @@ public:
     RADIENT_STATUS SyncScene(
         const IRadientScene&                        Scene,
         const RadientTesseraMaterialResolveContext& MaterialResolveContext);
+
+    /// Applies cached material render-state changes to dependent drawables. Call
+    /// after material preparation and before preparing geometry passes. Changes
+    /// are appended to the scene-sync deltas; each scene tracks its own revision.
+    RADIENT_STATUS SyncMaterialState(const RadientTesseraMaterialCache& MaterialCache);
 
     const RadientDrawLists& GetDrawLists() const
     {
@@ -351,6 +359,12 @@ private:
         std::vector<RenderableMorphState*> Renderables;
     };
 
+    struct MaterialDrawables
+    {
+        Uint64                         RenderStateRevision = 0;
+        std::vector<RadientDrawableID> DrawableIDs;
+    };
+
     struct LightListLocation
     {
         RADIENT_LIGHT_TYPE Type  = RADIENT_LIGHT_TYPE_DIRECTIONAL;
@@ -386,6 +400,9 @@ private:
     RadientDrawableID AllocateDrawableID();
 
     void FreeDrawableID(RadientDrawableID DrawableID);
+    void RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
+    void AttachDrawableMaterial(RadientDrawableID DrawableID);
+    void DetachDrawableMaterial(RadientDrawableID DrawableID);
     void RemoveRenderableDrawables(RenderableRecord& Record);
     void AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record);
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
@@ -427,6 +444,12 @@ private:
     using PendingMaterialDataMap =
         absl::flat_hash_map<RadientEntityID, std::vector<RadientTesseraMaterialDataMap::ValueHandle>>;
     PendingMaterialDataMap m_PendingMaterialData;
+
+    // Drawable slots retain the material data used as keys. Remove each entry
+    // when its last drawable disappears, before releasing the slot's reference.
+    using MaterialDrawablesMap = absl::flat_hash_map<const RadientTesseraMaterialData*, MaterialDrawables>;
+    MaterialDrawablesMap m_MaterialDrawables;
+    Uint64               m_MaterialRenderStateRevision = 0;
 
     // Geometry passes cache pointers to drawable slots; deque keeps existing slot
     // addresses stable when new drawable IDs append more slots.

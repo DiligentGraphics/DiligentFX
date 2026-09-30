@@ -277,7 +277,7 @@ RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
     // A worker may publish after the refresh pass but before its allocation
     // is uploaded. Keep initial readiness pending until a refresh checks the
     // packed version. Later edits retain the already-ready material.
-    if (!m_InitialShaderDataValidated)
+    if (!m_InitialDataValidated)
         return RADIENT_STATUS_PENDING;
 
     IShaderResourceBinding* const pSRB = m_MaterialSRB.GetSRB();
@@ -302,8 +302,6 @@ bool RadientTesseraMaterialData::TryScheduleProcessing() noexcept
 
 void RadientTesseraMaterialData::PublishSuccess(
     PBR_Renderer::PSO_FLAGS                       MaterialPSOFlags,
-    RADIENT_MATERIAL_SURFACE_MODE                 SurfaceMode,
-    Bool                                          IsDoubleSided,
     RadientMaterialSRBLease                       MaterialSRB,
     RadientTesseraBufferAllocation                MaterialBufferAllocation,
     PBR_Renderer::StaticShaderTextureIdsArrayType ShaderTextureIds,
@@ -312,8 +310,6 @@ void RadientTesseraMaterialData::PublishSuccess(
     VERIFY_EXPR(MaterialSRB);
     VERIFY_EXPR(MaterialBufferAllocation);
     m_MaterialPSOFlags         = MaterialPSOFlags;
-    m_SurfaceMode              = SurfaceMode;
-    m_IsDoubleSided            = IsDoubleSided;
     m_MaterialSRB              = std::move(MaterialSRB);
     m_MaterialBufferAllocation = std::move(MaterialBufferAllocation);
     m_ShaderTextureIds         = std::move(ShaderTextureIds);
@@ -436,21 +432,21 @@ RadientTesseraMaterialResolveResult RadientTesseraMaterialCache::Resolve(IThread
 RADIENT_STATUS RadientTesseraMaterialCache::PrepareMaterialBuffer(IRenderDevice*  pDevice,
                                                                   IDeviceContext* pContext)
 {
-    const RADIENT_STATUS Status = RefreshShaderData();
+    const RADIENT_STATUS Status = RefreshMaterialData();
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
     return m_pProcessingContext->MaterialBuffer.Prepare(pDevice, pContext);
 }
 
-RADIENT_STATUS RadientTesseraMaterialCache::RefreshShaderData()
+RADIENT_STATUS RadientTesseraMaterialCache::RefreshMaterialData()
 {
     // Observe completed processing before taking the snapshot. A worker
     // publishing after this load advances the revision for the next preparation,
     // so unfinished tasks do not require repeated scans of the material cache.
     const Uint64 MaterialProcessingRevision =
         m_pProcessingContext->MaterialProcessingRevision.load(std::memory_order_acquire);
-    bool Refresh = m_ShaderDataRefreshPending || MaterialProcessingRevision != m_MaterialProcessingRevision;
+    bool Refresh = m_MaterialDataRefreshPending || MaterialProcessingRevision != m_MaterialProcessingRevision;
     for (MaterialTracker& Tracker : m_MaterialTrackers)
     {
         const Uint64 Revision = Tracker.pTracker->GetRevision();
@@ -499,12 +495,35 @@ RADIENT_STATUS RadientTesseraMaterialCache::RefreshShaderData()
             if (Status != RADIENT_STATUS_OK)
                 break;
         }
-        Material->m_InitialShaderDataValidated = true;
+        const Uint64 RenderStateVersion = Storage.GetChangeVersions().RenderStateVersion;
+        if (Material->m_ObservedRenderStateVersion != RenderStateVersion)
+        {
+            // ProcessMaterial() validates this interface before publication. Read
+            // mutable surface state only here, on the thread that commits edits.
+            const IRadientSurfaceMaterialAsset& SurfaceMaterial =
+                static_cast<const IRadientSurfaceMaterialAsset&>(*Material->m_pMaterial);
+            const RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = SurfaceMaterial.GetSurfaceMode();
+            const Bool                          DoubleSided = SurfaceMaterial.IsDoubleSided();
+            if (Material->m_SurfaceMode != SurfaceMode || Material->m_IsDoubleSided != DoubleSided)
+            {
+                Material->m_SurfaceMode   = SurfaceMode;
+                Material->m_IsDoubleSided = DoubleSided;
+                // Drawables can only attach after initial validation and read that
+                // state directly. Only later changes need to invalidate dependents.
+                if (Material->m_InitialDataValidated)
+                {
+                    ++Material->m_RenderStateRevision;
+                    ++m_RenderStateRevision;
+                }
+            }
+            Material->m_ObservedRenderStateVersion = RenderStateVersion;
+        }
+        Material->m_InitialDataValidated = true;
     }
 
     // Preserve scratch capacity without extending the lifetime of cached data.
     m_RefreshMaterials.clear();
-    m_ShaderDataRefreshPending = Status != RADIENT_STATUS_OK;
+    m_MaterialDataRefreshPending = Status != RADIENT_STATUS_OK;
     return Status;
 }
 
@@ -532,7 +551,7 @@ RADIENT_STATUS RadientTesseraMaterialCache::Prepare(
 {
     // The test-supplied buffer snapshot stands in for PrepareMaterialBuffer().
     // Validate shader data before exposing that synthetic upload to the SRBs.
-    const RADIENT_STATUS Status = RefreshShaderData();
+    const RADIENT_STATUS Status = RefreshMaterialData();
     if (Status != RADIENT_STATUS_OK)
         return Status;
 
@@ -644,8 +663,6 @@ void RadientTesseraMaterialCache::ProcessMaterial(
     }
 
     Data.PublishSuccess(MaterialPSOFlags,
-                        pSurfaceMaterial->GetSurfaceMode(),
-                        pSurfaceMaterial->IsDoubleSided(),
                         std::move(MaterialSRB),
                         std::move(MaterialBufferAllocation),
                         std::move(ShaderTextureIds),

@@ -420,6 +420,72 @@ TEST(RadientMaterialAssetManagerTest, TracksEffectiveMaterialChanges)
     EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), 5u);
 }
 
+TEST(RadientMaterialAssetManagerTest, TracksRuntimeSurfaceChangesWithoutReloading)
+{
+    RadientMaterialAssetManagerSharedPtr pMaterialManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pMaterialManager, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateUninitializedTestMaterial(*pMaterialManager);
+    ASSERT_NE(pMaterial, nullptr);
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset> pSurface{pMaterial, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurface, nullptr);
+    const RadientMaterialDetail::MaterialStorage* const pStorage = GetMaterialStorage(pMaterial);
+    ASSERT_NE(pStorage, nullptr);
+
+    // Seal initialization before editing render state. These changes must retain
+    // ready material status and publish only the versions they actually affect.
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+
+    struct Update
+    {
+        RADIENT_MATERIAL_SURFACE_MODE SurfaceMode;
+        Bool                          DoubleSided;
+        Uint64                        ShaderDataVersion;
+    };
+    const Update Updates[] = {
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, False, 2},
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, True, 2},
+        {RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT, True, 3},
+        {RADIENT_MATERIAL_SURFACE_MODE_OPAQUE, False, 4},
+    };
+    Uint64 Revision = 0;
+    for (const Update& State : Updates)
+    {
+        SCOPED_TRACE(Revision);
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(State.SurfaceMode), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(State.DoubleSided), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        ++Revision;
+
+        const RadientMaterialDetail::MaterialChangeVersions& Versions = pStorage->GetChangeVersions();
+        EXPECT_EQ(Versions.Version, Revision + 1);
+        EXPECT_EQ(Versions.ShaderDataVersion, State.ShaderDataVersion);
+        EXPECT_EQ(Versions.RenderStateVersion, Revision + 1);
+        EXPECT_EQ(Versions.TextureBindingsVersion, 1u);
+        EXPECT_EQ(pMaterial->GetVersion(), Revision + 1);
+        EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), Revision);
+        EXPECT_EQ(pSurface->GetSurfaceMode(), State.SurfaceMode);
+        EXPECT_EQ(pSurface->IsDoubleSided(), State.DoubleSided);
+        EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
+
+        // Repeating assignments through the reusable writer must not invalidate
+        // shader data, render state, or the manager's unchanged-frame fast path.
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(State.SurfaceMode), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(State.DoubleSided), RADIENT_STATUS_OK);
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_NO_CHANGE);
+        EXPECT_EQ(Versions.Version, Revision + 1);
+        EXPECT_EQ(Versions.ShaderDataVersion, State.ShaderDataVersion);
+        EXPECT_EQ(Versions.RenderStateVersion, Revision + 1);
+        EXPECT_EQ(Versions.TextureBindingsVersion, 1u);
+        EXPECT_EQ(pMaterialManager->GetMaterialChangeRevision(), Revision);
+    }
+}
+
 TEST(RadientMaterialAssetManagerTest, MaterialChangeIdentitiesAreManagerScoped)
 {
     RadientMaterialAssetManagerSharedPtr pFirstManager = RadientMaterialAssetManager::Create();

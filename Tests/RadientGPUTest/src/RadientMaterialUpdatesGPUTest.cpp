@@ -28,6 +28,7 @@
 #include "RadientTypesX.hpp"
 #include "RadientStandardMaterialParameters.h"
 
+#include "Assets/RadientMaterialAssetManager.hpp"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 
@@ -49,6 +50,28 @@ constexpr Uint32        OutputHeight = 64;
 constexpr RadientFloat4 UpdatedColor{0.25f, 0.5f, 0.75f, 1.f};
 
 using SampledColors = std::array<std::array<Uint8, 4>, 4>;
+
+struct QuadSetup
+{
+    RadientFloat4                 Color       = UpdatedColor;
+    RadientFloat2                 UVBias      = {0.25f, 0.5f};
+    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
+    Float32                       AlphaCutoff = 0.25f;
+    Bool                          DoubleSided = True;
+    bool                          BackFacing  = false;
+};
+
+using QuadSetups = std::array<QuadSetup, 4>;
+
+QuadSetups MakeDefaultQuadSetups()
+{
+    QuadSetups Setups;
+    Setups[0].Color       = {1.f, 1.f, 1.f, 1.f};
+    Setups[2].UVBias.x    = 0.75f;
+    Setups[3].UVBias.x    = 0.75f;
+    Setups[3].AlphaCutoff = 0.75f;
+    return Setups;
+}
 
 RefCntAutoPtr<IRadientDataBlob> MakeBlob(const void* pData, size_t Size)
 {
@@ -80,7 +103,7 @@ public:
             pAssets->Stop(pContext);
     }
 
-    void Initialize()
+    void Initialize(const QuadSetups& Setups = MakeDefaultQuadSetups(), Bool EnableAsyncPipelineCompilation = False)
     {
         GPUTestingEnvironment* const pEnvironment = GPUTestingEnvironment::GetInstance();
         pDevice                                   = pEnvironment->GetDevice();
@@ -100,7 +123,7 @@ public:
         ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
 
         RadientRendererDesc RendererDesc;
-        RendererDesc.EnableAsyncPipelineCompilation = False;
+        RendererDesc.EnableAsyncPipelineCompilation = EnableAsyncPipelineCompilation;
         ASSERT_EQ(pEngine->CreateRenderer(RendererDesc, &pRenderer), RADIENT_STATUS_OK);
         ASSERT_EQ(pEngine->CreateScene({}, &pScene), RADIENT_STATUS_OK);
 
@@ -132,29 +155,27 @@ public:
         // references initialized to the states expected after each update.
         for (Uint32 Index = 0; Index < Materials.size(); ++Index)
         {
-            const RadientFloat4                         Color  = Index == 0 ? RadientFloat4{1.f, 1.f, 1.f, 1.f} : UpdatedColor;
-            const RadientFloat2                         Bias   = {Index < 2 ? 0.25f : 0.75f, 0.5f};
-            const Float32                               Cutoff = Index < 3 ? 0.25f : 0.75f;
+            const QuadSetup&                            Setup = Setups[Index];
             RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
             DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
             ASSERT_EQ(CreateStandardMaterialAsset(
                           *pAssets, DefinitionCI,
                           [&](IRadientMaterialDefinitionAsset& Definition, IRadientMaterialWriter& Writer) {
-                              RADIENT_STATUS                           Status = SetParameter(Definition, Writer, RadientStandardMaterialBaseColorFactorName, Color);
+                              RADIENT_STATUS                           Status = SetParameter(Definition, Writer, RadientStandardMaterialBaseColorFactorName, Setup.Color);
                               RadientStandardMaterialTextureParameters TextureParameters{pTexture};
                               TextureParameters.UVScale = {0.f, 0.f};
-                              TextureParameters.UVBias  = Bias;
+                              TextureParameters.UVBias  = Setup.UVBias;
                               if (RADIENT_SUCCEEDED(Status))
                                   Status = SetStandardMaterialTextureParameters(Definition, Writer, RadientStandardMaterialBaseColorTextureParameterNames, TextureParameters);
                               RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurface{&Writer, IID_RadientSurfaceMaterialWriter};
                               if (pSurface == nullptr)
                                   return RADIENT_STATUS_INVALID_OPERATION;
                               if (RADIENT_SUCCEEDED(Status))
-                                  Status = pSurface->SetSurfaceMode(RADIENT_MATERIAL_SURFACE_MODE_MASKED);
+                                  Status = pSurface->SetSurfaceMode(Setup.SurfaceMode);
                               if (RADIENT_SUCCEEDED(Status))
-                                  Status = pSurface->SetDoubleSided(True);
+                                  Status = pSurface->SetDoubleSided(Setup.DoubleSided);
                               if (RADIENT_SUCCEEDED(Status))
-                                  Status = pSurface->SetAlphaCutoff(Cutoff);
+                                  Status = pSurface->SetAlphaCutoff(Setup.AlphaCutoff);
                               return Status;
                           },
                           &Materials[Index]),
@@ -172,11 +193,14 @@ public:
             {{0.4f, 0.4f, 0.f}, {1.f, 0.f}},
             {{-0.4f, 0.4f, 0.f}, {0.f, 0.f}},
         };
-        const Uint16                          Indices[] = {0, 1, 2, 0, 2, 3};
-        const RefCntAutoPtr<IRadientDataBlob> pVertices = MakeBlob(Vertices, sizeof(Vertices));
-        const RefCntAutoPtr<IRadientDataBlob> pIndices  = MakeBlob(Indices, sizeof(Indices));
+        const Uint16                          Indices[]     = {0, 1, 2, 0, 2, 3};
+        const Uint16                          BackIndices[] = {0, 2, 1, 0, 3, 2};
+        const RefCntAutoPtr<IRadientDataBlob> pVertices     = MakeBlob(Vertices, sizeof(Vertices));
+        const RefCntAutoPtr<IRadientDataBlob> pIndices      = MakeBlob(Indices, sizeof(Indices));
+        const RefCntAutoPtr<IRadientDataBlob> pBackIndices  = MakeBlob(BackIndices, sizeof(BackIndices));
         ASSERT_NE(pVertices, nullptr);
         ASSERT_NE(pIndices, nullptr);
+        ASSERT_NE(pBackIndices, nullptr);
         IRadientDataBlob*        VertexBuffers[] = {pVertices};
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer(sizeof(Vertex));
@@ -192,7 +216,7 @@ public:
             Primitive.pMaterial  = Materials[Index];
             RadientMeshCreateInfo MeshCI;
             MeshCI.VertexData     = {Layout, VertexBuffers, 4};
-            MeshCI.IndexData      = {pIndices, 6, RADIENT_INDEX_TYPE_UINT16};
+            MeshCI.IndexData      = {Setups[Index].BackFacing ? pBackIndices.RawPtr() : pIndices.RawPtr(), 6, RADIENT_INDEX_TYPE_UINT16};
             MeshCI.pPrimitives    = &Primitive;
             MeshCI.PrimitiveCount = 1;
             RefCntAutoPtr<IRadientMeshAsset> pMesh;
@@ -249,10 +273,21 @@ public:
         ViewDesc.TemporalAntiAliasing.Enabled = False;
         ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
 
+        ASSERT_NO_FATAL_FAILURE(RenderUntilReady());
+    }
+
+    void RenderUntilReady(IRadientMaterialAsset* pEditedMaterial = nullptr)
+    {
         const std::chrono::steady_clock::time_point Deadline = std::chrono::steady_clock::now() + std::chrono::seconds{60};
         RADIENT_STATUS                              Status   = RADIENT_STATUS_PENDING;
         while (Status == RADIENT_STATUS_PENDING && std::chrono::steady_clock::now() < Deadline)
         {
+            // Render-state edits can require a new pipeline, but the material
+            // itself must remain loaded while the renderer prepares that pipeline.
+            if (pEditedMaterial != nullptr)
+            {
+                ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pEditedMaterial), RADIENT_STATUS_OK);
+            }
             Status = RenderFrame();
             ASSERT_FALSE(RADIENT_FAILED(Status));
             if (Status == RADIENT_STATUS_PENDING)
@@ -260,6 +295,10 @@ public:
         }
         ASSERT_EQ(Status, RADIENT_STATUS_OK);
         ASSERT_EQ(RenderFrame(), RADIENT_STATUS_OK);
+        if (pEditedMaterial != nullptr)
+        {
+            ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pEditedMaterial), RADIENT_STATUS_OK);
+        }
     }
 
     RADIENT_STATUS RenderFrame()
@@ -380,8 +419,8 @@ TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneC
     ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
     ExpectSameColor(Colors[0], Colors[2]);
 
-    // Unsupported texture/render-state changes reject the complete commit. The
-    // valid color assignment in the same commit must not leak into rendering.
+    // Unsupported texture changes reject the complete commit. The valid color
+    // and surface-mode assignments in the same commit must not leak into rendering.
     RadientMaterialParameterHandle TextureHandle;
     ASSERT_EQ(Definition.FindParameter(RadientStandardMaterialBaseColorTextureName, &TextureHandle), RADIENT_STATUS_OK);
     ASSERT_EQ(SetParameter(Definition, *pWriter, RadientStandardMaterialBaseColorFactorName, RadientFloat4{1.f, 0.f, 0.f, 1.f}), RADIENT_STATUS_OK);
@@ -415,6 +454,139 @@ TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneC
     EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
 }
 
+
+// Compare the edited quad against independently initialized opaque, transparent,
+// and discarded masked quads. Only the first material changes between frames.
+TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedSurfaceModeWithoutSceneChanges)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (QuadSetup& Setup : Setups)
+    {
+        Setup.DoubleSided = False;
+    }
+    Setups[0].SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Setups[0].AlphaCutoff = 0.75f;
+    Setups[1].SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+    Setups[2].SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT;
+    Setups[3].AlphaCutoff = 0.75f;
+    MaterialUpdateScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups, True));
+
+    const RadientSceneRevisions           SceneRevisions = Scene.pScene->GetSceneRevisions();
+    IRadientMaterialAsset&                Material       = *Scene.Materials[0];
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(Material.CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset>  pSurface{&Material, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    ASSERT_NE(pSurface, nullptr);
+
+    SampledColors ReferenceColors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(ReferenceColors));
+    ExpectSameColor(ReferenceColors[0], ReferenceColors[1]);
+    ASSERT_GT(ReferenceColors[1][0], ReferenceColors[2][0] + 20);
+    ASSERT_GT(ReferenceColors[2][0], 20);
+    ASSERT_EQ(ReferenceColors[3][0], 0);
+    ASSERT_EQ(ReferenceColors[3][1], 0);
+    ASSERT_EQ(ReferenceColors[3][2], 0);
+
+    struct SurfaceUpdate
+    {
+        RADIENT_MATERIAL_SURFACE_MODE Mode;
+        Float32                       Cutoff;
+        Bool                          DoubleSided;
+        Uint32                        ReferenceIndex;
+    };
+    // Double-sided variants were not requested by the initial single-sided
+    // references, so these edits also exercise preparation of new pipelines.
+    const SurfaceUpdate Updates[] = {
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, 0.75f, True, 3},
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, 0.25f, True, 1},
+        {RADIENT_MATERIAL_SURFACE_MODE_TRANSPARENT, 0.75f, True, 2},
+        {RADIENT_MATERIAL_SURFACE_MODE_OPAQUE, 0.75f, True, 1},
+        {RADIENT_MATERIAL_SURFACE_MODE_MASKED, 0.75f, False, 3},
+    };
+    for (const SurfaceUpdate& Update : Updates)
+    {
+        SCOPED_TRACE(static_cast<int>(Update.Mode));
+        SCOPED_TRACE(Update.Cutoff);
+        const Uint64 PreviousVersion = Material.GetVersion();
+        ASSERT_EQ(pSurfaceWriter->SetSurfaceMode(Update.Mode), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetAlphaCutoff(Update.Cutoff), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(Update.DoubleSided), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Material.GetVersion(), PreviousVersion + 1);
+        EXPECT_EQ(pSurface->GetSurfaceMode(), Update.Mode);
+        EXPECT_FLOAT_EQ(pSurface->GetAlphaCutoff(), Update.Cutoff);
+        EXPECT_EQ(pSurface->IsDoubleSided(), Update.DoubleSided);
+        ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady(&Material));
+
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        ExpectSameColor(Colors[0], ReferenceColors[Update.ReferenceIndex]);
+        for (Uint32 Index = 1; Index < Colors.size(); ++Index)
+        {
+            ExpectSameColor(Colors[Index], ReferenceColors[Index]);
+        }
+        EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
+    }
+}
+
+// Reverse the first three quads so the camera sees their back faces. Static
+// culled/double-sided references distinguish culling changes from color updates.
+TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedDoubleSidedWithoutSceneChanges)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        Setups[Index].SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_OPAQUE;
+        Setups[Index].DoubleSided = Index == 1 ? True : False;
+        Setups[Index].BackFacing  = Index < 3;
+    }
+    MaterialUpdateScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups, True));
+
+    const RadientSceneRevisions           SceneRevisions = Scene.pScene->GetSceneRevisions();
+    IRadientMaterialAsset&                Material       = *Scene.Materials[0];
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(Material.CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurfaceWriter{pWriter, IID_RadientSurfaceMaterialWriter};
+    RefCntAutoPtr<IRadientSurfaceMaterialAsset>  pSurface{&Material, IID_RadientSurfaceMaterialAsset};
+    ASSERT_NE(pSurfaceWriter, nullptr);
+    ASSERT_NE(pSurface, nullptr);
+
+    SampledColors ReferenceColors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(ReferenceColors));
+    ExpectSameColor(ReferenceColors[0], ReferenceColors[2]);
+    ExpectSameColor(ReferenceColors[1], ReferenceColors[3]);
+    ASSERT_GT(ReferenceColors[1][0], 20);
+    ASSERT_EQ(ReferenceColors[2][0], 0);
+    ASSERT_EQ(ReferenceColors[2][1], 0);
+    ASSERT_EQ(ReferenceColors[2][2], 0);
+
+    const Bool DoubleSidedStates[] = {True, False, True};
+    for (Bool DoubleSided : DoubleSidedStates)
+    {
+        SCOPED_TRACE(DoubleSided);
+        const Uint64 PreviousVersion = Material.GetVersion();
+        ASSERT_EQ(pSurfaceWriter->SetDoubleSided(DoubleSided), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Material.GetVersion(), PreviousVersion + 1);
+        EXPECT_EQ(pSurface->IsDoubleSided(), DoubleSided);
+        ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady(&Material));
+
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        ExpectSameColor(Colors[0], ReferenceColors[DoubleSided ? 1 : 2]);
+        for (Uint32 Index = 1; Index < Colors.size(); ++Index)
+        {
+            ExpectSameColor(Colors[Index], ReferenceColors[Index]);
+        }
+        EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
+    }
+}
 
 // Evaluate a material clip on an already-renderable textured quad. Its color,
 // texture offset, and cutoff must reach the next frame without any scene edits.
