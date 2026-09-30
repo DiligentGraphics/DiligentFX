@@ -147,7 +147,8 @@ typedef struct RadientSceneRevisions RadientSceneRevisions;
 /// Entity creation attributes.
 struct RadientEntityDesc
 {
-    /// Optional entity name.
+    /// Optional entity name. The scene copies the string during CreateEntity().
+    /// Null and empty names are stored as an empty string. Names need not be unique.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
     /// Optional parent entity.
@@ -503,6 +504,16 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     VIRTUAL RADIENT_STATUS METHOD(IsEntityAlive)(THIS_
                                                  RadientEntityID Entity) CONST PURE;
 
+    /// Gets the entity's name. Returns RADIENT_STATUS_OK and a non-null string
+    /// for a live entity; unnamed entities return an empty string. Returns
+    /// RADIENT_STATUS_NOT_FOUND and sets Name to null if Entity is not alive.
+    /// The returned string is owned by the scene and remains valid until the
+    /// next entity creation or destruction, or until the scene is released.
+    /// Copy the string if it needs to be retained across those operations.
+    VIRTUAL RADIENT_STATUS METHOD(GetEntityName)(THIS_
+                                                 RadientEntityID Entity,
+                                                 const Char* REF Name) CONST PURE;
+
     /// Gets entity flags.
     VIRTUAL RADIENT_STATUS METHOD(GetEntityFlags)(THIS_
                                                   RadientEntityID          Entity,
@@ -595,8 +606,9 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientScene_GetDesc(This)                         CALL_IFACE_METHOD(RadientScene, GetDesc,                     This)
+#    define IRadientScene_GetDesc(This)                          CALL_IFACE_METHOD(RadientScene, GetDesc,                     This)
 #    define IRadientScene_IsEntityAlive(This, ...)               CALL_IFACE_METHOD(RadientScene, IsEntityAlive,               This, __VA_ARGS__)
+#    define IRadientScene_GetEntityName(This, ...)               CALL_IFACE_METHOD(RadientScene, GetEntityName,              This, __VA_ARGS__)
 #    define IRadientScene_GetEntityFlags(This, ...)              CALL_IFACE_METHOD(RadientScene, GetEntityFlags,              This, __VA_ARGS__)
 #    define IRadientScene_GetEntityOwnVisibility(This, ...)      CALL_IFACE_METHOD(RadientScene, GetEntityOwnVisibility,      This, __VA_ARGS__)
 #    define IRadientScene_GetEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetEntityEffectiveVisibility, This, __VA_ARGS__)

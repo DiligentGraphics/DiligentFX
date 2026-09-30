@@ -56,6 +56,9 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE IsEntityAlive(RadientEntityID Entity) const override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityName(RadientEntityID Entity,
+                                                            const Char*&    Name) const override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityFlags(RadientEntityID       Entity,
                                                              RADIENT_ENTITY_FLAGS& Flags) const override final;
 

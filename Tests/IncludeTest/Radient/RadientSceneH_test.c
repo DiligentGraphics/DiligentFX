@@ -123,6 +123,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID              Entity          = 0;
     RadientEntityID              Parent          = 0;
+    const Char*                  EntityName      = 0;
     RadientEntityID              Children[1]     = {0};
     RADIENT_ENTITY_FLAGS         EntityFlags     = 0;
     Uint32                       ChildCount      = 1;
@@ -142,6 +143,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
 
     IRadientScene_GetDesc(pScene);
     Status     = IRadientScene_IsEntityAlive(pScene, Entity);
+    Status     = IRadientScene_GetEntityName(pScene, Entity, &EntityName);
     Status     = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
     Status     = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
     Status     = IRadientScene_GetEntityEffectiveVisibility(pScene, Entity, &Visible);
@@ -158,6 +160,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Status     = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
     pRevisions = IRadientScene_GetSceneRevisions(pScene);
 
+    (void)EntityName;
     (void)Parent;
     (void)NumChildren;
     (void)Visible;

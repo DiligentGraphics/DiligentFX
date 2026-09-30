@@ -331,6 +331,65 @@ TEST(RadientSceneTest, Create)
     EXPECT_NE(pScene, nullptr);
 }
 
+TEST(RadientSceneTest, GetEntityName)
+{
+    // Names are copied during creation, allow duplicates and empty strings,
+    // and are discoverable through the public scene interface.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    const Char* Name = "unchanged";
+    EXPECT_EQ(pScene->GetEntityName(InvalidRadientEntityID, Name), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Name, nullptr);
+
+    RadientEntityID Unnamed = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Unnamed), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Unnamed, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "");
+
+    std::string       SourceName = "Cube";
+    RadientEntityDesc Desc;
+    Desc.Name             = SourceName.c_str();
+    RadientEntityID Named = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Named), RADIENT_STATUS_OK);
+    SourceName[0] = 'T';
+    ASSERT_EQ(pScene->GetEntityName(Named, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "Cube");
+
+    Desc.Name                 = "Cube";
+    RadientEntityID Duplicate = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Duplicate), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Duplicate, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "Cube");
+
+    Desc.Name             = "";
+    RadientEntityID Empty = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Empty), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Empty, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "");
+
+    // Reacquire borrowed names after destruction can compact entity storage.
+    ASSERT_EQ(pWriter->DestroyEntity(Unnamed), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetParent(Duplicate, Named, False), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Named, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "Cube");
+    ASSERT_EQ(pScene->GetEntityName(Duplicate, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "Cube");
+
+    ASSERT_EQ(pWriter->DestroyEntity(Named), RADIENT_STATUS_OK);
+    Name = "unchanged";
+    EXPECT_EQ(pScene->GetEntityName(Named, Name), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Name, nullptr);
+    Name = "unchanged";
+    EXPECT_EQ(pScene->GetEntityName(Duplicate, Name), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Name, nullptr);
+}
+
 TEST(RadientEngineTest, CreateBackend)
 {
     // The default engine should expose a local backend instance.
@@ -846,6 +905,18 @@ TEST(RadientSceneImporterTest, ImportScene)
     EXPECT_NE(ImportedModel->GetReference().Version, 0u);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
     EXPECT_EQ(pScene->IsEntityAlive(ImportedRoot), RADIENT_STATUS_OK);
+
+    // Read the names on the returned import root and its authored child.
+    const Char* Name = nullptr;
+    ASSERT_EQ(pScene->GetEntityName(ImportedRoot, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, InstantiateInfo.Name);
+
+    RadientEntityID ImportedNode = InvalidRadientEntityID;
+    Uint32          Written      = 0;
+    ASSERT_EQ(pScene->GetChildren(ImportedRoot, 0, 1, &ImportedNode, Written), RADIENT_STATUS_OK);
+    ASSERT_EQ(Written, 1u);
+    ASSERT_EQ(pScene->GetEntityName(ImportedNode, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "Root");
 }
 
 TEST(RadientSceneWriterTest, CreateRenderableEntity)

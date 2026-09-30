@@ -134,6 +134,7 @@ public:
     const RadientSceneDesc& GetDesc() const;
 
     RADIENT_STATUS IsEntityAlive(RadientEntityID Entity) const;
+    RADIENT_STATUS GetEntityName(RadientEntityID Entity, const Char*& Name) const;
     RADIENT_STATUS GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
     RADIENT_STATUS GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
     RADIENT_STATUS GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);

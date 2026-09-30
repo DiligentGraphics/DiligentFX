@@ -153,6 +153,19 @@ RADIENT_STATUS RadientSceneState::IsEntityAlive(RadientEntityID Entity) const
     return FindEntity(Entity) != entt::null ? RADIENT_STATUS_OK : RADIENT_STATUS_NOT_FOUND;
 }
 
+RADIENT_STATUS RadientSceneState::GetEntityName(RadientEntityID Entity, const Char*& Name) const
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+    {
+        Name = nullptr;
+        return RADIENT_STATUS_NOT_FOUND;
+    }
+
+    Name = m_CoreStorages.get<EntityComponent>(E).Name.c_str();
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const
 {
     const entt::entity E = FindEntity(Entity);

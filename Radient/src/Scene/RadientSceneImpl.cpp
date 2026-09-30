@@ -65,6 +65,11 @@ RADIENT_STATUS RadientSceneImpl::IsEntityAlive(RadientEntityID Entity) const
     return m_pState->IsEntityAlive(Entity);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetEntityName(RadientEntityID Entity, const Char*& Name) const
+{
+    return m_pState->GetEntityName(Entity, Name);
+}
+
 RADIENT_STATUS RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const
 {
     return m_pState->GetEntityFlags(Entity, Flags);
