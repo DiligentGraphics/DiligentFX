@@ -85,6 +85,11 @@ RADIENT_STATUS RadientSceneWriterImpl::DestroyEntity(RadientEntityID Entity)
     return m_pState ? m_pState->DestroyEntity(Entity) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
+RADIENT_STATUS RadientSceneWriterImpl::SetEntityName(RadientEntityID Entity, const Char* Name)
+{
+    return m_pState ? m_pState->SetEntityName(Entity, Name) : RADIENT_STATUS_INVALID_ARGUMENT;
+}
+
 RADIENT_STATUS RadientSceneWriterImpl::SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags)
 {
     return m_pState ? m_pState->SetEntityFlags(Entity, Flags) : RADIENT_STATUS_INVALID_ARGUMENT;

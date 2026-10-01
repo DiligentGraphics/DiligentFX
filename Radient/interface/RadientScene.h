@@ -508,8 +508,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// for a live entity; unnamed entities return an empty string. Returns
     /// RADIENT_STATUS_NOT_FOUND and sets Name to null if Entity is not alive.
     /// The returned string is owned by the scene and remains valid until the
-    /// next entity creation or destruction, or until the scene is released.
-    /// Copy the string if it needs to be retained across those operations.
+    /// next entity creation or destruction, until this entity's name is changed,
+    /// or until the scene is released. Copy the string if it needs to be retained
+    /// across those operations.
     VIRTUAL RADIENT_STATUS METHOD(GetEntityName)(THIS_
                                                  RadientEntityID Entity,
                                                  const Char* REF Name) CONST PURE;

@@ -584,6 +584,21 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::SetEntityName(RadientEntityID Entity, const Char* Name)
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const Char*  NewName    = Name != nullptr ? Name : "";
+    std::string& StoredName = m_CoreStorages.get<EntityComponent>(E).Name;
+    if (StoredName == NewName)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    StoredName = NewName;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags)
 {
     const entt::entity E = FindEntity(Entity);

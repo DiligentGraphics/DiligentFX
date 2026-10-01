@@ -67,6 +67,16 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
     VIRTUAL RADIENT_STATUS METHOD(DestroyEntity)(THIS_
                                                  RadientEntityID Entity) PURE;
 
+    /// Sets the entity name, copying the string during the call. Null and empty
+    /// names are stored as an empty string. Names need not be unique.
+    /// Returns RADIENT_STATUS_NOT_FOUND if Entity is not alive,
+    /// RADIENT_STATUS_NO_CHANGE if the name is unchanged, or RADIENT_STATUS_OK
+    /// if it changed. The new name is visible through GetEntityName() immediately,
+    /// without requiring CommitChanges().
+    VIRTUAL RADIENT_STATUS METHOD(SetEntityName)(THIS_
+                                                  RadientEntityID Entity,
+                                                  const Char*     Name) PURE;
+
     /// Sets entity flags.
     VIRTUAL RADIENT_STATUS METHOD(SetEntityFlags)(THIS_
                                                   RadientEntityID      Entity,
@@ -149,6 +159,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_GetScene(This)                    CALL_IFACE_METHOD(RadientSceneWriter, GetScene,          This)
 #    define IRadientSceneWriter_CreateEntity(This, ...)           CALL_IFACE_METHOD(RadientSceneWriter, CreateEntity,      This, __VA_ARGS__)
 #    define IRadientSceneWriter_DestroyEntity(This, ...)          CALL_IFACE_METHOD(RadientSceneWriter, DestroyEntity,     This, __VA_ARGS__)
+#    define IRadientSceneWriter_SetEntityName(This, ...)          CALL_IFACE_METHOD(RadientSceneWriter, SetEntityName,     This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetEntityFlags(This, ...)         CALL_IFACE_METHOD(RadientSceneWriter, SetEntityFlags,    This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetEntityOwnVisibility(This, ...) CALL_IFACE_METHOD(RadientSceneWriter, SetEntityOwnVisibility, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetParent(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetParent,         This, __VA_ARGS__)

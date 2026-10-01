@@ -474,6 +474,63 @@ TEST(RadientSceneTest, GetEntityName)
     EXPECT_EQ(Name, nullptr);
 }
 
+TEST(RadientSceneWriterTest, SetEntityName)
+{
+    // Renaming copies the input and is immediately visible without changing
+    // renderer revisions. Empty names and borrowed input are supported.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    EXPECT_EQ(pWriter->SetEntityName(InvalidRadientEntityID, "Name"), RADIENT_STATUS_NOT_FOUND);
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+    EXPECT_EQ(pWriter->SetEntityName(Entity, nullptr), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetEntityName(Entity, ""), RADIENT_STATUS_NO_CHANGE);
+
+    std::string SourceName = "A renamed entity with a name longer than small string storage";
+    ASSERT_EQ(pWriter->SetEntityName(Entity, SourceName.c_str()), RADIENT_STATUS_OK);
+    SourceName[0]    = 'B';
+    const Char* Name = nullptr;
+    ASSERT_EQ(pScene->GetEntityName(Entity, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "A renamed entity with a name longer than small string storage");
+    EXPECT_EQ(pWriter->SetEntityName(Entity, Name), RADIENT_STATUS_NO_CHANGE);
+
+    // The input may point into the scene's current string.
+    EXPECT_EQ(pWriter->SetEntityName(Entity, Name + 2), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Entity, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "renamed entity with a name longer than small string storage");
+    EXPECT_EQ(pWriter->SetEntityName(Entity, "Cube"), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetEntityName(Entity, "Cube"), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetEntityName(Entity, "cube"), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Entity, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "cube");
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    // Different entities may share a name, including one borrowed from a peer.
+    RadientEntityID Other = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, Other), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Entity, Name), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetEntityName(Other, Name), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Other, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "cube");
+
+    EXPECT_EQ(pWriter->SetEntityName(Entity, nullptr), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Entity, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "");
+    EXPECT_EQ(pWriter->SetEntityName(Entity, ""), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(pWriter->SetEntityName(Other, ""), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetEntityName(Other, Name), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Name, "");
+
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetEntityName(Entity, "Gone"), RADIENT_STATUS_NOT_FOUND);
+}
+
 TEST(RadientSceneTest, GetMesh)
 {
     // Mesh inspection borrows the asset, reflects replacement immediately,

@@ -183,6 +183,7 @@ public:
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
 
+    RADIENT_STATUS SetEntityName(RadientEntityID Entity, const Char* Name);
     RADIENT_STATUS SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags);
     RADIENT_STATUS SetEntityOwnVisibility(RadientEntityID Entity, Bool Visible);
     RADIENT_STATUS SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform);

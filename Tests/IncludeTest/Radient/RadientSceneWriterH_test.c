@@ -46,6 +46,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     pScene = IRadientSceneWriter_GetScene(pWriter);
     Status = IRadientSceneWriter_CreateEntity(pWriter, &EntityDesc, &Entity);
     Status = IRadientSceneWriter_DestroyEntity(pWriter, Entity);
+    Status = IRadientSceneWriter_SetEntityName(pWriter, Entity, "Renamed entity");
     Status = IRadientSceneWriter_SetEntityFlags(pWriter, Entity, EntityFlags);
     Status = IRadientSceneWriter_SetEntityOwnVisibility(pWriter, Entity, True);
     Status = IRadientSceneWriter_SetParent(pWriter, Entity, InvalidRadientEntityID, True);

@@ -59,6 +59,9 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE DestroyEntity(RadientEntityID Entity) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityName(RadientEntityID Entity,
+                                                            const Char*     Name) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityFlags(RadientEntityID      Entity,
                                                              RADIENT_ENTITY_FLAGS Flags) override final;
 
