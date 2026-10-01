@@ -536,6 +536,23 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                                       RadientEntityID Entity,
                                                                       Bool REF        Visible) CONST PURE;
 
+    /// Returns the number of live entities without a parent.
+    /// Reflects entity creation, destruction, and reparenting immediately,
+    /// without requiring CommitChanges().
+    VIRTUAL Uint32 METHOD(GetRootEntityCount)(THIS) CONST PURE;
+
+    /// Copies up to Capacity root entity IDs into the caller's array in ascending
+    /// ID order. Returns RADIENT_STATUS_OK and sets NumEntitiesWritten to the
+    /// smaller of Capacity and the current root count. Use GetRootEntityCount()
+    /// to size the array when all roots are needed. Zero Capacity succeeds without
+    /// writing any elements, and pEntities may be null in that case.
+    /// Returns RADIENT_STATUS_INVALID_ARGUMENT if pEntities is null with nonzero
+    /// Capacity; NumEntitiesWritten is set to zero. Does not require CommitChanges().
+    VIRTUAL RADIENT_STATUS METHOD(GetRootEntities)(THIS_
+                                                    Uint32           Capacity,
+                                                    RadientEntityID* pEntities,
+                                                    Uint32 REF       NumEntitiesWritten) CONST PURE;
+
     /// Gets the entity parent, or InvalidRadientEntityID for a root entity.
     VIRTUAL RADIENT_STATUS METHOD(GetParent)(THIS_
                                              RadientEntityID     Entity,
@@ -648,6 +665,8 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetEntityOwnVisibility(This, ...)      CALL_IFACE_METHOD(RadientScene, GetEntityOwnVisibility,      This, __VA_ARGS__)
 #    define IRadientScene_GetEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetEntityEffectiveVisibility, This, __VA_ARGS__)
 #    define IRadientScene_GetCachedEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetCachedEntityEffectiveVisibility, This, __VA_ARGS__)
+#    define IRadientScene_GetRootEntityCount(This)               CALL_IFACE_METHOD(RadientScene, GetRootEntityCount,          This)
+#    define IRadientScene_GetRootEntities(This, ...)             CALL_IFACE_METHOD(RadientScene, GetRootEntities,             This, __VA_ARGS__)
 #    define IRadientScene_GetParent(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetParent,                   This, __VA_ARGS__)
 #    define IRadientScene_GetChildCount(This, ...)               CALL_IFACE_METHOD(RadientScene, GetChildCount,               This, __VA_ARGS__)
 #    define IRadientScene_GetChildren(This, ...)                 CALL_IFACE_METHOD(RadientScene, GetChildren,                 This, __VA_ARGS__)

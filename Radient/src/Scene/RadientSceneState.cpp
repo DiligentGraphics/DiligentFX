@@ -221,6 +221,27 @@ RADIENT_STATUS RadientSceneState::GetCachedEntityEffectiveVisibility(RadientEnti
         RADIENT_STATUS_OK;
 }
 
+Uint32 RadientSceneState::GetRootEntityCount() const
+{
+    return static_cast<Uint32>(m_RootEntities.size());
+}
+
+RADIENT_STATUS RadientSceneState::GetRootEntities(Uint32 Capacity, RadientEntityID* pEntities, Uint32& NumEntitiesWritten) const
+{
+    NumEntitiesWritten = 0;
+    if (pEntities == nullptr && Capacity != 0)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    for (const RadientEntityID Entity : m_RootEntities)
+    {
+        if (NumEntitiesWritten == Capacity)
+            break;
+
+        pEntities[NumEntitiesWritten++] = Entity;
+    }
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
 {
     const entt::entity E = FindEntity(Entity);
@@ -539,6 +560,10 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
         m_CoreStorages.get<HierarchyComponent>(E).Parent = Parent;
         m_CoreStorages.get<HierarchyComponent>(Parent).Children.push_back(E);
     }
+    else
+    {
+        m_RootEntities.insert(Entity);
+    }
 
     MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
     Touch(CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY);
@@ -651,6 +676,10 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
         VERIFY(std::find(Siblings.begin(), Siblings.end(), E) == Siblings.end(),
                "Entity is already listed as a child of the new parent");
         Siblings.push_back(E);
+    }
+    else
+    {
+        m_RootEntities.insert(Entity);
     }
 
     m_CoreStorages.get<LocalTransformComponent>(E).Transform = LocalTransform;
@@ -1097,8 +1126,13 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
 
     HierarchyComponent& Hierarchy = m_CoreStorages.get<HierarchyComponent>(Entity);
     if (Hierarchy.Parent == entt::null)
+    {
+        m_RootEntities.erase(m_CoreStorages.get<EntityComponent>(Entity).ID);
         return;
+    }
 
+    // SetParent() adds the entity to the root set only if it stays parentless.
+    // DestroyEntity() uses this path too, so detaching a child does not add it.
     const entt::entity Parent = Hierarchy.Parent;
     VERIFY_ENTITY(Parent);
 

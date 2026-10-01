@@ -48,6 +48,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <set>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -139,6 +140,8 @@ public:
     RADIENT_STATUS GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
     RADIENT_STATUS GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
     RADIENT_STATUS GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
+    Uint32         GetRootEntityCount() const;
+    RADIENT_STATUS GetRootEntities(Uint32 Capacity, RadientEntityID* pEntities, Uint32& NumEntitiesWritten) const;
     RADIENT_STATUS GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
     RADIENT_STATUS GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
     RADIENT_STATUS GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
@@ -427,6 +430,7 @@ private:
     entt::registry                     m_Registry;
     CoreStorages                       m_CoreStorages;
     EntityMapType                      m_EntityMap;
+    std::set<RadientEntityID>          m_RootEntities;
     CustomComponentStoresMapType       m_CustomComponentStores;
     RadientEntityID                    m_NextEntityID = 1;
     RadientSceneRevisions              m_SceneRevisions;

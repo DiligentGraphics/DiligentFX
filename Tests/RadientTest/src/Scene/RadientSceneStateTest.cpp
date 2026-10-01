@@ -375,6 +375,122 @@ TEST(RadientSceneStateTest, IsEntityAlive)
     EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
 }
 
+TEST(RadientSceneStateTest, RootEntitiesFollowHierarchyChanges)
+{
+    // Cover root/child transitions and subtree destruction without committing
+    // the scene. Root membership follows the live hierarchy immediately.
+    RadientSceneState State;
+    const auto        ExpectRoots = [&State](const std::vector<RadientEntityID>& Expected) {
+        EXPECT_EQ(State.GetRootEntityCount(), Expected.size());
+        std::vector<RadientEntityID> Roots(State.GetRootEntityCount());
+        Uint32                       Written = 0;
+        ASSERT_EQ(State.GetRootEntities(static_cast<Uint32>(Roots.size()), Roots.data(), Written), RADIENT_STATUS_OK);
+        EXPECT_EQ(Written, Expected.size());
+        EXPECT_EQ(Roots, Expected);
+    };
+    ExpectRoots({});
+
+    RadientEntityID First  = InvalidRadientEntityID;
+    RadientEntityID Child  = InvalidRadientEntityID;
+    RadientEntityID Second = InvalidRadientEntityID;
+    RadientEntityID Third  = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, First), RADIENT_STATUS_OK);
+    RadientEntityDesc Desc;
+    Desc.Parent = First;
+    ASSERT_EQ(State.CreateEntity(Desc, Child), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CreateEntity({}, Second), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CreateEntity({}, Third), RADIENT_STATUS_OK);
+    ExpectRoots({First, Second, Third});
+
+    ASSERT_EQ(State.SetParent(Child, Second, False), RADIENT_STATUS_OK);
+    ExpectRoots({First, Second, Third});
+    ASSERT_EQ(State.SetParent(Third, Child, False), RADIENT_STATUS_OK);
+    ExpectRoots({First, Second});
+    ASSERT_EQ(State.SetParent(Child, InvalidRadientEntityID, False), RADIENT_STATUS_OK);
+    ExpectRoots({First, Child, Second});
+    ASSERT_EQ(State.SetParent(First, Child, False), RADIENT_STATUS_OK);
+    ExpectRoots({Child, Second});
+
+    // Rejected and no-op operations must leave root membership unchanged.
+    EXPECT_EQ(State.SetParent(Child, Third, False), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(State.SetParent(Second, Second, False), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(State.SetParent(Second, 999, False), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.SetParent(999, Second, False), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(State.SetParent(Child, InvalidRadientEntityID, False), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.SetParent(Third, Child, False), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.DestroyEntity(999), RADIENT_STATUS_NOT_FOUND);
+    RadientEntityID Rejected = InvalidRadientEntityID;
+    Desc.Parent              = 999;
+    EXPECT_EQ(State.CreateEntity(Desc, Rejected), RADIENT_STATUS_NOT_FOUND);
+    ExpectRoots({Child, Second});
+
+    Desc.Parent                    = InvalidRadientEntityID;
+    Desc.Transform.Scale           = {0.f, 0.f, 0.f};
+    RadientEntityID SingularParent = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(Desc, SingularParent), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetParent(Second, SingularParent, True), RADIENT_STATUS_INVALID_OPERATION);
+    ExpectRoots({Child, Second, SingularParent});
+    ASSERT_EQ(State.DestroyEntity(SingularParent), RADIENT_STATUS_OK);
+    ExpectRoots({Child, Second});
+
+    // Removing a non-root must not add it to the root set. Removing the root
+    // destroys its remaining children rather than promoting them to roots.
+    ASSERT_EQ(State.DestroyEntity(First), RADIENT_STATUS_OK);
+    ExpectRoots({Child, Second});
+    ASSERT_EQ(State.DestroyEntity(Child), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.IsEntityAlive(Third), RADIENT_STATUS_NOT_FOUND);
+    ExpectRoots({Second});
+    ASSERT_EQ(State.DestroyEntity(Second), RADIENT_STATUS_OK);
+    ExpectRoots({});
+
+    // A fresh entity remains discoverable when registry slots are reused.
+    RadientEntityID NewRoot = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, NewRoot), RADIENT_STATUS_OK);
+    ExpectRoots({NewRoot});
+}
+
+TEST(RadientSceneStateTest, RemoveRootsFromLargeFlatScene)
+{
+    // Remove roots from the front, middle, and back of a large flat scene.
+    // Survivors must remain sorted with no stale IDs or duplicates.
+    RadientSceneState            State;
+    constexpr Uint32             RootCount = 2048;
+    std::vector<RadientEntityID> Created(RootCount);
+    for (RadientEntityID& Entity : Created)
+    {
+        ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    }
+    ASSERT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.GetRootEntityCount(), RootCount);
+
+    std::vector<RadientEntityID> Expected;
+    for (Uint32 Index = 0; Index < RootCount; ++Index)
+    {
+        if (Index % 2 == 0)
+        {
+            ASSERT_EQ(State.DestroyEntity(Created[Index]), RADIENT_STATUS_OK);
+        }
+        else
+        {
+            Expected.push_back(Created[Index]);
+        }
+    }
+    ASSERT_EQ(State.GetRootEntityCount(), Expected.size());
+    std::vector<RadientEntityID> Roots(State.GetRootEntityCount());
+    Uint32                       Written = 0;
+    ASSERT_EQ(State.GetRootEntities(static_cast<Uint32>(Roots.size()), Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, Expected.size());
+    EXPECT_EQ(Roots, Expected);
+
+    for (Uint32 Index = RootCount; Index != 0; Index -= 2)
+    {
+        ASSERT_EQ(State.DestroyEntity(Created[Index - 1]), RADIENT_STATUS_OK);
+    }
+    EXPECT_EQ(State.GetRootEntityCount(), 0u);
+    EXPECT_EQ(State.GetRootEntities(0, nullptr, Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 0u);
+}
+
 TEST(RadientSceneStateTest, CreateEntityRejectsMissingParent)
 {
     // Entity creation should fail when the requested parent ID does not map to

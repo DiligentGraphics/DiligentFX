@@ -331,6 +331,90 @@ TEST(RadientSceneTest, Create)
     EXPECT_NE(pScene, nullptr);
 }
 
+TEST(RadientSceneTest, GetRootEntities)
+{
+    // The public API copies roots in ID order, including invisible roots,
+    // and limits the output to the caller's capacity.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
+    ASSERT_NE(pWriter, nullptr);
+
+    Uint32 Written = 123;
+    EXPECT_EQ(pScene->GetRootEntityCount(), 0u);
+    EXPECT_EQ(pScene->GetRootEntities(0, nullptr, Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 0u);
+    Written = 123;
+    EXPECT_EQ(pScene->GetRootEntities(1, nullptr, Written), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Written, 0u);
+
+    std::array<RadientEntityID, 3>       Roots{};
+    const std::array<RadientEntityID, 3> EmptyOutput = Roots;
+    EXPECT_EQ(pScene->GetRootEntities(static_cast<Uint32>(Roots.size()), Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 0u);
+    EXPECT_EQ(Roots, EmptyOutput);
+
+    RadientEntityID First  = InvalidRadientEntityID;
+    RadientEntityID Second = InvalidRadientEntityID;
+    RadientEntityID Child  = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, First), RADIENT_STATUS_OK);
+    RadientEntityDesc Desc;
+    Desc.Parent = First;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Child), RADIENT_STATUS_OK);
+    Desc.Parent = InvalidRadientEntityID;
+    Desc.Flags  = RADIENT_ENTITY_FLAG_NONE;
+    ASSERT_EQ(pWriter->CreateEntity(Desc, Second), RADIENT_STATUS_OK);
+    ASSERT_EQ(pScene->GetRootEntityCount(), 2u);
+
+    Written = 123;
+    EXPECT_EQ(pScene->GetRootEntities(0, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 0u);
+    EXPECT_EQ(Roots, EmptyOutput);
+    Written = 123;
+    EXPECT_EQ(pScene->GetRootEntities(1, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 1u);
+    EXPECT_EQ(Roots[0], First);
+    EXPECT_EQ(Roots[1], InvalidRadientEntityID);
+    EXPECT_EQ(Roots[2], InvalidRadientEntityID);
+    Written = 123;
+    EXPECT_EQ(pScene->GetRootEntities(0, nullptr, Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 0u);
+    Written = 123;
+    EXPECT_EQ(pScene->GetRootEntities(2, nullptr, Written), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Written, 0u);
+
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+    ASSERT_EQ(pScene->GetRootEntities(2, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 2u);
+    EXPECT_EQ(Roots[0], First);
+    EXPECT_EQ(Roots[1], Second);
+    EXPECT_EQ(Roots[2], InvalidRadientEntityID);
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
+
+    // Detaching an older child inserts it by ID, not at the end of the roots.
+    ASSERT_EQ(pWriter->SetParent(Child, InvalidRadientEntityID, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pScene->GetRootEntityCount(), 3u);
+    ASSERT_EQ(pScene->GetRootEntities(3, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 3u);
+    EXPECT_EQ(Roots[0], First);
+    EXPECT_EQ(Roots[1], Child);
+    EXPECT_EQ(Roots[2], Second);
+
+    // Returned IDs belong to the caller; editing them does not alter the set.
+    Roots[0] = InvalidRadientEntityID;
+    ASSERT_EQ(pScene->GetRootEntities(3, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Roots[0], First);
+    ASSERT_EQ(pWriter->DestroyEntity(Child), RADIENT_STATUS_OK);
+    Roots.fill(InvalidRadientEntityID);
+    ASSERT_EQ(pScene->GetRootEntities(3, Roots.data(), Written), RADIENT_STATUS_OK);
+    EXPECT_EQ(Written, 2u);
+    EXPECT_EQ(Roots[0], First);
+    EXPECT_EQ(Roots[1], Second);
+    EXPECT_EQ(Roots[2], InvalidRadientEntityID);
+}
+
 TEST(RadientSceneTest, GetEntityName)
 {
     // Names are copied during creation, allow duplicates and empty strings,
@@ -1212,6 +1296,14 @@ TEST(RadientSceneImporterTest, ImportScene)
     EXPECT_NE(ImportedModel->GetReference().Version, 0u);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
     EXPECT_EQ(pScene->IsEntityAlive(ImportedRoot), RADIENT_STATUS_OK);
+
+    // Only the instantiation root is parentless; the authored nodes are children.
+    EXPECT_EQ(pScene->GetRootEntityCount(), 1u);
+    RadientEntityID Root     = InvalidRadientEntityID;
+    Uint32          NumRoots = 0;
+    ASSERT_EQ(pScene->GetRootEntities(1, &Root, NumRoots), RADIENT_STATUS_OK);
+    EXPECT_EQ(NumRoots, 1u);
+    EXPECT_EQ(Root, ImportedRoot);
 
     // Read the names on the returned import root and its authored child.
     const Char* Name = nullptr;

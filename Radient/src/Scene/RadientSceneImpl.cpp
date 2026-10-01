@@ -90,6 +90,16 @@ RADIENT_STATUS RadientSceneImpl::GetCachedEntityEffectiveVisibility(RadientEntit
     return m_pState->GetCachedEntityEffectiveVisibility(Entity, Visible);
 }
 
+Uint32 RadientSceneImpl::GetRootEntityCount() const
+{
+    return m_pState->GetRootEntityCount();
+}
+
+RADIENT_STATUS RadientSceneImpl::GetRootEntities(Uint32 Capacity, RadientEntityID* pEntities, Uint32& NumEntitiesWritten) const
+{
+    return m_pState->GetRootEntities(Capacity, pEntities, NumEntitiesWritten);
+}
+
 RADIENT_STATUS RadientSceneImpl::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
 {
     return m_pState->GetParent(Entity, Parent);

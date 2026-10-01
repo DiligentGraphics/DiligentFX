@@ -71,6 +71,12 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetCachedEntityEffectiveVisibility(RadientEntityID Entity,
                                                                                  Bool&           Visible) const override final;
 
+    virtual Uint32 DILIGENT_CALL_TYPE GetRootEntityCount() const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetRootEntities(Uint32           Capacity,
+                                                              RadientEntityID* pEntities,
+                                                              Uint32&          NumEntitiesWritten) const override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParent(RadientEntityID  Entity,
                                                         RadientEntityID& Parent) const override final;
 

@@ -125,6 +125,9 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     RadientEntityID                  Parent          = 0;
     const Char*                      EntityName      = 0;
     RadientEntityID                  Children[1]     = {0};
+    RadientEntityID                  Roots[1]        = {0};
+    Uint32                           RootCount       = 0;
+    Uint32                           NumRoots        = 0;
     RADIENT_ENTITY_FLAGS             EntityFlags     = 0;
     Uint32                           ChildCount      = 1;
     Uint32                           NumChildren     = 0;
@@ -152,6 +155,8 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Status     = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
     Status     = IRadientScene_GetEntityEffectiveVisibility(pScene, Entity, &Visible);
     Status     = IRadientScene_GetCachedEntityEffectiveVisibility(pScene, Entity, &Visible);
+    RootCount  = IRadientScene_GetRootEntityCount(pScene);
+    Status     = IRadientScene_GetRootEntities(pScene, 1, Roots, &NumRoots);
     Status     = IRadientScene_GetParent(pScene, Entity, &Parent);
     Status     = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
     Status     = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);
@@ -171,6 +176,8 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     (void)EntityName;
     (void)Parent;
     (void)NumChildren;
+    (void)RootCount;
+    (void)NumRoots;
     (void)Visible;
     (void)HasComponent;
     (void)Camera;
