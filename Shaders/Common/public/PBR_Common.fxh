@@ -1,6 +1,10 @@
 #ifndef _PBR_COMMON_FXH_
 #define _PBR_COMMON_FXH_
 
+#ifndef ENABLE_IRIDESCENCE
+#    define ENABLE_IRIDESCENCE 0
+#endif
+
 #ifndef PI
 #    define PI 3.141592653589793
 #endif

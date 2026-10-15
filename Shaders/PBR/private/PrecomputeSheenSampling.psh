@@ -98,7 +98,7 @@ float IntegrateScaledSheenAzimuth(float NdotL, float NdotV, float Roughness)
     float MaxSin2H = 0.5 * (1.0 + SinThetaV);
     float Sum      = 0.0;
     [loop]
-    for (uint SampleIndex = 0u; SampleIndex < SHEEN_SAMPLING_AZIMUTH_COUNT; ++SampleIndex)
+    for (uint SampleIndex = 0u; SampleIndex < uint(SHEEN_SAMPLING_AZIMUTH_COUNT); ++SampleIndex)
     {
         float Phi  = 2.0 * PI * (float(SampleIndex) + 0.5) /
                      float(SHEEN_SAMPLING_AZIMUTH_COUNT);
@@ -128,7 +128,7 @@ void PrecomputeSheenViewAlbedo_PS(float4 PixelPosition : SV_Position,
     float NdotV     = SheenViewQuadrature[Pixel.x].x;
     Albedo          = 0.0;
     [loop]
-    for (uint BinIndex = 0u; BinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++BinIndex)
+    for (uint BinIndex = 0u; BinIndex < uint(SHEEN_SAMPLING_KERNEL_RESOLUTION); ++BinIndex)
     {
         float2 Bin = GetSheenKernelBin(BinIndex);
         Albedo += IntegrateScaledSheenAzimuth(
@@ -153,7 +153,7 @@ void PrecomputeSheenKernel_PS(float4 PixelPosition : SV_Position,
     float2 Bin      = GetSheenKernelBin(Pixel.x);
     Mass            = 0.0;
     [loop]
-    for (uint ViewIndex = 0u; ViewIndex < SHEEN_SAMPLING_VIEW_COUNT; ++ViewIndex)
+    for (uint ViewIndex = 0u; ViewIndex < uint(SHEEN_SAMPLING_VIEW_COUNT); ++ViewIndex)
     {
         float2 View   = SheenViewQuadrature[ViewIndex].xy;
         float Albedo  = g_SheenViewAlbedo.Load(int3(int(ViewIndex), int(Pixel.y), 0));
@@ -176,7 +176,7 @@ void PrecomputeSheenInverseCDF_PS(float4 PixelPosition : SV_Position,
     // The zero-roughness limit is concentrated on the normal's horizon.
     if (Pixel.y == 0u || Pixel.x == 0u)
         return;
-    if (Pixel.x == SHEEN_SAMPLING_QUANTILE_RESOLUTION)
+    if (Pixel.x == uint(SHEEN_SAMPLING_QUANTILE_RESOLUTION))
     {
         NdotL = 1.0;
         return;
@@ -184,7 +184,7 @@ void PrecomputeSheenInverseCDF_PS(float4 PixelPosition : SV_Position,
 
     float TotalMass = 0.0;
     [loop]
-    for (uint TotalBinIndex = 0u; TotalBinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++TotalBinIndex)
+    for (uint TotalBinIndex = 0u; TotalBinIndex < uint(SHEEN_SAMPLING_KERNEL_RESOLUTION); ++TotalBinIndex)
         TotalMass += g_SheenKernel.Load(int3(int(TotalBinIndex), int(Pixel.y), 0));
 
     float Probability = SheenSamplingProbability(
@@ -192,7 +192,7 @@ void PrecomputeSheenInverseCDF_PS(float4 PixelPosition : SV_Position,
     float TargetMass = Probability * TotalMass;
     float PrefixMass = 0.0;
     [loop]
-    for (uint BinIndex = 0u; BinIndex < SHEEN_SAMPLING_KERNEL_RESOLUTION; ++BinIndex)
+    for (uint BinIndex = 0u; BinIndex < uint(SHEEN_SAMPLING_KERNEL_RESOLUTION); ++BinIndex)
     {
         float Mass = g_SheenKernel.Load(int3(int(BinIndex), int(Pixel.y), 0));
         if (Mass > 0.0 && TargetMass <= PrefixMass + Mass)

@@ -56,7 +56,7 @@ float3 TransformTangentSpaceNormalGrad(in float3 dPos_dx,     // Position dx der
         // the tangent is normalized and the bitangent is only used to determine
         // orientation. The determinant magnitude therefore cancels, and only
         // its sign is required.
-        const float dSign = d < 0.0 ? -1.0 : +1.0;
+        float dSign = d < 0.0 ? -1.0 : +1.0;
 
         float3 n = MacroNormal;
         float3 t = (dUV_dy.y * dPos_dx - dUV_dx.y * dPos_dy) * dSign;

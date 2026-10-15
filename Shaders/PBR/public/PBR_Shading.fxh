@@ -191,7 +191,7 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
     {
         // Build the tangent frame for the original surface orientation, then
         // negate the complete transformed normal when rendering the back face.
-        const float3 SurfaceNormal = NormalInfo.Normal * NormalInfo.Face;
+        float3 SurfaceNormal = NormalInfo.Normal * NormalInfo.Face;
         return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx,
                                                NormalInfo.dPos_dy,
                                                dUV_dx,

@@ -413,6 +413,15 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_JointsBuffer{CI.pJointsBuffer},
     m_MorphTargetBuffer{CI.pMorphTargetBuffer}
 {
+    const RenderDeviceInfo& DeviceInfo = m_Device.GetDeviceInfo();
+    if (m_Settings.MaxActiveMorphTargetCount > 0 &&
+        DeviceInfo.Type == RENDER_DEVICE_TYPE_GLES && DeviceInfo.APIVersion < Version{3, 1})
+    {
+        // OpenGL ES 3.0, including WebGL 2, has no shader storage buffers.
+        LOG_WARNING_MESSAGE("Morph targets are disabled because OpenGL ES 3.0 does not support shader storage buffers");
+        m_Settings.MaxActiveMorphTargetCount = 0;
+    }
+
     if (m_Settings.EnableIBL)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples, BRDFType::GGX);
@@ -1749,7 +1758,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
             MaxAnisotropy = std::min(EffectiveSamDesc.MaxAnisotropy, Uint32{m_Device.GetAdapterInfo().Sampler.MaxAnisotropy});
             MaxAnisotropy = std::max(MaxAnisotropy, 1u);
         }
-        Macros.Add(MacroName, MaxAnisotropy);
+        Macros.Add(MacroName, static_cast<float>(MaxAnisotropy));
     };
     AddSamplerMaxAnisotropy("PBR_BASE_COLOR_MAX_ANISOTROPY", m_Settings.ColorMapImmutableSampler);
     AddSamplerMaxAnisotropy("PBR_NORMAL_MAX_ANISOTROPY", m_Settings.NormalMapImmutableSampler);

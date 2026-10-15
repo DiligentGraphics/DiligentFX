@@ -35,7 +35,7 @@ struct PBRPrimitiveAttribs
     PBRMorphTargetsShaderAttribs MorphTargets;
 #endif
 
-#if VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
+#if defined(VERTEX_POS_PACK_MODE) && VERTEX_POS_PACK_MODE != VERTEX_POS_PACK_MODE_NONE
     PBRVertexPositionUnpackShaderAttribs PositionUnpack;
 #endif
 
