@@ -11,7 +11,8 @@
     #define DepthFarPlane 1.0
 #endif // SSR_OPTION_INVERTED_DEPTH
 
-#if !defined(DESKTOP_GL) && !defined(GL_ES)
+// WGSL does not support explicitly requesting early depth/stencil tests.
+#if !defined(DESKTOP_GL) && !defined(GL_ES) && !defined(WEBGPU)
     #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL [earlydepthstencil]
 #else
     #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL 
