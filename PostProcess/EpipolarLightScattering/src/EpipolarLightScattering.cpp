@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -1381,7 +1381,9 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
         // clang-format off
         ShaderResourceVariableDesc VarDesc[] =
         {
-            {SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+            {SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+            // Min/max depths are loaded without filtering, including when the format is RG32_FLOAT.
+            {SHADER_TYPE_PIXEL, "g_tex2DMinMaxLightSpaceDepth", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU}
         };
         // clang-format on
         ResourceLayout.Variables    = VarDesc;
@@ -1540,6 +1542,10 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
         if (ResourceNames.find("cbMiscDynamicParams") != ResourceNames.end())
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+        // Ray marching loads min/max depths directly and does not require a filterable format.
+        if (ResourceNames.find("g_tex2DMinMaxLightSpaceDepth") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DMinMaxLightSpaceDepth", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
         if (ResourceNames.find("g_tex2DCamSpaceZ") != ResourceNames.end())
             ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
