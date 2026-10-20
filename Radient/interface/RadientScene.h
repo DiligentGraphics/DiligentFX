@@ -169,16 +169,23 @@ struct RadientCameraComponent
     /// Camera projection mode.
     RADIENT_CAMERA_PROJECTION Projection DEFAULT_INITIALIZER(RADIENT_CAMERA_PROJECTION_PERSPECTIVE);
 
-    /// Horizontal aperture in millimeters.
+    /// Horizontal sensor aperture in millimeters for perspective lens effects.
+    /// Perspective projection uses the viewport aspect ratio instead of this value.
+    /// In orthographic mode, this is the view width in scene units.
     Float32 HorizontalAperture DEFAULT_INITIALIZER(20.955f);
 
-    /// Vertical aperture in millimeters.
+    /// Vertical sensor aperture in millimeters. Together with FocalLength,
+    /// determines the perspective vertical field of view; the horizontal field
+    /// of view follows the viewport aspect ratio. In orthographic mode, this is
+    /// the view height in scene units.
     Float32 VerticalAperture DEFAULT_INITIALIZER(15.2908f);
 
     /// Horizontal aperture offset in the same units as HorizontalAperture.
+    /// Stored in the component but currently not applied by the renderer.
     Float32 HorizontalApertureOffset DEFAULT_INITIALIZER(0.f);
 
     /// Vertical aperture offset in the same units as VerticalAperture.
+    /// Stored in the component but currently not applied by the renderer.
     Float32 VerticalApertureOffset DEFAULT_INITIALIZER(0.f);
 
     /// Perspective focal length in millimeters.
@@ -495,6 +502,19 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientScene =
 // clang-format off
 
 /// Scene graph and ECS storage interface.
+///
+/// Scene access is externally synchronized, including access through any writer
+/// or animation destination that modifies this scene. Mutations, CommitChanges(),
+/// GetWorldMatrix(), GetEntityEffectiveVisibility(), and rendering the scene
+/// require exclusive access: they must not overlap other accesses to this scene.
+/// Read-only queries may run concurrently while the scene is otherwise unchanged.
+/// For animation, exclusive access spans the entire BeginUpdate()/EndUpdate() scope.
+///
+/// A scene supports rendering by a single IRadientRenderer instance throughout
+/// its lifetime. Multiple views of that renderer may share the scene. Sharing
+/// a scene between independent renderers, or reusing an already-rendered scene
+/// with a replacement renderer, is unsupported. When replacing the renderer,
+/// create and populate a new scene for it.
 DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
 {
     /// Returns the scene description.
@@ -526,6 +546,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                           Bool REF        Visible) CONST PURE;
 
     /// Gets effective entity visibility, accounting for parent visibility.
+    /// Updates dirty visibility caches along the entity's ancestor path as needed.
+    /// Requires exclusive access to the scene, even though this is a query.
     VIRTUAL RADIENT_STATUS METHOD(GetEntityEffectiveVisibility)(THIS_
                                                                 RadientEntityID Entity,
                                                                 Bool REF        Visible) PURE;
@@ -577,7 +599,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                      RadientEntityID      Entity,
                                                      RadientTransform REF Transform) CONST PURE;
 
-    /// Gets world transform matrix.
+    /// Gets the world transform matrix, updating dirty transform caches along
+    /// the entity's ancestor path as needed. Requires exclusive access to the
+    /// scene, even though this is a query.
     VIRTUAL RADIENT_STATUS METHOD(GetWorldMatrix)(THIS_
                                                   RadientEntityID      Entity,
                                                   RadientMatrix4x4 REF Matrix) PURE;
@@ -650,7 +674,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                 RadientComponentTypeID ComponentType,
                                                 Bool REF               HasComponent) CONST PURE;
 
-    /// Returns renderer-relevant scene revisions.
+    /// Returns renderer-relevant scene revisions. Relevant revisions advance
+    /// when the scene is edited, without waiting for CommitChanges().
     VIRTUAL const RadientSceneRevisions REF METHOD(GetSceneRevisions)(THIS) CONST PURE;
 };
 DILIGENT_END_INTERFACE

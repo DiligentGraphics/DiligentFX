@@ -46,12 +46,19 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
 
 // clang-format off
 
-/// Scene graph mutation interface. Radient-created writers expose
-/// IID_RadientAnimationDestination through QueryInterface() for batched scene
-/// node, light-component, and camera-component animation. Each
-/// RadientAnimationPropertyBindingDesc::DestinationElement is a
-/// RadientEntityID. No scene-writer method may be called between a successful
-/// animation destination binding BeginUpdate() and its matching EndUpdate().
+/// Scene graph mutation interface.
+///
+/// Entity and component edits immediately modify the shared scene state and
+/// update the relevant revisions. All writers for a scene operate on that same
+/// state; they do not keep isolated copies or pending transactions. Access follows
+/// the external synchronization requirements documented by IRadientScene.
+///
+/// Radient-created writers expose IID_RadientAnimationDestination through
+/// QueryInterface() for batched scene node, light-component, and camera-component
+/// animation. Each RadientAnimationPropertyBindingDesc::DestinationElement is a
+/// RadientEntityID. No method on any writer for the same scene may be called
+/// between a successful animation destination binding BeginUpdate() and its
+/// matching EndUpdate().
 DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
 {
     /// Returns the scene modified by this writer. The returned pointer is
@@ -65,7 +72,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                                 const RadientEntityDesc REF Desc,
                                                 RadientEntityID REF         Entity) PURE;
 
-    /// Destroys an entity and its owned components.
+    /// Destroys the entity, its entire descendant subtree, and all their components.
+    /// All entity IDs in the subtree become invalid immediately. Returns
+    /// RADIENT_STATUS_NOT_FOUND if Entity is not alive.
     VIRTUAL RADIENT_STATUS METHOD(DestroyEntity)(THIS_
                                                  RadientEntityID Entity) PURE;
 
@@ -146,12 +155,21 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                                           RadientEntityID                       Entity,
                                                           const RadientCustomComponentData REF Component) PURE;
 
-    /// Removes a component from the entity.
+    /// Removes a component from the entity. Removing RADIENT_COMPONENT_TYPE_MESH
+    /// also removes the entity's morph component. The transform is mandatory:
+    /// requesting removal of RADIENT_COMPONENT_TYPE_TRANSFORM from a live entity
+    /// returns RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(RemoveComponent)(THIS_
                                                    RadientEntityID        Entity,
                                                    RadientComponentTypeID ComponentType) PURE;
 
-    /// Commits pending scene changes to the active backend.
+    /// Updates dirty world transforms and effective visibility, including affected
+    /// descendants, for changes made through any writer for this scene.
+    /// Entity and component edits and their revision updates are already visible
+    /// before this call. This method does not submit work to the backend, publish
+    /// a transaction, or synchronize concurrent scene access.
+    /// Call after a batch of edits and before rendering or reading cached derived
+    /// state to ensure that world transforms and effective visibility are current.
     VIRTUAL RADIENT_STATUS METHOD(CommitChanges)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE

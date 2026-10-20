@@ -537,7 +537,7 @@ struct RadientViewDesc
     /// View name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Scene to render.
+    /// Scene to render. See IRadientScene for scene-renderer lifetime restrictions.
     IRadientScene* pScene DEFAULT_INITIALIZER(nullptr);
 
     /// Camera entity to render from.
@@ -603,6 +603,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     VIRTUAL const RadientViewDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Sets the scene rendered by the view.
+    /// See IRadientScene for scene-renderer lifetime restrictions.
     VIRTUAL RADIENT_STATUS METHOD(SetScene)(THIS_
                                             IRadientScene* pScene) PURE;
 

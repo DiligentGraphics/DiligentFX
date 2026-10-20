@@ -93,7 +93,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientEngine, IObject)
                                                const RadientSceneCreateInfo REF CreateInfo,
                                                IRadientScene**                  ppScene) PURE;
 
-    /// Creates a writer for a scene created by this engine.
+    /// Creates a writer for a scene created by this engine. All writers for the
+    /// same scene modify shared state and follow IRadientScene's synchronization
+    /// requirements.
     VIRTUAL RADIENT_STATUS METHOD(CreateSceneWriter)(THIS_
                                                      IRadientScene*        pScene,
                                                      IRadientSceneWriter** ppWriter) PURE;

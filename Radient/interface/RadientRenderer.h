@@ -210,6 +210,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
     /// while renderer-specific drawable resources are still being prepared
     /// asynchronously. BeginFrame() must have succeeded before this method is
     /// called.
+    ///
+    /// The scene follows the single-renderer lifetime restriction documented by
+    /// IRadientScene. Rendering a scene previously rendered by another renderer
+    /// may return RADIENT_STATUS_INVALID_OPERATION. This call requires exclusive
+    /// access to the scene as described by IRadientScene's synchronization contract.
     VIRTUAL RADIENT_STATUS METHOD(Render)(THIS_
                                           const RadientRenderAttribs REF Attribs) PURE;
 
