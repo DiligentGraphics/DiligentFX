@@ -82,6 +82,8 @@ public:
         return Index;
     }
 
+    void UpdateAt(size_t Index, const RadientLightItem& Item);
+
     RadientEntityID RemoveAt(size_t Index);
 
     size_t GetItemCount() const
@@ -122,6 +124,11 @@ public:
                const Bool&                  EffectiveVisible)
     {
         return m_LightLists[Type].Add(Entity, Light, WorldMatrix, EffectiveVisible);
+    }
+
+    void UpdateAt(RADIENT_LIGHT_TYPE Type, size_t Index, const RadientLightItem& Item)
+    {
+        m_LightLists[Type].UpdateAt(Index, Item);
     }
 
     RadientEntityID RemoveAt(RADIENT_LIGHT_TYPE Type,

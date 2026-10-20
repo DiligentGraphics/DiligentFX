@@ -41,11 +41,12 @@ struct SkinComponentStorage
 
     SkinComponentStorage();
 
-    SkinComponentStorage(const SkinComponentStorage&)            = delete;
+    // clang-format off
+    SkinComponentStorage           (const SkinComponentStorage&) = delete;
     SkinComponentStorage& operator=(const SkinComponentStorage&) = delete;
-
-    SkinComponentStorage(SkinComponentStorage&& Rhs) noexcept;
+    SkinComponentStorage           (SkinComponentStorage&& Rhs) noexcept;
     SkinComponentStorage& operator=(SkinComponentStorage&& Rhs) noexcept;
+    // clang-format on
 
     void Assign(const RadientSkinComponent& Skin);
 

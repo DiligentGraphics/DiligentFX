@@ -711,6 +711,32 @@ std::vector<const RadientDrawableSlot*> GetDrawableSlotsForEntity(
     return Slots;
 }
 
+void ExpectCachedSceneReferences(const RadientTesseraDrawableCache& Cache,
+                                 const RadientSceneImpl&            Scene)
+{
+    EXPECT_EQ(Scene.GetState().EnumerateRenderableMeshes(
+                  [&](const RadientSceneState::RenderableMesh& Mesh) {
+                      const std::vector<const RadientDrawableSlot*> Slots = GetDrawableSlotsForEntity(Cache, Mesh.Entity);
+                      ASSERT_FALSE(Slots.empty());
+                      for (const RadientDrawableSlot* pSlot : Slots)
+                      {
+                          EXPECT_EQ(pSlot->pWorldMatrix, &Mesh.WorldMatrix);
+                          EXPECT_EQ(pSlot->pEffectiveVisible, &Mesh.EffectiveVisible);
+                          EXPECT_EQ(pSlot->pRenderer, &Mesh.Renderer);
+                      }
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(Scene.GetState().EnumerateRenderableLights(
+                  [&](const RadientSceneState::RenderableLight& Light) {
+                      const RadientLightItem* pItem = FindLightItem(Cache.GetLightList(Light.Light.Type), Light.Entity);
+                      ASSERT_NE(pItem, nullptr);
+                      EXPECT_EQ(pItem->pLight, &Light.Light);
+                      EXPECT_EQ(pItem->pWorldMatrix, &Light.WorldMatrix);
+                      EXPECT_EQ(pItem->pEffectiveVisible, &Light.EffectiveVisible);
+                  }),
+              RADIENT_STATUS_OK);
+}
+
 const RadientDrawableSlot* FindDrawableSlotByFirstElement(const RadientTesseraDrawableCache& Cache,
                                                           GLTF::Material::ALPHA_MODE         AlphaMode,
                                                           Uint32                             FirstElement)
@@ -2646,6 +2672,169 @@ TEST(RadientTesseraDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDra
     EXPECT_EQ(pSlot->pEffectiveVisible, pEffectiveVisible);
     EXPECT_FALSE(*pEffectiveVisible);
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
+}
+
+TEST(RadientTesseraDrawableCacheTest, UnrelatedEntityDeletionPreservesCachedTransformAndVisibility)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-unrelated-deletion", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+
+    RadientEntityID UnrelatedEntity = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity({}, UnrelatedEntity), RADIENT_STATUS_OK);
+    const RadientEntityID Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
+    RadientLightComponent Light;
+    Light.Type = RADIENT_LIGHT_TYPE_POINT;
+    ASSERT_EQ(pWriter->SetLight(Entity, Light), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetLocalTransform(Entity, MakeTranslation(2.f, 3.f, 4.f)), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    const RadientDrawableSlot* pSlot = GetFirstDrawableSlot(DrawableCache);
+    ASSERT_NE(pSlot, nullptr);
+    const RadientMatrix4x4* pWorldMatrix = pSlot->pWorldMatrix;
+    const Bool*             pVisibility  = pSlot->pEffectiveVisible;
+
+    // The removed entity has no renderable components. Its deletion must not move
+    // the survivor's transform or visibility, even though no cache update is emitted.
+    ASSERT_EQ(pWriter->DestroyEntity(UnrelatedEntity), RADIENT_STATUS_OK);
+    RadientEntityDesc ReplacementDesc;
+    ReplacementDesc.Transform   = MakeTranslation(100.f, 200.f, 300.f);
+    ReplacementDesc.Flags       = RADIENT_ENTITY_FLAG_NONE;
+    RadientEntityID Replacement = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(ReplacementDesc, Replacement), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+    EXPECT_TRUE(DrawableCache.GetLightChanges().empty());
+    ExpectCachedSceneReferences(DrawableCache, *pScene);
+    EXPECT_EQ(pSlot->pWorldMatrix, pWorldMatrix);
+    EXPECT_EQ(pSlot->pEffectiveVisible, pVisibility);
+    ExpectMatrixNear(*pSlot->pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(2.f, 3.f, 4.f)));
+    EXPECT_TRUE(*pSlot->pEffectiveVisible);
+    const RadientLightItem* pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), Entity);
+    ASSERT_NE(pLightItem, nullptr);
+    EXPECT_EQ(pLightItem->pWorldMatrix, pWorldMatrix);
+    EXPECT_EQ(pLightItem->pEffectiveVisible, pVisibility);
+}
+
+TEST(RadientTesseraDrawableCacheTest, UnrelatedRemovalPreservesCachedRendererAndLight)
+{
+    for (bool DestroyEntity : {false, true})
+    {
+        SCOPED_TRACE(DestroyEntity ? "Destroy entity" : "Remove components");
+        TestDrawableMeshProvider        MeshProvider;
+        RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+        RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+        ASSERT_NE(pScene, nullptr);
+
+        GLTF::Model Model;
+        InitTestModel(Model);
+        RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-component-stability", 1);
+        RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+        MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+
+        RadientEntityID UnrelatedEntity = InvalidRadientEntityID;
+        ASSERT_EQ(pWriter->CreateEntity({}, UnrelatedEntity), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetMeshRenderer(UnrelatedEntity, {}), RADIENT_STATUS_OK);
+        RadientLightComponent Light;
+        Light.Type = RADIENT_LIGHT_TYPE_POINT;
+        ASSERT_EQ(pWriter->SetLight(UnrelatedEntity, Light), RADIENT_STATUS_OK);
+
+        const RadientEntityID        Entity = AddReadyRenderableEntity(MeshProvider, DrawableCache, *pScene, *pWriter, pMesh);
+        RadientMeshRendererComponent Renderer;
+        Renderer.VisibilityMask = 0x1234u;
+        Light.Intensity         = 3.f;
+        ASSERT_EQ(pWriter->SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetLight(Entity, Light), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+        ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+        pScene->ClearPendingRenderChanges();
+
+        const RadientDrawableSlot* pSlot = GetFirstDrawableSlot(DrawableCache);
+        ASSERT_NE(pSlot, nullptr);
+        const RadientMeshRendererComponent* pRenderer  = pSlot->pRenderer;
+        const RadientLightItem*             pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), Entity);
+        ASSERT_NE(pLightItem, nullptr);
+        const RadientLightComponent* pLight = pLightItem->pLight;
+
+        // Removing the earlier component must not relocate the survivor. Creating
+        // another component then reuses storage and exposes stale cached pointers.
+        if (DestroyEntity)
+        {
+            ASSERT_EQ(pWriter->DestroyEntity(UnrelatedEntity), RADIENT_STATUS_OK);
+        }
+        else
+        {
+            ASSERT_EQ(pWriter->RemoveComponent(UnrelatedEntity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+            ASSERT_EQ(pWriter->RemoveComponent(UnrelatedEntity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+        }
+        RadientEntityID Replacement = InvalidRadientEntityID;
+        ASSERT_EQ(pWriter->CreateEntity({}, Replacement), RADIENT_STATUS_OK);
+        Renderer.VisibilityMask = 0x5678u;
+        Light.Intensity         = 99.f;
+        ASSERT_EQ(pWriter->SetMeshRenderer(Replacement, Renderer), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetLight(Replacement, Light), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+        ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+        EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+        ExpectLightChangeCounts(DrawableCache, 1u, 1u, 0u);
+        ExpectCachedSceneReferences(DrawableCache, *pScene);
+        EXPECT_EQ(pSlot->pRenderer, pRenderer);
+        EXPECT_EQ(pSlot->pRenderer->VisibilityMask, 0x1234u);
+        pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), Entity);
+        ASSERT_NE(pLightItem, nullptr);
+        EXPECT_EQ(pLightItem->pLight, pLight);
+        EXPECT_EQ(pLightItem->pLight->Intensity, 3.f);
+    }
+}
+
+TEST(RadientTesseraDrawableCacheTest, RecreatedSameTypeLightRefreshesCachedReferences)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    RadientLightComponent Light;
+    Light.Type                   = RADIENT_LIGHT_TYPE_POINT;
+    Light.Intensity              = 2.f;
+    const RadientEntityID Entity = AddLightEntity(*pWriter, Light);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    pScene->ClearPendingRenderChanges();
+
+    // Reusing the removed light's slot before re-adding it makes the cached pointer
+    // refer to another entity. The coalesced same-type update must replace it.
+    ASSERT_EQ(pWriter->RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    Light.Intensity                   = 7.f;
+    const RadientEntityID OtherEntity = AddLightEntity(*pWriter, Light);
+    Light.Intensity                   = 11.f;
+    ASSERT_EQ(pWriter->SetLight(Entity, Light), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+
+    ExpectLightChangeCounts(DrawableCache, 1u, 0u, 1u);
+    ExpectCachedSceneReferences(DrawableCache, *pScene);
+    const RadientLightList& LightList = DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT);
+    ASSERT_EQ(LightList.GetItemCount(), 2u);
+    const RadientLightItem* pOriginal = FindLightItem(LightList, Entity);
+    const RadientLightItem* pOther    = FindLightItem(LightList, OtherEntity);
+    ASSERT_NE(pOriginal, nullptr);
+    ASSERT_NE(pOther, nullptr);
+    EXPECT_NE(pOriginal->pLight, pOther->pLight);
+    EXPECT_EQ(pOriginal->pLight->Intensity, 11.f);
+    EXPECT_EQ(pOther->pLight->Intensity, 7.f);
 }
 
 TEST(RadientTesseraDrawableCacheTest, LightListsUpdateIncrementallyByType)

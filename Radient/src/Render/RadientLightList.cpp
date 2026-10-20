@@ -31,6 +31,18 @@
 namespace Diligent
 {
 
+void RadientLightList::UpdateAt(size_t Index, const RadientLightItem& Item)
+{
+    if (Index >= m_Items.size())
+    {
+        UNEXPECTED("Light list item index (", Index, ") exceeds the number of items in the list (", m_Items.size(), ")");
+        return;
+    }
+
+    VERIFY_EXPR(m_Items[Index].Entity == Item.Entity);
+    m_Items[Index] = Item;
+}
+
 RadientEntityID RadientLightList::RemoveAt(size_t Index)
 {
     if (Index >= m_Items.size())

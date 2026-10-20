@@ -39,11 +39,12 @@ struct MeshComponentStorage
 
     MeshComponentStorage();
 
-    MeshComponentStorage(const MeshComponentStorage& Rhs)        = delete;
+    // clang-format off
+    MeshComponentStorage           (const MeshComponentStorage&) = delete;
     MeshComponentStorage& operator=(const MeshComponentStorage&) = delete;
-
-    MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept;
+    MeshComponentStorage           (MeshComponentStorage&& Rhs) noexcept;
     MeshComponentStorage& operator=(MeshComponentStorage&& Rhs) noexcept;
+    // clang-format on
 
     void Assign(const RadientMeshComponent& Mesh);
 

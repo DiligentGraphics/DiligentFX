@@ -55,6 +55,33 @@
 #include <unordered_map>
 #include <vector>
 
+namespace entt
+{
+
+// Tessera retains pointers to these components. Removing another component must
+// not relocate them. Keep this storage policy internal to the scene implementation.
+template <typename Entity>
+struct component_traits<Diligent::RadientMeshRendererComponent, Entity>
+{
+    using element_type = Diligent::RadientMeshRendererComponent;
+    using entity_type  = Entity;
+
+    static constexpr bool        in_place_delete = true;
+    static constexpr std::size_t page_size       = ENTT_PACKED_PAGE;
+};
+
+template <typename Entity>
+struct component_traits<Diligent::RadientLightComponent, Entity>
+{
+    using element_type = Diligent::RadientLightComponent;
+    using entity_type  = Entity;
+
+    static constexpr bool        in_place_delete = true;
+    static constexpr std::size_t page_size       = ENTT_PACKED_PAGE;
+};
+
+} // namespace entt
+
 namespace Diligent
 {
 
@@ -62,8 +89,11 @@ class RadientSceneAnimationDestinationBindingImpl;
 
 // RadientSceneState is not internally synchronized. Access from multiple threads must be externally synchronized.
 // Enumeration callbacks must not mutate the scene or call methods that may update cached derived state.
-// Renderable data passed to enumeration callbacks references registry-owned storage and is valid only
-// for the duration of the callback.
+// Renderable data passed to enumeration callbacks references registry-owned storage.
+// Renderer, light, world-matrix, and effective-visibility references remain valid until the
+// corresponding component is removed or its entity is destroyed. Their storages must not be
+// sorted or compacted. Retained caches must be synchronized after structural changes before use.
+// Other referenced component data is valid only for the duration of the callback.
 class RadientSceneState
 {
 public:
@@ -265,13 +295,18 @@ private:
         RadientTransform Transform;
     };
 
+    // Renderables and light lists retain pointers to these values across scene updates.
     struct WorldTransformComponent
     {
+        static constexpr bool in_place_delete = true;
+
         RadientMatrix4x4 Matrix;
     };
 
     struct EffectiveVisibilityComponent
     {
+        static constexpr bool in_place_delete = true;
+
         Bool Visible = True;
     };
 
@@ -536,11 +571,12 @@ void RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& Callback) 
         if (Pending.Type == RenderableMeshChangeType::Removed || !IsRenderableMeshEntity(Entity))
         {
             Callback(Change, static_cast<const RenderableMesh*>(nullptr));
-            continue;
         }
-
-        const RenderableMesh Mesh = MakeRenderableMesh(Entity, m_Registry);
-        Callback(Change, &Mesh);
+        else
+        {
+            const RenderableMesh Mesh = MakeRenderableMesh(Entity, m_Registry);
+            Callback(Change, &Mesh);
+        }
     }
 }
 
@@ -578,11 +614,12 @@ void RadientSceneState::EnumerateRenderableLightChanges(CallbackType&& Callback)
         if (Pending.Type == RenderableLightChangeType::Removed || !IsRenderableLightEntity(Entity))
         {
             Callback(Change, static_cast<const RenderableLight*>(nullptr));
-            continue;
         }
-
-        const RenderableLight Light = MakeRenderableLight(Entity, m_Registry);
-        Callback(Change, &Light);
+        else
+        {
+            const RenderableLight Light = MakeRenderableLight(Entity, m_Registry);
+            Callback(Change, &Light);
+        }
     }
 }
 

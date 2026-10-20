@@ -556,6 +556,10 @@ void RadientTesseraDrawableCache::ProcessRenderableLightAddedOrUpdated(const Rad
     }
     else
     {
+        // Removing and re-adding a light before synchronization is coalesced into
+        // an update. The new component may occupy a different storage slot.
+        m_LightLists.UpdateAt(It->second.Type, It->second.Index,
+                             {Light.Entity, Light.Light, Light.WorldMatrix, Light.EffectiveVisible});
         RecordLightChange(Light.Entity, It->second.Type, RadientLightChangeType::Updated);
     }
 }

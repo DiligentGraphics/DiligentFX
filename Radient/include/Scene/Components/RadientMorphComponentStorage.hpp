@@ -40,11 +40,12 @@ struct MorphComponentStorage
 
     MorphComponentStorage();
 
-    MorphComponentStorage(const MorphComponentStorage&)            = delete;
+    // clang-format off
+    MorphComponentStorage           (const MorphComponentStorage&) = delete;
     MorphComponentStorage& operator=(const MorphComponentStorage&) = delete;
-
-    MorphComponentStorage(MorphComponentStorage&& Rhs) noexcept;
+    MorphComponentStorage           (MorphComponentStorage&& Rhs) noexcept;
     MorphComponentStorage& operator=(MorphComponentStorage&& Rhs) noexcept;
+    // clang-format on
 
     void Assign(const RadientMorphComponent& Morph);
 

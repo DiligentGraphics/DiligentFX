@@ -43,11 +43,12 @@ struct MaterialBindingsStorage
 
     MaterialBindingsStorage();
 
-    MaterialBindingsStorage(const MaterialBindingsStorage& Rhs) = delete;
+    // clang-format off
+    MaterialBindingsStorage           (const MaterialBindingsStorage&) = delete;
     MaterialBindingsStorage& operator=(const MaterialBindingsStorage&) = delete;
-
-    MaterialBindingsStorage(MaterialBindingsStorage&& Rhs) noexcept;
+    MaterialBindingsStorage           (MaterialBindingsStorage&& Rhs) noexcept;
     MaterialBindingsStorage& operator=(MaterialBindingsStorage&& Rhs) noexcept;
+    // clang-format on
 
     bool Equals(const RadientMaterialBindingsComponent& Bindings) const;
     void Assign(const RadientMaterialBindingsComponent& Bindings);
