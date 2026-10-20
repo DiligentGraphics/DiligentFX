@@ -883,6 +883,71 @@ TEST(RadientSceneStateTest, SetParentRejectsMissingParent)
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 }
 
+TEST(RadientSceneStateTest, SetParentKeepsWorldTransformWithZeroScale)
+{
+    // A rotated zero-scale transform must survive attachment, reparenting,
+    // and detachment, including the world transforms of its descendants.
+    const RadientFloat3 Scales[] = {
+        {0.f, 1.f, 1.f},
+        {1.f, 0.f, 1.f},
+        {1.f, 1.f, 0.f},
+        {1.f, 0.f, 0.f},
+        {0.f, 1.f, 0.f},
+        {0.f, 0.f, 1.f},
+        {0.f, 0.f, 0.f},
+    };
+    for (const RadientFloat3& Scale : Scales)
+    {
+        SCOPED_TRACE(::testing::Message{} << "Scale: " << Scale.x << ", " << Scale.y << ", " << Scale.z);
+        RadientSceneState State;
+        RadientEntityID   FirstParent  = InvalidRadientEntityID;
+        RadientEntityID   SecondParent = InvalidRadientEntityID;
+        ASSERT_EQ(State.CreateEntity({}, FirstParent), RADIENT_STATUS_OK);
+        RadientEntityDesc ParentDesc;
+        ParentDesc.Transform.Position   = {2.f, 3.f, 4.f};
+        ParentDesc.Transform.Rotation.y = 0.70710678f;
+        ParentDesc.Transform.Rotation.w = 0.70710678f;
+        ParentDesc.Transform.Scale      = {2.f, 2.f, 2.f};
+        ASSERT_EQ(State.CreateEntity(ParentDesc, SecondParent), RADIENT_STATUS_OK);
+
+        RadientEntityDesc Desc;
+        Desc.Transform.Rotation.z = 0.70710678f;
+        Desc.Transform.Rotation.w = 0.70710678f;
+        Desc.Transform.Scale      = Scale;
+        RadientEntityID Entity    = InvalidRadientEntityID;
+        ASSERT_EQ(State.CreateEntity(Desc, Entity), RADIENT_STATUS_OK);
+        RadientEntityDesc ChildDesc;
+        ChildDesc.Parent      = Entity;
+        ChildDesc.Transform   = MakeTranslation(1.f, 2.f, 3.f);
+        RadientEntityID Child = InvalidRadientEntityID;
+        ASSERT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+        ASSERT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        RadientMatrix4x4 OriginalWorld;
+        RadientMatrix4x4 OriginalChildWorld;
+        ASSERT_EQ(State.GetWorldMatrix(Entity, OriginalWorld), RADIENT_STATUS_OK);
+        ASSERT_EQ(State.GetWorldMatrix(Child, OriginalChildWorld), RADIENT_STATUS_OK);
+        for (const RadientEntityID TargetParent : {FirstParent, SecondParent, InvalidRadientEntityID})
+        {
+            SCOPED_TRACE(TargetParent);
+            ASSERT_EQ(State.SetParent(Entity, TargetParent, True), RADIENT_STATUS_OK);
+            RadientEntityID Parent = InvalidRadientEntityID;
+            ASSERT_EQ(State.GetParent(Entity, Parent), RADIENT_STATUS_OK);
+            EXPECT_EQ(Parent, TargetParent);
+            ASSERT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
+            EXPECT_EQ(Parent, Entity);
+            EXPECT_EQ(State.GetRootEntityCount(), TargetParent == InvalidRadientEntityID ? 3u : 2u);
+
+            ASSERT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+            RadientMatrix4x4 World;
+            ASSERT_EQ(State.GetCachedWorldMatrix(Entity, World), RADIENT_STATUS_OK);
+            ExpectMatrixNear(World, OriginalWorld);
+            ASSERT_EQ(State.GetCachedWorldMatrix(Child, World), RADIENT_STATUS_OK);
+            ExpectMatrixNear(World, OriginalChildWorld);
+        }
+    }
+}
+
 TEST(RadientSceneStateTest, SetLocalTransformRejectsMissingEntity)
 {
     // Transform updates for an unknown entity should report not found and leave

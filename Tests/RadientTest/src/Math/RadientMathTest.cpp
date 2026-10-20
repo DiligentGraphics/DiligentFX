@@ -464,4 +464,34 @@ TEST(RadientMathTest, DecomposesTransformMatrix)
     ExpectRotationNear(Decomposed.Rotation, Transform.Rotation);
 }
 
+TEST(RadientMathTest, DecomposesZeroScaleTransformMatrix)
+{
+    // Degenerate TRS decompositions are not unique. Reconstruct the matrix
+    // instead of requiring the original quaternion or scale signs.
+    const RadientFloat3 Scales[] = {
+        {0.f, 1.f, 1.f},
+        {1.f, 0.f, 1.f},
+        {1.f, 1.f, 0.f},
+        {1.f, 0.f, 0.f},
+        {0.f, 1.f, 0.f},
+        {0.f, 0.f, 1.f},
+        {0.f, 0.f, 0.f},
+        {0.f, -2.f, 3.f},
+        {0.f, 0.f, -4.f},
+    };
+    for (const RadientFloat3& Scale : Scales)
+    {
+        SCOPED_TRACE(::testing::Message{} << "Scale: " << Scale.x << ", " << Scale.y << ", " << Scale.z);
+        RadientTransform Transform;
+        Transform.Position   = {1.f, 2.f, 3.f};
+        Transform.Rotation.z = 0.70710678f;
+        Transform.Rotation.w = 0.70710678f;
+        Transform.Scale      = Scale;
+
+        const RadientMatrix4x4 Matrix     = RadientMath::TransformToMatrix(Transform);
+        const RadientTransform Decomposed = RadientMath::MatrixToTransform(Matrix);
+        ExpectMatrixNear(RadientMath::TransformToMatrix(Decomposed), Matrix);
+    }
+}
+
 } // namespace
