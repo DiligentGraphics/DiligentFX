@@ -525,7 +525,7 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
 {
     Entity = InvalidRadientEntityID;
 
-    if (!IsValidEntityFlags(Desc.Flags))
+    if (!IsValidEntityFlags(Desc.Flags) || !IsFinite(Desc.Transform))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     entt::entity Parent = entt::null;
@@ -708,6 +708,9 @@ RADIENT_STATUS RadientSceneState::SetLocalTransform(RadientEntityID Entity, cons
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
+
+    if (!IsFinite(Transform))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const RadientTransform   NormalizedTransform = RadientMath::NormalizeTransform(Transform);
     LocalTransformComponent& LocalTransform      = m_CoreStorages.get<LocalTransformComponent>(E);

@@ -58,7 +58,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
     /// borrowed and remains valid for the writer lifetime.
     VIRTUAL IRadientScene* METHOD(GetScene)(THIS) CONST PURE;
 
-    /// Creates an entity.
+    /// Creates an entity. All position, rotation, and scale components in
+    /// Desc.Transform must be finite. Otherwise, returns RADIENT_STATUS_INVALID_ARGUMENT,
+    /// sets Entity to InvalidRadientEntityID, and leaves the scene unchanged.
     VIRTUAL RADIENT_STATUS METHOD(CreateEntity)(THIS_
                                                 const RadientEntityDesc REF Desc,
                                                 RadientEntityID REF         Entity) PURE;
@@ -95,7 +97,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                              RadientEntityID Parent,
                                              Bool            KeepWorldTransform DEFAULT_VALUE(True)) PURE;
 
-    /// Sets local transform.
+    /// Sets the local transform. Returns RADIENT_STATUS_NOT_FOUND if Entity is not alive.
+    /// All position, rotation, and scale components must be finite. Otherwise,
+    /// returns RADIENT_STATUS_INVALID_ARGUMENT without changing the scene.
     VIRTUAL RADIENT_STATUS METHOD(SetLocalTransform)(THIS_
                                                      RadientEntityID            Entity,
                                                      const RadientTransform REF Transform) PURE;

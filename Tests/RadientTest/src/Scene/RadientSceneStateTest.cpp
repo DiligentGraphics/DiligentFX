@@ -894,6 +894,131 @@ TEST(RadientSceneStateTest, SetLocalTransformRejectsMissingEntity)
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 }
 
+TEST(RadientSceneStateTest, RejectsNonFiniteEntityTransforms)
+{
+    // Every transform component rejects NaN and both infinities before entity
+    // creation or mutation can affect IDs, hierarchy, revisions, or dirty state.
+    RadientSceneState State;
+    RadientEntityDesc RootDesc;
+    RootDesc.Transform   = MakeTranslation(1.f, 2.f, 3.f);
+    RadientEntityID Root = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(RootDesc, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent      = Root;
+    ChildDesc.Transform   = MakeTranslation(4.f, 5.f, 6.f);
+    RadientEntityID Child = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions Revisions  = State.GetSceneRevisions();
+    const RadientMatrix4x4      RootWorld  = RadientMath::TransformToMatrix(RootDesc.Transform);
+    const RadientMatrix4x4      ChildWorld = RadientMath::TransformToMatrix(MakeTranslation(5.f, 7.f, 9.f));
+
+    RadientTransform InvalidTransform = RootDesc.Transform;
+    struct TransformComponent
+    {
+        const char* Name;
+        Float32*    pValue;
+    };
+    const TransformComponent Components[] = {
+        {"Position.x", &InvalidTransform.Position.x},
+        {"Position.y", &InvalidTransform.Position.y},
+        {"Position.z", &InvalidTransform.Position.z},
+        {"Rotation.x", &InvalidTransform.Rotation.x},
+        {"Rotation.y", &InvalidTransform.Rotation.y},
+        {"Rotation.z", &InvalidTransform.Rotation.z},
+        {"Rotation.w", &InvalidTransform.Rotation.w},
+        {"Scale.x", &InvalidTransform.Scale.x},
+        {"Scale.y", &InvalidTransform.Scale.y},
+        {"Scale.z", &InvalidTransform.Scale.z},
+    };
+    const Float32 InvalidValues[] = {
+        std::numeric_limits<Float32>::quiet_NaN(),
+        std::numeric_limits<Float32>::infinity(),
+        -std::numeric_limits<Float32>::infinity(),
+    };
+    for (const TransformComponent& Component : Components)
+    {
+        SCOPED_TRACE(Component.Name);
+        for (const Float32 InvalidValue : InvalidValues)
+        {
+            SCOPED_TRACE(InvalidValue);
+            InvalidTransform  = RootDesc.Transform;
+            *Component.pValue = InvalidValue;
+            for (const RadientEntityID Parent : {InvalidRadientEntityID, Root})
+            {
+                RadientEntityDesc InvalidDesc;
+                InvalidDesc.Parent             = Parent;
+                InvalidDesc.Transform          = InvalidTransform;
+                RadientEntityID RejectedEntity = 123;
+                EXPECT_EQ(State.CreateEntity(InvalidDesc, RejectedEntity), RADIENT_STATUS_INVALID_ARGUMENT);
+                EXPECT_EQ(RejectedEntity, InvalidRadientEntityID);
+            }
+            EXPECT_EQ(State.SetLocalTransform(Root, InvalidTransform), RADIENT_STATUS_INVALID_ARGUMENT);
+            EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+
+            EXPECT_EQ(State.GetRootEntityCount(), 1u);
+            RadientEntityID StoredRoot = InvalidRadientEntityID;
+            Uint32          Written    = 0;
+            ASSERT_EQ(State.GetRootEntities(1, &StoredRoot, Written), RADIENT_STATUS_OK);
+            EXPECT_EQ(Written, 1u);
+            EXPECT_EQ(StoredRoot, Root);
+            Uint32 ChildCount = 0;
+            ASSERT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
+            EXPECT_EQ(ChildCount, 1u);
+            RadientEntityID StoredChild = InvalidRadientEntityID;
+            ASSERT_EQ(State.GetChildren(Root, 0, 1, &StoredChild, Written), RADIENT_STATUS_OK);
+            EXPECT_EQ(Written, 1u);
+            EXPECT_EQ(StoredChild, Child);
+
+            RadientTransform StoredTransform;
+            ASSERT_EQ(State.GetLocalTransform(Root, StoredTransform), RADIENT_STATUS_OK);
+            ExpectTransformEq(StoredTransform, RootDesc.Transform);
+            RadientMatrix4x4 World;
+            EXPECT_EQ(State.GetCachedWorldMatrix(Root, World), RADIENT_STATUS_OK);
+            ExpectMatrixNear(World, RootWorld);
+            EXPECT_EQ(State.GetCachedWorldMatrix(Child, World), RADIENT_STATUS_OK);
+            ExpectMatrixNear(World, ChildWorld);
+            EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+            EXPECT_EQ(State.GetSceneRevisions(), Revisions);
+        }
+    }
+
+    // None of the rejected root or child creations consumes a public ID.
+    RadientEntityID NextEntity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, NextEntity), RADIENT_STATUS_OK);
+    EXPECT_EQ(NextEntity, Child + 1);
+}
+
+TEST(RadientSceneStateTest, AcceptsFiniteDegenerateTransforms)
+{
+    // Finite validation must preserve existing zero-quaternion normalization
+    // and permit zero or negative scale components for creation and updates.
+    RadientSceneState State;
+    RadientEntityDesc Desc;
+    Desc.Transform.Position = {1.f, 2.f, 3.f};
+    Desc.Transform.Rotation = {0.f, 0.f, 0.f, 0.f};
+    Desc.Transform.Scale    = {0.f, -2.f, 3.f};
+    RadientEntityID Entity  = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(Desc, Entity), RADIENT_STATUS_OK);
+
+    RadientTransform Expected = Desc.Transform;
+    Expected.Rotation         = {};
+    RadientTransform StoredTransform;
+    ASSERT_EQ(State.GetLocalTransform(Entity, StoredTransform), RADIENT_STATUS_OK);
+    ExpectTransformEq(StoredTransform, Expected);
+
+    Desc.Transform.Position = {4.f, 5.f, 6.f};
+    Desc.Transform.Scale    = {-1.f, 2.f, 0.f};
+    ASSERT_EQ(State.SetLocalTransform(Entity, Desc.Transform), RADIENT_STATUS_OK);
+    Expected          = Desc.Transform;
+    Expected.Rotation = {};
+    ASSERT_EQ(State.GetLocalTransform(Entity, StoredTransform), RADIENT_STATUS_OK);
+    ExpectTransformEq(StoredTransform, Expected);
+    EXPECT_EQ(State.SetLocalTransform(Entity, Desc.Transform), RADIENT_STATUS_NO_CHANGE);
+}
+
 TEST(RadientSceneStateTest, SetCameraRejectsMissingEntity)
 {
     // Camera updates validate the entity before storing the component.

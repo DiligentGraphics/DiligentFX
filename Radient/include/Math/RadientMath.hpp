@@ -165,6 +165,11 @@ inline bool IsFinite(const RadientFloat4& Value)
     return IsFinite(Value.x) && IsFinite(Value.y) && IsFinite(Value.z) && IsFinite(Value.w);
 }
 
+inline bool IsFinite(const RadientTransform& Transform)
+{
+    return IsFinite(Transform.Position) && IsFinite(Transform.Rotation) && IsFinite(Transform.Scale);
+}
+
 inline bool IsFinitePositive(Float32 Value)
 {
     return IsFinite(Value) && Value > 0.f;
