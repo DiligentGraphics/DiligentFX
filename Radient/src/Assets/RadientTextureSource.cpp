@@ -530,7 +530,9 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
     {
         return {};
     }
-    Builder.AddBool("srgb", m_EncodedTextureIsSRGB);
+    // Supplied mip data uses its explicit format; the encoded-input flag is ignored.
+    if (m_SourceType != SourceType::TextureData)
+        Builder.AddBool("srgb", m_EncodedTextureIsSRGB);
     return Builder.GetKey();
 }
 

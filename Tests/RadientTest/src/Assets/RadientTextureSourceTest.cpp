@@ -387,6 +387,30 @@ TEST(RadientTextureSourceTest, BuildsStableTextureDataCacheKeys)
     EXPECT_NE(Source.MakeCacheKey(), DifferentFormatSource.MakeCacheKey());
 }
 
+TEST(RadientTextureSourceTest, TextureDataCacheKeyIgnoresEncodedSRGB)
+{
+    const std::array<Uint8, 4>      Data{1, 2, 3, 4};
+    RefCntAutoPtr<IRadientDataBlob> pBlob = MakeTestDataBlob(Data.data(), Data.size());
+    ASSERT_NE(pBlob, nullptr);
+
+    for (const RADIENT_TEXTURE_FORMAT Format : {RADIENT_TEXTURE_FORMAT_RGBA8_UNORM, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB})
+    {
+        SCOPED_TRACE(static_cast<Uint32>(Format));
+        RadientTextureDataX TextureData{1, 1, Format};
+        TextureData.AddMip(pBlob);
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetTextureData(TextureData).SetEncodedTextureSRGB(False);
+        RadientTextureSource Source{LoadInfo};
+        ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+        ASSERT_FALSE(Source.MakeCacheKey().empty());
+
+        LoadInfo.SetEncodedTextureSRGB(True);
+        RadientTextureSource SameSource{LoadInfo};
+        ASSERT_EQ(SameSource.GetStatus(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Source.MakeCacheKey(), SameSource.MakeCacheKey());
+    }
+}
+
 TEST(RadientTextureSourceTest, TextureDataCacheKeyIgnoresRowAndTrailingPadding)
 {
     constexpr Uint32 Width         = 3;
