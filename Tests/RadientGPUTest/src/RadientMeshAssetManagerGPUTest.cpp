@@ -320,7 +320,6 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     AttributeDesc.ComponentCount = 3;
 
     RadientMorphTargetAttributeCreateInfo AttributeCI{};
-    AttributeCI.pDeltas = PositionDeltas;
 
     RadientMorphTargetCreateInfo MorphTargetCI{};
     MorphTargetCI.Desc.Name           = "Position offset";
@@ -345,6 +344,11 @@ TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
     BlobCI.pData = Indices;
     RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
     ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(PositionDeltas);
+    BlobCI.pData = PositionDeltas;
+    RefCntAutoPtr<IRadientDataBlob> pDeltaBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pDeltaBlob), RADIENT_STATUS_OK);
+    AttributeCI.pDeltaBuffer = pDeltaBlob;
     IRadientDataBlob* const VertexData[]{pPositionsBlob};
 
     MeshCI.VertexData.VertexLayout          = VertexLayout;

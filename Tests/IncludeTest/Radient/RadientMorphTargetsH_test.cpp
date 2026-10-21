@@ -44,7 +44,8 @@ static_assert(DefaultAttribute.Semantic == nullptr, "Unexpected morph-target att
 static_assert(DefaultAttribute.ComponentCount == 0, "Unexpected morph-target attribute component count default value");
 
 constexpr RadientMorphTargetAttributeCreateInfo DefaultAttributeData{};
-static_assert(DefaultAttributeData.pDeltas == nullptr, "Unexpected morph-target attribute data default value");
+static_assert(DefaultAttributeData.pDeltaBuffer == nullptr, "Unexpected morph-target attribute buffer default value");
+static_assert(DefaultAttributeData.ByteOffset == 0, "Unexpected morph-target attribute byte offset default value");
 
 constexpr RadientMorphTargetCreateInfo DefaultTarget{};
 static_assert(DefaultTarget.Desc.Name == nullptr, "Unexpected morph-target name default value");
@@ -66,9 +67,10 @@ void RadientMorphTargets_CPP_UseInterface(IRadientMorphTargetWeights* pTargetWei
     RadientMorphTargetCreateInfo          Target;
     Float32                               Weight = 0.f;
 
-    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
-    Attribute.ComponentCount = 3;
-    AttributeData.pDeltas    = nullptr;
+    Attribute.Semantic         = RadientMorphTargetPositionSemantic;
+    Attribute.ComponentCount   = 3;
+    AttributeData.pDeltaBuffer = nullptr;
+    AttributeData.ByteOffset   = 0;
 
     Target.Desc.pAttributes    = &Attribute;
     Target.Desc.AttributeCount = 1;

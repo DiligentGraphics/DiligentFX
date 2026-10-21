@@ -33,9 +33,10 @@ void RadientMorphTargets_C_UseTypes(void)
     RadientMorphTargetCreateInfo          Target        = {0};
     RadientMorphTargetDesc                TargetDesc    = {0};
 
-    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
-    Attribute.ComponentCount = 3;
-    AttributeData.pDeltas    = 0;
+    Attribute.Semantic         = RadientMorphTargetPositionSemantic;
+    Attribute.ComponentCount   = 3;
+    AttributeData.pDeltaBuffer = 0;
+    AttributeData.ByteOffset   = 0;
 
     TargetDesc.Name           = "Target";
     TargetDesc.pAttributes    = &Attribute;

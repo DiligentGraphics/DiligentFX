@@ -167,11 +167,11 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
                                           "MorphTargetData.pMorphTargets[", TargetIndex, "].Desc.pAttributes[", AttributeIndex,
                                           "].Semantic must not be null or empty.");
             }
-            if (TargetCI.pAttributeData[AttributeIndex].pDeltas == nullptr)
+            if (TargetCI.pAttributeData[AttributeIndex].pDeltaBuffer == nullptr)
             {
                 return LogValidationError("RadientMeshCreateInfo",
                                           "MorphTargetData.pMorphTargets[", TargetIndex, "].pAttributeData[", AttributeIndex,
-                                          "].pDeltas must not be null.");
+                                          "].pDeltaBuffer must not be null.");
             }
             if (Attribute.ComponentCount == 0 || Attribute.ComponentCount > 4)
             {

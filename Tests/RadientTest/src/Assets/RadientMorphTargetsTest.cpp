@@ -64,12 +64,12 @@ struct MorphMeshData
 
     MorphMeshData()
     {
-        Attributes[0].Semantic       = RadientMorphTargetPositionSemantic;
-        Attributes[0].ComponentCount = 3;
-        Attributes[1].Semantic       = "CUSTOM";
-        Attributes[1].ComponentCount = 2;
-        AttributeData[0].pDeltas     = PositionDeltas.data();
-        AttributeData[1].pDeltas     = CustomDeltas.data();
+        Attributes[0].Semantic        = RadientMorphTargetPositionSemantic;
+        Attributes[0].ComponentCount  = 3;
+        Attributes[1].Semantic        = "CUSTOM";
+        Attributes[1].ComponentCount  = 2;
+        AttributeData[0].pDeltaBuffer = pPositionBlob;
+        AttributeData[1].pDeltaBuffer = pCustomBlob;
 
         Targets[0].Desc.Name           = "Smile";
         Targets[0].Desc.pAttributes    = Attributes.data();
@@ -82,6 +82,8 @@ struct MorphMeshData
         Primitive.IndexCount = static_cast<Uint32>(Indices.size());
     }
 
+    const RefCntAutoPtr<IRadientDataBlob> pPositionBlob = Testing::MakeTestDataBlob(PositionDeltas.data(), sizeof(PositionDeltas));
+    const RefCntAutoPtr<IRadientDataBlob> pCustomBlob   = Testing::MakeTestDataBlob(CustomDeltas.data(), sizeof(CustomDeltas));
     const RadientVertexLayoutDescX        VertexLayout{{{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False}}, {{}}};
     const RefCntAutoPtr<IRadientDataBlob> pVertexBlob = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
     IRadientDataBlob* const               VertexData  = pVertexBlob;
@@ -218,6 +220,52 @@ TEST(RadientMorphTargetsTest, DataCopiesSourceMetadataAndAttributeLayout)
     EXPECT_EQ(Data.GetAttributeDataOffset(0, 0), 0u);
     EXPECT_EQ(Data.GetAttributeDataOffset(0, 1), sizeof(Source.PositionDeltas));
     EXPECT_EQ(Data.GetDataSize(), sizeof(Source.PositionDeltas) + sizeof(Source.CustomDeltas));
+}
+
+TEST(RadientMorphTargetsTest, MeshCreationReleasesMorphBlobReadsAfterProcessing)
+{
+    MorphMeshData                                Source;
+    Uint32                                       ReadReleases = 0;
+    const RefCntAutoPtr<IRadientMutableDataBlob> pBlob        = Testing::MakeTestMutableDataBlob(
+        Source.PositionDeltas.data(), sizeof(Source.PositionDeltas), Testing::CountBlobReadReleases, &ReadReleases);
+    ASSERT_NE(pBlob, nullptr);
+    Source.AttributeData[0].pDeltaBuffer = pBlob;
+
+    const RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(Source.MakeCreateInfo());
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(ReadReleases, 1u);
+    void* pWrite = nullptr;
+    ASSERT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+    EXPECT_EQ(pBlob->Resize(0), RADIENT_STATUS_OK);
+    EXPECT_EQ(pMesh->GetDesc().MorphTargetCount, 2u);
+}
+
+TEST(RadientMorphTargetsTest, MeshCreationRejectsBusyAndOutOfRangeMorphBlobsSynchronously)
+{
+    MorphMeshData                                Source;
+    const RefCntAutoPtr<IRadientMutableDataBlob> pBlob = Testing::MakeTestMutableDataBlob(
+        Source.PositionDeltas.data(), sizeof(Source.PositionDeltas));
+    ASSERT_NE(pBlob, nullptr);
+    Source.AttributeData[0].pDeltaBuffer = pBlob;
+    void* pWrite                         = nullptr;
+    ASSERT_EQ(pBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
+
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RadientMeshAssetManagerSharedPtr pManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pManager, nullptr);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_EQ(pManager->CreateMesh(*pThreadPool, Source.MakeCreateInfo(), pMesh.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMesh, nullptr);
+    ASSERT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
+
+    Source.AttributeData[0].ByteOffset = 1;
+    EXPECT_EQ(pManager->CreateMesh(*pThreadPool, Source.MakeCreateInfo(), pMesh.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMesh, nullptr);
+    pThreadPool->WaitForAllTasks();
+    pThreadPool->StopThreads();
+    EXPECT_EQ(pBlob->Resize(0), RADIENT_STATUS_OK);
 }
 
 TEST(RadientMorphTargetsTest, MeshCreatesMutableWeightsFromDefaults)

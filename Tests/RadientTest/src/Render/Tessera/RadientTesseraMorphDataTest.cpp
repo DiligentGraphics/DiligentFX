@@ -53,6 +53,7 @@ struct MorphMeshData
     std::array<RadientFloat3, VertexCount> Positions{};
     std::array<Uint32, VertexCount>        Indices{0, 1, 2};
     std::array<Float32, VertexCount * 3>   Deltas{};
+    RefCntAutoPtr<IRadientDataBlob>        pDeltaBlob = MakeTestDataBlob(Deltas.data(), sizeof(Deltas));
 
     std::array<std::array<RadientMorphTargetAttributeDesc, 3>, TargetCount>       Attributes{};
     std::array<std::array<RadientMorphTargetAttributeCreateInfo, 3>, TargetCount> AttributeData{};
@@ -74,9 +75,9 @@ struct MorphMeshData
         {
             for (Uint32 AttributeIndex = 0; AttributeIndex < AttributeCounts[TargetIndex]; ++AttributeIndex)
             {
-                Attributes[TargetIndex][AttributeIndex].Semantic       = Semantics[TargetIndex][AttributeIndex];
-                Attributes[TargetIndex][AttributeIndex].ComponentCount = 3;
-                AttributeData[TargetIndex][AttributeIndex].pDeltas     = Deltas.data();
+                Attributes[TargetIndex][AttributeIndex].Semantic        = Semantics[TargetIndex][AttributeIndex];
+                Attributes[TargetIndex][AttributeIndex].ComponentCount  = 3;
+                AttributeData[TargetIndex][AttributeIndex].pDeltaBuffer = pDeltaBlob;
             }
 
             Targets[TargetIndex].Desc.pAttributes    = Attributes[TargetIndex].data();

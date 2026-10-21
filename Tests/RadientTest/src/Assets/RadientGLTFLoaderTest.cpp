@@ -37,9 +37,11 @@
 #include "Import/RadientGLTFSceneAssetImporter.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientMathTestHelpers.hpp"
+#include "RadientMorphTargets.h"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
 #include "RadientTestDataHelpers.hpp"
+#include "RadientTypesX.hpp"
 #include "ThreadPool.hpp"
 
 #include <array>
@@ -139,6 +141,61 @@ std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial)
 })GLTF";
 
     return WriteGLTFFile(TempDir, WithMaterial ? "mesh_with_material.gltf" : "mesh.gltf", GLTF.str().c_str());
+}
+
+std::string WriteGLTFMeshWithMorphTargetsFile(const TempDirectory&          TempDir,
+                                              const std::array<Float32, 9>& PositionDeltas,
+                                              const std::array<Float32, 9>& NormalDeltas)
+{
+    const std::array<Float32, 9> Normals{
+        0.f, 0.f, 1.f,
+        0.f, 0.f, 1.f,
+        0.f, 0.f, 1.f};
+    std::vector<Uint8>          Buffer;
+    const std::array<size_t, 5> ByteOffsets{
+        AppendBytes(Buffer, TrianglePositions),
+        AppendBytes(Buffer, Normals),
+        AppendBytes(Buffer, PositionDeltas),
+        AppendBytes(Buffer, NormalDeltas),
+        AppendBytes(Buffer, TriangleIndices)};
+    WriteBinaryFile(TempDir, "morph_mesh.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"mesh": 0}],
+    "buffers": [{"uri": "morph_mesh.bin", "byteLength": )GLTF"
+         << Buffer.size() << R"GLTF(}],
+    "bufferViews": [)GLTF";
+    for (size_t ViewIndex = 0; ViewIndex < ByteOffsets.size(); ++ViewIndex)
+    {
+        if (ViewIndex != 0)
+            GLTF << ',';
+        GLTF << R"GLTF({"buffer": 0, "byteOffset": )GLTF" << ByteOffsets[ViewIndex]
+             << R"GLTF(, "byteLength": )GLTF"
+             << (ViewIndex < 4 ? sizeof(PositionDeltas) : sizeof(TriangleIndices)) << '}';
+    }
+    GLTF << R"GLTF(],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC3", "min": [1, 2, 3], "max": [7, 8, 9]},
+        {"bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC3"},
+        {"bufferView": 4, "componentType": 5123, "count": 3, "type": "SCALAR"}
+    ],
+    "meshes": [{
+        "name": "MorphMesh",
+        "weights": [0.25],
+        "extras": {"targetNames": ["Smile"]},
+        "primitives": [
+            {"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 4, "targets": [{"POSITION": 2, "NORMAL": 3}]},
+            {"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 4, "targets": [{"POSITION": 2}]}
+        ]
+    }]
+})GLTF";
+    return WriteGLTFFile(TempDir, "morph_mesh.gltf", GLTF.str().c_str());
 }
 
 std::string WriteGLTFSceneGraphFile(const TempDirectory& TempDir)
@@ -1742,6 +1799,103 @@ TEST(RadientGLTFLoaderTest, LoadSceneCreatesMeshAsset)
     EXPECT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
     EXPECT_NE(DrawableMesh.pMesh, nullptr);
 
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, MorphDeltasSurviveDeferredImportAndMissingAttributesAreZero)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    const std::array<Float32, 9>    PositionDeltas{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f};
+    const std::array<Float32, 9>    NormalDeltas{0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f};
+    TempDirectory                   TempDir{"RadientGLTFLoaderTest"};
+    const std::string               GLTFPath  = WriteGLTFMeshWithMorphTargetsFile(TempDir, PositionDeltas, NormalDeltas);
+    std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+
+    // LoadScene's metadata model and all importer-local blob references are gone.
+    // Only retained source reads now own the moved delta vectors and zero buffers.
+    pDocument.reset();
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_PENDING);
+    EXPECT_GT(pThreadPool->GetQueueSize(), 0u);
+    ProcessQueuedTasks(*pThreadPool);
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+
+    const RadientMeshAssetDesc& Desc = Scene.Meshes[0]->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 2u);
+    ASSERT_EQ(Desc.MorphTargetCount, 1u);
+    ASSERT_EQ(Desc.pMorphTargets[0].AttributeCount, 2u);
+    EXPECT_STREQ(Desc.pMorphTargets[0].Name, "Smile");
+    EXPECT_FLOAT_EQ(Desc.pMorphTargets[0].DefaultWeight, 0.25f);
+
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 2> ExpectedMeshes;
+    {
+        const RefCntAutoPtr<IRadientDataBlob> pVertices =
+            MakeTestDataBlob(TrianglePositions.data(), sizeof(TrianglePositions));
+        const RefCntAutoPtr<IRadientDataBlob> pIndices =
+            MakeTestDataBlob(TriangleIndices.data(), sizeof(TriangleIndices));
+        const RefCntAutoPtr<IRadientDataBlob> pPositions =
+            MakeTestDataBlob(PositionDeltas.data(), sizeof(PositionDeltas));
+        const RefCntAutoPtr<IRadientDataBlob> pNormals =
+            MakeTestDataBlob(NormalDeltas.data(), sizeof(NormalDeltas));
+        const RefCntAutoPtr<IRadientDataBlob> pZeros = MakeTestDataBlob(nullptr, sizeof(NormalDeltas));
+        RadientVertexLayoutDescX              Layout;
+        Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+        IRadientDataBlob* const        VertexBuffer = pVertices;
+        RadientMeshPrimitiveCreateInfo Primitive;
+        Primitive.IndexCount = 3;
+        std::array<RadientMorphTargetAttributeCreateInfo, 2> AttributeData;
+        RadientMorphTargetCreateInfo                         Target;
+        Target.Desc           = Desc.pMorphTargets[0];
+        Target.pAttributeData = AttributeData.data();
+        RadientMeshCreateInfo CI;
+        CI.VertexData.VertexLayout    = Layout;
+        CI.VertexData.ppVertexBuffers = &VertexBuffer;
+        CI.VertexData.VertexCount     = 3;
+        CI.IndexData.pIndexBuffer     = pIndices;
+        CI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT16;
+        CI.IndexData.IndexCount       = 3;
+        CI.MorphTargetData            = {&Target, 1};
+        CI.pPrimitives                = &Primitive;
+        CI.PrimitiveCount             = 1;
+        for (size_t GeometryIndex = 0; GeometryIndex < ExpectedMeshes.size(); ++GeometryIndex)
+        {
+            for (size_t AttributeIndex = 0; AttributeIndex < AttributeData.size(); ++AttributeIndex)
+            {
+                const Char* Semantic = Target.Desc.pAttributes[AttributeIndex].Semantic;
+                if (std::strcmp(Semantic, RadientMorphTargetPositionSemantic) == 0)
+                {
+                    AttributeData[AttributeIndex].pDeltaBuffer = pPositions;
+                }
+                else
+                {
+                    ASSERT_STREQ(Semantic, RadientMorphTargetNormalSemantic);
+                    AttributeData[AttributeIndex].pDeltaBuffer = GeometryIndex == 0 ? pNormals : pZeros;
+                }
+            }
+            ASSERT_EQ(pAssetManager->CreateMesh(CI, &ExpectedMeshes[GeometryIndex]), RADIENT_STATUS_PENDING);
+        }
+    }
+    ProcessQueuedTasks(*pThreadPool);
+
+    // Cache equality checks the actual imported values against independent,
+    // separate-blob inputs, including the second primitive's missing normals.
+    for (Uint32 GeometryIndex = 0; GeometryIndex < ExpectedMeshes.size(); ++GeometryIndex)
+    {
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(ExpectedMeshes[GeometryIndex]), RADIENT_STATUS_OK);
+        const MeshMorphTargetDataPayloadImpl* pImported =
+            RadientMeshAssetManager::GetMeshMorphTargetDataPayload(Scene.Meshes[0], GeometryIndex);
+        ASSERT_NE(pImported, nullptr);
+        EXPECT_EQ(pImported, RadientMeshAssetManager::GetMeshMorphTargetDataPayload(ExpectedMeshes[GeometryIndex], 0));
+    }
+    EXPECT_NE(RadientMeshAssetManager::GetMeshMorphTargetDataPayload(Scene.Meshes[0], 0),
+              RadientMeshAssetManager::GetMeshMorphTargetDataPayload(Scene.Meshes[0], 1));
     pThreadPool->StopThreads();
 }
 

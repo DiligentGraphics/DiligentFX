@@ -64,8 +64,8 @@ RadientMorphTargetSource::RadientMorphTargetSource(const RadientMorphTargetCreat
     if (pTargets == nullptr || TargetCount == 0 || VertexCount == 0)
         return;
 
-    m_VertexCount = VertexCount;
-    m_Targets.reserve(TargetCount);
+    std::vector<Target> Targets;
+    Targets.reserve(TargetCount);
 
     Uint64 DataSize = 0;
     for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
@@ -78,17 +78,18 @@ RadientMorphTargetSource::RadientMorphTargetSource(const RadientMorphTargetCreat
             return;
         }
 
-        Target& TargetData       = m_Targets.emplace_back();
+        Target& TargetData       = Targets.emplace_back();
         TargetData.Name          = SourceTarget.Desc.Name != nullptr ? SourceTarget.Desc.Name : "";
         TargetData.DefaultWeight = SourceTarget.Desc.DefaultWeight;
         TargetData.Attributes.reserve(SourceTarget.Desc.AttributeCount);
 
         for (Uint32 AttributeIndex = 0; AttributeIndex < SourceTarget.Desc.AttributeCount; ++AttributeIndex)
         {
-            const RadientMorphTargetAttributeDesc& SourceAttribute = SourceTarget.Desc.pAttributes[AttributeIndex];
+            const RadientMorphTargetAttributeDesc&       SourceAttribute = SourceTarget.Desc.pAttributes[AttributeIndex];
+            const RadientMorphTargetAttributeCreateInfo& SourceData      = SourceTarget.pAttributeData[AttributeIndex];
             if (SourceAttribute.Semantic == nullptr || *SourceAttribute.Semantic == '\0' ||
                 SourceAttribute.ComponentCount == 0 || SourceAttribute.ComponentCount > 4 ||
-                SourceTarget.pAttributeData[AttributeIndex].pDeltas == nullptr ||
+                SourceData.pDeltaBuffer == nullptr ||
                 (IsStandardMorphTargetSemantic(SourceAttribute.Semantic) && SourceAttribute.ComponentCount != 3))
             {
                 return;
@@ -107,31 +108,37 @@ RadientMorphTargetSource::RadientMorphTargetSource(const RadientMorphTargetCreat
             if (!RadientValidation::IsSumRepresentable<Uint32>(DataSize, AttributeDataSize))
                 return;
 
+            RadientDataBlobReadAccess Buffer{SourceData.pDeltaBuffer};
+            if (!Buffer)
+            {
+                m_Status = RADIENT_STATUS_INVALID_OPERATION;
+                return;
+            }
+            if (!RadientValidation::IsAddressableSize(Buffer.GetSize()) ||
+                !RadientValidation::IsValidSubrange(SourceData.ByteOffset, AttributeDataSize, Buffer.GetSize()))
+            {
+                return;
+            }
+            if (Buffer.GetData() == nullptr)
+            {
+                m_Status = RADIENT_STATUS_INVALID_DATA;
+                return;
+            }
+
             Attribute& AttributeData     = TargetData.Attributes.emplace_back();
             AttributeData.Semantic       = SourceAttribute.Semantic;
             AttributeData.ComponentCount = SourceAttribute.ComponentCount;
             AttributeData.DataOffset     = static_cast<Uint32>(DataSize);
+            AttributeData.pData          = static_cast<const Uint8*>(Buffer.GetData()) + static_cast<size_t>(SourceData.ByteOffset);
+            AttributeData.Buffer         = std::move(Buffer);
             DataSize += AttributeDataSize;
         }
     }
 
-    m_Deltas.resize(static_cast<size_t>(DataSize / sizeof(Float32)));
-    for (Uint32 TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
-    {
-        const RadientMorphTargetCreateInfo& SourceTarget = pTargets[TargetIndex];
-        const Target&                       TargetData   = m_Targets[TargetIndex];
-        for (Uint32 AttributeIndex = 0; AttributeIndex < TargetData.Attributes.size(); ++AttributeIndex)
-        {
-            const Attribute& AttributeData = TargetData.Attributes[AttributeIndex];
-            const size_t     AttributeDataSize =
-                size_t{VertexCount} * AttributeData.ComponentCount * sizeof(Float32);
-            std::memcpy(reinterpret_cast<Uint8*>(m_Deltas.data()) + AttributeData.DataOffset,
-                        SourceTarget.pAttributeData[AttributeIndex].pDeltas,
-                        AttributeDataSize);
-        }
-    }
-
-    m_Status = RADIENT_STATUS_OK;
+    m_VertexCount = VertexCount;
+    m_DataSize    = static_cast<Uint32>(DataSize);
+    m_Targets     = std::move(Targets);
+    m_Status      = RADIENT_STATUS_OK;
 }
 
 std::string RadientMorphTargetSource::MakeCacheKey() const
@@ -157,8 +164,15 @@ std::string RadientMorphTargetSource::MakeCacheKey() const
     }
 
     Hasher.Update(GetDataSize());
-    if (!m_Deltas.empty())
-        Hasher.UpdateRaw(m_Deltas.data(), GetDataSize());
+    // Hash only the delta ranges, in packed order, independently of blob layout.
+    for (const Target& TargetData : m_Targets)
+    {
+        for (const Attribute& AttributeData : TargetData.Attributes)
+        {
+            const Uint64 AttributeDataSize = Uint64{m_VertexCount} * AttributeData.ComponentCount * sizeof(Float32);
+            Hasher.UpdateRaw(AttributeData.pData, AttributeDataSize);
+        }
+    }
 
     return std::string{"mesh-morph-target-data:"} + Hasher.Digest().ToString();
 }
@@ -174,7 +188,15 @@ RADIENT_STATUS RadientMorphTargetSource::PackData(PackDestination Destination) c
     if (Destination.pData == nullptr || Destination.DataSize < DataSize)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    std::memcpy(Destination.pData, m_Deltas.data(), DataSize);
+    for (const Target& TargetData : m_Targets)
+    {
+        for (const Attribute& AttributeData : TargetData.Attributes)
+        {
+            const size_t AttributeDataSize = size_t{m_VertexCount} * AttributeData.ComponentCount * sizeof(Float32);
+            std::memcpy(static_cast<Uint8*>(Destination.pData) + AttributeData.DataOffset,
+                        AttributeData.pData, AttributeDataSize);
+        }
+    }
     return RADIENT_STATUS_OK;
 }
 

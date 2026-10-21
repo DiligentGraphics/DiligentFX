@@ -118,6 +118,7 @@ struct MeshValidationData
 
     RefCntAutoPtr<IRadientDataBlob> IndexBlob16 = MakeTestDataBlob(Indices16.data(), sizeof(Indices16));
     RefCntAutoPtr<IRadientDataBlob> IndexBlob32 = MakeTestDataBlob(Indices32.data(), sizeof(Indices32));
+    RefCntAutoPtr<IRadientDataBlob> MorphBlob   = MakeTestDataBlob(MorphDeltas.data(), sizeof(MorphDeltas));
 
     RadientMeshCreateInfo MakeMeshCI()
     {
@@ -138,9 +139,9 @@ struct MeshValidationData
 
     void AddMorphTarget(RadientMeshCreateInfo& MeshCI)
     {
-        MorphAttribute.Semantic       = RadientMorphTargetPositionSemantic;
-        MorphAttribute.ComponentCount = 3;
-        MorphAttributeData.pDeltas    = MorphDeltas.data();
+        MorphAttribute.Semantic         = RadientMorphTargetPositionSemantic;
+        MorphAttribute.ComponentCount   = 3;
+        MorphAttributeData.pDeltaBuffer = MorphBlob;
 
         MorphTarget.Desc.Name           = "Target";
         MorphTarget.Desc.pAttributes    = &MorphAttribute;
@@ -291,12 +292,12 @@ TEST(RadientAssetValidationTest, RejectsEmptyMorphTargetAttributeSemantic)
                                 });
 }
 
-TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeDeltas)
+TEST(RadientAssetValidationTest, RejectsMissingMorphTargetAttributeDeltaBuffer)
 {
-    ExpectInvalidMeshCreateInfo("pMorphTargets[0].pAttributeData[0].pDeltas must not be null",
+    ExpectInvalidMeshCreateInfo("pMorphTargets[0].pAttributeData[0].pDeltaBuffer must not be null",
                                 [](RadientMeshCreateInfo& MeshCI, MeshValidationData& Data) {
                                     Data.AddMorphTarget(MeshCI);
-                                    Data.MorphAttributeData.pDeltas = nullptr;
+                                    Data.MorphAttributeData.pDeltaBuffer = nullptr;
                                 });
 }
 
@@ -691,19 +692,23 @@ TEST(RadientAssetValidationTest, DefersMeshBlobAccessUntilSourceConstruction)
     MeshValidationData              Data;
     auto                            CI = Data.MakeMeshCI();
     RefCntAutoPtr<SizeOnlyDataBlob> pUncheckedBlob{MakeNewRCObj<SizeOnlyDataBlob>()(Uint64{0})};
-    Data.VertexData[0]        = pUncheckedBlob;
-    CI.IndexData.pIndexBuffer = pUncheckedBlob;
+    Data.AddMorphTarget(CI);
+    Data.VertexData[0]                   = pUncheckedBlob;
+    CI.IndexData.pIndexBuffer            = pUncheckedBlob;
+    Data.MorphAttributeData.pDeltaBuffer = pUncheckedBlob;
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
 
-    auto pEmptyBlob           = MakeTestDataBlob(nullptr, 0);
-    Data.VertexData[0]        = pEmptyBlob;
-    CI.IndexData.pIndexBuffer = pEmptyBlob;
+    auto pEmptyBlob                      = MakeTestDataBlob(nullptr, 0);
+    Data.VertexData[0]                   = pEmptyBlob;
+    CI.IndexData.pIndexBuffer            = pEmptyBlob;
+    Data.MorphAttributeData.pDeltaBuffer = pEmptyBlob;
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
 
-    auto pMutableBlob         = MakeTestMutableDataBlob(Data.Positions.data(), sizeof(Data.Positions));
-    Data.VertexData[0]        = pMutableBlob;
-    CI.IndexData.pIndexBuffer = pMutableBlob;
-    void* pWrite              = nullptr;
+    auto pMutableBlob                    = MakeTestMutableDataBlob(Data.Positions.data(), sizeof(Data.Positions));
+    Data.VertexData[0]                   = pMutableBlob;
+    CI.IndexData.pIndexBuffer            = pMutableBlob;
+    Data.MorphAttributeData.pDeltaBuffer = pMutableBlob;
+    void* pWrite                         = nullptr;
     ASSERT_EQ(pMutableBlob->BeginWrite(&pWrite), RADIENT_STATUS_OK);
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
     EXPECT_EQ(pMutableBlob->EndWrite(), RADIENT_STATUS_OK);

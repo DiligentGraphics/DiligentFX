@@ -283,22 +283,28 @@ TEST_F(RadientMeshImportServicesTest, ReusesVertexAndIndexDataIndependentlyAndDe
     EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 1), RadientMeshAssetManager::GetMeshIndexDataPayload(pDuplicate, 0));
 }
 
-TEST_F(RadientMeshImportServicesTest, CopiesMorphDataBeforeReturningAndPreservesWeights)
+TEST_F(RadientMeshImportServicesTest, RetainsMorphBlobsCopiesMetadataAndPreservesWeights)
 {
+    static constexpr std::array<Float32, 9> OriginalDeltas{0.f, 0.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    const std::array<Float32, 11>           PaddedDeltas{-999.f, 0.f, 0.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 999.f};
+    RefCntAutoPtr<IRadientMutableDataBlob>  pDeltaBlob = Testing::MakeTestMutableDataBlob(
+        PaddedDeltas.data(), sizeof(PaddedDeltas));
+    ASSERT_NE(pDeltaBlob, nullptr);
+    RefCntWeakPtr<IRadientDataBlob> WeakDeltaBlob{pDeltaBlob.RawPtr()};
+
     RefCntAutoPtr<IRadientMeshVertexData>      pVertices = CreateVertices();
     RefCntAutoPtr<IRadientMeshIndexData>       pIndices  = CreateIndices();
     RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphData;
     RefCntAutoPtr<IRadientMeshMorphTargetData> pDuplicateMorphData;
     {
-        std::string                             Name{"Smile"};
-        std::string                             Semantic{"POSITION"};
-        static constexpr std::array<Float32, 9> OriginalDeltas{0.f, 0.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
-        std::array<Float32, 9>                  Deltas = OriginalDeltas;
-        RadientMorphTargetAttributeDesc         Attribute;
+        std::string                     Name{"Smile"};
+        std::string                     Semantic{"POSITION"};
+        RadientMorphTargetAttributeDesc Attribute;
         Attribute.Semantic       = Semantic.c_str();
         Attribute.ComponentCount = 3;
         RadientMorphTargetAttributeCreateInfo AttributeData;
-        AttributeData.pDeltas = Deltas.data();
+        AttributeData.pDeltaBuffer = pDeltaBlob;
+        AttributeData.ByteOffset   = sizeof(Float32);
         RadientMorphTargetCreateInfo Target;
         Target.Desc.Name           = Name.c_str();
         Target.Desc.pAttributes    = &Attribute;
@@ -309,24 +315,35 @@ TEST_F(RadientMeshImportServicesTest, CopiesMorphDataBeforeReturningAndPreserves
         CI.pMorphTargets    = &Target;
         CI.MorphTargetCount = 1;
         ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, 3, &pMorphData), RADIENT_STATUS_PENDING);
-        // An independent source with unchanged bytes must deduplicate with the
-        // first call even after the first call's delta array is overwritten.
+
+        // An independently stored canonical range must deduplicate with the
+        // retained range, excluding the prefix and suffix outside its bounds.
+        const RefCntAutoPtr<IRadientDataBlob> pDuplicateBlob = Testing::MakeTestDataBlob(OriginalDeltas.data(), sizeof(OriginalDeltas));
         RadientMorphTargetAttributeCreateInfo DuplicateAttributeData;
-        DuplicateAttributeData.pDeltas               = OriginalDeltas.data();
+        DuplicateAttributeData.pDeltaBuffer          = pDuplicateBlob;
         RadientMorphTargetCreateInfo DuplicateTarget = Target;
         DuplicateTarget.pAttributeData               = &DuplicateAttributeData;
         CI.pMorphTargets                             = &DuplicateTarget;
         ASSERT_EQ(pMeshImportServices->CreateMeshMorphTargetData(CI, 3, &pDuplicateMorphData), RADIENT_STATUS_PENDING);
-        Deltas.fill(999.f);
-        Name[0]                   = 'X';
-        Semantic[0]               = 'X';
-        Attribute.ComponentCount  = 1;
-        Target.Desc.DefaultWeight = 1.f;
-        Target.pAttributeData     = nullptr;
+
+        Name[0]                    = 'X';
+        Semantic[0]                = 'X';
+        Attribute.ComponentCount   = 1;
+        AttributeData.pDeltaBuffer = nullptr;
+        AttributeData.ByteOffset   = 0;
+        Target.Desc.DefaultWeight  = 1.f;
+        Target.pAttributeData      = nullptr;
     }
     ExpectAssetInterface(pMorphData.RawPtr(), IID_RadientMeshMorphTargetData, RADIENT_ASSET_TYPE_MESH_MORPH_TARGET_DATA);
+    void* pWriteData = nullptr;
+    EXPECT_EQ(pDeltaBlob->BeginWrite(&pWriteData), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pDeltaBlob->Resize(sizeof(PaddedDeltas) + sizeof(Float32)), RADIENT_STATUS_INVALID_OPERATION);
+    pDeltaBlob.Release();
+    EXPECT_NE(WeakDeltaBlob.Lock(), nullptr);
+
     ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMorphData), RADIENT_STATUS_OK);
     ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicateMorphData), RADIENT_STATUS_OK);
+    EXPECT_EQ(WeakDeltaBlob.Lock(), nullptr);
     RefCntAutoPtr<IRadientMeshAsset> pMesh      = CreateView({pVertices, pIndices, pMorphData});
     RefCntAutoPtr<IRadientMeshAsset> pDuplicate = CreateView({pVertices, pIndices, pDuplicateMorphData});
     pMorphData.Release();
@@ -396,6 +413,19 @@ TEST_F(RadientMeshImportServicesTest, RejectsInvalidIndexAndMorphSourcesWithoutQ
     RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphData;
     EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData(MorphCI, 3, &pMorphData), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMorphData, nullptr);
+
+    RadientMorphTargetAttributeDesc Attribute;
+    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
+    Attribute.ComponentCount = 3;
+    const RadientMorphTargetAttributeCreateInfo AttributeData{pBlob};
+    RadientMorphTargetCreateInfo                Target;
+    Target.Desc.pAttributes    = &Attribute;
+    Target.Desc.AttributeCount = 1;
+    Target.pAttributeData      = &AttributeData;
+    MorphCI.pMorphTargets      = &Target;
+    // Nine FLOAT32 components cannot fit into the three-byte source.
+    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData(MorphCI, 3, &pMorphData), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMorphData, nullptr);
     EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
 }
 
@@ -415,12 +445,26 @@ TEST_F(RadientMeshImportServicesTest, RejectsActiveWritersBeforeQueuingWork)
     IndexCI.pIndexBuffer = pBlob;
     IndexCI.IndexCount   = 3;
     IndexCI.IndexType    = RADIENT_INDEX_TYPE_UINT8;
-    RefCntAutoPtr<IRadientMeshVertexData> pVertices;
-    RefCntAutoPtr<IRadientMeshIndexData>  pIndices;
+    RadientMorphTargetAttributeDesc Attribute;
+    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
+    Attribute.ComponentCount = 3;
+    const RadientMorphTargetAttributeCreateInfo AttributeData{pBlob};
+    RadientMorphTargetCreateInfo                Target;
+    Target.Desc.pAttributes    = &Attribute;
+    Target.Desc.AttributeCount = 1;
+    Target.pAttributeData      = &AttributeData;
+    RadientMeshMorphTargetData MorphCI;
+    MorphCI.pMorphTargets    = &Target;
+    MorphCI.MorphTargetCount = 1;
+    RefCntAutoPtr<IRadientMeshVertexData>      pVertices;
+    RefCntAutoPtr<IRadientMeshIndexData>       pIndices;
+    RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphData;
     EXPECT_EQ(pMeshImportServices->CreateMeshVertexData(VertexCI, &pVertices), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pMeshImportServices->CreateMeshIndexData(IndexCI, &pIndices), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(pMeshImportServices->CreateMeshMorphTargetData(MorphCI, 3, &pMorphData), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(pVertices, nullptr);
     EXPECT_EQ(pIndices, nullptr);
+    EXPECT_EQ(pMorphData, nullptr);
     EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
     EXPECT_EQ(pBlob->EndWrite(), RADIENT_STATUS_OK);
 }

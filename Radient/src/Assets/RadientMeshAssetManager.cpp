@@ -1155,12 +1155,15 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     {
         try
         {
-            RADIENT_STATUS Status = CreateMeshMorphTargetData(
-                ThreadPool,
+            std::unique_ptr<RadientMorphTargetSource> pSource =
                 std::make_unique<RadientMorphTargetSource>(MeshCI.MorphTargetData.pMorphTargets,
                                                            MeshCI.MorphTargetData.MorphTargetCount,
-                                                           MeshCI.VertexData.VertexCount),
-                pMorphTargetData.GetAddressOfEmpty());
+                                                           MeshCI.VertexData.VertexCount);
+            if (RADIENT_FAILED(pSource->GetStatus()))
+                return pSource->GetStatus();
+
+            RADIENT_STATUS Status = CreateMeshMorphTargetData(
+                ThreadPool, std::move(pSource), pMorphTargetData.GetAddressOfEmpty());
             if (RADIENT_FAILED(Status) || pMorphTargetData == nullptr)
             {
                 LOG_ERROR_MESSAGE("Failed to create Radient mesh morph-target data; creating the mesh without morph targets");
@@ -1169,7 +1172,7 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
         }
         catch (const std::exception& Error)
         {
-            LOG_ERROR_MESSAGE("Failed to copy Radient mesh morph targets: ", Error.what(),
+            LOG_ERROR_MESSAGE("Failed to prepare Radient mesh morph targets: ", Error.what(),
                               "; creating the mesh without morph targets");
         }
     }

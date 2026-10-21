@@ -70,9 +70,12 @@ blobs still require their external storage to remain valid for the blob's
 lifetime.
 
 Optional `CreateMeshMorphTargetData` takes a `RadientMeshMorphTargetData`
-containing the target array and count, plus a separate vertex count. It copies
-names, attribute descriptions, and delta arrays during the call. Attach the
-resulting handle to any geometry with the same vertex count.
+containing the target array and count, plus a separate vertex count. Each
+attribute supplies a `pDeltaBuffer` and `ByteOffset` identifying tightly packed
+`FLOAT32` deltas; several attributes can share one blob. The call copies names
+and attribute descriptions and retains the blobs under shared read access,
+following the same lifetime rules as vertex and index data. Attach the resulting
+handle to any geometry with the same vertex count.
 
 ## Assemble a mesh view
 

@@ -430,7 +430,29 @@ struct MorphTargetSchema
     std::vector<MorphTargetAttributeSchema> Attributes;
 };
 
-RADIENT_STATUS CreateMorphTargetDataAssets(const GLTF::Mesh&                                        Mesh,
+RADIENT_STATUS CreateMorphTargetDeltaBuffer(std::vector<Float32>& Values,
+                                            IRadientDataBlob**    ppDeltaBuffer)
+{
+    // The metadata model is temporary. Transfer its values to the blob so
+    // asynchronous morph-data creation can keep reading them after import.
+    std::unique_ptr<std::vector<Float32>> pValues =
+        std::make_unique<std::vector<Float32>>(std::move(Values));
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size      = Uint64{pValues->size()} * sizeof(Float32);
+    BlobCI.pData     = pValues->data();
+    BlobCI.pUserData = pValues.get();
+    BlobCI.OnDestroy = [](void* pUserData) {
+        delete static_cast<std::vector<Float32>*>(pUserData);
+    };
+
+    const RADIENT_STATUS Status =
+        CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, ppDeltaBuffer);
+    if (Status == RADIENT_STATUS_OK)
+        pValues.release();
+    return Status;
+}
+
+RADIENT_STATUS CreateMorphTargetDataAssets(GLTF::Mesh&                                              Mesh,
                                            IRadientMeshImportServices&                              MeshImportServices,
                                            std::vector<RefCntAutoPtr<IRadientMeshMorphTargetData>>& MorphTargetDataAssets)
 {
@@ -530,19 +552,29 @@ RADIENT_STATUS CreateMorphTargetDataAssets(const GLTF::Mesh&                    
         Assets.reserve(Mesh.Primitives.size());
         for (size_t PrimitiveIndex = 0; PrimitiveIndex < Mesh.Primitives.size(); ++PrimitiveIndex)
         {
-            const GLTF::Primitive& Primitive = Mesh.Primitives[PrimitiveIndex];
+            GLTF::Primitive& Primitive = Mesh.Primitives[PrimitiveIndex];
             if (Primitive.VertexCount == 0)
                 return RADIENT_STATUS_OK;
 
             std::vector<std::vector<RadientMorphTargetAttributeDesc>>       AttributeDescs(TargetCount);
             std::vector<std::vector<RadientMorphTargetAttributeCreateInfo>> AttributeCreateInfos(TargetCount);
             std::vector<RadientMorphTargetCreateInfo>                       TargetCreateInfos(TargetCount);
-            std::array<std::vector<Float32>, 5>                              ZeroDeltas;
+            std::vector<RefCntAutoPtr<IRadientDataBlob>>                    DeltaBuffers(TargetCount);
+            std::array<RefCntAutoPtr<IRadientDataBlob>, 5>                  ZeroDeltaBuffers;
 
             for (size_t TargetIndex = 0; TargetIndex < TargetCount; ++TargetIndex)
             {
-                const MorphTargetSchema& Target       = TargetSchemas[TargetIndex];
-                const GLTF::MorphTarget& SourceTarget = Primitive.MorphTargets[TargetIndex];
+                const MorphTargetSchema& Target           = TargetSchemas[TargetIndex];
+                GLTF::MorphTarget&       SourceTarget     = Primitive.MorphTargets[TargetIndex];
+                const size_t             SourceValueCount = SourceTarget.Values.size();
+                if (SourceValueCount != 0)
+                {
+                    const RADIENT_STATUS Status =
+                        CreateMorphTargetDeltaBuffer(SourceTarget.Values, &DeltaBuffers[TargetIndex]);
+                    if (Status != RADIENT_STATUS_OK)
+                        return Status;
+                }
+
                 AttributeDescs[TargetIndex].resize(Target.Attributes.size());
                 AttributeCreateInfos[TargetIndex].resize(Target.Attributes.size());
 
@@ -567,21 +599,30 @@ RADIENT_STATUS CreateMorphTargetDataAssets(const GLTF::Mesh&                    
                     {
                         if (!RadientValidation::IsValidSubrange(pSourceAttribute->FirstValue,
                                                                 ValueCount,
-                                                                SourceTarget.Values.size()))
+                                                                SourceValueCount))
                         {
                             LOG_WARNING_MESSAGE("Ignoring morph targets for GLTF mesh '", Mesh.Name,
                                                 "' because primitive ", PrimitiveIndex, " target ", TargetIndex,
                                                 " attribute '", Attribute.Semantic, "' has an invalid value range");
                             return RADIENT_STATUS_OK;
                         }
-                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltas =
-                            SourceTarget.GetAttributeData(*pSourceAttribute);
+                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltaBuffer = DeltaBuffers[TargetIndex];
+                        AttributeCreateInfos[TargetIndex][AttributeIndex].ByteOffset =
+                            Uint64{pSourceAttribute->FirstValue} * sizeof(Float32);
                     }
                     else
                     {
-                        std::vector<Float32>& Deltas = ZeroDeltas[Attribute.ComponentCount];
-                        Deltas.resize(ValueCount, 0.f);
-                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltas = Deltas.data();
+                        RefCntAutoPtr<IRadientDataBlob>& pZeroDeltas = ZeroDeltaBuffers[Attribute.ComponentCount];
+                        if (pZeroDeltas == nullptr)
+                        {
+                            RadientDataBlobCreateInfo BlobCI;
+                            BlobCI.Size = Uint64{ValueCount} * sizeof(Float32);
+                            const RADIENT_STATUS Status =
+                                CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pZeroDeltas);
+                            if (Status != RADIENT_STATUS_OK)
+                                return Status;
+                        }
+                        AttributeCreateInfos[TargetIndex][AttributeIndex].pDeltaBuffer = pZeroDeltas;
                     }
                 }
 

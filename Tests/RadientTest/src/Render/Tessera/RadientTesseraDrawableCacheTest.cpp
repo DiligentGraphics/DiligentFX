@@ -322,8 +322,9 @@ public:
 
     std::unique_ptr<RadientMorphTargetData> CreateGeometryData(Uint32 VertexCount) const
     {
-        std::vector<Float32>                        Deltas(size_t{VertexCount} * 3);
-        const RadientMorphTargetAttributeCreateInfo AttributeData{Deltas.data()};
+        const std::vector<Float32>                  Deltas(size_t{VertexCount} * 3);
+        const RefCntAutoPtr<IRadientDataBlob>       pDeltaBlob = MakeTestDataBlob(Deltas.data(), Deltas.size() * sizeof(Float32));
+        const RadientMorphTargetAttributeCreateInfo AttributeData{pDeltaBlob};
         std::array<RadientMorphTargetCreateInfo, 2> Targets{};
         for (size_t Index = 0; Index < Targets.size(); ++Index)
         {

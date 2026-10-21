@@ -65,13 +65,20 @@ typedef struct RadientMorphTargetAttributeDesc RadientMorphTargetAttributeDesc;
 /// Creation data for one morph-target vertex attribute.
 struct RadientMorphTargetAttributeCreateInfo
 {
-    /// Tightly packed canonical floating-point deltas. The array contains
-    /// vertex count times the corresponding attribute description's ComponentCount
-    /// values. CreateMesh uses VertexData.VertexCount; CreateMeshMorphTargetData
-    /// takes the vertex count separately. Radient copies the data into
-    /// transient upload storage during mesh creation and does not retain the
-    /// deltas in CPU memory after the upload has been scheduled.
-    const Float32* pDeltas DEFAULT_INITIALIZER(nullptr);
+    /// Blob containing tightly packed FLOAT32 deltas starting at ByteOffset.
+    /// Must be non-null and contain at least vertex count times the corresponding
+    /// attribute description's ComponentCount times sizeof(Float32) bytes after
+    /// ByteOffset. CreateMesh uses VertexData.VertexCount; CreateMeshMorphTargetData
+    /// takes the vertex count separately. Bytes outside this range are ignored.
+    /// Multiple attributes or targets may share a blob. Both read-only and mutable
+    /// blobs are accepted; size and data are checked under retained read access.
+    /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
+    IRadientDataBlob* pDeltaBuffer DEFAULT_INITIALIZER(nullptr);
+
+    /// Byte offset of the first delta relative to the start of pDeltaBuffer.
+    /// Defaults to zero. No padding is required before or after the delta range,
+    /// and the offset does not need to be aligned to sizeof(Float32).
+    Uint64 ByteOffset DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientMorphTargetAttributeCreateInfo RadientMorphTargetAttributeCreateInfo;
 
@@ -102,9 +109,14 @@ typedef struct RadientMorphTargetDesc RadientMorphTargetDesc;
 
 /// Morph-target creation attributes.
 ///
-/// Radient retains a copy of Desc and all metadata it references. Attribute
-/// creation data is copied only into transient upload storage and is not kept
-/// in CPU memory after the GPU upload has been scheduled.
+/// CreateMesh and CreateMeshMorphTargetData copy Desc, the attribute-data array,
+/// and all referenced metadata before returning. They retain the delta blobs
+/// under shared read access without copying the input bytes. The caller can then
+/// release its descriptors, strings, and blob references. End blob write access
+/// before the call; an active writer returns RADIENT_STATUS_INVALID_OPERATION.
+/// Read access ends when source processing finishes, independently of GPU upload
+/// completion. Reference blobs retain their normal external-storage lifetime
+/// requirements. The resulting asset does not keep a persistent CPU delta copy.
 struct RadientMorphTargetCreateInfo
 {
     /// Complete immutable description of the target to create.

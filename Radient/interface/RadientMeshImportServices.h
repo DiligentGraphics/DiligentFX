@@ -263,8 +263,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
 
     /// Creates reusable, immutable morph-target data for a vertex domain.
     ///
-    /// All descriptions, strings, and delta values are copied before returning.
-    /// Data can be used by CreateMeshView while loading is pending.
+    /// Descriptions and strings are copied and delta blobs are retained under
+    /// shared read access before returning, without copying the input bytes.
+    /// Read access ends when source processing finishes. Data can be used by
+    /// CreateMeshView while loading is pending.
     ///
     /// \param [in] MorphTargetData - Source targets; see RadientMeshMorphTargetData.
     ///                              MorphTargetCount must be nonzero.
@@ -280,7 +282,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///         RADIENT_STATUS_PENDING if it continues asynchronously. Neither
     ///         guarantees GPU readiness. WaitForAssetLoad reports later source
     ///         errors. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
-    ///         a stopped manager returns RADIENT_STATUS_INVALID_OPERATION.
+    ///         an active blob writer or a stopped manager returns
+    ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshMorphTargetData)(THIS_
                                                              const RadientMeshMorphTargetData REF MorphTargetData,
                                                              Uint32                               VertexCount,

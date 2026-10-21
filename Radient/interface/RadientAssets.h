@@ -285,10 +285,14 @@ typedef struct RadientMeshIndexData RadientMeshIndexData;
 
 /// CPU morph targets supplied to CreateMesh or CreateMeshMorphTargetData.
 ///
-/// Both calls copy descriptions, names, attribute semantics, and all delta values
-/// before returning. The caller can then release the source arrays and strings.
-/// Delta values use transient source and upload storage; retaining the resulting
-/// asset does not keep a persistent CPU copy of the deltas.
+/// Both calls copy descriptions, names, and attribute semantics and retain the
+/// delta blobs under shared read access before returning, without copying the
+/// input bytes. The caller can then release its source arrays, strings, and blob
+/// references. End blob write access before the call; an active writer returns
+/// RADIENT_STATUS_INVALID_OPERATION. Read access ends when source processing
+/// finishes, independently of GPU upload completion. Reference blobs retain their
+/// normal external-storage lifetime requirements. Retaining the resulting asset
+/// does not keep a persistent CPU copy of the deltas.
 struct RadientMeshMorphTargetData
 {
     /// Array of MorphTargetCount morph targets. Must be non-null when
@@ -329,11 +333,11 @@ typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
 
 /// CPU-side mesh creation attributes.
 ///
-/// CreateMesh copies descriptor metadata and morph-target deltas and retains
-/// vertex and index blobs under shared read access before returning, including
-/// when uploads are asynchronous. The caller can then modify or release the
-/// descriptors and its blob references. Source vertex and index bytes are read
-/// without copying the input buffers. End blob write access before calling;
+/// CreateMesh copies descriptor metadata and retains vertex, index, and
+/// morph-target blobs under shared read access before returning, including when
+/// uploads are asynchronous. The caller can then modify or release the descriptors
+/// and its blob references. Source bytes are read without copying the input
+/// buffers. End blob write access before calling;
 /// an active writer returns RADIENT_STATUS_INVALID_OPERATION. Read access lasts
 /// until source processing finishes. OnLastReaderReleased can be used to recycle
 /// blob storage after acquiring write access; it does not signal GPU completion.

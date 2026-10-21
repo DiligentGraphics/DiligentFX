@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientMorphTargets.h"
+#include "Core/RadientDataBlobReadAccess.hpp"
 
 #include <string>
 #include <vector>
@@ -34,7 +35,7 @@
 namespace Diligent
 {
 
-/// Owns CPU-side morph-target source data that is packed into a GPU buffer.
+/// Retains CPU morph-target blobs under read access for packing into a GPU buffer.
 class RadientMorphTargetSource final
 {
 public:
@@ -43,6 +44,9 @@ public:
         std::string Semantic;
         Uint32      ComponentCount = 0;
         Uint32      DataOffset     = 0;
+
+        RadientDataBlobReadAccess Buffer;
+        const Uint8*              pData = nullptr;
     };
 
     struct Target
@@ -91,7 +95,7 @@ public:
 
     Uint32 GetDataSize() const noexcept
     {
-        return static_cast<Uint32>(m_Deltas.size() * sizeof(Float32));
+        return m_DataSize;
     }
 
     /// Returns a key for the packed morph-target description and GPU data.
@@ -100,10 +104,10 @@ public:
     RADIENT_STATUS PackData(PackDestination Destination) const noexcept;
 
 private:
-    RADIENT_STATUS       m_Status      = RADIENT_STATUS_INVALID_ARGUMENT;
-    Uint32               m_VertexCount = 0;
-    std::vector<Target>  m_Targets;
-    std::vector<Float32> m_Deltas;
+    RADIENT_STATUS      m_Status      = RADIENT_STATUS_INVALID_ARGUMENT;
+    Uint32              m_VertexCount = 0;
+    Uint32              m_DataSize    = 0;
+    std::vector<Target> m_Targets;
 };
 
 } // namespace Diligent
