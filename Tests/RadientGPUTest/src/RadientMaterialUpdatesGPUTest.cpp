@@ -29,6 +29,7 @@
 #include "RadientStandardMaterialParameters.h"
 
 #include "Assets/RadientMaterialAssetManager.hpp"
+#include "Assets/RadientMeshAssetManager.hpp"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 
@@ -55,6 +56,8 @@ struct QuadSetup
 {
     RadientFloat4                 Color          = UpdatedColor;
     RadientFloat2                 UVBias         = {0.25f, 0.5f};
+    RadientFloat2                 UVScale        = {0.f, 0.f};
+    Uint32                        TexCoordSet    = 0;
     RADIENT_MATERIAL_SURFACE_MODE SurfaceMode    = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
     Float32                       AlphaCutoff    = 0.25f;
     Bool                          DoubleSided    = True;
@@ -165,8 +168,9 @@ public:
                           [&](IRadientMaterialDefinitionAsset& Definition, IRadientMaterialWriter& Writer) {
                               RADIENT_STATUS                           Status = SetParameter(Definition, Writer, RadientStandardMaterialBaseColorFactorName, Setup.Color);
                               RadientStandardMaterialTextureParameters TextureParameters{pTexture};
-                              TextureParameters.UVScale = {0.f, 0.f};
-                              TextureParameters.UVBias  = Setup.UVBias;
+                              TextureParameters.UVScale    = Setup.UVScale;
+                              TextureParameters.UVBias     = Setup.UVBias;
+                              TextureParameters.UVSelector = static_cast<Int32>(Setup.TexCoordSet);
                               if (RADIENT_SUCCEEDED(Status))
                                   Status = SetStandardMaterialTextureParameters(Definition, Writer, RadientStandardMaterialBaseColorTextureParameterNames, TextureParameters);
                               RefCntAutoPtr<IRadientSurfaceMaterialWriter> pSurface{&Writer, IID_RadientSurfaceMaterialWriter};
@@ -206,13 +210,13 @@ public:
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer(sizeof(Vertex));
         Layout.AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
-        Layout.AddAttribute("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
 
         RefCntAutoPtr<IRadientSceneWriter> pSceneWriter;
         ASSERT_EQ(pEngine->CreateSceneWriter(pScene, &pSceneWriter), RADIENT_STATUS_OK);
         for (Uint32 Index = 0; Index < Materials.size(); ++Index)
         {
-            RadientVertexLayoutDescX        MeshLayout = Layout;
+            RadientVertexLayoutDescX MeshLayout = Layout;
+            MeshLayout.AddAttribute(Setups[Index].TexCoordSet == 0 ? "TEXCOORD_0" : "TEXCOORD_1", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
             RefCntAutoPtr<IRadientDataBlob> pVertexColors;
             if (Setups[Index].UseVertexColor)
             {
@@ -229,12 +233,12 @@ public:
             Primitive.IndexCount = 6;
             Primitive.pMaterial  = Materials[Index];
             RadientMeshCreateInfo MeshCI;
-            MeshCI.VertexData     = {MeshLayout, VertexBuffers, 4};
-            MeshCI.IndexData      = {Setups[Index].BackFacing ? pBackIndices.RawPtr() : pIndices.RawPtr(), 6, RADIENT_INDEX_TYPE_UINT16};
-            MeshCI.pPrimitives    = &Primitive;
-            MeshCI.PrimitiveCount = 1;
-            RefCntAutoPtr<IRadientMeshAsset> pMesh;
-            const RADIENT_STATUS             MeshStatus = pAssets->CreateMesh(MeshCI, &pMesh);
+            MeshCI.VertexData                            = {MeshLayout, VertexBuffers, 4};
+            MeshCI.IndexData                             = {Setups[Index].BackFacing ? pBackIndices.RawPtr() : pIndices.RawPtr(), 6, RADIENT_INDEX_TYPE_UINT16};
+            MeshCI.pPrimitives                           = &Primitive;
+            MeshCI.PrimitiveCount                        = 1;
+            RefCntAutoPtr<IRadientMeshAsset>& pMesh      = Meshes[Index];
+            const RADIENT_STATUS              MeshStatus = pAssets->CreateMesh(MeshCI, &pMesh);
             ASSERT_TRUE(MeshStatus == RADIENT_STATUS_OK || MeshStatus == RADIENT_STATUS_PENDING);
             ASSERT_NE(pMesh, nullptr);
 
@@ -363,6 +367,7 @@ public:
     RefCntAutoPtr<IRadientScene>                        pScene;
     RefCntAutoPtr<IRadientTextureAsset>                 pTexture;
     std::array<RefCntAutoPtr<IRadientMaterialAsset>, 4> Materials;
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 4>     Meshes;
     RefCntAutoPtr<ITexture>                             pOutput;
     RefCntAutoPtr<ITexture>                             pReadback;
     RefCntAutoPtr<IRadientRenderTarget>                 pTarget;
@@ -376,8 +381,8 @@ void ExpectSameColor(const std::array<Uint8, 4>& Actual, const std::array<Uint8,
         EXPECT_NEAR(static_cast<int>(Actual[Channel]), static_cast<int>(Reference[Channel]), 2) << "Channel " << Channel;
 }
 
-// Vertex colors occupy renderer slot 3, while positions and UVs occupy slot 0.
-// The pool stores these as consecutive elements 0 and 1. Compare two such meshes
+// Positions, UVs, and vertex colors occupy renderer slots 0, 2, and 4.
+// The pool stores these as consecutive elements 0, 1, and 2. Compare two such meshes
 // against quads with the same colors supplied entirely through their materials.
 TEST(RadientMaterialUpdatesGPUTest, RendersSparseVertexStreams)
 {
@@ -403,6 +408,45 @@ TEST(RadientMaterialUpdatesGPUTest, RendersSparseVertexStreams)
     ASSERT_GT(Colors[1][1], Colors[3][1] + 20);
     ExpectSameColor(Colors[0], Colors[1]);
     ExpectSameColor(Colors[2], Colors[3]);
+}
+
+// UV0 and UV1 have identical storage sizes but different renderer slots. Their
+// meshes share the same physical pool and must still bind the correct UV slot.
+// Nonzero UV scale makes sampling depend on the bound vertex stream.
+TEST(RadientMaterialUpdatesGPUTest, RendersDifferentVertexSlotMappingsFromTheSamePool)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    Setups[0].UVScale     = {1.f, 0.f};
+    Setups[1].UVScale     = {1.f, 0.f};
+    Setups[1].TexCoordSet = 1;
+    // Fixed-UV reference and control do not depend on vertex attribute sampling.
+    Setups[2].UVBias = {0.75f, 0.5f};
+    Setups[3].UVBias = {0.25f, 0.5f};
+
+    MaterialUpdateScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+    const RadientDrawableMeshResolveResult First = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], true);
+    ASSERT_EQ(First.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(First.pMesh, nullptr);
+    ASSERT_EQ(First.pMesh->Geometries.size(), 1u);
+    for (Uint32 Index = 0; Index < Scene.Meshes.size(); ++Index)
+    {
+        SCOPED_TRACE(Index);
+        const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[Index], true);
+        ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+        ASSERT_NE(Result.pMesh, nullptr);
+        ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+        EXPECT_EQ(Result.pMesh->Geometries[0].pVertexPool, First.pMesh->Geometries[0].pVertexPool);
+        EXPECT_EQ(Result.pMesh->Geometries[0].VertexBufferMask, (1u << 0) | (1u << (2 + Setups[Index].TexCoordSet)));
+    }
+
+    SampledColors Colors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+    ASSERT_GT(Colors[2][1], 20);
+    ASSERT_GT(Colors[3][0], Colors[2][0] + 20);
+    ExpectSameColor(Colors[0], Colors[2]);
+    ExpectSameColor(Colors[1], Colors[2]);
 }
 
 TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneChanges)

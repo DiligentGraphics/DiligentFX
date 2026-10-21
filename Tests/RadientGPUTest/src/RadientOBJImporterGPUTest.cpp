@@ -332,6 +332,14 @@ TEST(RadientOBJImporterGPUTest, ImportsTexturedSceneAndUploadsSharedGeometry)
     ASSERT_EQ(GeometryDesc.VertexCount, 4u);
     ASSERT_EQ(GeometryDesc.IndexCount, 6u);
     ASSERT_EQ(GeometryDesc.IndexType, RADIENT_INDEX_TYPE_UINT32);
+    // OBJ supplies position, normal, and UV0 data. Each occupies its own stream;
+    // absent attributes must not appear in the reflected storage layout.
+    ASSERT_EQ(GeometryDesc.VertexLayout.AttributeCount, 3u);
+    ASSERT_EQ(GeometryDesc.VertexLayout.BufferCount, 3u);
+    EXPECT_EQ(GeometryDesc.VertexLayout.pBuffers[0].ByteStride, 12u);
+    EXPECT_EQ(GeometryDesc.VertexLayout.pBuffers[1].ByteStride, 12u);
+    EXPECT_EQ(GeometryDesc.VertexLayout.pBuffers[2].ByteStride, 8u);
+    EXPECT_EQ(Geometry.VertexBufferMask, (1u << 0) | (1u << 1) | (1u << 2));
     const RadientVertexAttributeDesc* pPosition = nullptr;
     for (Uint32 Index = 0; Index < GeometryDesc.VertexLayout.AttributeCount; ++Index)
     {

@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientMeshVertexSource.hpp"
+#include "Render/RadientVertexAttributes.hpp"
 
 #include "RadientMathTestHelpers.hpp"
 #include "RadientTypesX.hpp"
@@ -153,7 +154,7 @@ const std::array<RadientFloat4, 2> DefaultWeights{
 
 GLTF::VertexAttributeDesc GetDefaultAttribute(const char* Name)
 {
-    for (const GLTF::VertexAttributeDesc& Attrib : GLTF::DefaultVertexAttributes)
+    for (const GLTF::VertexAttributeDesc& Attrib : RadientDefaultVertexAttributes)
     {
         if (std::strcmp(Attrib.Name, Name) == 0)
             return Attrib;
@@ -192,26 +193,10 @@ PackedDefaultAttribute PackDefaultAttribute(GLTF::VertexAttributeDesc DstAttrib)
     if (Result.Source->GetStatus() != RADIENT_STATUS_OK)
         return Result;
 
-    DstAttrib.RelativeOffset = GLTF::VertexAttributeDesc{}.RelativeOffset;
-
-    if (std::strcmp(DstAttrib.Name, GLTF::PositionAttributeName) == 0)
-    {
-        DstAttrib.BufferId = 0;
-        const std::array<GLTF::VertexAttributeDesc, 1> Attributes{DstAttrib};
-        EXPECT_EQ(Result.Source->SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())),
-                  RADIENT_STATUS_OK);
-        Result.BufferIndex = 0;
-    }
-    else
-    {
-        GLTF::VertexAttributeDesc Position = GetDefaultAttribute(GLTF::PositionAttributeName);
-        DstAttrib.BufferId                 = 1;
-
-        const std::array<GLTF::VertexAttributeDesc, 2> Attributes{Position, DstAttrib};
-        EXPECT_EQ(Result.Source->SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())),
-                  RADIENT_STATUS_OK);
-        Result.BufferIndex = 1;
-    }
+    EXPECT_EQ(Result.Source->SetVertexAttributes(RadientDefaultVertexAttributes.data(),
+                                                 static_cast<Uint32>(RadientDefaultVertexAttributes.size())),
+              RADIENT_STATUS_OK);
+    Result.BufferIndex = DstAttrib.BufferId;
 
     if (Result.BufferIndex >= Result.Source->GetVertexBufferCount())
         return Result;
@@ -306,7 +291,7 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidVertexAttributes)
     };
 
     ExpectInvalidAttributes(nullptr, 1, "Destination vertex attributes must not be empty");
-    ExpectInvalidAttributes(GLTF::DefaultVertexAttributes.data(), 0, "Destination vertex attributes must not be empty");
+    ExpectInvalidAttributes(RadientDefaultVertexAttributes.data(), 0, "Destination vertex attributes must not be empty");
 
     const std::array<GLTF::VertexAttributeDesc, 1> MissingPosition{
         GLTF::VertexAttributeDesc{GLTF::VertexColorAttributeName, 0, VT_FLOAT32, 4}};
@@ -496,8 +481,8 @@ TEST(RadientMeshVertexSourceTest, RejectsInvalidPackDestination)
               RADIENT_STATUS_INVALID_ARGUMENT);
 
     RadientMeshVertexSource Source{MakeVertexMeshData(DefaultPositions).GetVertexData()};
-    ASSERT_EQ(Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
+    ASSERT_EQ(Source.SetVertexAttributes(RadientDefaultVertexAttributes.data(),
+                                         static_cast<Uint32>(RadientDefaultVertexAttributes.size())),
               RADIENT_STATUS_OK);
 
     std::vector<Uint8> Buffer0(Source.GetVertexBufferDataSize(0));
@@ -554,7 +539,7 @@ TEST(RadientMeshVertexSourceDefaultAttributesTest, PacksDefaultJointsAttribute)
     PackedDefaultAttribute Packed = PackDefaultAttribute(GetDefaultAttribute(GLTF::JointsAttributeName));
     ASSERT_TRUE(Packed.Source != nullptr);
     ASSERT_FALSE(Packed.Buffer.empty());
-    EXPECT_EQ(Packed.Source->GetVertexStride(Packed.BufferIndex), 16u);
+    EXPECT_EQ(Packed.Source->GetVertexStride(Packed.BufferIndex), 32u);
     ExpectFloat4Eq(ReadValue<RadientFloat4>(Packed.Buffer, 0),
                    RadientFloat4{1.f, 2.f, 3.f, 4.f});
 }
@@ -586,8 +571,8 @@ TEST(RadientMeshVertexSourceDefaultAttributesTest, PacksDefaultWeightsAttribute)
     PackedDefaultAttribute Packed = PackDefaultAttribute(GetDefaultAttribute(GLTF::WeightsAttributeName));
     ASSERT_TRUE(Packed.Source != nullptr);
     ASSERT_FALSE(Packed.Buffer.empty());
-    EXPECT_EQ(Packed.Source->GetVertexStride(Packed.BufferIndex), 16u);
-    ExpectFloat4Eq(ReadValue<RadientFloat4>(Packed.Buffer, 0), RadientFloat4{1.f, 0.f, 0.f, 0.f});
+    EXPECT_EQ(Packed.Source->GetVertexStride(Packed.BufferIndex), 32u);
+    ExpectFloat4Eq(ReadValue<RadientFloat4>(Packed.Buffer, 16), RadientFloat4{1.f, 0.f, 0.f, 0.f});
 }
 
 TEST(RadientMeshVertexSourceDefaultAttributesTest, PacksDefaultColorAttribute)
@@ -620,23 +605,101 @@ TEST(RadientMeshVertexSourceTest, StagesOnlyPresentAttributeBuffers)
 
     RadientMeshVertexSource Source{MeshData.GetVertexData()};
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
-    ASSERT_EQ(Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                         static_cast<Uint32>(GLTF::DefaultVertexAttributes.size())),
+    ASSERT_EQ(Source.SetVertexAttributes(RadientDefaultVertexAttributes.data(),
+                                         static_cast<Uint32>(RadientDefaultVertexAttributes.size())),
               RADIENT_STATUS_OK);
 
     EXPECT_NE(Source.GetVertexAttribFlags() & PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS,
               PBR_Renderer::PSO_FLAG_NONE);
     EXPECT_EQ(Source.GetVertexAttribFlags() & PBR_Renderer::PSO_FLAG_USE_JOINTS,
               PBR_Renderer::PSO_FLAG_NONE);
-    ASSERT_EQ(Source.GetVertexBufferCount(), 4u);
-    EXPECT_EQ(Source.GetActiveVertexBufferMask(), 1u | 8u);
+    ASSERT_EQ(Source.GetVertexBufferCount(), 5u);
+    EXPECT_EQ(Source.GetActiveVertexBufferMask(), (1u << 0) | (1u << 4));
+    EXPECT_EQ(Source.GetVertexBufferDataSize(0), 2u * 12u);
+    EXPECT_EQ(Source.GetVertexBufferDataSize(4), 2u * 16u);
+    for (Uint32 BufferIndex = 1; BufferIndex < 4; ++BufferIndex)
+    {
+        EXPECT_EQ(Source.GetVertexBufferDataSize(BufferIndex), 0u);
+    }
 
-    EXPECT_NE(Source.GetVertexBufferDataSize(0), 0u);
-    EXPECT_NE(Source.GetVertexStride(1), 0u);
-    EXPECT_NE(Source.GetVertexStride(2), 0u);
-    EXPECT_EQ(Source.GetVertexBufferDataSize(1), 0u);
-    EXPECT_EQ(Source.GetVertexBufferDataSize(2), 0u);
-    ASSERT_NE(Source.GetVertexBufferDataSize(3), 0u);
+    // Absent normals and UVs occupy neither storage nor reflected attributes.
+    const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
+    ASSERT_EQ(Layout.BufferCount, 2u);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 12u);
+    EXPECT_EQ(Layout.pBuffers[1].ByteStride, 16u);
+    ASSERT_EQ(Layout.AttributeCount, 2u);
+    EXPECT_STREQ(Layout.pAttributes[0].Semantic, "POSITION");
+    EXPECT_EQ(Layout.pAttributes[0].BufferIndex, 0u);
+    EXPECT_EQ(Layout.pAttributes[0].ByteOffset, 0u);
+    EXPECT_STREQ(Layout.pAttributes[1].Semantic, "COLOR_0");
+    EXPECT_EQ(Layout.pAttributes[1].BufferIndex, 1u);
+    EXPECT_EQ(Layout.pAttributes[1].ByteOffset, 0u);
+}
+
+TEST(RadientMeshVertexSourceDefaultAttributesTest, PacksSeparateStreamsAndCombinedSkinningData)
+{
+    VertexMeshData MeshData = MakeVertexMeshData(DefaultPositions);
+    MeshData.Add("NORMAL", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False, DefaultNormals);
+    MeshData.Add("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, DefaultTexCoords0);
+    const std::array<RadientFloat2, 2> TexCoords1{{{0.125f, 0.25f}, {0.5f, 0.75f}}};
+    MeshData.Add("TEXCOORD_1", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2, False, TexCoords1);
+    MeshData.Add("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT8, 4, True, DefaultColors);
+    MeshData.Add("JOINTS_0", RADIENT_VERTEX_COMPONENT_TYPE_UINT16, 4, False, DefaultJoints);
+    MeshData.Add("WEIGHTS_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, False, DefaultWeights);
+    MeshData.Add("TANGENT", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, False, DefaultTangents);
+
+    RadientMeshVertexSource Source{MeshData.GetVertexData()};
+    ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.SetVertexAttributes(RadientDefaultVertexAttributes.data(),
+                                         static_cast<Uint32>(RadientDefaultVertexAttributes.size())),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(Source.GetVertexBufferCount(), 7u);
+    EXPECT_EQ(Source.GetActiveVertexBufferMask(), 0x7Fu);
+
+    const std::array<Uint32, 7>       Strides{12, 12, 8, 8, 16, 32, 12};
+    std::array<std::vector<Uint8>, 7> Buffers;
+    for (Uint32 BufferIndex = 0; BufferIndex < Buffers.size(); ++BufferIndex)
+    {
+        SCOPED_TRACE(BufferIndex);
+        EXPECT_EQ(Source.GetVertexStride(BufferIndex), Strides[BufferIndex]);
+        EXPECT_EQ(Source.GetVertexBufferDataSize(BufferIndex), 2u * Strides[BufferIndex]);
+        Buffers[BufferIndex].resize(Source.GetVertexBufferDataSize(BufferIndex));
+        ASSERT_EQ(Source.PackVertexData(BufferIndex, {Buffers[BufferIndex].data(), static_cast<Uint32>(Buffers[BufferIndex].size())}),
+                  RADIENT_STATUS_OK);
+    }
+
+    for (Uint32 Vertex = 0; Vertex < 2; ++Vertex)
+    {
+        SCOPED_TRACE(Vertex);
+        ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffers[0], Vertex * 12), DefaultPositions[Vertex]);
+        ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffers[1], Vertex * 12), DefaultNormals[Vertex]);
+        ExpectFloat2Eq(ReadValue<RadientFloat2>(Buffers[2], Vertex * 8), DefaultTexCoords0[Vertex]);
+        ExpectFloat2Eq(ReadValue<RadientFloat2>(Buffers[3], Vertex * 8), TexCoords1[Vertex]);
+        const RadientColorRGBA8& Color = DefaultColors[Vertex];
+        ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffers[4], Vertex * 16),
+                       RadientFloat4{Color.r / 255.f, Color.g / 255.f, Color.b / 255.f, Color.a / 255.f});
+        const RadientBoneIndices4& Joints = DefaultJoints[Vertex];
+        ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffers[5], Vertex * 32),
+                       RadientFloat4{static_cast<float>(Joints.x), static_cast<float>(Joints.y),
+                                     static_cast<float>(Joints.z), static_cast<float>(Joints.w)});
+        ExpectFloat4Eq(ReadValue<RadientFloat4>(Buffers[5], Vertex * 32 + 16), DefaultWeights[Vertex]);
+        const RadientFloat4& Tangent = DefaultTangents[Vertex];
+        ExpectFloat3Eq(ReadValue<RadientFloat3>(Buffers[6], Vertex * 12), RadientFloat3{Tangent.x, Tangent.y, Tangent.z});
+    }
+
+    const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
+    ASSERT_EQ(Layout.BufferCount, Strides.size());
+    ASSERT_EQ(Layout.AttributeCount, 8u);
+    const std::array<const char*, 8> Semantics{"POSITION", "NORMAL", "TEXCOORD_0", "TEXCOORD_1", "JOINTS_0", "WEIGHTS_0", "COLOR_0", "TANGENT"};
+    const std::array<Uint32, 8>      BufferIndices{0, 1, 2, 3, 5, 5, 4, 6};
+    const std::array<Uint32, 8>      Offsets{0, 0, 0, 0, 0, 16, 0, 0};
+    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
+    {
+        SCOPED_TRACE(AttributeIndex);
+        EXPECT_STREQ(Layout.pAttributes[AttributeIndex].Semantic, Semantics[AttributeIndex]);
+        EXPECT_EQ(Layout.pAttributes[AttributeIndex].BufferIndex, BufferIndices[AttributeIndex]);
+        EXPECT_EQ(Layout.pAttributes[AttributeIndex].ByteOffset, Offsets[AttributeIndex]);
+    }
 }
 
 TEST(RadientMeshVertexSourceTest, PacksCustomVertexAttributeLayout)

@@ -133,6 +133,7 @@ set(INCLUDE
     include/Render/RadientRenderPipeline.hpp
     include/Render/RadientRenderTechnique.hpp
     include/Render/RadientRendererImpl.hpp
+    include/Render/RadientVertexAttributes.hpp
     include/Scene/Components/RadientMaterialBindingsStorage.hpp
     include/Scene/Components/RadientMeshComponentStorage.hpp
     include/Scene/Components/RadientSkinComponentStorage.hpp

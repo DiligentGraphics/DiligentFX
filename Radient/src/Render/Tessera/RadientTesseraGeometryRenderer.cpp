@@ -27,6 +27,7 @@
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 
+#include "Render/RadientVertexAttributes.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
@@ -633,7 +634,7 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
         RendererCI.PrimitiveArraySize = m_MultiDrawBatchSize;
     }
 
-    InputLayoutDescX InputLayout      = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
+    InputLayoutDescX InputLayout      = GLTF::VertexAttributesToInputLayout(RadientDefaultVertexAttributes.data(), RadientDefaultVertexAttributes.size());
     RendererCI.InputLayout            = InputLayout;
     RendererCI.TexColorConversionMode = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
     SetGLTFTextureAttribIndices(RendererCI);

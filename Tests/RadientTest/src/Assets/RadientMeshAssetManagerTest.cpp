@@ -88,7 +88,7 @@ struct MeshSources
 MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientDataBlob* pBlob = nullptr, IRadientDataBlob* pIndexDataBlob = nullptr)
 {
     // Leave destination vertex attributes unset. RadientMeshAssetManager should
-    // resolve the default GLTF layout before computing the mesh cache key.
+    // resolve the default Radient layout before computing the mesh cache key.
     static constexpr std::array<RadientFloat3, 3> Positions{
         RadientFloat3{0.f, 0.f, 0.f},
         RadientFloat3{1.f, 0.f, 0.f},
@@ -138,7 +138,7 @@ MeshSources MakeCustomLayoutMeshSources()
     MeshSources Sources = MakeMeshSources();
 
     // Preconfigure a custom destination layout. The manager must preserve this
-    // layout instead of overwriting it with the default GLTF layout.
+    // layout instead of overwriting it with the default Radient layout.
     const std::array<GLTF::VertexAttributeDesc, 1> PaddedPosition{
         GLTF::VertexAttributeDesc{GLTF::PositionAttributeName, 0, VT_FLOAT32, 3, Uint32{16}}};
     EXPECT_EQ(Sources.pVertexSource->SetVertexAttributes(PaddedPosition.data(), static_cast<Uint32>(PaddedPosition.size())),
@@ -267,8 +267,8 @@ TEST(RadientMeshAssetManagerTest, DrawableMeshRemainsPendingUntilPayloadIsReady)
     EXPECT_NE(ReadyResult.pMesh, nullptr);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
 
-    // CPU loading publishes the stored layout, including default-filled fields
-    // in active buffers, without requiring any GPU resources.
+    // CPU loading publishes only the stored attributes, without requiring any
+    // GPU resources or reserving space for absent normals and texture coordinates.
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
     ASSERT_EQ(Desc.GeometryCount, 1u);
     ASSERT_NE(Desc.pGeometries, nullptr);
@@ -279,22 +279,16 @@ TEST(RadientMeshAssetManagerTest, DrawableMeshRemainsPendingUntilPayloadIsReady)
     const RadientVertexLayoutDesc& Layout = Geometry.VertexLayout;
     ASSERT_EQ(Layout.BufferCount, 1u);
     ASSERT_NE(Layout.pBuffers, nullptr);
-    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 32u);
-    ASSERT_EQ(Layout.AttributeCount, 3u);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 12u);
+    ASSERT_EQ(Layout.AttributeCount, 1u);
     ASSERT_NE(Layout.pAttributes, nullptr);
-    const std::array<const char*, 3> Semantics{"POSITION", "NORMAL", "TEXCOORD_0"};
-    const std::array<Uint32, 3>      Offsets{0, 12, 24};
-    const std::array<Uint32, 3>      ComponentCounts{3, 3, 2};
-    for (Uint32 AttributeIndex = 0; AttributeIndex < Layout.AttributeCount; ++AttributeIndex)
-    {
-        const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[AttributeIndex];
-        EXPECT_STREQ(Attribute.Semantic, Semantics[AttributeIndex]);
-        EXPECT_EQ(Attribute.BufferIndex, 0u);
-        EXPECT_EQ(Attribute.ByteOffset, Offsets[AttributeIndex]);
-        EXPECT_EQ(Attribute.ComponentType, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32);
-        EXPECT_EQ(Attribute.ComponentCount, ComponentCounts[AttributeIndex]);
-        EXPECT_FALSE(Attribute.Normalized);
-    }
+    const RadientVertexAttributeDesc& Attribute = Layout.pAttributes[0];
+    EXPECT_STREQ(Attribute.Semantic, "POSITION");
+    EXPECT_EQ(Attribute.BufferIndex, 0u);
+    EXPECT_EQ(Attribute.ByteOffset, 0u);
+    EXPECT_EQ(Attribute.ComponentType, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32);
+    EXPECT_EQ(Attribute.ComponentCount, 3u);
+    EXPECT_FALSE(Attribute.Normalized);
     ASSERT_EQ(Desc.PrimitiveCount, 1u);
     ASSERT_NE(Desc.pPrimitives, nullptr);
     EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
@@ -1090,8 +1084,11 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     const RadientVertexLayoutDesc& DefaultLayout = Desc.pGeometries[1].VertexLayout;
     ASSERT_EQ(DefaultLayout.BufferCount, 1u);
     ASSERT_NE(DefaultLayout.pBuffers, nullptr);
-    EXPECT_EQ(DefaultLayout.pBuffers[0].ByteStride, 32u);
-    EXPECT_EQ(DefaultLayout.AttributeCount, 3u);
+    EXPECT_EQ(DefaultLayout.pBuffers[0].ByteStride, 12u);
+    ASSERT_EQ(DefaultLayout.AttributeCount, 1u);
+    EXPECT_STREQ(DefaultLayout.pAttributes[0].Semantic, "POSITION");
+    EXPECT_EQ(DefaultLayout.pAttributes[0].ByteOffset, 0u);
+    EXPECT_EQ(DefaultLayout.pAttributes[0].BufferIndex, 0u);
     for (Uint32 GeometryIndex = 0; GeometryIndex < Desc.GeometryCount; ++GeometryIndex)
     {
         EXPECT_EQ(Desc.pGeometries[GeometryIndex].VertexCount, 3u);

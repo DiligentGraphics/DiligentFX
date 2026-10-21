@@ -38,6 +38,7 @@
 #include "Assets/RadientMorphTargetSource.hpp"
 #include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMeshViewSource.hpp"
+#include "Render/RadientVertexAttributes.hpp"
 #include "RadientMeshViewCreateInfoSnapshot.hpp"
 #include "Cast.hpp"
 #include "DebugUtilities.hpp"
@@ -1302,8 +1303,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshVertexData(IThreadPool&       
             if (!Source.HasVertexAttributes())
             {
                 const RADIENT_STATUS Status =
-                    Source.SetVertexAttributes(GLTF::DefaultVertexAttributes.data(),
-                                               static_cast<Uint32>(GLTF::DefaultVertexAttributes.size()));
+                    Source.SetVertexAttributes(RadientDefaultVertexAttributes.data(),
+                                               static_cast<Uint32>(RadientDefaultVertexAttributes.size()));
                 if (RADIENT_FAILED(Status))
                     return Status;
             }

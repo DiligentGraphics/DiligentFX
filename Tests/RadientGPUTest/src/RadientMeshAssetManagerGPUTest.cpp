@@ -341,7 +341,7 @@ TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreserve
         ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
         const RadientDrawableMeshGeometry& Geometry = Result.pMesh->Geometries[0];
         ASSERT_NE(Geometry.pVertexPool, nullptr);
-        EXPECT_EQ(Geometry.VertexBufferMask, (1u << 0) | (1u << 3));
+        EXPECT_EQ(Geometry.VertexBufferMask, (1u << 0) | (1u << 4));
         if (MeshIndex == 0)
         {
             pPool              = Geometry.pVertexPool;
@@ -356,11 +356,11 @@ TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreserve
         }
     }
 
-    // POSITION uses the existing 32-byte grouped stream; COLOR_0 uses 16 bytes.
-    // The absent joint and TEXCOORD_1 streams must not allocate pool elements.
+    // POSITION and COLOR_0 occupy separate 12-byte and 16-byte streams.
+    // Absent attributes must not occupy storage in either the pool or reflection.
     const VertexPoolDesc& PoolDesc = pPool->GetDesc();
     ASSERT_EQ(PoolDesc.NumElements, 2u);
-    EXPECT_EQ(PoolDesc.pElements[0].Size, 32u);
+    EXPECT_EQ(PoolDesc.pElements[0].Size, 12u);
     EXPECT_EQ(PoolDesc.pElements[1].Size, 16u);
     EXPECT_GE(PoolDesc.VertexCount, 6u);
     ASSERT_NE(pPool->GetBuffer(0), nullptr);
@@ -368,7 +368,7 @@ TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreserve
 
     BufferDesc ReadbackDesc;
     ReadbackDesc.Name           = "Compact vertex pool readback";
-    ReadbackDesc.Size           = 3u * (32u + 16u);
+    ReadbackDesc.Size           = 3u * (12u + 16u);
     ReadbackDesc.Usage          = USAGE_STAGING;
     ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
     RefCntAutoPtr<IBuffer> pReadbackBuffer;
@@ -382,31 +382,33 @@ TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreserve
         ASSERT_EQ(Desc.GeometryCount, 1u);
         const RadientVertexLayoutDesc& Layout = Desc.pGeometries[0].VertexLayout;
         ASSERT_EQ(Layout.BufferCount, 2u);
-        EXPECT_EQ(Layout.pBuffers[0].ByteStride, 32u);
+        EXPECT_EQ(Layout.pBuffers[0].ByteStride, 12u);
         EXPECT_EQ(Layout.pBuffers[1].ByteStride, 16u);
-        ASSERT_EQ(Layout.AttributeCount, 4u);
-        EXPECT_STREQ(Layout.pAttributes[3].Semantic, "COLOR_0");
-        EXPECT_EQ(Layout.pAttributes[3].BufferIndex, 1u);
+        ASSERT_EQ(Layout.AttributeCount, 2u);
+        EXPECT_STREQ(Layout.pAttributes[0].Semantic, "POSITION");
+        EXPECT_EQ(Layout.pAttributes[0].BufferIndex, 0u);
+        EXPECT_STREQ(Layout.pAttributes[1].Semantic, "COLOR_0");
+        EXPECT_EQ(Layout.pAttributes[1].BufferIndex, 1u);
 
         const RadientDrawableMeshResolveResult Result     = RadientMeshAssetManager::GetDrawableMesh(Meshes[MeshIndex], true);
         const Uint64                           BaseVertex = Result.pMesh->Geometries[0].BaseVertex;
-        pContext->CopyBuffer(pPool->GetBuffer(0), BaseVertex * 32u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-                             pReadbackBuffer, 0, 3u * 32u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pContext->CopyBuffer(pPool->GetBuffer(0), BaseVertex * 12u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                             pReadbackBuffer, 0, 3u * 12u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pContext->CopyBuffer(pPool->GetBuffer(1), BaseVertex * 16u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-                             pReadbackBuffer, 3u * 32u, 3u * 16u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                             pReadbackBuffer, 3u * 12u, 3u * 16u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pContext->WaitForIdle();
         MapHelper<Float32>   MappedData{pContext, pReadbackBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT};
         const Float32* const pData = MappedData;
         ASSERT_NE(pData, nullptr);
         for (Uint32 Vertex = 0; Vertex < Positions[MeshIndex].size(); ++Vertex)
         {
-            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 0], Positions[MeshIndex][Vertex].x);
-            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 1], Positions[MeshIndex][Vertex].y);
-            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 2], Positions[MeshIndex][Vertex].z);
-            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 0], Colors[Vertex].x);
-            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 1], Colors[Vertex].y);
-            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 2], Colors[Vertex].z);
-            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 3], Colors[Vertex].w);
+            EXPECT_FLOAT_EQ(pData[Vertex * 3 + 0], Positions[MeshIndex][Vertex].x);
+            EXPECT_FLOAT_EQ(pData[Vertex * 3 + 1], Positions[MeshIndex][Vertex].y);
+            EXPECT_FLOAT_EQ(pData[Vertex * 3 + 2], Positions[MeshIndex][Vertex].z);
+            EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 0], Colors[Vertex].x);
+            EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 1], Colors[Vertex].y);
+            EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 2], Colors[Vertex].z);
+            EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 3], Colors[Vertex].w);
         }
     }
 }
