@@ -712,6 +712,7 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         Slot.IsIndexed          = Primitive.IsIndexed;
         Slot.MaterialData       = std::move(MaterialData[PrimitiveIndex]);
         Slot.pVertexPool        = Geometry.pVertexPool;
+        Slot.VertexBufferMask   = Geometry.VertexBufferMask;
         Slot.VertexAttribFlags  = Geometry.VertexAttribFlags;
         Slot.FirstIndexLocation = Geometry.FirstIndexLocation;
         Slot.BaseVertex         = Geometry.BaseVertex;

@@ -143,7 +143,8 @@ public:
                           const RadientMeshVertexSource& Source) :
         MeshDataStatusStorage{InitLoadStatus, std::move(CacheKey)},
         VertexCount{Source.GetVertexCount()},
-        VertexAttribFlags{Source.GetVertexAttribFlags()}
+        VertexAttribFlags{Source.GetVertexAttribFlags()},
+        VertexBufferMask{Source.GetActiveVertexBufferMask()}
     {
         // Keep the stored layout after the source and its read scopes are released.
         const RadientVertexLayoutDesc Layout = Source.GetVertexLayout();
@@ -179,6 +180,7 @@ public:
 
     const Uint32                  VertexCount       = 0;
     const PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+    const Uint32                  VertexBufferMask  = 0;
 
 private:
     std::vector<RadientVertexAttributeDesc>    VertexAttributes;
@@ -454,8 +456,8 @@ struct MeshVertexBufferCopyData
     RefCntAutoPtr<MeshVertexDataPayloadImpl> pVertexDataPayload;
     RefCntAutoPtr<IRenderDevice>             pDevice;
 
-    Uint32 VertexBufferIndex = 0;
-    Uint32 VertexStride      = 0;
+    Uint32 PoolBufferIndex = 0;
+    Uint32 VertexStride    = 0;
 };
 
 struct MorphTargetBufferCopyData
@@ -532,6 +534,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             nullptr,
             pMorphTargetData,
             VertexData.VertexAttribFlags,
+            VertexData.VertexBufferMask,
             0,
             0,
             0});
@@ -668,7 +671,7 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         pSrcBuffer != nullptr &&
         pVertexAllocation != nullptr)
     {
-        IBuffer* pDstBuffer = pVertexAllocation->Update(Data->VertexBufferIndex, Data->pDevice, pContext);
+        IBuffer* pDstBuffer = pVertexAllocation->Update(Data->PoolBufferIndex, Data->pDevice, pContext);
         if (pDstBuffer != nullptr)
         {
             const Uint32 DstOffset = pVertexAllocation->GetStartVertex() * Data->VertexStride;
@@ -747,12 +750,13 @@ void ScheduleMeshVertexUpload(IGPUUploadManager&             UploadManager,
                               IRenderDevice&                 Device,
                               const RadientMeshVertexSource& Source,
                               MeshVertexDataPayloadImpl*     pVertexDataPayload,
-                              Uint32                         VertexBufferIndex)
+                              Uint32                         VertexBufferIndex,
+                              Uint32                         PoolBufferIndex)
 {
     std::unique_ptr<MeshVertexBufferCopyData> pCopyData{new MeshVertexBufferCopyData{}};
     pCopyData->pVertexDataPayload = pVertexDataPayload;
     pCopyData->pDevice            = &Device;
-    pCopyData->VertexBufferIndex  = VertexBufferIndex;
+    pCopyData->PoolBufferIndex    = PoolBufferIndex;
     pCopyData->VertexStride       = Source.GetVertexStride(VertexBufferIndex);
 
     MeshVertexBufferWriteData WriteData;
@@ -853,9 +857,14 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
     }
 
     GLTF::ResourceManager::VertexLayoutKey LayoutKey;
-    LayoutKey.Elements.reserve(VertexBufferCount);
+    LayoutKey.Elements.reserve(UploadCount);
+    // Keep pool elements dense and ordered by active renderer buffer slot.
+    // VertexBufferMask restores these slots when binding the pool for rendering.
     for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
-        LayoutKey.Elements.emplace_back(VertexSource.GetVertexStride(BufferIndex), BIND_VERTEX_BUFFER);
+    {
+        if (VertexSource.IsVertexBufferActive(BufferIndex))
+            LayoutKey.Elements.emplace_back(VertexSource.GetVertexStride(BufferIndex), BIND_VERTEX_BUFFER);
+    }
 
     VertexData.pVertexAllocation = ResourceManager.AllocateVertices(LayoutKey, VertexSource.GetVertexCount());
     if (VertexData.pVertexAllocation == nullptr)
@@ -867,12 +876,15 @@ void CreateMeshVertexDataFromSource(const RadientMeshVertexSource& VertexSource,
         VertexData.PendingUploads.store(UploadCount, std::memory_order_release);
         VertexData.SetGPUResourceStatus(RADIENT_STATUS_PENDING);
 
+        Uint32 PoolBufferIndex = 0;
         for (Uint32 BufferIndex = 0; BufferIndex < VertexBufferCount; ++BufferIndex)
         {
             if (!VertexSource.IsVertexBufferActive(BufferIndex))
                 continue;
 
-            ScheduleMeshVertexUpload(UploadManager, Device, VertexSource, &VertexDataPayload, BufferIndex);
+            // Packing uses the source's logical slot; GPU copies use the compact pool index.
+            ScheduleMeshVertexUpload(UploadManager, Device, VertexSource, &VertexDataPayload, BufferIndex, PoolBufferIndex);
+            ++PoolBufferIndex;
         }
     }
 

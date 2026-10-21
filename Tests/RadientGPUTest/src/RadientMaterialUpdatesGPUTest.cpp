@@ -53,12 +53,14 @@ using SampledColors = std::array<std::array<Uint8, 4>, 4>;
 
 struct QuadSetup
 {
-    RadientFloat4                 Color       = UpdatedColor;
-    RadientFloat2                 UVBias      = {0.25f, 0.5f};
-    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
-    Float32                       AlphaCutoff = 0.25f;
-    Bool                          DoubleSided = True;
-    bool                          BackFacing  = false;
+    RadientFloat4                 Color          = UpdatedColor;
+    RadientFloat2                 UVBias         = {0.25f, 0.5f};
+    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode    = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
+    Float32                       AlphaCutoff    = 0.25f;
+    Bool                          DoubleSided    = True;
+    bool                          BackFacing     = false;
+    bool                          UseVertexColor = false;
+    RadientFloat4                 VertexColor    = {1.f, 1.f, 1.f, 1.f};
 };
 
 using QuadSetups = std::array<QuadSetup, 4>;
@@ -201,7 +203,6 @@ public:
         ASSERT_NE(pVertices, nullptr);
         ASSERT_NE(pIndices, nullptr);
         ASSERT_NE(pBackIndices, nullptr);
-        IRadientDataBlob*        VertexBuffers[] = {pVertices};
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer(sizeof(Vertex));
         Layout.AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
@@ -211,11 +212,24 @@ public:
         ASSERT_EQ(pEngine->CreateSceneWriter(pScene, &pSceneWriter), RADIENT_STATUS_OK);
         for (Uint32 Index = 0; Index < Materials.size(); ++Index)
         {
+            RadientVertexLayoutDescX        MeshLayout = Layout;
+            RefCntAutoPtr<IRadientDataBlob> pVertexColors;
+            if (Setups[Index].UseVertexColor)
+            {
+                std::array<RadientFloat4, 4> VertexColors;
+                VertexColors.fill(Setups[Index].VertexColor);
+                pVertexColors = MakeBlob(VertexColors.data(), sizeof(VertexColors));
+                ASSERT_NE(pVertexColors, nullptr);
+                MeshLayout.AddBuffer(sizeof(RadientFloat4));
+                MeshLayout.AddAttribute("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, 1);
+            }
+            IRadientDataBlob* VertexBuffers[] = {pVertices, pVertexColors};
+
             RadientMeshPrimitiveCreateInfo Primitive;
             Primitive.IndexCount = 6;
             Primitive.pMaterial  = Materials[Index];
             RadientMeshCreateInfo MeshCI;
-            MeshCI.VertexData     = {Layout, VertexBuffers, 4};
+            MeshCI.VertexData     = {MeshLayout, VertexBuffers, 4};
             MeshCI.IndexData      = {Setups[Index].BackFacing ? pBackIndices.RawPtr() : pIndices.RawPtr(), 6, RADIENT_INDEX_TYPE_UINT16};
             MeshCI.pPrimitives    = &Primitive;
             MeshCI.PrimitiveCount = 1;
@@ -360,6 +374,35 @@ void ExpectSameColor(const std::array<Uint8, 4>& Actual, const std::array<Uint8,
 {
     for (Uint32 Channel = 0; Channel < 3; ++Channel)
         EXPECT_NEAR(static_cast<int>(Actual[Channel]), static_cast<int>(Reference[Channel]), 2) << "Channel " << Channel;
+}
+
+// Vertex colors occupy renderer slot 3, while positions and UVs occupy slot 0.
+// The pool stores these as consecutive elements 0 and 1. Compare two such meshes
+// against quads with the same colors supplied entirely through their materials.
+TEST(RadientMaterialUpdatesGPUTest, RendersSparseVertexStreams)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    const RadientFloat4                VertexColors[] = {UpdatedColor, {0.75f, 0.25f, 0.5f, 1.f}};
+    for (Uint32 Pair = 0; Pair < 2; ++Pair)
+    {
+        QuadSetup& ColoredQuad     = Setups[2 * Pair];
+        ColoredQuad.Color          = {1.f, 1.f, 1.f, 1.f};
+        ColoredQuad.UseVertexColor = true;
+        ColoredQuad.VertexColor    = VertexColors[Pair];
+        Setups[2 * Pair + 1].Color = VertexColors[Pair];
+    }
+
+    MaterialUpdateScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+    SampledColors Colors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+    ASSERT_GT(Colors[1][0], 20);
+    ASSERT_GT(Colors[3][1], 20);
+    ASSERT_GT(Colors[3][0], Colors[1][0] + 20);
+    ASSERT_GT(Colors[1][1], Colors[3][1] + 20);
+    ExpectSameColor(Colors[0], Colors[1]);
+    ExpectSameColor(Colors[2], Colors[3]);
 }
 
 TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneChanges)

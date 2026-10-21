@@ -105,7 +105,8 @@ struct RadientDrawableSlot
     // MaterialData retains renderer-specific material state and its asset.
     RadientTesseraMaterialDataMap::ValueHandle MaterialData;
 
-    IVertexPool* pVertexPool = nullptr;
+    IVertexPool* pVertexPool      = nullptr;
+    Uint32       VertexBufferMask = 0;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 

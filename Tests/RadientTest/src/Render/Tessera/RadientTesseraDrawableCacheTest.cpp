@@ -148,6 +148,7 @@ public:
             pVertexPool,
             nullptr,
             VertexAttribFlags,
+            1u,
             FirstIndexLocation,
             BaseVertex});
 
@@ -1006,12 +1007,14 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
         Geometry0Pool,
         nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS,
+        1u,
         17,
         5};
     Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
         Geometry1Pool,
         nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS,
+        1u | 8u,
         29,
         8});
 
@@ -1030,6 +1033,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
     ASSERT_NE(pGeometry0Slot, nullptr);
     EXPECT_EQ(pGeometry0Slot->Entity, Entity);
     EXPECT_EQ(pGeometry0Slot->pVertexPool, Geometry0Pool);
+    EXPECT_EQ(pGeometry0Slot->VertexBufferMask, 1u);
     EXPECT_EQ(pGeometry0Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS);
     EXPECT_EQ(pGeometry0Slot->FirstIndexLocation, 17u);
     EXPECT_EQ(pGeometry0Slot->BaseVertex, 5u);
@@ -1040,6 +1044,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
     ASSERT_NE(pGeometry1Slot, nullptr);
     EXPECT_EQ(pGeometry1Slot->Entity, Entity);
     EXPECT_EQ(pGeometry1Slot->pVertexPool, Geometry1Pool);
+    EXPECT_EQ(pGeometry1Slot->VertexBufferMask, 1u | 8u);
     EXPECT_EQ(pGeometry1Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS);
     EXPECT_EQ(pGeometry1Slot->FirstIndexLocation, 29u);
     EXPECT_EQ(pGeometry1Slot->BaseVertex, 8u);

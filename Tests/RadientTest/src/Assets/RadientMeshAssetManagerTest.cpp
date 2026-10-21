@@ -363,6 +363,42 @@ TEST(RadientMeshAssetManagerTest, CreateMeshDataAcceptsVertexAndIndexSources)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientMeshAssetManagerTest, ReflectsSparseVertexBufferSlotsWithoutGPUResources)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pMeshManager, nullptr);
+
+    // Renderer slots and reflected storage indices are independent even when
+    // no GPU pool is available: the sole active slot is reflected as buffer 0.
+    MeshSources                     Sources = MakeMeshSources();
+    const GLTF::VertexAttributeDesc Position{GLTF::PositionAttributeName, 3, VT_FLOAT32, 3};
+    ASSERT_EQ(Sources.pVertexSource->SetVertexAttributes(&Position, 1), RADIENT_STATUS_OK);
+    RadientMeshPrimitiveCreateInfo   Primitive;
+    const RadientMeshViewCreateInfo  View = MakeMeshView(Primitive);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(CreateMeshViewFromSource(*pMeshManager, *pThreadPool, std::move(Sources), View, pMesh),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+    DrainThreadPool(*pThreadPool);
+
+    const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(Result.pMesh, nullptr);
+    ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+    EXPECT_EQ(Result.pMesh->Geometries[0].VertexBufferMask, 1u << 3);
+    EXPECT_EQ(Result.pMesh->Geometries[0].pVertexPool, nullptr);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    const RadientVertexLayoutDesc& Layout = Desc.pGeometries[0].VertexLayout;
+    ASSERT_EQ(Layout.BufferCount, 1u);
+    EXPECT_EQ(Layout.pBuffers[0].ByteStride, 12u);
+    ASSERT_EQ(Layout.AttributeCount, 1u);
+    EXPECT_STREQ(Layout.pAttributes[0].Semantic, "POSITION");
+    EXPECT_EQ(Layout.pAttributes[0].BufferIndex, 0u);
+}
+
 TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
 {
     auto                               pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});

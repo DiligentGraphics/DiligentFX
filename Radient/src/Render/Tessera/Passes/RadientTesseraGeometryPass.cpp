@@ -35,6 +35,7 @@
 #include "GraphicsAccessories.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "GLTFLoader.hpp"
+#include "PlatformMisc.hpp"
 
 #include <algorithm>
 #include <array>
@@ -98,16 +99,26 @@ PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(RADIENT_MATERIAL_SURFACE_MODE SurfaceMod
 }
 
 void BindVertexPool(IVertexPool&    VertexPool,
+                    Uint32          VertexBufferMask,
                     IDeviceContext* pContext)
 {
-    const VertexPoolDesc& PoolDesc = VertexPool.GetDesc();
+    const Uint32 NumBuffers = VertexBufferMask != 0 ? PlatformMisc::GetMSB(VertexBufferMask) + 1 : 0;
 
-    std::array<IBuffer*, GLTF::ModelCreateInfo::MaxBuffers> pVBs; // Do not zero-initialize
-    VERIFY(PoolDesc.NumElements <= pVBs.size(), "Too many vertex buffers in Radient vertex pool");
-    for (Uint32 BufferIndex = 0; BufferIndex < PoolDesc.NumElements; ++BufferIndex)
-        pVBs[BufferIndex] = VertexPool.GetBuffer(BufferIndex);
+    std::array<IBuffer*, GLTF::ModelCreateInfo::MaxBuffers> pVBs{};
+    VERIFY(NumBuffers != 0 && NumBuffers <= pVBs.size(), "Invalid Radient vertex buffer mask");
+    VERIFY(PlatformMisc::CountOneBits(VertexBufferMask) == VertexPool.GetDesc().NumElements,
+           "Radient vertex buffer mask does not match the vertex pool");
 
-    pContext->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+    // Pool elements are compact; each set bit identifies the corresponding
+    // fixed renderer slot, in ascending order.
+    for (Uint32 PoolBufferIndex = 0, RemainingMask = VertexBufferMask; RemainingMask != 0; ++PoolBufferIndex)
+    {
+        const Uint32 BufferSlot = PlatformMisc::GetLSB(RemainingMask);
+        pVBs[BufferSlot]        = VertexPool.GetBuffer(PoolBufferIndex);
+        RemainingMask &= RemainingMask - 1;
+    }
+
+    pContext->SetVertexBuffers(0, NumBuffers, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 }
 
 } // namespace
@@ -494,12 +505,13 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*   
 
         const DrawableBatch& Batch = *Pending.pBatch;
 
-        if (State.pVertexPool != Batch.pVertexPool)
+        if (State.pVertexPool != Batch.pVertexPool || State.VertexBufferMask != Batch.VertexBufferMask)
         {
-            State.pVertexPool = Batch.pVertexPool;
+            State.pVertexPool      = Batch.pVertexPool;
+            State.VertexBufferMask = Batch.VertexBufferMask;
             VERIFY(State.pVertexPool != nullptr, "Pending batch references null vertex pool");
             if (State.pVertexPool != nullptr)
-                BindVertexPool(*State.pVertexPool, pContext);
+                BindVertexPool(*State.pVertexPool, State.VertexBufferMask, pContext);
         }
 
         if (State.pPSO != Batch.pPSO)
@@ -620,6 +632,9 @@ bool RadientTesseraGeometryPass::DrawableBatchKeyLess::operator()(const Drawable
 
     if (Lhs.VertexPoolId != Rhs.VertexPoolId)
         return Lhs.VertexPoolId < Rhs.VertexPoolId;
+
+    if (Lhs.VertexBufferMask != Rhs.VertexBufferMask)
+        return Lhs.VertexBufferMask < Rhs.VertexBufferMask;
 
     return Lhs.IsIndexed < Rhs.IsIndexed;
 }
@@ -774,6 +789,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         pPSO->GetUniqueID(),
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),
+        Drawable.VertexBufferMask,
         Drawable.IsIndexed,
     };
 
@@ -787,6 +803,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         Batch.PrimitiveAttribsSize  = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
         Batch.MaterialId            = BatchKey.MaterialId;
         Batch.pVertexPool           = Drawable.pVertexPool;
+        Batch.VertexBufferMask      = Drawable.VertexBufferMask;
         Batch.MaterialAttribsOffset = MaterialBufferAllocation.GetOffset();
         Batch.IsIndexed             = Drawable.IsIndexed;
         Batch.MaterialSRB           = MaterialSRB;
@@ -797,6 +814,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
                    Batch.PSOFlags == PSOFlags &&
                    Batch.MaterialId == BatchKey.MaterialId &&
                    Batch.pVertexPool == Drawable.pVertexPool &&
+                   Batch.VertexBufferMask == Drawable.VertexBufferMask &&
                    Batch.MaterialAttribsOffset == MaterialBufferAllocation.GetOffset() &&
                    Batch.IsIndexed == Drawable.IsIndexed,
                "Drawable batch key refers to inconsistent shared render state");

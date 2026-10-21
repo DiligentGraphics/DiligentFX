@@ -88,10 +88,11 @@ private:
 
     struct DrawableBatchKey
     {
-        UniqueIdentifier PSOId        = 0;
-        UniqueIdentifier MaterialId   = 0;
-        UniqueIdentifier VertexPoolId = 0;
-        bool             IsIndexed    = false;
+        UniqueIdentifier PSOId            = 0;
+        UniqueIdentifier MaterialId       = 0;
+        UniqueIdentifier VertexPoolId     = 0;
+        Uint32           VertexBufferMask = 0;
+        bool             IsIndexed        = false;
     };
 
     struct DrawableBatchKeyLess
@@ -123,6 +124,7 @@ private:
 
         UniqueIdentifier MaterialId            = 0;
         IVertexPool*     pVertexPool           = nullptr;
+        Uint32           VertexBufferMask      = 0;
         Uint32           MaterialAttribsOffset = ~Uint32{0};
         bool             IsIndexed             = false;
 
@@ -153,6 +155,7 @@ private:
         IShaderResourceVariable* pMaterialAttribsVar   = nullptr;
         IPipelineState*          pPSO                  = nullptr;
         IVertexPool*             pVertexPool           = nullptr;
+        Uint32                   VertexBufferMask      = 0;
         Uint32                   MaterialAttribsOffset = ~Uint32{0};
         bool                     FrameSRBCommitted     = false;
     };

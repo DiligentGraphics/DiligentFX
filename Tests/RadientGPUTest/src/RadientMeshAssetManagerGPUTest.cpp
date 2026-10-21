@@ -31,6 +31,8 @@
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTypesX.hpp"
 #include "GPUUploadManager.h"
+#include "MapHelper.hpp"
+#include "VertexPool.h"
 #include "GPUTestingEnvironment.hpp"
 #include "RadientGPUTestHelpers.hpp"
 #include "RadientMaterialTestHelpers.hpp"
@@ -38,6 +40,7 @@
 
 #include "gtest/gtest.h"
 
+#include <array>
 #include <chrono>
 #include <thread>
 
@@ -251,6 +254,161 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
 
     pThreadPool->StopThreads();
     StopThreadPool.pThreadPool = nullptr;
+}
+
+TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreservesDataOnPoolGrowth)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreadPool{pThreadPool};
+
+    // The first triangle fits; the second forces the same pool to grow after
+    // the first upload has completed. Both allocations must retain their data.
+    GLTF::ResourceManager::CreateInfo ResourceManagerCI = MakeResourceManagerCI();
+    ResourceManagerCI.DefaultPoolDesc.VertexCount       = 4;
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager =
+        GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+    ASSERT_NE(pResourceManager, nullptr);
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+    RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pMeshManager, nullptr);
+
+    const std::array<std::array<RadientFloat3, 3>, 2> Positions{{
+        {{{0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}}},
+        {{{2.f, 0.f, 0.f}, {3.f, 0.f, 0.f}, {2.f, 1.f, 0.f}}},
+    }};
+    const std::array<RadientFloat4, 3>                Colors{{
+        {1.f, 0.f, 0.f, 1.f},
+        {0.f, 1.f, 0.f, 1.f},
+        {0.f, 0.f, 1.f, 1.f},
+    }};
+    const std::array<Uint32, 3>                       Indices{0, 1, 2};
+
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    VertexLayout.AddBuffer().AddAttribute("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, 1);
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Colors);
+    BlobCI.pData = Colors.data();
+    RefCntAutoPtr<IRadientDataBlob> pColorsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pColorsBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(Indices);
+    BlobCI.pData = Indices.data();
+    RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
+
+    RadientMeshPrimitiveCreateInfo PrimitiveCI;
+    PrimitiveCI.IndexCount = static_cast<Uint32>(Indices.size());
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 2> Meshes;
+    IVertexPool*                                    pPool              = nullptr;
+    Uint32                                          InitialPoolVersion = 0;
+    Uint32                                          InitialBaseVertex  = 0;
+    for (Uint32 MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        BlobCI.Size  = sizeof(Positions[MeshIndex]);
+        BlobCI.pData = Positions[MeshIndex].data();
+        RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
+        ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+        IRadientDataBlob* const VertexBuffers[]{pPositionsBlob, pColorsBlob};
+
+        RadientMeshCreateInfo MeshCI;
+        MeshCI.VertexData.VertexLayout    = VertexLayout;
+        MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
+        MeshCI.VertexData.VertexCount     = static_cast<Uint32>(Positions[MeshIndex].size());
+        MeshCI.IndexData.pIndexBuffer     = pIndexBlob;
+        MeshCI.IndexData.IndexCount       = static_cast<Uint32>(Indices.size());
+        MeshCI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT32;
+        MeshCI.pPrimitives                = &PrimitiveCI;
+        MeshCI.PrimitiveCount             = 1;
+        EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &Meshes[MeshIndex])));
+        ASSERT_NE(Meshes[MeshIndex], nullptr);
+        ASSERT_TRUE(WaitForMeshLoadStatus(Meshes[MeshIndex], RADIENT_STATUS_OK));
+        ASSERT_TRUE(WaitForMeshDrawableStatus(Meshes[MeshIndex], RADIENT_STATUS_OK, pUploadManager, pContext));
+
+        const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Meshes[MeshIndex], true);
+        ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+        ASSERT_NE(Result.pMesh, nullptr);
+        ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+        const RadientDrawableMeshGeometry& Geometry = Result.pMesh->Geometries[0];
+        ASSERT_NE(Geometry.pVertexPool, nullptr);
+        EXPECT_EQ(Geometry.VertexBufferMask, (1u << 0) | (1u << 3));
+        if (MeshIndex == 0)
+        {
+            pPool              = Geometry.pVertexPool;
+            InitialPoolVersion = pPool->GetVersion();
+            InitialBaseVertex  = Geometry.BaseVertex;
+        }
+        else
+        {
+            EXPECT_EQ(Geometry.pVertexPool, pPool);
+            EXPECT_NE(Geometry.BaseVertex, InitialBaseVertex);
+            EXPECT_GT(pPool->GetVersion(), InitialPoolVersion);
+        }
+    }
+
+    // POSITION uses the existing 32-byte grouped stream; COLOR_0 uses 16 bytes.
+    // The absent joint and TEXCOORD_1 streams must not allocate pool elements.
+    const VertexPoolDesc& PoolDesc = pPool->GetDesc();
+    ASSERT_EQ(PoolDesc.NumElements, 2u);
+    EXPECT_EQ(PoolDesc.pElements[0].Size, 32u);
+    EXPECT_EQ(PoolDesc.pElements[1].Size, 16u);
+    EXPECT_GE(PoolDesc.VertexCount, 6u);
+    ASSERT_NE(pPool->GetBuffer(0), nullptr);
+    ASSERT_NE(pPool->GetBuffer(1), nullptr);
+
+    BufferDesc ReadbackDesc;
+    ReadbackDesc.Name           = "Compact vertex pool readback";
+    ReadbackDesc.Size           = 3u * (32u + 16u);
+    ReadbackDesc.Usage          = USAGE_STAGING;
+    ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<IBuffer> pReadbackBuffer;
+    pDevice->CreateBuffer(ReadbackDesc, nullptr, &pReadbackBuffer);
+    ASSERT_NE(pReadbackBuffer, nullptr);
+
+    for (Uint32 MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        SCOPED_TRACE(MeshIndex);
+        const RadientMeshAssetDesc& Desc = Meshes[MeshIndex]->GetDesc();
+        ASSERT_EQ(Desc.GeometryCount, 1u);
+        const RadientVertexLayoutDesc& Layout = Desc.pGeometries[0].VertexLayout;
+        ASSERT_EQ(Layout.BufferCount, 2u);
+        EXPECT_EQ(Layout.pBuffers[0].ByteStride, 32u);
+        EXPECT_EQ(Layout.pBuffers[1].ByteStride, 16u);
+        ASSERT_EQ(Layout.AttributeCount, 4u);
+        EXPECT_STREQ(Layout.pAttributes[3].Semantic, "COLOR_0");
+        EXPECT_EQ(Layout.pAttributes[3].BufferIndex, 1u);
+
+        const RadientDrawableMeshResolveResult Result     = RadientMeshAssetManager::GetDrawableMesh(Meshes[MeshIndex], true);
+        const Uint64                           BaseVertex = Result.pMesh->Geometries[0].BaseVertex;
+        pContext->CopyBuffer(pPool->GetBuffer(0), BaseVertex * 32u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                             pReadbackBuffer, 0, 3u * 32u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pContext->CopyBuffer(pPool->GetBuffer(1), BaseVertex * 16u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                             pReadbackBuffer, 3u * 32u, 3u * 16u, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pContext->WaitForIdle();
+        MapHelper<Float32>   MappedData{pContext, pReadbackBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT};
+        const Float32* const pData = MappedData;
+        ASSERT_NE(pData, nullptr);
+        for (Uint32 Vertex = 0; Vertex < Positions[MeshIndex].size(); ++Vertex)
+        {
+            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 0], Positions[MeshIndex][Vertex].x);
+            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 1], Positions[MeshIndex][Vertex].y);
+            EXPECT_FLOAT_EQ(pData[Vertex * 8 + 2], Positions[MeshIndex][Vertex].z);
+            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 0], Colors[Vertex].x);
+            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 1], Colors[Vertex].y);
+            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 2], Colors[Vertex].z);
+            EXPECT_FLOAT_EQ(pData[24 + Vertex * 4 + 3], Colors[Vertex].w);
+        }
+    }
 }
 
 TEST(RadientMeshAssetManagerGPUTest, DisablesMorphTargetsWhenAllocatorSizeIsZero)

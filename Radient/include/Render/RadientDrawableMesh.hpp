@@ -60,6 +60,10 @@ struct RadientDrawableMeshGeometry
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
+    /// Active renderer buffer slots. Pool elements correspond to the set bits
+    /// in ascending order; inactive slots have no pool allocation.
+    Uint32 VertexBufferMask = 0;
+
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
 
