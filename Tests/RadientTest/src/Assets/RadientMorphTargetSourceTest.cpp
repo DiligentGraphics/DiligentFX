@@ -159,7 +159,7 @@ TEST(RadientMorphTargetSourceTest, RejectsInvalidAttributeDescription)
     EXPECT_EQ(InvalidStandardComponents.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 
     Data.Reset();
-    Data.Attributes[1].Semantic = RadientMorphTargetPositionSemantic;
+    Data.Attributes[0].Semantic = "CUSTOM"; // Both attributes are valid individually.
     RadientMorphTargetSource DuplicateSemantic{Data.Targets.data(), static_cast<Uint32>(Data.Targets.size()), Data.VertexCount};
     EXPECT_EQ(DuplicateSemantic.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 }
