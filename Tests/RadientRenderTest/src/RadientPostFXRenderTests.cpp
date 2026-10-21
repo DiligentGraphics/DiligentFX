@@ -843,7 +843,7 @@ TEST_F(RadientRender, SSR)
     CheckerData.AddMip(pCheckerBlob, 0, CheckerWidth * 4);
 
     RadientTextureLoadInfoX CheckerLoadInfo{};
-    CheckerLoadInfo.SetTextureData(CheckerData).SetSRGB(True);
+    CheckerLoadInfo.SetTextureData(CheckerData).SetEncodedTextureSRGB(True);
 
     RefCntAutoPtr<IRadientTextureAsset> pCheckerTexture;
     ASSERT_TRUE(IsPendingOrOK(GetAssetManager()->LoadTexture(CheckerLoadInfo, &pCheckerTexture)));

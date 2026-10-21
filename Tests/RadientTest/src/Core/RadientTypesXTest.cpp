@@ -248,10 +248,10 @@ TEST(RadientTypesXTest, LoadInfoCopiesNestedDescriptorsAndURIStrings)
     Data.pMipLevels          = &Mip;
     Data.MipLevelCount       = 1;
     RadientTextureLoadInfo Desc;
-    Desc.URI          = URI.c_str();
-    Desc.BaseURI      = BaseURI.c_str();
-    Desc.pTextureData = &Data;
-    Desc.IsSRGB       = True;
+    Desc.URI                  = URI.c_str();
+    Desc.BaseURI              = BaseURI.c_str();
+    Desc.pTextureData         = &Data;
+    Desc.EncodedTextureIsSRGB = True;
     RadientTextureLoadInfoX Info{Desc};
     EXPECT_NE(Info.Get().URI, URI.c_str());
     EXPECT_NE(Info.Get().BaseURI, BaseURI.c_str());
@@ -266,7 +266,7 @@ TEST(RadientTypesXTest, LoadInfoCopiesNestedDescriptorsAndURIStrings)
     EXPECT_STREQ(Info.Get().BaseURI, "assets/");
     EXPECT_EQ(Info.Get().pTextureData->Width, 2u);
     EXPECT_NE(Info.Get().pTextureData->pMipLevels[0].pDataBlob, nullptr);
-    EXPECT_TRUE(Info.Get().IsSRGB);
+    EXPECT_TRUE(Info.Get().EncodedTextureIsSRGB);
 
     RadientTextureLoadInfoX Copy{Info};
     EXPECT_NE(Copy.Get().pTextureData, Info.Get().pTextureData);
@@ -336,7 +336,7 @@ TEST(RadientTypesXTest, SourceSettersPreserveIdentityAndReleasePreviousBlobs)
     ASSERT_NE(Encoded, nullptr);
     ASSERT_NE(MipBlob, nullptr);
     RadientTextureLoadInfoX Info;
-    Info.SetURI("id").SetBaseURI("base/").SetSRGB(True).SetDataBlob(Encoded);
+    Info.SetURI("id").SetBaseURI("base/").SetEncodedTextureSRGB(True).SetDataBlob(Encoded);
     Encoded.Release();
     RadientTextureDataX Data{4, 4, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
     Data.AddMip(MipBlob).SetGenerateMips(False);
@@ -358,7 +358,7 @@ TEST(RadientTypesXTest, SourceSettersPreserveIdentityAndReleasePreviousBlobs)
     EXPECT_EQ(MipEvents.Destroyed, 1u);
     EXPECT_STREQ(Info.Get().URI, "new-id");
     EXPECT_STREQ(Info.Get().BaseURI, "");
-    EXPECT_TRUE(Info.Get().IsSRGB);
+    EXPECT_TRUE(Info.Get().EncodedTextureIsSRGB);
     EXPECT_EQ(Info.Get().pDataBlob, nullptr);
     Info.SetURI(nullptr).SetBaseURI(nullptr);
     EXPECT_EQ(Info.Get().URI, nullptr);
@@ -366,7 +366,7 @@ TEST(RadientTypesXTest, SourceSettersPreserveIdentityAndReleasePreviousBlobs)
     EXPECT_EQ(EncodedEvents.ReadersReleased, 0u);
     EXPECT_EQ(MipEvents.ReadersReleased, 0u);
     Info.Clear();
-    EXPECT_FALSE(Info.Get().IsSRGB);
+    EXPECT_FALSE(Info.Get().EncodedTextureIsSRGB);
 }
 
 TEST(RadientTypesXTest, TextureLoadCapturesWrapperBeforeAsyncProcessing)

@@ -199,7 +199,7 @@ handle. The caller can release its blob reference after the call returns.
 ```cpp
 RadientTextureLoadInfo LoadInfo;
 LoadInfo.pDataBlob = Blob;
-LoadInfo.IsSRGB = True;
+LoadInfo.EncodedTextureIsSRGB = True;
 RefCntAutoPtr<IRadientTextureAsset> Texture;
 const RADIENT_STATUS Status = AssetManager->LoadTexture(LoadInfo, &Texture);
 ```

@@ -154,7 +154,7 @@ XXH128Hash ComputeTextureDataHash(const void* pData,
 RadientTextureSource::RadientTextureSource(const RadientTextureLoadInfo& LoadInfo) :
     m_URI{GetURI(LoadInfo)},
     m_BaseURI{LoadInfo.BaseURI != nullptr ? LoadInfo.BaseURI : ""},
-    m_IsSRGB{LoadInfo.IsSRGB}
+    m_EncodedTextureIsSRGB{LoadInfo.EncodedTextureIsSRGB}
 {
     if (LoadInfo.pDataBlob != nullptr && LoadInfo.pTextureData != nullptr)
     {
@@ -376,7 +376,7 @@ RADIENT_STATUS RadientTextureSource::CreateLoader(IRadientAssetResolver* pAssetR
     TextureLoadInfo LoadInfo{m_URI.empty() ? nullptr : m_URI.c_str()};
     LoadInfo.Usage     = USAGE_DEFAULT;
     LoadInfo.BindFlags = BIND_SHADER_RESOURCE;
-    LoadInfo.IsSRGB    = m_IsSRGB;
+    LoadInfo.IsSRGB    = m_EncodedTextureIsSRGB;
 
     RefCntAutoPtr<ITextureLoader> pLoader;
     if (m_SourceType == SourceType::TextureData)
@@ -530,7 +530,7 @@ std::string RadientTextureSource::MakeCacheKey(IRadientAssetLocation* pAssetLoca
     {
         return {};
     }
-    Builder.AddBool("srgb", m_IsSRGB);
+    Builder.AddBool("srgb", m_EncodedTextureIsSRGB);
     return Builder.GetKey();
 }
 
@@ -548,16 +548,16 @@ void RadientTextureSource::ReleaseMemory()
 
 void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
 {
-    m_Status      = Rhs.m_Status;
-    m_ReadAccess  = std::move(Rhs.m_ReadAccess);
-    m_SourceType  = Rhs.m_SourceType;
-    m_URI         = std::move(Rhs.m_URI);
-    m_BaseURI     = std::move(Rhs.m_BaseURI);
-    m_IsSRGB      = Rhs.m_IsSRGB;
-    m_DataSize    = Rhs.m_DataSize;
-    m_TextureData = Rhs.m_TextureData;
-    m_Mips        = std::move(Rhs.m_Mips);
-    m_pData       = Rhs.m_pData;
+    m_Status                = Rhs.m_Status;
+    m_ReadAccess            = std::move(Rhs.m_ReadAccess);
+    m_SourceType            = Rhs.m_SourceType;
+    m_URI                   = std::move(Rhs.m_URI);
+    m_BaseURI               = std::move(Rhs.m_BaseURI);
+    m_EncodedTextureIsSRGB  = Rhs.m_EncodedTextureIsSRGB;
+    m_DataSize              = Rhs.m_DataSize;
+    m_TextureData           = Rhs.m_TextureData;
+    m_Mips                  = std::move(Rhs.m_Mips);
+    m_pData                 = Rhs.m_pData;
 
     Rhs.m_Status     = RADIENT_STATUS_INVALID_ARGUMENT;
     Rhs.m_SourceType = SourceType::Invalid;

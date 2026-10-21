@@ -113,7 +113,7 @@ RadientTextureDataX MakeTextureData(IRadientDataBlob*        pDataBlob,
 RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& TextureData)
 {
     RadientTextureLoadInfoX LoadInfo;
-    LoadInfo.SetTextureData(TextureData).SetSRGB(False);
+    LoadInfo.SetTextureData(TextureData).SetEncodedTextureSRGB(False);
     return LoadInfo;
 }
 

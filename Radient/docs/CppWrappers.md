@@ -38,16 +38,20 @@ blob, optional byte offset, and optional row stride. A zero stride retains its
 existing meaning of tightly packed rows. Multiple levels can share a blob.
 
 ```cpp
-RadientTextureDataX Data{Width, Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+RadientTextureDataX Data{Width, Height, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB};
 Data.AddMip(pMip0Blob)
     .AddMip(pMip1Blob);
 
 RadientTextureLoadInfoX LoadInfo;
-LoadInfo.SetTextureData(std::move(Data))
-        .SetSRGB(True);
+LoadInfo.SetTextureData(std::move(Data));
 
 pAssetManager->LoadTexture(LoadInfo, &pTexture);
 ```
+
+For supplied mip data, `Format` determines the loaded texture format and the color
+space used for mip generation. `EncodedTextureIsSRGB` is ignored for this input.
+`SetEncodedTextureSRGB` applies only to encoded input loaded from a URI or supplied
+with `SetDataBlob`.
 
 `GenerateMips` keeps its default of `True`; use `SetGenerateMips(False)` to load
 only the supplied levels. Format support and loading behavior are unchanged.

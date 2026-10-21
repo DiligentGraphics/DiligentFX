@@ -529,7 +529,7 @@ public:
     }
 
     /// Copies supplied mip metadata, retains its blobs, and clears encoded data.
-    /// URI, BaseURI, and IsSRGB are preserved.
+    /// URI, BaseURI, and EncodedTextureIsSRGB are preserved.
     RadientTextureLoadInfoX& SetTextureData(const RadientTextureData& Data)
     {
         RadientTextureDataX Copy{Data};
@@ -537,7 +537,7 @@ public:
     }
 
     /// Transfers supplied mip metadata and blob references, clearing encoded data.
-    /// Data becomes default-initialized; URI, BaseURI, and IsSRGB are preserved.
+    /// Data becomes default-initialized; URI, BaseURI, and EncodedTextureIsSRGB are preserved.
     RadientTextureLoadInfoX& SetTextureData(RadientTextureDataX&& Data) noexcept
     {
         RadientTextureDataX             Moved{std::move(Data)};
@@ -549,14 +549,15 @@ public:
         return *this;
     }
 
-    /// Selects the existing LoadTexture sRGB interpretation option.
-    RadientTextureLoadInfoX& SetSRGB(Bool IsSRGB) noexcept
+    /// Sets EncodedTextureIsSRGB for encoded input (URI or pDataBlob).
+    /// Supplied mip data uses RadientTextureData::Format and ignores this option.
+    RadientTextureLoadInfoX& SetEncodedTextureSRGB(Bool EncodedTextureIsSRGB) noexcept
     {
-        m_Desc.IsSRGB = IsSRGB;
+        m_Desc.EncodedTextureIsSRGB = EncodedTextureIsSRGB;
         return *this;
     }
 
-    /// Releases both data sources while preserving URI, BaseURI, and IsSRGB.
+    /// Releases both data sources while preserving URI, BaseURI, and EncodedTextureIsSRGB.
     RadientTextureLoadInfoX& ClearSourceData() noexcept { return SetDataBlob(nullptr); }
 
     /// Returns the C descriptor view without allocating or acquiring blob access.

@@ -879,7 +879,7 @@ RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&              
             LOG_WARNING_MESSAGE("GLTF texture ", TextureIndex, " in '", SourceURI,
                                 "' is used by both sRGB and linear material attributes; loading it as linear");
         }
-        LoadInfo.IsSRGB = Usage.SRGB && !Usage.Linear;
+        LoadInfo.EncodedTextureIsSRGB = Usage.SRGB && !Usage.Linear;
 
         RefCntAutoPtr<IRadientDataBlob> pDataBlob;
         if (Source.pData != nullptr)

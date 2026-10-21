@@ -41,6 +41,14 @@ levels can share a blob or use separate blobs; zero stride selects tightly packe
 pixel rows or compressed block rows for that level. The supplied bytes are consumed
 without copying or repacking.
 
+`RadientTextureLoadInfo::EncodedTextureIsSRGB` applies only to encoded input, from a
+URI or `pDataBlob`. When `pTextureData` is supplied, its `Format` determines the
+loaded color space and mip-generation filtering, regardless of
+`EncodedTextureIsSRGB`. For example, use
+`RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB` for sRGB-encoded RGBA pixels;
+`RADIENT_TEXTURE_FORMAT_RGBA8_UNORM` keeps linear interpretation even when
+`EncodedTextureIsSRGB` is `True`.
+
 Mip dimensions describe the logical image in pixels. Compressed storage rounds
 those dimensions up to complete blocks using the format's block width and height.
 Even a logical 1x1 mip requires one full compression block.

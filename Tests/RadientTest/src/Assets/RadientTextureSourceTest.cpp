@@ -162,7 +162,7 @@ std::vector<Uint8> ReadSourceBytes(const RadientTextureSource& Source)
 TEST(RadientTextureSourceTest, BuildsCanonicalURITextureCacheKey)
 {
     RadientTextureLoadInfoX LoadInfo{};
-    LoadInfo.SetURI("Textures/Albedo.png").SetSRGB(True);
+    LoadInfo.SetURI("Textures/Albedo.png").SetEncodedTextureSRGB(True);
 
     RadientTextureSource Source{LoadInfo};
     EXPECT_TRUE(Source.MakeCacheKey().empty());
@@ -183,7 +183,7 @@ TEST(RadientTextureSourceTest, BuildsCanonicalURITextureCacheKey)
     EXPECT_EQ(Source.MakeCacheKey(pLocation), BaseSource.MakeCacheKey(pLocation));
 
     RadientTextureLoadInfoX LinearLoadInfo = LoadInfo;
-    LinearLoadInfo.SetSRGB(False);
+    LinearLoadInfo.SetEncodedTextureSRGB(False);
     RadientTextureSource LinearSource{LinearLoadInfo};
     EXPECT_NE(Source.MakeCacheKey(pLocation), LinearSource.MakeCacheKey(pLocation));
 }
@@ -213,7 +213,7 @@ TEST(RadientTextureSourceTest, BuildsStableMemoryTextureCacheKeys)
     EXPECT_NE(Source.MakeCacheKey(), DifferentDataSource.MakeCacheKey());
 
     RadientTextureLoadInfoX LinearLoadInfo = LoadInfo;
-    LinearLoadInfo.SetSRGB(True);
+    LinearLoadInfo.SetEncodedTextureSRGB(True);
     RadientTextureSource LinearSource{LinearLoadInfo};
     EXPECT_NE(Source.MakeCacheKey(), LinearSource.MakeCacheKey());
 }

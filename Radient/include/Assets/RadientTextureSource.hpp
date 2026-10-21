@@ -83,11 +83,12 @@ public:
     explicit RadientTextureSource(const RadientTextureLoadInfo& LoadInfo);
     ~RadientTextureSource();
 
-    RadientTextureSource(RadientTextureSource&& Rhs) noexcept;
+    // clang-format off
+    RadientTextureSource           (RadientTextureSource&& Rhs) noexcept;
     RadientTextureSource& operator=(RadientTextureSource&& Rhs) noexcept;
-
-    RadientTextureSource(const RadientTextureSource&)            = delete;
+    RadientTextureSource           (const RadientTextureSource&) = delete;
     RadientTextureSource& operator=(const RadientTextureSource&) = delete;
+    // clang-format on
 
     bool IsMemory() const
     {
@@ -99,9 +100,9 @@ public:
         return m_SourceType == SourceType::TextureData;
     }
 
-    Bool IsSRGB() const
+    Bool EncodedTextureIsSRGB() const
     {
-        return m_IsSRGB;
+        return m_EncodedTextureIsSRGB;
     }
 
     const std::string& GetURI() const
@@ -145,7 +146,7 @@ private:
     SourceType  m_SourceType = SourceType::Invalid;
     std::string m_URI;
     std::string m_BaseURI;
-    Bool        m_IsSRGB = False;
+    Bool        m_EncodedTextureIsSRGB = False;
 
     RADIENT_STATUS m_Status = RADIENT_STATUS_OK;
 

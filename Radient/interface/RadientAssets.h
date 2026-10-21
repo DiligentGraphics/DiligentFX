@@ -721,6 +721,10 @@ struct RadientTextureData
     /// Pixel or block-compressed format shared by every mip. Accepts all
     /// RADIENT_TEXTURE_FORMAT values except RADIENT_TEXTURE_FORMAT_UNKNOWN,
     /// which is the default.
+    /// This format determines the loaded color space and mip-generation filtering.
+    /// RadientTextureLoadInfo::EncodedTextureIsSRGB is ignored for supplied mip data.
+    /// Use an sRGB format, such as RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB, for
+    /// sRGB-encoded data.
     RADIENT_TEXTURE_FORMAT Format DEFAULT_INITIALIZER(RADIENT_TEXTURE_FORMAT_UNKNOWN);
 
     /// Required array of MipLevelCount descriptors, ordered consecutively from mip 0.
@@ -790,8 +794,11 @@ struct RadientTextureLoadInfo
     /// see RadientTextureMipData::pDataBlob.
     const RadientTextureData* pTextureData DEFAULT_INITIALIZER(nullptr);
 
-    /// Interpret the texture as sRGB.
-    Bool IsSRGB DEFAULT_INITIALIZER(False);
+    /// Interpret encoded textures loaded from URI or pDataBlob as sRGB.
+    /// Ignored when pTextureData is provided: RadientTextureData::Format determines
+    /// the loaded format and the color space used for mip generation.
+    /// Defaults to False.
+    Bool EncodedTextureIsSRGB DEFAULT_INITIALIZER(False);
 };
 typedef struct RadientTextureLoadInfo RadientTextureLoadInfo;
 

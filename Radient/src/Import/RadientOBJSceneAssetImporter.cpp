@@ -339,7 +339,7 @@ private:
         if (Texture == m_Textures.end())
         {
             RadientTextureLoadInfoX LoadInfo;
-            LoadInfo.SetURI(Map.Name).SetBaseURI(Source.URI).SetSRGB(IsSRGB);
+            LoadInfo.SetURI(Map.Name).SetBaseURI(Source.URI).SetEncodedTextureSRGB(IsSRGB);
             RefCntAutoPtr<IRadientTextureAsset> pTexture;
 
             const RADIENT_STATUS Status = m_AssetManager.LoadTexture(LoadInfo, pTexture.GetAddressOfEmpty());

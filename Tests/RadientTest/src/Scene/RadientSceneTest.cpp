@@ -1171,7 +1171,7 @@ TEST(RadientAssetManagerTest, TextureWithSourceURIKeepsSourceURI)
     LoadInfo.SetURI("Textures/TestAlbedo.png");
     auto pBlob = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size());
     ASSERT_NE(pBlob, nullptr);
-    LoadInfo.SetDataBlob(pBlob).SetSRGB(True);
+    LoadInfo.SetDataBlob(pBlob).SetEncodedTextureSRGB(True);
 
     RefCntAutoPtr<IRadientTextureAsset> pTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
@@ -1205,7 +1205,7 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     RadientTextureLoadInfoX LoadInfo{};
     auto                    pBlob = MakeTestDataBlob(TransparentPng.data(), TransparentPng.size());
     ASSERT_NE(pBlob, nullptr);
-    LoadInfo.SetDataBlob(pBlob).SetSRGB(True);
+    LoadInfo.SetDataBlob(pBlob).SetEncodedTextureSRGB(True);
 
     RefCntAutoPtr<IRadientTextureAsset> pFirstTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(LoadInfo, &pFirstTexture), RADIENT_STATUS_PENDING);
@@ -1236,7 +1236,7 @@ TEST(RadientAssetManagerTest, DeduplicatesPendingTextureLoads)
     EXPECT_STRNE(pOwnedDuplicateTexture->GetReference().URI, pFirstTexture->GetReference().URI);
 
     RadientTextureLoadInfoX LinearLoadInfo = LoadInfo;
-    LinearLoadInfo.SetSRGB(False);
+    LinearLoadInfo.SetEncodedTextureSRGB(False);
 
     RefCntAutoPtr<IRadientTextureAsset> pLinearTexture;
     EXPECT_EQ(pAssetManager->LoadTexture(LinearLoadInfo, &pLinearTexture), RADIENT_STATUS_PENDING);

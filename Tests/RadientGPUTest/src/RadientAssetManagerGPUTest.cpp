@@ -68,7 +68,7 @@ RadientTextureDataX MakeTextureData(Uint32 Width, Uint32 Height, Uint32 Stride, 
 RadientTextureLoadInfoX MakeTextureLoadInfo(const RadientTextureData& TextureData)
 {
     RadientTextureLoadInfoX LoadInfo{};
-    LoadInfo.SetTextureData(TextureData).SetSRGB(False);
+    LoadInfo.SetTextureData(TextureData).SetEncodedTextureSRGB(False);
     return LoadInfo;
 }
 

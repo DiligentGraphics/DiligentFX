@@ -87,7 +87,7 @@ RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& Textur
                                                 Bool                      IsSRGB = True)
 {
     RadientTextureLoadInfoX LoadInfo;
-    LoadInfo.SetTextureData(TextureData).SetSRGB(IsSRGB);
+    LoadInfo.SetTextureData(TextureData).SetEncodedTextureSRGB(IsSRGB);
     return LoadInfo;
 }
 
@@ -395,7 +395,7 @@ TEST(RadientTextureAssetManagerTest, ReflectsEncodedPNGColorSpaceWithoutGPUResou
     for (Uint32 i = 0; i < Textures.size(); ++i)
     {
         RadientTextureLoadInfoX LoadInfo;
-        LoadInfo.SetDataBlob(pBlob).SetSRGB(i != 0 ? True : False);
+        LoadInfo.SetDataBlob(pBlob).SetEncodedTextureSRGB(i != 0 ? True : False);
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]), RADIENT_STATUS_PENDING);
         ExpectTextureDesc(Textures[i]);
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
@@ -566,7 +566,7 @@ TEST(RadientTextureAssetManagerTest, ReflectsCompressedDDSFormatsAndStoredMipCou
         auto pBlob     = MakeDDSTestBlob(Desc);
         ASSERT_NE(pBlob, nullptr);
         RadientTextureLoadInfoX LoadInfo;
-        LoadInfo.SetDataBlob(pBlob).SetSRGB(Case.IsSRGB);
+        LoadInfo.SetDataBlob(pBlob).SetEncodedTextureSRGB(Case.IsSRGB);
         RefCntAutoPtr<IRadientTextureAsset> pTexture;
         ASSERT_EQ(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
         ASSERT_TRUE(pThreadPool->ProcessTask(0, false));

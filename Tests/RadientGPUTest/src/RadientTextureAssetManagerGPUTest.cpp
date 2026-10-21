@@ -1318,7 +1318,7 @@ TEST(RadientTextureAssetManagerGPUTest, ParallelTextureUploads)
                 StartSignal.Wait();
 
                 RadientTextureLoadInfoX LoadInfo;
-                LoadInfo.SetTextureData(TextureData[i]).SetSRGB(False);
+                LoadInfo.SetTextureData(TextureData[i]).SetEncodedTextureSRGB(False);
                 LoadStatuses[i] = pManager->LoadTexture(*pThreadPool, LoadInfo, &Textures[i]);
             });
     }
