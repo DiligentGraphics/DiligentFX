@@ -149,6 +149,7 @@ public:
             nullptr,
             VertexAttribFlags,
             1u,
+            VT_UINT32,
             FirstIndexLocation,
             BaseVertex});
 
@@ -605,6 +606,7 @@ bool DrawableSlotMatchesPrimitive(const RadientDrawableSlot& Slot,
         Slot.IsValid() &&
         Slot.IsInDrawList() &&
         Slot.IsIndexed == IsIndexed &&
+        Slot.IndexType == VT_UINT32 &&
         Slot.AlphaMode == static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode) &&
         Slot.VertexAttribFlags == VertexAttribFlags &&
         Slot.FirstIndexLocation == FirstIndexLocation &&
@@ -1008,6 +1010,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
         nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS,
         1u,
+        VT_UINT16,
         17,
         5};
     Mesh.Geometries.push_back(RadientDrawableMeshGeometry{
@@ -1015,6 +1018,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
         nullptr,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS,
         1u | 8u,
+        VT_UINT32,
         29,
         8});
 
@@ -1035,6 +1039,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
     EXPECT_EQ(pGeometry0Slot->pVertexPool, Geometry0Pool);
     EXPECT_EQ(pGeometry0Slot->VertexBufferMask, 1u);
     EXPECT_EQ(pGeometry0Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS);
+    EXPECT_EQ(pGeometry0Slot->IndexType, VT_UINT16);
     EXPECT_EQ(pGeometry0Slot->FirstIndexLocation, 17u);
     EXPECT_EQ(pGeometry0Slot->BaseVertex, 5u);
     EXPECT_EQ(pGeometry0Slot->ElementCount, 3u);
@@ -1046,6 +1051,7 @@ TEST(RadientTesseraDrawableCacheTest, PrimitiveGeometryIndexSelectsDrawableGeome
     EXPECT_EQ(pGeometry1Slot->pVertexPool, Geometry1Pool);
     EXPECT_EQ(pGeometry1Slot->VertexBufferMask, 1u | 8u);
     EXPECT_EQ(pGeometry1Slot->VertexAttribFlags, PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS);
+    EXPECT_EQ(pGeometry1Slot->IndexType, VT_UINT32);
     EXPECT_EQ(pGeometry1Slot->FirstIndexLocation, 29u);
     EXPECT_EQ(pGeometry1Slot->BaseVertex, 8u);
     EXPECT_EQ(pGeometry1Slot->ElementCount, 3u);

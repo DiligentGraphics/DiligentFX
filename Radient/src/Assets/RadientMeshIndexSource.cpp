@@ -28,10 +28,12 @@
 
 #include "Core/RadientValidation.hpp"
 
+#include "Align.hpp"
 #include "GraphicsAccessories.hpp"
 #include "XXH128Hasher.hpp"
 
 #include <cstring>
+#include <limits>
 
 namespace Diligent
 {
@@ -39,9 +41,7 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint32 MeshIndexSourceCacheKeyVersion = 1;
-
-using RadientValidation::IsProductRepresentable;
+constexpr Uint32 MeshIndexSourceCacheKeyVersion = 2;
 
 VALUE_TYPE GetSourceIndexType(RADIENT_INDEX_TYPE IndexType)
 {
@@ -88,11 +88,16 @@ void UpdateStridedRaw(XXH128State& Hasher, const Uint8* pData, Uint32 Count, Uin
 RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshIndexData& CI)
 {
     const VALUE_TYPE IndexType = GetSourceIndexType(CI.IndexType);
-    if (CI.pIndexBuffer == nullptr || CI.IndexCount == 0 || IndexType == VT_UNDEFINED ||
-        !IsProductRepresentable<Uint32>(CI.IndexCount, sizeof(Uint32)))
+    if (CI.pIndexBuffer == nullptr || CI.IndexCount == 0 || IndexType == VT_UNDEFINED)
     {
         return;
     }
+
+    // GPU copies require four-byte alignment, including the final partial word
+    // when a sixteen-bit index stream contains an odd number of indices.
+    const Uint32 PackedIndexSize = IndexType == VT_UINT32 ? sizeof(Uint32) : sizeof(Uint16);
+    if (AlignUp(Uint64{CI.IndexCount} * PackedIndexSize, Uint64{4}) > (std::numeric_limits<Uint32>::max)())
+        return;
 
     RadientDataBlobReadAccess Buffer{CI.pIndexBuffer};
     if (!Buffer)
@@ -111,11 +116,16 @@ RadientMeshIndexSource::RadientMeshIndexSource(const RadientMeshIndexData& CI)
         return;
     }
 
-    m_IndexCount  = CI.IndexCount;
-    m_IndexType   = IndexType;
-    m_pIndexData  = static_cast<const Uint8*>(Buffer.GetData());
-    m_IndexBuffer = std::move(Buffer);
-    m_Status      = RADIENT_STATUS_OK;
+    m_IndexCount   = CI.IndexCount;
+    m_SrcIndexType = IndexType;
+    m_pIndexData   = static_cast<const Uint8*>(Buffer.GetData());
+    m_IndexBuffer  = std::move(Buffer);
+    m_Status       = RADIENT_STATUS_OK;
+}
+
+Uint32 RadientMeshIndexSource::GetIndexDataSize() const
+{
+    return m_IndexCount * GetValueSize(GetIndexType());
 }
 
 std::string RadientMeshIndexSource::MakeCacheKey() const
@@ -123,14 +133,14 @@ std::string RadientMeshIndexSource::MakeCacheKey() const
     if (RADIENT_FAILED(m_Status))
         return {};
 
-    const Uint32 IndexElementSize = GetValueSize(m_IndexType);
+    const Uint32 IndexElementSize = GetValueSize(m_SrcIndexType);
     if (IndexElementSize == 0 || m_pIndexData == nullptr)
         return {};
 
     XXH128State Hasher;
     Hasher.Update(MeshIndexSourceCacheKeyVersion,
                   m_IndexCount,
-                  m_IndexType,
+                  m_SrcIndexType,
                   Uint64{m_IndexCount} * IndexElementSize);
     UpdateStridedRaw(Hasher, m_pIndexData, m_IndexCount, IndexElementSize, IndexElementSize);
 
@@ -152,27 +162,16 @@ RADIENT_STATUS RadientMeshIndexSource::PackIndexData(PackDestination Destination
     if (m_pIndexData == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (m_IndexType == VT_UINT32)
+    if (m_SrcIndexType == VT_UINT16 || m_SrcIndexType == VT_UINT32)
     {
         std::memcpy(pDstIndices, m_pIndexData, GetIndexDataSize());
     }
-    else if (m_IndexType == VT_UINT16)
+    else if (m_SrcIndexType == VT_UINT8)
     {
         for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
         {
-            Uint16 Value16 = 0;
-            std::memcpy(&Value16, m_pIndexData + size_t{Index} * sizeof(Value16), sizeof(Value16));
-
-            const Uint32 Value = Value16;
-            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
-        }
-    }
-    else if (m_IndexType == VT_UINT8)
-    {
-        for (Uint32 Index = 0; Index < m_IndexCount; ++Index)
-        {
-            const Uint32 Value = m_pIndexData[Index];
-            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint32), &Value, sizeof(Value));
+            const Uint16 Value = m_pIndexData[Index];
+            std::memcpy(pDstIndices + size_t{Index} * sizeof(Uint16), &Value, sizeof(Value));
         }
     }
     else

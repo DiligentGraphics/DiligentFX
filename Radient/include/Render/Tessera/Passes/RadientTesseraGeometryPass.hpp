@@ -92,6 +92,7 @@ private:
         UniqueIdentifier MaterialId       = 0;
         UniqueIdentifier VertexPoolId     = 0;
         Uint32           VertexBufferMask = 0;
+        VALUE_TYPE       IndexType        = VT_UNDEFINED;
         bool             IsIndexed        = false;
     };
 
@@ -126,6 +127,7 @@ private:
         IVertexPool*     pVertexPool           = nullptr;
         Uint32           VertexBufferMask      = 0;
         Uint32           MaterialAttribsOffset = ~Uint32{0};
+        VALUE_TYPE       IndexType             = VT_UNDEFINED;
         bool             IsIndexed             = false;
 
         RadientMaterialSRBLease        MaterialSRB;

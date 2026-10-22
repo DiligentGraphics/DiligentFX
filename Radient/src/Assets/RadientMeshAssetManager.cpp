@@ -40,10 +40,12 @@
 #include "Assets/RadientMeshViewSource.hpp"
 #include "Render/RadientVertexAttributes.hpp"
 #include "RadientMeshViewCreateInfoSnapshot.hpp"
+#include "Align.hpp"
 #include "Cast.hpp"
 #include "DebugUtilities.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
+#include "GraphicsAccessories.hpp"
 #include "ThreadPool.hpp"
 #include "BufferSuballocator.h"
 #include "VertexPool.h"
@@ -125,15 +127,18 @@ class MeshIndexDataStorage : public MeshDataStatusStorage
 public:
     MeshIndexDataStorage(RADIENT_STATUS InitLoadStatus,
                          std::string    CacheKey,
-                         Uint32         IndexCount) :
+                         Uint32         IndexCount,
+                         VALUE_TYPE     IndexType) :
         MeshDataStatusStorage{InitLoadStatus, std::move(CacheKey)},
-        IndexCount{IndexCount}
+        IndexCount{IndexCount},
+        IndexType{IndexType}
     {
     }
 
     RefCntAutoPtr<IBufferSuballocation> pIndexAllocation;
 
-    const Uint32 IndexCount = 0;
+    const Uint32     IndexCount = 0;
+    const VALUE_TYPE IndexType  = VT_UNDEFINED;
 };
 
 class MeshVertexDataStorage : public MeshDataStatusStorage
@@ -521,7 +526,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
         GeometryDescs.push_back(RadientMeshGeometryDesc{
             VertexData.GetVertexLayout(),
             VertexData.VertexCount,
-            RADIENT_INDEX_TYPE_UINT32,
+            IndexData.IndexType == VT_UINT16 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32,
             IndexData.IndexCount});
 
         if (pMorphTargetData != nullptr && Desc.pMorphTargets == nullptr)
@@ -536,6 +541,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             pMorphTargetData,
             VertexData.VertexAttribFlags,
             VertexData.VertexBufferMask,
+            IndexData.IndexType,
             0,
             0,
             0});
@@ -596,6 +602,12 @@ void WriteMeshIndexData(void* pDstData, Uint32 NumBytes, void* pUserData) noexce
     const RADIENT_STATUS Status =
         Data->pSource->PackIndexData(RadientMeshIndexSource::PackDestination{pDstData, NumBytes});
     VERIFY_EXPR(Status == RADIENT_STATUS_OK);
+
+    // Initialize the upload's alignment padding without reading beyond the
+    // source blob. Padding is excluded from the reflected and drawn index count.
+    const Uint32 IndexDataSize = Data->pSource->GetIndexDataSize();
+    if (Status == RADIENT_STATUS_OK && NumBytes > IndexDataSize)
+        std::memset(static_cast<Uint8*>(pDstData) + IndexDataSize, 0, NumBytes - IndexDataSize);
 }
 
 void WriteMeshVertexData(void* pDstData, Uint32 NumBytes, void* pUserData) noexcept
@@ -736,7 +748,7 @@ void ScheduleMeshIndexUpload(IGPUUploadManager&            UploadManager,
 
     ScheduleBufferUpdateInfo UpdateInfo;
     UpdateInfo.pContext                   = nullptr;
-    UpdateInfo.NumBytes                   = Source.GetIndexDataSize();
+    UpdateInfo.NumBytes                   = AlignUp(Source.GetIndexDataSize(), 4u);
     UpdateInfo.pSrcData                   = nullptr;
     UpdateInfo.WriteDataCallback          = WriteMeshIndexData;
     UpdateInfo.pWriteDataCallbackUserData = &WriteData;
@@ -810,7 +822,7 @@ void CreateMeshIndexDataFromSource(const RadientMeshIndexSource& IndexSource,
 {
     MeshIndexDataStorage& IndexData = IndexDataPayload.GetStorage();
 
-    IndexData.pIndexAllocation = ResourceManager.AllocateIndices(IndexSource.GetIndexDataSize(), alignof(Uint32));
+    IndexData.pIndexAllocation = ResourceManager.AllocateIndices(AlignUp(IndexSource.GetIndexDataSize(), 4u), 4);
     if (IndexData.pIndexAllocation == nullptr)
     {
         IndexData.SetGPUResourceStatus(RADIENT_STATUS_FAILED);
@@ -1282,7 +1294,8 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshIndexData(IThreadPool&        
         [](const RadientMeshIndexSource& Source, std::string CacheKey) {
             return MeshIndexDataPayloadImpl::Create(RADIENT_STATUS_PENDING,
                                                     std::move(CacheKey),
-                                                    Source.GetIndexCount());
+                                                    Source.GetIndexCount(),
+                                                    Source.GetIndexType());
         },
         CreateMeshIndexDataFromSource);
 }
@@ -1943,7 +1956,7 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
 
                 RadientDrawableMeshGeometry& DrawableGeometry = Mesh.DrawableMesh.Geometries[GeometryIndex];
                 DrawableGeometry.pVertexPool                  = pVertexPool;
-                DrawableGeometry.FirstIndexLocation           = pIndexAllocation->GetOffset() / sizeof(Uint32);
+                DrawableGeometry.FirstIndexLocation           = pIndexAllocation->GetOffset() / GetValueSize(IndexData.IndexType);
                 DrawableGeometry.BaseVertex                   = pVertexAllocation->GetStartVertex();
 
                 if (Geometry.pMorphTargetDataPayload != nullptr)

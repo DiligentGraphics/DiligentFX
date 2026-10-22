@@ -110,10 +110,11 @@ struct RadientDrawableSlot
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    Uint32 FirstIndexLocation = 0;
-    Uint32 BaseVertex         = 0;
-    Uint32 FirstElement       = 0;
-    Uint32 ElementCount       = 0;
+    VALUE_TYPE IndexType          = VT_UNDEFINED;
+    Uint32     FirstIndexLocation = 0;
+    Uint32     BaseVertex         = 0;
+    Uint32     FirstElement       = 0;
+    Uint32     ElementCount       = 0;
 
     size_t DrawListIndex = InvalidDrawListIndex;
 

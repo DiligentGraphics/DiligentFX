@@ -64,6 +64,8 @@ struct RadientDrawableMeshGeometry
     /// in ascending order; inactive slots have no pool allocation.
     Uint32 VertexBufferMask = 0;
 
+    VALUE_TYPE IndexType = VT_UNDEFINED;
+
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
 

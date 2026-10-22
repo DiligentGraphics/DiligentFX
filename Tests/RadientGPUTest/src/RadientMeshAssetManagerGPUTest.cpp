@@ -42,6 +42,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <thread>
 
 using namespace Diligent;
@@ -409,6 +410,126 @@ TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreserve
             EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 1], Colors[Vertex].y);
             EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 2], Colors[Vertex].z);
             EXPECT_FLOAT_EQ(pData[9 + Vertex * 4 + 3], Colors[Vertex].w);
+        }
+    }
+}
+
+// The shared index buffer stores native 16-bit and 32-bit ranges. A three-index
+// 16-bit range needs two padding bytes for four-byte-aligned GPU copies; UINT8
+// input is widened to the same representation. Read back each range, including
+// its padding, after all uploads to detect overlap or incorrect element offsets.
+TEST(RadientMeshAssetManagerGPUTest, UploadsMixedIndexTypesWithAlignedPadding)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment*             pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*                     pDevice  = pEnv->GetDevice();
+    IDeviceContext*                    pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard                  StopThreadPool{pThreadPool};
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+    RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pMeshManager, nullptr);
+
+    // Ensure every tested index range has a nonzero byte offset.
+    const RefCntAutoPtr<IBufferSuballocation> pPrefix = pResourceManager->AllocateIndices(4);
+    ASSERT_NE(pPrefix, nullptr);
+    const RadientFloat3 Positions[]{{0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}};
+    const Uint16        Indices16[]{0, 2, 1};
+    const Uint32        Indices32[]{2, 1, 0};
+    const Uint8         Indices8[]{1, 0, 2};
+    const Uint16        WidenedIndices8[]{1, 0, 2};
+    struct IndexCase
+    {
+        RADIENT_INDEX_TYPE SourceType;
+        const void*        pData;
+        size_t             DataSize;
+        VALUE_TYPE         StoredType;
+        const void*        pExpected;
+        Uint32             ExpectedSize;
+    };
+    const IndexCase Cases[]{
+        {RADIENT_INDEX_TYPE_UINT16, Indices16, sizeof(Indices16), VT_UINT16, Indices16, sizeof(Indices16)},
+        {RADIENT_INDEX_TYPE_UINT32, Indices32, sizeof(Indices32), VT_UINT32, Indices32, sizeof(Indices32)},
+        {RADIENT_INDEX_TYPE_UINT8, Indices8, sizeof(Indices8), VT_UINT16, WidenedIndices8, sizeof(WidenedIndices8)},
+    };
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Positions);
+    BlobCI.pData = Positions;
+    RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+    IRadientDataBlob* const  VertexBuffers[]{pPositionsBlob};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.IndexCount = 3;
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 3> Meshes;
+    for (Uint32 CaseIndex = 0; CaseIndex < Meshes.size(); ++CaseIndex)
+    {
+        SCOPED_TRACE(CaseIndex);
+        const IndexCase& Case = Cases[CaseIndex];
+        BlobCI.Size           = Case.DataSize;
+        BlobCI.pData          = Case.pData;
+        RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
+        ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pIndexBlob), RADIENT_STATUS_OK);
+        RadientMeshCreateInfo MeshCI;
+        MeshCI.VertexData     = {VertexLayout, VertexBuffers, 3};
+        MeshCI.IndexData      = {pIndexBlob, 3, Case.SourceType};
+        MeshCI.pPrimitives    = &Primitive;
+        MeshCI.PrimitiveCount = 1;
+        EXPECT_TRUE(IsPendingOrOK(pMeshManager->CreateMesh(*pThreadPool, MeshCI, &Meshes[CaseIndex])));
+        ASSERT_NE(Meshes[CaseIndex], nullptr);
+        ASSERT_TRUE(WaitForMeshLoadStatus(Meshes[CaseIndex], RADIENT_STATUS_OK));
+        ASSERT_TRUE(WaitForMeshDrawableStatus(Meshes[CaseIndex], RADIENT_STATUS_OK, pUploadManager, pContext));
+    }
+    ASSERT_EQ(pResourceManager->GetIndexBufferCount(), 1u);
+    IBuffer* const pIndexBuffer = pResourceManager->GetIndexBuffer();
+    ASSERT_NE(pIndexBuffer, nullptr);
+    BufferDesc ReadbackDesc;
+    ReadbackDesc.Name           = "Mixed index types readback";
+    ReadbackDesc.Size           = sizeof(Indices32);
+    ReadbackDesc.Usage          = USAGE_STAGING;
+    ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<IBuffer> pReadbackBuffer;
+    pDevice->CreateBuffer(ReadbackDesc, nullptr, &pReadbackBuffer);
+    ASSERT_NE(pReadbackBuffer, nullptr);
+
+    for (Uint32 CaseIndex = 0; CaseIndex < Meshes.size(); ++CaseIndex)
+    {
+        SCOPED_TRACE(CaseIndex);
+        const IndexCase&                       Case   = Cases[CaseIndex];
+        const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Meshes[CaseIndex], true);
+        ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+        ASSERT_NE(Result.pMesh, nullptr);
+        ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+        const RadientDrawableMeshGeometry& Geometry = Result.pMesh->Geometries[0];
+        EXPECT_EQ(Geometry.IndexType, Case.StoredType);
+        const RadientMeshAssetDesc& Desc = Meshes[CaseIndex]->GetDesc();
+        ASSERT_EQ(Desc.GeometryCount, 1u);
+        EXPECT_EQ(Desc.pGeometries[0].IndexCount, 3u);
+        EXPECT_EQ(Desc.pGeometries[0].IndexType, Case.StoredType == VT_UINT16 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32);
+        const Uint32 ElementSize = Case.StoredType == VT_UINT16 ? sizeof(Uint16) : sizeof(Uint32);
+        const Uint64 ByteOffset  = Uint64{Geometry.FirstIndexLocation} * ElementSize;
+        const Uint32 CopySize    = Case.StoredType == VT_UINT16 ? 8u : 12u;
+        EXPECT_GE(ByteOffset, 4u);
+        EXPECT_EQ(ByteOffset % 4u, 0u);
+        pContext->CopyBuffer(pIndexBuffer, ByteOffset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                             pReadbackBuffer, 0, CopySize, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pContext->WaitForIdle();
+        MapHelper<Uint8>   MappedData{pContext, pReadbackBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT};
+        const Uint8* const pData = MappedData;
+        ASSERT_NE(pData, nullptr);
+        EXPECT_EQ(std::memcmp(pData, Case.pExpected, Case.ExpectedSize), 0);
+        for (Uint32 Byte = Case.ExpectedSize; Byte < CopySize; ++Byte)
+        {
+            EXPECT_EQ(pData[Byte], 0u);
         }
     }
 }

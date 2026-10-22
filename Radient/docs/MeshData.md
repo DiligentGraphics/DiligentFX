@@ -33,7 +33,8 @@ service or its asset manager, which would create an ownership cycle.
 
 Describe source vertices with the existing vertex-layout API and data blobs.
 The renderer chooses the stored layout. Index data accepts tightly packed
-`UINT8`, `UINT16`, or `UINT32` elements.
+`UINT8`, `UINT16`, or `UINT32` elements. Sixteen- and thirty-two-bit indices
+retain their width in GPU storage; eight-bit indices are widened to sixteen bits.
 
 ```cpp
 RadientVertexLayoutDescX Layout;

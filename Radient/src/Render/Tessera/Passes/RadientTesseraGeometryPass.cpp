@@ -572,7 +572,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*   
             {
                 pContext->MultiDrawIndexed({Pending.DrawCount,
                                             pDrawItems,
-                                            VT_UINT32,
+                                            Batch.IndexType,
                                             DRAW_FLAG_VERIFY_ALL});
             }
             else
@@ -580,7 +580,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*   
                 for (Uint32 DrawIndex = 0; DrawIndex < Pending.DrawCount; ++DrawIndex)
                 {
                     const MultiDrawIndexedItem& DrawItem = pDrawItems[DrawIndex];
-                    DrawIndexedAttribs          DrawAttrs{DrawItem.NumIndices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    DrawIndexedAttribs          DrawAttrs{DrawItem.NumIndices, Batch.IndexType, DRAW_FLAG_VERIFY_ALL};
                     if (DrawIndex > 0)
                         DrawAttrs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
                     DrawAttrs.FirstIndexLocation    = DrawItem.FirstIndexLocation;
@@ -635,6 +635,9 @@ bool RadientTesseraGeometryPass::DrawableBatchKeyLess::operator()(const Drawable
 
     if (Lhs.VertexBufferMask != Rhs.VertexBufferMask)
         return Lhs.VertexBufferMask < Rhs.VertexBufferMask;
+
+    if (Lhs.IndexType != Rhs.IndexType)
+        return Lhs.IndexType < Rhs.IndexType;
 
     return Lhs.IsIndexed < Rhs.IsIndexed;
 }
@@ -790,6 +793,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),
         Drawable.VertexBufferMask,
+        Drawable.IndexType,
         Drawable.IsIndexed,
     };
 
@@ -805,6 +809,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         Batch.pVertexPool           = Drawable.pVertexPool;
         Batch.VertexBufferMask      = Drawable.VertexBufferMask;
         Batch.MaterialAttribsOffset = MaterialBufferAllocation.GetOffset();
+        Batch.IndexType             = Drawable.IndexType;
         Batch.IsIndexed             = Drawable.IsIndexed;
         Batch.MaterialSRB           = MaterialSRB;
     }
@@ -816,6 +821,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
                    Batch.pVertexPool == Drawable.pVertexPool &&
                    Batch.VertexBufferMask == Drawable.VertexBufferMask &&
                    Batch.MaterialAttribsOffset == MaterialBufferAllocation.GetOffset() &&
+                   Batch.IndexType == Drawable.IndexType &&
                    Batch.IsIndexed == Drawable.IsIndexed,
                "Drawable batch key refers to inconsistent shared render state");
     }

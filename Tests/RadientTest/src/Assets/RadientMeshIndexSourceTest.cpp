@@ -132,11 +132,11 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidCreateInfo)
     ExpectInvalid(InvalidCI);
 }
 
-TEST(RadientMeshIndexSourceTest, PacksUint8Uint16AndUint32AsUint32)
+TEST(RadientMeshIndexSourceTest, PreservesUint16AndUint32AndWidensUint8)
 {
     std::array<Uint8, 3>  Indices8{255, 1, 0};
-    std::array<Uint16, 3> Indices16{3, 4, 5};
-    std::array<Uint32, 3> Indices32{6, 7, 8};
+    std::array<Uint16, 3> Indices16{65535, 4, 5};
+    std::array<Uint32, 3> Indices32{65536, 7, 8};
 
     const RadientMeshIndexSource Source8  = MakeIndexSource(Indices8);
     const RadientMeshIndexSource Source16 = MakeIndexSource(Indices16);
@@ -146,9 +146,16 @@ TEST(RadientMeshIndexSourceTest, PacksUint8Uint16AndUint32AsUint32)
     ASSERT_EQ(Source16.GetStatus(), RADIENT_STATUS_OK);
     ASSERT_EQ(Source32.GetStatus(), RADIENT_STATUS_OK);
 
+    EXPECT_EQ(Source8.GetIndexType(), VT_UINT16);
+    EXPECT_EQ(Source16.GetIndexType(), VT_UINT16);
+    EXPECT_EQ(Source32.GetIndexType(), VT_UINT32);
+    EXPECT_EQ(Source8.GetIndexDataSize(), 6u);
+    EXPECT_EQ(Source16.GetIndexDataSize(), 6u);
+    EXPECT_EQ(Source32.GetIndexDataSize(), 12u);
+
     ExpectPackedIndices(Source8, {255, 1, 0});
-    ExpectPackedIndices(Source16, {3, 4, 5});
-    ExpectPackedIndices(Source32, {6, 7, 8});
+    ExpectPackedIndices(Source16, {65535, 4, 5});
+    ExpectPackedIndices(Source32, {65536, 7, 8});
 }
 
 TEST(RadientMeshIndexSourceTest, RetainsReferencedBlobAndKeepsOwnerAlive)
@@ -314,7 +321,7 @@ TEST(RadientMeshIndexSourceTest, RejectsInvalidPackDestination)
     RadientMeshIndexSource Source = MakeIndexSource(Indices);
     ASSERT_EQ(Source.GetStatus(), RADIENT_STATUS_OK);
 
-    std::array<Uint32, 2> SmallBuffer{};
+    std::array<Uint16, 2> SmallBuffer{};
     EXPECT_EQ(Source.PackIndexData(RadientMeshIndexSource::PackDestination{nullptr, Source.GetIndexDataSize()}),
               RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Source.PackIndexData(RadientMeshIndexSource::PackDestination{
@@ -336,4 +343,11 @@ TEST(RadientMeshIndexSourceTest, CacheKeyDependsOnIndexData)
     ASSERT_FALSE(SourceA.MakeCacheKey().empty());
     EXPECT_EQ(SourceA.MakeCacheKey(), SourceB.MakeCacheKey());
     EXPECT_NE(SourceA.MakeCacheKey(), SourceC.MakeCacheKey());
+}
+
+TEST(RadientMeshIndexSourceTest, CacheKeyDistinguishesStoredIndexTypes)
+{
+    const RadientMeshIndexSource Source16 = MakeIndexSource(std::array<Uint16, 3>{0, 1, 2});
+    const RadientMeshIndexSource Source32 = MakeIndexSource(std::array<Uint32, 3>{0, 1, 2});
+    EXPECT_NE(Source16.MakeCacheKey(), Source32.MakeCacheKey());
 }

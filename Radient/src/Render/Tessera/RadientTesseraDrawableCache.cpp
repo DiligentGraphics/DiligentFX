@@ -714,6 +714,7 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         Slot.pVertexPool        = Geometry.pVertexPool;
         Slot.VertexBufferMask   = Geometry.VertexBufferMask;
         Slot.VertexAttribFlags  = Geometry.VertexAttribFlags;
+        Slot.IndexType          = Geometry.IndexType;
         Slot.FirstIndexLocation = Geometry.FirstIndexLocation;
         Slot.BaseVertex         = Geometry.BaseVertex;
         Slot.FirstElement       = Primitive.FirstElement;

@@ -236,7 +236,7 @@ TEST_F(RadientMeshImportServicesTest, PendingViewsRetainSourcesAndCopyDescriptor
     EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
     EXPECT_EQ(Desc.pGeometries[0].IndexCount, 3u);
     // Reflection describes the renderer's packed data, not the UINT8 source.
-    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT16);
     ASSERT_GT(Desc.pGeometries[0].VertexLayout.AttributeCount, 0u);
     EXPECT_STREQ(Desc.pGeometries[0].VertexLayout.pAttributes[0].Semantic, "POSITION");
 }

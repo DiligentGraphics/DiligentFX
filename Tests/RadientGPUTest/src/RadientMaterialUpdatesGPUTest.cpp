@@ -28,10 +28,13 @@
 #include "RadientTypesX.hpp"
 #include "RadientStandardMaterialParameters.h"
 
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "GPUTestingEnvironment.hpp"
+#include "GLTFResourceManager.hpp"
 #include "RadientMaterialTestHelpers.hpp"
+#include "VertexPool.h"
 
 #include "gtest/gtest.h"
 
@@ -39,6 +42,7 @@
 #include <chrono>
 #include <cstring>
 #include <thread>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -64,6 +68,8 @@ struct QuadSetup
     bool                          BackFacing     = false;
     bool                          UseVertexColor = false;
     RadientFloat4                 VertexColor    = {1.f, 1.f, 1.f, 1.f};
+    RADIENT_INDEX_TYPE            IndexType      = RADIENT_INDEX_TYPE_UINT16;
+    Uint32                        FirstIndex     = 0;
 };
 
 using QuadSetups = std::array<QuadSetup, 4>;
@@ -127,8 +133,19 @@ public:
         ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
         ASSERT_EQ(pEngine->GetAssetManager(&pAssets), RADIENT_STATUS_OK);
 
+        if (ReservedVertexCount != 0)
+        {
+            GLTF::ResourceManager::VertexLayoutKey LayoutKey;
+            LayoutKey.Elements.emplace_back(static_cast<Uint32>(sizeof(RadientFloat3)), BIND_VERTEX_BUFFER);
+            LayoutKey.Elements.emplace_back(static_cast<Uint32>(sizeof(RadientFloat2)), BIND_VERTEX_BUFFER);
+            RadientAssetManagerImpl& AssetManager = *static_cast<RadientAssetManagerImpl*>(pAssets.RawPtr());
+            pReservedVertices                     = AssetManager.GetResourceManager()->AllocateVertices(LayoutKey, ReservedVertexCount);
+            ASSERT_NE(pReservedVertices, nullptr);
+        }
+
         RadientRendererDesc RendererDesc;
         RendererDesc.EnableAsyncPipelineCompilation = EnableAsyncPipelineCompilation;
+        RendererDesc.MultiDrawBatchSize             = MultiDrawBatchSize;
         ASSERT_EQ(pEngine->CreateRenderer(RendererDesc, &pRenderer), RADIENT_STATUS_OK);
         ASSERT_EQ(pEngine->CreateScene({}, &pScene), RADIENT_STATUS_OK);
 
@@ -160,6 +177,11 @@ public:
         // references initialized to the states expected after each update.
         for (Uint32 Index = 0; Index < Materials.size(); ++Index)
         {
+            if (ShareMaterial && Index != 0)
+            {
+                Materials[Index] = Materials[0];
+                continue;
+            }
             const QuadSetup&                            Setup = Setups[Index];
             RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
             DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
@@ -202,11 +224,7 @@ public:
         const Uint16                          Indices[]     = {0, 1, 2, 0, 2, 3};
         const Uint16                          BackIndices[] = {0, 2, 1, 0, 3, 2};
         const RefCntAutoPtr<IRadientDataBlob> pVertices     = MakeBlob(Vertices, sizeof(Vertices));
-        const RefCntAutoPtr<IRadientDataBlob> pIndices      = MakeBlob(Indices, sizeof(Indices));
-        const RefCntAutoPtr<IRadientDataBlob> pBackIndices  = MakeBlob(BackIndices, sizeof(BackIndices));
         ASSERT_NE(pVertices, nullptr);
-        ASSERT_NE(pIndices, nullptr);
-        ASSERT_NE(pBackIndices, nullptr);
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer(sizeof(Vertex));
         Layout.AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
@@ -229,12 +247,29 @@ public:
             }
             IRadientDataBlob* VertexBuffers[] = {pVertices, pVertexColors};
 
+            const Uint16* const pSourceIndices = Setups[Index].BackFacing ? BackIndices : Indices;
+            std::vector<Uint16> Indices16(Setups[Index].FirstIndex, Uint16{0});
+            Indices16.insert(Indices16.end(), pSourceIndices, pSourceIndices + 6);
+            RefCntAutoPtr<IRadientDataBlob> pIndices;
+            if (Setups[Index].IndexType == RADIENT_INDEX_TYPE_UINT16)
+            {
+                pIndices = MakeBlob(Indices16.data(), Indices16.size() * sizeof(Uint16));
+            }
+            else
+            {
+                ASSERT_EQ(Setups[Index].IndexType, RADIENT_INDEX_TYPE_UINT32);
+                const std::vector<Uint32> Indices32(Indices16.begin(), Indices16.end());
+                pIndices = MakeBlob(Indices32.data(), Indices32.size() * sizeof(Uint32));
+            }
+            ASSERT_NE(pIndices, nullptr);
+
             RadientMeshPrimitiveCreateInfo Primitive;
+            Primitive.FirstIndex = Setups[Index].FirstIndex;
             Primitive.IndexCount = 6;
             Primitive.pMaterial  = Materials[Index];
             RadientMeshCreateInfo MeshCI;
             MeshCI.VertexData                            = {MeshLayout, VertexBuffers, 4};
-            MeshCI.IndexData                             = {Setups[Index].BackFacing ? pBackIndices.RawPtr() : pIndices.RawPtr(), 6, RADIENT_INDEX_TYPE_UINT16};
+            MeshCI.IndexData                             = {pIndices, static_cast<Uint32>(Indices16.size()), Setups[Index].IndexType};
             MeshCI.pPrimitives                           = &Primitive;
             MeshCI.PrimitiveCount                        = 1;
             RefCntAutoPtr<IRadientMeshAsset>& pMesh      = Meshes[Index];
@@ -359,10 +394,14 @@ public:
         pContext->UnmapTextureSubresource(pReadback, 0, 0);
     }
 
-    IRenderDevice*                                      pDevice  = nullptr;
-    IDeviceContext*                                     pContext = nullptr;
+    Uint32                                              ReservedVertexCount = 0;
+    Uint32                                              MultiDrawBatchSize  = 16;
+    bool                                                ShareMaterial       = false;
+    IRenderDevice*                                      pDevice             = nullptr;
+    IDeviceContext*                                     pContext            = nullptr;
     RefCntAutoPtr<IRadientEngine>                       pEngine;
     RefCntAutoPtr<IRadientAssetManager>                 pAssets;
+    RefCntAutoPtr<IVertexPoolAllocation>                pReservedVertices;
     RefCntAutoPtr<IRadientRenderer>                     pRenderer;
     RefCntAutoPtr<IRadientScene>                        pScene;
     RefCntAutoPtr<IRadientTextureAsset>                 pTexture;
@@ -447,6 +486,57 @@ TEST(RadientMaterialUpdatesGPUTest, RendersDifferentVertexSlotMappingsFromTheSam
     ASSERT_GT(Colors[3][0], Colors[2][0] + 20);
     ExpectSameColor(Colors[0], Colors[2]);
     ExpectSameColor(Colors[1], Colors[2]);
+}
+
+// Both index formats use one index buffer and one material. Reserve vertices
+// beyond the 16-bit range, and prefix each index allocation with degenerate
+// triangles so correct rendering requires both BaseVertex and FirstIndex.
+// Exercise individual draws and multi-draw batches where the backend supports them.
+TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        Setups[Index].IndexType  = (Index & 1) == 0 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32;
+        Setups[Index].FirstIndex = 3 * (Index + 1);
+    }
+
+    for (Uint32 BatchSize : {1u, 16u})
+    {
+        SCOPED_TRACE(BatchSize);
+        MaterialUpdateScene Scene;
+        Scene.ReservedVertexCount = 65536;
+        Scene.MultiDrawBatchSize  = BatchSize;
+        Scene.ShareMaterial       = true;
+        ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+        RadientAssetManagerImpl& AssetManager = *static_cast<RadientAssetManagerImpl*>(Scene.pAssets.RawPtr());
+        ASSERT_EQ(AssetManager.GetResourceManager()->GetIndexBufferCount(), 1u);
+        for (Uint32 Index = 0; Index < Scene.Meshes.size(); ++Index)
+        {
+            SCOPED_TRACE(Index);
+            const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[Index], true);
+            ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(Result.pMesh, nullptr);
+            ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+            ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
+            EXPECT_GE(Result.pMesh->Geometries[0].BaseVertex, 65536u);
+            EXPECT_EQ(Result.pMesh->Geometries[0].IndexType, (Index & 1) == 0 ? VT_UINT16 : VT_UINT32);
+            EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, Setups[Index].FirstIndex);
+            EXPECT_EQ(Result.pMesh->Primitives[0].pMaterialAsset, Scene.Materials[0]);
+            EXPECT_EQ(Scene.Meshes[Index]->GetDesc().pGeometries[0].IndexType, Setups[Index].IndexType);
+        }
+
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        ASSERT_GT(Colors[0][0], 20);
+        ASSERT_GT(Colors[0][1], Colors[0][0] + 20);
+        ASSERT_GT(Colors[0][2], Colors[0][1] + 20);
+        for (Uint32 Index = 1; Index < Colors.size(); ++Index)
+        {
+            ExpectSameColor(Colors[Index], Colors[0]);
+        }
+    }
 }
 
 TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneChanges)

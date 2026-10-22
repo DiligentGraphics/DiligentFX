@@ -428,7 +428,7 @@ TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
     ASSERT_EQ(Desc.GeometryCount, 1u);
     ASSERT_NE(Desc.pGeometries, nullptr);
-    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT32);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT16);
     EXPECT_EQ(Desc.pGeometries[0].IndexCount, 3u);
     EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
 }

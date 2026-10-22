@@ -29,6 +29,7 @@
 #include "Assets/RadientMeshIndexSource.hpp"
 #include "gtest/gtest.h"
 
+#include <cstring>
 #include <initializer_list>
 #include <vector>
 
@@ -41,15 +42,30 @@ namespace Testing
 inline void ExpectPackedIndices(const RadientMeshIndexSource& Source,
                                 std::initializer_list<Uint32> ExpectedIndices)
 {
-    std::vector<Uint32> PackedIndices(Source.GetIndexCount(), 0xCDCDCDCDu);
-    ASSERT_EQ(PackedIndices.size(), ExpectedIndices.size());
+    ASSERT_EQ(Source.GetIndexCount(), ExpectedIndices.size());
+    ASSERT_TRUE(Source.GetIndexType() == VT_UINT16 || Source.GetIndexType() == VT_UINT32);
+    const Uint32 IndexSize = Source.GetIndexType() == VT_UINT16 ? sizeof(Uint16) : sizeof(Uint32);
+    ASSERT_EQ(Source.GetIndexDataSize(), Source.GetIndexCount() * IndexSize);
+    std::vector<Uint8> PackedIndices(Source.GetIndexDataSize(), Uint8{0xCD});
+    ASSERT_EQ(Source.PackIndexData({PackedIndices.data(), Source.GetIndexDataSize()}), RADIENT_STATUS_OK);
 
-    ASSERT_EQ(Source.PackIndexData(RadientMeshIndexSource::PackDestination{
-                  PackedIndices.data(),
-                  static_cast<Uint32>(PackedIndices.size() * sizeof(PackedIndices[0]))}),
-              RADIENT_STATUS_OK);
-
-    EXPECT_EQ(PackedIndices, std::vector<Uint32>{ExpectedIndices});
+    size_t Offset = 0;
+    for (Uint32 Expected : ExpectedIndices)
+    {
+        Uint32 Value = 0;
+        if (Source.GetIndexType() == VT_UINT16)
+        {
+            Uint16 Value16 = 0;
+            std::memcpy(&Value16, PackedIndices.data() + Offset, sizeof(Value16));
+            Value = Value16;
+        }
+        else
+        {
+            std::memcpy(&Value, PackedIndices.data() + Offset, sizeof(Value));
+        }
+        EXPECT_EQ(Value, Expected);
+        Offset += IndexSize;
+    }
 }
 
 } // namespace Testing

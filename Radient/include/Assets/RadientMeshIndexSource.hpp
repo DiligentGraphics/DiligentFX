@@ -64,10 +64,14 @@ public:
         return m_IndexCount;
     }
 
-    Uint32 GetIndexDataSize() const
+    /// GPU index type. Eight-bit source indices are widened to sixteen bits.
+    VALUE_TYPE GetIndexType() const
     {
-        return m_IndexCount * sizeof(Uint32);
+        return m_SrcIndexType == VT_UINT8 ? VT_UINT16 : m_SrcIndexType;
     }
+
+    /// Packed index bytes, excluding any upload-alignment padding.
+    Uint32 GetIndexDataSize() const;
 
     RADIENT_STATUS PackIndexData(PackDestination Destination) const noexcept;
 
@@ -79,8 +83,8 @@ private:
 
     Uint32 m_IndexCount = 0;
 
-    VALUE_TYPE   m_IndexType  = VT_UNDEFINED;
-    const Uint8* m_pIndexData = nullptr;
+    VALUE_TYPE   m_SrcIndexType = VT_UNDEFINED;
+    const Uint8* m_pIndexData   = nullptr;
 
     RadientDataBlobReadAccess m_IndexBuffer;
 };
