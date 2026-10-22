@@ -1529,7 +1529,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
 
                         pMorphTargetData                     = &Geometry.pMorphTargetDataPayload->GetStorage();
                         const RADIENT_STATUS MorphDataStatus = pMorphTargetData->GetLoadStatus();
-                        if (MorphDataStatus != RADIENT_STATUS_OK)
+                        // Cached metadata is immutable, but the original payload initializer
+                        // may still be running. Mesh load status tracks that pending work.
+                        if (RADIENT_FAILED(MorphDataStatus))
                             return FailMesh(MorphDataStatus);
 
                         if (pMorphTargetData->Data.GetVertexCount() != VertexData.VertexCount)

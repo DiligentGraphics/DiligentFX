@@ -646,6 +646,126 @@ TEST(RadientMeshAssetManagerGPUTest, DisablesMorphTargetsWhenAllocatorSizeIsZero
     EXPECT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 0u);
 }
 
+TEST(RadientMeshAssetManagerGPUTest, MeshViewAcceptsPendingMorphTargetCacheHit)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment*             pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*                     pDevice  = pEnv->GetDevice();
+    IDeviceContext*                    pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pOwnerThreadPool     = CreateThreadPool(ThreadPoolCreateInfo{2});
+    RefCntAutoPtr<IThreadPool> pDuplicateThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pOwnerThreadPool, nullptr);
+    ASSERT_NE(pDuplicateThreadPool, nullptr);
+    ThreadPoolStopGuard StopOwnerThreadPool{pOwnerThreadPool};
+    ThreadPoolStopGuard StopDuplicateThreadPool{pDuplicateThreadPool};
+
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+    // Without a context, no upload pages can be mapped until we pump uploads.
+    // Both original data tasks stay inside ScheduleBufferUpdate after publishing
+    // their payloads, so duplicate tasks can finish with pending cache entries.
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, nullptr);
+    ASSERT_NE(pUploadManager, nullptr);
+    struct UploadStopGuard
+    {
+        IGPUUploadManager& UploadManager;
+        IDeviceContext&    Context;
+
+        ~UploadStopGuard()
+        {
+            // Fatal assertions must unblock uploads before the pool guards join workers.
+            UploadManager.Stop(&Context);
+        }
+    } StopUploads{*pUploadManager, *pContext};
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pMeshManager, nullptr);
+
+    const RadientFloat3       Positions[] = {{0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}};
+    const RadientFloat3       Deltas[]    = {{0.f, 0.f, 0.f}, {0.1f, 0.2f, 0.3f}, {-0.1f, -0.2f, -0.3f}};
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Positions);
+    BlobCI.pData = Positions;
+    RefCntAutoPtr<IRadientDataBlob> pPositionsBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pPositionsBlob), RADIENT_STATUS_OK);
+    BlobCI.Size  = sizeof(Deltas);
+    BlobCI.pData = Deltas;
+    RefCntAutoPtr<IRadientDataBlob> pDeltaBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pDeltaBlob), RADIENT_STATUS_OK);
+
+    IRadientDataBlob* const  VertexBuffers[] = {pPositionsBlob};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    RadientMorphTargetAttributeDesc Attribute;
+    Attribute.Semantic       = RadientMorphTargetPositionSemantic;
+    Attribute.ComponentCount = 3;
+    RadientMorphTargetAttributeCreateInfo AttributeData;
+    AttributeData.pDeltaBuffer = pDeltaBlob;
+    RadientMorphTargetCreateInfo Target;
+    Target.Desc.Name           = "Pending morph target";
+    Target.Desc.pAttributes    = &Attribute;
+    Target.Desc.AttributeCount = 1;
+    Target.pAttributeData      = &AttributeData;
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.ElementCount = 3;
+    RadientMeshCreateInfo MeshCI;
+    MeshCI.VertexData                       = {VertexLayout, VertexBuffers, 3};
+    MeshCI.MorphTargetData.pMorphTargets    = &Target;
+    MeshCI.MorphTargetData.MorphTargetCount = 1;
+    MeshCI.pPrimitives                      = &Primitive;
+    MeshCI.PrimitiveCount                   = 1;
+
+    RefCntAutoPtr<IRadientMeshAsset> pOwnerMesh;
+    ASSERT_EQ(pMeshManager->CreateMesh(*pOwnerThreadPool, MeshCI, &pOwnerMesh), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pOwnerMesh, nullptr);
+    const std::chrono::steady_clock::time_point AllocationDeadline = std::chrono::steady_clock::now() + 5s;
+    while ((pResourceManager->GetVertexPoolUsageStats().AllocationCount != 1 ||
+            pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount != 1) &&
+           std::chrono::steady_clock::now() < AllocationDeadline)
+    {
+        std::this_thread::sleep_for(1ms);
+    }
+    ASSERT_EQ(pResourceManager->GetVertexPoolUsageStats().AllocationCount, 1u);
+    ASSERT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 1u);
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pOwnerMesh), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(RadientMeshAssetManager::GetMeshPayload(pOwnerMesh), nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pDuplicateMesh;
+    ASSERT_EQ(pMeshManager->CreateMesh(*pDuplicateThreadPool, MeshCI, &pDuplicateMesh), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pDuplicateMesh, nullptr);
+    // Run the vertex cache hit, morph cache hit, and dependent view explicitly.
+    // The original workers remain blocked because uploads have not been pumped.
+    ASSERT_EQ(pDuplicateThreadPool->GetQueueSize(), 3u);
+    ASSERT_TRUE(pDuplicateThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(pDuplicateThreadPool->GetQueueSize(), 2u);
+    ASSERT_TRUE(pDuplicateThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(pDuplicateThreadPool->GetQueueSize(), 1u);
+    ASSERT_TRUE(pDuplicateThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(pDuplicateThreadPool->GetQueueSize(), 0u);
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pDuplicateMesh), RADIENT_STATUS_PENDING);
+    const MeshPayloadImpl*                pPendingMeshPayload = RadientMeshAssetManager::GetMeshPayload(pDuplicateMesh);
+    const MeshMorphTargetDataPayloadImpl* pPendingMorphPayload =
+        RadientMeshAssetManager::GetMeshMorphTargetDataPayload(pDuplicateMesh, 0);
+    ASSERT_NE(pPendingMeshPayload, nullptr);
+    ASSERT_NE(pPendingMorphPayload, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pOwnerMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pOwnerMesh), nullptr);
+
+    ASSERT_TRUE(WaitForMeshDrawableStatus(pDuplicateMesh, RADIENT_STATUS_OK, pUploadManager, pContext));
+    ASSERT_TRUE(WaitForMeshLoadStatus(pOwnerMesh, RADIENT_STATUS_OK));
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pDuplicateMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pDuplicateMesh), pPendingMeshPayload);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshMorphTargetDataPayload(pDuplicateMesh, 0), pPendingMorphPayload);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshMorphTargetDataPayload(pOwnerMesh, 0), pPendingMorphPayload);
+    ASSERT_EQ(pDuplicateMesh->GetDesc().MorphTargetCount, 1u);
+    EXPECT_STREQ(pDuplicateMesh->GetDesc().pMorphTargets[0].Name, "Pending morph target");
+    EXPECT_EQ(pResourceManager->GetVertexPoolUsageStats().AllocationCount, 1u);
+    EXPECT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 1u);
+}
+
 TEST(RadientMeshAssetManagerGPUTest, UploadsMorphTargetsToGPUBuffer)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
