@@ -94,7 +94,7 @@ struct MeshIndexDataResult
     /// Index-data handle created by the import services, or null on failure.
     RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
 
-    /// Number of accessor or generated indices, or zero on failure.
+    /// Number of accessor indices, or zero on failure.
     Uint32 IndexCount = 0;
 };
 
@@ -117,13 +117,11 @@ MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&           
 
 /// Creates reusable Radient index data for a GLTF primitive.
 ///
-/// If the primitive has an index accessor, it must use a supported tightly
-/// packed unsigned index type. If the primitive is not indexed, sequential
-/// Uint32 indices are generated directly in an owning data blob for VertexCount
-/// vertices. Accessor data is referenced without copying through a blob that
-/// retains the document. The import services retain the blob with read access;
-/// the caller may release its document reference after this function succeeds,
-/// even if processing is still pending.
+/// The primitive must have an index accessor with a supported tightly packed
+/// unsigned index type. Accessor data is referenced without copying through a
+/// blob that retains the document. The import services retain the blob with read
+/// access; the caller may release its document reference after this function
+/// succeeds, even if processing is still pending.
 ///
 /// Conversion failures return a default result, except for a null document,
 /// which returns RADIENT_STATUS_INVALID_ARGUMENT. Mesh-data creation failures
@@ -132,8 +130,7 @@ MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&           
 MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&                  MeshImportServices,
                                         const GLTF::TinyGltfModelView&               GltfModel,
                                         const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                        const std::shared_ptr<const GLTF::Document>& pDocument,
-                                        Uint32                                       VertexCount);
+                                        const std::shared_ptr<const GLTF::Document>& pDocument);
 
 /// Converts GLTF scene metadata and immutable animation and skin resources.
 /// pAssetManager is required when GLTFModel contains animations or skins.

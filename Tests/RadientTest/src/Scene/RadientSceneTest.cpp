@@ -165,10 +165,10 @@ RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager&  AssetMana
     const Uint32 Indices[] = {0, 1, 2};
 
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.Name       = "Radient test primitive";
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = 3;
-    PrimitiveCI.pMaterial  = pMaterial;
+    PrimitiveCI.Name         = "Radient test primitive";
+    PrimitiveCI.FirstElement = 0;
+    PrimitiveCI.ElementCount = 3;
+    PrimitiveCI.pMaterial    = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name = "Radient test mesh";

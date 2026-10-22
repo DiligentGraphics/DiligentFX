@@ -122,8 +122,8 @@ struct MeshValidationData
 
     RadientMeshCreateInfo MakeMeshCI()
     {
-        Primitive.FirstIndex = 0;
-        Primitive.IndexCount = static_cast<Uint32>(Indices16.size());
+        Primitive.FirstElement = 0;
+        Primitive.ElementCount = static_cast<Uint32>(Indices16.size());
 
         RadientMeshCreateInfo MeshCI{};
         MeshCI.VertexData.VertexLayout    = {VertexAttributes.data(), 1, VertexBuffers.data(), 1};
@@ -201,7 +201,7 @@ TEST(RadientAssetValidationTest, RejectsMeshCreateInfoMissingRequiredData)
     ExpectInvalidMeshCreateInfo("pIndexBuffer must not be null", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexData.pIndexBuffer = nullptr;
     });
-    ExpectInvalidMeshCreateInfo("IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+    ExpectInvalidMeshCreateInfo("IndexData must be empty when IndexType is RADIENT_INDEX_TYPE_NONE", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
         MeshCI.IndexData.IndexType = RADIENT_INDEX_TYPE_NONE;
     });
     ExpectInvalidMeshCreateInfo("PrimitiveCount must not be zero", [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
@@ -341,16 +341,16 @@ TEST(RadientAssetValidationTest, RejectsDuplicateMorphTargetAttributeSemantics)
 
 TEST(RadientAssetValidationTest, RejectsMeshCreateInfoInvalidPrimitiveRanges)
 {
-    ExpectInvalidMeshCreateInfo("pPrimitives[0].IndexCount must not be zero", [](RadientMeshCreateInfo&, MeshValidationData& Data) {
-        Data.Primitive.IndexCount = 0;
+    ExpectInvalidMeshCreateInfo("pPrimitives[0].ElementCount must not be zero", [](RadientMeshCreateInfo&, MeshValidationData& Data) {
+        Data.Primitive.ElementCount = 0;
     });
-    ExpectInvalidMeshCreateInfo("pPrimitives[0].FirstIndex", [](RadientMeshCreateInfo&, MeshValidationData& Data) {
-        Data.Primitive.FirstIndex = static_cast<Uint32>(Data.Indices16.size());
+    ExpectInvalidMeshCreateInfo("pPrimitives[0].FirstElement", [](RadientMeshCreateInfo&, MeshValidationData& Data) {
+        Data.Primitive.FirstElement = static_cast<Uint32>(Data.Indices16.size());
     });
-    ExpectInvalidMeshCreateInfo("range [FirstIndex, FirstIndex + IndexCount) exceeds IndexData.IndexCount",
+    ExpectInvalidMeshCreateInfo("range [FirstElement, FirstElement + ElementCount) exceeds IndexData.IndexCount",
                                 [](RadientMeshCreateInfo&, MeshValidationData& Data) {
-                                    Data.Primitive.FirstIndex = 2;
-                                    Data.Primitive.IndexCount = 2;
+                                    Data.Primitive.FirstElement = 2;
+                                    Data.Primitive.ElementCount = 2;
                                 });
 }
 
@@ -720,4 +720,62 @@ TEST(RadientAssetValidationTest, DefersMeshBlobAccessUntilSourceConstruction)
     Data.VertexData[1]                     = nullptr;
     Data.VertexData[2]                     = pUncheckedBlob;
     EXPECT_TRUE(ValidateMeshCreateInfo(CI));
+}
+
+TEST(RadientAssetValidationTest, ValidatesNonIndexedMeshVertexRanges)
+{
+    MeshValidationData    Data;
+    RadientMeshCreateInfo MeshCI = Data.MakeMeshCI();
+    MeshCI.IndexData             = {};
+    Data.Primitive.FirstElement  = 0;
+    Data.Primitive.ElementCount  = MeshCI.VertexData.VertexCount;
+    EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
+
+    Data.Primitive.FirstElement = 1;
+    Data.Primitive.ElementCount = 1;
+    EXPECT_TRUE(ValidateMeshCreateInfo(MeshCI));
+
+    Data.Primitive.ElementCount = 2;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{
+            "range [FirstElement, FirstElement + ElementCount) exceeds VertexData.VertexCount"};
+        EXPECT_FALSE(ValidateMeshCreateInfo(MeshCI));
+    }
+    Data.Primitive.FirstElement = MeshCI.VertexData.VertexCount;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"FirstElement"};
+        EXPECT_FALSE(ValidateMeshCreateInfo(MeshCI));
+    }
+    Data.Primitive.FirstElement = 0;
+    Data.Primitive.ElementCount = 0;
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{"ElementCount must not be zero"};
+        EXPECT_FALSE(ValidateMeshCreateInfo(MeshCI));
+    }
+}
+
+TEST(RadientAssetValidationTest, RejectsPartiallySpecifiedNonIndexedData)
+{
+    for (Uint32 Fields : {1u, 2u, 3u})
+    {
+        SCOPED_TRACE(Fields);
+        MeshValidationData    Data;
+        RadientMeshCreateInfo MeshCI = Data.MakeMeshCI();
+        MeshCI.IndexData             = {};
+        if ((Fields & 1u) != 0)
+        {
+            MeshCI.IndexData.pIndexBuffer = Data.IndexBlob16;
+        }
+        if ((Fields & 2u) != 0)
+        {
+            MeshCI.IndexData.IndexCount = static_cast<Uint32>(Data.Indices16.size());
+        }
+        TestingEnvironment::ErrorScope ExpectedErrors{"IndexData must be empty when IndexType is RADIENT_INDEX_TYPE_NONE"};
+        EXPECT_FALSE(ValidateMeshCreateInfo(MeshCI));
+    }
+
+    ExpectInvalidMeshCreateInfo("IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32",
+                                [](RadientMeshCreateInfo& MeshCI, MeshValidationData&) {
+                                    MeshCI.IndexData.IndexType = static_cast<RADIENT_INDEX_TYPE>(~0u);
+                                });
 }

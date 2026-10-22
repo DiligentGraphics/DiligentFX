@@ -80,14 +80,14 @@ TEST(RadientMeshViewCreateInfoSnapshotTest, CopiesPrimitiveGeometryNameAndMateri
         "snapshot primitive 1"};
 
     std::array<RadientMeshPrimitiveCreateInfo, 2> Primitives{};
-    Primitives[0].Name       = PrimitiveNames[0].c_str();
-    Primitives[0].FirstIndex = 1;
-    Primitives[0].IndexCount = 2;
-    Primitives[0].pMaterial  = pMaterial0;
-    Primitives[1].Name       = PrimitiveNames[1].c_str();
-    Primitives[1].FirstIndex = 3;
-    Primitives[1].IndexCount = 4;
-    Primitives[1].pMaterial  = pMaterial1;
+    Primitives[0].Name         = PrimitiveNames[0].c_str();
+    Primitives[0].FirstElement = 1;
+    Primitives[0].ElementCount = 2;
+    Primitives[0].pMaterial    = pMaterial0;
+    Primitives[1].Name         = PrimitiveNames[1].c_str();
+    Primitives[1].FirstElement = 3;
+    Primitives[1].ElementCount = 4;
+    Primitives[1].pMaterial    = pMaterial1;
 
     std::array<Uint32, 2> GeometryIndices{1, 0};
 
@@ -111,15 +111,15 @@ TEST(RadientMeshViewCreateInfoSnapshotTest, CopiesPrimitiveGeometryNameAndMateri
     EXPECT_EQ(CopiedCI.pGeometryIndices[0], 1u);
     EXPECT_EQ(CopiedCI.pGeometryIndices[1], 0u);
 
-    EXPECT_EQ(CopiedCI.pPrimitives[0].FirstIndex, 1u);
-    EXPECT_EQ(CopiedCI.pPrimitives[0].IndexCount, 2u);
+    EXPECT_EQ(CopiedCI.pPrimitives[0].FirstElement, 1u);
+    EXPECT_EQ(CopiedCI.pPrimitives[0].ElementCount, 2u);
     ASSERT_NE(CopiedCI.pPrimitives[0].Name, nullptr);
     EXPECT_STREQ(CopiedCI.pPrimitives[0].Name, "snapshot primitive 0");
     EXPECT_NE(CopiedCI.pPrimitives[0].Name, PrimitiveNames[0].c_str());
     EXPECT_EQ(CopiedCI.pPrimitives[0].pMaterial, pRawMaterial0);
 
-    EXPECT_EQ(CopiedCI.pPrimitives[1].FirstIndex, 3u);
-    EXPECT_EQ(CopiedCI.pPrimitives[1].IndexCount, 4u);
+    EXPECT_EQ(CopiedCI.pPrimitives[1].FirstElement, 3u);
+    EXPECT_EQ(CopiedCI.pPrimitives[1].ElementCount, 4u);
     ASSERT_NE(CopiedCI.pPrimitives[1].Name, nullptr);
     EXPECT_STREQ(CopiedCI.pPrimitives[1].Name, "snapshot primitive 1");
     EXPECT_NE(CopiedCI.pPrimitives[1].Name, PrimitiveNames[1].c_str());
@@ -142,10 +142,10 @@ TEST(RadientMeshViewCreateInfoSnapshotTest, MoveConstructorKeepsCopiedArraysUsab
     std::string PrimitiveName = "snapshot moved primitive";
 
     RadientMeshPrimitiveCreateInfo Primitive{};
-    Primitive.Name       = PrimitiveName.c_str();
-    Primitive.FirstIndex = 2;
-    Primitive.IndexCount = 5;
-    Primitive.pMaterial  = pMaterial;
+    Primitive.Name         = PrimitiveName.c_str();
+    Primitive.FirstElement = 2;
+    Primitive.ElementCount = 5;
+    Primitive.pMaterial    = pMaterial;
 
     Uint32 GeometryIndex = 3;
 
@@ -166,8 +166,8 @@ TEST(RadientMeshViewCreateInfoSnapshotTest, MoveConstructorKeepsCopiedArraysUsab
     ASSERT_NE(MovedCI.pGeometryIndices, nullptr);
 
     EXPECT_EQ(MovedCI.pGeometryIndices[0], 3u);
-    EXPECT_EQ(MovedCI.pPrimitives[0].FirstIndex, 2u);
-    EXPECT_EQ(MovedCI.pPrimitives[0].IndexCount, 5u);
+    EXPECT_EQ(MovedCI.pPrimitives[0].FirstElement, 2u);
+    EXPECT_EQ(MovedCI.pPrimitives[0].ElementCount, 5u);
     ASSERT_NE(MovedCI.pPrimitives[0].Name, nullptr);
     EXPECT_STREQ(MovedCI.pPrimitives[0].Name, "snapshot moved primitive");
     EXPECT_NE(MovedCI.pPrimitives[0].Name, PrimitiveName.c_str());

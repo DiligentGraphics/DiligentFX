@@ -897,7 +897,7 @@ void ExpectCreateMeshIndexDataPacksIndices(const IndexData&              Indices
         std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
         WeakDocument                              = pDocument;
         GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
+        Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
     }
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
@@ -1398,11 +1398,12 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexDataReturnsDefaultResultOnFailure)
     const GLTF::TinyGltfPrimitiveView Primitive = GetFirstPrimitive(pDocument);
 
     RadientGLTFConverter::MeshIndexDataResult Result =
-        RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, {}, TestVertexCount);
+        RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, {});
     EXPECT_EQ(Result.Status, RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Result.pIndexData, nullptr);
 
-    Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument, 0);
+    // No index accessor means there is no index data to convert or create.
+    Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument);
     ExpectDefaultResult(Result);
     EXPECT_EQ(pServices->IndexCallCount, 0u);
 }
@@ -1423,26 +1424,6 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexDataPacksUint32Indices)
         {1, 0, 2});
 }
 
-TEST(RadientGLTFConverterTest, CreateMeshIndexDataGeneratesSequentialIndices)
-{
-    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
-
-    RadientGLTFConverter::MeshIndexDataResult Result;
-    std::weak_ptr<GLTF::Document>             WeakDocument;
-    {
-        std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()});
-        WeakDocument                              = pDocument;
-        GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
-        Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument, TestVertexCount);
-    }
-
-    ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
-    ASSERT_NE(Result.pIndexData, nullptr);
-    EXPECT_TRUE(WeakDocument.expired());
-    EXPECT_EQ(Result.IndexCount, TestVertexCount);
-    ExpectPackedIndices(static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source, {0, 1, 2});
-}
-
 TEST(RadientGLTFConverterTest, MeshDataConversionPreservesServiceStatusAndPendingHandles)
 {
     const std::array<Uint16, 3>           Indices{2, 0, 1};
@@ -1458,7 +1439,7 @@ TEST(RadientGLTFConverterTest, MeshDataConversionPreservesServiceStatusAndPendin
         const RadientGLTFConverter::MeshVertexDataResult Vertices =
             RadientGLTFConverter::CreateMeshVertexData(*pServices, GltfModel, Primitive, pDocument);
         const RadientGLTFConverter::MeshIndexDataResult IndicesResult =
-            RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument, TestVertexCount);
+            RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, Primitive, pDocument);
         const RADIENT_STATUS ExpectedStatus = Status == RADIENT_STATUS_INVALID_ARGUMENT ? RADIENT_STATUS_INVALID_DATA : Status;
         EXPECT_EQ(Vertices.Status, ExpectedStatus);
         EXPECT_EQ(IndicesResult.Status, ExpectedStatus);

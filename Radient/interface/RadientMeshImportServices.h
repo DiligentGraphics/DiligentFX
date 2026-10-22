@@ -53,8 +53,9 @@ struct RadientMeshGeometryData
     /// vertex domain, including the indices and optional morph-target deltas.
     IRadientMeshVertexData* pVertexData DEFAULT_INITIALIZER(nullptr);
 
-    /// Required index-data handle. Every index used by the geometry refers to a
-    /// vertex in pVertexData; primitive ranges select elements of this index data.
+    /// Optional index-data handle. Every index refers to a vertex in pVertexData.
+    /// Primitive ranges select indices when this handle is present, or vertices
+    /// directly when it is null.
     IRadientMeshIndexData* pIndexData DEFAULT_INITIALIZER(nullptr);
 
     /// Optional morph-target data, or nullptr for a geometry without morphing.
@@ -84,8 +85,9 @@ typedef struct RadientMeshGeometryData RadientMeshGeometryData;
 struct RadientMeshViewCreateInfo
 {
     /// Array of PrimitiveCount primitive descriptions. Must be non-null. Each
-    /// FirstIndex and IndexCount selects a nonempty range in the index-data handle
-    /// of the primitive's selected geometry. Materials are optional.
+    /// FirstElement and ElementCount select a nonempty index range when the
+    /// selected geometry has index data, or a vertex range otherwise. Materials
+    /// are optional.
     const RadientMeshPrimitiveCreateInfo* pPrimitives DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pPrimitives and, when provided, pGeometryIndices.

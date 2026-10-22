@@ -144,33 +144,6 @@ struct PrimitiveVertexKey
     };
 };
 
-struct PrimitiveIndexKey
-{
-    int    IndexAccessor       = -1;
-    Uint32 GeneratedIndexCount = 0;
-
-    PrimitiveIndexKey(const GLTF::TinyGltfPrimitiveView& GltfPrimitive,
-                      Uint32                             VertexCount) :
-        IndexAccessor{GltfPrimitive.GetIndicesId()},
-        GeneratedIndexCount{IndexAccessor < 0 ? VertexCount : 0u}
-    {
-    }
-
-    bool operator==(const PrimitiveIndexKey& Rhs) const noexcept
-    {
-        return IndexAccessor == Rhs.IndexAccessor &&
-            GeneratedIndexCount == Rhs.GeneratedIndexCount;
-    }
-
-    struct Hasher
-    {
-        size_t operator()(const PrimitiveIndexKey& Key) const noexcept
-        {
-            return ComputeHash(Key.IndexAccessor, Key.GeneratedIndexCount);
-        }
-    };
-};
-
 struct PlannedVertexData
 {
     RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
@@ -327,15 +300,13 @@ private:
             if (RADIENT_FAILED(Status))
                 return Status;
 
-            const PlannedVertexData* pVertexData = GetVertexData(VertexDataIndex);
-            if (pVertexData == nullptr)
-                return RADIENT_STATUS_FAILED;
-
             Uint32 IndexDataIndex = ~0u;
-
-            Status = GetOrCreateIndexData(GltfPrimitive, pVertexData->VertexCount, IndexDataIndex);
-            if (RADIENT_FAILED(Status))
-                return Status;
+            if (GltfPrimitive.GetIndicesId() >= 0)
+            {
+                Status = GetOrCreateIndexData(GltfPrimitive, IndexDataIndex);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+            }
 
             PlannedPrimitive& Primitive    = Mesh.Primitives.emplace_back();
             Primitive.VertexDataIndex      = VertexDataIndex;
@@ -377,12 +348,11 @@ private:
     }
 
     RADIENT_STATUS GetOrCreateIndexData(const GLTF::TinyGltfPrimitiveView& GltfPrimitive,
-                                        Uint32                             VertexCount,
                                         Uint32&                            IndexDataIndex)
     {
-        const PrimitiveIndexKey Key{GltfPrimitive, VertexCount};
+        const int IndexAccessor = GltfPrimitive.GetIndicesId();
 
-        auto IndexDataIt = m_IndexDataMap.find(Key);
+        auto IndexDataIt = m_IndexDataMap.find(IndexAccessor);
         if (IndexDataIt != m_IndexDataMap.end())
         {
             IndexDataIndex = IndexDataIt->second;
@@ -390,7 +360,7 @@ private:
         }
 
         RadientGLTFConverter::MeshIndexDataResult Result =
-            RadientGLTFConverter::CreateMeshIndexData(m_MeshImportServices, m_GltfModel, GltfPrimitive, m_pDocument, VertexCount);
+            RadientGLTFConverter::CreateMeshIndexData(m_MeshImportServices, m_GltfModel, GltfPrimitive, m_pDocument);
         if (RADIENT_FAILED(Result.Status) || Result.pIndexData == nullptr)
             return RADIENT_FAILED(Result.Status) ? Result.Status : RADIENT_STATUS_FAILED;
 
@@ -400,7 +370,7 @@ private:
 
         IndexDataIndex = static_cast<Uint32>(m_IndexData.size());
         m_IndexData.emplace_back(std::move(IndexData));
-        m_IndexDataMap.emplace(Key, IndexDataIndex);
+        m_IndexDataMap.emplace(IndexAccessor, IndexDataIndex);
         return RADIENT_STATUS_OK;
     }
 
@@ -412,7 +382,7 @@ private:
     std::vector<PlannedVertexData>                                             m_VertexData;
     std::unordered_map<PrimitiveVertexKey, Uint32, PrimitiveVertexKey::Hasher> m_VertexDataMap;
     std::vector<PlannedIndexData>                                              m_IndexData;
-    std::unordered_map<PrimitiveIndexKey, Uint32, PrimitiveIndexKey::Hasher>   m_IndexDataMap;
+    std::unordered_map<int, Uint32>                                            m_IndexDataMap;
     std::vector<PlannedMesh>                                                   m_Meshes;
     std::vector<bool>                                                          m_ScannedMeshes;
 };
@@ -757,20 +727,22 @@ public:
             const PlannedVertexData* pVertexData = m_GeometryPlan.GetVertexData(PlannedPrimitive.VertexDataIndex);
             const PlannedIndexData*  pIndexData  = m_GeometryPlan.GetIndexData(PlannedPrimitive.IndexDataIndex);
             if (pVertexData == nullptr ||
-                pIndexData == nullptr ||
                 pVertexData->pVertexData == nullptr ||
-                pIndexData->pIndexData == nullptr)
+                (PlannedPrimitive.IndexDataIndex != ~0u && (pIndexData == nullptr || pIndexData->pIndexData == nullptr)))
             {
                 m_Status = RADIENT_STATUS_FAILED;
                 return pNewMesh;
             }
+
+            IRadientMeshIndexData* pIndexAsset = pIndexData != nullptr ? pIndexData->pIndexData.RawPtr() : nullptr;
+            const Uint32           IndexCount  = pIndexData != nullptr ? pIndexData->IndexCount : 0;
 
             Uint32 LocalGeometryIndex = ~0u;
             if (!HasMorphTargets && !MeshGeometryData.empty())
             {
                 const RadientMeshGeometryData& LastGeometry = MeshGeometryData.back();
                 if (LastGeometry.pVertexData == pVertexData->pVertexData &&
-                    LastGeometry.pIndexData == pIndexData->pIndexData)
+                    LastGeometry.pIndexData == pIndexAsset)
                 {
                     LocalGeometryIndex = static_cast<Uint32>(MeshGeometryData.size() - 1);
                 }
@@ -779,7 +751,7 @@ public:
             if (LocalGeometryIndex == ~0u)
             {
                 LocalGeometryIndex = static_cast<Uint32>(MeshGeometryData.size());
-                MeshGeometryData.push_back(RadientMeshGeometryData{pVertexData->pVertexData, pIndexData->pIndexData});
+                MeshGeometryData.push_back(RadientMeshGeometryData{pVertexData->pVertexData, pIndexAsset});
             }
 
             const Uint32 MaterialSlot = PlannedPrimitive.MaterialId >= 0 ?
@@ -787,7 +759,7 @@ public:
                 0u;
 
             GLTF::Primitive& NewPrimitive = pNewMesh->Primitives.emplace_back(0u,
-                                                                              pIndexData->IndexCount,
+                                                                              IndexCount,
                                                                               0u,
                                                                               pVertexData->VertexCount,
                                                                               MaterialSlot,
@@ -804,8 +776,8 @@ public:
             }
 
             RadientMeshPrimitiveCreateInfo& Primitive = Primitives.emplace_back();
-            Primitive.FirstIndex                      = 0;
-            Primitive.IndexCount                      = pIndexData->IndexCount;
+            Primitive.FirstElement                    = 0;
+            Primitive.ElementCount                    = pIndexData != nullptr ? IndexCount : pVertexData->VertexCount;
             if (PlannedPrimitive.MaterialId >= 0 && static_cast<size_t>(PlannedPrimitive.MaterialId) < m_Materials.size())
                 Primitive.pMaterial = m_Materials[static_cast<size_t>(PlannedPrimitive.MaterialId)];
             else if (PlannedPrimitive.MaterialId < 0)

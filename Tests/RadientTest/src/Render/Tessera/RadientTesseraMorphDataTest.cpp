@@ -85,7 +85,7 @@ struct MorphMeshData
             Targets[TargetIndex].pAttributeData      = AttributeData[TargetIndex].data();
         }
 
-        Primitive.IndexCount = static_cast<Uint32>(Indices.size());
+        Primitive.ElementCount = static_cast<Uint32>(Indices.size());
     }
 
     const RadientVertexLayoutDescX        VertexLayout{{{"POSITION", 0, RADIENT_VERTEX_AUTO_OFFSET, RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3, False}}, {{}}};

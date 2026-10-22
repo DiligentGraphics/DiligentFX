@@ -48,6 +48,8 @@ void RadientAssets_C_UseTypes(void)
 
     (void)AssetManagerDesc;
     (void)AssetManagerCI;
+    Primitive.FirstElement = 0;
+    Primitive.ElementCount = 3;
     (void)Primitive;
 
     const RadientVertexAttributeDesc VertexAttribute = {

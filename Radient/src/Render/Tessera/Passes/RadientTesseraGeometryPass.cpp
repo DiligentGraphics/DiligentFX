@@ -283,9 +283,10 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
-    // DXBC/DXIL SV_VertexID is not affected by the draw's base vertex, while
-    // SPIR-V/GLSL vertex IDs include it.
-    const bool     ShaderVertexIDIncludesBaseVertex = !pDevice->GetDeviceInfo().IsD3DDevice();
+    // D3D vertex IDs omit draw offsets: indexed IDs are raw index values,
+    // and nonindexed IDs start at zero. Other backends include the draw's
+    // base vertex or starting vertex, respectively.
+    const bool     ShaderVertexIDIncludesDrawOffset = !pDevice->GetDeviceInfo().IsD3DDevice();
     const bool     UsePreviousDeformationData       = FrameHistory.HasCameraHistory();
     DrawState      State;
     RADIENT_STATUS Result = RADIENT_STATUS_OK;
@@ -424,7 +425,14 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             {
                 const RadientTesseraMorphData& MorphData     = pMorphAttachment->MorphData;
                 const Uint32                   GeometryIndex = pMorphAttachment->GeometryIndex;
-                AttribsData.MorphTargetVertexOffset          = ShaderVertexIDIncludesBaseVertex ? Drawable.BaseVertex : 0;
+                AttribsData.MorphTargetVertexOffset          = ShaderVertexIDIncludesDrawOffset ? Drawable.BaseVertex : 0;
+                if (!ShaderVertexIDIncludesDrawOffset && !Batch.IsIndexed)
+                {
+                    // D3D nonindexed IDs start at zero, so add FirstElement to
+                    // address geometry-local deltas. The shader subtracts this
+                    // unsigned offset: BaseVertex - FirstLocation is -FirstElement.
+                    AttribsData.MorphTargetVertexOffset = Drawable.BaseVertex - Drawable.FirstLocation;
+                }
                 AttribsData.ActiveMorphTargetCount           = MorphData.GetActiveTargetCount(false);
                 AttribsData.pActiveMorphTargets              = MorphData.GetShaderAttribs(GeometryIndex, false);
                 AttribsData.PrevActiveMorphTargetCount       = MorphData.GetActiveTargetCount(UsePreviousDeformationData);

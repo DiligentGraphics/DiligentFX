@@ -459,9 +459,9 @@ public:
             for (const OBJ::Primitive& SourcePrimitive : Mesh.Primitives)
             {
                 RadientMeshPrimitiveCreateInfo Primitive;
-                Primitive.Name       = Mesh.Name.c_str();
-                Primitive.FirstIndex = SourcePrimitive.FirstIndex;
-                Primitive.IndexCount = SourcePrimitive.IndexCount;
+                Primitive.Name         = Mesh.Name.c_str();
+                Primitive.FirstElement = SourcePrimitive.FirstIndex;
+                Primitive.ElementCount = SourcePrimitive.IndexCount;
                 const std::unordered_map<std::string, RefCntAutoPtr<IRadientMaterialAsset>>::const_iterator Material =
                     Materials.find(SourcePrimitive.MaterialName);
                 if (Material != Materials.end())

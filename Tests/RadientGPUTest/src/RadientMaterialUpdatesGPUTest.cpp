@@ -69,7 +69,8 @@ struct QuadSetup
     bool                          UseVertexColor = false;
     RadientFloat4                 VertexColor    = {1.f, 1.f, 1.f, 1.f};
     RADIENT_INDEX_TYPE            IndexType      = RADIENT_INDEX_TYPE_UINT16;
-    Uint32                        FirstIndex     = 0;
+    Uint32                        FirstElement   = 0;
+    bool                          UseMorphTarget = false;
 };
 
 using QuadSetups = std::array<QuadSetup, 4>;
@@ -221,57 +222,104 @@ public:
             {{0.4f, 0.4f, 0.f}, {1.f, 0.f}},
             {{-0.4f, 0.4f, 0.f}, {0.f, 0.f}},
         };
-        const Uint16                          Indices[]     = {0, 1, 2, 0, 2, 3};
-        const Uint16                          BackIndices[] = {0, 2, 1, 0, 3, 2};
-        const RefCntAutoPtr<IRadientDataBlob> pVertices     = MakeBlob(Vertices, sizeof(Vertices));
-        ASSERT_NE(pVertices, nullptr);
+        const Uint16             Indices[]     = {0, 1, 2, 0, 2, 3};
+        const Uint16             BackIndices[] = {0, 2, 1, 0, 3, 2};
         RadientVertexLayoutDescX Layout;
         Layout.AddBuffer(sizeof(Vertex));
         Layout.AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
 
+        std::array<RadientEntityID, 4>     Entities{};
         RefCntAutoPtr<IRadientSceneWriter> pSceneWriter;
         ASSERT_EQ(pEngine->CreateSceneWriter(pScene, &pSceneWriter), RADIENT_STATUS_OK);
         for (Uint32 Index = 0; Index < Materials.size(); ++Index)
         {
-            RadientVertexLayoutDescX MeshLayout = Layout;
-            MeshLayout.AddAttribute(Setups[Index].TexCoordSet == 0 ? "TEXCOORD_0" : "TEXCOORD_1", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
-            RefCntAutoPtr<IRadientDataBlob> pVertexColors;
-            if (Setups[Index].UseVertexColor)
+            const QuadSetup&                Setup          = Setups[Index];
+            const Uint16* const             pSourceIndices = Setup.BackFacing ? BackIndices : Indices;
+            const bool                      IsIndexed      = Setup.IndexType != RADIENT_INDEX_TYPE_NONE;
+            std::vector<Vertex>             MeshVertices;
+            RefCntAutoPtr<IRadientDataBlob> pIndices;
+            Uint32                          IndexCount = 0;
+            if (IsIndexed)
             {
-                std::array<RadientFloat4, 4> VertexColors;
-                VertexColors.fill(Setups[Index].VertexColor);
-                pVertexColors = MakeBlob(VertexColors.data(), sizeof(VertexColors));
+                MeshVertices.assign(Vertices, Vertices + 4);
+                std::vector<Uint16> Indices16(Setup.FirstElement, Uint16{0});
+                Indices16.insert(Indices16.end(), pSourceIndices, pSourceIndices + 6);
+                IndexCount = static_cast<Uint32>(Indices16.size());
+                if (Setup.IndexType == RADIENT_INDEX_TYPE_UINT16)
+                {
+                    pIndices = MakeBlob(Indices16.data(), Indices16.size() * sizeof(Uint16));
+                }
+                else
+                {
+                    ASSERT_EQ(Setup.IndexType, RADIENT_INDEX_TYPE_UINT32);
+                    const std::vector<Uint32> Indices32(Indices16.begin(), Indices16.end());
+                    pIndices = MakeBlob(Indices32.data(), Indices32.size() * sizeof(Uint32));
+                }
+                ASSERT_NE(pIndices, nullptr);
+            }
+            else
+            {
+                // Prefix the nonindexed range with degenerate vertices, then
+                // expand the same two triangles used by indexed references.
+                MeshVertices.resize(Setup.FirstElement);
+                for (Uint32 VertexIndex = 0; VertexIndex < 6; ++VertexIndex)
+                {
+                    MeshVertices.push_back(Vertices[pSourceIndices[VertexIndex]]);
+                }
+            }
+
+            RefCntAutoPtr<IRadientDataBlob>       pDeltas;
+            RadientMorphTargetAttributeDesc       MorphAttribute{RadientMorphTargetPositionSemantic, 3};
+            RadientMorphTargetAttributeCreateInfo MorphData;
+            RadientMorphTargetCreateInfo          MorphTarget;
+            if (Setup.UseMorphTarget)
+            {
+                // The undeformed quad is too small to cover off-center probes.
+                // A weight of one must restore the reference quad's full size.
+                std::vector<RadientFloat3> Deltas(MeshVertices.size());
+                for (size_t VertexIndex = 0; VertexIndex < MeshVertices.size(); ++VertexIndex)
+                {
+                    RadientFloat3& Position = MeshVertices[VertexIndex].Position;
+                    Deltas[VertexIndex]     = {Position.x * 0.75f, Position.y * 0.75f, 0.f};
+                    Position.x *= 0.25f;
+                    Position.y *= 0.25f;
+                }
+                pDeltas = MakeBlob(Deltas.data(), Deltas.size() * sizeof(RadientFloat3));
+                ASSERT_NE(pDeltas, nullptr);
+                MorphData.pDeltaBuffer          = pDeltas;
+                MorphTarget.Desc.pAttributes    = &MorphAttribute;
+                MorphTarget.Desc.AttributeCount = 1;
+                MorphTarget.Desc.DefaultWeight  = 1.f;
+                MorphTarget.pAttributeData      = &MorphData;
+            }
+            const RefCntAutoPtr<IRadientDataBlob> pVertices = MakeBlob(MeshVertices.data(), MeshVertices.size() * sizeof(Vertex));
+            ASSERT_NE(pVertices, nullptr);
+            RadientVertexLayoutDescX MeshLayout = Layout;
+            MeshLayout.AddAttribute(Setup.TexCoordSet == 0 ? "TEXCOORD_0" : "TEXCOORD_1", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
+            RefCntAutoPtr<IRadientDataBlob> pVertexColors;
+            if (Setup.UseVertexColor)
+            {
+                const std::vector<RadientFloat4> VertexColors(MeshVertices.size(), Setup.VertexColor);
+                pVertexColors = MakeBlob(VertexColors.data(), VertexColors.size() * sizeof(RadientFloat4));
                 ASSERT_NE(pVertexColors, nullptr);
                 MeshLayout.AddBuffer(sizeof(RadientFloat4));
                 MeshLayout.AddAttribute("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4, 1);
             }
             IRadientDataBlob* VertexBuffers[] = {pVertices, pVertexColors};
 
-            const Uint16* const pSourceIndices = Setups[Index].BackFacing ? BackIndices : Indices;
-            std::vector<Uint16> Indices16(Setups[Index].FirstIndex, Uint16{0});
-            Indices16.insert(Indices16.end(), pSourceIndices, pSourceIndices + 6);
-            RefCntAutoPtr<IRadientDataBlob> pIndices;
-            if (Setups[Index].IndexType == RADIENT_INDEX_TYPE_UINT16)
-            {
-                pIndices = MakeBlob(Indices16.data(), Indices16.size() * sizeof(Uint16));
-            }
-            else
-            {
-                ASSERT_EQ(Setups[Index].IndexType, RADIENT_INDEX_TYPE_UINT32);
-                const std::vector<Uint32> Indices32(Indices16.begin(), Indices16.end());
-                pIndices = MakeBlob(Indices32.data(), Indices32.size() * sizeof(Uint32));
-            }
-            ASSERT_NE(pIndices, nullptr);
-
             RadientMeshPrimitiveCreateInfo Primitive;
-            Primitive.FirstIndex = Setups[Index].FirstIndex;
-            Primitive.IndexCount = 6;
-            Primitive.pMaterial  = Materials[Index];
+            Primitive.FirstElement = Setup.FirstElement;
+            Primitive.ElementCount = 6;
+            Primitive.pMaterial    = Materials[Index];
             RadientMeshCreateInfo MeshCI;
-            MeshCI.VertexData                            = {MeshLayout, VertexBuffers, 4};
-            MeshCI.IndexData                             = {pIndices, static_cast<Uint32>(Indices16.size()), Setups[Index].IndexType};
-            MeshCI.pPrimitives                           = &Primitive;
-            MeshCI.PrimitiveCount                        = 1;
+            MeshCI.VertexData = {MeshLayout, VertexBuffers, static_cast<Uint32>(MeshVertices.size())};
+            if (IsIndexed)
+                MeshCI.IndexData = {pIndices, IndexCount, Setup.IndexType};
+            if (Setup.UseMorphTarget)
+                MeshCI.MorphTargetData = {&MorphTarget, 1};
+            MeshCI.pPrimitives    = &Primitive;
+            MeshCI.PrimitiveCount = 1;
+
             RefCntAutoPtr<IRadientMeshAsset>& pMesh      = Meshes[Index];
             const RADIENT_STATUS              MeshStatus = pAssets->CreateMesh(MeshCI, &pMesh);
             ASSERT_TRUE(MeshStatus == RADIENT_STATUS_OK || MeshStatus == RADIENT_STATUS_PENDING);
@@ -283,6 +331,7 @@ public:
             ASSERT_EQ(pSceneWriter->CreateEntity(EntityDesc, Entity), RADIENT_STATUS_OK);
             ASSERT_EQ(pSceneWriter->SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
             ASSERT_EQ(pSceneWriter->SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+            Entities[Index] = Entity;
         }
 
         RadientEntityDesc CameraDesc;
@@ -327,6 +376,25 @@ public:
         ASSERT_EQ(pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
 
         ASSERT_NO_FATAL_FAILURE(RenderUntilReady());
+
+        // Mesh payloads must be available before creating their weights. Pump
+        // the renderer first: waiting here without rendering would prevent
+        // queued uploads and their dependent mesh tasks from making progress.
+        bool HasMorphComponents = false;
+        for (Uint32 Index = 0; Index < Meshes.size(); ++Index)
+        {
+            if (!Setups[Index].UseMorphTarget)
+                continue;
+            RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+            ASSERT_EQ(Meshes[Index]->CreateMorphTargetWeights(&pWeights), RADIENT_STATUS_OK);
+            ASSERT_EQ(pSceneWriter->SetMorph(Entities[Index], {pWeights}), RADIENT_STATUS_OK);
+            HasMorphComponents = true;
+        }
+        if (HasMorphComponents)
+        {
+            ASSERT_EQ(pSceneWriter->CommitChanges(), RADIENT_STATUS_OK);
+            ASSERT_NO_FATAL_FAILURE(RenderUntilReady());
+        }
     }
 
     void RenderUntilReady(IRadientMaterialAsset* pEditedMaterial = nullptr)
@@ -373,7 +441,7 @@ public:
         return RenderStatus == RADIENT_STATUS_OK ? EndStatus : RenderStatus;
     }
 
-    void ReadColors(SampledColors& Colors)
+    void ReadColors(SampledColors& Colors, Uint32 PixelOffsetX = 0)
     {
         CopyTextureAttribs Copy;
         Copy.pSrcTexture              = pOutput;
@@ -387,7 +455,7 @@ public:
         ASSERT_NE(Mapped.pData, nullptr);
         for (Uint32 Index = 0; Index < Colors.size(); ++Index)
         {
-            const Uint32 X      = (2 * Index + 1) * OutputWidth / 8;
+            const Uint32 X      = (2 * Index + 1) * OutputWidth / 8 + PixelOffsetX;
             const Uint8* pPixel = static_cast<const Uint8*>(Mapped.pData) + (OutputHeight / 2) * Mapped.Stride + X * 4;
             std::memcpy(Colors[Index].data(), pPixel, Colors[Index].size());
         }
@@ -490,7 +558,7 @@ TEST(RadientMaterialUpdatesGPUTest, RendersDifferentVertexSlotMappingsFromTheSam
 
 // Both index formats use one index buffer and one material. Reserve vertices
 // beyond the 16-bit range, and prefix each index allocation with degenerate
-// triangles so correct rendering requires both BaseVertex and FirstIndex.
+// triangles so correct rendering requires both BaseVertex and FirstElement.
 // Exercise individual draws and multi-draw batches where the backend supports them.
 TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
 {
@@ -498,8 +566,8 @@ TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
     QuadSetups                         Setups;
     for (Uint32 Index = 0; Index < Setups.size(); ++Index)
     {
-        Setups[Index].IndexType  = (Index & 1) == 0 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32;
-        Setups[Index].FirstIndex = 3 * (Index + 1);
+        Setups[Index].IndexType    = (Index & 1) == 0 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32;
+        Setups[Index].FirstElement = 3 * (Index + 1);
     }
 
     for (Uint32 BatchSize : {1u, 16u})
@@ -522,7 +590,7 @@ TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
             ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
             EXPECT_GE(Result.pMesh->Geometries[0].BaseVertex, 65536u);
             EXPECT_EQ(Result.pMesh->Geometries[0].IndexType, (Index & 1) == 0 ? VT_UINT16 : VT_UINT32);
-            EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, Setups[Index].FirstIndex);
+            EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, Setups[Index].FirstElement);
             EXPECT_EQ(Result.pMesh->Primitives[0].pMaterialAsset, Scene.Materials[0]);
             EXPECT_EQ(Scene.Meshes[Index]->GetDesc().pGeometries[0].IndexType, Setups[Index].IndexType);
         }
@@ -535,6 +603,100 @@ TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
         for (Uint32 Index = 1; Index < Colors.size(); ++Index)
         {
             ExpectSameColor(Colors[Index], Colors[0]);
+        }
+    }
+}
+
+// Indexed and nonindexed ranges share the material and vertex pool. Nonindexed
+// ranges start after dummy vertices and at a nonzero pool base, and must never
+// allocate index data. Compare the complete rendering path with indexed quads.
+TEST(RadientMaterialUpdatesGPUTest, RendersIndexedAndNonIndexedVertexRanges)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        Setups[Index].IndexType    = (Index & 1) == 0 ? RADIENT_INDEX_TYPE_NONE : RADIENT_INDEX_TYPE_UINT16;
+        Setups[Index].FirstElement = 3 * (Index + 1);
+    }
+    Setups[3].IndexType = RADIENT_INDEX_TYPE_UINT32;
+    for (Uint32 BatchSize : {1u, 16u})
+    {
+        SCOPED_TRACE(BatchSize);
+        MaterialUpdateScene Scene;
+        Scene.ReservedVertexCount = 32;
+        Scene.MultiDrawBatchSize  = BatchSize;
+        Scene.ShareMaterial       = true;
+        ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+        RadientAssetManagerImpl& AssetManager = *static_cast<RadientAssetManagerImpl*>(Scene.pAssets.RawPtr());
+        EXPECT_EQ(AssetManager.GetResourceManager()->GetIndexBufferUsageStats().AllocationCount, 2u);
+        for (Uint32 Index = 0; Index < Scene.Meshes.size(); ++Index)
+        {
+            SCOPED_TRACE(Index);
+            const bool                             IsIndexed = Setups[Index].IndexType != RADIENT_INDEX_TYPE_NONE;
+            const RadientDrawableMeshResolveResult Result    = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[Index], true);
+            ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(Result.pMesh, nullptr);
+            ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+            ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
+            EXPECT_GE(Result.pMesh->Geometries[0].BaseVertex, Scene.ReservedVertexCount);
+            EXPECT_EQ(Result.pMesh->Primitives[0].IsIndexed, IsIndexed);
+            EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, Setups[Index].FirstElement);
+            const RadientMeshGeometryDesc& Geometry = Scene.Meshes[Index]->GetDesc().pGeometries[0];
+            EXPECT_EQ(Geometry.IndexType, Setups[Index].IndexType);
+            if (!IsIndexed)
+            {
+                EXPECT_EQ(Geometry.IndexCount, 0u);
+                EXPECT_EQ(Geometry.VertexCount, Setups[Index].FirstElement + 6);
+                EXPECT_EQ(Result.pMesh->Geometries[0].IndexType, VT_UNDEFINED);
+            }
+        }
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        ASSERT_GT(Colors[1][0], 20);
+        ASSERT_GT(Colors[3][1], 20);
+        ExpectSameColor(Colors[0], Colors[1]);
+        ExpectSameColor(Colors[2], Colors[3]);
+    }
+}
+
+// The morph target expands a small quad to the size of the plain indexed
+// reference. Off-center pixels require nonzero deltas. Nonindexed draws must
+// address geometry-local deltas despite backend differences in vertex IDs.
+TEST(RadientMaterialUpdatesGPUTest, MorphsNonIndexedVertexRangesAtNonzeroPoolOffsets)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        Setups[Index].IndexType      = (Index & 1) == 0 ? RADIENT_INDEX_TYPE_NONE : RADIENT_INDEX_TYPE_UINT16;
+        Setups[Index].FirstElement   = 3 * (Index + 1);
+        Setups[Index].UseMorphTarget = Index != 3;
+    }
+    for (Uint32 BatchSize : {1u, 16u})
+    {
+        SCOPED_TRACE(BatchSize);
+        MaterialUpdateScene Scene;
+        Scene.ReservedVertexCount = 32;
+        Scene.MultiDrawBatchSize  = BatchSize;
+        Scene.ShareMaterial       = true;
+        ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+        for (Uint32 Index = 0; Index < 3; ++Index)
+        {
+            const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[Index], true);
+            ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(Result.pMesh, nullptr);
+            ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+            EXPECT_GE(Result.pMesh->Geometries[0].BaseVertex, Scene.ReservedVertexCount);
+            EXPECT_NE(Result.pMesh->Geometries[0].pMorphTargetData, nullptr);
+        }
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors, 16));
+        ASSERT_GT(Colors[3][0], 20);
+        for (Uint32 Index = 0; Index < 3; ++Index)
+        {
+            SCOPED_TRACE(Index);
+            ExpectSameColor(Colors[Index], Colors[3]);
         }
     }
 }

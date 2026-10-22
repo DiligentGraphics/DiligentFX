@@ -40,12 +40,12 @@ using namespace Diligent;
 namespace
 {
 
-RadientMeshPrimitiveCreateInfo MakePrimitive(Uint32 FirstIndex = 0,
-                                             Uint32 IndexCount = 3)
+RadientMeshPrimitiveCreateInfo MakePrimitive(Uint32 FirstElement = 0,
+                                             Uint32 ElementCount = 3)
 {
     RadientMeshPrimitiveCreateInfo Primitive{};
-    Primitive.FirstIndex = FirstIndex;
-    Primitive.IndexCount = IndexCount;
+    Primitive.FirstElement = FirstElement;
+    Primitive.ElementCount = ElementCount;
     return Primitive;
 }
 
@@ -61,9 +61,9 @@ RadientMeshViewCreateInfo MakeViewCI(const RadientMeshPrimitiveCreateInfo* pPrim
 }
 
 RADIENT_STATUS CreateViewStatus(const RadientMeshViewCreateInfo& ViewCI,
-                                Uint32                           IndexCount)
+                                Uint32                           ElementCount)
 {
-    return RadientMeshViewSource{ViewCI, IndexCount}.GetStatus();
+    return RadientMeshViewSource{ViewCI, ElementCount}.GetStatus();
 }
 
 RefCntAutoPtr<IRadientMaterialAsset> CreateMaterial(RadientMaterialAssetManager& MaterialManager)
@@ -88,16 +88,16 @@ TEST(RadientMeshViewSourceTest, RejectsInvalidCreateInfo)
     EXPECT_EQ(CreateViewStatus(MakeViewCI(&Primitive, 0), 3), RADIENT_STATUS_INVALID_ARGUMENT);
 
     RadientMeshPrimitiveCreateInfo InvalidPrimitive = Primitive;
-    InvalidPrimitive.IndexCount                     = 0;
+    InvalidPrimitive.ElementCount                   = 0;
     EXPECT_EQ(CreateViewStatus(MakeViewCI(&InvalidPrimitive, 1), 3), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    InvalidPrimitive            = Primitive;
-    InvalidPrimitive.FirstIndex = 3;
+    InvalidPrimitive              = Primitive;
+    InvalidPrimitive.FirstElement = 3;
     EXPECT_EQ(CreateViewStatus(MakeViewCI(&InvalidPrimitive, 1), 3), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    InvalidPrimitive            = Primitive;
-    InvalidPrimitive.FirstIndex = 2;
-    InvalidPrimitive.IndexCount = 2;
+    InvalidPrimitive              = Primitive;
+    InvalidPrimitive.FirstElement = 2;
+    InvalidPrimitive.ElementCount = 2;
     EXPECT_EQ(CreateViewStatus(MakeViewCI(&InvalidPrimitive, 1), 3), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
@@ -118,16 +118,16 @@ TEST(RadientMeshViewSourceTest, CopiesPrimitiveRangesAndKeepsMaterialsAlive)
     RadientMeshViewSource View{MakeViewCI(&Primitive, 1), 3};
     ASSERT_EQ(View.GetStatus(), RADIENT_STATUS_OK);
 
-    PrimitiveName[0]     = 'X';
-    Primitive.FirstIndex = 0;
-    Primitive.IndexCount = 1;
-    Primitive.Name       = nullptr;
-    Primitive.pMaterial  = nullptr;
+    PrimitiveName[0]       = 'X';
+    Primitive.FirstElement = 0;
+    Primitive.ElementCount = 1;
+    Primitive.Name         = nullptr;
+    Primitive.pMaterial    = nullptr;
     pMaterial.Release();
 
     ASSERT_EQ(View.GetPrimitiveCount(), 1u);
-    EXPECT_EQ(View.GetPrimitive(0).FirstIndex, 1u);
-    EXPECT_EQ(View.GetPrimitive(0).IndexCount, 2u);
+    EXPECT_EQ(View.GetPrimitive(0).FirstElement, 1u);
+    EXPECT_EQ(View.GetPrimitive(0).ElementCount, 2u);
     EXPECT_EQ(View.GetGeometryIndex(0), 0u);
     ASSERT_NE(View.GetPrimitive(0).Name, nullptr);
     EXPECT_STREQ(View.GetPrimitive(0).Name, "mesh view primitive");
@@ -163,8 +163,8 @@ TEST(RadientMeshViewSourceTest, MoveConstructorRebindsPrimitiveNames)
     pMaterial.Release();
 
     ASSERT_EQ(MovedView.GetPrimitiveCount(), 1u);
-    EXPECT_EQ(MovedView.GetPrimitive(0).FirstIndex, 1u);
-    EXPECT_EQ(MovedView.GetPrimitive(0).IndexCount, 2u);
+    EXPECT_EQ(MovedView.GetPrimitive(0).FirstElement, 1u);
+    EXPECT_EQ(MovedView.GetPrimitive(0).ElementCount, 2u);
     EXPECT_EQ(MovedView.GetGeometryIndex(0), 0u);
     ASSERT_NE(MovedView.GetPrimitive(0).Name, nullptr);
     EXPECT_STREQ(MovedView.GetPrimitive(0).Name, "mesh view moved primitive");
@@ -241,7 +241,7 @@ TEST(RadientMeshViewSourceTest, CacheKeyIgnoresPrimitiveNames)
 
 TEST(RadientMeshViewSourceTest, GeometryIndicesSelectValidationRanges)
 {
-    const std::array<Uint32, 2> GeometryIndexCounts{3, 6};
+    const std::array<Uint32, 2> GeometryElementCounts{3, 6};
 
     std::array<RadientMeshPrimitiveCreateInfo, 2> Primitives{
         MakePrimitive(0, 3),
@@ -251,35 +251,35 @@ TEST(RadientMeshViewSourceTest, GeometryIndicesSelectValidationRanges)
 
     RadientMeshViewSource View{
         MakeViewCI(Primitives.data(), static_cast<Uint32>(Primitives.size()), GeometryIndices.data()),
-        GeometryIndexCounts.data(),
-        static_cast<Uint32>(GeometryIndexCounts.size())};
+        GeometryElementCounts.data(),
+        static_cast<Uint32>(GeometryElementCounts.size())};
 
     ASSERT_EQ(View.GetStatus(), RADIENT_STATUS_OK);
     EXPECT_EQ(View.GetGeometryIndex(0), 0u);
     EXPECT_EQ(View.GetGeometryIndex(1), 1u);
-    EXPECT_EQ(View.GetPrimitive(1).FirstIndex, 4u);
-    EXPECT_EQ(View.GetPrimitive(1).IndexCount, 2u);
+    EXPECT_EQ(View.GetPrimitive(1).FirstElement, 4u);
+    EXPECT_EQ(View.GetPrimitive(1).ElementCount, 2u);
 
     // The same primitive range is valid in geometry 1, but would overrun geometry 0.
     std::array<Uint32, 2> WrongGeometryForRange{0, 0};
     RadientMeshViewSource InvalidRangeView{
         MakeViewCI(Primitives.data(), static_cast<Uint32>(Primitives.size()), WrongGeometryForRange.data()),
-        GeometryIndexCounts.data(),
-        static_cast<Uint32>(GeometryIndexCounts.size())};
+        GeometryElementCounts.data(),
+        static_cast<Uint32>(GeometryElementCounts.size())};
     EXPECT_EQ(InvalidRangeView.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 
     // Geometry indices must reference one of the source geometries.
     std::array<Uint32, 2> OutOfRangeGeometry{0, 2};
     RadientMeshViewSource InvalidGeometryView{
         MakeViewCI(Primitives.data(), static_cast<Uint32>(Primitives.size()), OutOfRangeGeometry.data()),
-        GeometryIndexCounts.data(),
-        static_cast<Uint32>(GeometryIndexCounts.size())};
+        GeometryElementCounts.data(),
+        static_cast<Uint32>(GeometryElementCounts.size())};
     EXPECT_EQ(InvalidGeometryView.GetStatus(), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(RadientMeshViewSourceTest, CacheKeyIncludesGeometrySourcesAndIndices)
 {
-    const std::array<Uint32, 2>    GeometryIndexCounts{3, 3};
+    const std::array<Uint32, 2>    GeometryElementCounts{3, 3};
     const std::vector<std::string> GeometryKeys{
         "mesh-geometry:0",
         "mesh-geometry:1"};
@@ -291,12 +291,12 @@ TEST(RadientMeshViewSourceTest, CacheKeyIncludesGeometrySourcesAndIndices)
 
     RadientMeshViewSource View0{
         MakeViewCI(&Primitive, 1, Geometry0.data()),
-        GeometryIndexCounts.data(),
-        static_cast<Uint32>(GeometryIndexCounts.size())};
+        GeometryElementCounts.data(),
+        static_cast<Uint32>(GeometryElementCounts.size())};
     RadientMeshViewSource View1{
         MakeViewCI(&Primitive, 1, Geometry1.data()),
-        GeometryIndexCounts.data(),
-        static_cast<Uint32>(GeometryIndexCounts.size())};
+        GeometryElementCounts.data(),
+        static_cast<Uint32>(GeometryElementCounts.size())};
 
     const std::string CacheKey = View0.MakeCacheKey(GeometryKeys);
     ASSERT_FALSE(CacheKey.empty());

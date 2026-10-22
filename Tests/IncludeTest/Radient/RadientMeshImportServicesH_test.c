@@ -45,7 +45,7 @@ void RadientMeshImportServices_C_UseInterfaces(IRadientAssetManager* pManager, I
     RadientMeshGeometryData        Geometry  = {pVertices, pIndices, pMorphData};
     RadientMeshPrimitiveCreateInfo Primitive = {0};
     RadientMeshViewCreateInfo      ViewCI    = {0};
-    Primitive.IndexCount                     = 3;
+    Primitive.ElementCount                   = 3;
     ViewCI.pPrimitives                       = &Primitive;
     ViewCI.PrimitiveCount                    = 1;
     ViewCI.pGeometryData                     = &Geometry;

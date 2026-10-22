@@ -159,9 +159,9 @@ public:
 
         const RadientMeshGeometryData  Geometry{pVertices, pIndices};
         RadientMeshPrimitiveCreateInfo Primitive;
-        Primitive.Name       = "Imported triangle";
-        Primitive.IndexCount = static_cast<Uint32>(Indices.size());
-        Primitive.pMaterial  = pMaterial;
+        Primitive.Name         = "Imported triangle";
+        Primitive.ElementCount = static_cast<Uint32>(Indices.size());
+        Primitive.pMaterial    = pMaterial;
         RadientMeshViewCreateInfo ViewCI;
         ViewCI.pPrimitives    = &Primitive;
         ViewCI.PrimitiveCount = 1;

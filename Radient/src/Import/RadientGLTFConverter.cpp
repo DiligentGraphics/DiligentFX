@@ -1783,8 +1783,7 @@ MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&           
 MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&                  MeshImportServices,
                                         const GLTF::TinyGltfModelView&               GltfModel,
                                         const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
-                                        const std::shared_ptr<const GLTF::Document>& pDocument,
-                                        Uint32                                       VertexCount)
+                                        const std::shared_ptr<const GLTF::Document>& pDocument)
 {
     if (pDocument == nullptr)
     {
@@ -1793,70 +1792,46 @@ MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&             
         return Result;
     }
 
+    const int IndexAccessor = GltfPrimitive.GetIndicesId();
+    if (IndexAccessor < 0)
+        return {};
+
     RefCntAutoPtr<IRadientDataBlob> pIndexBlob;
     RadientMeshIndexData            IndexCI;
-    const int                       IndexAccessor = GltfPrimitive.GetIndicesId();
-    if (IndexAccessor >= 0)
+    const auto                      GltfIndexData = GLTF::GetGltfDataInfo(GltfModel, IndexAccessor);
+    if (GltfIndexData.pData == nullptr ||
+        GltfIndexData.ByteStride <= 0 ||
+        GltfIndexData.Count == 0 ||
+        GltfIndexData.Count > (std::numeric_limits<Uint32>::max)())
     {
-        const auto GltfIndexData = GLTF::GetGltfDataInfo(GltfModel, IndexAccessor);
-        if (GltfIndexData.pData == nullptr ||
-            GltfIndexData.ByteStride <= 0 ||
-            GltfIndexData.Count == 0 ||
-            GltfIndexData.Count > (std::numeric_limits<Uint32>::max)())
-        {
-            return {};
-        }
-
-        const VALUE_TYPE IndexType       = GltfIndexData.Accessor.GetComponentType();
-        const Uint32     IndexValueSize  = GetValueSize(IndexType);
-        const Uint32     IndexByteStride = static_cast<Uint32>(GltfIndexData.ByteStride);
-        IndexCI.IndexType                = ToRadientIndexType(IndexType);
-        if (IndexCI.IndexType == RADIENT_INDEX_TYPE_NONE ||
-            IndexValueSize == 0 ||
-            IndexByteStride != IndexValueSize)
-        {
-            return {};
-        }
-
-        const Uint64                       DataSize = Uint64{GltfIndexData.Count} * IndexValueSize;
-        const GLTF::TinyGltfBufferViewView View     = GltfModel.GetBufferView(GltfIndexData.Accessor.GetBufferViewId());
-        const GLTF::TinyGltfBufferView     Buffer   = GltfModel.GetBuffer(View.GetBufferId());
-        if (!RadientValidation::IsValidSubrange(GltfIndexData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
-            !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
-        {
-            return {};
-        }
-
-        pIndexBlob = CreateDocumentDataBlob(pDocument, GltfIndexData.pData, DataSize);
-        if (pIndexBlob == nullptr)
-            return {};
-
-        IndexCI.IndexCount = static_cast<Uint32>(GltfIndexData.Count);
-    }
-    else
-    {
-        if (VertexCount == 0)
-            return {};
-
-        RadientDataBlobCreateInfo BlobCI;
-        BlobCI.Size = Uint64{VertexCount} * sizeof(Uint32);
-        RefCntAutoPtr<IRadientMutableDataBlob> pMutableBlob;
-        if (CreateRadientMutableDataBlob(BlobCI, &pMutableBlob) != RADIENT_STATUS_OK)
-            return {};
-        void* pData = nullptr;
-        if (pMutableBlob->BeginWrite(&pData) != RADIENT_STATUS_OK)
-            return {};
-        Uint32* pIndices = static_cast<Uint32*>(pData);
-        for (Uint32 Index = 0; Index < VertexCount; ++Index)
-            pIndices[Index] = Index;
-        if (pMutableBlob->EndWrite() != RADIENT_STATUS_OK)
-            return {};
-
-        pIndexBlob         = pMutableBlob;
-        IndexCI.IndexType  = RADIENT_INDEX_TYPE_UINT32;
-        IndexCI.IndexCount = VertexCount;
+        return {};
     }
 
+    const VALUE_TYPE IndexType       = GltfIndexData.Accessor.GetComponentType();
+    const Uint32     IndexValueSize  = GetValueSize(IndexType);
+    const Uint32     IndexByteStride = static_cast<Uint32>(GltfIndexData.ByteStride);
+    IndexCI.IndexType                = ToRadientIndexType(IndexType);
+    if (IndexCI.IndexType == RADIENT_INDEX_TYPE_NONE ||
+        IndexValueSize == 0 ||
+        IndexByteStride != IndexValueSize)
+    {
+        return {};
+    }
+
+    const Uint64                       DataSize = Uint64{GltfIndexData.Count} * IndexValueSize;
+    const GLTF::TinyGltfBufferViewView View     = GltfModel.GetBufferView(GltfIndexData.Accessor.GetBufferViewId());
+    const GLTF::TinyGltfBufferView     Buffer   = GltfModel.GetBuffer(View.GetBufferId());
+    if (!RadientValidation::IsValidSubrange(GltfIndexData.Accessor.GetByteOffset(), DataSize, View.View.byteLength) ||
+        !RadientValidation::IsValidSubrange(View.GetByteOffset(), View.View.byteLength, Buffer.Buffer.data.size()))
+    {
+        return {};
+    }
+
+    pIndexBlob = CreateDocumentDataBlob(pDocument, GltfIndexData.pData, DataSize);
+    if (pIndexBlob == nullptr)
+        return {};
+
+    IndexCI.IndexCount   = static_cast<Uint32>(GltfIndexData.Count);
     IndexCI.pIndexBuffer = pIndexBlob;
 
     MeshIndexDataResult Result;

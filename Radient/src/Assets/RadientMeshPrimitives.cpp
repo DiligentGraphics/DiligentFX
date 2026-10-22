@@ -302,10 +302,10 @@ RADIENT_STATUS CreatePrimitiveMesh(IRadientAssetManager*  pAssetManager,
         return Status;
 
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.Name       = Name;
-    PrimitiveCI.FirstIndex = 0;
-    PrimitiveCI.IndexCount = IndexCount;
-    PrimitiveCI.pMaterial  = pMaterial;
+    PrimitiveCI.Name         = Name;
+    PrimitiveCI.FirstElement = 0;
+    PrimitiveCI.ElementCount = IndexCount;
+    PrimitiveCI.pMaterial    = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name                      = Name;

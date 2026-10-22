@@ -121,11 +121,11 @@ MeshSources MakeMeshSources(std::array<Uint32, 3> Indices = {0, 1, 2}, IRadientD
 }
 
 RadientMeshViewCreateInfo MakeMeshView(RadientMeshPrimitiveCreateInfo& PrimitiveCI,
-                                       Uint32                          FirstIndex = 0,
-                                       Uint32                          IndexCount = 3)
+                                       Uint32                          FirstElement = 0,
+                                       Uint32                          ElementCount = 3)
 {
-    PrimitiveCI.FirstIndex = FirstIndex;
-    PrimitiveCI.IndexCount = IndexCount;
+    PrimitiveCI.FirstElement = FirstElement;
+    PrimitiveCI.ElementCount = ElementCount;
 
     RadientMeshViewCreateInfo ViewCI{};
     ViewCI.pPrimitives    = &PrimitiveCI;
@@ -406,7 +406,7 @@ TEST(RadientMeshAssetManagerTest, ReflectionReportsStoredIndexType)
     RadientVertexLayoutDescX    Layout;
     Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
     RadientMeshPrimitiveCreateInfo Primitive{};
-    Primitive.IndexCount = static_cast<Uint32>(Indices.size());
+    Primitive.ElementCount = static_cast<Uint32>(Indices.size());
     RadientMeshCreateInfo MeshCI{};
     MeshCI.VertexData.VertexLayout    = Layout;
     MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
@@ -577,7 +577,7 @@ TEST(RadientMeshAssetManagerTest, RejectsUnreadableIndexBlobBeforeQueuingLoad)
     Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
     IRadientDataBlob* const        VertexBuffers[]{pVertexBlob};
     RadientMeshPrimitiveCreateInfo Primitive;
-    Primitive.IndexCount = 3;
+    Primitive.ElementCount = 3;
     RadientMeshCreateInfo MeshCI;
     MeshCI.VertexData.VertexLayout    = Layout;
     MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
@@ -631,7 +631,7 @@ TEST(RadientMeshAssetManagerTest, RejectsActiveVertexBlobWriterBeforeQueuingLoad
     const Uint32                   Indices[]{0, 1, 2};
     const auto                     pIndexBlob = Testing::MakeTestDataBlob(Indices, sizeof(Indices));
     RadientMeshPrimitiveCreateInfo Primitive;
-    Primitive.IndexCount = 3;
+    Primitive.ElementCount = 3;
     RadientMeshCreateInfo MeshCI;
     MeshCI.VertexData.VertexLayout    = Layout;
     MeshCI.VertexData.ppVertexBuffers = VertexBuffers;
@@ -1036,17 +1036,17 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
     ASSERT_NE(pMaterialB, nullptr);
 
     std::array<RadientMeshPrimitiveCreateInfo, 3> Primitives{};
-    Primitives[0].Name       = "custom whole";
-    Primitives[0].FirstIndex = 0;
-    Primitives[0].IndexCount = 3;
-    Primitives[0].pMaterial  = pMaterialA;
-    Primitives[1].Name       = "default subrange";
-    Primitives[1].FirstIndex = 1;
-    Primitives[1].IndexCount = 2;
-    Primitives[2].Name       = "custom subrange";
-    Primitives[2].FirstIndex = 2;
-    Primitives[2].IndexCount = 1;
-    Primitives[2].pMaterial  = pMaterialB;
+    Primitives[0].Name         = "custom whole";
+    Primitives[0].FirstElement = 0;
+    Primitives[0].ElementCount = 3;
+    Primitives[0].pMaterial    = pMaterialA;
+    Primitives[1].Name         = "default subrange";
+    Primitives[1].FirstElement = 1;
+    Primitives[1].ElementCount = 2;
+    Primitives[2].Name         = "custom subrange";
+    Primitives[2].FirstElement = 2;
+    Primitives[2].ElementCount = 1;
+    Primitives[2].pMaterial    = pMaterialB;
 
     const std::array<Uint32, 3> GeometryIndices{1, 0, 1};
 
@@ -1104,8 +1104,8 @@ TEST(RadientMeshAssetManagerTest, CreateMeshAcceptsMultipleGeometrySources)
         const RadientMeshPrimitiveDesc& Primitive = Desc.pPrimitives[PrimitiveIndex];
         EXPECT_STREQ(Primitive.Name, Primitives[PrimitiveIndex].Name);
         EXPECT_EQ(Primitive.GeometryIndex, ReflectedGeometryIndices[PrimitiveIndex]);
-        EXPECT_EQ(Primitive.FirstElement, Primitives[PrimitiveIndex].FirstIndex);
-        EXPECT_EQ(Primitive.ElementCount, Primitives[PrimitiveIndex].IndexCount);
+        EXPECT_EQ(Primitive.FirstElement, Primitives[PrimitiveIndex].FirstElement);
+        EXPECT_EQ(Primitive.ElementCount, Primitives[PrimitiveIndex].ElementCount);
         EXPECT_EQ(Primitive.pMaterial, Primitives[PrimitiveIndex].pMaterial);
     }
 
@@ -1300,9 +1300,9 @@ TEST(RadientMeshAssetManagerTest, MeshViewCopiesCreateInfoBeforeAsyncTaskRuns)
         const std::string PrimitiveName = "temporary primitive name";
 
         std::array<RadientMeshPrimitiveCreateInfo, 1> Primitives{};
-        Primitives[0].Name       = PrimitiveName.c_str();
-        Primitives[0].FirstIndex = 0;
-        Primitives[0].IndexCount = 3;
+        Primitives[0].Name         = PrimitiveName.c_str();
+        Primitives[0].FirstElement = 0;
+        Primitives[0].ElementCount = 3;
 
         std::array<Uint32, 1> GeometryIndices{0};
 
@@ -1358,4 +1358,55 @@ TEST(RadientMeshAssetManagerTest, MeshTasksKeepManagerAliveUntilCompletion)
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), nullptr);
+}
+
+TEST(RadientMeshAssetManagerTest, CreatesNonIndexedMeshWithoutIndexData)
+{
+    RefCntAutoPtr<IThreadPool>       pThreadPool  = CreateThreadPool(ThreadPoolCreateInfo{0});
+    RadientMeshAssetManagerSharedPtr pMeshManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pThreadPool, nullptr);
+    ASSERT_NE(pMeshManager, nullptr);
+
+    const std::array<RadientFloat3, 3>    Positions{{{0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}}};
+    const RefCntAutoPtr<IRadientDataBlob> pBlob  = Testing::MakeTestDataBlob(Positions.data(), sizeof(Positions));
+    IRadientDataBlob* const               Buffer = pBlob;
+    RadientVertexLayoutDescX              Layout;
+    Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.FirstElement = 1;
+    Primitive.ElementCount = 2;
+    RadientMeshCreateInfo CI;
+    CI.VertexData     = {Layout, &Buffer, static_cast<Uint32>(Positions.size())};
+    CI.pPrimitives    = &Primitive;
+    CI.PrimitiveCount = 1;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    RefCntAutoPtr<IRadientMeshAsset> pDuplicate;
+    ASSERT_EQ(pMeshManager->CreateMesh(*pThreadPool, CI, &pMesh), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(pMeshManager->CreateMesh(*pThreadPool, CI, &pDuplicate), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+    ASSERT_NE(pDuplicate, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pMesh->GetDesc().GeometryCount, 0u);
+    ASSERT_NO_FATAL_FAILURE(DrainThreadPool(*pThreadPool));
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh), RadientMeshAssetManager::GetMeshPayload(pDuplicate));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMesh), nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 0), nullptr);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_NONE);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].FirstElement, 1u);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, 2u);
+    const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(Result.pMesh, nullptr);
+    ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
+    EXPECT_FALSE(Result.pMesh->Primitives[0].IsIndexed);
+    EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, 1u);
+    EXPECT_EQ(Result.pMesh->Primitives[0].ElementCount, 2u);
 }

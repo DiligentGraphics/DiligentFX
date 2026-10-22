@@ -69,6 +69,8 @@ void RadientAssets_CPP_UseMeshCreateInfo()
     RadientTextureLoadInfo         TextureLoadInfo;
     RadientSceneLoadInfo           SceneLoadInfo;
 
+    Primitive.FirstElement = 0;
+    Primitive.ElementCount = 3;
     (void)Primitive;
     const RadientVertexAttributeDesc VertexAttribute = {
         "POSITION",

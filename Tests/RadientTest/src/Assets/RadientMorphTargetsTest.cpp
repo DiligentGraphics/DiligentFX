@@ -79,7 +79,7 @@ struct MorphMeshData
         Targets[1].Desc.Name           = nullptr;
         Targets[1].Desc.DefaultWeight  = -0.5f;
 
-        Primitive.IndexCount = static_cast<Uint32>(Indices.size());
+        Primitive.ElementCount = static_cast<Uint32>(Indices.size());
     }
 
     const RefCntAutoPtr<IRadientDataBlob> pPositionBlob = Testing::MakeTestDataBlob(PositionDeltas.data(), sizeof(PositionDeltas));
@@ -288,7 +288,7 @@ TEST(RadientMorphTargetsTest, MeshCreatesMutableWeightsFromDefaults)
     ASSERT_EQ(Desc.PrimitiveCount, 1u);
     ASSERT_NE(Desc.pPrimitives, nullptr);
     EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
-    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, Source.Primitive.IndexCount);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, Source.Primitive.ElementCount);
 
     RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
     ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);

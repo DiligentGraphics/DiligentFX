@@ -208,42 +208,53 @@ bool ValidateMeshCreateInfo(const RadientMeshCreateInfo& MeshCI)
         }
     }
 
-    if (MeshCI.IndexData.IndexCount == 0)
-        return LogValidationError("RadientMeshCreateInfo", "IndexData.IndexCount must not be zero.");
+    const bool IsIndexed = MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_NONE;
+    if (IsIndexed)
+    {
+        if (MeshCI.IndexData.IndexCount == 0)
+            return LogValidationError("RadientMeshCreateInfo", "IndexData.IndexCount must not be zero.");
 
-    if (MeshCI.IndexData.pIndexBuffer == nullptr)
-        return LogValidationError("RadientMeshCreateInfo", "IndexData.pIndexBuffer must not be null.");
+        if (MeshCI.IndexData.pIndexBuffer == nullptr)
+            return LogValidationError("RadientMeshCreateInfo", "IndexData.pIndexBuffer must not be null.");
 
-    if (MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT8 &&
-        MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
-        MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT32)
+        if (MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT8 &&
+            MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
+            MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_UINT32)
+        {
+            return LogValidationError("RadientMeshCreateInfo",
+                                      "IndexData.IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32.");
+        }
+    }
+    else if (MeshCI.IndexData.pIndexBuffer != nullptr || MeshCI.IndexData.IndexCount != 0)
     {
         return LogValidationError("RadientMeshCreateInfo",
-                                  "IndexData.IndexType must be RADIENT_INDEX_TYPE_UINT8, RADIENT_INDEX_TYPE_UINT16, or RADIENT_INDEX_TYPE_UINT32.");
+                                  "IndexData must be empty when IndexType is RADIENT_INDEX_TYPE_NONE.");
     }
 
+    const Uint32 GeometryElementCount = IsIndexed ? MeshCI.IndexData.IndexCount : MeshCI.VertexData.VertexCount;
+    const char*  ElementCountName     = IsIndexed ? "IndexData.IndexCount" : "VertexData.VertexCount";
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = MeshCI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.IndexCount == 0)
+        if (PrimitiveCI.ElementCount == 0)
         {
             return LogValidationError("RadientMeshCreateInfo",
-                                      "pPrimitives[", PrimitiveIndex, "].IndexCount must not be zero.");
+                                      "pPrimitives[", PrimitiveIndex, "].ElementCount must not be zero.");
         }
 
-        if (PrimitiveCI.FirstIndex >= MeshCI.IndexData.IndexCount)
+        if (PrimitiveCI.FirstElement >= GeometryElementCount)
         {
             return LogValidationError("RadientMeshCreateInfo",
-                                      "pPrimitives[", PrimitiveIndex, "].FirstIndex (", PrimitiveCI.FirstIndex,
-                                      ") must be less than IndexData.IndexCount (", MeshCI.IndexData.IndexCount, ").");
+                                      "pPrimitives[", PrimitiveIndex, "].FirstElement (", PrimitiveCI.FirstElement,
+                                      ") must be less than ", ElementCountName, " (", GeometryElementCount, ").");
         }
 
-        if (!IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, MeshCI.IndexData.IndexCount))
+        if (!IsValidSubrange(PrimitiveCI.FirstElement, PrimitiveCI.ElementCount, GeometryElementCount))
         {
             return LogValidationError("RadientMeshCreateInfo",
                                       "pPrimitives[", PrimitiveIndex,
-                                      "] range [FirstIndex, FirstIndex + IndexCount) exceeds IndexData.IndexCount (",
-                                      MeshCI.IndexData.IndexCount, ").");
+                                      "] range [FirstElement, FirstElement + ElementCount) exceeds ", ElementCountName,
+                                      " (", GeometryElementCount, ").");
         }
     }
 

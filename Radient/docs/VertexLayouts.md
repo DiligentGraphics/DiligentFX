@@ -143,11 +143,14 @@ Blob sizes and data are checked while read access is held. An active writer
 prevents mesh creation and results in `RADIENT_STATUS_INVALID_OPERATION`.
 
 `pIndexBuffer` supplies indices through an `IRadientDataBlob` with the same
-ownership and read-access rules. It contains `IndexCount` tightly packed `UINT16`
-or `UINT32` values, selected by `IndexType`, beginning at the blob's first byte.
-The blob must contain at least `IndexCount * sizeof(index type)` bytes; additional
-bytes are ignored. Index data does not use `VertexLayout`. Both the index buffer
-and a nonzero index count are required.
+ownership and read-access rules. It contains `IndexCount` tightly packed `UINT8`,
+`UINT16`, or `UINT32` values, selected by `IndexType`, beginning at the blob's first
+byte. The blob must contain at least `IndexCount * sizeof(index type)` bytes;
+additional bytes are ignored. Index data does not use `VertexLayout`.
+
+Leave `IndexData` empty (null buffer, zero count, and type `NONE`) to create
+non-indexed geometry. A primitive's `FirstElement` and `ElementCount` select
+indices when index data is present, or vertices otherwise.
 
 Mesh creation requires a nonzero vertex count and a three-component `POSITION`.
 `JOINTS_0` and `WEIGHTS_0` appear together with four components each; joint

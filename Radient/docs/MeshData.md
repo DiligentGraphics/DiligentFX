@@ -86,10 +86,10 @@ Geometry.pVertexData = pVertexData;
 Geometry.pIndexData  = pIndexData;
 
 RadientMeshPrimitiveCreateInfo Primitive;
-Primitive.Name       = "Surface";
-Primitive.FirstIndex = 0;
-Primitive.IndexCount = IndexCount;
-Primitive.pMaterial  = pMaterial;
+Primitive.Name         = "Surface";
+Primitive.FirstElement = 0;
+Primitive.ElementCount = IndexCount;
+Primitive.pMaterial    = pMaterial;
 
 RadientMeshViewCreateInfo ViewCI;
 ViewCI.pGeometryData  = &Geometry;
@@ -105,14 +105,16 @@ if (RADIENT_FAILED(Status))
 
 The view may be submitted immediately after creating its data handles. It waits
 for their source processing and uses their existing storage. All geometry data
-must belong to the same asset manager as the mesh-import service. Views
-currently require both vertex and index data.
+must belong to the same asset manager as the mesh-import service. Vertex data
+is required. Leave `Geometry.pIndexData` null for non-indexed geometry; primitive
+`FirstElement` and `ElementCount` then select vertices directly. Indexed and
+non-indexed geometries may appear in the same mesh view.
 
 For multiple geometries, provide a `pGeometryData` array and use
 `pGeometryIndices` to map each primitive to an array entry. A null mapping
 selects geometry zero for every primitive. Geometry handles can be reused
 independently: two entries may share vertices and use different index data,
-or vice versa. Each primitive selects its own index range and material.
+or vice versa. Each primitive selects its own index or vertex range and material.
 Unused geometry entries are ignored; the resulting mesh description lists
 used geometries in first-use order.
 
@@ -120,6 +122,29 @@ The call copies primitive metadata, names, and geometry mappings and retains
 the referenced materials and geometry data. Input arrays and caller-owned
 references can be released when it returns. Primitive ranges and compatibility
 of morph targets across geometries are checked after data processing finishes.
+
+## Create a non-indexed mesh
+
+For regular `CreateMesh`, leave `IndexData` at its default empty value and
+provide vertex ranges in the primitive descriptors:
+
+```cpp
+RadientMeshPrimitiveCreateInfo Primitive;
+Primitive.FirstElement = 0;
+Primitive.ElementCount = VertexCount;
+Primitive.pMaterial    = pMaterial;
+
+RadientMeshCreateInfo MeshCI;
+MeshCI.VertexData     = VertexData;
+MeshCI.pPrimitives    = &Primitive;
+MeshCI.PrimitiveCount = 1;
+```
+
+No index data is created or uploaded. Reflection reports `IndexType = NONE`
+and `IndexCount = 0`; primitive element ranges refer to the geometry's vertices.
+An empty index descriptor has a null blob, zero count, and type `NONE`. Partially
+specified index data is invalid. The import service's `CreateMeshIndexData`
+continues to require actual index data.
 
 ## Completion and ownership
 

@@ -99,7 +99,7 @@ protected:
     RefCntAutoPtr<IRadientMeshAsset> CreateView(const RadientMeshGeometryData& Geometry)
     {
         RadientMeshPrimitiveCreateInfo Primitive;
-        Primitive.IndexCount = 3;
+        Primitive.ElementCount = 3;
         RadientMeshViewCreateInfo CI;
         CI.pPrimitives    = &Primitive;
         CI.PrimitiveCount = 1;
@@ -185,8 +185,8 @@ TEST_F(RadientMeshImportServicesTest, PendingViewsRetainSourcesAndCopyDescriptor
 
         std::string                    PrimitiveName{"imported triangle"};
         RadientMeshPrimitiveCreateInfo Primitive;
-        Primitive.Name       = PrimitiveName.c_str();
-        Primitive.IndexCount = 3;
+        Primitive.Name         = PrimitiveName.c_str();
+        Primitive.ElementCount = 3;
         RadientMeshGeometryData   Geometry{pVertices, pIndices};
         Uint32                    GeometryIndex = 0;
         RadientMeshViewCreateInfo ViewCI;
@@ -199,12 +199,12 @@ TEST_F(RadientMeshImportServicesTest, PendingViewsRetainSourcesAndCopyDescriptor
 
         // All descriptors can be overwritten immediately, including strings,
         // the buffer-pointer array, geometry references, and primitive ranges.
-        Semantic[0]          = 'X';
-        Buffer               = nullptr;
-        PrimitiveName[0]     = 'X';
-        Primitive.IndexCount = 0;
-        GeometryIndex        = 99;
-        Geometry             = {};
+        Semantic[0]            = 'X';
+        Buffer                 = nullptr;
+        PrimitiveName[0]       = 'X';
+        Primitive.ElementCount = 0;
+        GeometryIndex          = 99;
+        Geometry               = {};
     }
     ExpectAssetInterface(pVertices.RawPtr(), IID_RadientMeshVertexData, RADIENT_ASSET_TYPE_MESH_VERTEX_DATA);
     ExpectAssetInterface(pIndices.RawPtr(), IID_RadientMeshIndexData, RADIENT_ASSET_TYPE_MESH_INDEX_DATA);
@@ -253,7 +253,7 @@ TEST_F(RadientMeshImportServicesTest, ReusesVertexAndIndexDataIndependentlyAndDe
     const std::array<Uint32, 4>                   GeometryIndices{2, 0, 1, 2};
     std::array<RadientMeshPrimitiveCreateInfo, 4> Primitives{};
     for (RadientMeshPrimitiveCreateInfo& Primitive : Primitives)
-        Primitive.IndexCount = 3;
+        Primitive.ElementCount = 3;
     RadientMeshViewCreateInfo CI;
     CI.pPrimitives      = Primitives.data();
     CI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
@@ -375,7 +375,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsMissingOutputAndInvalidViewReferenc
     RefCntAutoPtr<IRadientMeshIndexData>  pIndices  = CreateIndices();
     RadientMeshGeometryData               Geometry{pVertices, pIndices};
     RadientMeshPrimitiveCreateInfo        Primitive;
-    Primitive.IndexCount                    = 3;
+    Primitive.ElementCount                  = 3;
     Uint32                    GeometryIndex = 1;
     RadientMeshViewCreateInfo CI;
     CI.pPrimitives      = &Primitive;
@@ -479,7 +479,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsGeometryDataFromAnotherManager)
     RefCntAutoPtr<IRadientMeshIndexData>            pIndices       = CreateIndices();
     const RadientMeshGeometryData                   Geometry{pVertices, pIndices};
     RadientMeshPrimitiveCreateInfo                  Primitive;
-    Primitive.IndexCount = 3;
+    Primitive.ElementCount = 3;
     RadientMeshViewCreateInfo CI;
     CI.pPrimitives    = &Primitive;
     CI.PrimitiveCount = 1;
@@ -505,6 +505,105 @@ TEST_F(RadientMeshImportServicesTest, RejectsCreationAfterManagerStops)
     EXPECT_EQ(pIndices, nullptr);
     EXPECT_EQ(pMorphData, nullptr);
     EXPECT_EQ(pMesh, nullptr);
+}
+
+TEST_F(RadientMeshImportServicesTest, CombinesIndexedAndNonIndexedGeometry)
+{
+    RefCntAutoPtr<IRadientMeshVertexData> pVertices = CreateVertices();
+    RefCntAutoPtr<IRadientMeshIndexData>  pIndices  = CreateIndices();
+    ASSERT_NE(pVertices, nullptr);
+    ASSERT_NE(pIndices, nullptr);
+
+    const std::array<RadientMeshGeometryData, 2>  Geometries{{{pVertices, nullptr}, {pVertices, pIndices}}};
+    const std::array<Uint32, 3>                   GeometryIndices{0, 1, 0};
+    std::array<RadientMeshPrimitiveCreateInfo, 3> Primitives{};
+    Primitives[0].FirstElement = 1;
+    Primitives[0].ElementCount = 2;
+    Primitives[1].ElementCount = 3;
+    Primitives[2].ElementCount = 3;
+    RadientMeshViewCreateInfo CI;
+    CI.pPrimitives      = Primitives.data();
+    CI.PrimitiveCount   = static_cast<Uint32>(Primitives.size());
+    CI.pGeometryIndices = GeometryIndices.data();
+    CI.pGeometryData    = Geometries.data();
+    CI.GeometryCount    = static_cast<Uint32>(Geometries.size());
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pMeshImportServices->CreateMeshView(CI, &pMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 2u);
+    ASSERT_EQ(Desc.PrimitiveCount, 3u);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_NONE);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, 0u);
+    EXPECT_EQ(Desc.pGeometries[1].IndexType, RADIENT_INDEX_TYPE_UINT16);
+    EXPECT_EQ(Desc.pGeometries[1].IndexCount, 3u);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(pMesh), nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 0), nullptr);
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 1), nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(pMesh, 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(pMesh, 1));
+
+    const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(Result.pMesh, nullptr);
+    EXPECT_EQ(Result.pMesh->Geometries[0].IndexType, VT_UNDEFINED);
+    EXPECT_EQ(Result.pMesh->Geometries[0].FirstIndexLocation, 0u);
+    ASSERT_EQ(Result.pMesh->Primitives.size(), Primitives.size());
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Primitives.size(); ++PrimitiveIndex)
+    {
+        EXPECT_EQ(Desc.pPrimitives[PrimitiveIndex].GeometryIndex, GeometryIndices[PrimitiveIndex]);
+        EXPECT_EQ(Desc.pPrimitives[PrimitiveIndex].FirstElement, Primitives[PrimitiveIndex].FirstElement);
+        EXPECT_EQ(Desc.pPrimitives[PrimitiveIndex].ElementCount, Primitives[PrimitiveIndex].ElementCount);
+        EXPECT_EQ(Result.pMesh->Primitives[PrimitiveIndex].IsIndexed, GeometryIndices[PrimitiveIndex] == 1);
+        EXPECT_EQ(Result.pMesh->Primitives[PrimitiveIndex].FirstElement, Primitives[PrimitiveIndex].FirstElement);
+        EXPECT_EQ(Result.pMesh->Primitives[PrimitiveIndex].ElementCount, Primitives[PrimitiveIndex].ElementCount);
+    }
+}
+
+TEST_F(RadientMeshImportServicesTest, DeduplicatesNonIndexedViewsSeparatelyFromIndexedViews)
+{
+    RefCntAutoPtr<IRadientMeshVertexData> pVertices          = CreateVertices();
+    RefCntAutoPtr<IRadientMeshVertexData> pDuplicateVertices = CreateVertices();
+    RefCntAutoPtr<IRadientMeshIndexData>  pIndices           = CreateIndices();
+    RefCntAutoPtr<IRadientMeshAsset>      pMesh              = CreateView({pVertices, nullptr});
+    RefCntAutoPtr<IRadientMeshAsset>      pDuplicate         = CreateView({pDuplicateVertices, nullptr});
+    RefCntAutoPtr<IRadientMeshAsset>      pIndexed           = CreateView({pVertices, pIndices});
+    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicate), RADIENT_STATUS_OK);
+    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pIndexed), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh), RadientMeshAssetManager::GetMeshPayload(pDuplicate));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), RadientMeshAssetManager::GetMeshPayload(pIndexed));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(pMesh, 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(pIndexed, 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pMesh, 0), nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(pDuplicate, 0), nullptr);
+}
+
+TEST_F(RadientMeshImportServicesTest, RejectsNonIndexedViewRangesAfterVertexDataLoads)
+{
+    RefCntAutoPtr<IRadientMeshVertexData> pVertices = CreateVertices();
+    RadientMeshGeometryData               Geometry{pVertices, nullptr};
+    RadientMeshPrimitiveCreateInfo        Primitive;
+    Primitive.FirstElement = 1;
+    Primitive.ElementCount = 3;
+    RadientMeshViewCreateInfo CI;
+    CI.pPrimitives    = &Primitive;
+    CI.PrimitiveCount = 1;
+    CI.pGeometryData  = &Geometry;
+    CI.GeometryCount  = 1;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pMeshImportServices->CreateMeshView(CI, &pMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMesh->GetDesc().GeometryCount, 0u);
+
+    RefCntAutoPtr<IRadientMeshIndexData> pEmptyIndices;
+    EXPECT_EQ(pMeshImportServices->CreateMeshIndexData({}, &pEmptyIndices), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pEmptyIndices, nullptr);
 }
 
 } // namespace

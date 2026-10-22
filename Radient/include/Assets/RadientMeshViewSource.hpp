@@ -71,10 +71,10 @@ class RadientMeshViewSource final
 {
 public:
     RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
-                          Uint32                           IndexCount);
+                          Uint32                           ElementCount);
 
     RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
-                          const Uint32*                    pGeometryIndexCounts,
+                          const Uint32*                    pGeometryElementCounts,
                           Uint32                           GeometryCount);
 
     RadientMeshViewSource(RadientMeshViewSource&& Rhs) noexcept;

@@ -502,16 +502,15 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
     GeometryDescs.reserve(Geometries.size());
     for (const MeshGeometryStorage& Geometry : Geometries)
     {
-        if (Geometry.pIndexDataPayload == nullptr ||
-            Geometry.pVertexDataPayload == nullptr)
+        if (Geometry.pVertexDataPayload == nullptr)
         {
             LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
             return;
         }
 
-        const MeshIndexDataStorage&  IndexData  = Geometry.pIndexDataPayload->GetStorage();
+        const MeshIndexDataStorage*  pIndexData = Geometry.pIndexDataPayload != nullptr ? &Geometry.pIndexDataPayload->GetStorage() : nullptr;
         const MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
-        if (IndexData.IndexCount == 0 ||
+        if ((pIndexData != nullptr && pIndexData->IndexCount == 0) ||
             VertexData.VertexCount == 0)
         {
             LoadStatus.store(RADIENT_STATUS_INVALID_ARGUMENT, std::memory_order_release);
@@ -523,11 +522,15 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             &Geometry.pMorphTargetDataPayload->GetStorage().Data :
             nullptr;
 
-        GeometryDescs.push_back(RadientMeshGeometryDesc{
-            VertexData.GetVertexLayout(),
-            VertexData.VertexCount,
-            IndexData.IndexType == VT_UINT16 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32,
-            IndexData.IndexCount});
+        RadientMeshGeometryDesc GeometryDesc;
+        GeometryDesc.VertexLayout = VertexData.GetVertexLayout();
+        GeometryDesc.VertexCount  = VertexData.VertexCount;
+        if (pIndexData != nullptr)
+        {
+            GeometryDesc.IndexType  = pIndexData->IndexType == VT_UINT16 ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32;
+            GeometryDesc.IndexCount = pIndexData->IndexCount;
+        }
+        GeometryDescs.push_back(GeometryDesc);
 
         if (pMorphTargetData != nullptr && Desc.pMorphTargets == nullptr)
         {
@@ -541,7 +544,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
             pMorphTargetData,
             VertexData.VertexAttribFlags,
             VertexData.VertexBufferMask,
-            IndexData.IndexType,
+            pIndexData != nullptr ? pIndexData->IndexType : VT_UNDEFINED,
             0,
             0,
             0});
@@ -582,9 +585,9 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
         DrawableMesh.Primitives.push_back(RadientDrawableMeshPrimitive{
             pMaterialAsset,
             GeometryIndex,
-            true,
-            PrimitiveCI.FirstIndex,
-            PrimitiveCI.IndexCount});
+            Geometries[GeometryIndex].pIndexDataPayload != nullptr,
+            PrimitiveCI.FirstElement,
+            PrimitiveCI.ElementCount});
     }
 
     Desc.pGeometries   = GeometryDescs.data();
@@ -977,17 +980,18 @@ bool AreMorphTargetDescsCompatible(const RadientMeshAssetDesc& Lhs,
 }
 
 std::string MakeMeshGeometryCacheKey(const MeshVertexDataStorage&      VertexData,
-                                     const MeshIndexDataStorage&       IndexData,
+                                     const MeshIndexDataStorage*       pIndexData,
                                      const MeshMorphTargetDataStorage* pMorphTargetData)
 {
     if (VertexData.CacheKey.empty() ||
-        IndexData.CacheKey.empty() ||
+        (pIndexData != nullptr && pIndexData->CacheKey.empty()) ||
         (pMorphTargetData != nullptr && pMorphTargetData->CacheKey.empty()))
         return {};
 
     RadientCacheKeyBuilder Builder{"mesh-geometry", 1};
-    Builder.AddString("vertex", VertexData.CacheKey)
-        .AddString("index", IndexData.CacheKey);
+    Builder.AddString("vertex", VertexData.CacheKey);
+    if (pIndexData != nullptr)
+        Builder.AddString("index", pIndexData->CacheKey);
 
     if (pMorphTargetData != nullptr)
         Builder.AddString("morph-target", pMorphTargetData->CacheKey);
@@ -1171,9 +1175,13 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
     if (RADIENT_FAILED(pVertexSource->GetStatus()))
         return pVertexSource->GetStatus();
 
-    std::unique_ptr<RadientMeshIndexSource> pIndexSource = std::make_unique<RadientMeshIndexSource>(MeshCI.IndexData);
-    if (RADIENT_FAILED(pIndexSource->GetStatus()))
-        return pIndexSource->GetStatus();
+    std::unique_ptr<RadientMeshIndexSource> pIndexSource;
+    if (MeshCI.IndexData.IndexType != RADIENT_INDEX_TYPE_NONE)
+    {
+        pIndexSource = std::make_unique<RadientMeshIndexSource>(MeshCI.IndexData);
+        if (RADIENT_FAILED(pIndexSource->GetStatus()))
+            return pIndexSource->GetStatus();
+    }
 
     RefCntAutoPtr<IRadientMeshMorphTargetData> pMorphTargetData;
     if (MeshCI.MorphTargetData.MorphTargetCount != 0)
@@ -1214,11 +1222,14 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMesh(IThreadPool&                 
         return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
 
     RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
-    Status = CreateMeshIndexData(ThreadPool,
-                                 std::move(pIndexSource),
-                                 pIndexData.GetAddressOfEmpty());
-    if (RADIENT_FAILED(Status) || pIndexData == nullptr)
-        return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+    if (pIndexSource != nullptr)
+    {
+        Status = CreateMeshIndexData(ThreadPool,
+                                     std::move(pIndexSource),
+                                     pIndexData.GetAddressOfEmpty());
+        if (RADIENT_FAILED(Status) || pIndexData == nullptr)
+            return RADIENT_FAILED(Status) ? Status : RADIENT_STATUS_FAILED;
+    }
 
     const RadientMeshGeometryData GeometryData{pVertexData, pIndexData, pMorphTargetData};
     return CreateMeshView(ThreadPool, &GeometryData, 1, ViewCI, ppMesh);
@@ -1394,10 +1405,9 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
     {
         RefCntAutoPtr<MeshVertexDataAssetImpl> pVertexData{pGeometryData[GeometryIndex].pVertexData, IID_MeshVertexDataImpl};
         RefCntAutoPtr<MeshIndexDataAssetImpl>  pIndexData{pGeometryData[GeometryIndex].pIndexData, IID_MeshIndexDataImpl};
-        if (pVertexData == nullptr ||
-            pIndexData == nullptr ||
-            !pVertexData->IsOwnedBy(this) ||
-            !pIndexData->IsOwnedBy(this))
+        if (pVertexData == nullptr || !pVertexData->IsOwnedBy(this) ||
+            (pGeometryData[GeometryIndex].pIndexData != nullptr &&
+             (pIndexData == nullptr || !pIndexData->IsOwnedBy(this))))
         {
             return RADIENT_STATUS_INVALID_ARGUMENT;
         }
@@ -1460,40 +1470,47 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                     return ASYNC_TASK_STATUS_COMPLETE;
                 };
 
-                std::vector<Uint32> GeometryIndexCounts;
-                GeometryIndexCounts.reserve(ConcreteGeometries.size());
+                std::vector<Uint32> GeometryElementCounts;
+                GeometryElementCounts.reserve(ConcreteGeometries.size());
                 std::vector<std::string> GeometryCacheKeys;
                 GeometryCacheKeys.reserve(ConcreteGeometries.size());
                 const RadientMeshAssetDesc* pMeshMorphTargetDesc = nullptr;
                 for (MeshGeometryStorage& Geometry : ConcreteGeometries)
                 {
-                    if (Geometry.pIndexDataAsset == nullptr ||
-                        Geometry.pVertexDataAsset == nullptr)
+                    if (Geometry.pVertexDataAsset == nullptr)
                         return FailMesh();
 
-                    const RADIENT_STATUS IndexPayloadStatus = Geometry.pIndexDataAsset->GetPayloadStatus();
-                    if (IndexPayloadStatus != RADIENT_STATUS_OK)
-                        return FailMesh(IndexPayloadStatus);
+                    const MeshIndexDataStorage* pIndexData = nullptr;
+                    if (Geometry.pIndexDataAsset != nullptr)
+                    {
+                        const RADIENT_STATUS IndexPayloadStatus = Geometry.pIndexDataAsset->GetPayloadStatus();
+                        if (IndexPayloadStatus != RADIENT_STATUS_OK)
+                            return FailMesh(IndexPayloadStatus);
+
+                        Geometry.pIndexDataPayload = Geometry.pIndexDataAsset->GetPayload();
+                        if (Geometry.pIndexDataPayload == nullptr)
+                            return FailMesh();
+
+                        pIndexData = &Geometry.pIndexDataPayload->GetStorage();
+                        if (pIndexData->IndexCount == 0)
+                            return FailMesh();
+
+                        const RADIENT_STATUS IndexDataStatus = pIndexData->GetLoadStatus();
+                        if (RADIENT_FAILED(IndexDataStatus))
+                            return FailMesh(IndexDataStatus);
+                    }
 
                     const RADIENT_STATUS VertexPayloadStatus = Geometry.pVertexDataAsset->GetPayloadStatus();
                     if (VertexPayloadStatus != RADIENT_STATUS_OK)
                         return FailMesh(VertexPayloadStatus);
 
-                    Geometry.pIndexDataPayload  = Geometry.pIndexDataAsset->GetPayload();
                     Geometry.pVertexDataPayload = Geometry.pVertexDataAsset->GetPayload();
-                    if (Geometry.pIndexDataPayload == nullptr ||
-                        Geometry.pVertexDataPayload == nullptr)
+                    if (Geometry.pVertexDataPayload == nullptr)
                         return FailMesh();
 
-                    MeshIndexDataStorage&  IndexData  = Geometry.pIndexDataPayload->GetStorage();
                     MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
-                    if (IndexData.IndexCount == 0 ||
-                        VertexData.VertexCount == 0)
+                    if (VertexData.VertexCount == 0)
                         return FailMesh();
-
-                    const RADIENT_STATUS IndexDataStatus = IndexData.GetLoadStatus();
-                    if (RADIENT_FAILED(IndexDataStatus))
-                        return FailMesh(IndexDataStatus);
 
                     const RADIENT_STATUS VertexDataStatus = VertexData.GetLoadStatus();
                     if (RADIENT_FAILED(VertexDataStatus))
@@ -1533,18 +1550,18 @@ RADIENT_STATUS RadientMeshAssetManager::CreateMeshView(IThreadPool&             
                     }
 
                     const std::string GeometryCacheKey =
-                        MakeMeshGeometryCacheKey(VertexData, IndexData, pMorphTargetData);
+                        MakeMeshGeometryCacheKey(VertexData, pIndexData, pMorphTargetData);
                     if (GeometryCacheKey.empty())
                         return FailMesh();
 
-                    GeometryIndexCounts.push_back(IndexData.IndexCount);
+                    GeometryElementCounts.push_back(pIndexData != nullptr ? pIndexData->IndexCount : VertexData.VertexCount);
                     GeometryCacheKeys.push_back(GeometryCacheKey);
                 }
 
                 RadientMeshViewSource MeshView{
                     CanonicalStableViewCI.GetCreateInfo(),
-                    GeometryIndexCounts.data(),
-                    static_cast<Uint32>(GeometryIndexCounts.size()),
+                    GeometryElementCounts.data(),
+                    static_cast<Uint32>(GeometryElementCounts.size()),
                 };
                 if (RADIENT_FAILED(MeshView.GetStatus()))
                     return FailMesh(MeshView.GetStatus());
@@ -1763,14 +1780,17 @@ RADIENT_STATUS GetMeshGeometryLoadStatus(MeshStorage& Mesh)
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     for (const MeshGeometryStorage& Geometry : Mesh.Geometries)
     {
-        if (Geometry.pIndexDataPayload == nullptr ||
-            Geometry.pVertexDataPayload == nullptr)
+        if (Geometry.pVertexDataPayload == nullptr ||
+            (Geometry.pIndexDataAsset != nullptr && Geometry.pIndexDataPayload == nullptr))
             return CacheTerminalStatus(Mesh.GeometryLoadStatus, RADIENT_STATUS_INVALID_OPERATION);
 
-        const MeshIndexDataStorage&  IndexData  = Geometry.pIndexDataPayload->GetStorage();
         const MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
-        Status                                  = CombineDependencyStatus(Status, IndexData.LoadStatus.load(std::memory_order_acquire));
         Status                                  = CombineDependencyStatus(Status, VertexData.LoadStatus.load(std::memory_order_acquire));
+        if (Geometry.pIndexDataPayload != nullptr)
+        {
+            const MeshIndexDataStorage& IndexData = Geometry.pIndexDataPayload->GetStorage();
+            Status                                = CombineDependencyStatus(Status, IndexData.LoadStatus.load(std::memory_order_acquire));
+        }
 
         if (Geometry.pMorphTargetDataAsset != nullptr ||
             Geometry.pMorphTargetDataPayload != nullptr)
@@ -1802,16 +1822,17 @@ RADIENT_STATUS GetMeshGeometryGPUResourceStatus(MeshStorage& Mesh)
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     for (const MeshGeometryStorage& Geometry : Mesh.Geometries)
     {
-        VERIFY_EXPR(Geometry.pIndexDataPayload != nullptr && Geometry.pVertexDataPayload != nullptr);
-        if (Geometry.pIndexDataPayload == nullptr ||
-            Geometry.pVertexDataPayload == nullptr)
+        VERIFY_EXPR(Geometry.pVertexDataPayload != nullptr);
+        if (Geometry.pVertexDataPayload == nullptr)
             return CacheTerminalStatus(Mesh.GeometryGPUResourceStatus, RADIENT_STATUS_INVALID_OPERATION);
 
-        const MeshIndexDataStorage&  IndexData  = Geometry.pIndexDataPayload->GetStorage();
         const MeshVertexDataStorage& VertexData = Geometry.pVertexDataPayload->GetStorage();
-
-        Status = CombineDependencyStatus(Status, IndexData.GPUResourceStatus.load(std::memory_order_acquire));
         Status = CombineDependencyStatus(Status, VertexData.GPUResourceStatus.load(std::memory_order_acquire));
+        if (Geometry.pIndexDataPayload != nullptr)
+        {
+            const MeshIndexDataStorage& IndexData = Geometry.pIndexDataPayload->GetStorage();
+            Status                                = CombineDependencyStatus(Status, IndexData.GPUResourceStatus.load(std::memory_order_acquire));
+        }
 
         if (Geometry.pMorphTargetDataPayload != nullptr)
         {
@@ -1936,19 +1957,16 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
             for (size_t GeometryIndex = 0; GeometryIndex < Mesh.Geometries.size(); ++GeometryIndex)
             {
                 MeshGeometryStorage& Geometry = Mesh.Geometries[GeometryIndex];
-                if (Geometry.pIndexDataPayload == nullptr ||
-                    Geometry.pVertexDataPayload == nullptr)
+                if (Geometry.pVertexDataPayload == nullptr)
                 {
                     Result.Status = RADIENT_STATUS_INVALID_OPERATION;
                     return Result;
                 }
 
-                MeshIndexDataStorage&        IndexData         = Geometry.pIndexDataPayload->GetStorage();
                 MeshVertexDataStorage&       VertexData        = Geometry.pVertexDataPayload->GetStorage();
-                IBufferSuballocation* const  pIndexAllocation  = IndexData.pIndexAllocation;
                 IVertexPoolAllocation* const pVertexAllocation = VertexData.pVertexAllocation;
                 IVertexPool* const           pVertexPool       = pVertexAllocation != nullptr ? pVertexAllocation->GetPool() : nullptr;
-                if (pIndexAllocation == nullptr || pVertexAllocation == nullptr || pVertexPool == nullptr)
+                if (pVertexAllocation == nullptr || pVertexPool == nullptr)
                 {
                     Result.Status = RADIENT_STATUS_INVALID_OPERATION;
                     return Result;
@@ -1956,8 +1974,18 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
 
                 RadientDrawableMeshGeometry& DrawableGeometry = Mesh.DrawableMesh.Geometries[GeometryIndex];
                 DrawableGeometry.pVertexPool                  = pVertexPool;
-                DrawableGeometry.FirstIndexLocation           = pIndexAllocation->GetOffset() / GetValueSize(IndexData.IndexType);
                 DrawableGeometry.BaseVertex                   = pVertexAllocation->GetStartVertex();
+
+                if (Geometry.pIndexDataPayload != nullptr)
+                {
+                    const MeshIndexDataStorage& IndexData = Geometry.pIndexDataPayload->GetStorage();
+                    if (IndexData.pIndexAllocation == nullptr)
+                    {
+                        Result.Status = RADIENT_STATUS_INVALID_OPERATION;
+                        return Result;
+                    }
+                    DrawableGeometry.FirstIndexLocation = IndexData.pIndexAllocation->GetOffset() / GetValueSize(IndexData.IndexType);
+                }
 
                 if (Geometry.pMorphTargetDataPayload != nullptr)
                 {

@@ -263,21 +263,27 @@ typedef struct RadientMeshVertexData RadientMeshVertexData;
 /// finishes, independently of GPU upload completion. Reference blobs retain their
 /// usual external-storage lifetime requirements. The renderer selects the stored
 /// index encoding; the source encoding does not dictate GPU storage.
+///
+/// In CreateMesh, the default empty descriptor creates non-indexed geometry.
+/// CreateMeshIndexData requires a nonempty descriptor.
 struct RadientMeshIndexData
 {
     /// Blob containing IndexCount tightly packed indices, starting at its first
-    /// byte. Must be non-null and contain at least IndexCount times the source
-    /// element size bytes. Additional bytes are ignored. Both read-only and
-    /// mutable blobs are accepted. Size and data are checked under read access.
+    /// byte. For indexed data, must be non-null and contain at least IndexCount
+    /// times the source element size bytes. Additional bytes are ignored. Both
+    /// read-only and mutable blobs are accepted. Size and data are checked under
+    /// read access.
     /// Insufficient or unaddressable storage returns RADIENT_STATUS_INVALID_ARGUMENT.
     IRadientDataBlob* pIndexBuffer DEFAULT_INITIALIZER(nullptr);
 
-    /// Number of source index elements. Must be nonzero. These indices are local
-    /// to the vertex domain of each geometry that uses this index data.
+    /// Number of source index elements. Must be nonzero for indexed data, or
+    /// zero when IndexType is NONE. These indices are local to the vertex domain
+    /// of each geometry that uses this index data.
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
     /// Encoding of the source indices: UINT8, UINT16, or UINT32. The default NONE
-    /// is invalid for index-data creation.
+    /// requires a null pIndexBuffer and zero IndexCount, and is accepted only
+    /// by CreateMesh, not by CreateMeshIndexData.
     RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
 };
 typedef struct RadientMeshIndexData RadientMeshIndexData;
@@ -317,13 +323,16 @@ struct RadientMeshPrimitiveCreateInfo
     /// Optional primitive name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Zero-based index element offset in RadientMeshCreateInfo::IndexData.pIndexBuffer,
-    /// or in the selected geometry's index data when creating a mesh view.
-    Uint32 FirstIndex DEFAULT_INITIALIZER(0);
+    /// Zero-based first index for indexed geometry, or first vertex for geometry
+    /// without index data. Relative to the source geometry, excluding GPU pool
+    /// offsets. The selected geometry determines whether the range uses indices
+    /// or vertices when creating a mesh view.
+    Uint32 FirstElement DEFAULT_INITIALIZER(0);
 
-    /// Number of indices to draw from the source index buffer or the selected
-    /// geometry's index data. Must be nonzero.
-    Uint32 IndexCount DEFAULT_INITIALIZER(0);
+    /// Number of indices or vertices to draw. Must be nonzero, and the range
+    /// [FirstElement, FirstElement + ElementCount) must fit within the geometry's
+    /// index count for indexed geometry or vertex count otherwise.
+    Uint32 ElementCount DEFAULT_INITIALIZER(0);
 
     /// Default material for this primitive.
     IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
@@ -352,7 +361,9 @@ struct RadientMeshCreateInfo
     /// The renderer selects the stored vertex layout.
     RadientMeshVertexData VertexData DEFAULT_INITIALIZER({});
 
-    /// Required source index data. Primitive ranges select elements of this data.
+    /// Optional source index data. Leave the descriptor empty (null pIndexBuffer,
+    /// zero IndexCount, and IndexType NONE) for non-indexed geometry. Primitive
+    /// ranges select indices when index data is present, or vertices otherwise.
     RadientMeshIndexData IndexData DEFAULT_INITIALIZER({});
 
     /// Optional morph targets. Each target attribute contains VertexData.VertexCount
@@ -360,7 +371,7 @@ struct RadientMeshCreateInfo
     RadientMeshMorphTargetData MorphTargetData DEFAULT_INITIALIZER({});
 
     /// Array of PrimitiveCount mesh primitives. Must be non-null. Each primitive
-    /// selects a nonempty index range and an optional material.
+    /// selects a nonempty index or vertex range and an optional material.
     const RadientMeshPrimitiveCreateInfo* pPrimitives DEFAULT_INITIALIZER(nullptr);
 
     /// Number of elements in pPrimitives. Must be nonzero.

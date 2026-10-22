@@ -72,11 +72,11 @@ void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
 }
 
 bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
-                                const Uint32*                    pGeometryIndexCounts,
+                                const Uint32*                    pGeometryElementCounts,
                                 Uint32                           GeometryCount)
 {
     if (GeometryCount == 0 ||
-        pGeometryIndexCounts == nullptr ||
+        pGeometryElementCounts == nullptr ||
         CI.PrimitiveCount == 0 ||
         CI.pPrimitives == nullptr)
     {
@@ -89,11 +89,11 @@ bool ValidateMeshViewCreateInfo(const RadientMeshViewCreateInfo& CI,
         if (GeometryIndex >= GeometryCount)
             return false;
 
-        const Uint32                          IndexCount  = pGeometryIndexCounts[GeometryIndex];
-        const RadientMeshPrimitiveCreateInfo& PrimitiveCI = CI.pPrimitives[PrimitiveIndex];
-        if (IndexCount == 0 ||
-            PrimitiveCI.IndexCount == 0 ||
-            !RadientValidation::IsValidSubrange(PrimitiveCI.FirstIndex, PrimitiveCI.IndexCount, IndexCount))
+        const Uint32                          ElementCount = pGeometryElementCounts[GeometryIndex];
+        const RadientMeshPrimitiveCreateInfo& PrimitiveCI  = CI.pPrimitives[PrimitiveIndex];
+        if (ElementCount == 0 ||
+            PrimitiveCI.ElementCount == 0 ||
+            !RadientValidation::IsValidSubrange(PrimitiveCI.FirstElement, PrimitiveCI.ElementCount, ElementCount))
         {
             return false;
         }
@@ -147,16 +147,16 @@ RadientMeshViewGeometryRemap BuildMeshViewGeometryRemap(const Uint32* pGeometryI
 }
 
 RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
-                                             Uint32                           IndexCount) :
-    RadientMeshViewSource{CI, &IndexCount, 1}
+                                             Uint32                           ElementCount) :
+    RadientMeshViewSource{CI, &ElementCount, 1}
 {
 }
 
 RadientMeshViewSource::RadientMeshViewSource(const RadientMeshViewCreateInfo& CI,
-                                             const Uint32*                    pGeometryIndexCounts,
+                                             const Uint32*                    pGeometryElementCounts,
                                              Uint32                           GeometryCount)
 {
-    if (!ValidateMeshViewCreateInfo(CI, pGeometryIndexCounts, GeometryCount))
+    if (!ValidateMeshViewCreateInfo(CI, pGeometryElementCounts, GeometryCount))
     {
         m_Status = RADIENT_STATUS_INVALID_ARGUMENT;
         return;
@@ -247,8 +247,8 @@ std::string RadientMeshViewSource::MakeCacheKey(const std::vector<std::string>& 
     {
         const RadientMeshPrimitiveCreateInfo& Primitive = m_Primitives[PrimitiveIndex];
         Hasher.Update(Remap.PrimitiveGeometryIndices[PrimitiveIndex]);
-        Hasher.Update(Primitive.FirstIndex,
-                      Primitive.IndexCount);
+        Hasher.Update(Primitive.FirstElement,
+                      Primitive.ElementCount);
         HashMaterial(Hasher, m_Materials[PrimitiveIndex]);
     }
 
