@@ -570,6 +570,9 @@ RADIENT_STATUS RadientAssetManagerImpl::RegisterSceneAssetImporter(IRadientScene
         if (m_Stopped.load(std::memory_order_acquire))
             return RADIENT_STATUS_INVALID_OPERATION;
 
+        // Reserve before publishing the index so allocation failure cannot leave
+        // a map entry without a corresponding importer in the vector.
+        m_SceneImporters.reserve(m_SceneImporters.size() + 1);
         const auto InsertResult = m_SceneImporterIndices.emplace(Identifier, m_SceneImporters.size());
         if (!InsertResult.second)
             return RADIENT_STATUS_INVALID_ARGUMENT;
