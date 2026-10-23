@@ -554,7 +554,18 @@ private:
             return nullptr;
 
         if (pAtlasSuballocation != nullptr)
-            return pAtlasSuballocation->GetAtlas()->Update(pDevice, pContext);
+        {
+            IDynamicTextureAtlas* const pAtlas      = pAtlasSuballocation->GetAtlas();
+            ITexture* const             pDstTexture = pAtlas->Update(pDevice, pContext);
+
+            // Update() may return the previous texture if atlas growth fails.
+            // Check committed capacity, including resident slices for sparse atlases,
+            // before allowing either upload callback to enqueue a copy.
+            if (pAtlasSuballocation->GetSlice() >= pAtlas->GetAtlasDesc().GetArraySize())
+                return nullptr;
+
+            return pDstTexture;
+        }
 
         TextureStorage& Storage     = pTexture->GetStorage();
         ITexture*       pDstTexture = Storage.GetTexture();
