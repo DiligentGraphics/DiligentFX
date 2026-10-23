@@ -188,7 +188,9 @@ public:
                               true);
         }
         else
+        {
             ClearTextureAttribs();
+        }
 
         // BeginSubresourceUploads() and RecordCopyCommandEnqueueResult() own
         // readiness publication. Creating the resource does not imply that its
@@ -530,7 +532,9 @@ struct TextureCopyData
     {
         std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
         if (Data)
+        {
             Data->CopyTexture(pContext, DstMipLevel, DstSlice, DstBox, SrcData);
+        }
     }
 
     static void CopyD3D11TextureCallback(IDeviceContext* pContext,
@@ -544,7 +548,9 @@ struct TextureCopyData
     {
         std::unique_ptr<TextureCopyData> Data{static_cast<TextureCopyData*>(pUserData)};
         if (Data)
+        {
             Data->CopyD3D11Texture(pContext, DstMipLevel, DstSlice, DstBox, pSrcTexture, SrcX, SrcY);
+        }
     }
 
 private:

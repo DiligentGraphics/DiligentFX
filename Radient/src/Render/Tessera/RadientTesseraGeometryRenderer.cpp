@@ -569,9 +569,6 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::BeginView(IRenderDevice*         
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    if (IBuffer* pIndexBuffer = pResourceManager->GetIndexBuffer())
-        pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
     return RADIENT_STATUS_OK;
 }
 

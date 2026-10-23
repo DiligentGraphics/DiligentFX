@@ -36,6 +36,7 @@ namespace Diligent
 {
 
 class RadientMorphTargetData;
+struct IBufferSuballocator;
 struct IRadientMaterialAsset;
 
 struct RadientDrawableMeshPrimitive
@@ -53,6 +54,11 @@ struct RadientDrawableMeshPrimitive
 struct RadientDrawableMeshGeometry
 {
     IVertexPool* pVertexPool = nullptr;
+
+    /// Allocator retained by the mesh's index allocation, or null for unindexed
+    /// geometry. Its current buffer is resolved when drawing because growth may
+    /// replace the buffer without changing the allocation or its offset.
+    IBufferSuballocator* pIndexAllocator = nullptr;
 
     /// Immutable layout of this geometry's morph-target streams, or null when
     /// the geometry has no morph targets.

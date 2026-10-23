@@ -32,6 +32,7 @@
 #include "Render/Tessera/RadientTesseraDrawableCache.hpp"
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 
+#include "BufferSuballocator.h"
 #include "GraphicsAccessories.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "GLTFLoader.hpp"
@@ -39,6 +40,7 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <limits>
 #include <vector>
 
@@ -522,6 +524,18 @@ RADIENT_STATUS RadientTesseraGeometryPass::RenderPendingDraws(IDeviceContext*   
                 BindVertexPool(*State.pVertexPool, State.VertexBufferMask, pContext);
         }
 
+        if (Batch.IsIndexed && State.pIndexAllocator != Batch.pIndexAllocator)
+        {
+            // DrawState starts empty for each Execute(). Resolve the current
+            // buffer here so growth does not require rebuilding cached batches.
+            IBuffer* const pIndexBuffer = Batch.pIndexAllocator->GetBuffer();
+            if (pIndexBuffer == nullptr)
+                return RADIENT_STATUS_OUT_OF_DATE;
+
+            pContext->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            State.pIndexAllocator = Batch.pIndexAllocator;
+        }
+
         if (State.pPSO != Batch.pPSO)
         {
             State.pPSO = Batch.pPSO;
@@ -640,6 +654,11 @@ bool RadientTesseraGeometryPass::DrawableBatchKeyLess::operator()(const Drawable
 
     if (Lhs.VertexPoolId != Rhs.VertexPoolId)
         return Lhs.VertexPoolId < Rhs.VertexPoolId;
+
+    // Allocator identity stays stable when its backing GPU buffer grows.
+    // Different allocators must never share an indexed multi-draw batch.
+    if (Lhs.pIndexAllocator != Rhs.pIndexAllocator)
+        return std::less<IBufferSuballocator*>{}(Lhs.pIndexAllocator, Rhs.pIndexAllocator);
 
     if (Lhs.VertexBufferMask != Rhs.VertexBufferMask)
         return Lhs.VertexBufferMask < Rhs.VertexBufferMask;
@@ -790,7 +809,8 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
     }
 
     IPipelineState* const pPSO = m_PbrPSOCache.Get(PsoKey, GetFlags);
-    if (pPSO == nullptr || Drawable.pVertexPool == nullptr)
+    if (pPSO == nullptr || Drawable.pVertexPool == nullptr ||
+        (Drawable.IsIndexed && Drawable.pIndexAllocator == nullptr))
     {
         UNEXPECTED("Unable to create drawable pass ordering data");
         return;
@@ -800,6 +820,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         pPSO->GetUniqueID(),
         TesseraMaterialData.GetUniqueID(),
         Drawable.pVertexPool->GetUniqueID(),
+        Drawable.pIndexAllocator,
         Drawable.VertexBufferMask,
         Drawable.IndexType,
         Drawable.IsIndexed,
@@ -815,6 +836,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
         Batch.PrimitiveAttribsSize  = pRenderer->GetPBRPrimitiveAttribsSize(PSOFlags);
         Batch.MaterialId            = BatchKey.MaterialId;
         Batch.pVertexPool           = Drawable.pVertexPool;
+        Batch.pIndexAllocator       = Drawable.pIndexAllocator;
         Batch.VertexBufferMask      = Drawable.VertexBufferMask;
         Batch.MaterialAttribsOffset = MaterialBufferAllocation.GetOffset();
         Batch.IndexType             = Drawable.IndexType;
@@ -827,6 +849,7 @@ void RadientTesseraGeometryPass::UpdateDrawablePassData(RadientTesseraGeometryRe
                    Batch.PSOFlags == PSOFlags &&
                    Batch.MaterialId == BatchKey.MaterialId &&
                    Batch.pVertexPool == Drawable.pVertexPool &&
+                   Batch.pIndexAllocator == Drawable.pIndexAllocator &&
                    Batch.VertexBufferMask == Drawable.VertexBufferMask &&
                    Batch.MaterialAttribsOffset == MaterialBufferAllocation.GetOffset() &&
                    Batch.IndexType == Drawable.IndexType &&

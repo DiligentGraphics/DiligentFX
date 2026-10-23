@@ -541,6 +541,7 @@ MeshStorage::MeshStorage(std::vector<MeshGeometryStorage> GeometryData,
 
         DrawableMesh.Geometries.push_back(RadientDrawableMeshGeometry{
             nullptr,
+            nullptr,
             pMorphTargetData,
             VertexData.VertexAttribFlags,
             VertexData.VertexBufferMask,
@@ -1986,6 +1987,7 @@ RadientDrawableMeshResolveResult ResolveDrawableMesh(MeshStorage& Mesh,
                         Result.Status = RADIENT_STATUS_INVALID_OPERATION;
                         return Result;
                     }
+                    DrawableGeometry.pIndexAllocator    = IndexData.pIndexAllocation->GetAllocator();
                     DrawableGeometry.FirstIndexLocation = IndexData.pIndexAllocation->GetOffset() / GetValueSize(IndexData.IndexType);
                 }
 

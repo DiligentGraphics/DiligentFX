@@ -51,6 +51,7 @@ namespace Diligent
 {
 
 class RadientTesseraDrawableCache;
+struct IBufferSuballocator;
 struct RadientDrawableSlot;
 struct RadientTesseraMorphAttachment;
 struct RadientTesseraSkinAttachment;
@@ -88,12 +89,13 @@ private:
 
     struct DrawableBatchKey
     {
-        UniqueIdentifier PSOId            = 0;
-        UniqueIdentifier MaterialId       = 0;
-        UniqueIdentifier VertexPoolId     = 0;
-        Uint32           VertexBufferMask = 0;
-        VALUE_TYPE       IndexType        = VT_UNDEFINED;
-        bool             IsIndexed        = false;
+        UniqueIdentifier     PSOId            = 0;
+        UniqueIdentifier     MaterialId       = 0;
+        UniqueIdentifier     VertexPoolId     = 0;
+        IBufferSuballocator* pIndexAllocator  = nullptr;
+        Uint32               VertexBufferMask = 0;
+        VALUE_TYPE           IndexType        = VT_UNDEFINED;
+        bool                 IsIndexed        = false;
     };
 
     struct DrawableBatchKeyLess
@@ -123,12 +125,13 @@ private:
         PBR_Renderer::PSO_FLAGS PSOFlags             = PBR_Renderer::PSO_FLAG_NONE;
         Uint32                  PrimitiveAttribsSize = 0;
 
-        UniqueIdentifier MaterialId            = 0;
-        IVertexPool*     pVertexPool           = nullptr;
-        Uint32           VertexBufferMask      = 0;
-        Uint32           MaterialAttribsOffset = ~Uint32{0};
-        VALUE_TYPE       IndexType             = VT_UNDEFINED;
-        bool             IsIndexed             = false;
+        UniqueIdentifier     MaterialId            = 0;
+        IVertexPool*         pVertexPool           = nullptr;
+        IBufferSuballocator* pIndexAllocator       = nullptr;
+        Uint32               VertexBufferMask      = 0;
+        Uint32               MaterialAttribsOffset = ~Uint32{0};
+        VALUE_TYPE           IndexType             = VT_UNDEFINED;
+        bool                 IsIndexed             = false;
 
         RadientMaterialSRBLease        MaterialSRB;
         std::vector<DrawableBatchItem> Drawables;
@@ -157,6 +160,7 @@ private:
         IShaderResourceVariable* pMaterialAttribsVar   = nullptr;
         IPipelineState*          pPSO                  = nullptr;
         IVertexPool*             pVertexPool           = nullptr;
+        IBufferSuballocator*     pIndexAllocator       = nullptr;
         Uint32                   VertexBufferMask      = 0;
         Uint32                   MaterialAttribsOffset = ~Uint32{0};
         bool                     FrameSRBCommitted     = false;

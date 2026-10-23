@@ -31,6 +31,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
+#include "BufferSuballocator.h"
 #include "GPUTestingEnvironment.hpp"
 #include "GLTFResourceManager.hpp"
 #include "RadientMaterialTestHelpers.hpp"
@@ -58,19 +59,20 @@ using SampledColors = std::array<std::array<Uint8, 4>, 4>;
 
 struct QuadSetup
 {
-    RadientFloat4                 Color          = UpdatedColor;
-    RadientFloat2                 UVBias         = {0.25f, 0.5f};
-    RadientFloat2                 UVScale        = {0.f, 0.f};
-    Uint32                        TexCoordSet    = 0;
-    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode    = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
-    Float32                       AlphaCutoff    = 0.25f;
-    Bool                          DoubleSided    = True;
-    bool                          BackFacing     = false;
-    bool                          UseVertexColor = false;
-    RadientFloat4                 VertexColor    = {1.f, 1.f, 1.f, 1.f};
-    RADIENT_INDEX_TYPE            IndexType      = RADIENT_INDEX_TYPE_UINT16;
-    Uint32                        FirstElement   = 0;
-    bool                          UseMorphTarget = false;
+    RadientFloat4                 Color             = UpdatedColor;
+    RadientFloat2                 UVBias            = {0.25f, 0.5f};
+    RadientFloat2                 UVScale           = {0.f, 0.f};
+    Uint32                        TexCoordSet       = 0;
+    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode       = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
+    Float32                       AlphaCutoff       = 0.25f;
+    Bool                          DoubleSided       = True;
+    bool                          BackFacing        = false;
+    bool                          UseVertexColor    = false;
+    RadientFloat4                 VertexColor       = {1.f, 1.f, 1.f, 1.f};
+    RADIENT_INDEX_TYPE            IndexType         = RADIENT_INDEX_TYPE_UINT16;
+    Uint32                        FirstElement      = 0;
+    Uint32                        VertexPrefixCount = 0;
+    bool                          UseMorphTarget    = false;
 };
 
 using QuadSetups = std::array<QuadSetup, 4>;
@@ -127,7 +129,8 @@ public:
         EngineCI.Backend.pDevice                     = pDevice;
         EngineCI.Backend.pImmediateContext           = pContext;
         EngineCI.WorkerThreadCount                   = 1;
-        EngineCI.Resources.IndexBufferSize           = 4096;
+        EngineCI.Resources.IndexBufferSize           = IndexBufferSize;
+        EngineCI.Resources.MaxIndexBufferSize        = MaxIndexBufferSize;
         EngineCI.Resources.VertexPoolSize            = 64;
         EngineCI.Resources.TextureAtlasSize          = 64;
         EngineCI.Resources.TextureAtlasMipLevel0Size = 64 * 64 * 4;
@@ -241,9 +244,16 @@ public:
             Uint32                          IndexCount = 0;
             if (IsIndexed)
             {
-                MeshVertices.assign(Vertices, Vertices + 4);
+                // Prefixing indexed vertices makes otherwise identical quads
+                // require different index data. Reading another mesh's indices
+                // then selects degenerate vertices instead of the visible quad.
+                MeshVertices.resize(Setup.VertexPrefixCount);
+                MeshVertices.insert(MeshVertices.end(), Vertices, Vertices + 4);
                 std::vector<Uint16> Indices16(Setup.FirstElement, Uint16{0});
-                Indices16.insert(Indices16.end(), pSourceIndices, pSourceIndices + 6);
+                for (Uint32 VertexIndex = 0; VertexIndex < 6; ++VertexIndex)
+                {
+                    Indices16.push_back(static_cast<Uint16>(pSourceIndices[VertexIndex] + Setup.VertexPrefixCount));
+                }
                 IndexCount = static_cast<Uint32>(Indices16.size());
                 if (Setup.IndexType == RADIENT_INDEX_TYPE_UINT16)
                 {
@@ -462,6 +472,8 @@ public:
         pContext->UnmapTextureSubresource(pReadback, 0, 0);
     }
 
+    Uint32                                              IndexBufferSize     = 4096;
+    Uint64                                              MaxIndexBufferSize  = RadientResourceManagerCreateInfo{}.MaxIndexBufferSize;
     Uint32                                              ReservedVertexCount = 0;
     Uint32                                              MultiDrawBatchSize  = 16;
     bool                                                ShareMaterial       = false;
@@ -604,6 +616,131 @@ TEST(RadientMaterialUpdatesGPUTest, RendersMixedIndexTypesWithLargeBaseVertex)
         {
             ExpectSameColor(Colors[Index], Colors[0]);
         }
+    }
+}
+
+// Each allocator holds two distinct six-index quads. All four quads use the
+// same material, vertex pool, and index type, so correct single-draw and
+// multi-draw rendering requires splitting batches by index allocator. Prefixes
+// make another allocator's index data select degenerate vertices.
+TEST(RadientMaterialUpdatesGPUTest, RendersMeshesFromMultipleIndexBuffers)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        Setups[Index].VertexPrefixCount = 4 * Index;
+    }
+
+    for (Uint32 BatchSize : {1u, 16u})
+    {
+        SCOPED_TRACE(BatchSize);
+        MaterialUpdateScene Scene;
+        Scene.IndexBufferSize    = 24;
+        Scene.MaxIndexBufferSize = 24;
+        Scene.MultiDrawBatchSize = BatchSize;
+        Scene.ShareMaterial      = true;
+        ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+
+        RadientAssetManagerImpl& AssetManager = *static_cast<RadientAssetManagerImpl*>(Scene.pAssets.RawPtr());
+        GLTF::ResourceManager&   Resources    = *AssetManager.GetResourceManager();
+        ASSERT_EQ(Resources.GetIndexBufferCount(), 2u);
+        std::array<Uint32, 2> AllocatorMeshCounts{};
+        IVertexPool*          pVertexPool = nullptr;
+        for (Uint32 Index = 0; Index < Scene.Meshes.size(); ++Index)
+        {
+            SCOPED_TRACE(Index);
+            const RadientDrawableMeshResolveResult Result = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[Index], true);
+            ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(Result.pMesh, nullptr);
+            ASSERT_EQ(Result.pMesh->Geometries.size(), 1u);
+            ASSERT_EQ(Result.pMesh->Primitives.size(), 1u);
+            const RadientDrawableMeshGeometry& Geometry = Result.pMesh->Geometries[0];
+            ASSERT_NE(Geometry.pIndexAllocator, nullptr);
+            const Uint32 AllocatorIndex = Resources.GetIndexAllocatorIndex(Geometry.pIndexAllocator);
+            ASSERT_LT(AllocatorIndex, AllocatorMeshCounts.size());
+            ++AllocatorMeshCounts[AllocatorIndex];
+            EXPECT_EQ(Geometry.IndexType, VT_UINT16);
+            EXPECT_EQ(Result.pMesh->Primitives[0].pMaterialAsset, Scene.Materials[0]);
+            if (Index == 0)
+                pVertexPool = Geometry.pVertexPool;
+            EXPECT_EQ(Geometry.pVertexPool, pVertexPool);
+        }
+        EXPECT_EQ(AllocatorMeshCounts[0], 2u);
+        EXPECT_EQ(AllocatorMeshCounts[1], 2u);
+
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        ASSERT_GT(Colors[0][0], 20);
+        ASSERT_GT(Colors[0][1], Colors[0][0] + 20);
+        ASSERT_GT(Colors[0][2], Colors[0][1] + 20);
+        for (Uint32 Index = 1; Index < Colors.size(); ++Index)
+        {
+            ExpectSameColor(Colors[Index], Colors[0]);
+        }
+    }
+}
+
+// Render first so drawable and batch caches retain the index allocator, then
+// grow its backing buffer without changing the scene. Cached draws must bind
+// the replacement buffer and preserve the original quad pixels. Clearing the
+// retired buffer makes a stale raw-buffer binding produce degenerate triangles.
+TEST(RadientMaterialUpdatesGPUTest, RebindsIndexBufferAfterGrowth)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    MaterialUpdateScene                Scene;
+    Scene.IndexBufferSize    = 12;
+    Scene.MaxIndexBufferSize = 96;
+    Scene.ShareMaterial      = true;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(QuadSetups{}));
+
+    RadientAssetManagerImpl& AssetManager = *static_cast<RadientAssetManagerImpl*>(Scene.pAssets.RawPtr());
+    GLTF::ResourceManager&   Resources    = *AssetManager.GetResourceManager();
+    ASSERT_EQ(Resources.GetIndexBufferCount(), 1u);
+    const RadientDrawableMeshResolveResult InitialMesh = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], true);
+    ASSERT_EQ(InitialMesh.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(InitialMesh.pMesh, nullptr);
+    ASSERT_EQ(InitialMesh.pMesh->Geometries.size(), 1u);
+    IBufferSuballocator* const pAllocator = InitialMesh.pMesh->Geometries[0].pIndexAllocator;
+    ASSERT_NE(pAllocator, nullptr);
+    const RefCntAutoPtr<IBuffer> pOriginalBuffer{pAllocator->GetBuffer()};
+    ASSERT_NE(pOriginalBuffer, nullptr);
+    const Uint32  OriginalVersion = pAllocator->GetVersion();
+    SampledColors Before;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Before));
+    for (const std::array<Uint8, 4>& Color : Before)
+    {
+        ASSERT_GT(Color[0], 20);
+        ASSERT_GT(Color[1], Color[0] + 20);
+        ASSERT_GT(Color[2], Color[1] + 20);
+    }
+
+    const RefCntAutoPtr<IBufferSuballocation> pExtraIndices = Resources.AllocateIndices(48);
+    ASSERT_NE(pExtraIndices, nullptr);
+    ASSERT_EQ(pExtraIndices->GetAllocator(), pAllocator);
+    ASSERT_EQ(Resources.GetIndexBufferCount(), 1u);
+    ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady());
+    ASSERT_NE(pAllocator->GetBuffer(), nullptr);
+    EXPECT_NE(pAllocator->GetBuffer(), pOriginalBuffer.RawPtr());
+    EXPECT_GT(pAllocator->GetVersion(), OriginalVersion);
+    EXPECT_GE(pAllocator->GetBuffer()->GetDesc().Size, Uint64{60});
+    const RadientDrawableMeshResolveResult UpdatedMesh = RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], true);
+    ASSERT_EQ(UpdatedMesh.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(UpdatedMesh.pMesh, nullptr);
+    ASSERT_EQ(UpdatedMesh.pMesh->Geometries.size(), 1u);
+    EXPECT_EQ(UpdatedMesh.pMesh->Geometries[0].pIndexAllocator, pAllocator);
+
+    // Growth has finished copying the old contents. Poison only the retired
+    // buffer: a batch retaining its raw pointer must not keep rendering from it.
+    const std::array<Uint16, 6> EmptyIndices{};
+    Scene.pContext->UpdateBuffer(pOriginalBuffer, 0, sizeof(EmptyIndices), EmptyIndices.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady());
+
+    SampledColors After;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(After));
+    for (Uint32 Index = 0; Index < After.size(); ++Index)
+    {
+        ExpectSameColor(After[Index], Before[Index]);
     }
 }
 
