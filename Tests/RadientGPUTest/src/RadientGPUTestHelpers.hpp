@@ -31,16 +31,11 @@
 #include "RadientAssets.h"
 #include "RadientTypesX.hpp"
 #include "RefCntAutoPtr.hpp"
-
-namespace Threading
-{
-class Signal;
-} // namespace Threading
+#include "ThreadSignal.hpp"
 
 namespace Diligent
 {
 
-struct IAsyncTask;
 struct IDeviceContext;
 struct IGPUUploadManager;
 struct IRenderDevice;
@@ -75,9 +70,21 @@ RadientTextureDataX MakeTextureData(IRadientDataBlob*        pDataBlob,
 // Wraps texture data into a memory-based texture load request.
 RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& TextureData);
 
-// Enqueues a worker task that blocks until ReleaseWorker is triggered.
-RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&         ThreadPool,
-                                            ::Threading::Signal& ReleaseWorker);
+// Blocks one worker until Release() or scope exit. On scope exit, releases
+// the worker and joins the pool before destroying the signal, including when
+// a fatal test assertion returns early. The pool must outlive this object.
+class ScopedWorkerBlocker
+{
+public:
+    explicit ScopedWorkerBlocker(IThreadPool& ThreadPool);
+    ~ScopedWorkerBlocker();
+
+    void Release();
+
+private:
+    IThreadPool&        m_ThreadPool;
+    ::Threading::Signal m_ReleaseWorker;
+};
 
 // Stops the associated thread pool when the guard leaves scope.
 struct ThreadPoolStopGuard
@@ -85,6 +92,16 @@ struct ThreadPoolStopGuard
     IThreadPool* pThreadPool = nullptr;
 
     ~ThreadPoolStopGuard();
+};
+
+// Stops upload scheduling before worker cleanup joins threads that may be
+// waiting for staging space. Declare after the upload manager and worker guard.
+struct UploadManagerStopGuard
+{
+    IGPUUploadManager& UploadManager;
+    IDeviceContext&    Context;
+
+    ~UploadManagerStopGuard();
 };
 
 // Builds a resource manager configuration with small test pools and atlas.

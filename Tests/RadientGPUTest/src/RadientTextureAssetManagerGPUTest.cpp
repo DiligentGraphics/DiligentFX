@@ -1564,9 +1564,7 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
+    ScopedWorkerBlocker Blocker{*pThreadPool};
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
@@ -1590,7 +1588,7 @@ TEST(RadientTextureAssetManagerGPUTest, ManagerMayDieWhileUploadIsPending)
 
     // Do not pump GPU uploads or wait for manager stats here. The worker
     // must observe expired weak upload dependencies and exit safely.
-    ReleaseWorker.Trigger();
+    Blocker.Release();
 
     pThreadPool->StopThreads();
 

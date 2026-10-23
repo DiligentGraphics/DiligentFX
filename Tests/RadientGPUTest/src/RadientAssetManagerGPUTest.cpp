@@ -125,21 +125,6 @@ bool WaitForTextureManagerIdle(RadientAssetManagerImpl& AssetManager,
         Stats.PendingCopyCommandEnqueueCallbacks == 0;
 }
 
-RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&       ThreadPool,
-                                            Threading::Signal& ReleaseWorker)
-{
-    RefCntAutoPtr<IAsyncTask> pTask =
-        EnqueueAsyncWork(
-            &ThreadPool,
-            [&ReleaseWorker](Uint32) //
-            {
-                ReleaseWorker.Wait();
-                return ASYNC_TASK_STATUS_COMPLETE;
-            });
-    pTask->WaitUntilRunning();
-    return pTask;
-}
-
 std::string WriteGLTFWithMissingMaterialTextures(const TempDirectory& TempDir)
 {
     const std::string Path = TempDir.Get() + "/missing_material_textures.gltf";
@@ -969,9 +954,7 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
+    RadientGPUTest::ScopedWorkerBlocker Blocker{*pThreadPool};
 
     const Uint32                            TextureWidth  = 64;
     const Uint32                            TextureHeight = 64;
@@ -998,6 +981,16 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
 
         RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create(AssetManagerCI);
         ASSERT_NE(pAssetManager, nullptr);
+        struct AssetManagerStopGuard
+        {
+            RadientAssetManagerImpl& AssetManager;
+            IDeviceContext*          pContext;
+
+            ~AssetManagerStopGuard()
+            {
+                AssetManager.Stop(pContext);
+            }
+        } StopAssets{*pAssetManager, pContext};
 
         for (size_t i = 0; i < NumTextures; ++i)
         {
@@ -1012,7 +1005,7 @@ TEST(RadientAssetManagerGPUTest, ManagerMayDieWhileTextureLoadsArePending)
 
     // After Stop() and manager release, accepted texture load tasks observe
     // expired GPU upload dependencies and are cancelled.
-    ReleaseWorker.Trigger();
+    Blocker.Release();
     pThreadPool->StopThreads();
 
     for (size_t i = 0; i < NumTextures; ++i)

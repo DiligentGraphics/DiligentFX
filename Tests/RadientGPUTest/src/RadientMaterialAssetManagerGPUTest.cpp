@@ -349,15 +349,14 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
+    ScopedWorkerBlocker Blocker{*pThreadPool};
 
     RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
     ASSERT_NE(pResourceManager, nullptr);
 
     RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
     ASSERT_NE(pUploadManager, nullptr);
+    UploadManagerStopGuard StopUploads{*pUploadManager, *pContext};
 
     RadientTextureAssetManagerSharedPtr pTextureManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pTextureManager, nullptr);
@@ -389,7 +388,7 @@ TEST(RadientMaterialAssetManagerGPUTest, WaitsForTextureStorage)
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
     EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 
-    ReleaseWorker.Trigger();
+    Blocker.Release();
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pTextureManager, *pUploadManager, *pContext));
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
@@ -419,15 +418,14 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
+    ScopedWorkerBlocker Blocker{*pThreadPool};
 
     RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
     ASSERT_NE(pResourceManager, nullptr);
 
     RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
     ASSERT_NE(pUploadManager, nullptr);
+    UploadManagerStopGuard StopUploads{*pUploadManager, *pContext};
 
     RadientTextureAssetManagerSharedPtr pTextureManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
     ASSERT_NE(pTextureManager, nullptr);
@@ -467,7 +465,7 @@ TEST(RadientMaterialAssetManagerGPUTest, StandardMaterialWithSharedTextureWaitsF
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
     EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
 
-    ReleaseWorker.Trigger();
+    Blocker.Release();
 
     ASSERT_TRUE(WaitForTextureManagerIdle(pTextureManager, *pUploadManager, *pContext));
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
@@ -550,9 +548,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
     ASSERT_NE(pThreadPool, nullptr);
 
-    Threading::Signal         ReleaseWorker;
-    RefCntAutoPtr<IAsyncTask> pBlocker = BlockWorkerThread(*pThreadPool, ReleaseWorker);
-    ASSERT_NE(pBlocker, nullptr);
+    ScopedWorkerBlocker Blocker{*pThreadPool};
 
     const RefCntAutoPtr<IRadientDataBlob> pTextureDataBlob = MakeTextureDataBlob();
     ASSERT_NE(pTextureDataBlob, nullptr);
@@ -576,7 +572,7 @@ TEST(RadientMaterialAssetManagerGPUTest, MaterialHandleMayOutliveManagersBeforeT
     // The queued texture load now runs without the resource/upload managers.
     // The material asset must remain valid; source load succeeds, while the
     // dependent GPU resource status reports the failure.
-    ReleaseWorker.Trigger();
+    Blocker.Release();
     pThreadPool->StopThreads();
 
     EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);

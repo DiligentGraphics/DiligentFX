@@ -33,6 +33,7 @@
 #include "ThreadSignal.hpp"
 
 #include "gtest/gtest.h"
+#include "gtest/gtest-spi.h"
 
 #include <chrono>
 #include <cstddef>
@@ -118,25 +119,64 @@ RadientTextureLoadInfoX MakeTextureDataLoadInfo(const RadientTextureData& Textur
     return LoadInfo;
 }
 
-RefCntAutoPtr<IAsyncTask> BlockWorkerThread(IThreadPool&         ThreadPool,
-                                            ::Threading::Signal& ReleaseWorker)
+ScopedWorkerBlocker::ScopedWorkerBlocker(IThreadPool& ThreadPool) :
+    m_ThreadPool{ThreadPool}
 {
     RefCntAutoPtr<IAsyncTask> pTask =
         EnqueueAsyncWork(
-            &ThreadPool,
-            [&ReleaseWorker](Uint32) //
+            &m_ThreadPool,
+            [this](Uint32) //
             {
-                ReleaseWorker.Wait();
+                m_ReleaseWorker.Wait();
                 return ASYNC_TASK_STATUS_COMPLETE;
             });
     pTask->WaitUntilRunning();
-    return pTask;
+}
+
+ScopedWorkerBlocker::~ScopedWorkerBlocker()
+{
+    Release();
+    m_ThreadPool.StopThreads();
+}
+
+void ScopedWorkerBlocker::Release()
+{
+    if (!m_ReleaseWorker.IsTriggered())
+        m_ReleaseWorker.Trigger();
 }
 
 ThreadPoolStopGuard::~ThreadPoolStopGuard()
 {
     if (pThreadPool != nullptr)
         pThreadPool->StopThreads();
+}
+
+UploadManagerStopGuard::~UploadManagerStopGuard()
+{
+    UploadManager.Stop(&Context);
+}
+
+TEST(RadientGPUTestHelpersTest, ReleasesBlockedWorkerOnFatalAssertion)
+{
+    // A fatal assertion must leave the scope without hanging or destroying
+    // the signal while the worker is still waiting on it.
+    EXPECT_FATAL_FAILURE(
+        []() {
+            RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+            ScopedWorkerBlocker        Blocker{*pThreadPool};
+            FAIL() << "Intentional early exit before releasing the worker";
+        }(),
+        "Intentional early exit before releasing the worker");
+
+    // Cleanup must also be safe after the test's normal release point.
+    EXPECT_FATAL_FAILURE(
+        []() {
+            RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+            ScopedWorkerBlocker        Blocker{*pThreadPool};
+            Blocker.Release();
+            FAIL() << "Intentional early exit after releasing the worker";
+        }(),
+        "Intentional early exit after releasing the worker");
 }
 
 GLTF::ResourceManager::CreateInfo MakeResourceManagerCI(Uint32 TextureAtlasSize)
