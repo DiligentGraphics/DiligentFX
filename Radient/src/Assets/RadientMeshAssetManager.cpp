@@ -1020,6 +1020,49 @@ bool RequiresGPUUpload(const RadientMorphTargetSource& Source) noexcept
     return Source.GetDataSize() != 0;
 }
 
+bool ValidateMeshUploadSize(const RadientMeshVertexSource& Source)
+{
+    for (Uint32 BufferIndex = 0; BufferIndex < Source.GetVertexBufferCount(); ++BufferIndex)
+    {
+        if (!Source.IsVertexBufferActive(BufferIndex))
+            continue;
+
+        const Uint32 UploadSize = Source.GetVertexBufferDataSize(BufferIndex);
+        if (UploadSize > GPU_UPLOAD_MAX_BUFFER_SIZE)
+        {
+            LOG_ERROR_MESSAGE("Radient mesh vertex buffer ", BufferIndex, " upload size (", UploadSize,
+                              " bytes) exceeds the GPU upload limit (", GPU_UPLOAD_MAX_BUFFER_SIZE, " bytes)");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ValidateMeshUploadSize(const RadientMeshIndexSource& Source)
+{
+    // Include the final partial word copied for an odd number of 16-bit indices.
+    const Uint64 UploadSize = AlignUp(Uint64{Source.GetIndexDataSize()}, Uint64{4});
+    if (UploadSize > GPU_UPLOAD_MAX_BUFFER_SIZE)
+    {
+        LOG_ERROR_MESSAGE("Radient mesh index upload size (", UploadSize,
+                          " bytes) exceeds the GPU upload limit (", GPU_UPLOAD_MAX_BUFFER_SIZE, " bytes)");
+        return false;
+    }
+    return true;
+}
+
+bool ValidateMeshUploadSize(const RadientMorphTargetSource& Source)
+{
+    const Uint32 UploadSize = Source.GetDataSize();
+    if (UploadSize > GPU_UPLOAD_MAX_BUFFER_SIZE)
+    {
+        LOG_ERROR_MESSAGE("Radient morph-target upload size (", UploadSize,
+                          " bytes) exceeds the GPU upload limit (", GPU_UPLOAD_MAX_BUFFER_SIZE, " bytes)");
+        return false;
+    }
+    return true;
+}
+
 template <typename AssetImplType,
           typename SourceType,
           typename DataInterfaceType,
@@ -1075,6 +1118,13 @@ RADIENT_STATUS CreateMeshDataAsset(IThreadPool&                    ThreadPool,
                 const RADIENT_STATUS PrepareStatus = PrepareSource(*pSource);
                 if (RADIENT_FAILED(PrepareStatus))
                     return Fail(PrepareStatus);
+
+                // Packed sizes are now known. Reject uploads that cannot fit before
+                // hashing source bytes or publishing a payload: allocating first can
+                // permanently grow a shared pool even if the upload is later rejected.
+                // CPU-only loading does not use staging pages and has no such limit.
+                if (Context.pDevice != nullptr && !ValidateMeshUploadSize(*pSource))
+                    return Fail(RADIENT_STATUS_INVALID_ARGUMENT);
 
                 std::string CacheKey = pSource->MakeCacheKey();
                 if (CacheKey.empty())

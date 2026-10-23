@@ -26,6 +26,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
+#include "Assets/RadientMeshVertexSource.hpp"
 #include "Assets/RadientMorphTargetData.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
@@ -43,6 +44,7 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <thread>
 
 using namespace Diligent;
@@ -255,6 +257,146 @@ TEST(RadientMeshAssetManagerGPUTest, WaitsForPendingMaterial)
 
     pThreadPool->StopThreads();
     StopThreadPool.pThreadPool = nullptr;
+}
+
+TEST(RadientMeshAssetManagerGPUTest, RejectsOversizedVertexStreamsBeforeAllocatingPools)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment*             pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*                     pDevice  = pEnv->GetDevice();
+    IDeviceContext*                    pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard                  StopThreadPool{pThreadPool};
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = CreateTestResourceManager(pDevice);
+    ASSERT_NE(pResourceManager, nullptr);
+    // No staging pages are created before the invalid requests are rejected.
+    // Even a regression must not allocate their multi-gigabyte GPU buffers.
+    GPUUploadManagerCreateInfo UploadCI;
+    UploadCI.pDevice               = pDevice;
+    UploadCI.PageSize              = 1024;
+    UploadCI.LargePageSize         = 4096;
+    UploadCI.InitialPageCount      = 0;
+    UploadCI.InitialLargePageCount = 0;
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager;
+    CreateGPUUploadManager(UploadCI, &pUploadManager);
+    ASSERT_NE(pUploadManager, nullptr);
+    struct UploadStopGuard
+    {
+        IGPUUploadManager& UploadManager;
+        IDeviceContext&    Context;
+
+        ~UploadStopGuard()
+        {
+            // Unblock a regressed worker before the thread-pool guard joins it.
+            UploadManager.Stop(&Context);
+        }
+    } StopUploads{*pUploadManager, *pContext};
+
+    RadientMeshAssetManagerSharedPtr pMeshManager = CreateMeshManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pMeshManager, nullptr);
+    RadientMeshAssetManagerSharedPtr pCPUOnlyManager = CreateMeshManager(nullptr, nullptr, nullptr);
+    ASSERT_NE(pCPUOnlyManager, nullptr);
+
+    const Float32             Vertex[] = {1.f, 2.f, 3.f, 1.f, 0.f, 0.f, 1.f};
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = sizeof(Vertex);
+    BlobCI.pData = Vertex;
+    RefCntAutoPtr<IRadientDataBlob> pVertexBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pVertexBlob), RADIENT_STATUS_OK);
+    IRadientDataBlob* const  VertexBuffers[]{pVertexBlob};
+    RadientVertexLayoutDescX VertexLayout;
+    VertexLayout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    VertexLayout.AddAttribute("COLOR_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 4);
+    const RadientMeshVertexData VertexData{VertexLayout, VertexBuffers, 1};
+
+    auto MakeSource = [&](Uint32 OversizedBuffer) {
+        std::array<GLTF::VertexAttributeDesc, 2> Attributes{{
+            {"POSITION", 0, VT_FLOAT32, 3, 0u},
+            {"COLOR_0", 1, VT_FLOAT32, 4, 0u},
+        }};
+        // Only destination padding is large; the source always contains the
+        // same valid 28 bytes. Hashing it does not visit destination padding.
+        if (OversizedBuffer < Attributes.size())
+            Attributes[OversizedBuffer].RelativeOffset = GPU_UPLOAD_MAX_BUFFER_SIZE;
+        std::unique_ptr<RadientMeshVertexSource> pSource{new RadientMeshVertexSource{VertexData}};
+        EXPECT_EQ(pSource->SetVertexAttributes(Attributes.data(), static_cast<Uint32>(Attributes.size())), RADIENT_STATUS_OK);
+        return pSource;
+    };
+
+    const VertexPoolUsageStats     InitialStats = pResourceManager->GetVertexPoolUsageStats();
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.ElementCount = 1;
+    RadientMeshViewCreateInfo ViewCI;
+    ViewCI.pPrimitives    = &Primitive;
+    ViewCI.PrimitiveCount = 1;
+
+    for (Uint32 OversizedBuffer = 0; OversizedBuffer < 2; ++OversizedBuffer)
+    {
+        SCOPED_TRACE(OversizedBuffer);
+        std::unique_ptr<RadientMeshVertexSource> pSource = MakeSource(OversizedBuffer);
+        ASSERT_EQ(pSource->GetStatus(), RADIENT_STATUS_OK);
+        ASSERT_EQ(pSource->GetActiveVertexBufferMask(), 3u);
+        ASSERT_GT(pSource->GetVertexBufferDataSize(OversizedBuffer), GPU_UPLOAD_MAX_BUFFER_SIZE);
+        RefCntAutoPtr<IRadientMeshVertexData> pVertices;
+        {
+            TestingEnvironment::ErrorScope ExpectedError{"exceeds the GPU upload limit"};
+            ASSERT_EQ(pMeshManager->CreateMeshVertexData(*pThreadPool, std::move(pSource), &pVertices), RADIENT_STATUS_PENDING);
+            ASSERT_NE(pVertices, nullptr);
+            const std::chrono::steady_clock::time_point Deadline = std::chrono::steady_clock::now() + 5s;
+            while (RadientMeshAssetManager::GetLoadStatus(pVertices) == RADIENT_STATUS_PENDING &&
+                   std::chrono::steady_clock::now() < Deadline)
+            {
+                std::this_thread::sleep_for(1ms);
+            }
+            ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pVertices), RADIENT_STATUS_INVALID_ARGUMENT);
+            pThreadPool->WaitForAllTasks();
+        }
+
+        // Checking the second stream must precede allocating or staging the
+        // otherwise-valid first stream, not just reject the oversized copy.
+        const VertexPoolUsageStats Stats = pResourceManager->GetVertexPoolUsageStats();
+        ASSERT_EQ(Stats.AllocationCount, InitialStats.AllocationCount);
+        ASSERT_EQ(Stats.AllocatedVertexCount, InitialStats.AllocatedVertexCount);
+        ASSERT_EQ(Stats.TotalVertexCount, InitialStats.TotalVertexCount);
+        ASSERT_EQ(Stats.CommittedMemorySize, InitialStats.CommittedMemorySize);
+        ASSERT_EQ(Stats.UsedMemorySize, InitialStats.UsedMemorySize);
+        GPUUploadManagerStats UploadStats;
+        pUploadManager->GetStats(UploadStats);
+        ASSERT_EQ(UploadStats.NumInFlightPages, 0u);
+        for (Uint32 StreamIndex = 0; StreamIndex < UploadStats.NumStreams; ++StreamIndex)
+        {
+            EXPECT_EQ(UploadStats.pStreamStats[StreamIndex].NumPages, 0u);
+            EXPECT_EQ(UploadStats.pStreamStats[StreamIndex].PeakUpdateSize, 0u);
+        }
+
+        // This is an upload limit, not a source-layout restriction. CPU-only
+        // processing can describe the same padded layout without storing it.
+        RefCntAutoPtr<IRadientMeshVertexData> pCPUVertices;
+        ASSERT_EQ(pCPUOnlyManager->CreateMeshVertexData(*pThreadPool, MakeSource(OversizedBuffer), &pCPUVertices), RADIENT_STATUS_PENDING);
+        pThreadPool->WaitForAllTasks();
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pCPUVertices), RADIENT_STATUS_OK);
+        const RadientMeshGeometryData    Geometry{pCPUVertices};
+        RefCntAutoPtr<IRadientMeshAsset> pCPUMesh;
+        ASSERT_EQ(pCPUOnlyManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pCPUMesh), RADIENT_STATUS_PENDING);
+        pThreadPool->WaitForAllTasks();
+        EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pCPUMesh), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pCPUMesh), RADIENT_STATUS_NO_GPU_DATA);
+    }
+
+    // A small sibling still uploads through the same managers after both
+    // invalid requests. Only now is it safe to advance GPU resource creation.
+    RefCntAutoPtr<IRadientMeshVertexData> pVertices;
+    ASSERT_EQ(pMeshManager->CreateMeshVertexData(*pThreadPool, MakeSource(2), &pVertices), RADIENT_STATUS_PENDING);
+    const RadientMeshGeometryData    Geometry{pVertices};
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pMeshManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pMesh), RADIENT_STATUS_PENDING);
+    ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK, pUploadManager, pContext));
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(pResourceManager->GetVertexPoolUsageStats().AllocationCount, InitialStats.AllocationCount + 1);
 }
 
 TEST(RadientMeshAssetManagerGPUTest, AllocatesOnlyActiveVertexBuffersAndPreservesDataOnPoolGrowth)
