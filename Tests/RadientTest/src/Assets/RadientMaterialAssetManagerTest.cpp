@@ -26,14 +26,23 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialStorage.hpp"
+#include "Assets/RadientTextureAssetManager.hpp"
 
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientTypesX.hpp"
+#include "TestingEnvironment.hpp"
+#include "ThreadPool.hpp"
+#include "ThreadSignal.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
+#include <atomic>
+#include <string>
+#include <thread>
+#include <vector>
 
 using namespace Diligent;
 using Diligent::Testing::GetMaterialParameter;
@@ -695,6 +704,259 @@ TEST(RadientMaterialAssetManagerTest, MaterialHandleMayOutliveManager)
     const RadientMaterialAssetView MaterialView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
     ASSERT_TRUE(MaterialView);
     EXPECT_EQ(MaterialView.pMaterial, pMaterial);
+}
+
+class RadientMaterialTextureSelectionTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_pThreadPool      = CreateThreadPool(ThreadPoolCreateInfo{0});
+        m_pTextureManager  = RadientTextureAssetManager::Create({});
+        m_pMaterialManager = RadientMaterialAssetManager::Create();
+        ASSERT_NE(m_pThreadPool, nullptr);
+        ASSERT_NE(m_pTextureManager, nullptr);
+        ASSERT_NE(m_pMaterialManager, nullptr);
+    }
+
+    RefCntAutoPtr<IRadientTextureAsset> LoadTexture(bool Fail = false)
+    {
+        const std::array<Uint8, 4>            Pixels{255, 255, 255, 255};
+        const RefCntAutoPtr<IRadientDataBlob> pBlob = Testing::MakeTestDataBlob(Pixels.data(), Pixels.size());
+        RadientTextureDataX                   TextureData{1, 1, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM};
+        TextureData.AddMip(pBlob);
+        RadientTextureLoadInfoX LoadInfo;
+        LoadInfo.SetTextureData(TextureData);
+
+        RefCntAutoPtr<IRadientTextureAsset> pTexture;
+        if (Fail)
+        {
+            RefCntAutoPtr<IThreadPool> pStoppedPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+            pStoppedPool->StopThreads();
+            Testing::TestingEnvironment::ErrorScope ExpectedError{"Enqueue on a stopped ThreadPool"};
+            EXPECT_EQ(m_pTextureManager->LoadTexture(*pStoppedPool, LoadInfo, &pTexture), RADIENT_STATUS_INVALID_OPERATION);
+        }
+        else
+        {
+            EXPECT_EQ(m_pTextureManager->LoadTexture(*m_pThreadPool, LoadInfo, &pTexture), RADIENT_STATUS_PENDING);
+        }
+        return pTexture;
+    }
+
+    RefCntAutoPtr<IRadientMaterialAsset> CreateMaterial(IRadientTextureAsset* pRequested,
+                                                        IRadientTextureAsset* pFallback    = nullptr,
+                                                        Uint32                TextureCount = 1)
+    {
+        std::vector<std::string>                  Names(TextureCount);
+        std::vector<RadientMaterialParameterDesc> Parameters(TextureCount);
+        for (Uint32 Index = 0; Index < TextureCount; ++Index)
+        {
+            Names[Index]                      = Index == 0 ? "Textures" : "Textures" + std::to_string(Index);
+            Parameters[Index].Name            = Names[Index].c_str();
+            Parameters[Index].Type            = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+            Parameters[Index].pDefaultTexture = pFallback;
+        }
+        RadientComputeMaterialDefinitionDesc DefinitionDesc;
+        DefinitionDesc.Name           = "Texture selection test";
+        DefinitionDesc.pParameters    = Parameters.data();
+        DefinitionDesc.ParameterCount = TextureCount;
+        RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+        EXPECT_EQ(RadientMaterialAssetManager::CreateDefinition(DefinitionDesc, &pDefinition), RADIENT_STATUS_OK);
+        if (!pDefinition)
+            return {};
+
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+        EXPECT_EQ(m_pMaterialManager->CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+        if (!pMaterial)
+            return {};
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        EXPECT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+        if (!pWriter)
+            return {};
+        for (Uint32 Index = 0; Index < TextureCount; ++Index)
+        {
+            RadientMaterialParameterHandle Handle;
+            EXPECT_EQ(pDefinition->FindParameter(Names[Index].c_str(), &Handle), RADIENT_STATUS_OK);
+            EXPECT_EQ(pWriter->SetTexture(Handle, 0, pRequested), RADIENT_STATUS_OK);
+        }
+        EXPECT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+        return pMaterial;
+    }
+
+    RefCntAutoPtr<IThreadPool>           m_pThreadPool;
+    RadientTextureAssetManagerSharedPtr  m_pTextureManager;
+    RadientMaterialAssetManagerSharedPtr m_pMaterialManager;
+};
+
+TEST_F(RadientMaterialTextureSelectionTest, RetriesPendingSelectionAndPublishesTextureOwnership)
+{
+    const RefCntAutoPtr<IRadientTextureAsset> pTexture = LoadTexture();
+    ASSERT_NE(pTexture, nullptr);
+    const RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(pTexture);
+    ASSERT_NE(pMaterial, nullptr);
+
+    // A pending scan must release its claim so later queries can retry after
+    // the texture worker finishes. View queries must not publish a partial view.
+    for (Uint32 Attempt = 0; Attempt < 3; ++Attempt)
+    {
+        EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_PENDING);
+        EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_PENDING);
+        EXPECT_FALSE(RadientMaterialAssetManager::GetMaterialView(pMaterial));
+    }
+    ASSERT_TRUE(m_pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+
+    // The immutable selection owns each texture before CPU readiness is
+    // published, without waiting for render-thread view finalization.
+    const Int32 ReferenceCount = pTexture->GetReferenceCounters()->GetNumStrongRefs();
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(pTexture->GetReferenceCounters()->GetNumStrongRefs(), ReferenceCount + 1);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_NO_GPU_DATA);
+    const RadientMaterialAssetView View = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(View);
+    ASSERT_EQ(View.TextureCount, 1u);
+    EXPECT_EQ(View.pTextures[0].pTexture, pTexture);
+    EXPECT_EQ(pTexture->GetReferenceCounters()->GetNumStrongRefs(), ReferenceCount + 1);
+}
+
+TEST_F(RadientMaterialTextureSelectionTest, RetainsFallbackBeforeFinalizationAndReleasesFailedRequest)
+{
+    const RefCntAutoPtr<IRadientTextureAsset> pFallback = LoadTexture();
+    ASSERT_NE(pFallback, nullptr);
+    ASSERT_TRUE(m_pThreadPool->ProcessTask(0, false));
+    RefCntAutoPtr<IRadientTextureAsset> pRequested = LoadTexture(true);
+    ASSERT_NE(pRequested, nullptr);
+    const RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateMaterial(pRequested, pFallback);
+    ASSERT_NE(pMaterial, nullptr);
+
+    RefCntWeakPtr<IRadientTextureAsset> WeakRequested{pRequested};
+    pRequested.Release();
+    ASSERT_TRUE(WeakRequested.IsValid());
+    const Int32  FallbackReferenceCount = pFallback->GetReferenceCounters()->GetNumStrongRefs();
+    const Uint64 MaterialVersion        = pMaterial->GetVersion();
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFallback->GetReferenceCounters()->GetNumStrongRefs(), FallbackReferenceCount + 1);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_NO_GPU_DATA);
+    EXPECT_TRUE(WeakRequested.IsValid());
+    EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion);
+
+    // Status queries freeze the renderer's selection but leave the caller's
+    // parameter untouched until render-thread finalization replaces it.
+    RadientMaterialParameterHandle Handle;
+    ASSERT_EQ(pMaterial->GetDefinition()->FindParameter("Textures", &Handle), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientTextureAsset> pStored;
+    ASSERT_EQ(pMaterial->GetTexture(Handle, 0, &pStored), RADIENT_STATUS_OK);
+    EXPECT_EQ(pStored.RawPtr(), WeakRequested.UnsafeRawPtr());
+    pStored.Release();
+    const RadientMaterialAssetView View = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(View);
+    ASSERT_EQ(View.TextureCount, 1u);
+    EXPECT_EQ(View.pTextures[0].pTexture, pFallback);
+    EXPECT_FALSE(WeakRequested.IsValid());
+    EXPECT_EQ(pFallback->GetReferenceCounters()->GetNumStrongRefs(), FallbackReferenceCount + 2);
+    EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion + 1);
+
+    const RadientMaterialAssetView RepeatedView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    EXPECT_EQ(RepeatedView.pTextures, View.pTextures);
+    EXPECT_EQ(pFallback->GetReferenceCounters()->GetNumStrongRefs(), FallbackReferenceCount + 2);
+    EXPECT_EQ(pMaterial->GetVersion(), MaterialVersion + 1);
+}
+
+TEST_F(RadientMaterialTextureSelectionTest, ConcurrentQueriesPublishOneSelection)
+{
+    const RefCntAutoPtr<IRadientTextureAsset> pTexture = LoadTexture();
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_TRUE(m_pThreadPool->ProcessTask(0, false));
+    static constexpr Uint32                    TextureCount = 64;
+    const RefCntAutoPtr<IRadientMaterialAsset> pMaterial    = CreateMaterial(pTexture, nullptr, TextureCount);
+    ASSERT_NE(pMaterial, nullptr);
+    const Int32 ReferenceCount = pTexture->GetReferenceCounters()->GetNumStrongRefs();
+
+    // Start status scans and render-thread view acquisition together. A query
+    // may observe PENDING while another caller owns the one-time selection.
+    Threading::Signal          Start;
+    std::atomic<Uint32>        UnexpectedStatuses{0};
+    std::array<std::thread, 4> Workers;
+    for (std::thread& Worker : Workers)
+    {
+        Worker = std::thread{[&]() {
+            Start.Wait();
+            for (Uint32 Iteration = 0; Iteration < 32; ++Iteration)
+            {
+                const RADIENT_STATUS LoadStatus = RadientMaterialAssetManager::GetLoadStatus(pMaterial);
+                const RADIENT_STATUS GPUStatus  = RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial);
+                if ((LoadStatus != RADIENT_STATUS_OK && LoadStatus != RADIENT_STATUS_PENDING) ||
+                    (GPUStatus != RADIENT_STATUS_NO_GPU_DATA && GPUStatus != RADIENT_STATUS_PENDING))
+                    ++UnexpectedStatuses;
+            }
+        }};
+    }
+    Start.Trigger(true);
+    const RadientMaterialAssetView InitialView = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    for (std::thread& Worker : Workers)
+    {
+        Worker.join();
+    }
+    EXPECT_EQ(UnexpectedStatuses.load(), 0u);
+    EXPECT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_NO_GPU_DATA);
+    const RadientMaterialAssetView View = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    ASSERT_TRUE(View);
+    ASSERT_EQ(View.TextureCount, TextureCount);
+    if (InitialView)
+        EXPECT_EQ(InitialView.pTextures, View.pTextures);
+    for (Uint32 Index = 0; Index < TextureCount; ++Index)
+    {
+        EXPECT_EQ(View.pTextures[Index].pTexture, pTexture);
+    }
+    EXPECT_EQ(pTexture->GetReferenceCounters()->GetNumStrongRefs(), ReferenceCount + static_cast<Int32>(TextureCount));
+}
+
+TEST_F(RadientMaterialTextureSelectionTest, GPUStatusQueriesRemainValidDuringFallbackFinalization)
+{
+    const RefCntAutoPtr<IRadientTextureAsset> pFallback = LoadTexture();
+    ASSERT_NE(pFallback, nullptr);
+    ASSERT_TRUE(m_pThreadPool->ProcessTask(0, false));
+    RefCntAutoPtr<IRadientTextureAsset> pRequested = LoadTexture(true);
+    ASSERT_NE(pRequested, nullptr);
+    static constexpr Uint32                    TextureCount = 512;
+    const RefCntAutoPtr<IRadientMaterialAsset> pMaterial    = CreateMaterial(pRequested, pFallback, TextureCount);
+    ASSERT_NE(pMaterial, nullptr);
+    ASSERT_EQ(RadientMaterialAssetManager::GetLoadStatus(pMaterial), RADIENT_STATUS_OK);
+    RefCntWeakPtr<IRadientTextureAsset> WeakRequested{pRequested};
+    pRequested.Release();
+
+    // GPU scans must use the immutable selection even while finalization
+    // replaces every requested parameter and releases the last failed handle.
+    Threading::Signal          Start;
+    std::atomic<Uint32>        UnexpectedStatuses{0};
+    std::array<std::thread, 4> Workers;
+    for (std::thread& Worker : Workers)
+    {
+        Worker = std::thread{[&]() {
+            Start.Wait();
+            for (Uint32 Iteration = 0; Iteration < 32; ++Iteration)
+            {
+                if (RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial) != RADIENT_STATUS_NO_GPU_DATA)
+                    ++UnexpectedStatuses;
+            }
+        }};
+    }
+    Start.Trigger(true);
+    const RadientMaterialAssetView View = RadientMaterialAssetManager::GetMaterialView(pMaterial);
+    for (std::thread& Worker : Workers)
+    {
+        Worker.join();
+    }
+    EXPECT_EQ(UnexpectedStatuses.load(), 0u);
+    EXPECT_FALSE(WeakRequested.IsValid());
+    ASSERT_TRUE(View);
+    ASSERT_EQ(View.TextureCount, TextureCount);
+    for (Uint32 Index = 0; Index < TextureCount; ++Index)
+    {
+        EXPECT_EQ(View.pTextures[Index].pTexture, pFallback);
+    }
 }
 
 } // namespace

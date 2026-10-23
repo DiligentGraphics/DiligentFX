@@ -307,6 +307,16 @@ struct MaterialStorage::TextureState
             }
         }
 
+        // Allocate the selected entries up front so pending status queries only
+        // read dependencies and fill existing storage. Entries become immutable
+        // when LoadStatus publishes OK.
+        TextureEntries.resize(TextureSources.size());
+        for (size_t Index = 0; Index < TextureSources.size(); ++Index)
+        {
+            TextureEntries[Index].ParameterIndex = TextureSources[Index].ParameterIndex;
+            TextureEntries[Index].ArrayIndex     = TextureSources[Index].ArrayIndex;
+        }
+
         const RADIENT_STATUS InitialStatus =
             TextureSources.empty() ? RADIENT_STATUS_OK : RADIENT_STATUS_PENDING;
         LoadStatus.store(InitialStatus, std::memory_order_relaxed);
@@ -319,16 +329,39 @@ struct MaterialStorage::TextureState
         if (Status != RADIENT_STATUS_PENDING)
             return Status;
 
-        Status = RADIENT_STATUS_OK;
-        for (const MaterialTextureSource& Source : TextureSources)
+        // Only one query scans the requested textures. Other queries return
+        // immediately, without waiting for the scan or taking the data mutex.
+        if (LoadStatusScanInProgress.test_and_set(std::memory_order_acquire))
+            return LoadStatus.load(std::memory_order_acquire);
+
+        // Another scanner may have published OK after our first status read.
+        // Recheck before touching m_Data: the render thread may already have
+        // applied fallbacks and released the original requested textures.
+        Status = LoadStatus.load(std::memory_order_acquire);
+        if (Status == RADIENT_STATUS_PENDING)
         {
-            Status = CombineDependencyStatus(
-                Status,
-                Source.GetRenderTextureLoadStatus(Storage.m_Data));
+            Status = RADIENT_STATUS_OK;
+            for (const MaterialTextureSource& Source : TextureSources)
+            {
+                Status = CombineDependencyStatus(
+                    Status,
+                    Source.GetRenderTextureLoadStatus(Storage.m_Data));
+            }
+
+            if (Status == RADIENT_STATUS_OK)
+            {
+                for (size_t Index = 0; Index < TextureSources.size(); ++Index)
+                    TextureEntries[Index].pTexture = TextureSources[Index].GetRenderTexture(Storage.m_Data);
+            }
+
+            // Publish the complete selection before allowing finalization to
+            // replace m_Data textures. No scanner reads those slots afterward;
+            // GPU status queries use only the immutable selected entries.
+            if (Status != RADIENT_STATUS_PENDING)
+                LoadStatus.store(Status, std::memory_order_release);
         }
 
-        if (Status != RADIENT_STATUS_PENDING)
-            LoadStatus.store(Status, std::memory_order_release);
+        LoadStatusScanInProgress.clear(std::memory_order_release);
         return Status;
     }
 
@@ -343,9 +376,9 @@ struct MaterialStorage::TextureState
             return GPUStatus;
 
         GPUStatus = RADIENT_STATUS_OK;
-        for (const MaterialTextureSource& Source : TextureSources)
+        for (const RadientMaterialTextureEntry& Texture : TextureEntries)
         {
-            IRadientTextureAsset* const pTexture = Source.GetRenderTexture(Storage.m_Data);
+            IRadientTextureAsset* const pTexture = Texture.pTexture;
             if (pTexture == nullptr)
                 continue;
 
@@ -359,68 +392,46 @@ struct MaterialStorage::TextureState
         return GPUStatus;
     }
 
-    RADIENT_STATUS FinalizeTextureSelection()
+    RADIENT_STATUS ApplyTextureSelection()
     {
-        if (TextureSelectionReady)
+        if (TextureSelectionApplied)
             return RADIENT_STATUS_OK;
 
         const RADIENT_STATUS Status = GetLoadStatus();
         if (Status != RADIENT_STATUS_OK)
             return Status;
 
-        try
+        bool StateChanged = false;
+        for (const RadientMaterialTextureEntry& Texture : TextureEntries)
         {
-            TextureEntryArray NewTextureEntries;
-            NewTextureEntries.reserve(TextureSources.size());
-
-            bool StateChanged = false;
-            for (const MaterialTextureSource& Source : TextureSources)
+            if (Texture.pTexture != Storage.m_Data.GetTexture(Texture.ParameterIndex, Texture.ArrayIndex))
             {
-                IRadientTextureAsset* const pRequestedTexture =
-                    Source.GetRequestedTexture(Storage.m_Data);
-                IRadientTextureAsset* const pSelectedTexture =
-                    Source.GetRenderTexture(Storage.m_Data);
-
-                RadientMaterialTextureEntry& Texture = NewTextureEntries.emplace_back();
-                Texture.ParameterIndex               = Source.ParameterIndex;
-                Texture.ArrayIndex                   = Source.ArrayIndex;
-                Texture.pTexture                     = pSelectedTexture;
-
-                if (pSelectedTexture != pRequestedTexture)
-                {
-                    Storage.m_Data.SetTexture(
-                        Source.ParameterIndex,
-                        Source.ArrayIndex,
-                        pSelectedTexture,
-                        Storage.m_ChangeVersions.ShaderDataVersion + 1);
-                    StateChanged = true;
-                }
+                Storage.m_Data.SetTexture(
+                    Texture.ParameterIndex,
+                    Texture.ArrayIndex,
+                    Texture.pTexture,
+                    Storage.m_ChangeVersions.ShaderDataVersion + 1);
+                StateChanged = true;
             }
-
-            TextureEntries        = std::move(NewTextureEntries);
-            TextureSelectionReady = true;
-
-            if (StateChanged)
-            {
-                Storage.PublishChange(MATERIAL_CHANGE_FLAG_SHADER_DATA |
-                                      MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS);
-            }
-            return RADIENT_STATUS_OK;
         }
-        catch (const std::exception& Error)
+
+        TextureSelectionApplied = true;
+        if (StateChanged)
         {
-            LOG_ERROR_MESSAGE("Failed to finalize Radient material texture selection: ", Error.what());
-            return RADIENT_STATUS_FAILED;
+            Storage.PublishChange(MATERIAL_CHANGE_FLAG_SHADER_DATA |
+                                  MATERIAL_CHANGE_FLAG_TEXTURE_BINDINGS);
         }
+        return RADIENT_STATUS_OK;
     }
 
     MaterialStorage&                    Storage;
-    bool                                TextureSelectionReady = false;
+    bool                                TextureSelectionApplied = false;
     mutable std::atomic<RADIENT_STATUS> LoadStatus{RADIENT_STATUS_OK};
     mutable std::atomic<RADIENT_STATUS> GPUResourceStatus{RADIENT_STATUS_OK};
+    mutable std::atomic_flag            LoadStatusScanInProgress = ATOMIC_FLAG_INIT;
     TextureSourceArray                  TextureSources;
     TextureIndexArray                   TextureIndexByParameter;
-    TextureEntryArray                   TextureEntries;
+    mutable TextureEntryArray           TextureEntries;
 };
 
 MaterialStorage::MaterialStorage(IRadientMaterialDefinitionAsset* pDefinition,
@@ -513,7 +524,7 @@ RadientMaterialAssetView MaterialStorage::GetMaterialView(IRadientMaterialAsset*
     FinishInitialization();
     // Finalizing fallbacks can replace texture values read by shader packing.
     std::lock_guard<std::mutex> Lock{m_DataMutex};
-    if (pMaterial == nullptr || m_pTextureState->FinalizeTextureSelection() != RADIENT_STATUS_OK)
+    if (pMaterial == nullptr || m_pTextureState->ApplyTextureSelection() != RADIENT_STATUS_OK)
         return {};
 
     return {

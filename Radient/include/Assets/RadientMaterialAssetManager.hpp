@@ -184,9 +184,10 @@ public:
 
     // Returns an immutable view of the material asset and its selected textures,
     // including semantic defaults selected for failed requested textures.
-    // This method finalizes texture selection and must be called from the render
-    // thread. It is not thread-safe and must not race with another
-    // GetMaterialView() call for a material asset that retains the same state.
+    // This method applies the selected textures to the material's parameters and
+    // must be called from the render thread. It is not thread-safe and must not
+    // race with another GetMaterialView() call for a material asset that retains
+    // the same state.
     static RadientMaterialAssetView GetMaterialView(IRadientMaterialAsset* pMaterial);
 
 private:
