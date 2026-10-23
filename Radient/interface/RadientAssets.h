@@ -1123,6 +1123,12 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// The method must be called before destroying a GPU-backed asset manager. pContext must be the
     /// device context used by the renderer/update path and must not be used concurrently while Stop()
     /// is executing.
+    ///
+    /// This method does not wait for CPU tasks to finish and does not stop or join the thread pool.
+    /// In-flight imports may continue after it returns and retain the manager and its pool.
+    /// If also shutting down a caller-supplied pool, retain a strong reference to it and call
+    /// IThreadPool::StopThreads() from a non-worker thread after this method, before releasing that
+    /// reference. See RadientEngineCreateInfo::pThreadPool for the supplied-pool lifetime contract.
     VIRTUAL RADIENT_STATUS METHOD(Stop)(THIS_
                                         IDeviceContext* pContext) PURE;
 

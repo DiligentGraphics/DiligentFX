@@ -50,7 +50,22 @@ struct RadientEngineCreateInfo
     RadientAssetManagerCreateInfo Assets DEFAULT_INITIALIZER({});
 
     /// Optional thread pool used by Radient for asynchronous CPU work.
-    /// If null, Radient creates an internal thread pool.
+    ///
+    /// If null, Radient creates an internal pool, drains its work, and joins its workers
+    /// during engine destruction.
+    ///
+    /// For a supplied pool, Radient retains a strong reference but does not stop
+    /// or join its workers. The caller owns pool shutdown and must retain its own
+    /// strong reference until the workers have been stopped and joined. When
+    /// shutting down the pool, first call IRadientAssetManager::Stop(), then call
+    /// IThreadPool::StopThreads() from a thread outside the pool before releasing
+    /// the caller's pool reference. A shared pool may remain running after a
+    /// Radient engine is destroyed, provided its owner continues to retain it.
+    ///
+    /// Otherwise, an import worker can release the last pool reference and cause
+    /// the pool to attempt to join that same worker. WaitForAllTasks() alone is
+    /// not a substitute for joining: task-owned references may be released after
+    /// that wait returns.
     IThreadPool* pThreadPool DEFAULT_INITIALIZER(nullptr);
 
     /// Number of worker threads for the internal thread pool.
