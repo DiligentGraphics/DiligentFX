@@ -1123,6 +1123,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// This does not wait for the render thread to execute queued GPU upload callbacks. Resource-specific
     /// accessors may still report that GPU resources are not ready after this method returns RADIENT_STATUS_OK.
     /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
+    ///
+    /// \warning This method may execute queued CPU tasks on the calling thread, but does not advance GPU
+    ///          uploads. Tasks can block waiting for staging space, including before the first upload update.
+    ///          For GPU-backed loading, another thread must continue advancing uploads. Calling this method
+    ///          on the sole render thread can deadlock, even when the thread pool has worker threads.
     VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
                                                     IRadientAsset* pAsset) PURE;
 
