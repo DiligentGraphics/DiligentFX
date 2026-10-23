@@ -63,6 +63,17 @@ ValueType GetMaterialParameter(IRadientMaterialAsset& Material, const char* Name
     return Status == RADIENT_STATUS_OK ? GetParameter<ValueType>(Material, Handle) : ValueType{};
 }
 
+template <typename ValueType>
+RADIENT_STATUS SetMaterialParameter(IRadientMaterialDefinitionAsset& Definition,
+                                    IRadientMaterialWriter&          Writer,
+                                    const char*                      Name,
+                                    const ValueType&                 Value)
+{
+    RadientMaterialParameterHandle Handle;
+    const RADIENT_STATUS           Status = Definition.FindParameter(Name, &Handle);
+    return Status == RADIENT_STATUS_OK ? Writer.SetParameter(Handle, Value) : Status;
+}
+
 namespace Detail
 {
 
