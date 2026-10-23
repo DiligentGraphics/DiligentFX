@@ -26,7 +26,7 @@
 
 #include "Radient/interface/RadientMeshImportServices.h"
 
-void RadientMeshImportServices_C_UseInterfaces(IRadientAssetManager* pManager, IRadientMeshImportServices* pServices)
+void RadientMeshImportServices_C_UseInterfaces(IRadientMeshImportServices* pServices)
 {
     RadientMeshVertexData        VertexCI   = {0};
     RadientMeshIndexData         IndexCI    = {0};
@@ -38,9 +38,6 @@ void RadientMeshImportServices_C_UseInterfaces(IRadientAssetManager* pManager, I
     (void)IRadientMeshImportServices_CreateMeshVertexData(pServices, &VertexCI, &pVertices);
     (void)IRadientMeshImportServices_CreateMeshIndexData(pServices, &IndexCI, &pIndices);
     (void)IRadientMeshImportServices_CreateMeshMorphTargetData(pServices, &MorphCI, VertexCI.VertexCount, &pMorphData);
-    (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pVertices);
-    (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pIndices);
-    (void)IRadientAssetManager_WaitForAssetLoad(pManager, (IRadientAsset*)pMorphData);
 
     RadientMeshGeometryData        Geometry  = {pVertices, pIndices, pMorphData};
     RadientMeshPrimitiveCreateInfo Primitive = {0};

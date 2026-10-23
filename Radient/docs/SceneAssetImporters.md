@@ -59,8 +59,8 @@ failure; Radient does not retry the source with another importer.
 ## Implement the import
 
 `Import(const RadientSceneAssetImportContext&, RadientImport::ImportedDocument&)`
-runs as an asset-loading task, either on a worker or a thread calling
-`WaitForAssetLoad`. It has no guaranteed thread affinity. Its context provides:
+runs as an asset-loading task with no guaranteed thread affinity. Its context
+provides:
 
 - `pSourceData`: the opened source bytes and their canonical URI. Read the URI
   with `GetResolvedURI()` and the bytes with `GetData()` and `GetSize()`.
@@ -120,6 +120,8 @@ to the call and synchronize any shared mutable state. `GetIdentifier()` and
 ## Use the loaded scene
 
 `LoadScene` returns the scene asset through the usual asynchronous asset API.
-Call `IRadientAssetManager::WaitForAssetLoad` to wait for imported metadata and
-its asset dependencies, then instantiate the desired scene normally. GPU
-uploads follow the existing asset upload pipeline.
+Pass it to `IRadientSceneImporter::InstantiateScene` to schedule instantiation,
+then call `ProcessPendingImports` as loading progresses. Use
+`GetRadientAssetLoadStatus` to query source-loading progress or failures without
+waiting. GPU uploads follow the existing asset upload pipeline; a successful load
+status does not guarantee GPU readiness.

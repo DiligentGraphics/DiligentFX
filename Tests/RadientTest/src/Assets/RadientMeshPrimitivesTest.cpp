@@ -33,6 +33,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientMeshPrimitives.h"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientAssetTestHelpers.hpp"
 
 #include "ObjectBase.hpp"
 #include "ThreadPool.hpp"
@@ -46,11 +47,10 @@ using namespace Diligent::Testing;
 namespace
 {
 
-RefCntAutoPtr<RadientAssetManagerImpl> CreateAssetManager()
+RefCntAutoPtr<RadientAssetManagerImpl> CreateAssetManager(IThreadPool& ThreadPool)
 {
-    RefCntAutoPtr<IThreadPool>          pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     RadientAssetManagerImpl::CreateInfo CreateInfo;
-    CreateInfo.pThreadPool = pThreadPool;
+    CreateInfo.pThreadPool = &ThreadPool;
     return RadientAssetManagerImpl::Create(CreateInfo);
 }
 
@@ -59,9 +59,9 @@ void ExpectCreateMeshAccepted(RADIENT_STATUS Status)
     EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_PENDING);
 }
 
-void ExpectMeshLoadFinished(IRadientAssetManager* pAssetManager, IRadientMeshAsset* pMesh)
+void ExpectMeshLoadFinished(IRadientMeshAsset* pMesh, IThreadPool& ThreadPool)
 {
-    const RADIENT_STATUS Status = pAssetManager->WaitForAssetLoad(pMesh);
+    const RADIENT_STATUS Status = WaitForAssetLoad(pMesh, ThreadPool);
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
 }
@@ -175,11 +175,6 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset*) override final
-    {
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext*) override final
     {
         return RADIENT_STATUS_OK;
@@ -206,7 +201,10 @@ TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
 {
     // Cube helper should generate a valid mesh asset through the generic asset
     // manager mesh creation path.
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager(*pThreadPool);
 
     RadientCubeMeshCreateInfo CubeCI{};
     CubeCI.Name         = "Test cube";
@@ -216,7 +214,7 @@ TEST(RadientMeshPrimitivesTest, CreateCubeMesh)
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ExpectCreateMeshAccepted(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh));
     ExpectValidMeshAsset(pMesh);
-    ExpectMeshLoadFinished(pAssetManager, pMesh);
+    ExpectMeshLoadFinished(pMesh, *pThreadPool);
 
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
     ASSERT_EQ(Desc.GeometryCount, 1u);
@@ -269,7 +267,10 @@ TEST(RadientMeshPrimitivesTest, CreateSphereMesh)
 {
     // Sphere helper should generate indexed mesh data with positions, normals,
     // and UVs before creating the mesh asset.
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager(*pThreadPool);
 
     RadientSphereMeshCreateInfo SphereCI{};
     SphereCI.Name         = "Test sphere";
@@ -279,14 +280,17 @@ TEST(RadientMeshPrimitivesTest, CreateSphereMesh)
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ExpectCreateMeshAccepted(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh));
     ExpectValidMeshAsset(pMesh);
-    ExpectMeshLoadFinished(pAssetManager, pMesh);
+    ExpectMeshLoadFinished(pMesh, *pThreadPool);
 }
 
 TEST(RadientMeshPrimitivesTest, RejectInvalidArguments)
 {
     // Primitive helpers should reject missing output pointers, missing asset
     // managers, and invalid dimensions before creating any asset.
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager(*pThreadPool);
 
     RadientCubeMeshCreateInfo CubeCI{};
     CubeCI.Size = 1.f;

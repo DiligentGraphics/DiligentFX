@@ -168,7 +168,6 @@ void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
         (void)MipLevels;
     }
     Status = IRadientAssetManager_LoadScene(pAssetManager, &SceneLoadInfo, &pScene);
-    Status = IRadientAssetManager_WaitForAssetLoad(pAssetManager, (IRadientAsset*)pScene);
     if (pScene != 0)
     {
         const RadientSceneAssetDesc* pSceneDesc = IRadientSceneAsset_GetDesc(pScene);
@@ -199,4 +198,9 @@ void RadientAssets_C_TestSceneAssetImporterRegistration(IRadientAssetManager*   
                                                         IRadientSceneAssetImporter* pImporter)
 {
     (void)IRadientAssetManager_RegisterSceneAssetImporter(pAssetManager, pImporter);
+}
+
+void RadientAssets_C_GetAssetLoadStatus(IRadientAsset* pAsset)
+{
+    (void)Diligent_GetRadientAssetLoadStatus(pAsset);
 }

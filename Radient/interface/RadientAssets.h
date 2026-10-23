@@ -27,7 +27,7 @@
 #pragma once
 
 /// \file
-/// Defines Radient asset creation interfaces.
+/// Defines Radient asset creation interfaces and load-status queries.
 
 #include "RadientTypes.h"
 #include "RadientAssetResolver.h"
@@ -1118,19 +1118,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                              const RadientSceneLoadInfo REF LoadInfo,
                                              IRadientSceneAsset**           ppScene) PURE;
 
-    /// Blocks the calling thread until asset payload loading and GPU upload scheduling have completed.
-    ///
-    /// This does not wait for the render thread to execute queued GPU upload callbacks. Resource-specific
-    /// accessors may still report that GPU resources are not ready after this method returns RADIENT_STATUS_OK.
-    /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
-    ///
-    /// \warning This method may execute queued CPU tasks on the calling thread, but does not advance GPU
-    ///          uploads. Tasks can block waiting for staging space, including before the first upload update.
-    ///          For GPU-backed loading, another thread must continue advancing uploads. Calling this method
-    ///          on the sole render thread can deadlock, even when the thread pool has worker threads.
-    VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
-                                                    IRadientAsset* pAsset) PURE;
-
     /// Permanently stops the asset manager's internal GPU upload work.
     ///
     /// The method must be called before destroying a GPU-backed asset manager. pContext must be the
@@ -1156,11 +1143,31 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
 #    define IRadientAssetManager_RegisterSceneAssetImporter(This, ...) CALL_IFACE_METHOD(RadientAssetManager, RegisterSceneAssetImporter, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadScene(This, ...)          CALL_IFACE_METHOD(RadientAssetManager, LoadScene,      This, __VA_ARGS__)
-#    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 #    define IRadientAssetManager_Stop(This, ...)               CALL_IFACE_METHOD(RadientAssetManager, Stop,           This, __VA_ARGS__)
 
 #endif
 
 // clang-format on
+
+/// Returns the current asset source-loading status, including required dependencies.
+///
+/// This query does not wait for loading, execute queued tasks, or advance GPU
+/// uploads. RADIENT_STATUS_PENDING means source processing or required dependencies
+/// are still pending. RADIENT_STATUS_OK means source loading has completed;
+/// it does not guarantee GPU or rendering readiness. A negative status reports
+/// a loading or dependency failure.
+///
+/// Querying a material, directly or through dependencies, finishes its
+/// initialization and prevents subsequent texture reassignment; see
+/// IRadientMaterialAsset. Queries follow the asset's synchronization requirements.
+///
+/// The caller retains the asset for the duration of the call. The result is a
+/// snapshot and may change as loading progresses.
+///
+/// \param [in] pAsset - Asset created by Radient. May be a mesh-data handle created
+///                      by IRadientMeshImportServices.
+/// \return Current load status, or RADIENT_STATUS_INVALID_ARGUMENT for a null
+///         asset or an unrecognized asset type.
+RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(GetRadientAssetLoadStatus)(IRadientAsset* pAsset);
 
 DILIGENT_END_NAMESPACE // namespace Diligent

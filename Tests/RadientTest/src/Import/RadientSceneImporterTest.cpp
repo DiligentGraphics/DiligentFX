@@ -37,6 +37,7 @@
 #include "RadientMathTestHelpers.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientAssetTestHelpers.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "Scene/RadientSceneState.hpp"
 #include "RadientTestDataHelpers.hpp"
@@ -416,7 +417,7 @@ RADIENT_STATUS ProcessSceneLoad(ImportFixture& Fixture, IRadientSceneAsset* pMod
     if (Fixture.pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return Fixture.pAssetManager->WaitForAssetLoad(pModel);
+    return WaitForAssetLoad(pModel, *Fixture.pThreadPool);
 }
 
 RADIENT_STATUS FinishPendingSceneImports(ImportFixture& Fixture, IRadientSceneAsset* pModel)

@@ -37,7 +37,7 @@ static_assert(std::is_base_of<IRadientAsset, IRadientMeshMorphTargetData>::value
 static_assert(std::is_standard_layout<RadientMeshViewCreateInfo>::value, "Mesh view create info must have a C-compatible layout");
 static_assert(std::is_trivially_copyable<RadientMeshGeometryData>::value, "Geometry data must be trivially copyable");
 
-void RadientMeshImportServices_CPP_UseInterfaces(IRadientAssetManager* pManager, IRadientMeshImportServices* pServices)
+void RadientMeshImportServices_CPP_UseInterfaces(IRadientMeshImportServices* pServices)
 {
     RadientMeshVertexData      VertexCI;
     RadientMeshIndexData       IndexCI;
@@ -49,9 +49,6 @@ void RadientMeshImportServices_CPP_UseInterfaces(IRadientAssetManager* pManager,
     (void)pServices->CreateMeshVertexData(VertexCI, &pVertices);
     (void)pServices->CreateMeshIndexData(IndexCI, &pIndices);
     (void)pServices->CreateMeshMorphTargetData(MorphCI, VertexCI.VertexCount, &pMorphData);
-    (void)pManager->WaitForAssetLoad(pVertices);
-    (void)pManager->WaitForAssetLoad(pIndices);
-    (void)pManager->WaitForAssetLoad(pMorphData);
     RadientMeshGeometryData        Geometry{pVertices, pIndices, pMorphData};
     RadientMeshPrimitiveCreateInfo Primitive;
     Primitive.ElementCount = 3;

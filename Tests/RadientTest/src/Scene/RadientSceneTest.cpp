@@ -35,6 +35,7 @@
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
+#include "RadientAssetTestHelpers.hpp"
 #include "RadientTestDataHelpers.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 
@@ -62,9 +63,10 @@ std::string WriteBasicGLTFFile(const TempDirectory& TempDir)
 })GLTF");
 }
 
-RefCntAutoPtr<IRadientEngine> CreateTestEngine()
+RefCntAutoPtr<IRadientEngine> CreateTestEngine(IThreadPool* pThreadPool = nullptr)
 {
     RadientEngineCreateInfo EngineCI{};
+    EngineCI.pThreadPool = pThreadPool;
 
     RefCntAutoPtr<IRadientEngine> pEngine;
     EXPECT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
@@ -89,11 +91,6 @@ RefCntAutoPtr<IRadientAssetManager> GetTestAssetManager(IRadientEngine& Engine)
     EXPECT_NE(pAssetManager, nullptr);
 
     return pAssetManager;
-}
-
-RADIENT_STATUS ProcessTestGLTFLoad(IRadientAssetManager& AssetManager, IRadientSceneAsset* pModel)
-{
-    return AssetManager.WaitForAssetLoad(pModel);
 }
 
 RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& AssetManager)
@@ -900,7 +897,10 @@ TEST(RadientAssetManagerTest, CreateMesh)
 
 TEST(RadientAssetManagerTest, CreateMeshDeduplicatesIdenticalRawData)
 {
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
@@ -914,8 +914,8 @@ TEST(RadientAssetManagerTest, CreateMeshDeduplicatesIdenticalRawData)
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
-    const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
-    const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
+    const RADIENT_STATUS MeshStatus0 = WaitForAssetLoad(pMesh0, *pThreadPool);
+    const RADIENT_STATUS MeshStatus1 = WaitForAssetLoad(pMesh1, *pThreadPool);
     EXPECT_EQ(MeshStatus0, RADIENT_STATUS_OK);
     EXPECT_EQ(MeshStatus1, RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh0), RADIENT_STATUS_NO_GPU_DATA);
@@ -929,7 +929,10 @@ TEST(RadientAssetManagerTest, CreateMeshDeduplicatesIdenticalRawData)
 
 TEST(RadientAssetManagerTest, CreateMeshDifferentRawDataUsesDifferentPayload)
 {
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
@@ -943,8 +946,8 @@ TEST(RadientAssetManagerTest, CreateMeshDifferentRawDataUsesDifferentPayload)
 
     ASSERT_NE(pMesh0, nullptr);
     ASSERT_NE(pMesh1, nullptr);
-    const RADIENT_STATUS MeshStatus0 = pAssetManager->WaitForAssetLoad(pMesh0);
-    const RADIENT_STATUS MeshStatus1 = pAssetManager->WaitForAssetLoad(pMesh1);
+    const RADIENT_STATUS MeshStatus0 = WaitForAssetLoad(pMesh0, *pThreadPool);
+    const RADIENT_STATUS MeshStatus1 = WaitForAssetLoad(pMesh1, *pThreadPool);
     EXPECT_EQ(MeshStatus0, RADIENT_STATUS_OK);
     EXPECT_EQ(MeshStatus1, RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh0), RADIENT_STATUS_NO_GPU_DATA);
@@ -960,7 +963,10 @@ TEST(RadientAssetManagerTest, LoadScene)
 {
     // LoadScene should reject missing input, then accept a valid URI and finish
     // through WaitForAssetLoad.
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
@@ -985,7 +991,7 @@ TEST(RadientAssetManagerTest, LoadScene)
     EXPECT_NE(pGLTFModel->GetReference().URI, nullptr);
     EXPECT_STREQ(pGLTFModel->GetReference().URI, SceneLoadInfo.URI);
     EXPECT_NE(pGLTFModel->GetReference().Version, 0u);
-    EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
+    EXPECT_EQ(WaitForAssetLoad(pGLTFModel, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pGLTFModel), RADIENT_STATUS_NO_GPU_DATA);
 }
 
@@ -1110,7 +1116,10 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
 {
     // Loading two aliases of the same glTF should create distinct lightweight
     // asset handles that resolve to the same cached scene payload.
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
@@ -1134,14 +1143,14 @@ TEST(RadientAssetManagerTest, DeduplicatesGLTFLoads)
     const RADIENT_STATUS              FirstLoadStatus = pAssetManager->LoadScene(LoadInfo, &pFirstModel);
     ASSERT_TRUE(FirstLoadStatus == RADIENT_STATUS_OK || FirstLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pFirstModel, nullptr);
-    ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pFirstModel), RADIENT_STATUS_OK);
+    ASSERT_EQ(WaitForAssetLoad(pFirstModel, *pThreadPool), RADIENT_STATUS_OK);
     ASSERT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pFirstModel), RADIENT_STATUS_NO_GPU_DATA);
 
     RefCntAutoPtr<IRadientSceneAsset> pSecondModel;
     const RADIENT_STATUS              SecondLoadStatus = pAssetManager->LoadScene(AliasLoadInfo, &pSecondModel);
     EXPECT_TRUE(SecondLoadStatus == RADIENT_STATUS_OK || SecondLoadStatus == RADIENT_STATUS_PENDING);
     ASSERT_NE(pSecondModel, nullptr);
-    ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, pSecondModel), RADIENT_STATUS_OK);
+    ASSERT_EQ(WaitForAssetLoad(pSecondModel, *pThreadPool), RADIENT_STATUS_OK);
     ASSERT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pSecondModel), RADIENT_STATUS_NO_GPU_DATA);
     EXPECT_NE(pSecondModel.RawPtr(), pFirstModel.RawPtr());
     ASSERT_NE(pSecondModel->GetReference().URI, nullptr);
@@ -1307,7 +1316,10 @@ TEST(RadientSceneImporterTest, ImportScene)
 {
     // Public ImportScene should reject invalid load info and then import a
     // simple valid glTF into a live scene root.
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
@@ -1344,7 +1356,7 @@ TEST(RadientSceneImporterTest, ImportScene)
     {
         // Pending loads are completed explicitly in tests so the imported root
         // can be verified deterministically.
-        ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, ImportedModel), RADIENT_STATUS_OK);
+        ASSERT_EQ(WaitForAssetLoad(ImportedModel, *pThreadPool), RADIENT_STATUS_OK);
         ImportStatus = pImporter->ProcessPendingImports();
     }
     EXPECT_EQ(ImportStatus, RADIENT_STATUS_OK);
@@ -1379,7 +1391,10 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
 {
     // A renderable scene entity requires mesh, mesh-renderer, and material
     // binding data to be accepted by the writer.
-    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine(pThreadPool);
     ASSERT_NE(pEngine, nullptr);
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
@@ -1401,7 +1416,7 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
     EXPECT_NE(Entity, InvalidRadientEntityID);
 
     // Inspect the live entity and follow its mesh to the default material.
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+    ASSERT_EQ(WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
     RadientMeshComponent Mesh;
     ASSERT_EQ(pScene->GetMesh(Entity, Mesh), RADIENT_STATUS_OK);
     ASSERT_EQ(Mesh.pMesh, pMesh.RawPtr());

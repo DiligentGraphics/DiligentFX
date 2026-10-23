@@ -32,6 +32,7 @@
 #include "Import/RadientOBJSceneAssetImporter.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientAssetTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include <cmath>
@@ -195,7 +196,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, BuiltInImporterLoadsAutomaticallyAndByI
     {
         const RefCntAutoPtr<IRadientSceneAsset> pScene = Load(URI, std::strcmp(URI, "triangle.data") == 0 ? "obj" : nullptr);
         ASSERT_NE(pScene, nullptr);
-        ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+        ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
         const RadientImport::ImportedDocument* pDocument = RadientAssetManagerImpl::GetImportedScene(pScene);
         ASSERT_NE(pDocument, nullptr);
         ASSERT_EQ(pDocument->Meshes.size(), 1u);
@@ -228,7 +229,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, SharesGeometryAndRetainsParsedBuffersAf
     EXPECT_GT(pThreadPool->GetQueueSize(), 0u);
     for (const RefCntAutoPtr<IRadientMeshAsset>& pMesh : Document.Meshes)
     {
-        ASSERT_EQ(pManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+        ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
     }
     EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Document.Meshes[0], 0),
               RadientMeshAssetManager::GetMeshVertexDataPayload(Document.Meshes[1], 0));
@@ -259,7 +260,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, ConvertsMTLFactorsAndMaterialRanges)
               RADIENT_STATUS_OK);
     EXPECT_EQ(pResolver->GetStats().LastBaseURI, "memory://models/model.obj");
     ASSERT_EQ(Document.Meshes.size(), 1u);
-    ASSERT_EQ(pManager->WaitForAssetLoad(Document.Meshes[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(Document.Meshes[0], *pThreadPool), RADIENT_STATUS_OK);
     const RadientMeshAssetDesc& Desc = Document.Meshes[0]->GetDesc();
     ASSERT_EQ(Desc.PrimitiveCount, 2u);
     IRadientMaterialAsset* pPaint = Desc.pPrimitives[0].pMaterial;
@@ -290,7 +291,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, ResolvesTexturesRelativeToMTLAndPreserv
     ASSERT_EQ(Import(std::string{"mtllib surface.mtl\nusemtl Paint\n"} + Triangle, Document), RADIENT_STATUS_OK);
     ASSERT_EQ(Document.Textures.size(), 1u);
     ASSERT_EQ(Document.Meshes.size(), 1u);
-    ASSERT_EQ(pManager->WaitForAssetLoad(Document.Meshes[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(Document.Meshes[0], *pThreadPool), RADIENT_STATUS_OK);
     const RadientMeshAssetDesc& Desc = Document.Meshes[0]->GetDesc();
     ASSERT_EQ(Desc.PrimitiveCount, 1u);
     IRadientMaterialAsset& Material = *Desc.pPrimitives[0].pMaterial;
@@ -302,7 +303,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, ResolvesTexturesRelativeToMTLAndPreserv
     EXPECT_FLOAT_EQ(Scale.y, 3.f);
     EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(Material, "DiffuseTextureUVRotation"), 0.f);
     EXPECT_EQ(GetMaterialParameter<Uint32>(Material, "DiffuseTextureWrapU"), static_cast<Uint32>(RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_CLAMP));
-    ASSERT_EQ(pManager->WaitForAssetLoad(Document.Textures[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(Document.Textures[0], *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pResolver->GetStats().LastBaseURI, "memory://materials/surface.mtl");
     EXPECT_EQ(Document.Textures[0]->GetDesc().Format, RADIENT_TEXTURE_FORMAT_RGBA8_UNORM_SRGB);
 }
@@ -344,7 +345,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, RetainsFailedTexturesRegardlessOfComple
                       CompleteBeforeReturn ? Failure : RADIENT_STATUS_PENDING);
             if (!CompleteBeforeReturn)
                 FailTextureLoad();
-            EXPECT_EQ(pManager->WaitForAssetLoad(Document.Textures[0]), Failure);
+            EXPECT_EQ(Testing::WaitForAssetLoad(Document.Textures[0], *pThreadPool), Failure);
 
             // Keep the requested handle and mapping intact. Material dependencies
             // decide whether a failed source can be replaced by a default texture.
@@ -368,7 +369,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, RetainsFailedTexturesRegardlessOfComple
             }
             // This CPU-only manager has no default textures, so dependency
             // resolution reports the same source failure in both timing cases.
-            EXPECT_EQ(pManager->WaitForAssetLoad(Document.Meshes[0]), Failure);
+            EXPECT_EQ(Testing::WaitForAssetLoad(Document.Meshes[0], *pThreadPool), Failure);
         }
     }
 }
@@ -378,7 +379,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, MissingMaterialLibraryUsesDefaultMateri
     RadientImport::ImportedDocument Document;
     ASSERT_EQ(Import(std::string{"mtllib missing.mtl\nusemtl Missing\n"} + Triangle, Document), RADIENT_STATUS_OK);
     ASSERT_EQ(Document.Meshes.size(), 1u);
-    ASSERT_EQ(pManager->WaitForAssetLoad(Document.Meshes[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(Document.Meshes[0], *pThreadPool), RADIENT_STATUS_OK);
     ASSERT_EQ(Document.Meshes[0]->GetDesc().PrimitiveCount, 1u);
     EXPECT_EQ(Document.Meshes[0]->GetDesc().pPrimitives[0].pMaterial, pDefaultMaterial);
 }
@@ -389,7 +390,7 @@ TEST_F(RadientOBJSceneAssetImporterTest, InvalidGeometryDoesNotPublishScene)
     const RefCntAutoPtr<IRadientSceneAsset> pScene = Load("invalid.obj");
     ASSERT_NE(pScene, nullptr);
     TestingEnvironment::ErrorScope ExpectedError{"Failed to parse OBJ source"};
-    EXPECT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_INVALID_DATA);
+    EXPECT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_INVALID_DATA);
     EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pScene), nullptr);
 }
 

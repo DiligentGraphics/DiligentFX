@@ -101,9 +101,9 @@ struct IRadientSceneAssetImporter : IObject
     /// lock held; later registrations do not change the selection's snapshot.
     virtual Bool DILIGENT_CALL_TYPE CanImport(const Char* URI) const = 0;
 
-    /// Converts the source into Document as an asset-loading task. The task may
-    /// run on a worker or a thread calling WaitForAssetLoad; it has no guaranteed
-    /// thread affinity. No importer-registration lock is held during this call.
+    /// Converts the source into Document as an asset-loading task with no
+    /// guaranteed thread affinity. No importer-registration lock is held during
+    /// this call.
     /// Document is initially empty. Return RADIENT_STATUS_OK only after all
     /// metadata and asset references have been populated. Child assets may still
     /// be pending; scene dependency tracking handles their completion.

@@ -178,3 +178,8 @@ void RadientAssets_CPP_UseSceneAssetImporterRegistration(IRadientAssetManager*  
 {
     (void)pAssetManager->RegisterSceneAssetImporter(pImporter);
 }
+
+void RadientAssets_CPP_GetAssetLoadStatus(IRadientAsset* pAsset)
+{
+    (void)GetRadientAssetLoadStatus(pAsset);
+}

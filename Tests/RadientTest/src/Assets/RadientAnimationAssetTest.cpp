@@ -223,7 +223,7 @@ TEST(RadientAnimationAssetTest, CreatesEmptyClip)
     ASSERT_EQ(pAssetManager->CreateAnimationClip(EmptyDesc, pClip.GetAddressOfEmpty()),
               RADIENT_STATUS_OK);
     ASSERT_NE(pClip, nullptr);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pClip), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetRadientAssetLoadStatus(pClip), RADIENT_STATUS_OK);
     EXPECT_EQ(pClip->GetType(), RADIENT_ASSET_TYPE_ANIMATION_CLIP);
 
     const RadientAnimationClipDesc& StoredDesc = pClip->GetDesc();
@@ -242,7 +242,7 @@ TEST_F(RadientAnimationAssetValidationTest, CopiesDescriptionAndReferencedData)
 {
     RefCntAutoPtr<IRadientAnimationClipAsset> pClip = CreateClip(Desc);
     ASSERT_NE(pClip, nullptr);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pClip), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetRadientAssetLoadStatus(pClip), RADIENT_STATUS_OK);
 
     ClipName[0]       = 'X';
     TargetName[0]     = 'X';

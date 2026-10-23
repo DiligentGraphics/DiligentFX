@@ -25,6 +25,7 @@
  */
 
 #include "RadientGPUTestHelpers.hpp"
+#include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientTypesX.hpp"
 
 #include "GPUUploadManager.h"
@@ -226,6 +227,29 @@ void ProcessUploads(IGPUUploadManager&    UploadManager,
 {
     for (Uint32 i = 0; i < 32 && RadientTextureAssetManager::GetTextureSRV(&Texture) == nullptr; ++i)
         PumpUploadManager(UploadManager, Context);
+}
+
+RADIENT_STATUS WaitForSceneGPUResources(RadientAssetManagerImpl& AssetManager,
+                                        IRadientSceneAsset*      pScene,
+                                        IRenderDevice*           pDevice,
+                                        IDeviceContext*          pContext)
+{
+    const std::chrono::steady_clock::time_point Deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    do
+    {
+        const RADIENT_STATUS UpdateStatus = AssetManager.UpdateGPUResources(pDevice, pContext);
+        if (RADIENT_FAILED(UpdateStatus))
+            return UpdateStatus;
+        pContext->Flush();
+        pContext->FinishFrame();
+
+        const RADIENT_STATUS Status = RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
+        if (Status != RADIENT_STATUS_PENDING)
+            return Status;
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    } while (std::chrono::steady_clock::now() < Deadline);
+    return RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
 }
 
 bool IsTextureManagerIdle(const RadientTextureAssetManagerStats& Stats)

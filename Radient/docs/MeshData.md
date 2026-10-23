@@ -148,12 +148,12 @@ continues to require actual index data.
 
 ## Completion and ownership
 
-Creation normally returns `RADIENT_STATUS_PENDING`. Call
-`IRadientAssetManager::WaitForAssetLoad` on the associated asset manager to wait
-for a data handle or the assembled mesh. Waiting for the mesh also waits
-for its data dependencies and reports their failures. Successful source loading
-does not mean GPU uploads have completed; rendering uses the existing asset
-upload pipeline.
+Creation normally returns `RADIENT_STATUS_PENDING`. Data handles can be used
+to create mesh views while processing is pending. Query `GetRadientAssetLoadStatus`
+with a data handle or the assembled mesh to check progress without waiting.
+A mesh finishes loading after its data dependencies, and a dependency failure also
+fails the mesh. Successful source loading does not mean GPU uploads have completed;
+rendering uses the existing asset upload pipeline.
 
 Data handles are immutable. Keep a handle to reuse it in later views, or release
 it after creating the views that need it. Views retain their geometry data.

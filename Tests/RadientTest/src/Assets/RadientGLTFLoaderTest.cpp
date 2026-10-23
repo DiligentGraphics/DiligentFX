@@ -39,6 +39,7 @@
 #include "RadientMathTestHelpers.hpp"
 #include "RadientMorphTargets.h"
 #include "RadientStandardMaterialParameters.h"
+#include "RadientAssetTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "RadientTestDataHelpers.hpp"
 #include "RadientTypesX.hpp"
@@ -1057,7 +1058,7 @@ TEST(RadientGLTFLoaderTest, ImporterUsesSuppliedRootAndPublicAssetServices)
     Context = {};
     pRootData.Release();
 
-    ASSERT_EQ(pManager->WaitForAssetLoad(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(Scene.Meshes[0], *pThreadPool), RADIENT_STATUS_OK);
     const RadientMeshAssetDesc& Desc = Scene.Meshes[0]->GetDesc();
     ASSERT_EQ(Desc.GeometryCount, 1u);
     EXPECT_EQ(Desc.pGeometries[0].VertexCount, 3u);

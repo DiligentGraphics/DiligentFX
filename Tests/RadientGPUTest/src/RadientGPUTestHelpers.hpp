@@ -46,6 +46,8 @@ struct IGPUUploadManager;
 struct IRenderDevice;
 struct IThreadPool;
 
+class RadientAssetManagerImpl;
+
 namespace Testing
 {
 
@@ -114,6 +116,13 @@ void PumpUploadManager(IGPUUploadManager& UploadManager,
 void ProcessUploads(IGPUUploadManager&    UploadManager,
                     IDeviceContext&       Context,
                     IRadientTextureAsset& Texture);
+
+// Waits for scene GPU resources while pumping uploads on the calling render thread.
+// The asset manager's tasks must be serviced by worker threads.
+RADIENT_STATUS WaitForSceneGPUResources(RadientAssetManagerImpl& AssetManager,
+                                        IRadientSceneAsset*      pScene,
+                                        IRenderDevice*           pDevice,
+                                        IDeviceContext*          pContext);
 
 // Returns true when the texture manager has no pending CPU-side load work.
 bool IsTextureManagerIdle(const RadientTextureAssetManagerStats& Stats);

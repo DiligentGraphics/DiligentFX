@@ -25,7 +25,6 @@
  */
 
 #include "RadientMaterials.h"
-#include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
 #include "RadientMaterialTestHelpers.hpp"
@@ -1441,16 +1440,13 @@ TEST(RadientMaterialTest, RejectsOverlappingShaderTexturePackings)
         "texture parameter 'TextureA' packed properties and texture parameter 'TextureB' packed properties overlap");
 }
 
-TEST(RadientMaterialTest, AssetManagerReportsDefinitionAssetStatus)
+TEST(RadientMaterialTest, DefinitionAssetReportsLoadedStatus)
 {
-    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = RadientAssetManagerImpl::Create({});
-    ASSERT_NE(pAssetManager, nullptr);
-
     RadientComputeMaterialDefinitionDesc           DefinitionDesc{};
     RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
     ASSERT_EQ(CreateDefinition(DefinitionDesc, pDefinition.GetAddressOfEmpty()), RADIENT_STATUS_OK);
     ASSERT_NE(pDefinition, nullptr);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pDefinition), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetRadientAssetLoadStatus(pDefinition), RADIENT_STATUS_OK);
 }
 
 TEST(RadientMaterialTest, EmptyDefinitionSupportsMaterialLifecycleAndIdentity)

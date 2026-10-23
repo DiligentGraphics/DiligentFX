@@ -40,12 +40,10 @@
 #include "gtest/gtest.h"
 
 #include <array>
-#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 using namespace Diligent;
@@ -65,29 +63,6 @@ struct AssetManagerStopGuard
         AssetManager.Stop(pContext);
     }
 };
-
-RADIENT_STATUS WaitForSceneGPUResources(RadientAssetManagerImpl& AssetManager,
-                                        IRadientSceneAsset*      pScene,
-                                        IRenderDevice*           pDevice,
-                                        IDeviceContext*          pContext)
-{
-    const std::chrono::steady_clock::time_point Deadline =
-        std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    do
-    {
-        const RADIENT_STATUS UpdateStatus = AssetManager.UpdateGPUResources(pDevice, pContext);
-        if (RADIENT_FAILED(UpdateStatus))
-            return UpdateStatus;
-        pContext->Flush();
-        pContext->FinishFrame();
-
-        const RADIENT_STATUS Status = RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
-        if (Status != RADIENT_STATUS_PENDING)
-            return Status;
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
-    } while (std::chrono::steady_clock::now() < Deadline);
-    return RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
-}
 
 std::vector<Uint8> ReadBufferRange(IRenderDevice&  Device,
                                    IDeviceContext& Context,
@@ -259,7 +234,7 @@ TEST(RadientOBJImporterGPUTest, ImportsTexturedSceneAndUploadsSharedGeometry)
     ASSERT_NE(pSceneAsset, nullptr);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
     ASSERT_EQ(WaitForSceneGPUResources(AssetManager, pSceneAsset, pDevice, pContext), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssets->WaitForAssetLoad(pSceneAsset), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientAssetManagerImpl::GetSceneLoadStatus(pSceneAsset), RADIENT_STATUS_OK);
     ASSERT_TRUE(RADIENT_SUCCEEDED(pImporter->ProcessPendingImports()));
     ASSERT_TRUE(RADIENT_SUCCEEDED(pWriter->CommitChanges()));
 

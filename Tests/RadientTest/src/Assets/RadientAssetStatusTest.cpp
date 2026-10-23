@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientAssetStatus.hpp"
+#include "RadientAssets.h"
 
 #include "gtest/gtest.h"
 
@@ -72,4 +73,9 @@ TEST(RadientAssetStatusTest, CancellationTakesPriorityOverNonFailures)
     EXPECT_EQ(CombineDependencyStatus(RADIENT_STATUS_PENDING, RADIENT_STATUS_CANCELLED), RADIENT_STATUS_CANCELLED);
     EXPECT_EQ(CombineDependencyStatus(RADIENT_STATUS_CANCELLED, RADIENT_STATUS_OK), RADIENT_STATUS_CANCELLED);
     EXPECT_EQ(CombineDependencyStatus(RADIENT_STATUS_CANCELLED, RADIENT_STATUS_PENDING), RADIENT_STATUS_CANCELLED);
+}
+
+TEST(RadientAssetStatusTest, RejectsNullLoadStatusQuery)
+{
+    EXPECT_EQ(GetRadientAssetLoadStatus(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 }

@@ -80,8 +80,8 @@ typedef struct RadientMeshGeometryData RadientMeshGeometryData;
 ///
 /// Primitive range and morph-target compatibility checks occur after referenced
 /// geometry data finishes source processing. Consequently, a view accepted with
-/// RADIENT_STATUS_PENDING may later fail validation. WaitForAssetLoad reports
-/// source-processing and dependency errors; success does not imply GPU readiness.
+/// RADIENT_STATUS_PENDING may later fail validation. Source-processing and
+/// dependency errors fail the mesh; successful processing does not imply GPU readiness.
 struct RadientMeshViewCreateInfo
 {
     /// Array of PrimitiveCount primitive descriptions. Must be non-null. Each
@@ -162,9 +162,8 @@ struct IRadientMeshMorphTargetData
 /// Immutable, reusable vertex data created by IRadientMeshImportServices.
 ///
 /// GetType returns RADIENT_ASSET_TYPE_MESH_VERTEX_DATA. This handle can be passed
-/// to CreateMeshView and the associated asset manager's WaitForAssetLoad. Retaining
-/// the handle retains the processed data, not a CPU copy of the source vertices.
-/// WaitForAssetLoad success does not guarantee GPU resource or upload completion.
+/// to CreateMeshView while loading is pending. Retaining the handle retains
+/// the processed data, not a CPU copy of the source vertices.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshVertexData, IRadientAsset)
 {
 };
@@ -172,9 +171,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshVertexData, IRadientAsset)
 /// Immutable, reusable index data created by IRadientMeshImportServices.
 ///
 /// GetType returns RADIENT_ASSET_TYPE_MESH_INDEX_DATA. This handle can be passed to
-/// CreateMeshView and the associated asset manager's WaitForAssetLoad. Retaining the
-/// handle retains the processed data, not a CPU copy of the source indices.
-/// WaitForAssetLoad success does not guarantee GPU resource or upload completion.
+/// CreateMeshView while loading is pending. Retaining the handle retains the
+/// processed data, not a CPU copy of the source indices.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshIndexData, IRadientAsset)
 {
 };
@@ -182,10 +180,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshIndexData, IRadientAsset)
 /// Immutable, reusable morph-target data created by IRadientMeshImportServices.
 ///
 /// GetType returns RADIENT_ASSET_TYPE_MESH_MORPH_TARGET_DATA. This handle can be
-/// passed to CreateMeshView and the associated asset manager's WaitForAssetLoad.
-/// Target descriptions remain available through mesh views that use the data;
-/// retaining the handle does not keep a persistent CPU copy of the delta values.
-/// WaitForAssetLoad success does not guarantee GPU resource or upload completion.
+/// passed to CreateMeshView while loading is pending. Target descriptions remain
+/// available through mesh views that use the data; retaining the handle does not
+/// keep a persistent CPU copy of the delta values.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshMorphTargetData, IRadientAsset)
 {
 };
@@ -211,10 +208,11 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMeshImportServices =
 ///
 /// Each service is associated with an asset manager. It creates immutable data
 /// handles that importers can share independently across mesh geometries and
-/// assembles those geometries into mesh assets. The associated asset manager's
-/// WaitForAssetLoad accepts both the data handles and the resulting mesh assets.
-/// The service retains its associated asset manager. These methods can be
-/// called concurrently; stopping the manager prevents new creation requests.
+/// assembles those geometries into mesh assets. GetRadientAssetLoadStatus
+/// accepts both data handles and mesh assets to report source-processing status;
+/// success does not guarantee GPU readiness. The service retains its associated
+/// asset manager. These methods can be called concurrently; stopping the manager
+/// prevents new creation requests.
 DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
 {
     /// Creates reusable, immutable vertex data from a source layout and blobs.
@@ -232,8 +230,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///
     /// \return RADIENT_STATUS_OK if CPU processing is complete, or
     ///         RADIENT_STATUS_PENDING if it continues asynchronously. Neither
-    ///         guarantees GPU readiness. WaitForAssetLoad reports later source
-    ///         errors. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
+    ///         guarantees GPU readiness. Later source errors also fail meshes
+    ///         using this data. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
     ///         active blob writers or a stopped manager return
     ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshVertexData)(THIS_
@@ -255,8 +253,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///
     /// \return RADIENT_STATUS_OK if CPU processing is complete, or
     ///         RADIENT_STATUS_PENDING if it continues asynchronously. Neither
-    ///         guarantees GPU readiness. WaitForAssetLoad reports later source
-    ///         errors. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
+    ///         guarantees GPU readiness. Later source errors also fail meshes
+    ///         using this data. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
     ///         an active blob writer or a stopped manager returns
     ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshIndexData)(THIS_
@@ -282,8 +280,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///
     /// \return RADIENT_STATUS_OK if CPU processing is complete, or
     ///         RADIENT_STATUS_PENDING if it continues asynchronously. Neither
-    ///         guarantees GPU readiness. WaitForAssetLoad reports later source
-    ///         errors. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
+    ///         guarantees GPU readiness. Later source errors also fail meshes
+    ///         using this data. Invalid descriptions return RADIENT_STATUS_INVALID_ARGUMENT;
     ///         an active blob writer or a stopped manager returns
     ///         RADIENT_STATUS_INVALID_OPERATION.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshMorphTargetData)(THIS_
@@ -310,8 +308,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshImportServices, IObject)
     ///         guarantees GPU readiness. Invalid descriptors or geometry handles
     ///         return RADIENT_STATUS_INVALID_ARGUMENT; a stopped manager returns
     ///         RADIENT_STATUS_INVALID_OPERATION. Primitive ranges and morph-target
-    ///         compatibility are checked after geometry processing; use
-    ///         WaitForAssetLoad to observe deferred validation failures.
+    ///         compatibility are checked after geometry processing; validation
+    ///         failures at that stage fail the mesh asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(CreateMeshView)(THIS_
                                                   const RadientMeshViewCreateInfo REF ViewCI,
                                                   IRadientMeshAsset**                ppMesh) PURE;

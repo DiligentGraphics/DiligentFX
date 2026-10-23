@@ -27,6 +27,7 @@
 #include "RadientMeshImportServices.h"
 #include "RadientTypesX.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "RadientAssetTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "ThreadPool.hpp"
 
@@ -45,7 +46,7 @@ class RadientMeshImportServicesTest : public testing::Test
 protected:
     void SetUp() override
     {
-        // No workers run until WaitForAssetLoad processes the queue. This makes
+        // No workers run until the test helper processes the queue. This makes
         // source ownership and views of pending data deterministic.
         pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
         RadientAssetManagerImpl::CreateInfo CI;
@@ -141,7 +142,7 @@ TEST_F(RadientMeshImportServicesTest, ServicesAreSeparateFromAndRetainTheAssetMa
     RefCntAutoPtr<IRadientMeshVertexData> pVertices        = CreateVertices();
     RefCntAutoPtr<IRadientAssetManager>   pRetainedManager = WeakManager.Lock();
     ASSERT_NE(pRetainedManager, nullptr);
-    ASSERT_EQ(pRetainedManager->WaitForAssetLoad(pVertices), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pVertices, *pThreadPool), RADIENT_STATUS_OK);
     pRetainedManager.Release();
     EXPECT_NE(WeakManager.Lock(), nullptr);
 
@@ -219,9 +220,9 @@ TEST_F(RadientMeshImportServicesTest, PendingViewsRetainSourcesAndCopyDescriptor
     EXPECT_EQ(VertexReadReleases, 0u);
     EXPECT_EQ(IndexReadReleases, 0u);
 
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pVertices), RADIENT_STATUS_OK);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pIndices), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
+    EXPECT_EQ(Testing::WaitForAssetLoad(pVertices, *pThreadPool), RADIENT_STATUS_OK);
+    EXPECT_EQ(Testing::WaitForAssetLoad(pIndices, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(VertexReadReleases, 1u);
     EXPECT_EQ(IndexReadReleases, 1u);
     EXPECT_EQ(WeakVertexBlob.Lock(), nullptr);
@@ -263,8 +264,8 @@ TEST_F(RadientMeshImportServicesTest, ReusesVertexAndIndexDataIndependentlyAndDe
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ASSERT_EQ(pMeshImportServices->CreateMeshView(CI, &pMesh), RADIENT_STATUS_PENDING);
     RefCntAutoPtr<IRadientMeshAsset> pDuplicate = CreateView({pDuplicateVertices, pDuplicateIndices});
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicate), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pDuplicate, *pThreadPool), RADIENT_STATUS_OK);
 
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
     ASSERT_EQ(Desc.GeometryCount, 3u);
@@ -341,15 +342,15 @@ TEST_F(RadientMeshImportServicesTest, RetainsMorphBlobsCopiesMetadataAndPreserve
     pDeltaBlob.Release();
     EXPECT_NE(WeakDeltaBlob.Lock(), nullptr);
 
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMorphData), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicateMorphData), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMorphData, *pThreadPool), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pDuplicateMorphData, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(WeakDeltaBlob.Lock(), nullptr);
     RefCntAutoPtr<IRadientMeshAsset> pMesh      = CreateView({pVertices, pIndices, pMorphData});
     RefCntAutoPtr<IRadientMeshAsset> pDuplicate = CreateView({pVertices, pIndices, pDuplicateMorphData});
     pMorphData.Release();
     pDuplicateMorphData.Release();
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicate), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pDuplicate, *pThreadPool), RADIENT_STATUS_OK);
 
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
     ASSERT_EQ(Desc.MorphTargetCount, 1u);
@@ -530,7 +531,7 @@ TEST_F(RadientMeshImportServicesTest, CombinesIndexedAndNonIndexedGeometry)
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ASSERT_EQ(pMeshImportServices->CreateMeshView(CI, &pMesh), RADIENT_STATUS_PENDING);
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_PENDING);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
 
     const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
@@ -572,9 +573,9 @@ TEST_F(RadientMeshImportServicesTest, DeduplicatesNonIndexedViewsSeparatelyFromI
     RefCntAutoPtr<IRadientMeshAsset>      pMesh              = CreateView({pVertices, nullptr});
     RefCntAutoPtr<IRadientMeshAsset>      pDuplicate         = CreateView({pDuplicateVertices, nullptr});
     RefCntAutoPtr<IRadientMeshAsset>      pIndexed           = CreateView({pVertices, pIndices});
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pDuplicate), RADIENT_STATUS_OK);
-    ASSERT_EQ(pAssetManager->WaitForAssetLoad(pIndexed), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pDuplicate, *pThreadPool), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pIndexed, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(pMesh), RadientMeshAssetManager::GetMeshPayload(pDuplicate));
     EXPECT_NE(RadientMeshAssetManager::GetMeshPayload(pMesh), RadientMeshAssetManager::GetMeshPayload(pIndexed));
     EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(pMesh, 0),
@@ -597,7 +598,7 @@ TEST_F(RadientMeshImportServicesTest, RejectsNonIndexedViewRangesAfterVertexData
     CI.GeometryCount  = 1;
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
     ASSERT_EQ(pMeshImportServices->CreateMeshView(CI, &pMesh), RADIENT_STATUS_PENDING);
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Testing::WaitForAssetLoad(pMesh, *pThreadPool), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMesh->GetDesc().GeometryCount, 0u);
 

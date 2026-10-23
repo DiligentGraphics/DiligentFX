@@ -27,6 +27,7 @@
 #include "RadientSceneAssetImporter.hpp"
 #include "RadientTypesX.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "RadientAssetTestHelpers.hpp"
 #include "RadientTestAssetHelpers.hpp"
 #include "TestingEnvironment.hpp"
 #include "ThreadPool.hpp"
@@ -252,6 +253,8 @@ TEST_F(RadientSceneAssetImporterTest, ImportsThroughPublicServicesAndWaitsForPen
     pImporter->CreateTriangle                       = true;
     RefCntAutoPtr<IRadientSceneAsset> pScene        = Load();
     ASSERT_NE(pScene, nullptr);
+    // Status queries do not execute queued import work or open the source.
+    EXPECT_EQ(GetRadientAssetLoadStatus(pScene), RADIENT_STATUS_PENDING);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 0u);
     EXPECT_EQ(pImporter->ImportCount, 0u);
     ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
@@ -259,9 +262,10 @@ TEST_F(RadientSceneAssetImporterTest, ImportsThroughPublicServicesAndWaitsForPen
     EXPECT_EQ(pImporter->VertexStatus, RADIENT_STATUS_PENDING);
     EXPECT_EQ(pImporter->IndexStatus, RADIENT_STATUS_PENDING);
     EXPECT_EQ(pImporter->MeshStatus, RADIENT_STATUS_PENDING);
-    EXPECT_EQ(RadientAssetManagerImpl::GetSceneLoadStatus(pScene), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(GetRadientAssetLoadStatus(pScene), RADIENT_STATUS_PENDING);
 
-    ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
+    EXPECT_EQ(GetRadientAssetLoadStatus(pScene), RADIENT_STATUS_OK);
     const RadientImport::ImportedDocument* pDocument = RadientAssetManagerImpl::GetImportedScene(pScene);
     ASSERT_NE(pDocument, nullptr);
     ASSERT_EQ(pDocument->Nodes.size(), 1u);
@@ -288,7 +292,7 @@ TEST_F(RadientSceneAssetImporterTest, SelectsFirstMatchAndAllowsExplicitImporter
     RefCntAutoPtr<TestSceneAssetImporter> pFirst     = Register("first");
     RefCntAutoPtr<TestSceneAssetImporter> pSecond    = Register("second");
     RefCntAutoPtr<IRadientSceneAsset>     pAutomatic = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pAutomatic), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pAutomatic, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pFirst->ProbeCount.load(), 1u);
     EXPECT_EQ(pSecond->ProbeCount.load(), 1u);
     EXPECT_EQ(pFirst->ImportCount, 1u);
@@ -301,7 +305,7 @@ TEST_F(RadientSceneAssetImporterTest, SelectsFirstMatchAndAllowsExplicitImporter
     LoadInfo.ImporterId = "second";
     RefCntAutoPtr<IRadientSceneAsset> pExplicit;
     ASSERT_EQ(pManager->LoadScene(LoadInfo, &pExplicit), RADIENT_STATUS_PENDING);
-    ASSERT_EQ(pManager->WaitForAssetLoad(pExplicit), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pExplicit, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pFirst->ProbeCount.load(), 1u);
     EXPECT_EQ(pSecond->ProbeCount.load(), 1u);
     EXPECT_EQ(pFirst->ImportCount, 1u);
@@ -314,11 +318,11 @@ TEST_F(RadientSceneAssetImporterTest, DeduplicatesResolvedAliasesWithoutReopenin
 {
     RefCntAutoPtr<TestSceneAssetImporter> pImporter = Register("alias-importer");
     RefCntAutoPtr<IRadientSceneAsset>     pFirst    = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pFirst), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pFirst, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
     pResolver->SetOpenAssetStatus(RADIENT_STATUS_NOT_FOUND);
     RefCntAutoPtr<IRadientSceneAsset> pAlias = Load("alias.fake", "alias-importer");
-    ASSERT_EQ(pManager->WaitForAssetLoad(pAlias), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pAlias, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
     EXPECT_EQ(pImporter->ImportCount, 1u);
     EXPECT_NE(pFirst, pAlias);
@@ -335,7 +339,7 @@ TEST_F(RadientSceneAssetImporterTest, RetainsImportersAndReleasesManagerAfterCom
     pImporter.Release();
     EXPECT_NE(WeakImporter.Lock(), nullptr);
     RefCntAutoPtr<IRadientSceneAsset> pScene = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
     pManager.Release();
     EXPECT_EQ(WeakManager.Lock(), nullptr);
     EXPECT_EQ(WeakImporter.Lock(), nullptr);
@@ -398,7 +402,7 @@ TEST_F(RadientSceneAssetImporterTest, PreservesRegistrationOrderAndFindsEveryReg
         ExpectedProbeOrder.push_back(Index);
     }
     RefCntAutoPtr<IRadientSceneAsset> pAutomatic = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pAutomatic), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pAutomatic, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(ProbeOrder, ExpectedProbeOrder);
     for (Uint32 Index = 0; Index < Importers.size(); ++Index)
     {
@@ -410,7 +414,7 @@ TEST_F(RadientSceneAssetImporterTest, PreservesRegistrationOrderAndFindsEveryReg
     for (const RefCntAutoPtr<TestSceneAssetImporter>& pImporter : Importers)
     {
         RefCntAutoPtr<IRadientSceneAsset> pExplicit = Load("first.fake", pImporter->GetIdentifier());
-        ASSERT_EQ(pManager->WaitForAssetLoad(pExplicit), RADIENT_STATUS_OK);
+        ASSERT_EQ(Testing::WaitForAssetLoad(pExplicit, *pThreadPool), RADIENT_STATUS_OK);
         const RadientImport::ImportedDocument* pDocument = RadientAssetManagerImpl::GetImportedScene(pExplicit);
         ASSERT_NE(pDocument, nullptr);
         ASSERT_EQ(pDocument->Nodes.size(), 1u);
@@ -449,7 +453,7 @@ TEST_F(RadientSceneAssetImporterTest, ReentrantRegistrationDoesNotChangeActiveSe
     // The registration is visible to the next request, after the original
     // request finishes probing its retained list of importers.
     pScene = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pProbe->ProbeCount.load(), 2u);
     EXPECT_EQ(pLate->ProbeCount.load(), 1u);
     EXPECT_EQ(pLate->ImportCount, 1u);
@@ -474,7 +478,7 @@ TEST_F(RadientSceneAssetImporterTest, ConcurrentRegistrationRejectsDuplicateIden
                 (FirstStatus == RADIENT_STATUS_INVALID_ARGUMENT && SecondStatus == RADIENT_STATUS_OK));
 
     RefCntAutoPtr<IRadientSceneAsset> pScene = Load("first.fake", "duplicate");
-    ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pFirst->ImportCount, FirstStatus == RADIENT_STATUS_OK ? 1u : 0u);
     EXPECT_EQ(pSecond->ImportCount, SecondStatus == RADIENT_STATUS_OK ? 1u : 0u);
 }
@@ -537,12 +541,14 @@ TEST_F(RadientSceneAssetImporterTest, DoesNotPublishFailedOrIncompleteDocuments)
         RefCntAutoPtr<IRadientSceneAsset> pScene         = Load("first.fake", Identifier.c_str());
         if (RADIENT_FAILED(Results[Index]))
         {
-            EXPECT_EQ(pManager->WaitForAssetLoad(pScene), Results[Index]);
+            EXPECT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), Results[Index]);
+            EXPECT_EQ(GetRadientAssetLoadStatus(pScene), Results[Index]);
         }
         else
         {
             TestingEnvironment::ErrorScope ExpectedError{"must finish document conversion synchronously"};
-            EXPECT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_FAILED);
+            EXPECT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_FAILED);
+            EXPECT_EQ(GetRadientAssetLoadStatus(pScene), RADIENT_STATUS_FAILED);
         }
         EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pScene), nullptr);
         EXPECT_EQ(pImporter->WeakSource.Lock(), nullptr);
@@ -553,7 +559,7 @@ TEST_F(RadientSceneAssetImporterTest, DoesNotPublishFailedOrIncompleteDocuments)
     RefCntAutoPtr<IRadientSceneAsset> pScene        = Load("first.fake", "throwing");
     {
         TestingEnvironment::ErrorScope ExpectedError{"test importer failure"};
-        EXPECT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_FAILED);
+        EXPECT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_FAILED);
     }
     EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pScene), nullptr);
     EXPECT_EQ(pThrowing->WeakSource.Lock(), nullptr);
@@ -567,7 +573,7 @@ TEST_F(RadientSceneAssetImporterTest, DoesNotTryAnotherMatchingImporterAfterImpo
     pFirst->ReturnStatus                          = RADIENT_STATUS_UNSUPPORTED;
     pSecond->ReturnStatus                         = RADIENT_STATUS_UNSUPPORTED;
     RefCntAutoPtr<IRadientSceneAsset> pScene      = Load();
-    EXPECT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_UNSUPPORTED);
     EXPECT_EQ(pFirst->ImportCount, 1u);
     EXPECT_EQ(pSecond->ImportCount, 0u);
     EXPECT_EQ(RadientAssetManagerImpl::GetImportedScene(pScene), nullptr);
@@ -602,7 +608,7 @@ TEST_F(RadientSceneAssetImporterTest, ContainsRegistrationAndProbeExceptionsAndR
 
     pImporter->ThrowOnProbe = false;
     pScene                  = Load();
-    ASSERT_EQ(pManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Testing::WaitForAssetLoad(pScene, *pThreadPool), RADIENT_STATUS_OK);
     EXPECT_EQ(pImporter->ImportCount, 1u);
 }
 

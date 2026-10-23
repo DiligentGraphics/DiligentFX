@@ -840,13 +840,8 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingTexturesUsesDefaultsForAllSuppo
 
     // The missing texture remains failed, but both materials resolve through
     // their semantic defaults and allow the scene source load to succeed.
-    // Default texture uploads may temporarily occupy the only worker while
-    // waiting for render-thread copy callbacks, so service them before waiting
-    // synchronously for the scene source task.
-    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
-    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
-    EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGPUTest::WaitForSceneGPUResources(*pAssetManager, pScene, pDevice, pContext), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientAssetManagerImpl::GetSceneLoadStatus(pScene), RADIENT_STATUS_OK);
 
     const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pScene);
     ASSERT_NE(pImportedScene, nullptr);
@@ -933,10 +928,8 @@ TEST(RadientAssetManagerGPUTest, SceneWithMissingDDSTextureUsesDefault)
     EXPECT_TRUE(IsPendingOrOK(pAssetManager->LoadScene(LoadInfo, &pScene)));
     ASSERT_NE(pScene, nullptr);
 
-    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
-    EXPECT_EQ(pAssetManager->WaitForAssetLoad(pScene), RADIENT_STATUS_OK);
-    ASSERT_TRUE(WaitForTextureManagerIdle(*pAssetManager, pDevice, pContext));
-    EXPECT_EQ(RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(RadientGPUTest::WaitForSceneGPUResources(*pAssetManager, pScene, pDevice, pContext), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientAssetManagerImpl::GetSceneLoadStatus(pScene), RADIENT_STATUS_OK);
 
     const RadientImport::ImportedDocument* pImportedScene = RadientAssetManagerImpl::GetImportedScene(pScene);
     ASSERT_NE(pImportedScene, nullptr);

@@ -125,8 +125,6 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadScene(const RadientSceneLoadInfo& LoadInfo,
                                                         IRadientSceneAsset**        ppScene) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset* pAsset) override final;
-
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Stop(IDeviceContext* pContext) override final;
 
     // Creates the mesh services supplied to importer implementations. This
@@ -169,10 +167,6 @@ private:
 
     RADIENT_STATUS SelectSceneImporter(const RadientSceneLoadInfo&                LoadInfo,
                                        RefCntAutoPtr<IRadientSceneAssetImporter>& pImporter) const;
-
-    // Dispatches to the asset-type-specific load status. OK means source data
-    // has been processed.
-    static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
     void LoadSceneAsset(ScenePayloadImpl&           Scene,
                         IRadientSceneAssetImporter& Importer,

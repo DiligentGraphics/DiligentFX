@@ -55,7 +55,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -836,29 +835,6 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadScene(const RadientSceneLoadInfo& Lo
     return pModelAsset->GetPayloadStatus();
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
-{
-    if (pAsset == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    for (;;)
-    {
-        const RADIENT_STATUS Status = GetAssetLoadStatus(pAsset);
-
-        if (Status != RADIENT_STATUS_PENDING)
-            return Status;
-
-        if (m_Stopped.load(std::memory_order_acquire))
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        if (m_pThreadPool == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        if (!m_pThreadPool->ProcessTask(0, false))
-            std::this_thread::yield();
-    }
-}
-
 RADIENT_STATUS RadientAssetManagerImpl::Stop(IDeviceContext* pContext)
 {
     if (m_Stopped.load(std::memory_order_acquire))
@@ -965,7 +941,7 @@ RadientTextureAssetManagerStats RadientAssetManagerImpl::GetTextureManagerStats(
     return m_pTextureManager ? m_pTextureManager->GetStats() : RadientTextureAssetManagerStats{};
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset)
+RADIENT_STATUS GetRadientAssetLoadStatus(IRadientAsset* pAsset)
 {
     if (pAsset == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -1014,7 +990,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
             return RADIENT_STATUS_OK;
 
         default:
-            return RADIENT_STATUS_OK;
+            return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 }
 
@@ -1065,3 +1041,11 @@ void RadientAssetManagerImpl::LoadSceneAsset(ScenePayloadImpl&           Scene,
 }
 
 } // namespace Diligent
+
+extern "C"
+{
+    Diligent::RADIENT_STATUS Diligent_GetRadientAssetLoadStatus(Diligent::IRadientAsset* pAsset)
+    {
+        return Diligent::GetRadientAssetLoadStatus(pAsset);
+    }
+}
