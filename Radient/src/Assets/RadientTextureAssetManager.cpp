@@ -150,8 +150,16 @@ public:
         }
         else
         {
-            m_StorageFormat = Format;
-            m_ViewFormats.fill(Format);
+            // Encoded DDS data may use a typeless format even though the raw
+            // Radient format enum does not. Use Diligent's default typed SRV
+            // interpretation for families without an sRGB view.
+            const TEXTURE_FORMAT ViewFormat = GetTextureFormatAttribs(Format).IsTypeless ?
+                GetDefaultTextureViewFormat(Format, TEXTURE_VIEW_SHADER_RESOURCE, BIND_SHADER_RESOURCE) :
+                Format;
+            // A single interpretation needs no typeless storage. Using the
+            // typed format also keeps backend storage and view defaults aligned.
+            m_StorageFormat = ViewFormat;
+            m_ViewFormats.fill(ViewFormat);
         }
     }
 

@@ -485,6 +485,206 @@ TEST(RadientTextureAssetManagerGPUTest, EncodedDDSCubePreservesFacesMipmapsAndRe
     }
 }
 
+struct TypelessDDSTestCase
+{
+    const char*    Name;
+    TEXTURE_FORMAT SourceFormat;
+    TEXTURE_FORMAT LinearFormat;
+    TEXTURE_FORMAT SRGBFormat;
+    bool           UseAtlas;
+};
+
+class RadientTypelessDDSGPUTest : public ::testing::TestWithParam<TypelessDDSTestCase>
+{};
+
+TEST_P(RadientTypelessDDSGPUTest, UploadsWithTypedViewsAndPreservesPixels)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    const TypelessDDSTestCase& TestCase = GetParam();
+    if (TestCase.LinearFormat != TestCase.SRGBFormat &&
+        pDevice->GetDeviceInfo().Features.TextureSubresourceViews != DEVICE_FEATURE_STATE_ENABLED)
+    {
+        GTEST_SKIP() << "Typed linear and sRGB texture views are not supported by this device.";
+    }
+    for (const TEXTURE_FORMAT ViewFormat : {TestCase.LinearFormat, TestCase.SRGBFormat})
+    {
+        const TextureFormatInfoExt& FormatInfo = pDevice->GetTextureFormatInfoExt(ViewFormat);
+        if ((FormatInfo.Dimensions & RESOURCE_DIMENSION_SUPPORT_TEX_2D_ARRAY) == 0 ||
+            (FormatInfo.BindFlags & BIND_SHADER_RESOURCE) == 0)
+        {
+            GTEST_SKIP() << GetTextureFormatAttribs(ViewFormat).Name << " array shader resources are not supported by this device.";
+        }
+    }
+
+    constexpr Uint32 Width  = 16;
+    constexpr Uint32 Height = 8;
+    TextureDesc      SourceDesc;
+    SourceDesc.Type      = RESOURCE_DIM_TEX_2D;
+    SourceDesc.Width     = Width;
+    SourceDesc.Height    = Height;
+    SourceDesc.MipLevels = 1;
+    SourceDesc.Format    = TestCase.SourceFormat;
+
+    const TextureFormatAttribs& FormatAttribs = GetTextureFormatAttribs(TestCase.SourceFormat);
+    const Uint32                RowSize       = Width * FormatAttribs.ComponentSize * FormatAttribs.NumComponents;
+    std::vector<Uint8>          Pixels(static_cast<size_t>(RowSize) * Height);
+    for (Uint32 Row = 0; Row < Height; ++Row)
+    {
+        for (Uint32 Byte = 0; Byte < RowSize; ++Byte)
+        {
+            Pixels[static_cast<size_t>(Row) * RowSize + Byte] = static_cast<Uint8>(Row * 7 + Byte * 3);
+        }
+    }
+    // Use finite floating-point patterns so readback preserves their exact bits.
+    for (Uint32 Pixel = 0; Pixel < Width * Height; ++Pixel)
+    {
+        if (TestCase.LinearFormat == TEX_FORMAT_R16_FLOAT)
+        {
+            const Uint16 Value = static_cast<Uint16>(0x3400u + Pixel);
+            std::memcpy(Pixels.data() + static_cast<size_t>(Pixel) * sizeof(Value), &Value, sizeof(Value));
+        }
+        else if (TestCase.LinearFormat == TEX_FORMAT_R32_FLOAT)
+        {
+            const float Value = 0.25f + static_cast<float>(Pixel) / 256.f;
+            std::memcpy(Pixels.data() + static_cast<size_t>(Pixel) * sizeof(Value), &Value, sizeof(Value));
+        }
+    }
+    TextureSubResData          SourceSubresource{Pixels.data(), RowSize};
+    const TextureData          SourceData{&SourceSubresource, 1};
+    RefCntAutoPtr<IDataBlob>   pDDSData   = DataBlobImpl::Create();
+    RefCntAutoPtr<IFileStream> pDDSStream = MemoryFileStream::Create(pDDSData);
+    ASSERT_TRUE(WriteDDSToStream(pDDSStream, SourceDesc, SourceData));
+
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = pDDSData->GetSize();
+    BlobCI.pData = pDDSData->GetConstDataPtr();
+    RefCntAutoPtr<IRadientDataBlob> pBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_REFERENCE, &pBlob), RADIENT_STATUS_OK);
+
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
+    ASSERT_NE(pThreadPool, nullptr);
+    ThreadPoolStopGuard StopThreads{pThreadPool};
+    // An atlas narrower than mip zero forces the standalone path.
+    const Uint32                      AtlasSize           = TestCase.UseAtlas ? 64u : Width / 2;
+    GLTF::ResourceManager::CreateInfo ResourceManagerCI   = MakeResourceManagerCI(AtlasSize);
+    ResourceManagerCI.DefaultAtlasDesc.Desc.MipLevels     = 1;
+    RefCntAutoPtr<GLTF::ResourceManager> pResourceManager = GLTF::ResourceManager::Create(pDevice, ResourceManagerCI);
+    ASSERT_NE(pResourceManager, nullptr);
+    RefCntAutoPtr<IGPUUploadManager> pUploadManager = CreateTestUploadManager(pDevice, pContext);
+    ASSERT_NE(pUploadManager, nullptr);
+    RadientTextureAssetManagerSharedPtr pManager = CreateTextureManager(pDevice, pResourceManager, pUploadManager);
+    ASSERT_NE(pManager, nullptr);
+
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob).SetEncodedTextureSRGB(False);
+    RefCntAutoPtr<IRadientTextureAsset> pTexture;
+    ASSERT_TRUE(IsPendingOrOK(pManager->LoadTexture(*pThreadPool, LoadInfo, &pTexture)));
+    ASSERT_NE(pTexture, nullptr);
+    ASSERT_TRUE(WaitForTextureManagerIdle(pManager, *pUploadManager, *pContext));
+    ASSERT_EQ(RadientTextureAssetManager::GetLoadStatus(pTexture), RADIENT_STATUS_OK);
+    ProcessUploads(*pUploadManager, *pContext, *pTexture);
+    ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pTexture), RADIENT_STATUS_OK);
+
+    const RadientTextureAssetDesc& AssetDesc = pTexture->GetDesc();
+    EXPECT_EQ(AssetDesc.Width, Width);
+    EXPECT_EQ(AssetDesc.Height, Height);
+    EXPECT_EQ(AssetDesc.MipLevels, 1u);
+    // Typeless source formats have no public Radient format enum value.
+    EXPECT_EQ(AssetDesc.Format, RADIENT_TEXTURE_FORMAT_UNKNOWN);
+
+    ITextureView* const pLinearSRV = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::Linear);
+    ITextureView* const pSRGBSRV   = RadientTextureAssetManager::GetTextureSRV(pTexture, RadientTextureViewType::SRGB);
+    ASSERT_NE(pLinearSRV, nullptr);
+    ASSERT_NE(pSRGBSRV, nullptr);
+    EXPECT_EQ(RadientTextureAssetManager::GetTextureSRV(pTexture), pLinearSRV);
+    EXPECT_EQ(pLinearSRV->GetDesc().Format, TestCase.LinearFormat);
+    EXPECT_EQ(pSRGBSRV->GetDesc().Format, TestCase.SRGBFormat);
+    EXPECT_EQ(pLinearSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(pSRGBSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_FALSE(GetTextureFormatAttribs(pLinearSRV->GetDesc().Format).IsTypeless);
+    EXPECT_FALSE(GetTextureFormatAttribs(pSRGBSRV->GetDesc().Format).IsTypeless);
+    if (TestCase.LinearFormat == TestCase.SRGBFormat)
+    {
+        EXPECT_EQ(pLinearSRV, pSRGBSRV);
+    }
+
+    ITexture* const pUploaded = pLinearSRV->GetTexture();
+    ASSERT_NE(pUploaded, nullptr);
+    EXPECT_EQ(pSRGBSRV->GetTexture(), pUploaded);
+    const TextureDesc& UploadedDesc = pUploaded->GetDesc();
+    EXPECT_EQ(UploadedDesc.Format, TestCase.LinearFormat == TestCase.SRGBFormat ? TestCase.LinearFormat : TestCase.SourceFormat);
+    EXPECT_EQ(UploadedDesc.Type, RESOURCE_DIM_TEX_2D_ARRAY);
+    EXPECT_EQ(UploadedDesc.Width, TestCase.UseAtlas ? AtlasSize : Width);
+    EXPECT_EQ(UploadedDesc.Height, TestCase.UseAtlas ? AtlasSize : Height);
+    EXPECT_EQ(UploadedDesc.MipLevels, 1u);
+
+    const RadientTextureBindingIdentity LinearBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, RadientTextureViewType::Linear);
+    const RadientTextureBindingIdentity SRGBBinding =
+        RadientTextureAssetManager::GetTextureBindingIdentity(pTexture, RadientTextureViewType::SRGB);
+    ASSERT_TRUE(LinearBinding);
+    ASSERT_TRUE(SRGBBinding);
+    EXPECT_EQ(LinearBinding.ViewFormat, TestCase.LinearFormat);
+    EXPECT_EQ(SRGBBinding.ViewFormat, TestCase.SRGBFormat);
+    EXPECT_EQ(LinearBinding.StandaloneResourceId, TestCase.UseAtlas ? 0 : pUploaded->GetUniqueID());
+    EXPECT_EQ(SRGBBinding.StandaloneResourceId, LinearBinding.StandaloneResourceId);
+
+    RadientTextureSamplingInfo SamplingInfo;
+    ASSERT_TRUE(RadientTextureAssetManager::GetTextureSamplingInfo(pTexture, SamplingInfo));
+    EXPECT_EQ(SamplingInfo.Width, Width);
+    EXPECT_EQ(SamplingInfo.Height, Height);
+    EXPECT_EQ(SamplingInfo.MipLevels, 1u);
+    const Uint32 SrcX = static_cast<Uint32>(SamplingInfo.UVScaleBias.z * static_cast<float>(UploadedDesc.Width) + 0.5f);
+    const Uint32 SrcY = static_cast<Uint32>(SamplingInfo.UVScaleBias.w * static_cast<float>(UploadedDesc.Height) + 0.5f);
+    const Box    SourceBox{SrcX, SrcX + Width, SrcY, SrcY + Height};
+
+    TextureDesc ReadbackDesc    = SourceDesc;
+    ReadbackDesc.Name           = "Typeless DDS upload readback";
+    ReadbackDesc.Format         = TestCase.LinearFormat;
+    ReadbackDesc.Usage          = USAGE_STAGING;
+    ReadbackDesc.BindFlags      = BIND_NONE;
+    ReadbackDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<ITexture> pReadback;
+    pDevice->CreateTexture(ReadbackDesc, nullptr, &pReadback);
+    ASSERT_NE(pReadback, nullptr);
+
+    CopyTextureAttribs Copy;
+    Copy.pSrcTexture              = pUploaded;
+    Copy.SrcSlice                 = static_cast<Uint32>(SamplingInfo.TextureSlice);
+    Copy.pSrcBox                  = &SourceBox;
+    Copy.pDstTexture              = pReadback;
+    Copy.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    Copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    pContext->CopyTexture(Copy);
+    pContext->WaitForIdle();
+    const RENDER_DEVICE_TYPE DeviceType = pDevice->GetDeviceInfo().Type;
+    const MAP_FLAGS          MapFlags   = DeviceType == RENDER_DEVICE_TYPE_D3D11 || DeviceType == RENDER_DEVICE_TYPE_GL ?
+        MAP_FLAG_NONE :
+        MAP_FLAG_DO_NOT_WAIT;
+    VerifyTextureSubresourceReadback(*pContext, *pReadback, MapFlags, SourceSubresource);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    EncodedTexture,
+    RadientTypelessDDSGPUTest,
+    ::testing::Values(
+        TypelessDDSTestCase{"R8Atlas", TEX_FORMAT_R8_TYPELESS, TEX_FORMAT_R8_UNORM, TEX_FORMAT_R8_UNORM, true},
+        TypelessDDSTestCase{"R8Standalone", TEX_FORMAT_R8_TYPELESS, TEX_FORMAT_R8_UNORM, TEX_FORMAT_R8_UNORM, false},
+        TypelessDDSTestCase{"R16Atlas", TEX_FORMAT_R16_TYPELESS, TEX_FORMAT_R16_FLOAT, TEX_FORMAT_R16_FLOAT, true},
+        TypelessDDSTestCase{"R16Standalone", TEX_FORMAT_R16_TYPELESS, TEX_FORMAT_R16_FLOAT, TEX_FORMAT_R16_FLOAT, false},
+        TypelessDDSTestCase{"R32Atlas", TEX_FORMAT_R32_TYPELESS, TEX_FORMAT_R32_FLOAT, TEX_FORMAT_R32_FLOAT, true},
+        TypelessDDSTestCase{"R32Standalone", TEX_FORMAT_R32_TYPELESS, TEX_FORMAT_R32_FLOAT, TEX_FORMAT_R32_FLOAT, false},
+        TypelessDDSTestCase{"RGBA8Atlas", TEX_FORMAT_RGBA8_TYPELESS, TEX_FORMAT_RGBA8_UNORM, TEX_FORMAT_RGBA8_UNORM_SRGB, true},
+        TypelessDDSTestCase{"RGBA8Standalone", TEX_FORMAT_RGBA8_TYPELESS, TEX_FORMAT_RGBA8_UNORM, TEX_FORMAT_RGBA8_UNORM_SRGB, false}),
+    [](const ::testing::TestParamInfo<TypelessDDSTestCase>& Info) { return Info.param.Name; });
+
 TEST(RadientTextureAssetManagerGPUTest, RawCompressedTextureUsesOnlyUploadedAtlasMip)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;

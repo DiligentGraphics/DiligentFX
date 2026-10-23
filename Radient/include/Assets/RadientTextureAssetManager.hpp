@@ -208,6 +208,7 @@ private:
     ASYNC_TASK_STATUS LoadTextureFromSource(IRadientTextureAsset& TextureAsset,
                                             RadientTextureSource  TextureSource);
 
+private:
     RefCntAutoPtr<IRenderDevice>          m_pDevice;
     RefCntAutoPtr<IRadientAssetResolver>  m_pAssetResolver;
     RefCntWeakPtr<GLTF::ResourceManager>  m_WeakResourceManager;
