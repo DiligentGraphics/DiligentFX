@@ -691,7 +691,8 @@ void CopyMeshVertexBuffer(IDeviceContext* pContext,
         IBuffer* pDstBuffer = pVertexAllocation->Update(Data->PoolBufferIndex, Data->pDevice, pContext);
         if (pDstBuffer != nullptr)
         {
-            const Uint32 DstOffset = pVertexAllocation->GetStartVertex() * Data->VertexStride;
+            // Aggregate pool offsets can exceed 4 GiB even when each upload fits in 32 bits.
+            const Uint64 DstOffset = Uint64{pVertexAllocation->GetStartVertex()} * Data->VertexStride;
             pContext->CopyBuffer(pSrcBuffer, SrcOffset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
                                  pDstBuffer, DstOffset, NumBytes,
                                  RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
