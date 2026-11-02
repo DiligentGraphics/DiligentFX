@@ -45,6 +45,10 @@
 #include "RadientTypesX.hpp"
 #include "ThreadPool.hpp"
 
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+#include "../../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -150,6 +154,286 @@ std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial, b
 })GLTF";
 
     return WriteGLTFFile(TempDir, WithMaterial ? "mesh_with_material.gltf" : (Indexed ? "mesh.gltf" : "nonindexed_mesh.gltf"), GLTF.str().c_str());
+}
+
+const std::array<Float32, 15> TopologyPositions{
+    0.f, 0.f, 0.f,
+    1.f, 0.f, 0.f,
+    0.f, 1.f, 0.f,
+    1.f, 1.f, 0.f,
+    0.f, 2.f, 0.f};
+
+struct TopologyMesh
+{
+    int    Mode;
+    Uint32 PositionAccessor;
+    bool   Indexed;
+};
+
+std::string WriteGLTFTopologyMeshesFile(const TempDirectory&             TempDir,
+                                        const std::vector<TopologyMesh>& Meshes,
+                                        Uint32                           ElementCount = 5)
+{
+    std::array<Float32, 15> OtherPositions = TopologyPositions;
+    for (Float32& Component : OtherPositions)
+    {
+        Component *= 2.f;
+    }
+    std::array<Uint16, 5> Indices{4, 1, 3, 0, 2};
+    if (ElementCount < Indices.size())
+    {
+        for (Uint32 Index = 0; Index < ElementCount; ++Index)
+        {
+            Indices[Index] = static_cast<Uint16>(Index);
+        }
+    }
+    std::vector<Uint8> Buffer;
+    const size_t       PositionOffset = AppendBytes(Buffer, TopologyPositions);
+    const size_t       OtherOffset    = AppendBytes(Buffer, OtherPositions);
+    const size_t       IndexOffset    = AppendBytes(Buffer, Indices);
+    WriteBinaryFile(TempDir, "topology.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[)GLTF";
+    for (size_t MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        if (MeshIndex != 0)
+        {
+            GLTF << ',';
+        }
+        GLTF << MeshIndex;
+    }
+    GLTF << R"GLTF(]}],"nodes":[)GLTF";
+    for (size_t MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        if (MeshIndex != 0)
+        {
+            GLTF << ',';
+        }
+        GLTF << R"GLTF({"mesh":)GLTF" << MeshIndex << '}';
+    }
+    GLTF << R"GLTF(],"buffers":[{"uri":"topology.bin","byteLength":)GLTF" << Buffer.size()
+         << R"GLTF(}],"bufferViews":[{"buffer":0,"byteOffset":)GLTF" << PositionOffset
+         << R"GLTF(,"byteLength":)GLTF" << sizeof(TopologyPositions)
+         << R"GLTF(},{"buffer":0,"byteOffset":)GLTF" << OtherOffset
+         << R"GLTF(,"byteLength":)GLTF" << sizeof(OtherPositions)
+         << R"GLTF(},{"buffer":0,"byteOffset":)GLTF" << IndexOffset
+         << R"GLTF(,"byteLength":)GLTF" << sizeof(Indices)
+         << R"GLTF(}],"accessors":[
+        {"bufferView":0,"componentType":5126,"count":)GLTF"
+         << ElementCount
+         << R"GLTF(,"type":"VEC3","min":[0,0,0],"max":[1,2,0]},
+        {"bufferView":1,"componentType":5126,"count":)GLTF"
+         << ElementCount
+         << R"GLTF(,"type":"VEC3","min":[0,0,0],"max":[2,4,0]},
+        {"bufferView":0,"componentType":5126,"count":)GLTF"
+         << ElementCount - 1
+         << R"GLTF(,"type":"VEC3","min":[0,0,0],"max":[1,1,0]},
+        {"bufferView":2,"componentType":5123,"count":)GLTF"
+         << ElementCount
+         << R"GLTF(,"type":"SCALAR"}],"meshes":[)GLTF";
+    for (size_t MeshIndex = 0; MeshIndex < Meshes.size(); ++MeshIndex)
+    {
+        if (MeshIndex != 0)
+        {
+            GLTF << ',';
+        }
+        const TopologyMesh& Mesh = Meshes[MeshIndex];
+        GLTF << R"GLTF({"primitives":[{"attributes":{"POSITION":)GLTF" << Mesh.PositionAccessor
+             << R"GLTF(},"mode":)GLTF" << Mesh.Mode;
+        if (Mesh.Indexed)
+        {
+            GLTF << R"GLTF(,"indices":3)GLTF";
+        }
+        GLTF << "}]}";
+    }
+    GLTF << "]}";
+    return WriteGLTFFile(TempDir, "topology.gltf", GLTF.str().c_str());
+}
+
+class ScopedTopologyWarningCapture final
+{
+public:
+    ScopedTopologyWarningCapture() :
+        m_PreviousCallback{DebugMessageCallback}
+    {
+        EXPECT_EQ(s_pActive, nullptr);
+        s_pActive = this;
+        SetDebugMessageCallback(Callback);
+    }
+
+    ~ScopedTopologyWarningCapture()
+    {
+        SetDebugMessageCallback(m_PreviousCallback);
+        s_pActive = nullptr;
+    }
+
+    Uint32 WarningCount = 0;
+
+private:
+    static void DILIGENT_CALL_TYPE Callback(DEBUG_MESSAGE_SEVERITY Severity,
+                                            const Char*            Message,
+                                            const Char*            Function,
+                                            const Char*            File,
+                                            int                    Line)
+    {
+        if (Severity == DEBUG_MESSAGE_SEVERITY_WARNING &&
+            (std::strstr(Message, "skipping the primitive") != nullptr ||
+             std::strstr(Message, "ignoring the incomplete triangle") != nullptr))
+        {
+            ++s_pActive->WarningCount;
+        }
+        if (s_pActive->m_PreviousCallback != nullptr)
+        {
+            s_pActive->m_PreviousCallback(Severity, Message, Function, File, Line);
+        }
+    }
+
+    const DebugMessageCallbackType              m_PreviousCallback;
+    static inline ScopedTopologyWarningCapture* s_pActive = nullptr;
+};
+
+std::string WriteGLTFMixedTopologyFile(const TempDirectory& TempDir, bool WithSupportedPrimitives)
+{
+    const std::array<Float32, 12> Positions{0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f};
+    const std::array<Uint16, 4>   Indices{0, 1, 2, 3};
+    std::vector<Uint8>            Buffer;
+    AppendBytes(Buffer, Positions);
+    AppendBytes(Buffer, Indices);
+    WriteBinaryFile(TempDir, "mixed_topology.bin", Buffer);
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"name": "TopologyScene", "nodes": [0]}],
+    "nodes": [
+        {"name": "SkippedRoot", "mesh": 0, "translation": [1, 2, 3], "children": [1, 2, 3]},
+        {"name": "ChildMesh", "mesh": 1, "translation": [4, 5, 6]},
+        {"name": "CameraNode", "camera": 0},
+        {"name": "SkippedInstance", "mesh": 0, "translation": [7, 8, 9]}
+    ],
+    "cameras": [{"type": "orthographic", "orthographic": {"xmag": 4, "ymag": 3, "znear": 0.5, "zfar": 100}}],
+    "buffers": [{"uri": "mixed_topology.bin", "byteLength": 56}],
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": 0, "byteLength": 48},
+        {"buffer": 0, "byteOffset": 48, "byteLength": 8}
+    ],
+    "accessors": [
+        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        {"bufferView": 0, "componentType": 5126, "count": 2, "type": "VEC3", "min": [0, 0, 0], "max": [1, 0, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 2, "type": "SCALAR"},
+        {"bufferView": 0, "componentType": 5126, "count": 4, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+        {"bufferView": 1, "componentType": 5123, "count": 4, "type": "SCALAR"}
+    ],
+    "meshes": [)GLTF";
+    for (Uint32 MeshIndex = 0; MeshIndex < 2; ++MeshIndex)
+    {
+        if (MeshIndex != 0)
+        {
+            GLTF << ',';
+        }
+        GLTF << R"GLTF({"primitives":[)GLTF";
+        for (int Mode : {0, 1, 2, 3, -1, 7})
+        {
+            if (Mode != 0)
+            {
+                GLTF << ',';
+            }
+            GLTF << R"GLTF({"attributes":{"POSITION":0},"indices":1,"mode":)GLTF" << Mode << '}';
+            if (WithSupportedPrimitives && MeshIndex == 1 && Mode >= 0 && Mode < 3)
+            {
+                GLTF << R"GLTF(,{"attributes":{"POSITION":0},"indices":1,"mode":)GLTF" << Mode + 4 << '}';
+            }
+        }
+        for (int Mode : {4, 5, 6})
+        {
+            const Uint32 PositionAccessor = 2;
+            const Uint32 IndexAccessor    = 3;
+            GLTF << R"GLTF(,{"attributes":{"POSITION":)GLTF" << PositionAccessor
+                 << R"GLTF(},"indices":)GLTF" << IndexAccessor << R"GLTF(,"mode":)GLTF" << Mode << '}';
+            GLTF << R"GLTF(,{"attributes":{"POSITION":)GLTF" << PositionAccessor
+                 << R"GLTF(},"mode":)GLTF" << Mode << '}';
+            GLTF << R"GLTF(,{"attributes":{"NORMAL":0},"indices":1,"mode":)GLTF" << Mode << '}';
+            GLTF << R"GLTF(,{"attributes":{"NORMAL":0},"mode":)GLTF" << Mode << '}';
+        }
+        GLTF << "]}";
+    }
+    GLTF << "]}";
+    return WriteGLTFFile(TempDir, "mixed_topology.gltf", GLTF.str().c_str());
+}
+
+void ExpectTopologySceneHierarchy(const RadientImport::ImportedDocument& Scene)
+{
+    EXPECT_EQ(Scene.DefaultSceneId, 0u);
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].Name, "TopologyScene");
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+    ASSERT_EQ(Scene.Nodes.size(), 4u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "SkippedRoot");
+    EXPECT_EQ(Scene.Nodes[0].pMesh, nullptr);
+    ExpectFloat3Near(Scene.Nodes[0].Transform.Position, {1.f, 2.f, 3.f});
+    ASSERT_EQ(Scene.Nodes[0].Children.size(), 3u);
+    EXPECT_EQ(Scene.Nodes[0].Children[0], 1u);
+    EXPECT_EQ(Scene.Nodes[0].Children[1], 2u);
+    EXPECT_EQ(Scene.Nodes[0].Children[2], 3u);
+    EXPECT_EQ(Scene.Nodes[1].Name, "ChildMesh");
+    ExpectFloat3Near(Scene.Nodes[1].Transform.Position, {4.f, 5.f, 6.f});
+    EXPECT_EQ(Scene.Nodes[2].Name, "CameraNode");
+    ASSERT_TRUE(Scene.Nodes[2].Camera.has_value());
+    EXPECT_EQ(Scene.Nodes[2].Camera->Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
+    EXPECT_NEAR(Scene.Nodes[2].Camera->HorizontalAperture, 8.f, EPSILON);
+    EXPECT_NEAR(Scene.Nodes[2].Camera->VerticalAperture, 6.f, EPSILON);
+    EXPECT_EQ(Scene.Nodes[3].Name, "SkippedInstance");
+    EXPECT_EQ(Scene.Nodes[3].pMesh, nullptr);
+    ExpectFloat3Near(Scene.Nodes[3].Transform.Position, {7.f, 8.f, 9.f});
+}
+
+RADIENT_STATUS CreateExpectedTopologyMesh(RadientAssetManagerImpl&   AssetManager,
+                                          const std::vector<Uint16>& Indices,
+                                          IRadientMeshAsset**        ppMesh)
+{
+    const RefCntAutoPtr<IRadientDataBlob> pVertices = MakeTestDataBlob(TopologyPositions.data(), sizeof(TopologyPositions));
+    const RefCntAutoPtr<IRadientDataBlob> pIndices  = MakeTestDataBlob(Indices.data(), Indices.size() * sizeof(Uint16));
+    RadientVertexLayoutDescX              Layout;
+    Layout.AddBuffer().AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    IRadientDataBlob* const        VertexBuffer = pVertices;
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.ElementCount = static_cast<Uint32>(Indices.size());
+    RadientMeshCreateInfo CI;
+    CI.VertexData.VertexLayout    = Layout;
+    CI.VertexData.ppVertexBuffers = &VertexBuffer;
+    CI.VertexData.VertexCount     = 5;
+    CI.IndexData.pIndexBuffer     = pIndices;
+    CI.IndexData.IndexType        = RADIENT_INDEX_TYPE_UINT16;
+    CI.IndexData.IndexCount       = static_cast<Uint32>(Indices.size());
+    CI.pPrimitives                = &Primitive;
+    CI.PrimitiveCount             = 1;
+    return AssetManager.CreateMesh(CI, ppMesh);
+}
+
+void ExpectTopologyMeshDesc(IRadientMeshAsset* pMesh, Uint32 VertexCount, Uint32 IndexCount)
+{
+    ASSERT_NE(pMesh, nullptr);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.GeometryCount, 1u);
+    EXPECT_EQ(Desc.pGeometries[0].VertexCount, VertexCount);
+    EXPECT_EQ(Desc.pGeometries[0].IndexCount, IndexCount);
+    EXPECT_EQ(Desc.pGeometries[0].IndexType, RADIENT_INDEX_TYPE_UINT16);
+    ASSERT_EQ(Desc.PrimitiveCount, 1u);
+    EXPECT_EQ(Desc.pPrimitives[0].GeometryIndex, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].FirstElement, 0u);
+    EXPECT_EQ(Desc.pPrimitives[0].ElementCount, IndexCount);
+
+    const RadientDrawableMeshResolveResult DrawableMesh = RadientMeshAssetManager::GetDrawableMesh(pMesh, false);
+    ASSERT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
+    ASSERT_NE(DrawableMesh.pMesh, nullptr);
+    ASSERT_EQ(DrawableMesh.pMesh->Primitives.size(), 1u);
+    EXPECT_TRUE(DrawableMesh.pMesh->Primitives[0].IsIndexed);
+    EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].FirstElement, 0u);
+    EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].ElementCount, IndexCount);
 }
 
 std::string WriteGLTFMeshWithMorphTargetsFile(const TempDirectory&          TempDir,
@@ -1991,6 +2275,494 @@ TEST(RadientGLTFLoaderTest, LoadScenePreservesNonIndexedPrimitives)
     EXPECT_FALSE(DrawableMesh.pMesh->Primitives[0].IsIndexed);
     EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].FirstElement, 0u);
     EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].ElementCount, 3u);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, IndexedStripsAndFansUseModeSpecificIndexData)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory                       TempDir{"RadientGLTFLoaderTest"};
+    const std::string                   GLTFPath  = WriteGLTFTopologyMeshesFile(TempDir, {{5, 0, true}, {6, 0, true}, {5, 0, true}, {6, 0, true}});
+    std::shared_ptr<GLTF::Document>     pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    const std::weak_ptr<GLTF::Document> WeakDocument{pDocument};
+    RadientImport::ImportedDocument     Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Meshes.size(), 4u);
+
+    // The same source accessor expands differently for each mode. Queued loads
+    // must retain their converted bytes after all importer-local owners leave.
+    pDocument.reset();
+    EXPECT_FALSE(WeakDocument.expired());
+    EXPECT_GT(pThreadPool->GetQueueSize(), 0u);
+    ProcessQueuedTasks(*pThreadPool);
+    EXPECT_TRUE(WeakDocument.expired());
+
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 2> ExpectedMeshes;
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {4, 1, 3, 3, 1, 0, 3, 0, 2}, &ExpectedMeshes[0]), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {4, 1, 3, 4, 3, 0, 4, 0, 2}, &ExpectedMeshes[1]), RADIENT_STATUS_PENDING);
+    ProcessQueuedTasks(*pThreadPool);
+
+    for (Uint32 MeshIndex = 0; MeshIndex < Scene.Meshes.size(); ++MeshIndex)
+    {
+        SCOPED_TRACE(MeshIndex);
+        ASSERT_NE(Scene.Meshes[MeshIndex], nullptr);
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[MeshIndex]), RADIENT_STATUS_OK);
+        ExpectTopologyMeshDesc(Scene.Meshes[MeshIndex], 5, 9);
+        const MeshIndexDataPayloadImpl* pIndexPayload = RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[MeshIndex], 0);
+        ASSERT_NE(pIndexPayload, nullptr);
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(ExpectedMeshes[MeshIndex % 2]), RADIENT_STATUS_OK);
+        EXPECT_EQ(pIndexPayload, RadientMeshAssetManager::GetMeshIndexDataPayload(ExpectedMeshes[MeshIndex % 2], 0));
+        EXPECT_EQ(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[MeshIndex], 0),
+                  RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0));
+    }
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[0]),
+              RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[2]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[3]));
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, NonIndexedStripsAndFansShareGeneratedIndicesByModeAndVertexCount)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory                   TempDir{"RadientGLTFLoaderTest"};
+    const std::string               GLTFPath  = WriteGLTFTopologyMeshesFile(TempDir, {{5, 0, false}, {6, 0, false}, {5, 1, false}, {6, 1, false}, {5, 2, false}, {6, 2, false}});
+    std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Meshes.size(), 6u);
+    pDocument.reset();
+    EXPECT_GT(pThreadPool->GetQueueSize(), 0u);
+    ProcessQueuedTasks(*pThreadPool);
+
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 4> ExpectedMeshes;
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {0, 1, 2, 2, 1, 3, 2, 3, 4}, &ExpectedMeshes[0]), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {0, 1, 2, 0, 2, 3, 0, 3, 4}, &ExpectedMeshes[1]), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {0, 1, 2, 2, 1, 3}, &ExpectedMeshes[2]), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, {0, 1, 2, 0, 2, 3}, &ExpectedMeshes[3]), RADIENT_STATUS_PENDING);
+    ProcessQueuedTasks(*pThreadPool);
+
+    const std::array<Uint32, 6> ExpectedMeshIndices{0, 1, 0, 1, 2, 3};
+    for (Uint32 MeshIndex = 0; MeshIndex < Scene.Meshes.size(); ++MeshIndex)
+    {
+        SCOPED_TRACE(MeshIndex);
+        ASSERT_NE(Scene.Meshes[MeshIndex], nullptr);
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[MeshIndex]), RADIENT_STATUS_OK);
+        ExpectTopologyMeshDesc(Scene.Meshes[MeshIndex], MeshIndex < 4 ? 5 : 4, MeshIndex < 4 ? 9 : 6);
+        const MeshIndexDataPayloadImpl* pIndexPayload = RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[MeshIndex], 0);
+        ASSERT_NE(pIndexPayload, nullptr);
+        IRadientMeshAsset* const pExpected = ExpectedMeshes[ExpectedMeshIndices[MeshIndex]];
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pExpected), RADIENT_STATUS_OK);
+        EXPECT_EQ(pIndexPayload, RadientMeshAssetManager::GetMeshIndexDataPayload(pExpected, 0));
+    }
+    // Different POSITION accessors may share generated indices, while the
+    // source mode and vertex count must both distinguish their index streams.
+    EXPECT_NE(RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[0], 0),
+              RadientMeshAssetManager::GetMeshVertexDataPayload(Scene.Meshes[2], 0));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[0]),
+              RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[2]));
+    EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[1]),
+              RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[3]));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[4], 0));
+    EXPECT_NE(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[1], 0),
+              RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[5], 0));
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSkipsUnsupportedAndInvalidModesWithoutSchedulingGeometry)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFLoaderTest"};
+    ProcessQueuedTasks(*pThreadPool);
+
+    for (int Mode : {0, 1, 2, 3, -1, 7})
+    {
+        SCOPED_TRACE(Mode);
+        for (bool Indexed : {false, true})
+        {
+            SCOPED_TRACE(Indexed);
+            const std::string                     GLTFPath  = WriteGLTFTopologyMeshesFile(TempDir, {{Mode, 0, Indexed}});
+            const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+            RadientImport::ImportedDocument       Scene;
+            ScopedTopologyWarningCapture          Warnings;
+            ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+            EXPECT_EQ(Warnings.WarningCount, 1u);
+            EXPECT_TRUE(Scene.Meshes.empty());
+            ASSERT_EQ(Scene.Nodes.size(), 1u);
+            EXPECT_EQ(Scene.Nodes[0].pMesh, nullptr);
+            ASSERT_EQ(Scene.Scenes.size(), 1u);
+            ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+            EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+            EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+        }
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadScenePreservesSupportedPrimitivesBesideSkippedPrimitives)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory                   TempDir{"RadientGLTFLoaderTest"};
+    const std::string               GLTFPath  = WriteGLTFMixedTopologyFile(TempDir, true);
+    std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    RadientImport::ImportedDocument Scene;
+    ScopedTopologyWarningCapture    Warnings;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    EXPECT_EQ(Warnings.WarningCount, 36u);
+    ExpectTopologySceneHierarchy(Scene);
+    ASSERT_EQ(Scene.Nodes.size(), 4u);
+    IRadientMeshAsset* const pMesh = Scene.Nodes[1].pMesh;
+    ASSERT_NE(pMesh, nullptr);
+
+    pDocument.reset();
+    ProcessQueuedTasks(*pThreadPool);
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    const RadientMeshAssetDesc& Desc = pMesh->GetDesc();
+    ASSERT_EQ(Desc.PrimitiveCount, 3u);
+    ASSERT_GT(Desc.GeometryCount, 0u);
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Desc.PrimitiveCount; ++PrimitiveIndex)
+    {
+        SCOPED_TRACE(PrimitiveIndex);
+        EXPECT_EQ(Desc.pPrimitives[PrimitiveIndex].FirstElement, 0u);
+        EXPECT_EQ(Desc.pPrimitives[PrimitiveIndex].ElementCount, 3u);
+        ASSERT_LT(Desc.pPrimitives[PrimitiveIndex].GeometryIndex, Desc.GeometryCount);
+        const RadientMeshGeometryDesc& Geometry = Desc.pGeometries[Desc.pPrimitives[PrimitiveIndex].GeometryIndex];
+        EXPECT_EQ(Geometry.VertexCount, 3u);
+        EXPECT_EQ(Geometry.IndexCount, 3u);
+        EXPECT_EQ(Geometry.IndexType, RADIENT_INDEX_TYPE_UINT16);
+    }
+    Uint32 MeshAssetCount = 0;
+    for (const RefCntAutoPtr<IRadientMeshAsset>& pSceneMesh : Scene.Meshes)
+    {
+        if (pSceneMesh != nullptr)
+        {
+            ++MeshAssetCount;
+            EXPECT_EQ(pSceneMesh, pMesh);
+        }
+    }
+    EXPECT_EQ(MeshAssetCount, 1u);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadScenePreservesHierarchyAndCameraWhenAllPrimitivesAreSkipped)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory                         TempDir{"RadientGLTFLoaderTest"};
+    const std::string                     GLTFPath  = WriteGLTFMixedTopologyFile(TempDir, false);
+    const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    ProcessQueuedTasks(*pThreadPool);
+    RadientImport::ImportedDocument Scene;
+    ScopedTopologyWarningCapture    Warnings;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    EXPECT_EQ(Warnings.WarningCount, 36u);
+    EXPECT_TRUE(Scene.Meshes.empty());
+    ExpectTopologySceneHierarchy(Scene);
+    ASSERT_EQ(Scene.Nodes.size(), 4u);
+    EXPECT_EQ(Scene.Nodes[1].pMesh, nullptr);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneIgnoresIncompleteTriangleListTail)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFLoaderTest"};
+
+    for (Uint32 ElementCount : {4u, 5u})
+    {
+        SCOPED_TRACE(ElementCount);
+        for (bool Indexed : {false, true})
+        {
+            SCOPED_TRACE(Indexed);
+            const std::string                   GLTFPath  = WriteGLTFTopologyMeshesFile(TempDir, {{4, 0, Indexed}}, ElementCount);
+            std::shared_ptr<GLTF::Document>     pDocument = LoadMetadataOnlyDocument(GLTFPath);
+            const std::weak_ptr<GLTF::Document> WeakDocument{pDocument};
+            RadientImport::ImportedDocument     Scene;
+            ScopedTopologyWarningCapture        Warnings;
+            ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+            EXPECT_EQ(Warnings.WarningCount, 1u);
+            ASSERT_EQ(Scene.Meshes.size(), 1u);
+            ASSERT_NE(Scene.Meshes[0], nullptr);
+            ASSERT_EQ(Scene.Nodes.size(), 1u);
+            EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+
+            pDocument.reset();
+            EXPECT_FALSE(WeakDocument.expired());
+            EXPECT_GT(pThreadPool->GetQueueSize(), 0u);
+            ProcessQueuedTasks(*pThreadPool);
+            EXPECT_TRUE(WeakDocument.expired());
+            ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+
+            const RadientMeshAssetDesc& Desc = Scene.Meshes[0]->GetDesc();
+            ASSERT_EQ(Desc.GeometryCount, 1u);
+            EXPECT_EQ(Desc.pGeometries[0].VertexCount, ElementCount);
+            EXPECT_EQ(Desc.pGeometries[0].IndexType, Indexed ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_NONE);
+            EXPECT_EQ(Desc.pGeometries[0].IndexCount, Indexed ? 3u : 0u);
+            ASSERT_EQ(Desc.PrimitiveCount, 1u);
+            EXPECT_EQ(Desc.pPrimitives[0].FirstElement, 0u);
+            EXPECT_EQ(Desc.pPrimitives[0].ElementCount, 3u);
+
+            const RadientDrawableMeshResolveResult DrawableMesh =
+                RadientMeshAssetManager::GetDrawableMesh(Scene.Meshes[0], false);
+            ASSERT_EQ(DrawableMesh.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(DrawableMesh.pMesh, nullptr);
+            ASSERT_EQ(DrawableMesh.pMesh->Primitives.size(), 1u);
+            EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].IsIndexed, Indexed);
+            EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].FirstElement, 0u);
+            EXPECT_EQ(DrawableMesh.pMesh->Primitives[0].ElementCount, 3u);
+
+            if (Indexed)
+            {
+                // The helper uses different source sequences for four and five
+                // elements; only their first complete triangle may be retained.
+                const std::vector<Uint16> ExpectedIndices = ElementCount == 4 ?
+                    std::vector<Uint16>{0, 1, 2} :
+                    std::vector<Uint16>{4, 1, 3};
+                RefCntAutoPtr<IRadientMeshAsset> pExpectedMesh;
+                ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, ExpectedIndices, &pExpectedMesh), RADIENT_STATUS_PENDING);
+                ProcessQueuedTasks(*pThreadPool);
+                ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pExpectedMesh), RADIENT_STATUS_OK);
+                const MeshIndexDataPayloadImpl* pIndexPayload = RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0);
+                ASSERT_NE(pIndexPayload, nullptr);
+                EXPECT_EQ(pIndexPayload, RadientMeshAssetManager::GetMeshIndexDataPayload(pExpectedMesh, 0));
+            }
+            else
+            {
+                EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexData(Scene.Meshes[0]), nullptr);
+                EXPECT_EQ(RadientMeshAssetManager::GetMeshIndexDataPayload(Scene.Meshes[0], 0), nullptr);
+            }
+        }
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSkipsInvalidTopologyCountsWithoutSchedulingGeometry)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory TempDir{"RadientGLTFLoaderTest"};
+    ProcessQueuedTasks(*pThreadPool);
+
+    for (int Mode : {4, 5, 6})
+    {
+        SCOPED_TRACE(Mode);
+        for (bool Indexed : {false, true})
+        {
+            SCOPED_TRACE(Indexed);
+            const Uint32                          ElementCount = 2;
+            const std::string                     GLTFPath     = WriteGLTFTopologyMeshesFile(TempDir, {{Mode, 0, Indexed}}, ElementCount);
+            const std::shared_ptr<GLTF::Document> pDocument    = LoadMetadataOnlyDocument(GLTFPath);
+            RadientImport::ImportedDocument       Scene;
+            ScopedTopologyWarningCapture          Warnings;
+            ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+            EXPECT_EQ(Warnings.WarningCount, 1u);
+            EXPECT_TRUE(Scene.Meshes.empty());
+            ASSERT_EQ(Scene.Nodes.size(), 1u);
+            EXPECT_EQ(Scene.Nodes[0].pMesh, nullptr);
+            ASSERT_EQ(Scene.Scenes.size(), 1u);
+            ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+            EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+            EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+        }
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneRecoversFromMalformedPrimitiveData)
+{
+    struct MalformedPrimitiveCase
+    {
+        const char* Name;
+        void (*Corrupt)(tinygltf::Model&, tinygltf::Primitive&);
+    };
+    const MalformedPrimitiveCase Cases[]{
+        {"POSITION accessor out of range", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.attributes["POSITION"] = 999;
+         }},
+        {"negative POSITION accessor", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.attributes["POSITION"] = -2;
+         }},
+        {"index accessor out of range", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.indices = 999;
+         }},
+        {"negative index accessor", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.indices = -2;
+         }},
+        {"NORMAL accessor out of range", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.attributes["NORMAL"] = 999;
+         }},
+        {"negative NORMAL accessor", [](tinygltf::Model&, tinygltf::Primitive& Primitive) {
+             Primitive.attributes["NORMAL"] = -2;
+         }},
+        {"POSITION buffer view out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[2].bufferView = 999;
+         }},
+        {"index buffer view out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[3].bufferView = 999;
+         }},
+        {"POSITION buffer out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.bufferViews[2].buffer = 999;
+         }},
+        {"index buffer out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.bufferViews[3].buffer = 999;
+         }},
+        {"POSITION accessor offset out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[2].byteOffset = Model.bufferViews[2].byteLength + 1;
+         }},
+        {"index accessor offset out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[3].byteOffset = Model.bufferViews[3].byteLength + 1;
+         }},
+        {"POSITION buffer view offset out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.bufferViews[2].byteOffset = Model.buffers[0].data.size() + 1;
+         }},
+        {"index buffer view offset out of range", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.bufferViews[3].byteOffset = Model.buffers[0].data.size() + 1;
+         }},
+        {"truncated POSITION buffer view", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.bufferViews[2].byteLength = sizeof(Float32);
+         }},
+        {"mismatched NORMAL count", [](tinygltf::Model& Model, tinygltf::Primitive& Primitive) {
+             Primitive.attributes["NORMAL"] = 4;
+             Model.accessors[4].count       = 2;
+         }},
+        {"unsupported index component type", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[3].componentType = TINYGLTF_COMPONENT_TYPE_SHORT;
+         }},
+        {"POSITION has two components", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[2].type = TINYGLTF_TYPE_VEC2;
+         }},
+        {"POSITION has integer components", [](tinygltf::Model& Model, tinygltf::Primitive&) {
+             Model.accessors[2].componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT;
+         }},
+    };
+
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory     TempDir{"RadientGLTFLoaderTest"};
+    const std::string GLTFPath = WriteGLTFMeshFile(TempDir, false, true, R"GLTF(
+        "scene": 0,
+        "scenes": [{"name": "RecoveryScene", "nodes": [0]}],
+        "nodes": [
+            {"name": "MeshRoot", "mesh": 0, "translation": [1, 2, 3], "children": [1]},
+            {"name": "Child", "translation": [4, 5, 6]}
+        ])GLTF");
+
+    for (const MalformedPrimitiveCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.Name);
+        for (bool WithValidPrimitive : {false, true})
+        {
+            SCOPED_TRACE(WithValidPrimitive);
+            std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+            // Inject malformed references after parsing so parser validation does
+            // not prevent exercising the loader's primitive recovery boundary.
+            tinygltf::Model&           Model            = const_cast<tinygltf::Model&>(pDocument->GetModel());
+            const tinygltf::Primitive  ValidPrimitive   = Model.meshes[0].primitives[0];
+            const tinygltf::Accessor   PositionAccessor = Model.accessors[0];
+            const tinygltf::Accessor   IndexAccessor    = Model.accessors[1];
+            const tinygltf::BufferView PositionView     = Model.bufferViews[0];
+            const tinygltf::BufferView IndexView        = Model.bufferViews[1];
+            Model.accessors.push_back(PositionAccessor);
+            Model.accessors.push_back(IndexAccessor);
+            Model.accessors.push_back(PositionAccessor);
+            Model.bufferViews.push_back(PositionView);
+            Model.bufferViews.push_back(IndexView);
+            Model.accessors[2].bufferView             = 2;
+            Model.accessors[3].bufferView             = 3;
+            tinygltf::Primitive MalformedPrimitive    = ValidPrimitive;
+            MalformedPrimitive.attributes["POSITION"] = 2;
+            MalformedPrimitive.indices                = 3;
+            Case.Corrupt(Model, MalformedPrimitive);
+            Model.meshes[0].primitives = {MalformedPrimitive};
+            if (WithValidPrimitive)
+            {
+                Model.meshes[0].primitives.push_back(ValidPrimitive);
+            }
+
+            RadientImport::ImportedDocument Scene;
+            ScopedTopologyWarningCapture    Warnings;
+            ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+            EXPECT_EQ(Warnings.WarningCount, 1u);
+            ASSERT_EQ(Scene.Nodes.size(), 2u);
+            EXPECT_EQ(Scene.Nodes[0].Name, "MeshRoot");
+            ExpectFloat3Near(Scene.Nodes[0].Transform.Position, {1.f, 2.f, 3.f});
+            ASSERT_EQ(Scene.Nodes[0].Children.size(), 1u);
+            EXPECT_EQ(Scene.Nodes[0].Children[0], 1u);
+            EXPECT_EQ(Scene.Nodes[1].Name, "Child");
+            ExpectFloat3Near(Scene.Nodes[1].Transform.Position, {4.f, 5.f, 6.f});
+            ASSERT_EQ(Scene.Scenes.size(), 1u);
+            EXPECT_EQ(Scene.Scenes[0].Name, "RecoveryScene");
+            ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+            EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+
+            // Index validation may follow successful vertex scheduling. Those
+            // retained source reads must also finish after the document is released.
+            pDocument.reset();
+            ProcessQueuedTasks(*pThreadPool);
+            if (WithValidPrimitive)
+            {
+                ASSERT_EQ(Scene.Meshes.size(), 1u);
+                ASSERT_NE(Scene.Meshes[0], nullptr);
+                EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+                ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+                ExpectTopologyMeshDesc(Scene.Meshes[0], 3, 3);
+            }
+            else
+            {
+                EXPECT_TRUE(Scene.Meshes.empty());
+                EXPECT_EQ(Scene.Nodes[0].pMesh, nullptr);
+            }
+        }
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadScenePropagatesStoppedManagerFailure)
+{
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+    TempDirectory                         TempDir{"RadientGLTFLoaderTest"};
+    const std::string                     GLTFPath  = WriteGLTFMeshFile(TempDir, false);
+    const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+    ASSERT_EQ(pAssetManager->Stop(nullptr), RADIENT_STATUS_OK);
+
+    RadientImport::ImportedDocument Scene;
+    ScopedTopologyWarningCapture    Warnings;
+    EXPECT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(Warnings.WarningCount, 0u);
+    EXPECT_TRUE(Scene.Meshes.empty());
+    EXPECT_TRUE(Scene.Nodes.empty());
     pThreadPool->StopThreads();
 }
 

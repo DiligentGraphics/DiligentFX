@@ -43,6 +43,14 @@ informational message and uses the first. The built-in importers have identifier
 `"gltf"` and `"obj"` and are registered first, in that order. OBJ files can be
 loaded directly without registering another importer; see [OBJ import](OBJImporter.md).
 
+The GLTF importer supports indexed and non-indexed triangle lists, strips, and
+fans. Strips and fans are converted to triangle lists. For triangle lists, trailing
+indices or vertices that do not form a complete triangle are ignored with a warning.
+Primitives with unsupported or invalid modes, fewer than three elements, missing
+`POSITION` attributes, or invalid vertex/index data are skipped with a warning.
+Their nodes and any supported primitives remain in the imported scene. Operational
+failures, such as cancellation, still fail the import.
+
 Importer callbacks run without the manager's registration lock held. Automatic
 selection uses a fixed snapshot of registered importers, so later registrations
 do not affect that selection. `Import` also runs without the registration lock held.

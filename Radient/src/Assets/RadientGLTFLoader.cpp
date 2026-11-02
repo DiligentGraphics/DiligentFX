@@ -144,6 +144,26 @@ struct PrimitiveVertexKey
     };
 };
 
+struct PrimitiveIndexKey
+{
+    int    Accessor;
+    int    Mode;
+    Uint32 VertexCount; // Only used for generated indices of non-indexed primitives.
+
+    bool operator==(const PrimitiveIndexKey& Rhs) const noexcept
+    {
+        return Accessor == Rhs.Accessor && Mode == Rhs.Mode && VertexCount == Rhs.VertexCount;
+    }
+
+    struct Hasher
+    {
+        size_t operator()(const PrimitiveIndexKey& Key) const noexcept
+        {
+            return ComputeHash(Key.Accessor, Key.Mode, Key.VertexCount);
+        }
+    };
+};
+
 struct PlannedVertexData
 {
     RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
@@ -298,20 +318,90 @@ private:
 
         for (size_t PrimitiveIndex = 0; PrimitiveIndex < GltfMesh.GetPrimitiveCount(); ++PrimitiveIndex)
         {
-            const auto GltfPrimitive = GltfMesh.GetPrimitive(PrimitiveIndex);
+            const GLTF::TinyGltfPrimitiveView GltfPrimitive = GltfMesh.GetPrimitive(PrimitiveIndex);
+            const int                         Mode          = GltfPrimitive.GetMode();
+            switch (Mode)
+            {
+                case TINYGLTF_MODE_TRIANGLES:
+                case TINYGLTF_MODE_TRIANGLE_STRIP:
+                case TINYGLTF_MODE_TRIANGLE_FAN:
+                    break;
+
+                case TINYGLTF_MODE_POINTS:
+                case TINYGLTF_MODE_LINE:
+                case TINYGLTF_MODE_LINE_LOOP:
+                case TINYGLTF_MODE_LINE_STRIP:
+                    LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                        " uses unsupported primitive mode ", Mode, "; skipping the primitive");
+                    continue;
+
+                default:
+                    LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                        " uses invalid primitive mode ", Mode, "; skipping the primitive");
+                    continue;
+            }
+
+            const int* pPositionAccessor = GltfPrimitive.GetAttribute(GLTF::PositionAttributeName);
+            if (pPositionAccessor == nullptr)
+            {
+                LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                    " has no POSITION attribute; skipping the primitive");
+                continue;
+            }
+
+            // Validate topology before scheduling vertex or index processing.
+            // Non-indexed primitives assemble their vertices in accessor order.
+            const int ElementAccessor = GltfPrimitive.GetIndicesId() != -1 ? GltfPrimitive.GetIndicesId() : *pPositionAccessor;
+            if (ElementAccessor < 0 || static_cast<size_t>(ElementAccessor) >= m_GltfModel.GetAccessorCount())
+            {
+                LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                    " references invalid element accessor ", ElementAccessor, "; skipping the primitive");
+                continue;
+            }
+
+            const size_t ElementCount = m_GltfModel.GetAccessor(ElementAccessor).GetCount();
+            if (ElementCount < 3)
+            {
+                LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                    " has invalid element count ", ElementCount, " for primitive mode ", Mode,
+                                    "; skipping the primitive");
+                continue;
+            }
+
+            if (Mode == TINYGLTF_MODE_TRIANGLES && ElementCount % 3 != 0)
+            {
+                LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                    " has ", ElementCount % 3, " trailing elements; ignoring the incomplete triangle");
+            }
 
             Uint32 VertexDataIndex = ~0u;
 
+            // Malformed or unsupported geometry affects only this primitive.
+            // Operational failures, such as cancellation, still abort the import.
             RADIENT_STATUS Status = GetOrCreateVertexData(GltfPrimitive, VertexDataIndex);
             if (RADIENT_FAILED(Status))
-                return Status;
+            {
+                if (Status != RADIENT_STATUS_INVALID_DATA && Status != RADIENT_STATUS_UNSUPPORTED)
+                    return Status;
+
+                LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                    " has invalid or unsupported vertex data; skipping the primitive");
+                continue;
+            }
 
             Uint32 IndexDataIndex = ~0u;
-            if (GltfPrimitive.GetIndicesId() >= 0)
+            if (GltfPrimitive.GetIndicesId() >= 0 || Mode != TINYGLTF_MODE_TRIANGLES)
             {
-                Status = GetOrCreateIndexData(GltfPrimitive, IndexDataIndex);
+                Status = GetOrCreateIndexData(GltfPrimitive, m_VertexData[VertexDataIndex].VertexCount, IndexDataIndex);
                 if (RADIENT_FAILED(Status))
-                    return Status;
+                {
+                    if (Status != RADIENT_STATUS_INVALID_DATA && Status != RADIENT_STATUS_UNSUPPORTED)
+                        return Status;
+
+                    LOG_WARNING_MESSAGE("GLTF mesh '", Mesh.Name, "' primitive ", PrimitiveIndex,
+                                        " has invalid or unsupported index data; skipping the primitive");
+                    continue;
+                }
             }
 
             PlannedPrimitive& Primitive    = Mesh.Primitives.emplace_back();
@@ -354,11 +444,15 @@ private:
     }
 
     RADIENT_STATUS GetOrCreateIndexData(const GLTF::TinyGltfPrimitiveView& GltfPrimitive,
+                                        Uint32                             VertexCount,
                                         Uint32&                            IndexDataIndex)
     {
         const int IndexAccessor = GltfPrimitive.GetIndicesId();
+        // Topology affects the expanded index sequence. Without an accessor,
+        // the sequence depends only on the mode and the number of vertices.
+        const PrimitiveIndexKey Key{IndexAccessor, GltfPrimitive.GetMode(), IndexAccessor < 0 ? VertexCount : 0};
 
-        auto IndexDataIt = m_IndexDataMap.find(IndexAccessor);
+        auto IndexDataIt = m_IndexDataMap.find(Key);
         if (IndexDataIt != m_IndexDataMap.end())
         {
             IndexDataIndex = IndexDataIt->second;
@@ -376,7 +470,7 @@ private:
 
         IndexDataIndex = static_cast<Uint32>(m_IndexData.size());
         m_IndexData.emplace_back(std::move(IndexData));
-        m_IndexDataMap.emplace(IndexAccessor, IndexDataIndex);
+        m_IndexDataMap.emplace(Key, IndexDataIndex);
         return RADIENT_STATUS_OK;
     }
 
@@ -388,7 +482,7 @@ private:
     std::vector<PlannedVertexData>                                             m_VertexData;
     std::unordered_map<PrimitiveVertexKey, Uint32, PrimitiveVertexKey::Hasher> m_VertexDataMap;
     std::vector<PlannedIndexData>                                              m_IndexData;
-    std::unordered_map<int, Uint32>                                            m_IndexDataMap;
+    std::unordered_map<PrimitiveIndexKey, Uint32, PrimitiveIndexKey::Hasher>   m_IndexDataMap;
     std::vector<PlannedMesh>                                                   m_Meshes;
     std::vector<bool>                                                          m_ScannedMeshes;
 };
@@ -683,12 +777,15 @@ public:
         pNewMesh->Name      = GltfMesh.GetName();
 
         const PlannedMesh* pPlannedMesh = m_GeometryPlan.GetMesh(GltfMeshIndex);
-        if (pPlannedMesh == nullptr ||
-            pPlannedMesh->Primitives.empty())
+        if (pPlannedMesh == nullptr || GltfMesh.GetPrimitiveCount() == 0)
         {
             m_Status = RADIENT_STATUS_INVALID_DATA;
             return pNewMesh;
         }
+        // Preserve the node metadata when every primitive was skipped, but do
+        // not create an empty Radient mesh asset.
+        if (pPlannedMesh->Primitives.empty())
+            return pNewMesh;
 
         std::vector<RadientMeshPrimitiveCreateInfo> Primitives;
         std::vector<Uint32>                         GeometryIndices;
@@ -783,7 +880,9 @@ public:
 
             RadientMeshPrimitiveCreateInfo& Primitive = Primitives.emplace_back();
             Primitive.FirstElement                    = 0;
-            Primitive.ElementCount                    = pIndexData != nullptr ? IndexCount : pVertexData->VertexCount;
+            // Indexed counts already exclude incomplete triangles. Keep the
+            // full non-indexed vertex data, but draw only complete triangles.
+            Primitive.ElementCount = pIndexData != nullptr ? IndexCount : pVertexData->VertexCount - pVertexData->VertexCount % 3;
             if (PlannedPrimitive.MaterialId >= 0 && static_cast<size_t>(PlannedPrimitive.MaterialId) < m_Materials.size())
                 Primitive.pMaterial = m_Materials[static_cast<size_t>(PlannedPrimitive.MaterialId)];
             else if (PlannedPrimitive.MaterialId < 0)
@@ -1051,6 +1150,18 @@ RADIENT_STATUS LoadScene(IRadientMeshImportServices&             MeshImportServi
     const RADIENT_STATUS MeshStatus = MeshLoader.GetStatus();
     if (RADIENT_FAILED(MeshStatus))
         return MeshStatus;
+
+    // The metadata builder retains meshes even when all their primitives were
+    // skipped. Keep their nodes, but omit mesh-specific state from the import.
+    for (GLTF::Node& Node : MetadataModel.Nodes)
+    {
+        if (Node.pMesh != nullptr && Node.pMesh->Primitives.empty())
+        {
+            Node.pMesh = nullptr;
+            Node.pSkin = nullptr;
+            Node.Weights.clear();
+        }
+    }
 
     return RadientGLTFConverter::ExtractSceneGraph(MetadataModel, Scene, pAssetManager, pDocument.get());
 }

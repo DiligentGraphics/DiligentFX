@@ -94,7 +94,7 @@ struct MeshIndexDataResult
     /// Index-data handle created by the import services, or null on failure.
     RefCntAutoPtr<IRadientMeshIndexData> pIndexData;
 
-    /// Number of accessor indices, or zero on failure.
+    /// Number of resulting triangle-list indices, or zero on failure.
     Uint32 IndexCount = 0;
 };
 
@@ -106,10 +106,10 @@ struct MeshIndexDataResult
 /// without copying them. The caller may release its document reference after
 /// this function succeeds, even if processing is still pending.
 ///
-/// Conversion failures return a default result, except for a null document,
-/// which returns RADIENT_STATUS_INVALID_ARGUMENT. Mesh-data creation failures
-/// return their status with no handle, count, or bounds; rejected mesh data is
-/// reported as RADIENT_STATUS_INVALID_DATA.
+/// Invalid source data returns a default result. A null document returns
+/// RADIENT_STATUS_INVALID_ARGUMENT. Blob and mesh-data creation failures return
+/// their status with no handle, count, or bounds; rejected mesh data is reported
+/// as RADIENT_STATUS_INVALID_DATA.
 MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&                  MeshImportServices,
                                           const GLTF::TinyGltfModelView&               GltfModel,
                                           const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,
@@ -117,16 +117,21 @@ MeshVertexDataResult CreateMeshVertexData(IRadientMeshImportServices&           
 
 /// Creates reusable Radient index data for a GLTF primitive.
 ///
-/// The primitive must have an index accessor with a supported tightly packed
-/// unsigned index type. Accessor data is referenced without copying through a
-/// blob that retains the document. The import services retain the blob with read
-/// access; the caller may release its document reference after this function
-/// succeeds, even if processing is still pending.
+/// TRIANGLES indices use a supported tightly packed unsigned type and are
+/// referenced without copying through a blob that retains the document. Trailing
+/// indices that do not form a complete triangle are ignored. A non-indexed
+/// TRIANGLES primitive returns the default result without a handle.
+/// TRIANGLE_STRIP and TRIANGLE_FAN indices are expanded into an owning triangle
+/// list, preserving winding and source index width. Without an index accessor,
+/// these modes generate local uint16 or uint32 indices from the POSITION
+/// accessor's count. Degenerate triangles are retained. No vertex data is copied.
+/// The import services retain the index blob with read access; the caller may
+/// release its document reference after success, even with processing pending.
 ///
-/// Conversion failures return a default result, except for a null document,
-/// which returns RADIENT_STATUS_INVALID_ARGUMENT. Mesh-data creation failures
-/// return their status with no handle or count; rejected mesh data is reported
-/// as RADIENT_STATUS_INVALID_DATA.
+/// Point and line modes return RADIENT_STATUS_UNSUPPORTED. Invalid source data
+/// returns a default result. A null document returns RADIENT_STATUS_INVALID_ARGUMENT.
+/// Blob and mesh-data creation failures return their status with no handle or
+/// count; rejected mesh data is reported as RADIENT_STATUS_INVALID_DATA.
 MeshIndexDataResult CreateMeshIndexData(IRadientMeshImportServices&                  MeshImportServices,
                                         const GLTF::TinyGltfModelView&               GltfModel,
                                         const GLTF::TinyGltfPrimitiveView&           GltfPrimitive,

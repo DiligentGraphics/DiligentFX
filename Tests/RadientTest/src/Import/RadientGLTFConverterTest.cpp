@@ -553,7 +553,8 @@ public:
                                                           IRadientMeshIndexData**     ppData) override
     {
         ++IndexCallCount;
-        *ppData = nullptr;
+        SourceIndexType = Data.IndexType;
+        *ppData         = nullptr;
         if (RADIENT_FAILED(Status))
             return Status;
         const RefCntAutoPtr<ConvertedIndexData> pData{MakeNewRCObj<ConvertedIndexData>()(Data)};
@@ -578,9 +579,10 @@ public:
         return RADIENT_STATUS_UNSUPPORTED;
     }
 
-    RADIENT_STATUS Status          = RADIENT_STATUS_OK;
-    Uint32         VertexCallCount = 0;
-    Uint32         IndexCallCount  = 0;
+    RADIENT_STATUS     Status          = RADIENT_STATUS_OK;
+    Uint32             VertexCallCount = 0;
+    Uint32             IndexCallCount  = 0;
+    RADIENT_INDEX_TYPE SourceIndexType = RADIENT_INDEX_TYPE_NONE;
 };
 
 void ExpectDefaultResult(const RadientGLTFConverter::MeshVertexDataResult& Result)
@@ -681,7 +683,8 @@ std::shared_ptr<GLTF::Document> LoadDocument(const std::string& GLTFPath)
 }
 
 std::shared_ptr<GLTF::Document> MakePrimitiveDocument(const std::vector<AttributeData>& Attributes,
-                                                      const IndexData*                  pIndices = nullptr)
+                                                      const IndexData*                  pIndices = nullptr,
+                                                      int                               Mode     = -1)
 {
     TempDirectory TempDir{"RadientGLTFConverterTest"};
 
@@ -764,6 +767,8 @@ std::shared_ptr<GLTF::Document> MakePrimitiveDocument(const std::vector<Attribut
          << PrimitiveAttributes.str() << "}";
     if (IndexAccessor >= 0)
         GLTF << R"(, "indices": )" << IndexAccessor;
+    if (Mode >= 0)
+        GLTF << R"(, "mode": )" << Mode;
     GLTF << R"(}]}]
 })";
 
@@ -887,14 +892,18 @@ IndexData MakeIndexData(const std::array<IndexType, Size>& Indices, int Componen
 }
 
 void ExpectCreateMeshIndexDataPacksIndices(const IndexData&              Indices,
-                                           std::initializer_list<Uint32> ExpectedIndices)
+                                           std::initializer_list<Uint32> ExpectedIndices,
+                                           int                           Mode = -1)
 {
     const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
 
     RadientGLTFConverter::MeshIndexDataResult Result;
     std::weak_ptr<GLTF::Document>             WeakDocument;
     {
-        std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
+        AttributeData Positions   = MakePositionAttribute();
+        const Uint32  VertexCount = (std::max)(TestVertexCount, *std::max_element(ExpectedIndices.begin(), ExpectedIndices.end()) + 1u);
+        Positions.Bytes.resize(size_t{VertexCount} * 3 * sizeof(float));
+        std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({Positions}, &Indices, Mode);
         WeakDocument                              = pDocument;
         GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
         Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
@@ -902,8 +911,17 @@ void ExpectCreateMeshIndexDataPacksIndices(const IndexData&              Indices
 
     ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
     ASSERT_NE(Result.pIndexData, nullptr);
-    EXPECT_FALSE(WeakDocument.expired());
+    const bool Triangulated = Mode == TINYGLTF_MODE_TRIANGLE_STRIP || Mode == TINYGLTF_MODE_TRIANGLE_FAN;
+    EXPECT_EQ(WeakDocument.expired(), Triangulated);
     EXPECT_EQ(Result.IndexCount, ExpectedIndices.size());
+
+    // clang-format off
+    const RADIENT_INDEX_TYPE ExpectedType =
+        Indices.ComponentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE  ? RADIENT_INDEX_TYPE_UINT8 :
+        Indices.ComponentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT ? RADIENT_INDEX_TYPE_UINT16 :
+                                                                          RADIENT_INDEX_TYPE_UINT32;
+    // clang-format on
+    EXPECT_EQ(pServices->SourceIndexType, ExpectedType);
     ExpectPackedIndices(static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source, ExpectedIndices);
     Result.pIndexData.Release();
     EXPECT_TRUE(WeakDocument.expired());
@@ -1422,6 +1440,220 @@ TEST(RadientGLTFConverterTest, CreateMeshIndexDataPacksUint32Indices)
     ExpectCreateMeshIndexDataPacksIndices(
         MakeIndexData(Indices, TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT),
         {1, 0, 2});
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataRespectsIndexedPrimitiveModes)
+{
+    const std::array<IndexData, 3> IndexSources{
+        MakeIndexData(std::array<Uint8, 6>{4, 2, 0, 5, 1, 3}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE),
+        MakeIndexData(std::array<Uint16, 6>{4, 2, 0, 5, 1, 3}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT),
+        MakeIndexData(std::array<Uint32, 6>{4, 2, 0, 5, 1, 3}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)};
+
+    for (const IndexData& Indices : IndexSources)
+    {
+        SCOPED_TRACE(Indices.ComponentType);
+        ExpectCreateMeshIndexDataPacksIndices(Indices, {4, 2, 0, 5, 1, 3}, TINYGLTF_MODE_TRIANGLES);
+        ExpectCreateMeshIndexDataPacksIndices(
+            Indices, {4, 2, 0, 0, 2, 5, 0, 5, 1, 1, 5, 3}, TINYGLTF_MODE_TRIANGLE_STRIP);
+        ExpectCreateMeshIndexDataPacksIndices(
+            Indices, {4, 2, 0, 4, 0, 5, 4, 5, 1, 4, 1, 3}, TINYGLTF_MODE_TRIANGLE_FAN);
+    }
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataPreservesDegenerateTrianglesAndStripParity)
+{
+    const IndexData Indices = MakeIndexData(
+        std::array<Uint16, 6>{0, 0, 1, 2, 3, 4}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    ExpectCreateMeshIndexDataPacksIndices(
+        Indices, {0, 0, 1, 1, 0, 2, 1, 2, 3, 3, 2, 4}, TINYGLTF_MODE_TRIANGLE_STRIP);
+    ExpectCreateMeshIndexDataPacksIndices(
+        Indices, {0, 0, 1, 0, 1, 2, 0, 2, 3, 0, 3, 4}, TINYGLTF_MODE_TRIANGLE_FAN);
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataGeneratesNonindexedStripsAndFans)
+{
+    AttributeData Positions = MakePositionAttribute();
+    Positions.Bytes.resize(6 * 3 * sizeof(float));
+    for (int Mode : {TINYGLTF_MODE_TRIANGLE_STRIP, TINYGLTF_MODE_TRIANGLE_FAN})
+    {
+        SCOPED_TRACE(Mode);
+        const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+        RadientGLTFConverter::MeshIndexDataResult        Result;
+        std::weak_ptr<GLTF::Document>                    WeakDocument;
+        {
+            std::shared_ptr<GLTF::Document> pDocument = MakePrimitiveDocument({Positions}, nullptr, Mode);
+            WeakDocument                              = pDocument;
+            const GLTF::TinyGltfModelView GltfModel{pDocument->GetModel()};
+            Result = RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
+        }
+
+        ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+        ASSERT_NE(Result.pIndexData, nullptr);
+        EXPECT_TRUE(WeakDocument.expired());
+        EXPECT_EQ(Result.IndexCount, 12u);
+        EXPECT_EQ(pServices->SourceIndexType, RADIENT_INDEX_TYPE_UINT16);
+        const RadientMeshIndexSource& Source = static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source;
+        if (Mode == TINYGLTF_MODE_TRIANGLE_STRIP)
+            ExpectPackedIndices(Source, {0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5});
+        else
+            ExpectPackedIndices(Source, {0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5});
+    }
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataSelectsGeneratedIndexWidthAtUint16Limit)
+{
+    for (int Mode : {TINYGLTF_MODE_TRIANGLE_STRIP, TINYGLTF_MODE_TRIANGLE_FAN})
+    {
+        SCOPED_TRACE(Mode);
+        for (Uint32 VertexCount : {65536u, 65537u})
+        {
+            SCOPED_TRACE(VertexCount);
+            AttributeData Positions = MakePositionAttribute();
+            Positions.Bytes.resize(size_t{VertexCount} * 3 * sizeof(float));
+            const std::shared_ptr<GLTF::Document>            pDocument = MakePrimitiveDocument({Positions}, nullptr, Mode);
+            const GLTF::TinyGltfModelView                    GltfModel{pDocument->GetModel()};
+            const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+            const RadientGLTFConverter::MeshIndexDataResult  Result =
+                RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GetFirstPrimitive(pDocument), pDocument);
+
+            ASSERT_EQ(Result.Status, RADIENT_STATUS_OK);
+            ASSERT_NE(Result.pIndexData, nullptr);
+            const RADIENT_INDEX_TYPE ExpectedType = VertexCount == 65536u ? RADIENT_INDEX_TYPE_UINT16 : RADIENT_INDEX_TYPE_UINT32;
+            EXPECT_EQ(pServices->SourceIndexType, ExpectedType);
+            EXPECT_EQ(Result.IndexCount, (VertexCount - 2) * 3);
+            const RadientMeshIndexSource& Source = static_cast<ConvertedIndexData*>(Result.pIndexData.RawPtr())->Source;
+            std::vector<Uint8>            PackedIndices(Source.GetIndexDataSize());
+            ASSERT_EQ(Source.PackIndexData({PackedIndices.data(), Source.GetIndexDataSize()}), RADIENT_STATUS_OK);
+
+            std::array<Uint32, 3> LastTriangle{VertexCount - 3, VertexCount - 2, VertexCount - 1};
+            if (Mode == TINYGLTF_MODE_TRIANGLE_FAN)
+                LastTriangle[0] = 0;
+            else if ((VertexCount & 1u) == 0)
+                std::swap(LastTriangle[0], LastTriangle[1]);
+            const size_t IndexSize = ExpectedType == RADIENT_INDEX_TYPE_UINT16 ? sizeof(Uint16) : sizeof(Uint32);
+            for (size_t Index = 0; Index < LastTriangle.size(); ++Index)
+            {
+                const size_t Offset = (Result.IndexCount - 3 + Index) * IndexSize;
+                const Uint32 Value  = ExpectedType == RADIENT_INDEX_TYPE_UINT16 ?
+                    ReadValue<Uint16>(PackedIndices, Offset) :
+                    ReadValue<Uint32>(PackedIndices, Offset);
+                EXPECT_EQ(Value, LastTriangle[Index]);
+            }
+        }
+    }
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataRejectsInsufficientPrimitiveElements)
+{
+    const IndexData                                  Indices   = MakeIndexData(std::array<Uint16, 3>{0, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    const std::shared_ptr<GLTF::Document>            pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+    for (int Mode : {TINYGLTF_MODE_TRIANGLES, TINYGLTF_MODE_TRIANGLE_STRIP, TINYGLTF_MODE_TRIANGLE_FAN})
+    {
+        SCOPED_TRACE(Mode);
+        for (bool Indexed : {false, true})
+        {
+            if (!Indexed && Mode == TINYGLTF_MODE_TRIANGLES)
+                continue;
+            SCOPED_TRACE(Indexed);
+            for (size_t Count : {size_t{0}, size_t{1}, size_t{2}})
+            {
+                SCOPED_TRACE(Count);
+                tinygltf::Model Model                  = pDocument->GetModel();
+                Model.meshes[0].primitives[0].mode     = Mode;
+                Model.meshes[0].primitives[0].indices  = Indexed ? 1 : -1;
+                Model.accessors[Indexed ? 1 : 0].count = Count;
+                const GLTF::TinyGltfModelView GltfModel{Model};
+                ExpectDefaultResult(RadientGLTFConverter::CreateMeshIndexData(
+                    *pServices, GltfModel, GltfModel.GetMesh(0).GetPrimitive(0), pDocument));
+            }
+        }
+    }
+    EXPECT_EQ(pServices->IndexCallCount, 0u);
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataRejectsExpandedCountOverflow)
+{
+    const IndexData                                  Indices   = MakeIndexData(std::array<Uint16, 3>{0, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    const std::shared_ptr<GLTF::Document>            pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+    for (int Mode : {TINYGLTF_MODE_TRIANGLE_STRIP, TINYGLTF_MODE_TRIANGLE_FAN})
+    {
+        SCOPED_TRACE(Mode);
+        for (bool Indexed : {false, true})
+        {
+            SCOPED_TRACE(Indexed);
+            tinygltf::Model Model                 = pDocument->GetModel();
+            Model.meshes[0].primitives[0].mode    = Mode;
+            Model.meshes[0].primitives[0].indices = Indexed ? 1 : -1;
+            // Change metadata only: rejection must not allocate the expanded stream.
+            Model.accessors[Indexed ? 1 : 0].count = size_t{(std::numeric_limits<Uint32>::max)()} / 3 + 3;
+            const GLTF::TinyGltfModelView GltfModel{Model};
+            ExpectDefaultResult(RadientGLTFConverter::CreateMeshIndexData(
+                *pServices, GltfModel, GltfModel.GetMesh(0).GetPrimitive(0), pDocument));
+        }
+    }
+    EXPECT_EQ(pServices->IndexCallCount, 0u);
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataRejectsUnsupportedPrimitiveModes)
+{
+    const IndexData                                  Indices   = MakeIndexData(std::array<Uint16, 3>{0, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    const std::shared_ptr<GLTF::Document>            pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+    for (int Mode : {TINYGLTF_MODE_POINTS, TINYGLTF_MODE_LINE, TINYGLTF_MODE_LINE_LOOP, TINYGLTF_MODE_LINE_STRIP, 7})
+    {
+        SCOPED_TRACE(Mode);
+        tinygltf::Model Model              = pDocument->GetModel();
+        Model.meshes[0].primitives[0].mode = Mode;
+        const GLTF::TinyGltfModelView                   GltfModel{Model};
+        const RadientGLTFConverter::MeshIndexDataResult Result =
+            RadientGLTFConverter::CreateMeshIndexData(*pServices, GltfModel, GltfModel.GetMesh(0).GetPrimitive(0), pDocument);
+        EXPECT_EQ(Result.Status, Mode == 7 ? RADIENT_STATUS_INVALID_DATA : RADIENT_STATUS_UNSUPPORTED);
+        EXPECT_EQ(Result.pIndexData, nullptr);
+        EXPECT_EQ(Result.IndexCount, 0u);
+    }
+    EXPECT_EQ(pServices->IndexCallCount, 0u);
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataKeepsCompleteTriangleListPrefix)
+{
+    const std::array<IndexData, 3> IndexSources{
+        MakeIndexData(std::array<Uint8, 8>{0, 1, 2, 2, 0, 1, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE),
+        MakeIndexData(std::array<Uint16, 8>{0, 1, 2, 2, 0, 1, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT),
+        MakeIndexData(std::array<Uint32, 8>{0, 1, 2, 2, 0, 1, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)};
+
+    for (const IndexData& Source : IndexSources)
+    {
+        SCOPED_TRACE(Source.ComponentType);
+        for (size_t Count : {size_t{4}, size_t{5}, size_t{7}, size_t{8}})
+        {
+            SCOPED_TRACE(Count);
+            IndexData Indices = Source;
+            Indices.Bytes.resize(Count * GetComponentSize(Indices.ComponentType));
+            if (Count < 6)
+                ExpectCreateMeshIndexDataPacksIndices(Indices, {0, 1, 2}, TINYGLTF_MODE_TRIANGLES);
+            else
+                ExpectCreateMeshIndexDataPacksIndices(Indices, {0, 1, 2, 2, 0, 1}, TINYGLTF_MODE_TRIANGLES);
+        }
+    }
+}
+
+TEST(RadientGLTFConverterTest, CreateMeshIndexDataValidatesIncompleteTriangleListTailSpan)
+{
+    const IndexData                                  Indices   = MakeIndexData(std::array<Uint16, 3>{0, 1, 2}, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT);
+    const std::shared_ptr<GLTF::Document>            pDocument = MakePrimitiveDocument({MakePositionAttribute()}, &Indices);
+    const RefCntAutoPtr<ConverterMeshImportServices> pServices{MakeNewRCObj<ConverterMeshImportServices>()()};
+    for (size_t Count : {size_t{4}, size_t{5}})
+    {
+        SCOPED_TRACE(Count);
+        tinygltf::Model Model    = pDocument->GetModel();
+        Model.accessors[1].count = Count;
+        const GLTF::TinyGltfModelView GltfModel{Model};
+        ExpectDefaultResult(RadientGLTFConverter::CreateMeshIndexData(
+            *pServices, GltfModel, GltfModel.GetMesh(0).GetPrimitive(0), pDocument));
+    }
+    EXPECT_EQ(pServices->IndexCallCount, 0u);
 }
 
 TEST(RadientGLTFConverterTest, MeshDataConversionPreservesServiceStatusAndPendingHandles)
