@@ -580,10 +580,11 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
     Allocator.AddSpace<RadientMaterialShaderTexturePacking>(ShaderDataLayout.TexturePackingCount);
     if (ShaderDataLayout.pSurfacePacking != nullptr)
         Allocator.AddSpace<RadientSurfaceMaterialShaderParameterPacking>();
-    for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
-        Allocator.AddSpace(ShaderDataLayout.pInitializations[InitializationIndex].Size, alignof(Uint32));
+    // Match the write order below: strings can add padding before aligned initialization data.
     Allocator.AddSpaceForString(DefinitionName);
     Allocator.AddSpaceForString(Desc.Reference.URI);
+    for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
+        Allocator.AddSpace(ShaderDataLayout.pInitializations[InitializationIndex].Size, alignof(Uint32));
 
     for (Uint32 Index = 0; Index < Desc.ParameterCount; ++Index)
     {

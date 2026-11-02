@@ -916,6 +916,57 @@ TEST(RadientMaterialTest, DefinitionOwnsAndAppliesShaderDataInitializations)
     EXPECT_EQ(ShaderData, Expected);
 }
 
+TEST(RadientMaterialTest, DefinitionPacksShaderInitializationsAfterStrings)
+{
+    // A texture parameter has no default-value bytes to provide spare alignment
+    // padding. Null name/URI and parameter name "ab" exposed the original overrun.
+    RadientMaterialParameterDesc Parameter{};
+    Parameter.Name = "ab";
+    Parameter.Type = RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE;
+
+    // Exercise every string-length remainder modulo the initialization alignment,
+    // including the distinct handling of null and empty strings.
+    const std::array<const char*, 5> Strings{nullptr, "", "a", "ab", "abc"};
+    for (const char* Name : Strings)
+    {
+        for (const char* URI : Strings)
+        {
+            SCOPED_TRACE(testing::Message() << "Name: " << (Name != nullptr ? Name : "<null>")
+                                            << "; URI: " << (URI != nullptr ? URI : "<null>"));
+
+            RadientComputeMaterialDefinitionDesc DefinitionDesc{};
+            DefinitionDesc.Name           = Name;
+            DefinitionDesc.Reference.URI  = URI;
+            DefinitionDesc.pParameters    = &Parameter;
+            DefinitionDesc.ParameterCount = 1;
+
+            constexpr Uint32                              ExpectedValue = 0x12345678u;
+            Uint32                                        InitialValue  = ExpectedValue;
+            const RadientMaterialShaderDataInitialization Initialization{&InitialValue, sizeof(InitialValue), 0};
+            RadientMaterialShaderDataLayoutDesc           ShaderDataLayout{};
+            ShaderDataLayout.Size                = sizeof(InitialValue);
+            ShaderDataLayout.pInitializations    = &Initialization;
+            ShaderDataLayout.InitializationCount = 1;
+
+            RefCntAutoPtr<IRadientMaterialDefinitionAsset> pDefinition;
+            ASSERT_EQ(CreateDefinition(DefinitionDesc, ShaderDataLayout, &pDefinition), RADIENT_STATUS_OK);
+            ASSERT_NE(pDefinition, nullptr);
+            EXPECT_STREQ(pDefinition->GetDesc().Name, Name != nullptr ? Name : "");
+            EXPECT_STREQ(pDefinition->GetReference().URI, URI);
+            EXPECT_STREQ(pDefinition->GetParameterDesc(0).Name, "ab");
+
+            InitialValue = 0;
+            RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+            ASSERT_EQ(CreateMaterial(pDefinition, &pMaterial), RADIENT_STATUS_OK);
+            ASSERT_NE(pMaterial, nullptr);
+
+            Uint32 ShaderData = 0;
+            static_cast<RadientMaterialDefinitionImpl&>(*pDefinition).WriteShaderData(*pMaterial, &ShaderData);
+            EXPECT_EQ(ShaderData, ExpectedValue);
+        }
+    }
+}
+
 TEST(RadientMaterialTest, DefinitionPacksTextureShaderData)
 {
     const Int32                                 DefaultUVSelector = 0;
