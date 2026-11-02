@@ -200,7 +200,7 @@ public:
 
         std::vector<int> NodesToScan;
 
-        if (m_GltfModel.GetSceneCount() == 0 || SceneIndex < 0)
+        if (m_GltfModel.GetSceneCount() == 0)
         {
             NodesToScan.reserve(m_GltfModel.GetNodeCount());
             for (size_t NodeIndex = 0; NodeIndex < m_GltfModel.GetNodeCount(); ++NodeIndex)
@@ -212,10 +212,17 @@ public:
         }
         else
         {
-            const auto GltfScene = m_GltfModel.GetScene(SceneIndex);
-            NodesToScan.reserve(GltfScene.GetNodeCount());
-            for (size_t NodeIndex = 0; NodeIndex < GltfScene.GetNodeCount(); ++NodeIndex)
-                NodesToScan.push_back(GltfScene.GetNodeId(NodeIndex));
+            // Match the metadata builder: import every scene when SceneIndex is
+            // negative, but only visit nodes reachable from the scene roots.
+            // The roots themselves must pass through ScanNode's bounds check.
+            const int FirstScene = SceneIndex >= 0 ? SceneIndex : 0;
+            const int EndScene   = SceneIndex >= 0 ? SceneIndex + 1 : static_cast<int>(m_GltfModel.GetSceneCount());
+            for (int SceneId = FirstScene; SceneId < EndScene; ++SceneId)
+            {
+                const GLTF::TinyGltfSceneView GltfScene = m_GltfModel.GetScene(SceneId);
+                for (size_t NodeIndex = 0; NodeIndex < GltfScene.GetNodeCount(); ++NodeIndex)
+                    NodesToScan.push_back(GltfScene.GetNodeId(NodeIndex));
+            }
         }
 
         std::unordered_set<int> VisitedNodes;

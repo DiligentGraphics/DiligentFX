@@ -82,7 +82,7 @@ const std::array<float, 9> WideTrianglePositions{
 const std::array<Uint16, 3> TriangleIndices{0, 1, 2};
 const std::array<Uint16, 3> ReversedTriangleIndices{0, 2, 1};
 
-std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial, bool Indexed = true)
+std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial, bool Indexed = true, const char* SceneGraph = nullptr)
 {
     std::vector<Uint8> Buffer;
     Buffer.reserve(sizeof(float) * TrianglePositions.size() + sizeof(Uint16) * TriangleIndices.size());
@@ -95,12 +95,18 @@ std::string WriteGLTFMeshFile(const TempDirectory& TempDir, bool WithMaterial, b
 
     WriteBinaryFile(TempDir, "mesh.bin", Buffer);
 
-    std::ostringstream GLTF;
-    GLTF << R"GLTF({
-    "asset": {"version": "2.0"},
+    if (SceneGraph == nullptr)
+    {
+        SceneGraph = R"GLTF(
     "scene": 0,
     "scenes": [{"name": "MainScene", "nodes": [0]}],
-    "nodes": [{"name": "TriangleNode", "mesh": 0, "translation": [1, 2, 3], "scale": [2, 3, 4]}],
+    "nodes": [{"name": "TriangleNode", "mesh": 0, "translation": [1, 2, 3], "scale": [2, 3, 4]}])GLTF";
+    }
+
+    std::ostringstream GLTF;
+    GLTF << R"GLTF({
+    "asset": {"version": "2.0"},)GLTF"
+         << SceneGraph << R"GLTF(,
     "buffers": [{"uri": "mesh.bin", "byteLength": )GLTF"
          << Buffer.size() << R"GLTF(}],
     "bufferViews": [
@@ -1758,6 +1764,141 @@ TEST(RadientGLTFLoaderTest, LoadSceneExtractsSceneGraphComponents)
     EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Light->Intensity, 3.f, EPSILON);
     EXPECT_NEAR(Scene.Nodes[CameraLightNodeIndex].Light->Range, 10.f, EPSILON);
 
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneRejectsInvalidSceneRoots)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory TempDir{"RadientGLTFLoaderTest"};
+    for (int RootIndex : {-1, 1, 99})
+    {
+        SCOPED_TRACE(RootIndex);
+        // Parsing accepts these root references. Check a non-default scene too,
+        // since the importer loads every declared scene, not only the default.
+        for (int SceneIndex : {0, 1})
+        {
+            SCOPED_TRACE(SceneIndex);
+            std::ostringstream GLTF;
+            GLTF << R"GLTF({
+                "asset": {"version": "2.0"},
+                "scene": 0,
+                "nodes": [{}],
+                "scenes": [)GLTF";
+            if (SceneIndex == 1)
+                GLTF << R"GLTF({"nodes": [0]},)GLTF";
+            GLTF << R"GLTF({"nodes": [)GLTF" << RootIndex << "]}]}";
+            const std::string                     GLTFPath  = WriteGLTFFile(TempDir, "invalid_scene_root.gltf", GLTF.str().c_str());
+            const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+            ASSERT_NE(pDocument, nullptr);
+
+            RadientImport::ImportedDocument Scene;
+            EXPECT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_INVALID_DATA);
+            EXPECT_TRUE(Scene.Nodes.empty());
+            EXPECT_TRUE(Scene.Meshes.empty());
+        }
+    }
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneDoesNotScheduleUnreachableGeometry)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory                         TempDir{"RadientGLTFLoaderTest"};
+    const std::string                     GLTFPath  = WriteGLTFMeshFile(TempDir, false, true, R"GLTF(
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Root"}, {"name": "Orphan", "mesh": 0}])GLTF");
+    const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    // The orphan references valid geometry. A zero-worker pool exposes any
+    // unnecessary vertex/index tasks even though no mesh is published.
+    ProcessQueuedTasks(*pThreadPool);
+    ASSERT_EQ(pThreadPool->GetQueueSize(), 0u);
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    EXPECT_TRUE(Scene.Meshes.empty());
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "Root");
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+
+    ProcessQueuedTasks(*pThreadPool);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneSharesRootGeometryAcrossScenes)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory                         TempDir{"RadientGLTFLoaderTest"};
+    const std::string                     GLTFPath  = WriteGLTFMeshFile(TempDir, false, true, R"GLTF(
+        "scene": 1,
+        "scenes": [{"name": "First", "nodes": [0]}, {"name": "Second", "nodes": [0]}],
+        "nodes": [{"name": "SharedTriangle", "mesh": 0}])GLTF");
+    const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    // Both scenes must use the same imported node and mesh.
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    EXPECT_EQ(Scene.DefaultSceneId, 1u);
+    ASSERT_EQ(Scene.Scenes.size(), 2u);
+    EXPECT_EQ(Scene.Scenes[0].Name, "First");
+    EXPECT_EQ(Scene.Scenes[1].Name, "Second");
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    ASSERT_EQ(Scene.Scenes[1].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+    EXPECT_EQ(Scene.Scenes[1].RootNodes[0], 0u);
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+
+    ProcessQueuedTasks(*pThreadPool);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+    pThreadPool->StopThreads();
+}
+
+TEST(RadientGLTFLoaderTest, LoadSceneLoadsNodesWhenScenesAreAbsent)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateLoaderAssetManager(pThreadPool);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    TempDirectory                         TempDir{"RadientGLTFLoaderTest"};
+    const std::string                     GLTFPath  = WriteGLTFMeshFile(TempDir, false, true, R"GLTF(
+        "nodes": [{"name": "Triangle", "mesh": 0}])GLTF");
+    const std::shared_ptr<GLTF::Document> pDocument = LoadMetadataOnlyDocument(GLTFPath);
+
+    // Preserve the existing synthesized scene containing all nodes.
+    RadientImport::ImportedDocument Scene;
+    ASSERT_EQ(LoadScene(*pAssetManager, GLTFPath, pDocument, {}, Scene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.Scenes.size(), 1u);
+    EXPECT_EQ(Scene.DefaultSceneId, 0u);
+    ASSERT_EQ(Scene.Scenes[0].RootNodes.size(), 1u);
+    EXPECT_EQ(Scene.Scenes[0].RootNodes[0], 0u);
+    ASSERT_EQ(Scene.Nodes.size(), 1u);
+    EXPECT_EQ(Scene.Nodes[0].Name, "Triangle");
+    ASSERT_EQ(Scene.Meshes.size(), 1u);
+    ASSERT_NE(Scene.Meshes[0], nullptr);
+    EXPECT_EQ(Scene.Nodes[0].pMesh, Scene.Meshes[0]);
+
+    ProcessQueuedTasks(*pThreadPool);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();
 }
 
