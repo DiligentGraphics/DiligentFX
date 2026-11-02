@@ -198,13 +198,16 @@ public:
         m_Meshes.resize(m_GltfModel.GetMeshCount());
         m_ScannedMeshes.resize(m_GltfModel.GetMeshCount(), false);
 
-        std::vector<int> NodesToScan;
+        std::unordered_set<int> VisitedNodes;
 
         if (m_GltfModel.GetSceneCount() == 0)
         {
-            NodesToScan.reserve(m_GltfModel.GetNodeCount());
             for (size_t NodeIndex = 0; NodeIndex < m_GltfModel.GetNodeCount(); ++NodeIndex)
-                NodesToScan.push_back(static_cast<int>(NodeIndex));
+            {
+                const RADIENT_STATUS Status = ScanNode(static_cast<int>(NodeIndex), VisitedNodes);
+                if (RADIENT_FAILED(Status))
+                    return Status;
+            }
         }
         else if (SceneIndex >= static_cast<int>(m_GltfModel.GetSceneCount()))
         {
@@ -221,16 +224,12 @@ public:
             {
                 const GLTF::TinyGltfSceneView GltfScene = m_GltfModel.GetScene(SceneId);
                 for (size_t NodeIndex = 0; NodeIndex < GltfScene.GetNodeCount(); ++NodeIndex)
-                    NodesToScan.push_back(GltfScene.GetNodeId(NodeIndex));
+                {
+                    const RADIENT_STATUS Status = ScanNode(GltfScene.GetNodeId(NodeIndex), VisitedNodes);
+                    if (RADIENT_FAILED(Status))
+                        return Status;
+                }
             }
-        }
-
-        std::unordered_set<int> VisitedNodes;
-        for (int NodeIndex : NodesToScan)
-        {
-            const RADIENT_STATUS Status = ScanNode(NodeIndex, VisitedNodes);
-            if (RADIENT_FAILED(Status))
-                return Status;
         }
 
         return RADIENT_STATUS_OK;
