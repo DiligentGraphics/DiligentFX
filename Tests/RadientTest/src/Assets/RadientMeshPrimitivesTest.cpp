@@ -39,6 +39,7 @@
 #include "ThreadPool.hpp"
 
 #include <array>
+#include <limits>
 #include <vector>
 
 using namespace Diligent;
@@ -105,8 +106,10 @@ public:
         if (ppMesh == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
+        ++CreateMeshCallCount;
         *ppMesh         = nullptr;
         VertexCount     = MeshCI.VertexData.VertexCount;
+        IndexCount      = MeshCI.IndexData.IndexCount;
         HasVertexColors = false;
         CapturedVertexColors.clear();
         ResolvedVertexLayout Resolved;
@@ -186,8 +189,10 @@ public:
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    Uint32                         VertexCount     = 0;
-    bool                           HasVertexColors = false;
+    Uint32                         CreateMeshCallCount = 0;
+    Uint32                         VertexCount         = 0;
+    Uint32                         IndexCount          = 0;
+    bool                           HasVertexColors     = false;
     std::vector<RadientColorRGBA8> CapturedVertexColors;
 
 private:
@@ -283,6 +288,80 @@ TEST(RadientMeshPrimitivesTest, CreateSphereMesh)
     ExpectMeshLoadFinished(pMesh, *pThreadPool);
 }
 
+TEST(RadientMeshPrimitivesTest, AcceptsMaximumSubdivisions)
+{
+    ASSERT_EQ(RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS, 256u);
+    RefCntAutoPtr<CaptureMeshAssetManager> pAssetManager{MakeNewRCObj<CaptureMeshAssetManager>()()};
+    RadientCubeMeshCreateInfo              CubeCI{};
+    CubeCI.Subdivisions = RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_OK);
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(pAssetManager->CreateMeshCallCount, 1u);
+    EXPECT_EQ(pAssetManager->VertexCount, 396294u);
+    EXPECT_EQ(pAssetManager->IndexCount, 2359296u);
+
+    pMesh.Release();
+    RadientSphereMeshCreateInfo SphereCI{};
+    SphereCI.Subdivisions = RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS;
+    ASSERT_EQ(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh), RADIENT_STATUS_OK);
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(pAssetManager->CreateMeshCallCount, 2u);
+    EXPECT_GE(pAssetManager->VertexCount, 396294u);
+    EXPECT_LE(pAssetManager->VertexCount, 2u * 396294u);
+    EXPECT_EQ(pAssetManager->IndexCount, 2359296u);
+}
+
+TEST(RadientMeshPrimitivesTest, TreatsZeroSubdivisionsAsOne)
+{
+    RefCntAutoPtr<CaptureMeshAssetManager> pAssetManager{MakeNewRCObj<CaptureMeshAssetManager>()()};
+    Uint32                                 SphereVertexCount = 0;
+    for (Uint32 Subdivisions : {1u, 0u})
+    {
+        SCOPED_TRACE(Subdivisions);
+        RadientCubeMeshCreateInfo CubeCI{};
+        CubeCI.Subdivisions = Subdivisions;
+        RefCntAutoPtr<IRadientMeshAsset> pMesh;
+        ASSERT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_OK);
+        ASSERT_NE(pMesh, nullptr);
+        EXPECT_EQ(pAssetManager->VertexCount, 24u);
+        EXPECT_EQ(pAssetManager->IndexCount, 36u);
+
+        pMesh.Release();
+        RadientSphereMeshCreateInfo SphereCI{};
+        SphereCI.Subdivisions = Subdivisions;
+        ASSERT_EQ(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh), RADIENT_STATUS_OK);
+        ASSERT_NE(pMesh, nullptr);
+        if (Subdivisions == 1)
+            SphereVertexCount = pAssetManager->VertexCount;
+        EXPECT_EQ(pAssetManager->VertexCount, SphereVertexCount);
+        EXPECT_EQ(pAssetManager->IndexCount, 36u);
+    }
+    EXPECT_EQ(pAssetManager->CreateMeshCallCount, 4u);
+}
+
+TEST(RadientMeshPrimitivesTest, RejectsExcessiveSubdivisionsBeforeCreatingMesh)
+{
+    RefCntAutoPtr<CaptureMeshAssetManager> pAssetManager{MakeNewRCObj<CaptureMeshAssetManager>()()};
+    // Stop at 257 if the limit regresses, before larger inputs can allocate excessive memory.
+    for (Uint32 Subdivisions : {RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS + 1u, 4096u, (std::numeric_limits<Uint32>::max)()})
+    {
+        SCOPED_TRACE(Subdivisions);
+        RadientCubeMeshCreateInfo CubeCI{};
+        CubeCI.Subdivisions = Subdivisions;
+        RefCntAutoPtr<IRadientMeshAsset> pMesh;
+        ASSERT_EQ(CreateRadientCubeMesh(pAssetManager, CubeCI, &pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pMesh, nullptr);
+        EXPECT_EQ(pAssetManager->CreateMeshCallCount, 0u);
+
+        RadientSphereMeshCreateInfo SphereCI{};
+        SphereCI.Subdivisions = Subdivisions;
+        ASSERT_EQ(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pMesh, nullptr);
+        EXPECT_EQ(pAssetManager->CreateMeshCallCount, 0u);
+    }
+}
+
 TEST(RadientMeshPrimitivesTest, RejectInvalidArguments)
 {
     // Primitive helpers should reject missing output pointers, missing asset
@@ -306,6 +385,9 @@ TEST(RadientMeshPrimitivesTest, RejectInvalidArguments)
     EXPECT_EQ(pMesh, nullptr);
 
     RadientSphereMeshCreateInfo SphereCI{};
+    EXPECT_EQ(CreateRadientSphereMesh(nullptr, SphereCI, &pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pMesh, nullptr);
+
     SphereCI.Radius = 0.f;
     EXPECT_EQ(CreateRadientSphereMesh(pAssetManager, SphereCI, &pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(pMesh, nullptr);

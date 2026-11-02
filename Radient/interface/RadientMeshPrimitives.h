@@ -34,6 +34,10 @@
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 
+/// Maximum subdivisions per face accepted by the procedural mesh helpers.
+static DILIGENT_CONSTEXPR Uint32 RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS = 256;
+
+
 /// Cube mesh creation attributes.
 struct RadientCubeMeshCreateInfo
 {
@@ -44,6 +48,8 @@ struct RadientCubeMeshCreateInfo
     Float32 Size DEFAULT_INITIALIZER(1.f);
 
     /// Number of subdivisions per face. Zero uses one subdivision.
+    /// Values above RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS return
+    /// RADIENT_STATUS_INVALID_ARGUMENT before geometry is generated.
     Uint32 Subdivisions DEFAULT_INITIALIZER(1);
 
     /// Default material assigned to the cube primitive.
@@ -66,6 +72,8 @@ struct RadientSphereMeshCreateInfo
     Float32 Radius DEFAULT_INITIALIZER(1.f);
 
     /// Number of subdivisions per projected cube face. Zero uses one subdivision.
+    /// Values above RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS return
+    /// RADIENT_STATUS_INVALID_ARGUMENT before geometry is generated.
     Uint32 Subdivisions DEFAULT_INITIALIZER(16);
 
     /// Default material assigned to the sphere primitive.

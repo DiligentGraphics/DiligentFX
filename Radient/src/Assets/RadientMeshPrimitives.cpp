@@ -332,8 +332,12 @@ RADIENT_STATUS CreateRadientCubeMesh(IRadientAssetManager*            pAssetMana
     DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
-    if (!RadientMath::IsFinitePositive(MeshCI.Size))
+    if (pAssetManager == nullptr ||
+        !RadientMath::IsFinitePositive(MeshCI.Size) ||
+        MeshCI.Subdivisions > RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS)
+    {
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     const Uint32 Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
     return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial,
@@ -349,8 +353,12 @@ RADIENT_STATUS CreateRadientSphereMesh(IRadientAssetManager*              pAsset
     DEV_CHECK_ERR(*ppMesh == nullptr, "Output mesh pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppMesh = nullptr;
 
-    if (!RadientMath::IsFinitePositive(MeshCI.Radius))
+    if (pAssetManager == nullptr ||
+        !RadientMath::IsFinitePositive(MeshCI.Radius) ||
+        MeshCI.Subdivisions > RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS)
+    {
         return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
 
     const Uint32 Subdivisions = MeshCI.Subdivisions != 0 ? MeshCI.Subdivisions : 1u;
     return CreatePrimitiveMesh(pAssetManager, MeshCI.Name, MeshCI.pMaterial,
