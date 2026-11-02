@@ -381,7 +381,10 @@ TEST(RadientMeshAssetManagerGPUTest, RejectsOversizedVertexStreamsBeforeAllocati
         ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pCPUVertices), RADIENT_STATUS_OK);
         const RadientMeshGeometryData    Geometry{pCPUVertices};
         RefCntAutoPtr<IRadientMeshAsset> pCPUMesh;
-        ASSERT_EQ(pCPUOnlyManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pCPUMesh), RADIENT_STATUS_PENDING);
+        // The worker may publish the mesh before CreateMeshView returns.
+        const RADIENT_STATUS CPUCreateStatus = pCPUOnlyManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pCPUMesh);
+        ASSERT_TRUE(CPUCreateStatus == RADIENT_STATUS_OK || CPUCreateStatus == RADIENT_STATUS_PENDING) << CPUCreateStatus;
+        ASSERT_NE(pCPUMesh, nullptr);
         pThreadPool->WaitForAllTasks();
         EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pCPUMesh), RADIENT_STATUS_OK);
         EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pCPUMesh), RADIENT_STATUS_NO_GPU_DATA);
@@ -393,7 +396,9 @@ TEST(RadientMeshAssetManagerGPUTest, RejectsOversizedVertexStreamsBeforeAllocati
     ASSERT_EQ(pMeshManager->CreateMeshVertexData(*pThreadPool, MakeSource(2), &pVertices), RADIENT_STATUS_PENDING);
     const RadientMeshGeometryData    Geometry{pVertices};
     RefCntAutoPtr<IRadientMeshAsset> pMesh;
-    ASSERT_EQ(pMeshManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pMesh), RADIENT_STATUS_PENDING);
+    const RADIENT_STATUS             CreateStatus = pMeshManager->CreateMeshView(*pThreadPool, &Geometry, 1, ViewCI, &pMesh);
+    ASSERT_TRUE(CreateStatus == RADIENT_STATUS_OK || CreateStatus == RADIENT_STATUS_PENDING) << CreateStatus;
+    ASSERT_NE(pMesh, nullptr);
     ASSERT_TRUE(WaitForMeshDrawableStatus(pMesh, RADIENT_STATUS_OK, pUploadManager, pContext));
     EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
     EXPECT_EQ(pResourceManager->GetVertexPoolUsageStats().AllocationCount, InitialStats.AllocationCount + 1);
