@@ -410,6 +410,45 @@ TEST(RadientMorphTargetsTest, WeightUpdatesAdvanceVersionAndPreserveOtherValues)
     EXPECT_EQ(pWeights->GetVersion(), 3u);
 }
 
+TEST(RadientMorphTargetsTest, WeightUpdatesAllowOverlappingSourceRanges)
+{
+    MorphMeshData                               Source;
+    std::array<RadientMorphTargetCreateInfo, 4> Targets{Source.Targets[0], Source.Targets[1]};
+    for (Uint32 TargetIndex = 0; TargetIndex < Targets.size(); ++TargetIndex)
+        Targets[TargetIndex].Desc.DefaultWeight = static_cast<Float32>(TargetIndex + 1);
+
+    RadientMeshCreateInfo CI               = Source.MakeCreateInfo();
+    CI.MorphTargetData.pMorphTargets       = Targets.data();
+    CI.MorphTargetData.MorphTargetCount    = static_cast<Uint32>(Targets.size());
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateMesh(CI);
+    ASSERT_NE(pMesh, nullptr);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights = CreateWeights(*pMesh);
+    ASSERT_NE(pWeights, nullptr);
+    ASSERT_EQ(pWeights->GetWeightCount(), 4u);
+    ASSERT_NE(pWeights->GetWeights(), nullptr);
+
+    ASSERT_EQ(pWeights->SetWeights(1, 3, pWeights->GetWeights()), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWeights->GetVersion(), 2u);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[0], 1.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[1], 1.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[2], 2.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[3], 3.f);
+
+    ASSERT_EQ(pWeights->SetWeights(0, 3, pWeights->GetWeights() + 1), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWeights->GetVersion(), 3u);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[0], 1.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[1], 2.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[2], 3.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[3], 3.f);
+
+    ASSERT_EQ(pWeights->SetWeights(1, 2, pWeights->GetWeights() + 1), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWeights->GetVersion(), 4u);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[0], 1.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[1], 2.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[2], 3.f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[3], 3.f);
+}
+
 TEST(RadientMorphTargetsTest, WeightUpdatesValidateRangesWithoutChangingState)
 {
     MorphMeshData                    Source;

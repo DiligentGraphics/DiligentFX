@@ -173,9 +173,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientMorphTargetWeights, IObject)
     VIRTUAL const Float32* METHOD(GetWeights)(THIS) CONST PURE;
 
     /// Replaces WeightCount values beginning at FirstTarget. The input is
-    /// copied immediately. Returns RADIENT_STATUS_NO_CHANGE when WeightCount is
-    /// zero and RADIENT_STATUS_INVALID_ARGUMENT when the range is invalid or
-    /// pWeights is null for a nonempty range.
+    /// copied immediately and may overlap the destination range, including when
+    /// pWeights points into the array returned by GetWeights(). Returns
+    /// RADIENT_STATUS_NO_CHANGE when WeightCount is zero and
+    /// RADIENT_STATUS_INVALID_ARGUMENT when the range is invalid or pWeights
+    /// is null for a nonempty range.
     VIRTUAL RADIENT_STATUS METHOD(SetWeights)(THIS_
                                                Uint32         FirstTarget,
                                                Uint32         WeightCount,

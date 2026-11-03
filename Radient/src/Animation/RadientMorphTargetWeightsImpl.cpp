@@ -147,7 +147,7 @@ public:
         if (!AdvanceVersion())
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        std::memcpy(m_Weights.data() + FirstTarget, pWeights, sizeof(*pWeights) * WeightCount);
+        std::memmove(m_Weights.data() + FirstTarget, pWeights, sizeof(*pWeights) * WeightCount);
         return RADIENT_STATUS_OK;
     }
 
