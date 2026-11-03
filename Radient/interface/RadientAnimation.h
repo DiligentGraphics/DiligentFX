@@ -232,13 +232,16 @@ static DILIGENT_CONSTEXPR Char RadientLightShapingFocusPropertyName[] = "Shaping
 static DILIGENT_CONSTEXPR RadientAnimationSchemaID RadientCameraAnimationSchemaID =
     {0xfdb7924c, 0x9096, 0x47c7, {0xa0, 0x75, 0xd5, 0xb9, 0xe6, 0xcc, 0xfe, 0xd1}};
 
-/// FLOAT[1] horizontal aperture property in
-/// RadientCameraAnimationSchemaID, in millimeters. Values must be finite and
-/// positive at every sampled time.
+/// FLOAT[1] horizontal aperture property in RadientCameraAnimationSchemaID.
+/// In perspective mode, the value is the sensor aperture in millimeters. In
+/// orthographic mode, it is the view width in scene units. Values must be
+/// finite and positive at every sampled time.
 static DILIGENT_CONSTEXPR Char RadientCameraHorizontalAperturePropertyName[] = "HorizontalAperture";
 
-/// FLOAT[1] vertical aperture property in RadientCameraAnimationSchemaID, in
-/// millimeters. Values must be finite and positive at every sampled time.
+/// FLOAT[1] vertical aperture property in RadientCameraAnimationSchemaID.
+/// In perspective mode, the value is the sensor aperture in millimeters. In
+/// orthographic mode, it is the view height in scene units. Values must be
+/// finite and positive at every sampled time.
 static DILIGENT_CONSTEXPR Char RadientCameraVerticalAperturePropertyName[] = "VerticalAperture";
 
 /// FLOAT[1] focal-length property in RadientCameraAnimationSchemaID, in
