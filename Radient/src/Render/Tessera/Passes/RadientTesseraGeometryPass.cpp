@@ -363,9 +363,17 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                     RADIENT_STATUS_INVALID_OPERATION;
                 if (MorphStatus != RADIENT_STATUS_OK)
                 {
+                    Result = CombineDependencyStatus(Result, MorphStatus);
+                    if (MorphStatus == RADIENT_STATUS_PENDING)
+                    {
+                        // A drawable may become ready between views, after this
+                        // frame's deformation preparation. Wait for its morph
+                        // palette instead of briefly rendering it undeformed.
+                        continue;
+                    }
+
                     // Morph failure does not prevent the undeformed primitive
                     // or unrelated drawables from being rendered.
-                    Result           = CombineDependencyStatus(Result, MorphStatus);
                     pMorphAttachment = nullptr;
                 }
             }

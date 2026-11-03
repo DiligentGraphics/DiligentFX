@@ -182,9 +182,9 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
         pSceneState->DeformationPreparationFrameID = Context.RenderFrameID;
     }
 
-    // Deformation failures are handled per drawable during geometry execution:
-    // unavailable skins skip their drawables, while unavailable morph data
-    // falls back to the undeformed mesh.
+    // Deformation readiness is handled per drawable during geometry execution:
+    // unavailable skins and pending morph data skip their drawables. Failed
+    // morph preparation falls back to the undeformed mesh.
     const RADIENT_STATUS SkinningStatus = pSceneState->SkinningPreparationStatus;
     if (RADIENT_SUCCEEDED(SkinningStatus) && SkinningStatus != RADIENT_STATUS_NO_CHANGE)
         FrameStatus = CombineDependencyStatus(FrameStatus, SkinningStatus);

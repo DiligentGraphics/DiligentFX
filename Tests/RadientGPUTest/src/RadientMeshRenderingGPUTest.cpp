@@ -31,6 +31,8 @@
 #include "BufferSuballocator.h"
 #include "GLTFResourceManager.hpp"
 #include "GPUTestingEnvironment.hpp"
+#include "Render/Tessera/RadientTesseraRenderTechnique.hpp"
+#include "ThreadPool.hpp"
 
 #include "gtest/gtest.h"
 
@@ -377,6 +379,114 @@ TEST(RadientMeshRenderingGPUTest, MorphsNonIndexedVertexRangesAtNonzeroPoolOffse
             ExpectSameColor(Colors[Index], Colors[3]);
         }
     }
+}
+
+
+// Material preparation finishes after the first view's scene synchronization.
+// A later view in the same frame creates its drawable, but deformation is not
+// prepared again until the next frame. The quad must stay hidden in the meantime.
+TEST(RadientMeshRenderingGPUTest, WaitsForMorphPreparationWhenMaterialBecomesReadyBetweenViews)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    Setups[0].UseMorphTarget = true;
+    RadientQuadTestScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+    SampledColors Reference;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Reference, 16));
+    ASSERT_GT(Reference[0][0], 20);
+
+    // Reuse uploaded assets in a fresh scene, so this technique consumes the
+    // complete change log and builds its own real material-cache entries.
+    RefCntAutoPtr<IRadientScene>       pScene;
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(Scene.pEngine->CreateScene({}, &pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.pEngine->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
+    RadientEntityDesc MeshDesc;
+    MeshDesc.Transform.Position.x = -1.5f;
+    RadientEntityID MeshEntity    = InvalidRadientEntityID;
+    ASSERT_EQ(pWriter->CreateEntity(MeshDesc, MeshEntity), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMesh(MeshEntity, {Scene.Meshes[0]}), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMeshRenderer(MeshEntity, {}), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    ASSERT_EQ(Scene.Meshes[0]->CreateMorphTargetWeights(&pWeights), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetMorph(MeshEntity, {pWeights}), RADIENT_STATUS_OK);
+
+    RadientViewDesc        ViewDesc = Scene.pView->GetDesc();
+    RadientEntityDesc      CameraDesc;
+    RadientCameraComponent Camera;
+    ASSERT_EQ(Scene.pScene->GetLocalTransform(ViewDesc.Camera, CameraDesc.Transform), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.pScene->GetCamera(ViewDesc.Camera, Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CreateEntity(CameraDesc, ViewDesc.Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetCamera(ViewDesc.Camera, Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ViewDesc.pScene = pScene;
+    RefCntAutoPtr<IRadientView> pFirstView;
+    RefCntAutoPtr<IRadientView> pSecondView;
+    ASSERT_EQ(Scene.pRenderer->CreateView(ViewDesc, &pFirstView), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.pRenderer->CreateView(ViewDesc, &pSecondView), RADIENT_STATUS_OK);
+
+    // Process the real material task explicitly instead of depending on worker
+    // timing. No worker or signal remains blocked if an assertion fails.
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    RadientRendererDesc RendererDesc;
+    RendererDesc.EnableAsyncPipelineCompilation = False;
+    RadientTesseraRenderTechnique Technique{
+        pThreadPool, static_cast<RadientAssetManagerImpl*>(Scene.pAssets.RawPtr()), RendererDesc};
+    RadientFrameAttribs Frame;
+    Frame.pDeviceContext = Scene.pContext;
+    Frame.DeltaTime      = 1.0 / 60.0;
+    const RadientRenderAttribs FirstView{pFirstView};
+    const RadientRenderAttribs SecondView{pSecondView};
+    RadientRenderContext       FirstContext{Frame, FirstView, 1, Scene.pDevice, Scene.pContext};
+    RadientRenderContext       SecondContext{Frame, SecondView, 1, Scene.pDevice, Scene.pContext};
+
+    const auto RenderView = [&](const RadientRenderContext& Context, RADIENT_STATUS ExpectedStatus) {
+        ASSERT_FALSE(RADIENT_FAILED(Technique.PrepareFrame(Context)));
+        ASSERT_EQ(Technique.BeginView(Context), RADIENT_STATUS_OK);
+        EXPECT_EQ(Technique.Render(Context), ExpectedStatus);
+        EXPECT_EQ(Technique.EndView(Context), RADIENT_STATUS_OK);
+    };
+    const auto ExpectBlank = [&](const char* Stage) {
+        SCOPED_TRACE(Stage);
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        for (Uint32 Channel = 0; Channel < 3; ++Channel)
+        {
+            EXPECT_EQ(Colors[0][Channel], 0u) << "Undeformed quad was rendered";
+        }
+    };
+
+    ASSERT_EQ(Technique.BeginFrame({Frame, 1, Scene.pDevice, Scene.pContext}), RADIENT_STATUS_OK);
+    ASSERT_EQ(Technique.SyncScene(*pScene), RADIENT_STATUS_PENDING);
+    ASSERT_GT(pThreadPool->GetQueueSize(), 0u);
+    for (Uint32 Attempt = 0; Attempt < 16 && pThreadPool->GetQueueSize() != 0; ++Attempt)
+    {
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    }
+    ASSERT_EQ(pThreadPool->GetQueueSize(), 0u);
+    EXPECT_EQ(pThreadPool->GetRunningTaskCount(), 0u);
+    // This preparation snapshots deformation before publishing material GPU
+    // readiness. No drawable exists yet, so the first view remains empty.
+    ASSERT_NO_FATAL_FAILURE(RenderView(FirstContext, RADIENT_STATUS_OK));
+    ASSERT_NO_FATAL_FAILURE(ExpectBlank("First view: material was pending at synchronization"));
+
+    // No scene, weights, or material edits occur between these views.
+    ASSERT_EQ(Technique.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ASSERT_NO_FATAL_FAILURE(RenderView(SecondContext, RADIENT_STATUS_PENDING));
+    ASSERT_NO_FATAL_FAILURE(ExpectBlank("Second view: morph preparation is pending"));
+
+    // The following frame prepares morphing. Sampling outside the original
+    // small quad verifies the target expansion, not merely eventual visibility.
+    Frame.Time                 = Frame.DeltaTime;
+    FirstContext.RenderFrameID = 2;
+    ASSERT_EQ(Technique.BeginFrame({Frame, 2, Scene.pDevice, Scene.pContext}), RADIENT_STATUS_OK);
+    ASSERT_FALSE(RADIENT_FAILED(Technique.SyncScene(*pScene)));
+    ASSERT_NO_FATAL_FAILURE(RenderView(FirstContext, RADIENT_STATUS_OK));
+    SampledColors Colors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors, 16));
+    ExpectSameColor(Colors[0], Reference[0]);
 }
 
 } // namespace
