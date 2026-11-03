@@ -426,6 +426,15 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMorphTargetWeights(IRadientMorphTargetWeights** ppWeights) override final
     {
+        if (ppWeights == nullptr)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        DEV_CHECK_ERR(*ppWeights == nullptr, "Output morph-target weights pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
+        *ppWeights = nullptr;
+
+        const RADIENT_STATUS LoadStatus = RadientMeshAssetManager::GetLoadStatus(this);
+        if (LoadStatus != RADIENT_STATUS_OK)
+            return LoadStatus;
+
         return CreateRadientMorphTargetWeights(this, GetDesc(), ppWeights);
     }
 

@@ -917,8 +917,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientMeshAsset, IRadientAsset)
     VIRTUAL const RadientMeshAssetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Creates mutable weights initialized to the mesh morph-target defaults.
-    /// On success, ppWeights receives a strong reference. Meshes without morph
-    /// targets produce a valid zero-length weight object.
+    /// Returns RADIENT_STATUS_PENDING with *ppWeights set to null while CPU loading
+    /// is pending; retry after loading completes. Load failures are returned without
+    /// creating weights. GPU upload completion is not required.
+    /// On RADIENT_STATUS_OK, ppWeights receives a strong reference. Meshes without
+    /// morph targets produce a valid zero-length weight object.
     VIRTUAL RADIENT_STATUS METHOD(CreateMorphTargetWeights)(THIS_
                                                             IRadientMorphTargetWeights** ppWeights) PURE;
 };

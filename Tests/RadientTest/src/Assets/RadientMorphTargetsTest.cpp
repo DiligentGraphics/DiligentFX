@@ -106,6 +106,16 @@ struct MorphMeshData
     }
 };
 
+void DrainThreadPool(IThreadPool& ThreadPool)
+{
+    // A zero-worker pool keeps pending-state checks deterministic.
+    for (Uint32 Iteration = 0; ThreadPool.GetQueueSize() != 0 && Iteration < 16; ++Iteration)
+    {
+        ASSERT_TRUE(ThreadPool.ProcessTask(0, false));
+    }
+    ASSERT_EQ(ThreadPool.GetQueueSize(), 0u);
+}
+
 RefCntAutoPtr<IRadientMeshAsset> CreateMesh(const RadientMeshCreateInfo& CI)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{1});
@@ -266,6 +276,71 @@ TEST(RadientMorphTargetsTest, MeshCreationRejectsBusyAndOutOfRangeMorphBlobsSync
     pThreadPool->WaitForAllTasks();
     pThreadPool->StopThreads();
     EXPECT_EQ(pBlob->Resize(0), RADIENT_STATUS_OK);
+}
+
+TEST(RadientMorphTargetsTest, WeightCreationRequiresLoadedMesh)
+{
+    MorphMeshData Source;
+
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RadientMeshAssetManagerSharedPtr pManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pManager->CreateMesh(*pThreadPool, Source.MakeCreateInfo(), pMesh.GetAddressOfEmpty()),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(pMesh->GetDesc().MorphTargetCount, 0u);
+    EXPECT_EQ(pMesh->CreateMorphTargetWeights(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_PENDING);
+    ASSERT_EQ(pWeights, nullptr);
+
+    ASSERT_NO_FATAL_FAILURE(DrainThreadPool(*pThreadPool));
+
+    EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientMeshAssetManager::GetGPUResourceStatus(pMesh), RADIENT_STATUS_NO_GPU_DATA);
+    ASSERT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pWeights, nullptr);
+    EXPECT_EQ(pWeights->GetMesh(), pMesh.RawPtr());
+    ASSERT_EQ(pWeights->GetWeightCount(), 2u);
+    ASSERT_NE(pWeights->GetWeights(), nullptr);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[0], 0.25f);
+    EXPECT_FLOAT_EQ(pWeights->GetWeights()[1], -0.5f);
+}
+
+TEST(RadientMorphTargetsTest, WeightCreationPropagatesMeshLoadFailure)
+{
+    MorphMeshData Source;
+
+    const RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+    const RadientMeshAssetManagerSharedPtr pManager = RadientMeshAssetManager::Create({});
+    ASSERT_NE(pManager, nullptr);
+
+    RefCntAutoPtr<IRadientMeshVertexData> pVertexData;
+    ASSERT_EQ(pManager->CreateMeshVertexData(*pThreadPool, Source.MakeCreateInfo().VertexData,
+                                             pVertexData.GetAddressOfEmpty()),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pVertexData, nullptr);
+
+    // The queued view task rejects this range after the vertex data has loaded.
+    Source.Primitive.FirstElement = static_cast<Uint32>(Source.Positions.size());
+    const RadientMeshGeometryData    GeometryData{pVertexData, nullptr, nullptr};
+    const RadientMeshViewCreateInfo  ViewCI{&Source.Primitive, 1};
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    ASSERT_EQ(pManager->CreateMeshView(*pThreadPool, &GeometryData, 1, ViewCI, pMesh.GetAddressOfEmpty()),
+              RADIENT_STATUS_PENDING);
+    ASSERT_NE(pMesh, nullptr);
+    ASSERT_NO_FATAL_FAILURE(DrainThreadPool(*pThreadPool));
+    ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pMesh), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    RefCntAutoPtr<IRadientMorphTargetWeights> pWeights;
+    EXPECT_EQ(pMesh->CreateMorphTargetWeights(pWeights.GetAddressOfEmpty()), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pWeights, nullptr);
 }
 
 TEST(RadientMorphTargetsTest, MeshCreatesMutableWeightsFromDefaults)
