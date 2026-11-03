@@ -2917,6 +2917,80 @@ TEST_F(RadientSkeletonPoseAnimationDestinationTest, DefersDerivedStateUpdate)
     EXPECT_EQ(m_pPose->GetJointGlobalMatrices(1, 1, &Matrix), RADIENT_STATUS_OK);
 }
 
+TEST_F(RadientSkeletonPoseAnimationDestinationTest, AggregatesDeferredBindingsBeforeUpdatingGlobalTransforms)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             TranslationTarget  = Builder.AddTarget(1, RadientNodeAnimationSchemaID);
+    const Uint32             ScaleTarget        = Builder.AddTarget(2, RadientNodeAnimationSchemaID);
+    const Uint32             TranslationSampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f},
+        {{10.f, 20.f, 30.f}});
+    const Uint32 ScaleSampler = Builder.AddSampler<RadientFloat3>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT3,
+        RADIENT_ANIMATION_INTERPOLATION_STEP,
+        {0.f},
+        {{2.f, 3.f, 4.f}});
+    Builder.AddChannel(TranslationTarget, RadientNodeTranslationPropertyName, TranslationSampler);
+    Builder.AddChannel(ScaleTarget, RadientNodeScalePropertyName, ScaleSampler);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    RadientAnimationDestinationMappingDesc TranslationMapping;
+    TranslationMapping.ClipTargetIndex    = TranslationTarget;
+    TranslationMapping.DestinationElement = 0;
+    RadientAnimationDestinationMappingDesc ScaleMapping;
+    ScaleMapping.ClipTargetIndex                                = ScaleTarget;
+    ScaleMapping.DestinationElement                             = 0;
+    RefCntAutoPtr<IRadientAnimationBinding> pTranslationBinding = BindSingle(pClip, m_pDestination, {TranslationMapping});
+    RefCntAutoPtr<IRadientAnimationBinding> pScaleBinding       = BindSingle(pClip, m_pDestination, {ScaleMapping});
+    ASSERT_NE(pTranslationBinding, nullptr);
+    ASSERT_NE(pScaleBinding, nullptr);
+
+    std::array<RadientTransform, 3> ExpectedTransforms = GetLocalTransforms();
+    const Uint64                    InitialVersion     = m_pPose->GetVersion();
+    RadientAnimationEvaluateInfo    Info;
+    Info.UpdateDerivedState = False;
+    ASSERT_EQ(pTranslationBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    ExpectedTransforms[0].Position = {10.f, 20.f, 30.f};
+    EXPECT_EQ(GetLocalTransforms(), ExpectedTransforms);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion);
+
+    ASSERT_EQ(pScaleBinding->Evaluate(Info), RADIENT_STATUS_OK);
+    ExpectedTransforms[0].Scale = {2.f, 3.f, 4.f};
+    EXPECT_EQ(GetLocalTransforms(), ExpectedTransforms);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion);
+
+    const RadientMatrix4x4 SentinelMatrix{
+        1.f, 2.f, 3.f, 4.f,
+        5.f, 6.f, 7.f, 8.f,
+        9.f, 10.f, 11.f, 12.f,
+        13.f, 14.f, 15.f, 16.f};
+    RadientMatrix4x4 PendingMatrix = SentinelMatrix;
+    EXPECT_EQ(m_pPose->GetJointGlobalMatrices(0, 1, &PendingMatrix), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(PendingMatrix, SentinelMatrix);
+
+    ASSERT_EQ(m_pPose->UpdateGlobalTransforms(), RADIENT_STATUS_OK);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+    std::array<RadientMatrix4x4, 2> GlobalMatrices{};
+    ASSERT_EQ(m_pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
+    const RadientMatrix4x4 ExpectedRoot{
+        2.f, 0.f, 0.f, 0.f,
+        0.f, 3.f, 0.f, 0.f,
+        0.f, 0.f, 4.f, 0.f,
+        10.f, 20.f, 30.f, 1.f};
+    const RadientMatrix4x4 ExpectedChild{
+        4.f, 0.f, 0.f, 0.f,
+        0.f, 9.f, 0.f, 0.f,
+        0.f, 0.f, 16.f, 0.f,
+        18.f, 35.f, 54.f, 1.f};
+    ExpectMatrixNear(GlobalMatrices[0], ExpectedRoot);
+    ExpectMatrixNear(GlobalMatrices[1], ExpectedChild);
+    EXPECT_EQ(m_pPose->UpdateGlobalTransforms(), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(m_pPose->GetVersion(), InitialVersion + 1);
+}
+
 TEST_F(RadientSkeletonPoseAnimationDestinationTest, UpdatesIdenticalValuesWithoutChangeDetection)
 {
     TestAnimationClipBuilder Builder;

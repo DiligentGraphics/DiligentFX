@@ -136,6 +136,23 @@ void ExpectInvalidSkin(RadientAssetManagerImpl& AssetManager,
     EXPECT_FALSE(pSkin);
 }
 
+struct PoseJointRange
+{
+    Uint32 FirstJoint;
+    Uint32 JointCount;
+};
+
+// Invalid ranges for the two-joint fixture, including sums that would wrap Uint32.
+constexpr Uint32                        MaxJointIndex = (std::numeric_limits<Uint32>::max)();
+constexpr std::array<PoseJointRange, 6> InvalidPoseJointRanges{{
+    {2, 1},
+    {3, 0},
+    {1, 2},
+    {MaxJointIndex, 1},
+    {MaxJointIndex, 2},
+    {1, MaxJointIndex},
+}};
+
 struct PoseSkinningTestObjects
 {
     RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager;
@@ -718,6 +735,229 @@ TEST(RadientSkinningTest, PoseWriterCommitsVersionedPose)
     ASSERT_EQ(pPose->GetJointGlobalMatrices(0, 2, GlobalMatrices.data()), RADIENT_STATUS_OK);
     ExpectMatrixNear(GlobalMatrices[0], TranslationMatrix(1.f));
     ExpectMatrixNear(GlobalMatrices[1], TranslationMatrix(3.f));
+}
+
+TEST(RadientSkinningTest, PoseGettersValidateJointRangesWithoutChangingOutputs)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+
+    std::array<RadientTransform, 2> ExpectedLocals{};
+    ASSERT_EQ(Objects.pPose->GetJointLocalTransforms(0, 2, ExpectedLocals.data()), RADIENT_STATUS_OK);
+    const std::array<RadientTransform, 2> InitialTransforms{Translation(-10.f), Translation(-20.f)};
+    const std::array<RadientMatrix4x4, 2> InitialMatrices = MakeSentinelMatrices();
+    const Uint64                          InitialVersion  = Objects.pPose->GetVersion();
+
+    for (const bool Dirty : {false, true})
+    {
+        SCOPED_TRACE(Dirty ? "Dirty globals" : "Current globals");
+        if (Dirty)
+        {
+            RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+            ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+            ExpectedLocals[0] = Translation(10.f);
+            ASSERT_EQ(pWriter->SetJointLocalTransforms(0, 1, &ExpectedLocals[0]), RADIENT_STATUS_OK);
+            ASSERT_EQ(pWriter->Commit(False), RADIENT_STATUS_OK);
+        }
+
+        EXPECT_EQ(Objects.pPose->GetJointLocalTransforms(0, 1, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(Objects.pPose->GetJointGlobalMatrices(0, 1, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+        for (const PoseJointRange& Range : InvalidPoseJointRanges)
+        {
+            SCOPED_TRACE(testing::Message{} << "FirstJoint=" << Range.FirstJoint << ", JointCount=" << Range.JointCount);
+            std::array<RadientTransform, 2> Transforms = InitialTransforms;
+            std::array<RadientMatrix4x4, 2> Matrices   = InitialMatrices;
+            EXPECT_EQ(Objects.pPose->GetJointLocalTransforms(Range.FirstJoint, Range.JointCount, Transforms.data()),
+                      RADIENT_STATUS_INVALID_ARGUMENT);
+            EXPECT_EQ(Objects.pPose->GetJointGlobalMatrices(Range.FirstJoint, Range.JointCount, Matrices.data()),
+                      RADIENT_STATUS_INVALID_ARGUMENT);
+            EXPECT_EQ(Transforms, InitialTransforms);
+            EXPECT_EQ(Matrices, InitialMatrices);
+        }
+
+        // Empty ranges are valid through the end of the joint array, even while dirty.
+        for (const Uint32 FirstJoint : {0u, 2u})
+        {
+            EXPECT_EQ(Objects.pPose->GetJointLocalTransforms(FirstJoint, 0, nullptr), RADIENT_STATUS_OK);
+            EXPECT_EQ(Objects.pPose->GetJointGlobalMatrices(FirstJoint, 0, nullptr), RADIENT_STATUS_OK);
+        }
+
+        std::array<RadientTransform, 2> Transforms = InitialTransforms;
+        ASSERT_EQ(Objects.pPose->GetJointLocalTransforms(1, 1, Transforms.data() + 1), RADIENT_STATUS_OK);
+        EXPECT_EQ(Transforms[0], InitialTransforms[0]);
+        EXPECT_EQ(Transforms[1], ExpectedLocals[1]);
+        ASSERT_EQ(Objects.pPose->GetJointLocalTransforms(0, 2, Transforms.data()), RADIENT_STATUS_OK);
+        EXPECT_EQ(Transforms, ExpectedLocals);
+
+        std::array<RadientMatrix4x4, 2> Matrices = InitialMatrices;
+        EXPECT_EQ(Objects.pPose->GetJointGlobalMatrices(1, 1, Matrices.data() + 1),
+                  Dirty ? RADIENT_STATUS_PENDING : RADIENT_STATUS_OK);
+        EXPECT_EQ(Matrices[0], InitialMatrices[0]);
+        if (Dirty)
+            EXPECT_EQ(Matrices[1], InitialMatrices[1]);
+        else
+            ExpectMatrixNear(Matrices[1], TranslationMatrix(3.f));
+        EXPECT_EQ(Objects.pPose->GetVersion(), InitialVersion);
+    }
+}
+
+TEST(RadientSkinningTest, PoseWriterValidatesJointRangesWithoutChangingStagedTransforms)
+{
+    PoseSkinningTestObjects Objects = CreatePoseSkinningTestObjects();
+    ASSERT_NE(Objects.pPose, nullptr);
+    RefCntAutoPtr<IRadientSkeletonPoseWriter> pWriter;
+    ASSERT_EQ(Objects.pPose->CreateWriter(pWriter.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+
+    std::array<RadientTransform, 2> ExpectedLocals{};
+    ASSERT_EQ(Objects.pPose->GetJointLocalTransforms(0, 2, ExpectedLocals.data()), RADIENT_STATUS_OK);
+    const std::array<RadientTransform, 2> RejectedTransforms{Translation(100.f), Translation(200.f)};
+    const Uint64                          InitialVersion = Objects.pPose->GetVersion();
+
+    for (const bool HasPendingEdits : {false, true})
+    {
+        SCOPED_TRACE(HasPendingEdits ? "With staged edit" : "Without staged edit");
+        if (HasPendingEdits)
+        {
+            ExpectedLocals[1] = Translation(10.f, 20.f, 30.f);
+            ASSERT_EQ(pWriter->SetJointLocalTransforms(1, 1, &ExpectedLocals[1]), RADIENT_STATUS_OK);
+        }
+
+        EXPECT_EQ(pWriter->SetJointLocalTransforms(0, 1, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+        for (const PoseJointRange& Range : InvalidPoseJointRanges)
+        {
+            SCOPED_TRACE(testing::Message{} << "FirstJoint=" << Range.FirstJoint << ", JointCount=" << Range.JointCount);
+            EXPECT_EQ(pWriter->SetJointLocalTransforms(Range.FirstJoint, Range.JointCount, RejectedTransforms.data()),
+                      RADIENT_STATUS_INVALID_ARGUMENT);
+        }
+        for (const Uint32 FirstJoint : {0u, 2u})
+        {
+            EXPECT_EQ(pWriter->SetJointLocalTransforms(FirstJoint, 0, nullptr), RADIENT_STATUS_NO_CHANGE);
+        }
+
+        EXPECT_EQ(pWriter->Commit(False), HasPendingEdits ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE);
+        EXPECT_EQ(pWriter->Commit(False), RADIENT_STATUS_NO_CHANGE);
+        std::array<RadientTransform, 2> Transforms{};
+        ASSERT_EQ(Objects.pPose->GetJointLocalTransforms(0, 2, Transforms.data()), RADIENT_STATUS_OK);
+        EXPECT_EQ(Transforms, ExpectedLocals);
+        EXPECT_EQ(Objects.pPose->GetVersion(), InitialVersion);
+        EXPECT_EQ(Objects.pPose->UpdateGlobalTransforms(), HasPendingEdits ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE);
+        EXPECT_EQ(Objects.pPose->GetVersion(), InitialVersion + (HasPendingEdits ? 1u : 0u));
+    }
+}
+
+TEST(RadientSkinningTest, PoseComposesRotationsAndSignedScalesAcrossMultipleRoots)
+{
+    RefCntAutoPtr<RadientAssetManagerImpl> pAssetManager = CreateAssetManager();
+    ASSERT_NE(pAssetManager, nullptr);
+
+    constexpr Float32                       HalfSqrt = 0.7071067811865475f;
+    std::array<RadientSkeletonJointDesc, 3> Joints{};
+    // Joint 0 precedes its parent; joint 2 is an independent root.
+    Joints[0].ParentJointIndex            = 1;
+    Joints[0].LocalRestTransform.Position = {1.f, 2.f, 3.f};
+    Joints[0].LocalRestTransform.Rotation = {HalfSqrt, 0.f, 0.f, HalfSqrt}; // +90 degrees around X
+    Joints[0].LocalRestTransform.Scale    = {-1.f, 2.f, 3.f};
+    Joints[1].LocalRestTransform.Position = {4.f, 5.f, 6.f};
+    Joints[1].LocalRestTransform.Rotation = {0.f, 0.f, HalfSqrt, HalfSqrt}; // +90 degrees around Z
+    Joints[1].LocalRestTransform.Scale    = {2.f, 3.f, -1.f};
+    Joints[2].LocalRestTransform.Position = {-2.f, 3.f, 1.f};
+    Joints[2].LocalRestTransform.Rotation = {0.f, HalfSqrt, 0.f, HalfSqrt}; // +90 degrees around Y
+    Joints[2].LocalRestTransform.Scale    = {3.f, -2.f, 1.f};
+
+    RefCntAutoPtr<IRadientSkeletonAsset> pSkeleton =
+        CreateSkeleton(*pAssetManager, Joints.data(), static_cast<Uint32>(Joints.size()));
+    ASSERT_NE(pSkeleton, nullptr);
+    RefCntAutoPtr<IRadientSkeletonPose> pPose;
+    ASSERT_EQ(pSkeleton->CreatePose(pPose.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pPose, nullptr);
+
+    // Explicit row-vector results keep the oracle independent of production math.
+    // The parent maps (x,y,z) to (4-3y, 5+2x, 6-z), taking the child's
+    // local translation (1,2,3) to (-2,7,3).
+    const std::array<RadientMatrix4x4, 3> ExpectedGlobals{{
+        {0.f, -2.f, 0.f, 0.f,
+         0.f, 0.f, -2.f, 0.f,
+         9.f, 0.f, 0.f, 0.f,
+         -2.f, 7.f, 3.f, 1.f},
+        {0.f, 2.f, 0.f, 0.f,
+         -3.f, 0.f, 0.f, 0.f,
+         0.f, 0.f, -1.f, 0.f,
+         4.f, 5.f, 6.f, 1.f},
+        {0.f, 0.f, -3.f, 0.f,
+         0.f, -2.f, 0.f, 0.f,
+         1.f, 0.f, 0.f, 0.f,
+         -2.f, 3.f, 1.f, 1.f},
+    }};
+    std::array<RadientMatrix4x4, 3>       Matrices{};
+    ASSERT_EQ(pPose->GetJointGlobalMatrices(0, static_cast<Uint32>(Matrices.size()), Matrices.data()), RADIENT_STATUS_OK);
+    for (size_t JointIndex = 0; JointIndex < Matrices.size(); ++JointIndex)
+    {
+        SCOPED_TRACE(JointIndex);
+        ExpectMatrixNear(Matrices[JointIndex], ExpectedGlobals[JointIndex]);
+    }
+
+    // Reorder the palette and use inverse binds that do not commute with the
+    // globals, so reversing the multiplication order changes the result.
+    const std::array<RadientMatrix4x4, 3>            InverseBindMatrices{{
+        {0.f, -1.f, 0.f, 0.f,
+         2.f, 0.f, 0.f, 0.f,
+         0.f, 0.f, 1.f, 0.f,
+         1.f, -1.f, 2.f, 1.f},
+        {0.f, 0.f, -2.f, 0.f,
+         0.f, 1.f, 0.f, 0.f,
+         -1.f, 0.f, 0.f, 0.f,
+         -1.f, 2.f, 1.f, 1.f},
+        {1.f, 0.f, 0.f, 0.f,
+         0.f, 0.f, -2.f, 0.f,
+         0.f, 3.f, 0.f, 0.f,
+         2.f, -1.f, -2.f, 1.f},
+    }};
+    const std::array<RadientSkinJointBindingDesc, 3> SkinJoints{{
+        {2, InverseBindMatrices[0]},
+        {0, InverseBindMatrices[1]},
+        {1, InverseBindMatrices[2]},
+    }};
+    const std::array<RadientMatrix4x4, 3>            ExpectedPalette{{
+        {0.f, 2.f, 0.f, 0.f,
+         0.f, 0.f, -6.f, 0.f,
+         1.f, 0.f, 0.f, 0.f,
+         0.f, 5.f, -2.f, 1.f},
+        {-18.f, 0.f, 0.f, 0.f,
+         0.f, 0.f, -2.f, 0.f,
+         0.f, 2.f, 0.f, 0.f,
+         7.f, 9.f, -1.f, 1.f},
+        {0.f, 2.f, 0.f, 0.f,
+         0.f, 0.f, 2.f, 0.f,
+         -9.f, 0.f, 0.f, 0.f,
+         7.f, 9.f, 8.f, 1.f},
+    }};
+    RadientSkinDesc                                  SkinDesc;
+    SkinDesc.pSkeleton  = pSkeleton;
+    SkinDesc.pJoints    = SkinJoints.data();
+    SkinDesc.JointCount = static_cast<Uint32>(SkinJoints.size());
+    RefCntAutoPtr<IRadientSkinAsset> pSkin;
+    ASSERT_EQ(pAssetManager->CreateSkin(SkinDesc, pSkin.GetAddressOfEmpty()), RADIENT_STATUS_OK);
+    ASSERT_NE(pSkin, nullptr);
+
+    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, Matrices.data()), RADIENT_STATUS_OK);
+    for (size_t JointIndex = 0; JointIndex < Matrices.size(); ++JointIndex)
+    {
+        SCOPED_TRACE(JointIndex);
+        ExpectMatrixNear(Matrices[JointIndex], ExpectedPalette[JointIndex]);
+    }
+    ASSERT_EQ(pPose->ComputeSkinningMatrices(pSkin, Matrices.data(), True), RADIENT_STATUS_OK);
+    for (size_t JointIndex = 0; JointIndex < Matrices.size(); ++JointIndex)
+    {
+        SCOPED_TRACE(JointIndex);
+        for (size_t Row = 0; Row < 4; ++Row)
+        {
+            for (size_t Column = 0; Column < 4; ++Column)
+            {
+                EXPECT_NEAR(Matrices[JointIndex].Data[Row * 4 + Column],
+                            ExpectedPalette[JointIndex].Data[Column * 4 + Row], 1e-5f);
+            }
+        }
+    }
 }
 
 TEST(RadientSkinningTest, PoseComputesSkinningMatrices)
