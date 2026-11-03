@@ -152,6 +152,9 @@ set(INCLUDE
     include/Render/Tessera/RadientTesseraRenderTechnique.hpp
     include/Render/Tessera/RadientTesseraSkinData.hpp
     include/Scene/Components/RadientMorphComponentStorage.hpp
+    include/Utilities/RadientAbseilBTreeMap.hpp
+    include/Utilities/RadientAbseilFlatHashMap.hpp
+    include/Utilities/RadientAbseilInlinedVector.hpp
 )
 
 set(INTERFACE

@@ -34,15 +34,7 @@
 #include "RefCntAutoPtr.hpp"
 #include "STDAllocator.hpp"
 
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4127) // conditional expression is constant
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/flat_hash_map.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
+#include "Utilities/RadientAbseilFlatHashMap.hpp"
 
 #include <memory>
 #include <utility>

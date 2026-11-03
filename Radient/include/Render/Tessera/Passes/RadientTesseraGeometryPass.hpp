@@ -34,15 +34,7 @@
 #include "RefCntAutoPtr.hpp"
 #include "UniqueIdentifier.hpp"
 
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4127) // conditional expression is constant
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/btree_map.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
+#include "Utilities/RadientAbseilBTreeMap.hpp"
 
 #include <array>
 #include <vector>

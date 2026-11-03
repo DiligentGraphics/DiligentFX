@@ -29,16 +29,8 @@
 #include "Assets/RadientAssetStatus.hpp"
 #include "HashUtils.hpp"
 
-#ifdef _MSC_VER
-#    pragma warning(push)
-#    pragma warning(disable : 4127) // conditional expression is constant
-#    pragma warning(disable : 4702) // unreachable code
-#endif
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/inlined_vector.h"
-#ifdef _MSC_VER
-#    pragma warning(pop)
-#endif
+#include "Utilities/RadientAbseilFlatHashMap.hpp"
+#include "Utilities/RadientAbseilInlinedVector.hpp"
 
 #include <mutex>
 #include <utility>
