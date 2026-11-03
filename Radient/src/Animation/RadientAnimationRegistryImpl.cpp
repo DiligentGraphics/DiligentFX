@@ -33,6 +33,7 @@
 
 #include "Utilities/RadientAbseilFlatHashMap.hpp"
 
+#include <algorithm>
 #include <exception>
 #include <limits>
 #include <utility>
@@ -45,6 +46,23 @@ namespace
 {
 
 constexpr size_t InvalidIndex = std::numeric_limits<size_t>::max();
+
+
+// Registration reserves storage before publishing changes. Grow persistent
+// vectors geometrically so adding one binding at a time does not relocate
+// all existing elements on every call.
+template <typename T>
+void ReserveGeometrically(std::vector<T>& Values, size_t RequiredCapacity)
+{
+    const size_t Capacity = Values.capacity();
+    if (RequiredCapacity > Capacity)
+    {
+        const size_t GrownCapacity = Capacity <= Values.max_size() / 2 ?
+            Capacity * 2 :
+            Values.max_size();
+        Values.reserve(std::max(RequiredCapacity, GrownCapacity));
+    }
+}
 
 struct AnimationBindingEntityKey
 {
@@ -138,16 +156,16 @@ public:
 
     void Reserve(size_t AssociationCount, size_t BindingCount)
     {
-        m_Associations.reserve(AssociationCount);
+        ReserveGeometrically(m_Associations, AssociationCount);
         m_AssociationIndices.reserve(AssociationCount);
-        m_Bindings.reserve(BindingCount);
-        m_BindingAssociationCounts.reserve(BindingCount);
+        ReserveGeometrically(m_Bindings, BindingCount);
+        ReserveGeometrically(m_BindingAssociationCounts, BindingCount);
         m_BindingIndices.reserve(BindingCount);
 
         // This public projection is reserved last. Once it moves, all later
         // operations are capacity-backed insertions of non-throwing value
         // types, so a failed reserve cannot leave a published pointer stale.
-        m_BindingPointers.reserve(BindingCount);
+        ReserveGeometrically(m_BindingPointers, BindingCount);
     }
 
     void AddAssociation(IRadientAnimationBinding* pBinding,
@@ -575,7 +593,7 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimationBinding(IRadientAnimati
             auto InsertResult = m_EntityAssociations.try_emplace(Entity);
             if (InsertResult.second)
                 InsertedEntityAssociations.push_back(Entity);
-            InsertResult.first->second.Bindings.reserve(InsertResult.first->second.Bindings.size() + 1);
+            ReserveGeometrically(InsertResult.first->second.Bindings, InsertResult.first->second.Bindings.size() + 1);
         }
 
         AnimationRegistryEntry* pEntry = pExistingEntry;
@@ -589,12 +607,12 @@ RADIENT_STATUS RadientAnimationRegistryImpl::AddAnimationBinding(IRadientAnimati
             NewEntry.Reserve(PendingAssociations.size(), 1);
 
             m_EntryIndices.reserve(m_EntryIndices.size() + 1);
-            m_Entries.reserve(m_Entries.size() + 1);
+            ReserveGeometrically(m_Entries, m_Entries.size() + 1);
 
             // The public entry array is the final potentially relocating
             // reserve. All operations after it use preallocated storage and
             // non-throwing pointer/integer value types.
-            m_PublicEntries.reserve(m_PublicEntries.size() + 1);
+            ReserveGeometrically(m_PublicEntries, m_PublicEntries.size() + 1);
 
             const size_t NewEntryIndex = m_Entries.size();
             m_Entries.emplace_back(std::move(NewEntry));

@@ -20,6 +20,8 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <array>
+#include <cstdint>
+#include <string>
 
 using namespace Diligent;
 
@@ -222,6 +224,89 @@ TEST_F(RadientAnimationRegistryTest, AssociatesOneEntityWithMultipleBindingsForT
     ASSERT_EQ(pEntry->BindingCount, 2u);
     EXPECT_NE(FindBinding(*pEntry, AnimationData.pBinding), nullptr);
     EXPECT_NE(FindBinding(*pEntry, pSecondBinding), nullptr);
+}
+
+TEST_F(RadientAnimationRegistryTest, IncrementalBindingsAvoidRepeatedRelocation)
+{
+    Animation AnimationData = CreateAnimation("Incremental bindings");
+    ASSERT_NE(AnimationData.pClip, nullptr);
+    ASSERT_NE(AnimationData.pBinding, nullptr);
+    const RadientEntityID Entity = CreateEntity();
+
+    constexpr Uint32                                                  BindingCount = 128;
+    std::array<RefCntAutoPtr<IRadientAnimationBinding>, BindingCount> Bindings;
+    std::uintptr_t                                                    PreviousAddress = 0;
+    Uint32                                                            RelocationCount = 0;
+    for (Uint32 Index = 0; Index < BindingCount; ++Index)
+    {
+        Bindings[Index] = Index == 0 ? AnimationData.pBinding : CreateBinding(AnimationData.pClip);
+        ASSERT_NE(Bindings[Index], nullptr);
+        ASSERT_EQ(pRegistry->AddAnimationBinding(Bindings[Index], &Entity, 1), RADIENT_STATUS_OK);
+
+        const RadientAnimationRegistryState& State = pRegistry->GetState();
+        EXPECT_EQ(State.Revision, Index + 1);
+        ASSERT_EQ(State.EntryCount, 1u);
+        ASSERT_EQ(State.pEntries[0].BindingCount, Index + 1);
+        ASSERT_NE(State.pEntries[0].ppBindings, nullptr);
+
+        // Keep only the address value across mutations: the previous array
+        // may have been freed by registration.
+        const std::uintptr_t Address = reinterpret_cast<std::uintptr_t>(State.pEntries[0].ppBindings);
+        RelocationCount += Address != PreviousAddress ? 1u : 0u;
+        PreviousAddress = Address;
+    }
+
+    // Allow different geometric growth factors while catching exact-size
+    // reservation, which relocates the array for every added binding.
+    EXPECT_LE(RelocationCount, 16u);
+    const RadientAnimationRegistryEntry& Entry = pRegistry->GetState().pEntries[0];
+    for (const RefCntAutoPtr<IRadientAnimationBinding>& pBinding : Bindings)
+    {
+        EXPECT_NE(FindBinding(Entry, pBinding), nullptr);
+    }
+
+    // The reverse entity index must remain valid through all reallocations.
+    ASSERT_EQ(pRegistry->RemoveEntity(Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
+    EXPECT_EQ(pRegistry->GetState().pEntries, nullptr);
+}
+
+TEST_F(RadientAnimationRegistryTest, IncrementalClipsAvoidRepeatedRelocation)
+{
+    const RadientEntityID            Entity    = CreateEntity();
+    constexpr Uint32                 ClipCount = 128;
+    std::array<Animation, ClipCount> Animations;
+    std::uintptr_t                   PreviousAddress = 0;
+    Uint32                           RelocationCount = 0;
+    for (Uint32 Index = 0; Index < ClipCount; ++Index)
+    {
+        const std::string Name = "Incremental clip " + std::to_string(Index);
+        Animations[Index]      = CreateAnimation(Name.c_str());
+        ASSERT_NE(Animations[Index].pBinding, nullptr);
+        ASSERT_EQ(pRegistry->AddAnimationBinding(Animations[Index].pBinding, &Entity, 1), RADIENT_STATUS_OK);
+
+        const RadientAnimationRegistryState& State = pRegistry->GetState();
+        EXPECT_EQ(State.Revision, Index + 1);
+        ASSERT_EQ(State.EntryCount, Index + 1);
+        ASSERT_NE(State.pEntries, nullptr);
+        const std::uintptr_t Address = reinterpret_cast<std::uintptr_t>(State.pEntries);
+        RelocationCount += Address != PreviousAddress ? 1u : 0u;
+        PreviousAddress = Address;
+    }
+
+    // Registry entries should also grow geometrically when adding clips.
+    EXPECT_LE(RelocationCount, 16u);
+    for (const Animation& AnimationData : Animations)
+    {
+        const RadientAnimationRegistryEntry* pEntry = FindEntry(pRegistry->GetState(), AnimationData.pClip);
+        ASSERT_NE(pEntry, nullptr);
+        ASSERT_EQ(pEntry->BindingCount, 1u);
+        EXPECT_EQ(pEntry->ppBindings[0], AnimationData.pBinding);
+    }
+
+    ASSERT_EQ(pRegistry->RemoveEntity(Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRegistry->GetState().EntryCount, 0u);
+    EXPECT_EQ(pRegistry->GetState().pEntries, nullptr);
 }
 
 TEST_F(RadientAnimationRegistryTest, RemovesSelectedBindingAssociations)
