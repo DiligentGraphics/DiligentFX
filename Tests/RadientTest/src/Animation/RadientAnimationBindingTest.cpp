@@ -1949,6 +1949,58 @@ TEST_F(RadientAnimationBindingTest, CubicInterpolatesFloat3AndQuaternionArrays)
     ExpectQuaternionNear(Quaternions[1], {HalfSqrt, HalfSqrt, 0.f, 0.f});
 }
 
+TEST_F(RadientAnimationBindingTest, SamplesSparseSamplerIndices)
+{
+    TestAnimationClipBuilder Builder;
+    const Uint32             Target   = Builder.AddTarget(1);
+    const Uint32             SamplerA = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {2.f, 8.f});
+    for (Uint32 SamplerIndex = 0; SamplerIndex < 1024; ++SamplerIndex)
+    {
+        const Uint32 UnmappedTarget  = Builder.AddTarget(SamplerIndex + 2);
+        const Uint32 UnmappedSampler = Builder.AddSampler<Float32>(
+            RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+            RADIENT_ANIMATION_INTERPOLATION_STEP,
+            {0.f},
+            {-1.f});
+        Builder.AddChannel(UnmappedTarget, TestPropertyA, UnmappedSampler);
+    }
+    const Uint32 SamplerB = Builder.AddSampler<Float32>(
+        RADIENT_ANIMATION_VALUE_TYPE_FLOAT,
+        RADIENT_ANIMATION_INTERPOLATION_LINEAR,
+        {0.f, 1.f},
+        {20.f, 40.f});
+    Builder.AddChannel(Target, TestPropertyB, SamplerB);
+    Builder.AddChannel(Target, TestPropertyA, SamplerA);
+    RefCntAutoPtr<IRadientAnimationClipAsset> pClip = Builder.Create(*pAssetManager);
+    ASSERT_NE(pClip, nullptr);
+
+    std::shared_ptr<TestAnimationDestinationState> State        = std::make_shared<TestAnimationDestinationState>();
+    RefCntAutoPtr<TestAnimationDestination>        pDestination = CreateTestDestination(State);
+    RadientAnimationDestinationMappingDesc         Mapping;
+    Mapping.ClipTargetIndex                          = Target;
+    Mapping.DestinationElement                       = 7;
+    RefCntAutoPtr<IRadientAnimationBinding> pBinding = BindSingle(pClip, pDestination, {Mapping});
+    ASSERT_NE(pBinding, nullptr);
+
+    ASSERT_EQ(State->CreateRequests.size(), 1u);
+    ASSERT_EQ(State->CreateRequests[0].size(), 2u);
+    ExpectProperty(State->CreateRequests[0][0], 7, TestPropertyB, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+    ExpectProperty(State->CreateRequests[0][1], 7, TestPropertyA, RADIENT_ANIMATION_VALUE_TYPE_FLOAT);
+
+    RadientAnimationEvaluateInfo Info;
+    Info.Time = 0.25f;
+    ASSERT_EQ(pBinding->Evaluate(Info), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(State->EndCalls.size(), 1u);
+    ASSERT_EQ(State->EndCalls[0].Values.size(), 2u);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 0), 25.f);
+    EXPECT_FLOAT_EQ(ReadCapturedValue<Float32>(State->EndCalls[0], 1), 3.5f);
+}
+
 TEST_F(RadientAnimationBindingTest, SamplesSharedSamplerSeparatelyForDifferentSemantics)
 {
     TestAnimationClipBuilder Builder;

@@ -33,6 +33,15 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
@@ -702,8 +711,6 @@ struct AnimationSampleJob
 };
 
 constexpr Uint32 InvalidAnimationSampleJobIndex = ~Uint32{0};
-constexpr Uint32 ValidAnimationValueSemanticCount =
-    static_cast<Uint32>(RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT) - 1u;
 
 struct AnimationDestinationWriteJob
 {
@@ -748,25 +755,22 @@ bool AppendAnimationScratchBlock(size_t  Size,
     return true;
 }
 
-RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&     Clip,
-                                             Uint32                              SamplerIndex,
-                                             RADIENT_ANIMATION_VALUE_SEMANTIC    Semantic,
-                                             std::vector<Uint32>&                SampleJobLookup,
-                                             std::vector<AnimationSampleJob>&    SampleJobs,
-                                             Uint32&                             SampleJobIndex)
+RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&      Clip,
+                                             Uint32                               SamplerIndex,
+                                             RADIENT_ANIMATION_VALUE_SEMANTIC     Semantic,
+                                             absl::flat_hash_map<Uint64, Uint32>& SampleJobLookup,
+                                             std::vector<AnimationSampleJob>&     SampleJobs,
+                                             Uint32&                              SampleJobIndex)
 {
     VERIFY_EXPR(SamplerIndex < Clip.SamplerCount);
     VERIFY_EXPR(Semantic > RADIENT_ANIMATION_VALUE_SEMANTIC_UNKNOWN &&
                 Semantic < RADIENT_ANIMATION_VALUE_SEMANTIC_COUNT);
-    const size_t LookupIndex = static_cast<size_t>(SamplerIndex) * ValidAnimationValueSemanticCount +
-        (static_cast<size_t>(Semantic) - 1u);
-    VERIFY_EXPR(LookupIndex < SampleJobLookup.size());
-
-    const Uint32 ExistingSampleJobIndex = SampleJobLookup[LookupIndex];
-    if (ExistingSampleJobIndex != InvalidAnimationSampleJobIndex)
+    const Uint64 LookupKey   = (Uint64{SamplerIndex} << 32u) | static_cast<Uint32>(Semantic);
+    const auto   ExistingJob = SampleJobLookup.find(LookupKey);
+    if (ExistingJob != SampleJobLookup.end())
     {
-        VERIFY_EXPR(ExistingSampleJobIndex < SampleJobs.size());
-        SampleJobIndex = ExistingSampleJobIndex;
+        VERIFY_EXPR(ExistingJob->second < SampleJobs.size());
+        SampleJobIndex = ExistingJob->second;
         return RADIENT_STATUS_OK;
     }
 
@@ -799,7 +803,7 @@ RADIENT_STATUS GetOrCreateAnimationSampleJob(const RadientAnimationClipDesc&    
                           0,
                           static_cast<size_t>(OutputSize64),
                           pKernel});
-    SampleJobLookup[LookupIndex] = SampleJobIndex;
+    SampleJobLookup.emplace(LookupKey, SampleJobIndex);
     return RADIENT_STATUS_OK;
 }
 
@@ -977,19 +981,9 @@ RADIENT_STATUS CreateRadientAnimationBinding(IRadientAnimationClipAsset*        
     if (DescriptorStatus != RADIENT_STATUS_OK)
         return DescriptorStatus;
 
-    Uint64 SampleJobLookupCount = 0;
-    if ((!PendingDestinations.empty() &&
-         !CheckedMultiply(Clip.SamplerCount,
-                          ValidAnimationValueSemanticCount,
-                          SampleJobLookupCount)) ||
-        !IsAddressableArray(SampleJobLookupCount, sizeof(Uint32)))
-    {
-        LOG_ERROR_MESSAGE("Radient animation binding sampling job lookup size overflows addressable memory");
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-    }
-
-    std::vector<Uint32> SampleJobLookup(static_cast<size_t>(SampleJobLookupCount),
-                                        InvalidAnimationSampleJobIndex);
+    // Sparse bindings may use only a few samplers from a large clip. Keep the
+    // temporary lookup proportional to the sampler/semantic pairs actually used.
+    absl::flat_hash_map<Uint64, Uint32>           SampleJobLookup;
     std::vector<AnimationSampleJob>               SampleJobs;
     std::vector<CompiledAnimationDestination>     Destinations;
     std::vector<AnimationPropertySemantic>        PropertySemantics;
