@@ -95,11 +95,13 @@ struct RadientRenderTargetDesc
     ISwapChain* pSwapChain DEFAULT_INITIALIZER(nullptr);
 
     /// Native color render target view for local texture targets. When set,
-    /// this view takes precedence over the swap-chain back buffer.
+    /// this view takes precedence over the swap-chain back buffer and must have
+    /// type TEXTURE_VIEW_RENDER_TARGET.
     ITextureView* pColorRTV DEFAULT_INITIALIZER(nullptr);
 
     /// Native depth-stencil view for local texture targets. When set,
-    /// this view takes precedence over the swap-chain depth buffer.
+    /// this view takes precedence over the swap-chain depth buffer and must have
+    /// type TEXTURE_VIEW_DEPTH_STENCIL (writable depth-stencil view).
     ITextureView* pDepthDSV DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientRenderTargetDesc RadientRenderTargetDesc;
@@ -201,6 +203,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
     VIRTUAL const RadientRendererDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
     /// Creates a render target.
+    /// Returns RADIENT_STATUS_INVALID_ARGUMENT if an explicit texture view has
+    /// an incompatible type. On failure, the output target is null.
     VIRTUAL RADIENT_STATUS METHOD(CreateRenderTarget)(THIS_
                                                       const RadientRenderTargetDesc REF Desc,
                                                       IRadientRenderTarget**            ppTarget) PURE;

@@ -125,6 +125,18 @@ RADIENT_STATUS RadientRendererImpl::CreateRenderTarget(const RadientRenderTarget
     DEV_CHECK_ERR(*ppTarget == nullptr, "Output render target pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppTarget = nullptr;
 
+    if (Desc.pColorRTV != nullptr && Desc.pColorRTV->GetDesc().ViewType != TEXTURE_VIEW_RENDER_TARGET)
+    {
+        LOG_ERROR_MESSAGE("Cannot create a Radient render target: pColorRTV must be a render-target view");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (Desc.pDepthDSV != nullptr && Desc.pDepthDSV->GetDesc().ViewType != TEXTURE_VIEW_DEPTH_STENCIL)
+    {
+        LOG_ERROR_MESSAGE("Cannot create a Radient render target: pDepthDSV must be a writable depth-stencil view");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
     RefCntAutoPtr<IRadientRenderTarget> pTarget = RadientRenderTargetImpl::Create(Desc);
     *ppTarget                                   = pTarget.Detach();
     return RADIENT_STATUS_OK;
