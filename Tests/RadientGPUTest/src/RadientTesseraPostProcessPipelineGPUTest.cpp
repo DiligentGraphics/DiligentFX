@@ -69,6 +69,31 @@ TestRenderTarget CreateTestRenderTarget(IRenderDevice* pDevice, Uint32 Width, Ui
     return Result;
 }
 
+TEST(RadientFrameRenderTargetsGPUTest, PreparesSwapChainOnlyTarget)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment* const       pEnvironment = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const               pDevice      = pEnvironment->GetDevice();
+    ISwapChain* const                  pSwapChain   = pEnvironment->GetSwapChain();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pSwapChain, nullptr);
+
+    // Presentation targets resolve their output view from the swap chain.
+    // Supplying the captured RTV here would conceal a missing fallback.
+    RadientRenderTargetDesc Desc;
+    Desc.Size                                   = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
+    Desc.pSwapChain                             = pSwapChain;
+    RefCntAutoPtr<IRadientRenderTarget> pTarget = RadientRenderTargetImpl::Create(Desc);
+    ASSERT_NE(pTarget, nullptr);
+    ASSERT_EQ(pTarget->GetDesc().pColorRTV, nullptr);
+    ASSERT_NE(pSwapChain->GetCurrentBackBufferRTV(), nullptr);
+
+    RadientFrameRenderTargets Targets;
+    ASSERT_EQ(Targets.Prepare(pDevice, *pTarget), RADIENT_STATUS_OK);
+    EXPECT_EQ(Targets.GetOutputColorRTV(), pSwapChain->GetCurrentBackBufferRTV());
+    EXPECT_EQ(pTarget->GetDepthDSV(), pSwapChain->GetDepthBufferDSV());
+}
+
 TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentGBuffers)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;

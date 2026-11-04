@@ -500,8 +500,6 @@ TEST_F(RadientRender, Bloom)
     TargetDesc.Name       = "Bloom render test target";
     TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
-    TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
-    TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
     ASSERT_EQ(GetRenderer()->CreateRenderTarget(TargetDesc, &pRenderTarget), RADIENT_STATUS_OK);
@@ -701,8 +699,6 @@ TEST_F(RadientRender, SSAO)
     TargetDesc.Name       = "SSAO render test target";
     TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
-    TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
-    TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
     ASSERT_EQ(GetRenderer()->CreateRenderTarget(TargetDesc, &pRenderTarget), RADIENT_STATUS_OK);
@@ -1007,8 +1003,6 @@ TEST_F(RadientRender, SSR)
     TargetDesc.Name       = "SSR render test target";
     TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
-    TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
-    TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
     ASSERT_EQ(GetRenderer()->CreateRenderTarget(TargetDesc, &pRenderTarget), RADIENT_STATUS_OK);

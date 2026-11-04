@@ -71,12 +71,19 @@ RADIENT_STATUS RadientRenderTargetImpl::Resize(Uint32 Width, Uint32 Height)
 
 ITextureView* RadientRenderTargetImpl::GetColorRTV()
 {
-    return m_pColorRTV;
+    if (m_pColorRTV != nullptr)
+        return m_pColorRTV;
+
+    // The back buffer may change after presentation or resizing.
+    return m_pSwapChain != nullptr ? m_pSwapChain->GetCurrentBackBufferRTV() : nullptr;
 }
 
 ITextureView* RadientRenderTargetImpl::GetDepthDSV()
 {
-    return m_pDepthDSV;
+    if (m_pDepthDSV != nullptr)
+        return m_pDepthDSV;
+
+    return m_pSwapChain != nullptr ? m_pSwapChain->GetDepthBufferDSV() : nullptr;
 }
 
 ISwapChain* RadientRenderTargetImpl::GetSwapChain()

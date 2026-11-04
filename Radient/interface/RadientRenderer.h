@@ -90,13 +90,16 @@ struct RadientRenderTargetDesc
     /// Target size.
     RadientExtent2D Size DEFAULT_INITIALIZER({});
 
-    /// Native swap chain for local presentation targets.
+    /// Native swap chain for local presentation targets. Its current views
+    /// are used when the corresponding explicit view below is null.
     ISwapChain* pSwapChain DEFAULT_INITIALIZER(nullptr);
 
-    /// Native color render target view for local texture targets.
+    /// Native color render target view for local texture targets. When set,
+    /// this view takes precedence over the swap-chain back buffer.
     ITextureView* pColorRTV DEFAULT_INITIALIZER(nullptr);
 
-    /// Native depth-stencil view for local texture targets.
+    /// Native depth-stencil view for local texture targets. When set,
+    /// this view takes precedence over the swap-chain depth buffer.
     ITextureView* pDepthDSV DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientRenderTargetDesc RadientRenderTargetDesc;
@@ -152,10 +155,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderTarget, IObject)
                                           Uint32 Width,
                                           Uint32 Height) PURE;
 
-    /// Returns local color RTV when one exists.
+    /// Returns the explicit color RTV, or the swap chain's current back-buffer
+    /// RTV if no explicit view was supplied. Returns null if neither is available.
+    /// The returned pointer is borrowed; query it again after presentation or resizing.
     VIRTUAL ITextureView* METHOD(GetColorRTV)(THIS) PURE;
 
-    /// Returns local depth DSV when one exists.
+    /// Returns the explicit depth DSV, or the swap chain's depth-buffer DSV
+    /// if no explicit view was supplied. Returns null if neither is available.
+    /// The returned pointer is borrowed; query it again after resizing.
     VIRTUAL ITextureView* METHOD(GetDepthDSV)(THIS) PURE;
 
     /// Returns local swap chain when one exists.

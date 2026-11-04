@@ -208,8 +208,6 @@ public:
         TargetDesc.Name       = "Radient render test target";
         TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
         TargetDesc.pSwapChain = pSwapChain;
-        TargetDesc.pColorRTV  = pSwapChain->GetCurrentBackBufferRTV();
-        TargetDesc.pDepthDSV  = pSwapChain->GetDepthBufferDSV();
         m_Status              = m_pRenderer->CreateRenderTarget(TargetDesc, &m_pRenderTarget);
         if (RADIENT_FAILED(m_Status))
             return;
