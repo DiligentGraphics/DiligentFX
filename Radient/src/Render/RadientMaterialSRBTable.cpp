@@ -32,6 +32,7 @@
 #include "Utilities/RadientAbseilFlatHashMap.hpp"
 #include "Utilities/RadientAbseilInlinedVector.hpp"
 
+#include <atomic>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -100,6 +101,17 @@ struct RadientMaterialSRBIdentity
 class RadientMaterialSRBState
 {
 public:
+    explicit RadientMaterialSRBState(std::shared_ptr<std::atomic<Uint64>> pRetirementRevision) noexcept :
+        m_pRetirementRevision{std::move(pRetirementRevision)}
+    {}
+
+    ~RadientMaterialSRBState()
+    {
+        // Leases may outlive the table or be released on a worker. Notify through
+        // shared bookkeeping without calling the table or taking its mutex.
+        m_pRetirementRevision->fetch_add(1, std::memory_order_release);
+    }
+
     absl::InlinedVector<RadientMaterialTextureSRBSlot, 8> Slots;
 
     // Accessed exclusively from the render thread.
@@ -111,6 +123,9 @@ public:
     Uint32 PreparedTextureVersion           = ~0u;
     Uint32 PreparedMaterialBufferVersion    = ~0u;
     Uint64 PreparedMaterialBufferGeneration = 0;
+
+private:
+    const std::shared_ptr<std::atomic<Uint64>> m_pRetirementRevision;
 };
 
 RADIENT_STATUS RadientMaterialSRBLease::GetPreparationStatus() const noexcept
@@ -154,9 +169,21 @@ struct RadientMaterialSRBTable::Impl
                         RadientMaterialSRBIdentity::Hasher>
         Lookup;
 
-    // Prepare() snapshots strong references under Mutex, then creates GPU
-    // objects without blocking worker-thread acquisition.
-    std::vector<std::shared_ptr<RadientMaterialSRBState>> PrepareEntries;
+    // New entries are published under Mutex. Cache hits do not add work.
+    std::vector<std::weak_ptr<RadientMaterialSRBState>> NewEntries;
+    std::atomic<Uint64>                                 AddedRevision{0};
+    const std::shared_ptr<std::atomic<Uint64>>          pRetirementRevision = std::make_shared<std::atomic<Uint64>>(0);
+
+    // Render-thread work lists stay weak so they do not extend resource lifetimes.
+    std::vector<std::weak_ptr<RadientMaterialSRBState>> PrepareEntries;
+    std::vector<std::weak_ptr<RadientMaterialSRBState>> RetryEntries;
+
+    bool   Initialized                  = false;
+    Uint64 LastAddedRevision            = 0;
+    Uint64 LastRetirementRevision       = 0;
+    Uint32 LastTextureVersion           = 0;
+    Uint32 LastMaterialBufferVersion    = 0;
+    Uint64 LastMaterialBufferGeneration = 0;
 };
 
 RadientMaterialSRBTable::RadientMaterialSRBTable() :
@@ -305,12 +332,14 @@ RadientMaterialSRBLease RadientMaterialSRBTable::Acquire(
         m_Impl->Lookup.erase(LookupIt);
     }
 
-    auto pState = std::make_shared<RadientMaterialSRBState>();
+    std::shared_ptr<RadientMaterialSRBState> pState = std::make_shared<RadientMaterialSRBState>(m_Impl->pRetirementRevision);
     pState->Slots.reserve(SlotCount);
     for (Uint32 Slot = 0; Slot < SlotCount; ++Slot)
         pState->Slots.push_back(*ppSlots[Slot]);
 
     m_Impl->Lookup.emplace(std::move(Identity), pState);
+    m_Impl->NewEntries.emplace_back(pState);
+    m_Impl->AddedRevision.fetch_add(1, std::memory_order_release);
     return RadientMaterialSRBLease{std::move(pState)};
 }
 
@@ -324,27 +353,62 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     if (!ResolveTextureSRV || !CreateSRB)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
+    // Capture retirement before the snapshot. Releases during preparation must
+    // remain visible to the next call rather than being acknowledged here.
+    const Uint64 RetirementRevision = m_Impl->pRetirementRevision->load(std::memory_order_acquire);
+    const bool   FullRefresh        = !m_Impl->Initialized ||
+        m_Impl->LastTextureVersion != TextureVersion ||
+        m_Impl->LastMaterialBufferVersion != MaterialBufferVersion ||
+        m_Impl->LastMaterialBufferGeneration != MaterialBufferGeneration ||
+        m_Impl->LastRetirementRevision != RetirementRevision;
+    const bool HasNewEntries = m_Impl->AddedRevision.load(std::memory_order_acquire) != m_Impl->LastAddedRevision;
+    if (!FullRefresh && !HasNewEntries && m_Impl->RetryEntries.empty())
+        return RADIENT_STATUS_OK;
+
+    // If preparation throws, the next call rebuilds its work list. Scratch lists
+    // are weak and therefore cannot retain texture or SRB resources on that path.
+    m_Impl->Initialized = false;
     m_Impl->PrepareEntries.clear();
+    if (FullRefresh)
     {
         std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
         m_Impl->PrepareEntries.reserve(m_Impl->Lookup.size());
         for (auto LookupIt = m_Impl->Lookup.begin(); LookupIt != m_Impl->Lookup.end();)
         {
-            std::shared_ptr<RadientMaterialSRBState> pState = LookupIt->second.lock();
-            if (pState == nullptr)
+            if (LookupIt->second.expired())
             {
                 m_Impl->Lookup.erase(LookupIt++);
                 continue;
             }
 
-            m_Impl->PrepareEntries.push_back(std::move(pState));
+            m_Impl->PrepareEntries.push_back(LookupIt->second);
             ++LookupIt;
         }
+        m_Impl->NewEntries.clear();
+        m_Impl->LastAddedRevision = m_Impl->AddedRevision.load(std::memory_order_relaxed);
     }
+    else
+    {
+        if (HasNewEntries)
+        {
+            std::lock_guard<std::mutex> Lock{m_Impl->Mutex};
+            m_Impl->PrepareEntries.swap(m_Impl->NewEntries);
+            // Acknowledge only this batch. Acquisitions after unlocking remain
+            // queued and advance the revision for the next prepared view.
+            m_Impl->LastAddedRevision = m_Impl->AddedRevision.load(std::memory_order_relaxed);
+        }
+        m_Impl->PrepareEntries.insert(m_Impl->PrepareEntries.end(),
+                                      m_Impl->RetryEntries.begin(), m_Impl->RetryEntries.end());
+    }
+    m_Impl->RetryEntries.clear();
 
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
-    for (const std::shared_ptr<RadientMaterialSRBState>& pState : m_Impl->PrepareEntries)
+    for (const std::weak_ptr<RadientMaterialSRBState>& WeakState : m_Impl->PrepareEntries)
     {
+        const std::shared_ptr<RadientMaterialSRBState> pState = WeakState.lock();
+        if (pState == nullptr)
+            continue;
+
         // The texture recipe is immutable. A failed dependency or unsupported
         // texture binding cannot be repaired by rebuilding its SRB.
         if (RADIENT_FAILED(pState->PreparationStatus))
@@ -384,7 +448,10 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             // Invalid material content only disables this entry. Pending
             // dependencies still contribute to the frame readiness status.
             if (!RADIENT_FAILED(EntryStatus))
+            {
                 Status = CombineDependencyStatus(Status, EntryStatus);
+                m_Impl->RetryEntries.emplace_back(pState);
+            }
             continue;
         }
 
@@ -397,6 +464,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         if (pSRB == nullptr)
         {
             Status = CombineDependencyStatus(Status, RADIENT_STATUS_FAILED);
+            m_Impl->RetryEntries.emplace_back(pState);
             continue;
         }
 
@@ -405,6 +473,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         {
             UNEXPECTED("Material SRB does not contain the PBR primitive attributes buffer variable");
             Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
+            m_Impl->RetryEntries.emplace_back(pState);
             continue;
         }
 
@@ -413,6 +482,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         {
             UNEXPECTED("Material SRB does not contain the PBR material attributes buffer variable");
             Status = CombineDependencyStatus(Status, RADIENT_STATUS_INVALID_OPERATION);
+            m_Impl->RetryEntries.emplace_back(pState);
             continue;
         }
 
@@ -425,6 +495,11 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
         pState->PreparedMaterialBufferGeneration = MaterialBufferGeneration;
     }
     m_Impl->PrepareEntries.clear();
+    m_Impl->LastRetirementRevision       = RetirementRevision;
+    m_Impl->LastTextureVersion           = TextureVersion;
+    m_Impl->LastMaterialBufferVersion    = MaterialBufferVersion;
+    m_Impl->LastMaterialBufferGeneration = MaterialBufferGeneration;
+    m_Impl->Initialized                  = true;
 
     return Status;
 }

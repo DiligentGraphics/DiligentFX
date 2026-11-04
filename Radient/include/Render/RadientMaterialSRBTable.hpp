@@ -166,6 +166,10 @@ public:
     /// retained on the affected entry and do not fail table preparation.
     /// Failed recipes are not retried; their texture selection is immutable.
     /// Shared SRB creation/signature failures still fail preparation.
+    /// When resources and upload generation are unchanged and no entries were
+    /// released, only new and unresolved entries are processed. If no entries
+    /// were added or released and no retries
+    /// remain, the call returns without locking or scanning the table.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
                            Uint32                               MaterialBufferVersion,
                            Uint64                               MaterialBufferGeneration,
