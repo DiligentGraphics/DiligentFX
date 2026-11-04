@@ -145,7 +145,8 @@ void RadientQuadTestScene::Initialize(const QuadSetups& Setups, Bool EnableAsync
         }
         const QuadSetup&                            Setup = Setups[Index];
         RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
-        DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+        DefinitionCI.ShadingModel = Setup.ShadingModel;
+        DefinitionCI.Features     = Setup.Features;
         ASSERT_EQ(CreateStandardMaterialAsset(
                       *pAssets, DefinitionCI,
                       [&](IRadientMaterialDefinitionAsset& Definition, IRadientMaterialWriter& Writer) {

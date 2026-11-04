@@ -51,6 +51,68 @@ QuadSetups MakeDefaultQuadSetups()
     return Setups;
 }
 
+// Tessera disables transmission and volume. Their presence in the definition
+// must not shift texture metadata in the uploaded shader layout, even after edits.
+TEST(RadientMaterialUpdatesGPUTest, RendersAndUpdatesMaterialsWithDisabledFeatures)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    for (QuadSetup& Setup : Setups)
+    {
+        Setup.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_METALLIC_ROUGHNESS;
+        Setup.Color        = {1.f, 1.f, 1.f, 1.f};
+        Setup.UVBias       = {0.75f, 0.5f};
+    }
+    Setups[1].Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION;
+    Setups[2].Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION |
+        RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME;
+    Setups[3].Features = Setups[2].Features | RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR;
+
+    RadientQuadTestScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+    // Base-color visualization still runs the material texture sampling path,
+    // but makes the comparison independent of lighting and specular highlights.
+    ASSERT_EQ(Scene.pView->SetDebugVisualization(RADIENT_DEBUG_VISUALIZATION_BASE_COLOR), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+    const RadientSceneRevisions SceneRevisions = Scene.pScene->GetSceneRevisions();
+    SampledColors               InitialColors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(InitialColors));
+    ASSERT_GT(InitialColors[0][1], InitialColors[0][0] + 20);
+    ASSERT_GT(InitialColors[0][2], InitialColors[0][0] + 20);
+    for (Uint32 Index = 1; Index < InitialColors.size(); ++Index)
+    {
+        SCOPED_TRACE(Index);
+        ExpectSameColor(InitialColors[Index], InitialColors[0]);
+    }
+
+    // Supported scalar and texture parameters must continue rendering correctly
+    // after edits when the definition also contains unsupported features.
+    for (RefCntAutoPtr<IRadientMaterialAsset>& pMaterial : Scene.Materials)
+    {
+        IRadientMaterialDefinitionAsset&      Definition = *pMaterial->GetDefinition();
+        RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+        ASSERT_EQ(pMaterial->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+        ASSERT_EQ(SetMaterialParameter(Definition, *pWriter, RadientStandardMaterialBaseColorFactorName,
+                                       RadientFloat4{0.5f, 0.75f, 0.25f, 1.f}),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(SetMaterialParameter(Definition, *pWriter, RadientStandardMaterialBaseColorTextureUVBiasName,
+                                       RadientFloat2{0.25f, 0.5f}),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    }
+    ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+    SampledColors UpdatedColors;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(UpdatedColors));
+    ASSERT_GT(UpdatedColors[0][0], InitialColors[0][0] + 20);
+    ASSERT_GT(UpdatedColors[0][0], UpdatedColors[0][2] + 20);
+    for (Uint32 Index = 1; Index < UpdatedColors.size(); ++Index)
+    {
+        SCOPED_TRACE(Index);
+        ExpectSameColor(UpdatedColors[Index], UpdatedColors[0]);
+    }
+    EXPECT_EQ(Scene.pScene->GetSceneRevisions(), SceneRevisions);
+}
+
 TEST(RadientMaterialUpdatesGPUTest, UpdatesRenderedShaderPropertiesWithoutSceneChanges)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;

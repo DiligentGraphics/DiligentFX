@@ -127,6 +127,7 @@ set(INCLUDE
     include/Render/RadientFrameSRBCache.hpp
     include/Render/RadientFrameRenderTargets.hpp
     include/Render/RadientLightList.hpp
+    include/Render/RadientMaterialFeatures.hpp
     include/Render/RadientMaterialSRBTable.hpp
     include/Render/RadientPBRRenderer.hpp
     include/Render/RadientPostFXParameters.hpp

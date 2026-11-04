@@ -47,20 +47,22 @@ using SampledColors = std::array<std::array<Uint8, 4>, 4>;
 
 struct QuadSetup
 {
-    RadientFloat4                 Color             = DefaultQuadColor;
-    RadientFloat2                 UVBias            = {0.25f, 0.5f};
-    RadientFloat2                 UVScale           = {0.f, 0.f};
-    Uint32                        TexCoordSet       = 0;
-    RADIENT_MATERIAL_SURFACE_MODE SurfaceMode       = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
-    Float32                       AlphaCutoff       = 0.25f;
-    Bool                          DoubleSided       = True;
-    bool                          BackFacing        = false;
-    bool                          UseVertexColor    = false;
-    RadientFloat4                 VertexColor       = {1.f, 1.f, 1.f, 1.f};
-    RADIENT_INDEX_TYPE            IndexType         = RADIENT_INDEX_TYPE_UINT16;
-    Uint32                        FirstElement      = 0;
-    Uint32                        VertexPrefixCount = 0;
-    bool                          UseMorphTarget    = false;
+    RADIENT_SURFACE_SHADING_MODEL          ShadingModel      = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+    RADIENT_SURFACE_MATERIAL_FEATURE_FLAGS Features          = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_NONE;
+    RadientFloat4                          Color             = DefaultQuadColor;
+    RadientFloat2                          UVBias            = {0.25f, 0.5f};
+    RadientFloat2                          UVScale           = {0.f, 0.f};
+    Uint32                                 TexCoordSet       = 0;
+    RADIENT_MATERIAL_SURFACE_MODE          SurfaceMode       = RADIENT_MATERIAL_SURFACE_MODE_MASKED;
+    Float32                                AlphaCutoff       = 0.25f;
+    Bool                                   DoubleSided       = True;
+    bool                                   BackFacing        = false;
+    bool                                   UseVertexColor    = false;
+    RadientFloat4                          VertexColor       = {1.f, 1.f, 1.f, 1.f};
+    RADIENT_INDEX_TYPE                     IndexType         = RADIENT_INDEX_TYPE_UINT16;
+    Uint32                                 FirstElement      = 0;
+    Uint32                                 VertexPrefixCount = 0;
+    bool                                   UseMorphTarget    = false;
 };
 
 using QuadSetups = std::array<QuadSetup, 4>;

@@ -27,6 +27,7 @@
 #include "RadientStandardMaterialParameters.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Render/RadientMaterialFeatures.hpp"
 
 #include "GLTFBuilder.hpp"
 #include "GLTFLoader.hpp"
@@ -285,9 +286,10 @@ void ExpectShaderDataMatchesGLTF(const GLTF::Material&  Material,
     ASSERT_NE(pDefinition, nullptr);
 
     const PBR_Renderer::PSO_FLAGS Flags =
-        Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_UNLIT ?
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP :
-        GLTF_PBR_Renderer::GetMaterialPSOFlags(Material);
+        (Material.Attribs.Workflow == GLTF::Material::PBR_WORKFLOW_UNLIT ?
+             PBR_Renderer::PSO_FLAG_USE_COLOR_MAP :
+             GLTF_PBR_Renderer::GetMaterialPSOFlags(Material)) &
+        RadientMaterialPSOFlags;
     const Uint32 ExpectedSize = GetGLTFMaterialShaderDataSize(Flags);
     ASSERT_EQ(pDefinition->GetShaderDataSize(), ExpectedSize);
 
@@ -678,6 +680,80 @@ TEST(RadientStandardMaterialTest, TextureTransformPackingTracksScaleAndRotation)
     EXPECT_EQ(pMaterial->GetVersion(), UnchangedVersion);
     EXPECT_EQ(DefinitionImpl.UpdateShaderData(*pMaterial, PackedVersion, ShaderData.data()), PackedVersion);
     EXPECT_EQ(ShaderData, UnchangedShaderData);
+}
+
+// Unsupported features remain part of the material schema, but their data and
+// texture records must not shift the supported fields in the shader layout.
+TEST(RadientStandardMaterialTest, UnsupportedFeaturesPreserveParametersWithoutChangingShaderData)
+{
+    const RadientMaterialAssetManagerSharedPtr pManager = RadientMaterialAssetManager::Create();
+    ASSERT_NE(pManager, nullptr);
+    std::array<RefCntAutoPtr<IRadientMaterialAsset>, 2> Materials;
+    std::array<std::vector<Uint8>, 2>                   PackedData;
+    std::array<Uint64, 2>                               Versions{};
+    for (Uint32 Index = 0; Index < Materials.size(); ++Index)
+    {
+        RadientStandardMaterialDefinitionCreateInfo DefinitionCI{};
+        DefinitionCI.Features = RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR;
+        if (Index != 0)
+        {
+            DefinitionCI.Features |= RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION |
+                RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME;
+        }
+        ASSERT_EQ(Testing::CreateStandardMaterialAsset(*pManager, DefinitionCI, &Materials[Index]), RADIENT_STATUS_OK);
+        const RadientMaterialDefinitionImpl& Definition =
+            static_cast<const RadientMaterialDefinitionImpl&>(*Materials[Index]->GetDefinition());
+        PackedData[Index].resize(Definition.GetShaderDataSize());
+        Versions[Index] = Definition.WriteShaderData(*Materials[Index], PackedData[Index].data());
+    }
+    ASSERT_FALSE(PackedData[0].empty());
+    ASSERT_EQ(PackedData[1], PackedData[0]);
+    const std::vector<Uint8> InitialData = PackedData[0];
+
+    const RadientMaterialDefinitionImpl& ExtendedDefinition =
+        static_cast<const RadientMaterialDefinitionImpl&>(*Materials[1]->GetDefinition());
+    const RadientSurfaceMaterialDefinitionDesc& ExtendedDesc =
+        static_cast<const RadientSurfaceMaterialDefinitionDesc&>(ExtendedDefinition.GetDesc());
+    EXPECT_EQ(ExtendedDesc.Features,
+              RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR |
+                  RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION |
+                  RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME);
+    EXPECT_GT(ExtendedDefinition.GetParameterCount(), Materials[0]->GetDefinition()->GetParameterCount());
+    RadientMaterialParameterHandle TextureHandle;
+    ASSERT_EQ(ExtendedDefinition.FindParameter(RadientStandardMaterialTransmissionTextureName, &TextureHandle), RADIENT_STATUS_OK);
+    EXPECT_EQ(ExtendedDefinition.GetParameterDesc(TextureHandle.Index).Type, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE);
+
+    RefCntAutoPtr<IRadientMaterialWriter> pWriter;
+    ASSERT_EQ(Materials[1]->CreateWriter(&pWriter), RADIENT_STATUS_OK);
+    ASSERT_EQ(SetMaterialParameter(*Materials[1]->GetDefinition(), *pWriter, RadientStandardMaterialTransmissionFactorName, 0.8f), RADIENT_STATUS_OK);
+    ASSERT_EQ(SetMaterialParameter(*Materials[1]->GetDefinition(), *pWriter, RadientStandardMaterialThicknessFactorName, 2.f), RADIENT_STATUS_OK);
+    ASSERT_EQ(SetMaterialParameter(*Materials[1]->GetDefinition(), *pWriter, RadientStandardMaterialTransmissionTextureUVScaleName,
+                                   RadientFloat2{2.f, 3.f}),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->Commit(), RADIENT_STATUS_OK);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*Materials[1], RadientStandardMaterialTransmissionFactorName), 0.8f);
+    EXPECT_FLOAT_EQ(GetMaterialParameter<Float32>(*Materials[1], RadientStandardMaterialThicknessFactorName), 2.f);
+    EXPECT_EQ(GetMaterialParameter<RadientFloat2>(*Materials[1], RadientStandardMaterialTransmissionTextureUVScaleName),
+              (RadientFloat2{2.f, 3.f}));
+    Versions[1] = ExtendedDefinition.UpdateShaderData(*Materials[1], Versions[1], PackedData[1].data());
+    EXPECT_EQ(PackedData[1], InitialData);
+
+    // Specular texture records follow the omitted transmission/thickness records
+    // in the full shader layout. Updates must still use the original parameter indices.
+    for (Uint32 Index = 0; Index < Materials.size(); ++Index)
+    {
+        IRadientMaterialDefinitionAsset&      Definition = *Materials[Index]->GetDefinition();
+        RefCntAutoPtr<IRadientMaterialWriter> pSupportedWriter;
+        ASSERT_EQ(Materials[Index]->CreateWriter(&pSupportedWriter), RADIENT_STATUS_OK);
+        ASSERT_EQ(SetMaterialParameter(Definition, *pSupportedWriter, RadientStandardMaterialSpecularWeightName, 0.25f), RADIENT_STATUS_OK);
+        ASSERT_EQ(SetMaterialParameter(Definition, *pSupportedWriter, RadientStandardMaterialSpecularTextureUVScaleName,
+                                       RadientFloat2{0.5f, 0.75f}),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(pSupportedWriter->Commit(), RADIENT_STATUS_OK);
+        Versions[Index] = static_cast<const RadientMaterialDefinitionImpl&>(Definition).UpdateShaderData(*Materials[Index], Versions[Index], PackedData[Index].data());
+    }
+    EXPECT_NE(PackedData[0], InitialData);
+    EXPECT_EQ(PackedData[1], PackedData[0]);
 }
 
 TEST(RadientStandardMaterialTest, ExtendedPBRShaderDataMatchesGLTFPacking)

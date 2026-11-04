@@ -28,6 +28,7 @@
 #include "Render/Tessera/RadientTesseraSkinData.hpp"
 
 #include "Render/RadientVertexAttributes.hpp"
+#include "Render/RadientMaterialFeatures.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "Math/RadientMath.hpp"
 #include "PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
@@ -423,7 +424,7 @@ void RadientTesseraGeometryRenderer::CreateMaterialCache(IRenderDevice* pDevice)
 
     RadientTesseraMaterialCache::CreateInfo CacheCI;
     CacheCI.MaterialTextureSlotCount      = Settings.MaterialTexturesArraySize;
-    CacheCI.EnabledMaterialPSOFlags       = PBR_Renderer::GetEnabledPSOFlags(Settings);
+    CacheCI.EnabledMaterialPSOFlags       = RadientMaterialPSOFlags;
     CacheCI.DefaultTextures               = m_DefaultMaterialTextureBindings;
     CacheCI.ConstantBufferOffsetAlignment = pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
     CacheCI.MaxMaterialAttribsSize        = m_pRenderer->GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
@@ -599,16 +600,18 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     }
 
     PBR_Renderer::CreateInfo RendererCI;
-    RendererCI.EnableIBL         = true;
-    RendererCI.EnableAO          = true;
-    RendererCI.EnableEmissive    = true;
-    RendererCI.EnableClearCoat   = true;
-    RendererCI.EnableSheen       = true;
-    RendererCI.EnableSpecular    = true;
-    RendererCI.EnableAnisotropy  = true;
-    RendererCI.EnableIridescence = true;
-    RendererCI.EnableShadows     = false;
-    RendererCI.MaxLightCount     = RadientMaxLightCount;
+    RendererCI.EnableIBL          = true;
+    RendererCI.EnableAO           = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_USE_AO_MAP) != 0;
+    RendererCI.EnableEmissive     = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP) != 0;
+    RendererCI.EnableClearCoat    = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT) != 0;
+    RendererCI.EnableSheen        = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_SHEEN) != 0;
+    RendererCI.EnableSpecular     = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_SPECULAR) != 0;
+    RendererCI.EnableAnisotropy   = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY) != 0;
+    RendererCI.EnableIridescence  = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE) != 0;
+    RendererCI.EnableTransmission = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION) != 0;
+    RendererCI.EnableVolume       = (RadientMaterialPSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_VOLUME) != 0;
+    RendererCI.EnableShadows      = false;
+    RendererCI.MaxLightCount      = RadientMaxLightCount;
     static_assert(RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT == PBR_Renderer::MaxSupportedActiveMorphTargetCount,
                   "Radient and PBR active morph target limits must match");
 

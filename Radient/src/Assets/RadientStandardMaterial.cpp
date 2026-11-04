@@ -28,6 +28,7 @@
 
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMaterialDefinitionImpl.hpp"
+#include "Render/RadientMaterialFeatures.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
@@ -474,6 +475,10 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
 {
     using Material = GLTF::Material;
 
+    // Keep the definition's complete parameter set and original indices. Only
+    // shader packing is restricted to the same capabilities as the renderer.
+    const PBR_Renderer::PSO_FLAGS PSOFlags = GetStandardMaterialPSOFlags(CreateInfo) & RadientMaterialPSOFlags;
+
     const StandardMaterialParameters::ShaderParameterIndices& Indices = MaterialParameters.ShaderIndices;
 
     static const Material::ShaderAttribs        DefaultBasicAttribs{};
@@ -522,7 +527,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             offsetof(Material::ShaderAttribs, MetallicFactor));
         AddParameterPacking(Layout, Indices.RoughnessFactor,
                             offsetof(Material::ShaderAttribs, RoughnessFactor));
-        if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_CLEAR_COAT))
+        if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT) != 0)
         {
             AddParameterPacking(Layout, Indices.ClearCoatFactor,
                                 offsetof(Material::ShaderAttribs, ClearcoatFactor));
@@ -541,7 +546,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
     }
 
     Uint32 Offset = sizeof(Material::ShaderAttribs);
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SHEEN))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_SHEEN) != 0)
     {
         AddParameterPacking(Layout, Indices.SheenColorFactor,
                             Offset + offsetof(Material::SheenShaderAttribs, ColorFactor));
@@ -549,7 +554,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             Offset + offsetof(Material::SheenShaderAttribs, RoughnessFactor));
         Offset += sizeof(Material::SheenShaderAttribs);
     }
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_SPECULAR))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_SPECULAR) != 0)
     {
         AddParameterPacking(Layout, Indices.SpecularColorFactor,
                             Offset + offsetof(Material::SpecularShaderAttribs, ColorFactor));
@@ -557,7 +562,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             Offset + offsetof(Material::SpecularShaderAttribs, Factor));
         Offset += sizeof(Material::SpecularShaderAttribs);
     }
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_ANISOTROPY))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_ANISOTROPY) != 0)
     {
         AddParameterPacking(Layout, Indices.AnisotropyStrength,
                             Offset + offsetof(Material::AnisotropyShaderAttribs, Strength));
@@ -565,7 +570,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             Offset + offsetof(Material::AnisotropyShaderAttribs, Rotation));
         Offset += sizeof(Material::AnisotropyShaderAttribs);
     }
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_IRIDESCENCE))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_IRIDESCENCE) != 0)
     {
         AddParameterPacking(Layout, Indices.IridescenceFactor,
                             Offset + offsetof(Material::IridescenceShaderAttribs, Factor));
@@ -577,7 +582,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             Offset + offsetof(Material::IridescenceShaderAttribs, ThicknessMaximum));
         Offset += sizeof(Material::IridescenceShaderAttribs);
     }
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_TRANSMISSION))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_TRANSMISSION) != 0)
     {
         AddParameterPacking(Layout, Indices.TransmissionFactor,
                             Offset + offsetof(Material::TransmissionShaderAttribs, Factor));
@@ -585,7 +590,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
                             Offset + offsetof(Material::TransmissionShaderAttribs, IOR));
         Offset += sizeof(Material::TransmissionShaderAttribs);
     }
-    if (HasStandardMaterialFeature(CreateInfo.Features, RADIENT_SURFACE_MATERIAL_FEATURE_FLAG_VOLUME))
+    if ((PSOFlags & PBR_Renderer::PSO_FLAG_ENABLE_VOLUME) != 0)
     {
         AddParameterPacking(Layout, Indices.AttenuationColor,
                             Offset + offsetof(Material::VolumeShaderAttribs, AttenuationColor));
@@ -597,7 +602,7 @@ StandardMaterialShaderDataLayout BuildStandardMaterialShaderDataLayout(
     }
 
     PBR_Renderer::ProcessTexturAttribs(
-        GetStandardMaterialPSOFlags(CreateInfo),
+        PSOFlags,
         [&](int, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) {
             AddInitialization(Layout, DefaultTextureAttribs.UVScaleAndRotation,
                               Offset + offsetof(Material::TextureShaderAttribs, UVScaleAndRotation));
