@@ -141,6 +141,10 @@ public:
         VERTEX_POS_PACK_MODE_64_BIT,
     };
 
+    /// Maximum supported number of morph targets blended by one draw.
+    /// This limits the active palette, not the number of targets stored in a mesh.
+    static constexpr Uint32 MaxSupportedActiveMorphTargetCount = 64;
+
     static constexpr Uint32 InvalidMorphTargetDataOffset = ~Uint32{0};
 
     /// One morph target selected for the active target palette.
@@ -345,6 +349,8 @@ public:
         ///
         /// The value determines the size of the per-primitive morph palette
         /// and bounds vertex shader work. Set to zero to disable morph targets.
+        /// Values above MaxSupportedActiveMorphTargetCount are rejected during
+        /// renderer construction.
         Uint32 MaxActiveMorphTargetCount = 4;
 
         /// Joints buffer mode.

@@ -413,6 +413,12 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_JointsBuffer{CI.pJointsBuffer},
     m_MorphTargetBuffer{CI.pMorphTargetBuffer}
 {
+    if (m_Settings.MaxActiveMorphTargetCount > MaxSupportedActiveMorphTargetCount)
+    {
+        LOG_ERROR_AND_THROW("Invalid PBR active morph target count ", m_Settings.MaxActiveMorphTargetCount,
+                            "; the maximum supported count is ", MaxSupportedActiveMorphTargetCount);
+    }
+
     const RenderDeviceInfo& DeviceInfo = m_Device.GetDeviceInfo();
     if (m_Settings.MaxActiveMorphTargetCount > 0 &&
         DeviceInfo.Type == RENDER_DEVICE_TYPE_GLES && DeviceInfo.APIVersion < Version{3, 1})

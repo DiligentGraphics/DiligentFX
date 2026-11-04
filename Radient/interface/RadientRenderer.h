@@ -40,6 +40,11 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 typedef struct IRadientRenderTarget IRadientRenderTarget;
 typedef struct IRadientRenderer     IRadientRenderer;
 
+/// Maximum supported number of morph targets blended by one drawable.
+/// This limits the active palette, not the number of targets stored in a mesh.
+static DILIGENT_CONSTEXPR Uint32 RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT = 64;
+
+
 /// Renderer description.
 struct RadientRendererDesc
 {
@@ -65,7 +70,8 @@ struct RadientRendererDesc
 
     /// Maximum number of morph targets blended by one drawable. Targets with
     /// the greatest absolute weights are selected. Zero disables morph-target
-    /// rendering.
+    /// rendering. Values above RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT cause
+    /// IRadientEngine::CreateRenderer() to return RADIENT_STATUS_INVALID_ARGUMENT.
     Uint32 MaxActiveMorphTargetCount DEFAULT_INITIALIZER(4);
 
     /// Duration, in seconds, over which newly ready post-processing effects

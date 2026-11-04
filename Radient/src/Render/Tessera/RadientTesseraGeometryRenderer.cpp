@@ -607,6 +607,9 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
     RendererCI.EnableIridescence = true;
     RendererCI.EnableShadows     = false;
     RendererCI.MaxLightCount     = RadientMaxLightCount;
+    static_assert(RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT == PBR_Renderer::MaxSupportedActiveMorphTargetCount,
+                  "Radient and PBR active morph target limits must match");
+
     // Structured-buffer shaders only use MaxJointCount as the switch that
     // enables skinning resources. Tessera manages the actual capacity through
     // its resizable renderer-wide joint buffer.

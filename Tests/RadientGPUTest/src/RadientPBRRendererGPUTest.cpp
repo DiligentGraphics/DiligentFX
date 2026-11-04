@@ -33,6 +33,9 @@
 
 #include "gtest/gtest.h"
 
+#include <limits>
+#include <stdexcept>
+
 using namespace Diligent;
 using namespace Diligent::Testing;
 
@@ -47,6 +50,59 @@ bool HasResource(const PipelineResourceSignatureDesc& Desc, const char* Name)
             return true;
     }
     return false;
+}
+
+TEST(RadientPBRRendererGPUTest, ValidatesActiveMorphTargetLimit)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+
+    GPUTestingEnvironment* pEnv     = GPUTestingEnvironment::GetInstance();
+    IRenderDevice*         pDevice  = pEnv->GetDevice();
+    IDeviceContext*        pContext = pEnv->GetDeviceContext();
+    ASSERT_NE(pDevice, nullptr);
+    ASSERT_NE(pContext, nullptr);
+
+    PBR_Renderer::CreateInfo RendererCI{};
+    RendererCI.EnableIBL                      = false;
+    RendererCI.EnableSheen                    = false;
+    RendererCI.CreateDefaultTextures          = false;
+    RendererCI.CreateDefaultJointsBuffer      = false;
+    RendererCI.CreateDefaultMorphTargetBuffer = false;
+    RendererCI.MaxJointCount                  = 0;
+
+    // Direct PBR clients must also reject excessive limits before allocating
+    // primitive buffers. The large values previously wrapped the buffer size.
+    const Uint32 InvalidCounts[] = {PBR_Renderer::MaxSupportedActiveMorphTargetCount + 1, 1u << 27, (std::numeric_limits<Uint32>::max)()};
+    for (Uint32 Count : InvalidCounts)
+    {
+        SCOPED_TRACE(Count);
+        RendererCI.MaxActiveMorphTargetCount = Count;
+        TestingEnvironment::ErrorScope ExpectedError{"active morph target count"};
+        EXPECT_THROW(PBR_Renderer(pDevice, nullptr, pContext, RendererCI, false), std::runtime_error);
+    }
+
+    // Verify that disabling morphs contributes no data and that the maximum
+    // supported palette fits completely, including the previous-frame palette.
+    const Uint32 ValidCounts[] = {0, PBR_Renderer::MaxSupportedActiveMorphTargetCount};
+    for (Uint32 Count : ValidCounts)
+    {
+        const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
+        if (Count != 0 && DeviceInfo.Type == RENDER_DEVICE_TYPE_GLES && DeviceInfo.APIVersion < Version{3, 1})
+            continue; // Morph targets require shader storage buffers.
+
+        SCOPED_TRACE(Count);
+        RendererCI.MaxActiveMorphTargetCount = Count;
+        PBR_Renderer Renderer{pDevice, nullptr, pContext, RendererCI, false};
+        EXPECT_EQ(Renderer.GetSettings().MaxActiveMorphTargetCount, Count);
+
+        const size_t PaletteSize = Count != 0 ? sizeof(float4) + Count * sizeof(PBR_Renderer::MorphTargetShaderAttribs) : 0;
+        EXPECT_EQ(Renderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS),
+                  Renderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_NONE) + PaletteSize);
+
+        const size_t MotionPaletteSize = Count != 0 ? PaletteSize + Count * sizeof(PBR_Renderer::MorphTargetShaderAttribs) : 0;
+        EXPECT_EQ(Renderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_USE_MORPH_TARGETS | PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS),
+                  Renderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS) + MotionPaletteSize);
+    }
 }
 
 TEST(RadientPBRRendererGPUTest, SeparatesFrameAndMaterialResources)

@@ -1445,6 +1445,38 @@ TEST(RadientEngineTest, CreateRenderer)
     EXPECT_NE(pRenderer, nullptr);
 }
 
+TEST(RadientEngineTest, ValidatesActiveMorphTargetLimit)
+{
+    // Accept the disabled/default/boundary configurations, but reject excessive
+    // limits before creating a renderer or sizing its per-primitive buffers.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RadientRendererDesc RendererDesc{};
+    EXPECT_EQ(RendererDesc.MaxActiveMorphTargetCount, 4u);
+    const Uint32 ValidCounts[] = {0, RendererDesc.MaxActiveMorphTargetCount, RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT};
+    for (Uint32 Count : ValidCounts)
+    {
+        SCOPED_TRACE(Count);
+        RendererDesc.MaxActiveMorphTargetCount = Count;
+        RefCntAutoPtr<IRadientRenderer> pRenderer;
+        ASSERT_EQ(pEngine->CreateRenderer(RendererDesc, &pRenderer), RADIENT_STATUS_OK);
+        ASSERT_NE(pRenderer, nullptr);
+        EXPECT_EQ(pRenderer->GetDesc().MaxActiveMorphTargetCount, Count);
+    }
+
+    const Uint32 InvalidCounts[] = {RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT + 1, 1u << 27, (std::numeric_limits<Uint32>::max)()};
+    for (Uint32 Count : InvalidCounts)
+    {
+        SCOPED_TRACE(Count);
+        RendererDesc.MaxActiveMorphTargetCount = Count;
+        RefCntAutoPtr<IRadientRenderer> pRenderer;
+        TestingEnvironment::ErrorScope  ExpectedError{"active morph target count"};
+        EXPECT_EQ(pEngine->CreateRenderer(RendererDesc, &pRenderer), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(pRenderer, nullptr);
+    }
+}
+
 TEST(RadientRendererTest, CreateRenderTarget)
 {
     // Render targets should preserve name and size metadata after creation.

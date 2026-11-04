@@ -235,6 +235,13 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
 
     DEV_CHECK_ERR(*ppRenderer == nullptr, "Output renderer pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppRenderer = nullptr;
+    if (Desc.MaxActiveMorphTargetCount > RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT)
+    {
+        LOG_ERROR_MESSAGE("Invalid Radient active morph target count ", Desc.MaxActiveMorphTargetCount,
+                          "; the maximum supported count is ", RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT);
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
     if (m_pBackend == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
