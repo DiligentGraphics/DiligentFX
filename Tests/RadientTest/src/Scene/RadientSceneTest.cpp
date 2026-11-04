@@ -2251,6 +2251,99 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_OK);
 }
 
+// Rebinding the scene does not transfer a view's ownership. Reject the view
+// before rendering while keeping both renderers usable for their own views.
+TEST(RadientRendererTest, RejectsViewsCreatedByAnotherRenderer)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pFirstScene  = CreateTestScene(*pEngine);
+    RefCntAutoPtr<IRadientScene> pSecondScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pFirstScene, nullptr);
+    ASSERT_NE(pSecondScene, nullptr);
+    RefCntAutoPtr<IRadientScene> pOtherRendererScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pOtherRendererScene, nullptr);
+    RefCntAutoPtr<IRadientRenderer> pFirstRenderer  = CreateTestRenderer(*pEngine);
+    RefCntAutoPtr<IRadientRenderer> pSecondRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pFirstRenderer, nullptr);
+    ASSERT_NE(pSecondRenderer, nullptr);
+    RefCntAutoPtr<IRadientRenderTarget> pFirstTarget  = CreateTestRenderTarget(*pFirstRenderer);
+    RefCntAutoPtr<IRadientRenderTarget> pSecondTarget = CreateTestRenderTarget(*pSecondRenderer);
+    ASSERT_NE(pFirstTarget, nullptr);
+    ASSERT_NE(pSecondTarget, nullptr);
+    RefCntAutoPtr<IRadientView> pFirstView  = CreateTestView(*pFirstRenderer, pFirstScene, pFirstTarget);
+    RefCntAutoPtr<IRadientView> pSecondView = CreateTestView(*pSecondRenderer, pOtherRendererScene, pSecondTarget);
+    ASSERT_NE(pFirstView, nullptr);
+    ASSERT_NE(pSecondView, nullptr);
+
+    // Ownership is established at creation, before the first render call.
+    ASSERT_EQ(pSecondRenderer->BeginFrame({}), RADIENT_STATUS_OK);
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"created by a different renderer"};
+        EXPECT_EQ(pSecondRenderer->Render({pFirstView}), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(pFirstView->GetDesc().pScene, pFirstScene);
+    EXPECT_EQ(pSecondRenderer->EndFrame(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pFirstRenderer->BeginFrame({}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstRenderer->Render({pFirstView}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstRenderer->EndFrame(), RADIENT_STATUS_OK);
+
+    ASSERT_EQ(pFirstView->SetScene(pSecondScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(pSecondRenderer->BeginFrame({}), RADIENT_STATUS_OK);
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"created by a different renderer"};
+        EXPECT_EQ(pSecondRenderer->Render({pFirstView}), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(pFirstView->GetDesc().pScene, pSecondScene);
+    EXPECT_EQ(pSecondRenderer->Render({pSecondView}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pSecondRenderer->EndFrame(), RADIENT_STATUS_OK);
+
+    // The original renderer can still render its view after the scene change.
+    ASSERT_EQ(pFirstRenderer->BeginFrame({}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstRenderer->Render({pFirstView}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pFirstRenderer->EndFrame(), RADIENT_STATUS_OK);
+}
+
+// A view can outlive its creator without retaining it, but a replacement
+// renderer must create its own view instead of adopting the surviving one.
+TEST(RadientRendererTest, RejectsViewAfterItsRendererIsDestroyed)
+{
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+    RefCntAutoPtr<IRadientRenderTarget> pTarget = CreateTestRenderTarget(*pRenderer);
+    ASSERT_NE(pTarget, nullptr);
+    RefCntAutoPtr<IRadientView> pView = CreateTestView(*pRenderer, pScene, pTarget);
+    ASSERT_NE(pView, nullptr);
+
+    RefCntWeakPtr<IRadientRenderer> WeakRenderer{pRenderer.RawPtr()};
+    pRenderer.Release();
+    EXPECT_EQ(WeakRenderer.Lock(), nullptr);
+
+    RefCntAutoPtr<IRadientScene> pReplacementScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pReplacementScene, nullptr);
+    ASSERT_EQ(pView->SetScene(pReplacementScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().pScene, pReplacementScene);
+    pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+    RefCntAutoPtr<IRadientRenderTarget> pReplacementTarget = CreateTestRenderTarget(*pRenderer);
+    ASSERT_NE(pReplacementTarget, nullptr);
+    RefCntAutoPtr<IRadientView> pReplacementView = CreateTestView(*pRenderer, pReplacementScene, pReplacementTarget);
+    ASSERT_NE(pReplacementView, nullptr);
+
+    ASSERT_EQ(pRenderer->BeginFrame({}), RADIENT_STATUS_OK);
+    {
+        TestingEnvironment::ErrorScope ExpectedError{"created by a different renderer"};
+        EXPECT_EQ(pRenderer->Render({pView}), RADIENT_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(pRenderer->Render({pReplacementView}), RADIENT_STATUS_OK);
+    EXPECT_EQ(pRenderer->EndFrame(), RADIENT_STATUS_OK);
+}
+
 TEST(RadientRendererTest, EnforcesFrameLifecycle)
 {
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();

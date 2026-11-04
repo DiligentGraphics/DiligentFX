@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "RadientEngine.h"
 #include "Render/RadientPBRRenderer.hpp"
 #include "Core/RadientViewImpl.hpp"
 
@@ -217,8 +218,16 @@ TEST(RadientPBRRendererGPUTest, ViewsOwnIndependentIBLResources)
 
     ASSERT_NE(Renderer.GetFrameAttribsCB(), nullptr);
 
-    RefCntAutoPtr<IRadientView> pFirstView  = RadientViewImpl::Create({});
-    RefCntAutoPtr<IRadientView> pSecondView = RadientViewImpl::Create({});
+    RadientEngineCreateInfo EngineCI;
+    EngineCI.WorkerThreadCount = 1;
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    ASSERT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientRenderer> pViewRenderer;
+    ASSERT_EQ(pEngine->CreateRenderer({}, &pViewRenderer), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientView> pFirstView;
+    RefCntAutoPtr<IRadientView> pSecondView;
+    ASSERT_EQ(pViewRenderer->CreateView({}, &pFirstView), RADIENT_STATUS_OK);
+    ASSERT_EQ(pViewRenderer->CreateView({}, &pSecondView), RADIENT_STATUS_OK);
     ASSERT_NE(pFirstView, nullptr);
     ASSERT_NE(pSecondView, nullptr);
 

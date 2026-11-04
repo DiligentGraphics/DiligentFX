@@ -29,6 +29,7 @@
 #include "RadientRenderer.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "UniqueIdentifier.hpp"
 
 #include <memory>
 #include <string>
@@ -46,12 +47,16 @@ class RadientViewImpl final : public ObjectBase<IRadientView>
 public:
     using TBase = ObjectBase<IRadientView>;
 
-    RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc);
+    RadientViewImpl(IReferenceCounters*    pRefCounters,
+                    const RadientViewDesc& Desc,
+                    UniqueIdentifier       RendererID);
     ~RadientViewImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientView, TBase)
 
-    static RefCntAutoPtr<IRadientView> Create(const RadientViewDesc& Desc);
+    static RefCntAutoPtr<IRadientView> Create(const RadientViewDesc& Desc, UniqueIdentifier RendererID);
+
+    UniqueIdentifier GetRendererID() const noexcept { return m_RendererID; }
 
     virtual const RadientViewDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
@@ -106,6 +111,10 @@ private:
     void CopySkybox(const RadientSkyboxDesc& Skybox);
 
 private:
+    // Preserve creator identity without retaining the renderer or depending on
+    // its address, which may be reused while this view is still alive.
+    const UniqueIdentifier m_RendererID;
+
     std::string m_Name;
 
     RadientViewDesc m_Desc;

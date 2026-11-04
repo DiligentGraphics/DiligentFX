@@ -28,6 +28,7 @@
 #include "Render/RadientRenderPipeline.hpp"
 #include "Core/RadientViewImpl.hpp"
 
+#include "Cast.hpp"
 #include "Errors.hpp"
 
 namespace Diligent
@@ -130,7 +131,7 @@ RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRad
     DEV_CHECK_ERR(*ppView == nullptr, "Output view pointer must be null. Overwriting a non-null output pointer may result in memory leaks.");
     *ppView = nullptr;
 
-    RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc);
+    RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc, m_UniqueID.GetID());
     if (pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -177,7 +178,14 @@ RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
     if (m_pBackend == nullptr || m_RenderPipeline == nullptr || Attribs.pView == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    const RadientViewImpl* const pView = ClassPtrCast<const RadientViewImpl>(Attribs.pView);
+    if (pView->GetRendererID() != m_UniqueID.GetID())
+    {
+        LOG_ERROR_MESSAGE("Cannot render a Radient view created by a different renderer");
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    const RadientViewDesc& ViewDesc = pView->GetDesc();
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 

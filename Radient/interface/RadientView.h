@@ -597,13 +597,18 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientView =
 // clang-format off
 
 /// Persistent render view interface.
+///
+/// Each view is permanently associated with the renderer that created it
+/// and can only be rendered by that renderer. A view does not retain its
+/// renderer and may outlive it, but cannot be rendered after the renderer is destroyed.
 DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
 {
     /// Returns the view description.
     VIRTUAL const RadientViewDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
-    /// Sets the scene rendered by the view.
-    /// See IRadientScene for scene-renderer lifetime restrictions.
+    /// Sets the scene rendered by the view. The view remains associated with
+    /// its creating renderer. See IRadientScene for scene-renderer lifetime
+    /// restrictions.
     VIRTUAL RADIENT_STATUS METHOD(SetScene)(THIS_
                                             IRadientScene* pScene) PURE;
 

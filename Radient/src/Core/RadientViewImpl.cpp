@@ -137,13 +137,17 @@ bool IsValidDepthOfField(const RadientDepthOfFieldDesc& DepthOfField)
 
 } // namespace
 
-RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc) :
+RadientViewImpl::RadientViewImpl(IReferenceCounters*    pRefCounters,
+                                 const RadientViewDesc& Desc,
+                                 UniqueIdentifier       RendererID) :
     TBase{pRefCounters},
+    m_RendererID{RendererID},
     m_Name{Desc.Name != nullptr ? Desc.Name : ""},
     m_Desc{Desc},
     m_pScene{Desc.pScene},
     m_pRenderTarget{Desc.pRenderTarget}
 {
+    VERIFY_EXPR(m_RendererID != 0);
     m_Desc.Name = m_Name.c_str();
     CopyEnvironment(Desc.Environment);
     CopySkybox(Desc.Skybox);
@@ -153,7 +157,7 @@ RadientViewImpl::~RadientViewImpl()
 {
 }
 
-RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
+RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc, UniqueIdentifier RendererID)
 {
     if (!IsValidClearColor(Desc.ClearColor) ||
         !IsValidDebugVisualization(Desc.DebugVisualization) ||
@@ -166,7 +170,7 @@ RefCntAutoPtr<IRadientView> RadientViewImpl::Create(const RadientViewDesc& Desc)
         !IsValidDepthOfField(Desc.DepthOfField))
         return {};
 
-    return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc)};
+    return RefCntAutoPtr<RadientViewImpl>{MakeNewRCObj<RadientViewImpl>()(Desc, RendererID)};
 }
 
 const RadientViewDesc& RadientViewImpl::GetDesc() const

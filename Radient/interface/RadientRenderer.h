@@ -116,7 +116,7 @@ typedef struct RadientFrameAttribs RadientFrameAttribs;
 /// Per-view render call attributes.
 struct RadientRenderAttribs
 {
-    /// View to render.
+    /// View to render. It must have been created by the renderer receiving this call.
     IRadientView* pView DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientRenderAttribs RadientRenderAttribs;
@@ -192,7 +192,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
                                                       const RadientRenderTargetDesc REF Desc,
                                                       IRadientRenderTarget**            ppTarget) PURE;
 
-    /// Creates a persistent render view.
+    /// Creates a persistent render view owned by this renderer.
+    /// The view can only be rendered by this renderer, including after its
+    /// scene or render target changes. The view does not retain the renderer.
     VIRTUAL RADIENT_STATUS METHOD(CreateView)(THIS_
                                               const RadientViewDesc REF Desc,
                                               IRadientView**            ppView) PURE;
@@ -209,7 +211,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
     /// RADIENT_STATUS_PENDING when the view is rendered with ready content
     /// while renderer-specific drawable resources are still being prepared
     /// asynchronously. BeginFrame() must have succeeded before this method is
-    /// called.
+    /// called. Returns RADIENT_STATUS_INVALID_ARGUMENT if the view was created
+    /// by another renderer; the view and scene are not modified in this case.
     ///
     /// The scene follows the single-renderer lifetime restriction documented by
     /// IRadientScene. Rendering a scene previously rendered by another renderer

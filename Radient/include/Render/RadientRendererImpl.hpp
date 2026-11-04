@@ -29,6 +29,7 @@
 #include "RadientRenderer.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "UniqueIdentifier.hpp"
 
 #include <memory>
 #include <string>
@@ -110,6 +111,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE EndFrame() override final;
 
 private:
+    UniqueIdHelper<RadientRendererImpl> m_UniqueID;
+
     std::string m_Name;
 
     RadientRendererDesc m_Desc;
