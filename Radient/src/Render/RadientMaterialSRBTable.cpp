@@ -103,6 +103,7 @@ public:
     absl::InlinedVector<RadientMaterialTextureSRBSlot, 8> Slots;
 
     // Accessed exclusively from the render thread.
+    RADIENT_STATUS                        PreparationStatus = RADIENT_STATUS_PENDING;
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
     IShaderResourceVariable*              pPrimitiveAttribsVar = nullptr;
     IShaderResourceVariable*              pMaterialAttribsVar  = nullptr;
@@ -111,6 +112,11 @@ public:
     Uint32 PreparedMaterialBufferVersion    = ~0u;
     Uint64 PreparedMaterialBufferGeneration = 0;
 };
+
+RADIENT_STATUS RadientMaterialSRBLease::GetPreparationStatus() const noexcept
+{
+    return m_pState != nullptr ? m_pState->PreparationStatus : RADIENT_STATUS_INVALID_OPERATION;
+}
 
 IShaderResourceBinding* RadientMaterialSRBLease::GetSRB() const noexcept
 {
@@ -339,6 +345,11 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
     for (const std::shared_ptr<RadientMaterialSRBState>& pState : m_Impl->PrepareEntries)
     {
+        // The texture recipe is immutable. A failed dependency or unsupported
+        // texture binding cannot be repaired by rebuilding its SRB.
+        if (RADIENT_FAILED(pState->PreparationStatus))
+            continue;
+
         if (pState->pSRB != nullptr &&
             pState->PreparedTextureVersion == TextureVersion &&
             pState->PreparedMaterialBufferVersion == MaterialBufferVersion)
@@ -367,9 +378,19 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
                 TextureSRVs.push_back(ResolveResult.pTextureSRV);
         }
 
-        Status = CombineDependencyStatus(Status, EntryStatus);
+        pState->PreparationStatus = EntryStatus;
         if (EntryStatus != RADIENT_STATUS_OK)
+        {
+            // Invalid material content only disables this entry. Pending
+            // dependencies still contribute to the frame readiness status.
+            if (!RADIENT_FAILED(EntryStatus))
+                Status = CombineDependencyStatus(Status, EntryStatus);
             continue;
+        }
+
+        // SRB creation and shared signature errors remain table-wide failures
+        // and may be retried. Only texture-resolution failures are terminal.
+        pState->PreparationStatus = RADIENT_STATUS_PENDING;
 
         RefCntAutoPtr<IShaderResourceBinding> pSRB =
             CreateSRB(TextureSRVs.data(), static_cast<Uint32>(TextureSRVs.size()));
@@ -395,6 +416,7 @@ RADIENT_STATUS RadientMaterialSRBTable::Prepare(
             continue;
         }
 
+        pState->PreparationStatus                = RADIENT_STATUS_OK;
         pState->pSRB                             = std::move(pSRB);
         pState->pPrimitiveAttribsVar             = pPrimitiveAttribsVar;
         pState->pMaterialAttribsVar              = pMaterialAttribsVar;

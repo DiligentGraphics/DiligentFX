@@ -335,6 +335,98 @@ TEST(RadientTesseraMaterialCacheTest, ProcessesMaterialThroughQueuedTask)
     EXPECT_EQ(Result.Data->GetShaderTextureIds()[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC], 2u);
 }
 
+TEST(RadientTesseraMaterialCacheTest, TextureResolutionFailureReportsTerminalGPUStatus)
+{
+    const bool PrepareBeforeFailure[] = {false, true};
+    for (const bool InitiallyReady : PrepareBeforeFailure)
+    {
+        SCOPED_TRACE(InitiallyReady);
+
+        RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+        std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+        RefCntAutoPtr<IRadientMaterialAsset>         pMaterial   = MakeMaterialAsset();
+        RadientTesseraMaterialResolveResult          Result      = pCache->Resolve(*pThreadPool, pMaterial);
+        ASSERT_TRUE(Result.Data);
+        ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+        ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+        if (InitiallyReady)
+        {
+            ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+            ASSERT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+        }
+        IShaderResourceBinding* const pPreviousSRB = Result.Data->GetMaterialSRB().GetSRB();
+
+        Uint32                                                       ResolveCount = 0;
+        Uint32                                                       CreateCount  = 0;
+        const RadientMaterialSRBTable::ResolveTextureSRVCallbackType ResolveTextureSRV =
+            [&ResolveCount](const RadientMaterialTextureSRBSlot&) {
+                ++ResolveCount;
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_NOT_FOUND, nullptr};
+            };
+        const RadientMaterialSRBTable::CreateSRBCallbackType CreateSRB =
+            [&CreateCount](ITextureView* const*, Uint32) {
+                ++CreateCount;
+                return Testing::MakeTestShaderResourceBinding();
+            };
+
+        EXPECT_EQ(pCache->Prepare(2, 0, ~Uint64{0}, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
+        EXPECT_GT(ResolveCount, 0u);
+        const Uint32 FailedResolveCount = ResolveCount;
+        EXPECT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.Data->GetMaterialSRB().GetPreparationStatus(), RADIENT_STATUS_NOT_FOUND);
+        EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_NOT_FOUND);
+        EXPECT_EQ(Result.Data->GetMaterialSRB().GetSRB(), pPreviousSRB);
+
+        // The material has finished CPU processing. A terminal SRB failure must
+        // not become perpetual pending or schedule fresh processing work.
+        EXPECT_EQ(pCache->Prepare(2, 0, ~Uint64{0}, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
+        EXPECT_EQ(pCache->Prepare(3, 1, ~Uint64{0}, ResolveTextureSRV, CreateSRB), RADIENT_STATUS_OK);
+        const RadientTesseraMaterialResolveResult Retry = pCache->Resolve(*pThreadPool, pMaterial);
+        EXPECT_EQ(Retry.Data.Get(), Result.Data.Get());
+        EXPECT_EQ(Retry.Data->GetGPUResourceStatus(), RADIENT_STATUS_NOT_FOUND);
+        EXPECT_EQ(ResolveCount, FailedResolveCount);
+        EXPECT_EQ(CreateCount, 0u);
+        EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    }
+}
+
+TEST(RadientTesseraMaterialCacheTest, PendingTextureRefreshRetainsGPUReadiness)
+{
+    RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pCache      = MakeMaterialCache();
+    RefCntAutoPtr<IRadientMaterialAsset>         pMaterial   = MakeMaterialAsset();
+    RadientTesseraMaterialResolveResult          Result      = pCache->Resolve(*pThreadPool, pMaterial);
+    ASSERT_TRUE(Result.Data);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(PrepareMaterialCache(*pCache), RADIENT_STATUS_OK);
+    ASSERT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IShaderResourceBinding> pPreviousSRB{Result.Data->GetMaterialSRB().GetSRB()};
+    ASSERT_NE(pPreviousSRB, nullptr);
+
+    EXPECT_EQ(pCache->Prepare(
+                  2, 0, ~Uint64{0},
+                  [](const RadientMaterialTextureSRBSlot&) {
+                      return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_PENDING, nullptr};
+                  },
+                  [](ITextureView* const*, Uint32) {
+                      return Testing::MakeTestShaderResourceBinding();
+                  }),
+              RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Result.Data->GetMaterialSRB().GetPreparationStatus(), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Result.Data->GetMaterialSRB().GetSRB(), pPreviousSRB);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(pCache->Prepare(
+                  2, 0, ~Uint64{0}, ResolveTestTextureSRV,
+                  [](ITextureView* const*, Uint32) {
+                      return Testing::MakeTestShaderResourceBinding();
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(Result.Data->GetMaterialSRB().GetPreparationStatus(), RADIENT_STATUS_OK);
+    EXPECT_NE(Result.Data->GetMaterialSRB().GetSRB(), pPreviousSRB);
+    EXPECT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_OK);
+}
+
 TEST(RadientTesseraMaterialCacheTest, RefreshesSurfaceStateWithoutReplacingBindings)
 {
     RefCntAutoPtr<IThreadPool>                   pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});

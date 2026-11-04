@@ -280,6 +280,10 @@ RADIENT_STATUS RadientTesseraMaterialData::GetGPUResourceStatus() const noexcept
     if (!m_InitialDataValidated)
         return RADIENT_STATUS_PENDING;
 
+    const RADIENT_STATUS SRBStatus = m_MaterialSRB.GetPreparationStatus();
+    if (RADIENT_FAILED(SRBStatus))
+        return SRBStatus;
+
     IShaderResourceBinding* const pSRB = m_MaterialSRB.GetSRB();
     if (pSRB == nullptr)
         return RADIENT_STATUS_PENDING;

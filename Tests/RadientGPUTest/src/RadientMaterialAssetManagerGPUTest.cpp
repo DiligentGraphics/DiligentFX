@@ -29,12 +29,16 @@
 #include "Assets/RadientTextureAssetManager.hpp"
 #include "RadientStandardMaterialParameters.h"
 #include "RadientTypesX.hpp"
+#include "DataBlobImpl.hpp"
 #include "GPUUploadManager.h"
 #include "GPUTestingEnvironment.hpp"
+#include "MemoryFileStream.hpp"
 #include "RadientGPUTestHelpers.hpp"
+#include "RadientQuadTestScene.hpp"
 #include "RadientMaterialTestHelpers.hpp"
 #include "ThreadPool.hpp"
 #include "ThreadSignal.hpp"
+#include "TextureLoader.h"
 #include "Render/Tessera/RadientTesseraGeometryRenderer.hpp"
 #include "GLTFLoader.hpp"
 #include "ObjectBase.hpp"
@@ -837,6 +841,182 @@ TEST(RadientMaterialAssetManagerGPUTest, UpdatesShaderDataInEachRendererWithoutR
         }
     }
     EXPECT_EQ(pAssetManager->Stop(pContext), RADIENT_STATUS_OK);
+}
+
+
+TEST(RadientMaterialAssetManagerGPUTest, InvalidTextureSkipsOnlyAffectedDrawable)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment* const       pEnvironment = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const               pDevice      = pEnvironment->GetDevice();
+    ASSERT_NE(pDevice, nullptr);
+    const TextureFormatInfoExt& FormatInfo = pDevice->GetTextureFormatInfoExt(TEX_FORMAT_RGBA8_UNORM);
+    if ((FormatInfo.Dimensions & RESOURCE_DIMENSION_SUPPORT_TEX_CUBE) == 0 ||
+        (FormatInfo.BindFlags & BIND_SHADER_RESOURCE) == 0)
+    {
+        GTEST_SKIP() << "RGBA8 cube shader resources are not supported by this device.";
+    }
+
+    RadientQuadTestScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize());
+    SampledColors Reference;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Reference));
+    for (const std::array<Uint8, 4>& Color : Reference)
+    {
+        ASSERT_GT(Color[0], 20);
+        ASSERT_GT(Color[1], Color[0] + 20);
+        ASSERT_GT(Color[2], Color[1] + 20);
+    }
+
+    // Encode a real cube using the same DDS writer as the texture-loader tests.
+    // Every face is opaque white, so accidentally drawing it cannot look clear.
+    constexpr Uint32                         FaceCount = 6;
+    const std::array<Uint8, 4>               Pixel{255, 255, 255, 255};
+    std::array<TextureSubResData, FaceCount> Subresources;
+    for (TextureSubResData& Subresource : Subresources)
+    {
+        Subresource = TextureSubResData{Pixel.data(), Pixel.size()};
+    }
+    TextureDesc CubeDesc;
+    CubeDesc.Type                         = RESOURCE_DIM_TEX_CUBE;
+    CubeDesc.Width                        = 1;
+    CubeDesc.Height                       = 1;
+    CubeDesc.ArraySize                    = FaceCount;
+    CubeDesc.MipLevels                    = 1;
+    CubeDesc.Format                       = TEX_FORMAT_RGBA8_UNORM;
+    RefCntAutoPtr<IDataBlob>   pDDSData   = DataBlobImpl::Create();
+    RefCntAutoPtr<IFileStream> pDDSStream = MemoryFileStream::Create(pDDSData);
+    ASSERT_TRUE(WriteDDSToStream(pDDSStream, CubeDesc, TextureData{Subresources.data(), FaceCount}));
+    RadientDataBlobCreateInfo BlobCI;
+    BlobCI.Size  = pDDSData->GetSize();
+    BlobCI.pData = pDDSData->GetConstDataPtr();
+    RefCntAutoPtr<IRadientDataBlob> pBlob;
+    ASSERT_EQ(CreateRadientDataBlob(BlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pBlob), RADIENT_STATUS_OK);
+    RadientTextureLoadInfoX LoadInfo;
+    LoadInfo.SetDataBlob(pBlob);
+    RefCntAutoPtr<IRadientTextureAsset> pCubeTexture;
+    ASSERT_TRUE(IsPendingOrOK(Scene.pAssets->LoadTexture(LoadInfo, &pCubeTexture)));
+    ASSERT_NE(pCubeTexture, nullptr);
+
+    RadientStandardMaterialDefinitionCreateInfo DefinitionCI;
+    DefinitionCI.ShadingModel = RADIENT_SURFACE_SHADING_MODEL_UNLIT;
+    RefCntAutoPtr<IRadientMaterialAsset> pInvalidMaterial;
+    ASSERT_EQ(CreateStandardMaterialAsset(
+                  *Scene.pAssets, DefinitionCI,
+                  [&](IRadientMaterialDefinitionAsset& Definition, IRadientMaterialWriter& Writer) {
+                      return SetStandardMaterialTextureParameters(
+                          Definition, Writer, RadientStandardMaterialBaseColorTextureParameterNames,
+                          RadientStandardMaterialTextureParameters{pCubeTexture});
+                  },
+                  &pInvalidMaterial),
+              RADIENT_STATUS_OK);
+    ASSERT_NE(pInvalidMaterial, nullptr);
+
+    // Material selection comes from the mesh primitive. Use the reference
+    // quad's positions with a new primitive that owns the invalid material.
+    struct Vertex
+    {
+        RadientFloat3 Position;
+        RadientFloat2 UV;
+    };
+    const Vertex Vertices[] = {
+        {{-0.4f, -0.4f, 0.f}, {0.f, 1.f}},
+        {{0.4f, -0.4f, 0.f}, {1.f, 1.f}},
+        {{0.4f, 0.4f, 0.f}, {1.f, 0.f}},
+        {{-0.4f, -0.4f, 0.f}, {0.f, 1.f}},
+        {{0.4f, 0.4f, 0.f}, {1.f, 0.f}},
+        {{-0.4f, 0.4f, 0.f}, {0.f, 0.f}},
+    };
+    RadientDataBlobCreateInfo VertexBlobCI;
+    VertexBlobCI.Size  = sizeof(Vertices);
+    VertexBlobCI.pData = Vertices;
+    RefCntAutoPtr<IRadientDataBlob> pVertices;
+    ASSERT_EQ(CreateRadientDataBlob(VertexBlobCI, RADIENT_DATA_BLOB_STORAGE_MODE_COPY, &pVertices), RADIENT_STATUS_OK);
+    RadientVertexLayoutDescX Layout;
+    Layout.AddBuffer(sizeof(Vertex));
+    Layout.AddAttribute("POSITION", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 3);
+    Layout.AddAttribute("TEXCOORD_0", RADIENT_VERTEX_COMPONENT_TYPE_FLOAT32, 2);
+    IRadientDataBlob* const        pVertexBuffer = pVertices;
+    RadientMeshPrimitiveCreateInfo Primitive;
+    Primitive.ElementCount = 6;
+    Primitive.pMaterial    = pInvalidMaterial;
+    RadientMeshCreateInfo MeshCI;
+    MeshCI.VertexData     = {Layout, &pVertexBuffer, 6};
+    MeshCI.pPrimitives    = &Primitive;
+    MeshCI.PrimitiveCount = 1;
+    RefCntAutoPtr<IRadientMeshAsset> pInvalidMesh;
+    ASSERT_TRUE(IsPendingOrOK(Scene.pAssets->CreateMesh(MeshCI, &pInvalidMesh)));
+    ASSERT_NE(pInvalidMesh, nullptr);
+
+    // The new scene starts with one invalid material. The other three uploaded
+    // quads retain the same material recipes and expected pixels as the reference.
+    constexpr Uint32                   InvalidQuad = 1;
+    RefCntAutoPtr<IRadientScene>       pScene;
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(Scene.pEngine->CreateScene({}, &pScene), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.pEngine->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
+    for (Uint32 Index = 0; Index < Scene.Meshes.size(); ++Index)
+    {
+        RadientEntityDesc Desc;
+        Desc.Transform.Position.x = static_cast<float>(Index) - 1.5f;
+        RadientEntityID Entity    = InvalidRadientEntityID;
+        ASSERT_EQ(pWriter->CreateEntity(Desc, Entity), RADIENT_STATUS_OK);
+        IRadientMeshAsset* const pMesh = Index == InvalidQuad ? pInvalidMesh.RawPtr() : Scene.Meshes[Index].RawPtr();
+        ASSERT_EQ(pWriter->SetMesh(Entity, {pMesh}), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    }
+    RadientViewDesc        ViewDesc = Scene.pView->GetDesc();
+    RadientEntityDesc      CameraDesc;
+    RadientCameraComponent Camera;
+    ASSERT_EQ(Scene.pScene->GetLocalTransform(ViewDesc.Camera, CameraDesc.Transform), RADIENT_STATUS_OK);
+    ASSERT_EQ(Scene.pScene->GetCamera(ViewDesc.Camera, Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CreateEntity(CameraDesc, ViewDesc.Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->SetCamera(ViewDesc.Camera, Camera), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ViewDesc.pScene = pScene;
+    RefCntAutoPtr<IRadientView> pView;
+    ASSERT_EQ(Scene.pRenderer->CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    Scene.pScene                          = pScene;
+    Scene.pView                           = pView;
+    const RadientSceneRevisions Revisions = pScene->GetSceneRevisions();
+
+    TestingEnvironment::ErrorScope ExpectedError{"Material texture SRV must be a 2D array"};
+    // RenderUntilReady has a deadline and requires successful frames after all
+    // pending work completes. A terminal bad material must not keep it pending.
+    ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady());
+    ASSERT_EQ(pInvalidMesh->GetDesc().PrimitiveCount, 1u);
+    ASSERT_NE(pInvalidMesh->GetDesc().pPrimitives, nullptr);
+    EXPECT_EQ(pInvalidMesh->GetDesc().pPrimitives[0].pMaterial, pInvalidMaterial.RawPtr());
+    ASSERT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(pCubeTexture), RADIENT_STATUS_OK);
+    ITextureView* const pCubeSRV = RadientTextureAssetManager::GetTextureSRV(pCubeTexture);
+    ASSERT_NE(pCubeSRV, nullptr);
+    ASSERT_EQ(pCubeSRV->GetDesc().TextureDim, RESOURCE_DIM_TEX_CUBE);
+
+    // Unchanged frames reuse the terminal failure without retrying or logging.
+    // They must also keep rendering every unrelated drawable.
+    for (Uint32 Frame = 0; Frame < 4; ++Frame)
+    {
+        SCOPED_TRACE(Frame);
+        ASSERT_EQ(Scene.RenderFrame(), RADIENT_STATUS_OK);
+        SampledColors Colors;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Colors));
+        for (Uint32 Index = 0; Index < Colors.size(); ++Index)
+        {
+            SCOPED_TRACE(Index);
+            if (Index == InvalidQuad)
+            {
+                for (Uint32 Channel = 0; Channel < 3; ++Channel)
+                {
+                    EXPECT_EQ(Colors[Index][Channel], 0u);
+                }
+            }
+            else
+            {
+                ExpectSameColor(Colors[Index], Reference[Index]);
+            }
+        }
+    }
+    EXPECT_EQ(pScene->GetSceneRevisions(), Revisions);
 }
 
 } // namespace

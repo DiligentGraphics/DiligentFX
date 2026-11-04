@@ -316,6 +316,11 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
         if (Batch.pPSO == nullptr || Batch.pVertexPool == nullptr)
             continue;
 
+        // A binding can fail while refreshing an already-published batch.
+        // Do not use its retained SRB after a terminal texture failure.
+        if (RADIENT_FAILED(Batch.MaterialSRB.GetPreparationStatus()))
+            continue;
+
         // Pipeline and SRB readiness are shared by the whole batch, so each
         // potentially expensive query is made once instead of once per drawable.
         const RADIENT_STATUS PipelineStatus = GetPipelineStatus(Batch.pPSO);
@@ -325,7 +330,10 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
             continue;
 
         if (Batch.MaterialSRB.GetSRB() == nullptr)
+        {
+            Result = CombineDependencyStatus(Result, RADIENT_STATUS_PENDING);
             continue;
+        }
 
         RadientMatrix4x4 SkinnedNodeTransform;
 

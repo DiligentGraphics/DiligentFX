@@ -92,6 +92,11 @@ class RadientMaterialSRBLease
 public:
     RadientMaterialSRBLease() noexcept = default;
 
+    /// Reports the latest texture-resolution/preparation status. A terminal
+    /// texture failure disables this entry. While replacement is pending,
+    /// an existing SRB and its successful buffer snapshot remain usable.
+    RADIENT_STATUS GetPreparationStatus() const noexcept;
+
     IShaderResourceBinding*  GetSRB() const noexcept;
     IShaderResourceVariable* GetPrimitiveAttribsVariable() const noexcept;
     IShaderResourceVariable* GetMaterialAttribsVariable() const noexcept;
@@ -157,7 +162,10 @@ public:
 
     /// Creates new SRBs and recreates existing SRBs when the texture resources
     /// or shared material buffer change. Pending texture resolutions are
-    /// skipped and retried by the next call.
+    /// skipped and retried by the next call. Texture-resolution failures are
+    /// retained on the affected entry and do not fail table preparation.
+    /// Failed recipes are not retried; their texture selection is immutable.
+    /// Shared SRB creation/signature failures still fail preparation.
     RADIENT_STATUS Prepare(Uint32                               TextureVersion,
                            Uint32                               MaterialBufferVersion,
                            Uint64                               MaterialBufferGeneration,

@@ -32,6 +32,7 @@
 #include "Math/RadientMath.hpp"
 #include "PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 
+#include "GraphicsAccessories.hpp"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 
@@ -459,7 +460,8 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::PrepareMaterialSRBs(IRenderDevice
 
             if (pTextureSRV->GetDesc().TextureDim != RESOURCE_DIM_TEX_2D_ARRAY)
             {
-                UNEXPECTED("Material texture SRV is not a 2D array");
+                LOG_ERROR_MESSAGE("Material texture SRV must be a 2D array; received ",
+                                  GetResourceDimString(pTextureSRV->GetDesc().TextureDim));
                 return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_INVALID_OPERATION, nullptr};
             }
             return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_OK, pTextureSRV};

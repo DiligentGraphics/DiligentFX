@@ -1227,6 +1227,82 @@ TEST(RadientTesseraDrawableCacheTest, MaterialProcessingDefersAndSharesDrawables
     EXPECT_EQ(pSlot0->MaterialData.Get(), pSlot1->MaterialData.Get());
 }
 
+TEST(RadientTesseraDrawableCacheTest, RetainsFailedMaterialWhileSiblingIsPending)
+{
+    TestDrawableMeshProvider                     MeshProvider;
+    RadientTesseraDrawableCache                  DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl>              pScene         = RadientSceneImpl::Create();
+    RefCntAutoPtr<IThreadPool>                   pThreadPool    = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pMaterialCache = MakeDrawableMaterialCache();
+    ASSERT_NE(pScene, nullptr);
+    ASSERT_NE(pThreadPool, nullptr);
+
+    const RadientTesseraMaterialResolveContext MaterialContext{*pThreadPool, pMaterialCache.get()};
+    RefCntAutoPtr<IRadientMeshAsset>           pMesh   = MakeTestMeshAsset("mesh://drawable-cache-failed-pending-materials", 1);
+    RefCntAutoPtr<IRadientSceneWriter>         pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+    Model.Materials.resize(2);
+    Model.Meshes[0].Primitives.emplace_back(MakePrimitive(3, 3, 0, 0, 1));
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+    ASSERT_NE(AddRenderableEntity(*pWriter, pMesh), InvalidRadientEntityID);
+
+    // Synchronize directly: the provider's convenience helper retains material
+    // data itself and would hide a missing pending-renderable reference.
+    ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+    ASSERT_EQ(pThreadPool->GetQueueSize(), 2u);
+    EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+    pScene->ClearPendingRenderChanges();
+
+    // Only one material finishes processing. Its terminal SRB failure must
+    // survive while the other material's task remains queued.
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(pThreadPool->GetQueueSize(), 1u);
+    Uint32     ResolveCount          = 0;
+    Uint32     CreateCount           = 0;
+    const auto PrepareFailedTextures = [&]() {
+        return pMaterialCache->Prepare(
+            1,
+            0,
+            ~Uint64{0},
+            [&ResolveCount](const RadientMaterialTextureSRBSlot&) {
+                ++ResolveCount;
+                return RadientMaterialTextureSRVResolveResult{RADIENT_STATUS_NOT_FOUND, nullptr};
+            },
+            [&CreateCount](ITextureView* const*, Uint32) {
+                ++CreateCount;
+                return Testing::MakeTestShaderResourceBinding();
+            });
+    };
+    ASSERT_EQ(PrepareFailedTextures(), RADIENT_STATUS_OK);
+    ASSERT_GT(ResolveCount, 0u);
+    const Uint32 InitialResolveCount = ResolveCount;
+
+    for (Uint32 SyncIndex = 0; SyncIndex < 2; ++SyncIndex)
+    {
+        ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+        EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+        EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+        ASSERT_EQ(pThreadPool->GetQueueSize(), 1u);
+        ASSERT_EQ(PrepareFailedTextures(), RADIENT_STATUS_OK);
+        EXPECT_EQ(ResolveCount, InitialResolveCount);
+    }
+
+    // The second material uses the same texture recipe and inherits its
+    // retained failure. Neither material is published or rescheduled.
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(PrepareFailedTextures(), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+    EXPECT_EQ(pThreadPool->GetQueueSize(), 0u);
+    EXPECT_FALSE(DrawableCache.HasPendingRenderables());
+    EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+    EXPECT_EQ(ResolveCount, InitialResolveCount);
+    EXPECT_EQ(CreateCount, 0u);
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_NO_CHANGE);
+}
+
 TEST(RadientTesseraDrawableCacheTest, RenderableMayBeRemovedWhileMaterialProcessingIsPending)
 {
     TestDrawableMeshProvider                     MeshProvider;

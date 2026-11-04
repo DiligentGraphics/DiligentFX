@@ -651,16 +651,15 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         const RADIENT_STATUS MaterialStatus = MaterialResult.Data->GetGPUResourceStatus();
         if (MaterialStatus == RADIENT_STATUS_PENDING)
             HasPendingMaterial = true;
-        else if (MaterialStatus != RADIENT_STATUS_OK)
-            continue;
 
         MaterialData[PrimitiveIndex] = std::move(MaterialResult.Data);
     }
 
     if (HasPendingMaterial)
     {
-        // The material cache stores weak values. Retain the resolved handles
-        // until the renderable is retried and they can move into drawable slots.
+        // The material cache stores weak values. Retain all resolved handles,
+        // including failures, while other materials are pending. Otherwise a
+        // failed material would be discarded and processed again on each retry.
         m_PendingMaterialData[Entity] = std::move(MaterialData);
         AddPendingResolution(Entity, Record);
         return false;
@@ -681,7 +680,8 @@ bool RadientTesseraDrawableCache::TryExpandRenderable(
         if (Primitive.ElementCount == 0)
             continue;
 
-        if (!MaterialData[PrimitiveIndex])
+        if (!MaterialData[PrimitiveIndex] ||
+            MaterialData[PrimitiveIndex]->GetGPUResourceStatus() != RADIENT_STATUS_OK)
             continue;
 
         if (Primitive.GeometryIndex >= Mesh.Geometries.size())
