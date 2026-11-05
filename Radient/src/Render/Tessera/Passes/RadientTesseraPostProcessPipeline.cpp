@@ -260,6 +260,13 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Prepare(const PrepareInfo& Inf
     {
         m_ResetTemporalAntiAliasing = true;
     }
+    if (DepthOfFieldEnabled &&
+        (!m_DepthOfFieldEnabled ||
+         m_FinalPass.TargetVersion != Targets.GetVersion() ||
+         RadientPostFX::GetDepthOfFieldFeatureFlags(m_DepthOfField) != RadientPostFX::GetDepthOfFieldFeatureFlags(DepthOfFieldDesc)))
+    {
+        m_ResetDepthOfField = true;
+    }
 
     const bool ToneMappingEnabled = ToneMappingMode > TONE_MAPPING_MODE_NONE;
     if (ToneMappingEnabled)
@@ -388,6 +395,9 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
                                                           const RadientFrameRenderTargets& Targets,
                                                           bool                             ResetTemporalHistory)
 {
+    // Keep the reset pending if execution is skipped or DOF shaders are not ready.
+    m_ResetDepthOfField = m_ResetDepthOfField || ResetTemporalHistory;
+
     if (pContext == nullptr)
         return RADIENT_STATUS_OK;
 
@@ -447,7 +457,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             SSRRenderAttribs.pMaterialBufferSRV = Targets.GetGBufferSRV(RadientFrameRenderTargets::GBUFFER_TARGET_MATERIAL);
             SSRRenderAttribs.pMotionVectorsSRV  = pMotionVectorsSRV;
             SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
-            PostFXStatus = CombineDependencyStatus(
+            PostFXStatus                        = CombineDependencyStatus(
                 PostFXStatus,
                 GetRadientPostFXStatus(m_pSSR->Execute(SSRRenderAttribs)));
         }
@@ -458,14 +468,14 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             SSAOAttribs.ResetAccumulation                        = ResetTemporalHistory || m_ResetSSAO;
 
             ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs;
-            SSAORenderAttribs.pDevice          = pDevice;
-            SSAORenderAttribs.pDeviceContext   = pContext;
-            SSAORenderAttribs.pPostFXContext   = m_pPostFXContext.get();
-            SSAORenderAttribs.pDepthBufferSRV  = pDepthSRV;
-            SSAORenderAttribs.pNormalBufferSRV = pNormalSRV;
-            SSAORenderAttribs.pSSAOAttribs     = &SSAOAttribs;
+            SSAORenderAttribs.pDevice                 = pDevice;
+            SSAORenderAttribs.pDeviceContext          = pContext;
+            SSAORenderAttribs.pPostFXContext          = m_pPostFXContext.get();
+            SSAORenderAttribs.pDepthBufferSRV         = pDepthSRV;
+            SSAORenderAttribs.pNormalBufferSRV        = pNormalSRV;
+            SSAORenderAttribs.pSSAOAttribs            = &SSAOAttribs;
             const POST_FX_EXECUTION_STATUS SSAOStatus = m_pSSAO->Execute(SSAORenderAttribs);
-            PostFXStatus = CombineDependencyStatus(PostFXStatus, GetRadientPostFXStatus(SSAOStatus));
+            PostFXStatus                              = CombineDependencyStatus(PostFXStatus, GetRadientPostFXStatus(SSAOStatus));
             if (SSAOStatus == POST_FX_EXECUTION_STATUS_READY)
                 m_ResetSSAO = false;
         }
@@ -520,17 +530,25 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
 
             HLSL::DepthOfFieldAttribs DepthOfFieldAttribs =
                 RadientPostFX::MakeDepthOfFieldAttribs(m_DepthOfField);
+            // Replace accumulated CoC with the current frame without clearing the history textures.
+            if (m_ResetDepthOfField)
+                DepthOfFieldAttribs.TemporalStabilityFactor = 0.f;
 
             DepthOfField::RenderAttributes DepthOfFieldRenderAttribs;
-            DepthOfFieldRenderAttribs.pDevice         = pDevice;
-            DepthOfFieldRenderAttribs.pDeviceContext  = pContext;
-            DepthOfFieldRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
-            DepthOfFieldRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
-            DepthOfFieldRenderAttribs.pDepthBufferSRV = pDepthSRV;
-            DepthOfFieldRenderAttribs.pDOFAttribs     = &DepthOfFieldAttribs;
+            DepthOfFieldRenderAttribs.pDevice                 = pDevice;
+            DepthOfFieldRenderAttribs.pDeviceContext          = pContext;
+            DepthOfFieldRenderAttribs.pPostFXContext          = m_pPostFXContext.get();
+            DepthOfFieldRenderAttribs.pColorBufferSRV         = pCurrentColorSRV;
+            DepthOfFieldRenderAttribs.pDepthBufferSRV         = pDepthSRV;
+            DepthOfFieldRenderAttribs.pDOFAttribs             = &DepthOfFieldAttribs;
+            const POST_FX_EXECUTION_STATUS DepthOfFieldStatus = m_pDepthOfField->Execute(DepthOfFieldRenderAttribs);
+
             PostFXStatus = CombineDependencyStatus(
                 PostFXStatus,
-                GetRadientPostFXStatus(m_pDepthOfField->Execute(DepthOfFieldRenderAttribs)));
+                GetRadientPostFXStatus(DepthOfFieldStatus));
+
+            if (DepthOfFieldStatus == POST_FX_EXECUTION_STATUS_READY)
+                m_ResetDepthOfField = false;
 
             pCurrentColorSRV = m_pDepthOfField->GetDepthOfFieldTextureSRV();
             if (pCurrentColorSRV == nullptr)
@@ -550,7 +568,7 @@ RADIENT_STATUS RadientTesseraPostProcessPipeline::Execute(IRenderDevice*        
             BloomRenderAttribs.pPostFXContext  = m_pPostFXContext.get();
             BloomRenderAttribs.pColorBufferSRV = pCurrentColorSRV;
             BloomRenderAttribs.pBloomAttribs   = &BloomAttribs;
-            PostFXStatus = CombineDependencyStatus(
+            PostFXStatus                       = CombineDependencyStatus(
                 PostFXStatus,
                 GetRadientPostFXStatus(m_pBloom->Execute(BloomRenderAttribs)));
 

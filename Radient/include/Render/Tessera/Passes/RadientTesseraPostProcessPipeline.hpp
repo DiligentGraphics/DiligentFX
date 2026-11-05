@@ -173,6 +173,7 @@ private:
     bool   m_CompositionRequired         = false;
     bool   m_ResetSSAO                   = true;
     bool   m_ResetTemporalAntiAliasing   = true;
+    bool   m_ResetDepthOfField           = true;
     Uint32 m_ComposedColorVersion        = ~Uint32{0};
     float  m_TransitionDuration          = 1.f;
 };
