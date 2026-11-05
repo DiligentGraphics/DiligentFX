@@ -149,8 +149,8 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
         ShadowPSOCreateInfo.GraphicsPipeline.NumRenderTargets = 0;
         ShadowPSOCreateInfo.GraphicsPipeline.RTVFormats[0] = Diligent::TEX_FORMAT_UNKNOWN;
         // The DSV format is the shadow map format, this info needs to come from a g_buffer object we pass into the creation 
-		// so the shaders can pull what they need to know.  Also the models should not know enough to be creating shaders. 
-		// This whole thing is inverted the wrong way.  That is the next refactor.
+        // so the shaders can pull what they need to know.  Also the models should not know enough to be creating shaders. 
+        // This whole thing is inverted the wrong way.  That is the next refactor.
         ShadowPSOCreateInfo.GraphicsPipeline.DSVFormat = Diligent::TEX_FORMAT_D32_FLOAT;
         ShadowPSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         // Cull back faces
@@ -916,14 +916,17 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     AttribsData.NodeIndex = static_cast<Uint32>(Node.Index);
                     if (RenderParams.InstanceSlotBuffer != nullptr)
                     {
-                        VERIFY(Node.SkinTransformsIndex >= 0 &&
-                            static_cast<Uint32>(Node.SkinTransformsIndex) < RenderParams.InstanceJointOffsetCount &&
-                            RenderParams.InstanceJointOffsets != nullptr,
-                            "Instance skin-joint palette offsets are missing or incomplete.");
-                        if (Node.SkinTransformsIndex >= 0 &&
-                            static_cast<Uint32>(Node.SkinTransformsIndex) < RenderParams.InstanceJointOffsetCount &&
-                            RenderParams.InstanceJointOffsets != nullptr)
-                            AttribsData.FirstJoint = RenderParams.InstanceJointOffsets[Node.SkinTransformsIndex];
+                        if (JointCount != 0)
+                        {
+                            VERIFY(Node.SkinTransformsIndex >= 0 &&
+                                static_cast<Uint32>(Node.SkinTransformsIndex) < RenderParams.InstanceJointOffsetCount &&
+                                RenderParams.InstanceJointOffsets != nullptr,
+                                "Instance skin-joint palette offsets are missing or incomplete.");
+                            if (Node.SkinTransformsIndex >= 0 &&
+                                static_cast<Uint32>(Node.SkinTransformsIndex) < RenderParams.InstanceJointOffsetCount &&
+                                RenderParams.InstanceJointOffsets != nullptr)
+                                AttribsData.FirstJoint = RenderParams.InstanceJointOffsets[Node.SkinTransformsIndex];
+                        }
                     }
                     void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, !m_Settings.PackMatrixRowMajor, m_Settings.UseSkinPreTransform);
 
