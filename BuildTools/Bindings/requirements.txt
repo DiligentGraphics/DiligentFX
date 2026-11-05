@@ -1,0 +1,2 @@
+# Python bindings only; LLVM 20 supplies the native libclang library.
+clang==20.1.5

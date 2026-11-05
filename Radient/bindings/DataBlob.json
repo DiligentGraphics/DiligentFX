@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "headers": ["Radient/interface/RadientDataBlob.h"],
+  "declarations": {
+    "Diligent::IObject": {
+      "binding": "external",
+      "reason": "The language runtime supplies reference counting and interface queries.",
+      "ownership": "reference_counted"
+    },
+    "Diligent::RADIENT_STATUS": {"role": "status"},
+    "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE": {},
+    "Diligent::RadientDataBlobCreateInfo": {
+      "fields": {
+        "pData": {
+          "binding": "manual",
+          "reason": "COPY borrows Size bytes for creation; REFERENCE retains their address until destruction. A backend must provide the corresponding storage lifetime.",
+          "length": "Size"
+        },
+        "OnLastReaderReleased": {
+          "binding": "manual",
+          "reason": "Callback invocation may occur on a native worker; language runtime dispatch and callback retention need an adapter."
+        },
+        "pUserData": {
+          "binding": "manual",
+          "reason": "Opaque context is owned by the callback adapter, not exposed as a language pointer."
+        },
+        "OnDestroy": {
+          "binding": "manual",
+          "reason": "The callback adapter releases retained context on blob destruction and handles failed creation separately."
+        }
+      }
+    },
+    "Diligent::IRadientDataBlob": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_RadientDataBlob",
+      "methods": {
+        "BeginRead": {
+          "binding": "manual",
+          "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.",
+          "parameters": {
+            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
+          }
+        },
+        "EndRead": {
+          "binding": "manual",
+          "reason": "Called by the scoped read-access adapter."
+        }
+      }
+    },
+    "Diligent::IRadientMutableDataBlob": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_RadientMutableDataBlob",
+      "methods": {
+        "BeginWrite": {
+          "binding": "manual",
+          "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.",
+          "parameters": {
+            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
+          }
+        },
+        "EndWrite": {
+          "binding": "manual",
+          "reason": "Called by the scoped write-access adapter."
+        }
+      }
+    },
+    "Diligent::CreateRadientDataBlob": {
+      "parameters": {
+        "CreateInfo": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+      }
+    },
+    "Diligent::CreateRadientMutableDataBlob": {
+      "parameters": {
+        "CreateInfo": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+      }
+    }
+  }
+}
