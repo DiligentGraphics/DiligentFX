@@ -99,7 +99,6 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
     const IRadientScene&                        Scene,
     const RadientTesseraMaterialResolveContext& MaterialResolveContext)
 {
-    m_DrawableChanges.clear();
     m_LightChanges.clear();
 
     const RadientSceneRevisions& SceneRevisions = Scene.GetSceneRevisions();
@@ -143,6 +142,7 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
+    const size_t InitialDrawableChangeCount = m_DrawableChanges.size();
     if (UpdateRenderables)
     {
         State.EnumerateRenderableMeshChanges(
@@ -178,7 +178,8 @@ RADIENT_STATUS RadientTesseraDrawableCache::SyncScene(
     }
 
     // Pending meshes can acquire geometry bindings without a scene revision change.
-    if (UpdateDeformationVisibility || !m_DrawableChanges.empty())
+    // Only new changes affect visibility; older entries may await geometry preparation.
+    if (UpdateDeformationVisibility || m_DrawableChanges.size() != InitialDrawableChangeCount)
         RebuildVisibleDeformationDataLists();
 
     m_SceneRevisions = SceneRevisions;

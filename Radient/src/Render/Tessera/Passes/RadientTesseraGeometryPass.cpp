@@ -139,7 +139,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
                                                    bool                               EnableIBL)
 {
     if (pDevice == nullptr || pContext == nullptr)
-        return RADIENT_STATUS_OK;
+        return RADIENT_STATUS_OUT_OF_DATE;
 
     PBR_Renderer* pRenderer = Renderer.GetRenderer();
     if (pRenderer == nullptr)
@@ -170,7 +170,7 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
     {
         ITextureView* const pRTV = Targets.GetGBufferRTV(static_cast<RadientFrameRenderTargets::GBufferTarget>(TargetIndex));
         if (pRTV == nullptr)
-            return RADIENT_STATUS_OK;
+            return RADIENT_STATUS_OUT_OF_DATE;
 
         RTVFormats[TargetIndex] = GetTextureViewFormat(pRTV);
     }
@@ -190,6 +190,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Prepare(RadientTesseraGeometryRendere
 
         RebuildDrawablePassData = true;
     }
+
+    if (!m_PbrPSOCache)
+        return RADIENT_STATUS_OUT_OF_DATE;
 
     SyncDrawablePassData(Renderer, DrawableCache, RebuildDrawablePassData);
     return RADIENT_STATUS_OK;
@@ -226,12 +229,9 @@ RADIENT_STATUS RadientTesseraGeometryPass::Execute(RadientTesseraGeometryRendere
                                                      Targets,
                                                      m_DebugView,
                                                      m_EnableIBL);
-        if (RADIENT_FAILED(PrepareStatus))
+        if (PrepareStatus != RADIENT_STATUS_OK)
             return PrepareStatus;
     }
-    if (!m_PbrPSOCache)
-        return RADIENT_STATUS_OK;
-
     std::array<ITextureView*, RadientFrameRenderTargets::GBUFFER_TARGET_COUNT> GBufferRTVs{};
     for (Uint32 TargetIndex = 0; TargetIndex < RadientFrameRenderTargets::GBUFFER_TARGET_COUNT; ++TargetIndex)
     {
@@ -689,9 +689,6 @@ void RadientTesseraGeometryPass::SyncDrawablePassData(RadientTesseraGeometryRend
                                                       const RadientTesseraDrawableCache& DrawableCache,
                                                       bool                               RebuildAll)
 {
-    if (!m_PbrPSOCache)
-        return;
-
     if (RebuildAll)
     {
         for (OrderedDrawableBatchMap& Batches : m_DrawableBatches)

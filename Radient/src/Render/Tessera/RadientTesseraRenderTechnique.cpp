@@ -231,6 +231,10 @@ RADIENT_STATUS RadientTesseraRenderTechnique::PrepareFrame(const RadientRenderCo
                                           ViewDesc.EnableIBL);
     if (RADIENT_FAILED(GeometryPassStatus))
         return GeometryPassStatus;
+    // A skipped preparation has not consumed the changes. Once batches are
+    // synchronized, later pass failures do not require replaying these changes.
+    if (GeometryPassStatus == RADIENT_STATUS_OK)
+        pSceneState->DrawableCache.ClearDrawableChanges();
     FrameStatus = CombineDependencyStatus(FrameStatus, GeometryPassStatus);
 
     const RADIENT_STATUS SkyboxStatus =

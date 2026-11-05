@@ -36,6 +36,8 @@
 
 #include "gtest/gtest.h"
 
+#include <vector>
+
 using namespace Diligent;
 using namespace Diligent::Testing;
 using namespace Diligent::Testing::RadientGPUTest;
@@ -381,6 +383,81 @@ TEST(RadientMeshRenderingGPUTest, MorphsNonIndexedVertexRangesAtNonzeroPoolOffse
     }
 }
 
+
+// Failed preparation must retain changes until geometry batches consume them.
+// Removing morphing must restore the small base quad; removing the entity must
+// then hide it, while the other three quads continue rendering unchanged.
+TEST(RadientMeshRenderingGPUTest, PreservesDrawableChangesAcrossFailedFramePreparation)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    QuadSetups                         Setups;
+    Setups[0].UseMorphTarget = true;
+    RadientQuadTestScene Scene;
+    ASSERT_NO_FATAL_FAILURE(Scene.Initialize(Setups));
+    SampledColors ReferenceCenters;
+    SampledColors ReferenceEdges;
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(ReferenceCenters));
+    ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(ReferenceEdges, 16));
+    for (Uint32 Index = 0; Index < Setups.size(); ++Index)
+    {
+        ASSERT_GT(ReferenceCenters[Index][0], 20);
+        ASSERT_GT(ReferenceEdges[Index][0], 20);
+    }
+
+    std::vector<RadientEntityID> Roots(Scene.pScene->GetRootEntityCount());
+    Uint32                       RootCount = 0;
+    ASSERT_EQ(Scene.pScene->GetRootEntities(static_cast<Uint32>(Roots.size()), Roots.data(), RootCount), RADIENT_STATUS_OK);
+    ASSERT_EQ(RootCount, Roots.size());
+    RadientEntityID MorphEntity = InvalidRadientEntityID;
+    for (RadientEntityID Entity : Roots)
+    {
+        RadientMorphComponent Morph;
+        if (Scene.pScene->GetMorph(Entity, Morph) == RADIENT_STATUS_OK)
+        {
+            ASSERT_EQ(MorphEntity, InvalidRadientEntityID);
+            MorphEntity = Entity;
+        }
+    }
+    ASSERT_NE(MorphEntity, InvalidRadientEntityID);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    ASSERT_EQ(Scene.pEngine->CreateSceneWriter(Scene.pScene, &pWriter), RADIENT_STATUS_OK);
+    const RadientExtent2D      TargetSize = Scene.pTarget->GetDesc().Size;
+    const std::array<Uint8, 4> Background{0, 0, 0, 255};
+
+    for (bool RemoveEntity : {false, true})
+    {
+        SCOPED_TRACE(RemoveEntity ? "Remove entity" : "Remove morph component");
+        if (RemoveEntity)
+        {
+            ASSERT_EQ(pWriter->DestroyEntity(MorphEntity), RADIENT_STATUS_OK);
+        }
+        else
+        {
+            ASSERT_EQ(pWriter->RemoveComponent(MorphEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
+        }
+        ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.pTarget->Resize(0, 0), RADIENT_STATUS_OK);
+        // The first failed frame synchronizes the removal; the second has no new
+        // scene changes and must still preserve that unconsumed notification.
+        EXPECT_EQ(Scene.RenderFrame(), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(Scene.RenderFrame(), RADIENT_STATUS_INVALID_ARGUMENT);
+        ASSERT_EQ(Scene.pTarget->Resize(TargetSize.Width, TargetSize.Height), RADIENT_STATUS_OK);
+        ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady());
+
+        SampledColors Centers;
+        SampledColors Edges;
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Centers));
+        ASSERT_NO_FATAL_FAILURE(Scene.ReadColors(Edges, 16));
+        ExpectSameColor(Centers[0], RemoveEntity ? Background : ReferenceCenters[0]);
+        ExpectSameColor(Edges[0], Background);
+        for (Uint32 Index = 1; Index < Setups.size(); ++Index)
+        {
+            SCOPED_TRACE(Index);
+            ExpectSameColor(Centers[Index], ReferenceCenters[Index]);
+            ExpectSameColor(Edges[Index], ReferenceEdges[Index]);
+        }
+    }
+}
 
 // Material preparation finishes after the first view's scene synchronization.
 // A later view in the same frame creates its drawable, but deformation is not

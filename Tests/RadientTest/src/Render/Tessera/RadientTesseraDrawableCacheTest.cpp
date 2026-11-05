@@ -200,6 +200,10 @@ public:
     RADIENT_STATUS SyncScene(RadientTesseraDrawableCache& DrawableCache,
                              const IRadientScene&         Scene)
     {
+        // Previous changes have been inspected by the test. Model the geometry
+        // pass acknowledging them before the next synchronization.
+        DrawableCache.ClearDrawableChanges();
+
         for (auto& MeshPair : Meshes)
         {
             MeshData& Data = MeshPair.second;
@@ -907,6 +911,72 @@ TEST(RadientTesseraDrawableCacheTest, SyncEmptyScene)
         EXPECT_EQ(Change.Type, RadientDrawableChangeType::Removed);
 
     pScene->ClearPendingRenderChanges();
+}
+
+// Failed frame preparation leaves changes unconsumed. They must survive later
+// synchronizations, including removal and reuse of the same drawable slot.
+TEST(RadientTesseraDrawableCacheTest, RetainsDrawableChangesUntilConsumed)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IThreadPool>                   pThreadPool    = CreateThreadPool(ThreadPoolCreateInfo{0});
+    std::unique_ptr<RadientTesseraMaterialCache> pMaterialCache = MakeDrawableMaterialCache();
+    ASSERT_NE(pThreadPool, nullptr);
+    const RadientTesseraMaterialResolveContext MaterialContext{*pThreadPool, pMaterialCache.get()};
+
+    GLTF::Model Model;
+    InitSinglePrimitiveTestModel(Model);
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://unconsumed-drawable-changes", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RADIENT_STATUS_OK);
+    const RadientTesseraMaterialResolveResult Material =
+        pMaterialCache->Resolve(*pThreadPool, MeshProvider.Meshes.at(pMesh).Materials[0]);
+    ASSERT_TRUE(Material.Data);
+    ASSERT_TRUE(pThreadPool->ProcessTask(0, false));
+    ASSERT_EQ(PrepareDrawableMaterialCache(*pMaterialCache), RADIENT_STATUS_OK);
+
+    const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+    ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.GetDrawableChanges().size(), 1u);
+    const RadientDrawableID DrawableID = DrawableCache.GetDrawableChanges()[0].DrawableID;
+    pScene->ClearPendingRenderChanges();
+
+    // Use the cache directly: the provider's helper acknowledges prior changes.
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_NO_CHANGE);
+    ExpectDrawableChangeCounts(DrawableCache, 1u, 0u, 0u);
+
+    ASSERT_EQ(pWriter->DestroyEntity(Entity), RADIENT_STATUS_OK);
+    ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+    ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+    ExpectDrawableChangeCounts(DrawableCache, 1u, 1u, 0u);
+    EXPECT_EQ(DrawableCache.GetDrawableSlot(DrawableID), nullptr);
+    EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+    pScene->ClearPendingRenderChanges();
+
+    const RadientEntityID Replacement = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_NE(Replacement, InvalidRadientEntityID);
+    ASSERT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_OK);
+    const std::vector<RadientDrawableChange>& Changes = DrawableCache.GetDrawableChanges();
+    ASSERT_EQ(Changes.size(), 3u);
+    EXPECT_EQ(Changes[0].Type, RadientDrawableChangeType::Added);
+    EXPECT_EQ(Changes[1].Type, RadientDrawableChangeType::Removed);
+    EXPECT_EQ(Changes[2].Type, RadientDrawableChangeType::Added);
+    for (const RadientDrawableChange& Change : Changes)
+        EXPECT_EQ(Change.DrawableID, DrawableID);
+    const RadientDrawableSlot* pSlot = DrawableCache.GetDrawableSlot(DrawableID);
+    ASSERT_NE(pSlot, nullptr);
+    EXPECT_EQ(pSlot->Entity, Replacement);
+    pScene->ClearPendingRenderChanges();
+
+    DrawableCache.ClearDrawableChanges();
+    MeshProvider.NumCalls = 0;
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene, MaterialContext), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+    EXPECT_EQ(MeshProvider.NumCalls, 0u);
 }
 
 TEST(RadientTesseraDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSync)

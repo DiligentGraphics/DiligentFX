@@ -227,9 +227,16 @@ public:
         return m_DrawLists.GetDrawList(AlphaMode);
     }
 
+    /// Changes accumulate across scene and material synchronization until consumed.
     const std::vector<RadientDrawableChange>& GetDrawableChanges() const
     {
         return m_DrawableChanges;
+    }
+
+    /// Clears changes after the geometry pass has synchronized its batches.
+    void ClearDrawableChanges()
+    {
+        m_DrawableChanges.clear();
     }
 
     const RadientLightLists& GetLightList() const
@@ -279,7 +286,8 @@ public:
         }
 
         const RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-        VERIFY(Slot.IsValid(), "Drawable ID ", DrawableID, " is not valid");
+        // Unconsumed changes may reference a slot removed by a later synchronization.
+        // The geometry pass invalidates its old batch entry when this returns null.
         return Slot.IsValid() ? &Slot : nullptr;
     }
 

@@ -54,6 +54,8 @@ class RadientTesseraGeometryPass
 public:
     explicit RadientTesseraGeometryPass(bool EnableAsyncPipelineCompilation = true) noexcept;
 
+    // Returns OK after synchronizing batches, or OUT_OF_DATE if preparation is skipped.
+    // The owner may acknowledge pending drawable changes only after OK.
     RADIENT_STATUS Prepare(RadientTesseraGeometryRenderer&    Renderer,
                            IRenderDevice*                     pDevice,
                            IDeviceContext*                    pContext,
