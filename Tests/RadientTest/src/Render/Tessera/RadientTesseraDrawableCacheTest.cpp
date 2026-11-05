@@ -1708,6 +1708,69 @@ TEST(RadientTesseraDrawableCacheTest, PendingRenderableMeshChangeExpandsNewMeshO
     ExpectDrawListsForEntities(DrawableCache, AlternateModel, {Entity}, NewVertexAttribFlags, NewFirstIndexLocation, NewBaseVertex);
 }
 
+// Replacing a pending mesh must reuse the entity's retry entry. Otherwise every
+// replacement adds another resolution attempt to all subsequent synchronizations.
+TEST(RadientTesseraDrawableCacheTest, PendingMeshReplacementsDoNotAccumulateRetries)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientTesseraDrawableCache     DrawableCache{MeshProvider.GetJointBuffer(), &MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+    GLTF::Model AlternateModel;
+    InitAlternateTestModel(AlternateModel);
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh0  = MakeTestMeshAsset("mesh://pending-replacement-0", 1);
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh1  = MakeTestMeshAsset("mesh://pending-replacement-1", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh0, Model, RADIENT_STATUS_PENDING);
+    MeshProvider.RegisterMesh(pMesh1, AlternateModel, RADIENT_STATUS_PENDING);
+    const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh0);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    ASSERT_TRUE(DrawableCache.HasPendingRenderables());
+    pScene->ClearPendingRenderChanges();
+
+    for (Uint32 Replacement = 0; Replacement < 32; ++Replacement)
+    {
+        SCOPED_TRACE(Replacement);
+        RadientMeshComponent Mesh;
+        Mesh.pMesh = (Replacement % 2) == 0 ? pMesh1.RawPtr() : pMesh0.RawPtr();
+        ASSERT_EQ(pWriter->SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+        ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+        // Check both the replacement sync and the unchanged retry that follows.
+        for (Uint32 Sync = 0; Sync < 2; ++Sync)
+        {
+            SCOPED_TRACE(Sync);
+            MeshProvider.NumCalls = 0;
+            ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+            EXPECT_EQ(MeshProvider.NumCalls, 1u);
+            EXPECT_EQ(MeshProvider.pLastMesh, Mesh.pMesh);
+            EXPECT_TRUE(DrawableCache.HasPendingRenderables());
+            EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+            EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+            pScene->ClearPendingRenderChanges();
+        }
+    }
+
+    // The last replacement selected mesh 0; mesh 1 remains pending.
+    MeshProvider.SetMeshStatus(pMesh0, RADIENT_STATUS_OK);
+    MeshProvider.NumCalls = 0;
+    ASSERT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_OK);
+    EXPECT_EQ(MeshProvider.NumCalls, 1u);
+    EXPECT_EQ(MeshProvider.pLastMesh, pMesh0);
+    EXPECT_FALSE(DrawableCache.HasPendingRenderables());
+    ExpectDrawableChangeCounts(DrawableCache, 6u, 0u, 0u);
+    ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
+
+    MeshProvider.NumCalls = 0;
+    EXPECT_EQ(MeshProvider.SyncScene(DrawableCache, *pScene), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(MeshProvider.NumCalls, 0u);
+}
+
 TEST(RadientTesseraDrawableCacheTest, MeshChangeRebuildsDrawablePrimitives)
 {
     TestDrawableMeshProvider        MeshProvider;

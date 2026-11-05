@@ -273,8 +273,9 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
         RemoveRenderableDrawables(Record);
         m_PendingMaterialData.erase(Mesh.Entity);
 
-        Record.pMesh             = Mesh.Mesh.pMesh;
-        Record.PendingResolution = false;
+        // A queued retry belongs to the entity, not the old mesh. Preserve its
+        // pending state so replacing a loading mesh cannot enqueue it again.
+        Record.pMesh = Mesh.Mesh.pMesh;
     }
 
     Record.pRenderer         = &Mesh.Renderer;
@@ -297,7 +298,8 @@ void RadientTesseraDrawableCache::ProcessRenderableMeshAddedOrUpdated(
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Mesh.Entity, Record, MaterialResolveContext);
+        if (!Record.PendingResolution)
+            TryExpandRenderable(Mesh.Entity, Record, MaterialResolveContext);
     }
     else
     {
