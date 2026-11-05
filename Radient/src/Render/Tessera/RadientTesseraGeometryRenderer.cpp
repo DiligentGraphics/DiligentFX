@@ -39,6 +39,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <sstream>
 
 namespace Diligent
@@ -654,7 +655,21 @@ RADIENT_STATUS RadientTesseraGeometryRenderer::CreateRenderer(IRenderDevice* pDe
         return RADIENT_STATUS_FAILED;
     RendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
 
-    m_pRenderer                     = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
+    try
+    {
+        m_pRenderer = std::make_unique<RadientPBRRenderer>(pDevice, nullptr, pContext, RendererCI);
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to initialize Radient PBR renderer: ", Error.what());
+        return RADIENT_STATUS_FAILED;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to initialize Radient PBR renderer");
+        return RADIENT_STATUS_FAILED;
+    }
+
     const Uint32 PrimitiveArraySize = std::max(RendererCI.PrimitiveArraySize, 1u);
     const Uint64 PrimitiveAttribsRange =
         Uint64{m_pRenderer->GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL)} * PrimitiveArraySize;

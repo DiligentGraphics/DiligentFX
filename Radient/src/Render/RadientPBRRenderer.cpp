@@ -256,10 +256,12 @@ void RadientPBRRenderer::CreateCustomSignature(PipelineResourceSignatureDescX&& 
     SignatureDesc.SetBindingIndex(1);
 
     RefCntAutoPtr<IPipelineResourceSignature> pFrameSignature = m_Device.CreatePipelineResourceSignature(FrameSignatureDesc);
-    VERIFY_EXPR(pFrameSignature);
+    if (pFrameSignature == nullptr)
+        LOG_ERROR_AND_THROW("Failed to create Radient frame resource signature");
 
     RefCntAutoPtr<IPipelineResourceSignature> pMaterialSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
-    VERIFY_EXPR(pMaterialSignature);
+    if (pMaterialSignature == nullptr)
+        LOG_ERROR_AND_THROW("Failed to create Radient material resource signature");
 
     if (m_Settings.EnableIBL)
         pFrameSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
