@@ -688,4 +688,115 @@ RADIENT_STATUS RadientMaterialAssetManager::CreateStandardMaterialDefinition(con
     }
 }
 
+RADIENT_STATUS SetStandardMaterialTextureParameters(
+    const IRadientMaterialDefinitionAsset&              Definition,
+    IRadientMaterialWriter&                             Writer,
+    const RadientStandardMaterialTextureParameterNames& Names,
+    const RadientStandardMaterialTextureParameters&     Parameters)
+{
+    RadientMaterialParameterHandle Texture;
+    RadientMaterialParameterHandle UVSelector;
+    RadientMaterialParameterHandle UVScale;
+    RadientMaterialParameterHandle UVRotation;
+    RadientMaterialParameterHandle UVBias;
+    RadientMaterialParameterHandle WrapU;
+    RadientMaterialParameterHandle WrapV;
+
+    RADIENT_STATUS Status = Definition.FindParameter(Names.Texture, &Texture);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVSelector, &UVSelector);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVScale, &UVScale);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVRotation, &UVRotation);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.UVBias, &UVBias);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.WrapU, &WrapU);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+    Status = Definition.FindParameter(Names.WrapV, &WrapV);
+    if (Status != RADIENT_STATUS_OK)
+        return Status;
+
+    const auto HasExpectedType = [&](RadientMaterialParameterHandle  Handle,
+                                     RADIENT_MATERIAL_PARAMETER_TYPE Type) {
+        const RadientMaterialParameterDesc& Desc = Definition.GetParameterDesc(Handle.Index);
+        return Desc.Type == Type && Desc.ArraySize == 1;
+    };
+    if (!HasExpectedType(Texture, RADIENT_MATERIAL_PARAMETER_TYPE_TEXTURE) ||
+        !HasExpectedType(UVSelector, RADIENT_MATERIAL_PARAMETER_TYPE_INT) ||
+        !HasExpectedType(UVScale, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
+        !HasExpectedType(UVRotation, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT) ||
+        !HasExpectedType(UVBias, RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT2) ||
+        !HasExpectedType(WrapU, RADIENT_MATERIAL_PARAMETER_TYPE_UINT) ||
+        !HasExpectedType(WrapV, RADIENT_MATERIAL_PARAMETER_TYPE_UINT))
+    {
+        return RADIENT_STATUS_INVALID_DATA;
+    }
+
+    bool Changed = false;
+
+    IRadientTextureAsset* const pTexture = Parameters.pTexture != nullptr ?
+        Parameters.pTexture :
+        Definition.GetParameterDesc(Texture.Index).pDefaultTexture;
+
+    Status = Writer.SetTexture(Texture, 0, pTexture);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVSelector, Parameters.UVSelector);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVScale, Parameters.UVScale);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVRotation, Parameters.UVRotation);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(UVBias, Parameters.UVBias);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(WrapU, Parameters.WrapU);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    Status = Writer.SetParameter(WrapV, Parameters.WrapV);
+    if (RADIENT_FAILED(Status))
+        return Status;
+    Changed |= Status == RADIENT_STATUS_OK;
+
+    return Changed ? RADIENT_STATUS_OK : RADIENT_STATUS_NO_CHANGE;
+}
+
 } // namespace Diligent
+
+extern "C"
+{
+    Diligent::RADIENT_STATUS Diligent_SetStandardMaterialTextureParameters(
+        const Diligent::IRadientMaterialDefinitionAsset*              pDefinition,
+        Diligent::IRadientMaterialWriter*                             pWriter,
+        const Diligent::RadientStandardMaterialTextureParameterNames* pNames,
+        const Diligent::RadientStandardMaterialTextureParameters*     pParameters)
+    {
+        if (pDefinition == nullptr || pWriter == nullptr || pNames == nullptr || pParameters == nullptr)
+            return Diligent::RADIENT_STATUS_INVALID_ARGUMENT;
+
+        return Diligent::SetStandardMaterialTextureParameters(*pDefinition, *pWriter, *pNames, *pParameters);
+    }
+}

@@ -115,6 +115,27 @@ class PublicAPITest(unittest.TestCase):
         self.assertEqual([param["default"] for param in pose["ComputeSkinningMatrices"]["parameters"]],
                          [None, None, "False", "True"])
 
+    def test_standard_material_texture_parameters(self):
+        types = extract_public(["RadientStandardMaterialParameters.h"], [
+            "RadientStandardMaterialTextureParameterNames", "RadientStandardMaterialTextureParameters",
+            "SetStandardMaterialTextureParameters"])
+        names = types["Diligent::RadientStandardMaterialTextureParameterNames"]
+        fields = ["Texture", "UVSelector", "UVScale", "UVRotation", "UVBias", "WrapU", "WrapV"]
+        self.assertEqual([field["name"] for field in names["fields"]], fields)
+        self.assertEqual([field["default"] for field in names["fields"]], ["nullptr"] * 7)
+        values = types["Diligent::RadientStandardMaterialTextureParameters"]
+        self.assertEqual([field["name"] for field in values["fields"]], ["pTexture"] + fields[1:])
+        self.assertEqual(values["methods"], [])
+        self.assertEqual([field["default"] for field in values["fields"]], [
+            "nullptr", "- 1", "{ 1.f , 1.f }", "0.f", "{ }",
+            "RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP", "RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP"])
+        setter = types["Diligent::SetStandardMaterialTextureParameters"]
+        self.assertEqual(setter["kind"], "function")
+        self.assertEqual(unalias(setter["result"]["type"])["name"], "Diligent::RADIENT_STATUS")
+        self.assertEqual([param["name"] for param in setter["parameters"]],
+                         ["Definition", "Writer", "Names", "Parameters"])
+        self.assertTrue(all(param["type"]["kind"] == "reference" for param in setter["parameters"]))
+
     def test_math_functions_exclude_cpp_overloads(self):
         names = ["MakeAxisRotation", "MakeXRotation", "MakeYRotation", "MakeZRotation"]
         functions = extract_public(["RadientMath.h"], names)

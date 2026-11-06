@@ -38,3 +38,16 @@ void RadientStandardMaterialParameters_C_UseConstants(void)
     (void)pTextureName;
     (void)pUVSelectorName;
 }
+
+void RadientStandardMaterialParameters_C_TestHelpers(
+    const IRadientMaterialDefinitionAsset* pDefinition,
+    IRadientMaterialWriter*                pWriter,
+    IRadientTextureAsset*                  pTexture)
+{
+    RadientStandardMaterialTextureParameters Parameters = {
+        pTexture, 0, {1.f, 1.f}, 0.f, {0.f, 0.f}, RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP, RADIENT_MATERIAL_TEXTURE_ADDRESS_MODE_WRAP};
+    const RadientStandardMaterialTextureParameterNames Names  = RadientStandardMaterialBaseColorTextureParameterNames;
+    const RADIENT_STATUS                               Status = Diligent_SetStandardMaterialTextureParameters(
+        pDefinition, pWriter, &Names, &Parameters);
+    (void)Status;
+}
