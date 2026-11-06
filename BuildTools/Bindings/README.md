@@ -21,8 +21,9 @@ of Radient declarations and language-specific generation:
   the extracted model or with JSON loaded in a process without Clang installed.
 - `generate.py` composes these stages and writes the model artifact. Header
   selection, preprocessor definitions, and binding policies come from configuration.
-- `tests/` contains focused enum, struct, interface, and function fixtures using
-  the actual Diligent headers and macros, plus extraction and policy unit tests.
+- `tests/` contains focused enum, struct, interface, function, constant, and typedef
+  fixtures using the actual Diligent headers and macros, plus extraction and policy
+  unit tests.
 - `Radient/bindings/` contains Radient's configuration, build targets, and
   public-header integration tests.
 
@@ -73,7 +74,9 @@ architecture.
 
 Headers are parsed without binding-specific preprocessor switches. The extractor
 retains data fields and virtual interface methods and ignores constructors,
-operators, nonvirtual methods, and member templates. Standard headers included
+operators, nonvirtual methods, and member templates. Free inline functions and
+function templates are C++ helpers and are excluded, including overloads sharing
+a name with a public out-of-line function. Standard headers included
 by C++ helpers still need to be available to Clang, but their declarations are
 not part of the selected API. This dependency is independent of Core's C# tooling.
 
@@ -117,12 +120,12 @@ python -B BuildTools/Bindings/generate.py \
 Run the unit tests with `python -B BuildTools/Bindings/tests/run_tests.py`, passing
 the same `--target` and `--clang-arg` options as generation. These tests use real
 Core headers and therefore need the configured target's standard headers too.
-Use `--pattern test_structs.py` (or `test_enums.py`, `test_interfaces.py`, or
-`test_functions.py`) to run one group independently. Policy validation and
-generation checks live in separate test modules. The fixtures also parse as C,
-including the interface-call macros.
+Use `--pattern test_structs.py` (or `test_enums.py`, `test_interfaces.py`,
+`test_functions.py`, `test_constants.py`, or `test_typedefs.py`) to run one group
+independently. Policy validation and generation checks live in separate test
+modules. The fixtures also parse as C, including the interface-call macros.
 Run the Radient integration test with
-`python -B Radient/bindings/tests/test_data_blob.py`, passing the same `--target` and
+`python -B Radient/bindings/tests/test_public_api.py`, passing the same `--target` and
 `--clang-arg` options as generation. It uses the supplied target and SDK (the native
 host target by default). The CMake test target runs both suites.
 
@@ -167,6 +170,24 @@ sorted; member and parameter order follows the native declaration. Defaults are
 for inspection, not expressions to evaluate in another language: generated glue
 must use native descriptor initialization. The model is not a struct-memory ABI;
 it does not prescribe JS-side offsets or direct vtable calls.
+
+Standalone typedefs produce `alias` declarations with a `type` describing their
+underlying type. A redundant `typedef struct T T` keeps the original record
+declaration. Aliases encountered in signatures remain expanded as before, so
+selecting a standalone alias is only needed to export its own name and documentation.
+
+Selected const variables produce `constant` declarations with `type` and `value`.
+Clang evaluates integer and floating-point expressions; booleans and character
+arrays become JSON booleans and strings. Braced record constants use field-name
+objects with nested arrays, including UUID constants. Unsupported initializers
+fail generation. Integer values retain their full precision in Python and JSON;
+model consumers must preserve 64-bit integers rather than read them as doubles.
+Arbitrary preprocessor macros are not exported; select their typed public
+constants, such as `RADIENT_VERTEX_AUTO_OFFSET`, instead.
+
+Function and method parameters have a `default` expression (or `null` when none
+is supplied), matching record fields. `DEFAULT_VALUE` expressions are retained
+without translating them into language-specific code.
 
 ## Conventions for language backends
 

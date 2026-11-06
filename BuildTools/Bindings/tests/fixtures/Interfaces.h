@@ -80,7 +80,9 @@ DILIGENT_END_INTERFACE
 DILIGENT_BEGIN_INTERFACE(IBindingTestMutableObject, IBindingTestObject)
 {
     VIRTUAL BINDING_TEST_STATUS METHOD(Resize)(THIS_
-                                                 Uint64 Size) PURE;
+                                                 Uint64 Size,
+                                                 Bool PreserveData DEFAULT_VALUE(True),
+                                                 Bool UpdateState DEFAULT_VALUE(False)) PURE;
 };
 DILIGENT_END_INTERFACE
 

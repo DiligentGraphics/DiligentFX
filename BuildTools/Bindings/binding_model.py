@@ -104,6 +104,8 @@ def apply_declaration_policy(declaration, policy):
         validate_keys(policy, {"binding", "reason", "ownership"}, name)
     elif kind == "enum":
         validate_keys(policy, {"binding", "reason", "role"}, name)
+    elif kind in ("alias", "constant"):
+        validate_keys(policy, {"binding", "reason"}, name)
     elif kind in ("record", "interface"):
         validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods"}, name)
         apply_values_policy(declaration["fields"], policy.get("fields", {}), name)

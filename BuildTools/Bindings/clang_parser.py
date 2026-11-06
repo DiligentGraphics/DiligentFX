@@ -3,6 +3,7 @@
 from pathlib import Path
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
+import ctypes
 import os
 
 from clang import cindex
@@ -24,6 +25,28 @@ def configure_clang():
     library = os.environ.get("LIBCLANG_LIBRARY_FILE")
     if library:
         cindex.Config.set_library_file(library)
+
+
+@lru_cache(maxsize=1)
+def clang_library():
+    """Bind the small part of libclang 20 not exposed by clang.cindex."""
+    library = cindex.conf.lib
+    functions = [
+        ("clang_Cursor_isFunctionInlined", [cindex.Cursor], ctypes.c_uint),
+        ("clang_Cursor_Evaluate", [cindex.Cursor], ctypes.c_void_p),
+        ("clang_EvalResult_getKind", [ctypes.c_void_p], ctypes.c_int),
+        ("clang_EvalResult_isUnsignedInt", [ctypes.c_void_p], ctypes.c_uint),
+        ("clang_EvalResult_getAsUnsigned", [ctypes.c_void_p], ctypes.c_ulonglong),
+        ("clang_EvalResult_getAsLongLong", [ctypes.c_void_p], ctypes.c_longlong),
+        ("clang_EvalResult_getAsDouble", [ctypes.c_void_p], ctypes.c_double),
+        ("clang_EvalResult_getAsStr", [ctypes.c_void_p], ctypes.c_void_p),
+        ("clang_EvalResult_dispose", [ctypes.c_void_p], None),
+    ]
+    for name, arguments, result in functions:
+        function = getattr(library, name)
+        function.argtypes = arguments
+        function.restype = result
+    return library
 
 
 def qualified_name(cursor):
@@ -75,12 +98,87 @@ def describe_type(native_type):
         raise ModelError(f"Unsupported type: {native_type.spelling} ({kind.name})")
     return result
 
+def initializer(cursor):
+    """Find the initializer of a field, parameter, or constant declaration."""
+    expressions = [node for node in cursor.get_children() if node.kind.is_expression()]
+    if cursor.type.get_canonical().kind == cindex.TypeKind.CONSTANTARRAY:
+        # Array bounds are also expression children, but are not initializers.
+        expressions = [node for node in expressions
+                       if node.type.get_canonical().kind == cindex.TypeKind.CONSTANTARRAY]
+    return expressions[-1] if expressions else None
+
+
+def default_expression(cursor):
+    expression = initializer(cursor)
+    return " ".join(token.spelling for token in expression.get_tokens()) if expression else None
+
+
+def zero_value(native_type):
+    """Value-initialized aggregate members omitted from a braced initializer."""
+    native_type = native_type.get_canonical()
+    if native_type.kind == cindex.TypeKind.CONSTANTARRAY:
+        return [zero_value(native_type.element_type) for _ in range(native_type.element_count)]
+    if native_type.kind == cindex.TypeKind.RECORD:
+        return {field.spelling: initial_field_value(field) for field in native_type.get_fields()}
+    if native_type.kind == cindex.TypeKind.BOOL:
+        return False
+    if native_type.kind in (cindex.TypeKind.FLOAT, cindex.TypeKind.DOUBLE):
+        return 0.0
+    if native_type.kind in (cindex.TypeKind.POINTER, cindex.TypeKind.LVALUEREFERENCE):
+        raise ModelError("Pointer-valued aggregate constants are not supported")
+    return 0
+
+
+def initial_field_value(field):
+    expression = initializer(field)
+    return constant_value(expression) if expression else zero_value(field.type)
+
+
+def constant_value(cursor):
+    """Evaluate native values with Clang, walking braced aggregates by field order."""
+    library = clang_library()
+    evaluation = library.clang_Cursor_Evaluate(cursor)
+    if evaluation:
+        try:
+            kind = library.clang_EvalResult_getKind(evaluation)
+            if kind == 1:  # CXEval_Int
+                value = (library.clang_EvalResult_getAsUnsigned(evaluation)
+                         if library.clang_EvalResult_isUnsignedInt(evaluation)
+                         else library.clang_EvalResult_getAsLongLong(evaluation))
+                return bool(value) if cursor.type.get_canonical().kind == cindex.TypeKind.BOOL else value
+            if kind == 2:  # CXEval_Float
+                return library.clang_EvalResult_getAsDouble(evaluation)
+            if kind == 4:  # CXEval_StrLiteral
+                # Use the literal's array length rather than strlen, preserving
+                # embedded NULs and excluding only the terminating NUL.
+                expression = initializer(cursor) if cursor.kind == cindex.CursorKind.VAR_DECL else cursor
+                literal_type = expression.type.get_canonical()
+                if literal_type.kind == cindex.TypeKind.CONSTANTARRAY:
+                    return ctypes.string_at(library.clang_EvalResult_getAsStr(evaluation),
+                                            literal_type.element_count - 1).decode("utf-8")
+        finally:
+            library.clang_EvalResult_dispose(evaluation)
+
+    expression = initializer(cursor) if cursor.kind == cindex.CursorKind.VAR_DECL else cursor
+    if expression and expression.kind == cindex.CursorKind.INIT_LIST_EXPR:
+        native_type = expression.type.get_canonical()
+        elements = [child for child in expression.get_children() if child.kind.is_expression()]
+        if native_type.kind == cindex.TypeKind.CONSTANTARRAY:
+            return [constant_value(elements[index]) if index < len(elements)
+                    else zero_value(native_type.element_type) for index in range(native_type.element_count)]
+        if native_type.kind == cindex.TypeKind.RECORD:
+            return {field.spelling: constant_value(elements[index]) if index < len(elements)
+                    else initial_field_value(field) for index, field in enumerate(native_type.get_fields())}
+    raise ModelError(f"{qualified_name(cursor)}: unsupported constant initializer")
+
+
 def describe_callable(cursor, documentation):
     result = {
         "name": cursor.spelling,
         "documentation": documentation(cursor),
         "result": {"type": describe_type(cursor.result_type)},
-        "parameters": [{"name": arg.spelling, "type": describe_type(arg.type)}
+        "parameters": [{"name": arg.spelling, "type": describe_type(arg.type),
+                        "default": default_expression(arg)}
                        for arg in cursor.get_arguments()],
     }
     if cursor.type.is_function_variadic():
@@ -103,7 +201,14 @@ def describe_declaration(cursor, root, external, documentation):
         return result
 
     kind = cursor.kind
-    if kind == cindex.CursorKind.ENUM_DECL:
+    if kind == cindex.CursorKind.TYPEDEF_DECL:
+        result.update(kind="alias", type=describe_type(cursor.underlying_typedef_type))
+    elif kind == cindex.CursorKind.VAR_DECL:
+        # Canonicalize aliases to expose const on types such as const Char[N].
+        if not cursor.type.get_canonical().is_const_qualified():
+            raise ModelError(f"{name}: only constant variables can be exported")
+        result.update(kind="constant", type=describe_type(cursor.type), value=constant_value(cursor))
+    elif kind == cindex.CursorKind.ENUM_DECL:
         result.update(kind="enum", underlying_type=describe_type(cursor.enum_type),
                       values=[{"name": child.spelling, "value": child.enum_value,
                                "documentation": documentation(child)}
@@ -115,18 +220,9 @@ def describe_declaration(cursor, root, external, documentation):
             if child.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
                 bases.append(qualified_name(child.type.get_declaration()))
             elif child.kind == cindex.CursorKind.FIELD_DECL:
-                # Clang expands DEFAULT_INITIALIZER; its expression child retains
-                # the written default. Backends must still initialize native structs.
-                expressions = [node for node in child.get_children() if node.kind.is_expression()]
-                if child.type.get_canonical().kind == cindex.TypeKind.CONSTANTARRAY:
-                    # Array bounds also appear as expression children; they are
-                    # not initializers. Only the array-valued expression is one.
-                    expressions = [node for node in expressions
-                                   if node.type.get_canonical().kind == cindex.TypeKind.CONSTANTARRAY]
                 fields.append({"name": child.spelling, "type": describe_type(child.type),
                                "documentation": documentation(child),
-                               "default": " ".join(token.spelling for token in expressions[-1].get_tokens())
-                               if expressions else None})
+                               "default": default_expression(child)})
             elif child.kind == cindex.CursorKind.CXX_METHOD:
                 # Only virtual methods belong to the C-compatible interface.
                 # Nonvirtual overloads and operators are C++ convenience helpers.
@@ -193,7 +289,20 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
         for cursor in parent.get_children():
             name = qualified_name(cursor)
             symbols.add(name)
-            if name in selected and cursor.kind != cindex.CursorKind.TYPEDEF_DECL:
+            if name in selected:
+                if cursor.kind == cindex.CursorKind.TYPEDEF_DECL:
+                    # `typedef struct T T` is the C spelling of the same record,
+                    # not a second declaration or a self-referencing alias.
+                    declaration = cursor.underlying_typedef_type.get_canonical().get_declaration()
+                    if declaration and qualified_name(declaration) == name:
+                        continue
+                if cursor.kind == cindex.CursorKind.FUNCTION_TEMPLATE:
+                    continue
+                if (cursor.kind == cindex.CursorKind.FUNCTION_DECL and
+                        clang_library().clang_Cursor_isFunctionInlined(cursor)):
+                    # Radient's free inline functions are C++ convenience helpers,
+                    # including overloads of the public out-of-line C API.
+                    continue
                 if cursor.kind == cindex.CursorKind.FUNCTION_DECL or cursor.is_definition():
                     if name in declarations and declarations[name].get_usr() != cursor.get_usr():
                         raise ModelError(f"{name}: overloaded declarations require explicit support")

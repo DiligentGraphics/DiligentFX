@@ -3,6 +3,7 @@
 import unittest
 
 from support import extract_fixture
+from binding_model import ModelError
 
 
 class FunctionTest(unittest.TestCase):
@@ -29,3 +30,15 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(pointer["kind"], "pointer")
         self.assertEqual(pointer["target"]["kind"], "pointer")
         self.assertEqual(pointer["target"]["target"]["name"], "Diligent::IBindingTestObject")
+
+    def test_selects_public_function_instead_of_cpp_overload(self):
+        function = extract_fixture("Functions.h", ["Diligent::MakeBindingTestVector"])["Diligent::MakeBindingTestVector"]
+        self.assertEqual(function["result"]["type"]["kind"], "void")
+        self.assertEqual([param["name"] for param in function["parameters"]], ["Value", "Result"])
+        self.assertEqual(function["parameters"][1]["type"]["kind"], "reference")
+        self.assertEqual([param["default"] for param in function["parameters"]], [None, None])
+        self.assertIn("C-compatible API", function["documentation"])
+
+    def test_cpp_only_free_function_is_not_exported(self):
+        with self.assertRaisesRegex(ModelError, "Declarations not found: Diligent::BindingTestCppOnlyHelper"):
+            extract_fixture("Functions.h", ["Diligent::BindingTestCppOnlyHelper"])

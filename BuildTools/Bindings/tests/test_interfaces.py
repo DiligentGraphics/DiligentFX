@@ -53,3 +53,8 @@ class InterfaceTest(unittest.TestCase):
         self.assertEqual([method["name"] for method in methods],
                          ["QueryInterface", "AddRef", "Release", "GetReferenceCounters"])
         self.assertTrue(all(method["virtual"] for method in methods))
+
+    def test_default_arguments(self):
+        method = self.types["Diligent::IBindingTestMutableObject"]["methods"][0]
+        self.assertEqual([param["name"] for param in method["parameters"]], ["Size", "PreserveData", "UpdateState"])
+        self.assertEqual([param["default"] for param in method["parameters"]], [None, "True", "False"])

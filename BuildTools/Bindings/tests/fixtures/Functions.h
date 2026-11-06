@@ -38,6 +38,20 @@ BINDING_TEST_STATUS DILIGENT_GLOBAL_FUNCTION(CreateBindingTestObject)(
     const BindingTestDesc REF Desc,
     IBindingTestObject**      ppObject);
 
+/// Writes a vector through the C-compatible API.
+void DILIGENT_GLOBAL_FUNCTION(MakeBindingTestVector)(Float32 Value, BindingTestVector REF Result);
+
+#if DILIGENT_CPP_INTERFACE
+inline BindingTestVector MakeBindingTestVector(Float32 Value)
+{
+    BindingTestVector Result;
+    MakeBindingTestVector(Value, Result);
+    return Result;
+}
+
+inline Bool BindingTestCppOnlyHelper() { return True; }
+#endif
+
 #include "UndefRefMacro.h"
 
 DILIGENT_END_NAMESPACE // namespace Diligent

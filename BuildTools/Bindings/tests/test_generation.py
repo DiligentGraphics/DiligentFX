@@ -67,16 +67,15 @@ DILIGENT_END_NAMESPACE
 
     def test_fixtures_are_c_compatible(self):
         configure_clang()
-        header = (support.TOOLS / "tests/fixtures/Functions.h").as_posix()
-        # Functions.h includes the enum, struct, and interface fixtures. Exercise
-        # the C call macros too, so a fixture cannot silently become C++-only.
-        source = f'#include "{header}"\n' + '''
+        headers = sorted((support.TOOLS / "tests/fixtures").glob("*.h"))
+        # Exercise the C call macros too, so a fixture cannot silently become C++-only.
+        source = "".join(f'#include "{header.as_posix()}"\n' for header in headers) + '''
 void UseTestAPI(IBindingTestObject* pObject, IBindingTestMutableObject* pMutable)
 {
     const void* pData = 0;
     IBindingTestObject_GetSize(pObject);
     IBindingTestObject_Read(pObject, &pData);
-    IBindingTestMutableObject_Resize(pMutable, 16);
+    IBindingTestMutableObject_Resize(pMutable, 16, True, False);
     BindingTestDesc Desc = {0};
     Diligent_CreateBindingTestObject(&Desc, &pObject);
 }

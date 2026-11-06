@@ -79,7 +79,7 @@ add_custom_target(Radient-GenerateBindingModel
 add_custom_target(Radient-TestBindingModel
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/tests/run_tests.py"
         ${BINDING_ARGUMENTS}
-    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_data_blob.py"
+    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_public_api.py"
         ${BINDING_ARGUMENTS}
     COMMENT "Testing Radient binding extraction and metadata"
     VERBATIM
