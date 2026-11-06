@@ -136,6 +136,22 @@ class PublicAPITest(unittest.TestCase):
                          ["Definition", "Writer", "Names", "Parameters"])
         self.assertTrue(all(param["type"]["kind"] == "reference" for param in setter["parameters"]))
 
+    def test_standard_material_texture_parameter_name_groups(self):
+        semantics = [
+            "BaseColor", "Diffuse", "MetallicRoughness", "SpecularGlossiness", "Normal", "Occlusion", "Emissive",
+            "ClearCoat", "ClearCoatRoughness", "ClearCoatNormal", "SheenColor", "SheenRoughness", "Specular",
+            "SpecularColor", "Anisotropy", "Iridescence", "IridescenceThickness", "Transmission", "Thickness"]
+        names = ["RadientStandardMaterial" + semantic + "TextureParameterNames" for semantic in semantics]
+        types = extract_public(["RadientStandardMaterialParameters.h"], names)
+        for semantic, name in zip(semantics, names):
+            with self.subTest(semantic=semantic):
+                group = types["Diligent::" + name]
+                self.assertEqual(group["kind"], "constant")
+                self.assertEqual(group["value"], {
+                    field: semantic + "Texture" + suffix for field, suffix in (
+                        ("Texture", ""), ("UVSelector", "UVSelector"), ("UVScale", "UVScale"),
+                        ("UVRotation", "UVRotation"), ("UVBias", "UVBias"), ("WrapU", "WrapU"), ("WrapV", "WrapV"))})
+
     def test_math_functions_exclude_cpp_overloads(self):
         names = ["MakeAxisRotation", "MakeXRotation", "MakeYRotation", "MakeZRotation"]
         functions = extract_public(["RadientMath.h"], names)

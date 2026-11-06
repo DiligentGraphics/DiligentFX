@@ -179,8 +179,13 @@ selecting a standalone alias is only needed to export its own name and documenta
 Selected const variables produce `constant` declarations with `type` and `value`.
 Clang evaluates integer and floating-point expressions; booleans and character
 arrays become JSON booleans and strings. Braced record constants use field-name
-objects with nested arrays, including UUID constants. Unsupported initializers
-fail generation. Integer values retain their full precision in Python and JSON;
+objects with nested arrays, including UUID constants. References to immutable
+named character arrays resolve to their string contents, including in grouped
+material parameter names and arrays of names. The referenced strings do not need
+to be selected for export. Mutable storage, arbitrary addresses, and pointer
+arithmetic remain unsupported; the model never stores host pointers. Unsupported
+initializers fail generation. Integer values retain their full precision in Python
+and JSON;
 model consumers must preserve 64-bit integers rather than read them as doubles.
 Arbitrary preprocessor macros are not exported; select their typed public
 constants, such as `RADIENT_VERTEX_AUTO_OFFSET`, instead.

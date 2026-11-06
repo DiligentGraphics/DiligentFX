@@ -49,6 +49,40 @@ static DILIGENT_CONSTEXPR Uint32 BindingTestAutoOffset = DILIGENT_BINDING_TEST_A
 /// Canonical property name.
 static DILIGENT_CONSTEXPR Char BindingTestPropertyName[] = "Translation";
 
+/// A standalone pointer to a named, immutable string.
+static const Char* const BindingTestPropertyNamePointer = (BindingTestPropertyName);
+
+static DILIGENT_CONSTEXPR Char BindingTestEmptyName[] = "";
+static DILIGENT_CONSTEXPR Char BindingTestEmbeddedNullName[] = "First\0Second";
+
+// Exercise Clang's normalized string spelling, including concatenation and UTF-8.
+static DILIGENT_CONSTEXPR Char BindingTestEscapedName[] = "Line\n\"Quoted\"\\Path";
+static DILIGENT_CONSTEXPR Char BindingTestUnicodeName[] = u8"\u03c0";
+static DILIGENT_CONSTEXPR Char BindingTestJoinedName[] = "Base" "Color";
+static DILIGENT_CONSTEXPR Char BindingTestPaddedName[32] = "Padded";
+
+/// Like RadientStandardMaterialTextureParameterNames, this groups existing names.
+struct BindingTestParameterNames
+{
+    const Char* Property;
+    const Char* Repeated;
+    const Char* Empty;
+    const Char* EmbeddedNull;
+    const Char* Literal;
+};
+typedef struct BindingTestParameterNames BindingTestParameterNames;
+
+static DILIGENT_CONSTEXPR BindingTestParameterNames BindingTestNames =
+    {BindingTestPropertyName, BindingTestPropertyName, BindingTestEmptyName, BindingTestEmbeddedNullName, "Literal"};
+
+static const Char* const BindingTestNameArray[] = {BindingTestPropertyName, BindingTestEmptyName};
+
+// Unsupported address expressions must not silently become string values.
+static const Char* const BindingTestNameOffset = BindingTestPropertyName + 1;
+static const Char* const BindingTestAddress = (const Char*)1234;
+static Char BindingTestMutableName[] = "Mutable";
+static const Char* const BindingTestMutableNamePointer = BindingTestMutableName;
+
 /// A schema identifier containing nested scalar and array values.
 static DILIGENT_CONSTEXPR BindingTestSchemaID BindingTestSchema =
     {0xe4add320, 0xeeca, 0x439f, {0xa6, 0xc3, 0x1d, 0x8a, 0x25, 0xae, 0xfb, 0xc3}};

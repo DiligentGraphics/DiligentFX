@@ -3,6 +3,7 @@
 from pathlib import Path
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
+import ast
 import ctypes
 import os
 
@@ -39,7 +40,6 @@ def clang_library():
         ("clang_EvalResult_getAsUnsigned", [ctypes.c_void_p], ctypes.c_ulonglong),
         ("clang_EvalResult_getAsLongLong", [ctypes.c_void_p], ctypes.c_longlong),
         ("clang_EvalResult_getAsDouble", [ctypes.c_void_p], ctypes.c_double),
-        ("clang_EvalResult_getAsStr", [ctypes.c_void_p], ctypes.c_void_p),
         ("clang_EvalResult_dispose", [ctypes.c_void_p], None),
     ]
     for name, arguments, result in functions:
@@ -136,6 +136,19 @@ def initial_field_value(field):
 
 def constant_value(cursor):
     """Evaluate native values with Clang, walking braced aggregates by field order."""
+    expression = initializer(cursor) if cursor.kind == cindex.CursorKind.VAR_DECL else cursor
+    if expression and expression.kind == cindex.CursorKind.STRING_LITERAL:
+        # Clang has already joined adjacent literals and normalized raw strings,
+        # escapes, and UTF-8 bytes into a quoted spelling. Decode that spelling:
+        # clang_EvalResult_getAsStr truncates at embedded NULs, so it cannot be
+        # read using the native array size (which may also include extra padding).
+        spelling = expression.spelling
+        if spelling.startswith('u8"'):
+            spelling = spelling[2:]
+        if not spelling.startswith('"'):
+            raise ModelError("Only narrow string constants are supported")
+        return ast.literal_eval("b" + spelling).decode("utf-8")
+
     library = clang_library()
     evaluation = library.clang_Cursor_Evaluate(cursor)
     if evaluation:
@@ -148,18 +161,26 @@ def constant_value(cursor):
                 return bool(value) if cursor.type.get_canonical().kind == cindex.TypeKind.BOOL else value
             if kind == 2:  # CXEval_Float
                 return library.clang_EvalResult_getAsDouble(evaluation)
-            if kind == 4:  # CXEval_StrLiteral
-                # Use the literal's array length rather than strlen, preserving
-                # embedded NULs and excluding only the terminating NUL.
-                expression = initializer(cursor) if cursor.kind == cindex.CursorKind.VAR_DECL else cursor
-                literal_type = expression.type.get_canonical()
-                if literal_type.kind == cindex.TypeKind.CONSTANTARRAY:
-                    return ctypes.string_at(library.clang_EvalResult_getAsStr(evaluation),
-                                            literal_type.element_count - 1).decode("utf-8")
         finally:
             library.clang_EvalResult_dispose(evaluation)
 
-    expression = initializer(cursor) if cursor.kind == cindex.CursorKind.VAR_DECL else cursor
+    if expression and expression.kind in (cindex.CursorKind.UNEXPOSED_EXPR, cindex.CursorKind.PAREN_EXPR):
+        # Array-to-pointer decay and parentheses can wrap a named string. Follow
+        # these transparent nodes, but leave casts and pointer arithmetic unsupported.
+        elements = [child for child in expression.get_children() if child.kind.is_expression()]
+        if len(elements) == 1:
+            return constant_value(elements[0])
+    if expression and expression.kind == cindex.CursorKind.DECL_REF_EXPR:
+        declaration = expression.referenced
+        native_type = declaration.type.get_canonical()
+        # Public name groups reference immutable character arrays. Resolve their
+        # contents from the declaration, never from an address in the host process.
+        # Other object references and mutable storage are not constant string values.
+        if (declaration.kind == cindex.CursorKind.VAR_DECL and
+                native_type.kind == cindex.TypeKind.CONSTANTARRAY and
+                native_type.is_const_qualified() and
+                native_type.element_type.kind in (cindex.TypeKind.CHAR_S, cindex.TypeKind.CHAR_U)):
+            return constant_value(declaration)
     if expression and expression.kind == cindex.CursorKind.INIT_LIST_EXPR:
         native_type = expression.type.get_canonical()
         elements = [child for child in expression.get_children() if child.kind.is_expression()]
