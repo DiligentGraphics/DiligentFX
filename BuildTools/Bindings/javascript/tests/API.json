@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "headers": [
+    "fixtures/Interfaces.h"
+  ],
+  "declarations": {
+    "Diligent::IObject": {
+      "binding": "external",
+      "reason": "The JavaScript runtime owns native interface references"
+    },
+    "Diligent::MARSHAL_STATUS": {
+      "role": "status"
+    },
+    "Diligent::MARSHAL_MODE": {},
+    "Diligent::MarshalDesc": {},
+    "Diligent::IMarshalObject": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalObject"
+    },
+    "Diligent::IMarshalMutableObject": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalMutableObject"
+    },
+    "Diligent::CreateMarshalObject": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "ppObject": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "owned",
+          "lifetime": "caller"
+        }
+      }
+    },
+    "Diligent::CheckDefaultDesc": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::CheckCustomDesc": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetObjectSize": {
+      "parameters": {
+        "pObject": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadWideOutput": {
+      "parameters": {
+        "pValue": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::EchoInt8": {},
+    "Diligent::EchoUint8": {},
+    "Diligent::EchoInt16": {},
+    "Diligent::EchoUint16": {},
+    "Diligent::EchoInt32": {},
+    "Diligent::EchoUint32": {},
+    "Diligent::EchoInt64": {},
+    "Diligent::EchoUint64": {},
+    "Diligent::EchoFloat": {},
+    "Diligent::EchoDouble": {},
+    "Diligent::InvertBool": {},
+    "Diligent::EchoMode": {},
+    "Diligent::EchoStatus": {},
+    "Diligent::CheckScalars": {},
+    "Diligent::GetWideConstant": {},
+    "Diligent::RecordValue": {},
+    "Diligent::GetRecordedValue": {},
+    "Diligent::GetLiveObjectCount": {},
+    "Diligent::GetDestructionCount": {}
+  }
+}

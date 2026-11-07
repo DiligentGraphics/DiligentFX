@@ -24,6 +24,8 @@ of Radient declarations and language-specific generation:
 - `tests/` contains focused enum, struct, interface, function, constant, and typedef
   fixtures using the actual Diligent headers and macros, plus extraction and policy
   unit tests.
+- `javascript/` emits Wasm call glue, JavaScript wrappers, and TypeScript declarations.
+  Its standalone tests execute generated bindings against native test objects in Node.
 - `Radient/bindings/` contains Radient's configuration, build targets, and
   public-header integration tests.
 
@@ -40,8 +42,9 @@ belongs in the extraction/model stages and needs fixture coverage. The current
 model does not yet contain all ABI information required by every possible backend.
 
 Generate a model for each target ABI; a Wasm model must not be used as a native
-C# memory layout. Generated artifacts stay outside the source tree. Emitters and
-runtime conformance tests will be added when their language bindings are implemented.
+C# memory layout. Generated artifacts stay outside the source tree. The initial
+JavaScript backend and its standalone Wasm conformance tests are described in [javascript/README.md](javascript/README.md). Radient-specific runtime
+adapters are not implemented yet.
 
 ## Running
 
