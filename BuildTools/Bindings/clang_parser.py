@@ -230,8 +230,15 @@ def describe_declaration(cursor, root, external, documentation):
             raise ModelError(f"{name}: only constant variables can be exported")
         result.update(kind="constant", type=describe_type(cursor.type), value=constant_value(cursor))
     elif kind == cindex.CursorKind.ENUM_DECL:
+        # clang.cindex's enum_value does not unwrap typedefs such as Uint8 and
+        # incorrectly chooses the signed accessor for those underlying types.
+        unsigned = cursor.enum_type.get_canonical().kind in (
+            cindex.TypeKind.CHAR_U, cindex.TypeKind.UCHAR, cindex.TypeKind.USHORT,
+            cindex.TypeKind.UINT, cindex.TypeKind.ULONG, cindex.TypeKind.ULONGLONG)
+        get_value = (cindex.conf.lib.clang_getEnumConstantDeclUnsignedValue if unsigned else
+                     cindex.conf.lib.clang_getEnumConstantDeclValue)
         result.update(kind="enum", underlying_type=describe_type(cursor.enum_type),
-                      values=[{"name": child.spelling, "value": child.enum_value,
+                      values=[{"name": child.spelling, "value": get_value(child),
                                "documentation": documentation(child)}
                               for child in cursor.get_children()
                               if child.kind == cindex.CursorKind.ENUM_CONSTANT_DECL])

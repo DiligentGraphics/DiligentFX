@@ -26,10 +26,10 @@ class EnumTest(unittest.TestCase):
         mode = self.types["Diligent::BINDING_TEST_MODE"]
         underlying = unalias(mode["underlying_type"])
         self.assertEqual((underlying["name"], underlying["bits"]), ("uchar", 8))
-        self.assertEqual([value["value"] for value in mode["values"]], [0, 1])
+        self.assertEqual([value["value"] for value in mode["values"]], [0, 1, 241])
 
     def test_flag_expressions(self):
         flags = self.types["Diligent::BINDING_TEST_FLAGS"]
         underlying = unalias(flags["underlying_type"])
         self.assertEqual((underlying["name"], underlying["bits"]), ("uint", 32))
-        self.assertEqual([value["value"] for value in flags["values"]], [0, 1, 2, 3])
+        self.assertEqual([value["value"] for value in flags["values"]], [0, 1, 2, 3, 0x80000000])
