@@ -26,12 +26,13 @@ target_link_options(RadientWasm PRIVATE
     "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
 set_target_properties(RadientWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
 
-add_custom_target(Radient-TestJavaScript
-    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/test_generation.py" "${MODEL}"
-    COMMAND "${RADIENT_BINDINGS_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_data_blob.mjs" "${GENERATED}/Radient.mjs"
-    DEPENDS RadientWasm
-    COMMENT "Testing generated JavaScript bindings against Radient data blobs"
-    VERBATIM)
+# Build RadientWasm first; these tests never generate or rebuild artifacts.
+add_test(NAME Radient-JavaScriptGeneration
+    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/test_generation.py" "${MODEL}" -v)
+add_test(NAME Radient-JavaScriptDataBlob
+    COMMAND "${RADIENT_BINDINGS_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_data_blob.mjs" "${GENERATED}/Radient.mjs")
+set_tests_properties(Radient-JavaScriptGeneration Radient-JavaScriptDataBlob
+    PROPERTIES LABELS "Bindings;JavaScript")
 
 set(RADIENT_BINDINGS_BROWSER_EXECUTABLE "" CACHE FILEPATH "Chrome, Chromium, or Edge for browser tests (empty auto-detects)")
 set(BROWSER_ARGUMENTS)
@@ -39,15 +40,11 @@ if(RADIENT_BINDINGS_BROWSER_EXECUTABLE)
     list(APPEND BROWSER_ARGUMENTS --browser "${RADIENT_BINDINGS_BROWSER_EXECUTABLE}")
 endif()
 
-add_custom_target(Radient-TestJavaScriptBrowser
-    COMMAND "${RADIENT_BINDINGS_NODE_EXECUTABLE}" "${BINDING_TOOLS}/javascript/tests/test_browser_harness.mjs"
+add_test(NAME Radient-JavaScriptBrowser
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
         --module "${GENERATED}/Radient.mjs"
         --suite "${CMAKE_CURRENT_SOURCE_DIR}/data_blob_tests.mjs"
-        --shared-memory ${BROWSER_ARGUMENTS}
-    DEPENDS RadientWasm
-    COMMENT "Testing Radient JavaScript data blobs in a headless browser"
-    VERBATIM)
+        --shared-memory ${BROWSER_ARGUMENTS})
+set_tests_properties(Radient-JavaScriptBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
 
-set_target_properties(Radient-GenerateJavaScript RadientWasm Radient-TestJavaScript Radient-TestJavaScriptBrowser
-    PROPERTIES FOLDER "DiligentFX/Bindings")
+set_target_properties(Radient-GenerateJavaScript RadientWasm PROPERTIES FOLDER "DiligentFX/Bindings")

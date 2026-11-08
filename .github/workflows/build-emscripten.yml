@@ -59,7 +59,7 @@ jobs:
         )
         echo "RADIENT_BINDINGS_CMAKE_ARGS=${binding_args[*]}" >> "$GITHUB_ENV"
 
-    - name: Test JavaScript bindings
+    - name: Build JavaScript binding tests
       if: runner.os == 'Linux'
       shell: bash
       env:
@@ -70,7 +70,13 @@ jobs:
           -DBINDINGS_PYTHON_EXECUTABLE="$RUNNER_TEMP/bindings-venv/bin/python" \
           -DBINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1 \
           -DBINDINGS_NODE_EXECUTABLE="$(command -v node)"
-        cmake --build "$RUNNER_TEMP/binding-js" --target Bindings-TestJavaScript --parallel "$(nproc)"
+        cmake --build "$RUNNER_TEMP/binding-js" --target BindingTestsWasm --parallel "$(nproc)"
+
+    - name: Test JavaScript bindings
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        ctest --test-dir "$RUNNER_TEMP/binding-js" --verbose --output-on-failure --no-tests=error
 
     - name: Configure CMake
       if:   success()
@@ -83,17 +89,24 @@ jobs:
       if:   success()
       uses: DiligentGraphics/github-action/build@v28
 
-    - name: Test Radient bindings
+    - name: Build Radient bindings
       if: runner.os == 'Linux'
       shell: bash
       run: |
         # Reuse the Radient library and dependencies from the main build.
         cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
-          --target Radient-TestBindingModel Radient-TestJavaScript --parallel "$(nproc)"
+          --target RadientWasm --parallel "$(nproc)"
+
+    - name: Test Radient bindings
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Radient/bindings" \
+          -C "$DILIGENT_BUILD_TYPE" -LE Browser --verbose --output-on-failure --no-tests=error
 
     - name: Test Radient bindings in Chrome
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
-          --target Radient-TestJavaScriptBrowser --parallel "$(nproc)"
+        ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Radient/bindings" \
+          -C "$DILIGENT_BUILD_TYPE" -L Browser --verbose --output-on-failure --no-tests=error

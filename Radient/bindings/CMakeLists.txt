@@ -5,6 +5,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(RadientBindingModel CXX)
 endif()
 
+# Keep binding tests scoped to this directory even in the full engine build.
+# Run CTest with --test-dir pointing at the corresponding bindings build directory.
+enable_testing()
+
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 
 set(RADIENT_BINDINGS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter with Clang 22 bindings")
@@ -84,21 +88,18 @@ add_custom_target(Radient-GenerateBindingModel
     VERBATIM
 )
 
-add_custom_target(Radient-TestBindingModel
+add_test(NAME Bindings-Model
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/tests/run_tests.py"
-        ${BINDING_ARGUMENTS}
-    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_public_api.py"
-        ${BINDING_ARGUMENTS}
-    COMMENT "Testing Radient binding extraction and metadata"
-    VERBATIM
-)
+        ${BINDING_ARGUMENTS})
+add_test(NAME Radient-BindingModel
+    COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_public_api.py" -v
+        ${BINDING_ARGUMENTS})
+set_tests_properties(Bindings-Model Radient-BindingModel PROPERTIES LABELS "Bindings;Model")
 
-set_target_properties(Radient-GenerateBindingModel Radient-TestBindingModel PROPERTIES
-    FOLDER "DiligentFX/Bindings"
-)
+set_target_properties(Radient-GenerateBindingModel PROPERTIES FOLDER "DiligentFX/Bindings")
 
 # JavaScript bindings link the production library. Standalone configurations
-# provide only the model targets, without building Radient's dependencies.
+# provide only model generation and tests, without building Radient's dependencies.
 if(EMSCRIPTEN AND TARGET Radient)
     add_subdirectory(javascript)
 endif()

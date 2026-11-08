@@ -89,13 +89,15 @@ by C++ helpers still need to be available to Clang, but their declarations are
 not part of the selected API. This dependency is independent of Core's C# tooling.
 
 Enable `RADIENT_GENERATE_BINDINGS` in a regular build to add the optional
-`Radient-GenerateBindingModel` and `Radient-TestBindingModel` targets. Neither is
-part of the default build. The directory can also be configured independently:
+`Radient-GenerateBindingModel` build target and register the `Bindings-Model` and
+`Radient-BindingModel` CTest suites. Generation is not part of the default build;
+tests run only through CTest or direct script invocation. The directory can also
+be configured independently:
 
 ```sh
 cmake -S Radient/bindings -B /path/to/build/bindings
 cmake --build /path/to/build/bindings --target Radient-GenerateBindingModel
-cmake --build /path/to/build/bindings --target Radient-TestBindingModel
+ctest --test-dir /path/to/build/bindings -C Debug --output-on-failure --no-tests=error
 ```
 
 For example, a standalone Visual Studio configuration can select the separate
@@ -135,7 +137,11 @@ modules. The fixtures also parse as C, including the interface-call macros.
 Run the Radient integration test with
 `python -B Radient/bindings/tests/test_public_api.py`, passing the same `--target` and
 `--clang-arg` options as generation. It uses the supplied target and SDK (the native
-host target by default). The CMake test target runs both suites.
+host target by default). CTest registers these as separate suites. For a full
+engine build, run them from `/path/to/build/DiligentFX/Radient/bindings` with
+`ctest --test-dir /path/to/build/DiligentFX/Radient/bindings -C Debug -L Model --output-on-failure --no-tests=error`.
+These model tests parse their own fixtures and do not require building the model
+artifact first. CTest never builds artifacts automatically.
 
 ## Metadata and model
 

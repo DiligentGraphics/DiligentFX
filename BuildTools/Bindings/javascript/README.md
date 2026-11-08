@@ -23,7 +23,8 @@ From the FX source directory:
 emcmake cmake -S BuildTools/Bindings/javascript -B build/binding-js -G Ninja \
     -DBINDINGS_PYTHON_EXECUTABLE=/path/to/bindings-env/bin/python \
     -DBINDINGS_LIBCLANG=/path/to/LLVM-22/lib/libclang.so
-cmake --build build/binding-js --target Bindings-TestJavaScript
+cmake --build build/binding-js --target BindingTestsWasm
+ctest --test-dir build/binding-js --output-on-failure --no-tests=error
 ```
 
 On Windows, use the environment's `Scripts/python.exe` and LLVM's
@@ -33,10 +34,12 @@ On Windows, use the environment's `Scripts/python.exe` and LLVM's
 
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
-`Bindings-TestJavaScript` builds these artifacts, runs Python emitter tests, and
-then runs the Node scalar/interface, byte-buffer, and string marshalling tests. Nothing is
-built by default. Native model tests remain independent of this optional
-Emscripten project.
+CTest runs the Python emitter tests, Node scalar/interface, byte-buffer, and
+string marshalling suites, and browser-harness unit tests as separate entries.
+Build `BindingTestsWasm` before running CTest; test execution never generates or
+rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
+select suites. Nothing is built by default. Native model tests remain independent
+of this optional Emscripten project.
 
 Generated artifacts reside in the build directory's `generated/` folder and are
 not checked in. Only the generator, shared runtime, fixture declarations, metadata,

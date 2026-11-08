@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # A standalone conformance project; does not configure Radient or a renderer.
 project(DiligentJavaScriptBindings LANGUAGES C CXX)
+enable_testing()
 
 if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "Configure with the Emscripten CMake toolchain to build the Wasm binding tests.")
@@ -62,11 +63,21 @@ target_link_options(BindingTestsWasm PRIVATE
     "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
 set_target_properties(BindingTestsWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
 
-add_custom_target(Bindings-TestJavaScript
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/test_generator.py" "${MODEL}"
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_marshalling.mjs" "${GENERATED}/BindingTests.mjs"
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_buffers.mjs" "${GENERATED}/BindingTests.mjs"
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_strings.mjs" "${GENERATED}/BindingTests.mjs"
-    DEPENDS BindingTestsWasm
-    COMMENT "Testing generated bindings through JavaScript, Wasm, and native test objects"
-    VERBATIM)
+# Build BindingTestsWasm first; CTest only executes the prepared suites.
+add_test(NAME Bindings-JavaScriptGeneration
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/test_generator.py" "${MODEL}" -v)
+add_test(NAME Bindings-JavaScriptMarshalling
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_marshalling.mjs" "${GENERATED}/BindingTests.mjs")
+add_test(NAME Bindings-JavaScriptBuffers
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_buffers.mjs" "${GENERATED}/BindingTests.mjs")
+add_test(NAME Bindings-JavaScriptStrings
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_strings.mjs" "${GENERATED}/BindingTests.mjs")
+add_test(NAME Bindings-JavaScriptBrowserHarness
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_browser_harness.mjs")
+set_tests_properties(
+    Bindings-JavaScriptGeneration
+    Bindings-JavaScriptMarshalling
+    Bindings-JavaScriptBuffers
+    Bindings-JavaScriptStrings
+    Bindings-JavaScriptBrowserHarness
+    PROPERTIES LABELS "Bindings;JavaScript")

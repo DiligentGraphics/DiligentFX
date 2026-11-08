@@ -16,8 +16,9 @@ emcmake cmake -S . -B build/web -G Ninja \
     -DRADIENT_GENERATE_BINDINGS=ON \
     -DRADIENT_BINDINGS_PYTHON_EXECUTABLE=/path/to/bindings-env/bin/python \
     -DRADIENT_BINDINGS_LIBCLANG=/path/to/LLVM-22/lib/libclang.so
-cmake --build build/web \
-    --target Radient-TestBindingModel Radient-TestJavaScript --parallel 2
+cmake --build build/web --target RadientWasm
+ctest --test-dir build/web/DiligentFX/Radient/bindings \
+    -C Debug -LE Browser --output-on-failure --no-tests=error
 ```
 
 On Windows, use the environment's `Scripts/python.exe` and LLVM's
@@ -27,10 +28,15 @@ Node 18 or newer is required.
 `Radient-GenerateBindingModel` extracts the native API, and
 `Radient-GenerateJavaScript` consumes that model with the JavaScript configuration
 in `DataBlob.json`. `RadientWasm` compiles the generated wrapper and links the
-existing `Radient` library. `Radient-TestJavaScript` builds all dependencies and
-runs the generation checks and Node integration tests. These targets are
-optional; native builds and standalone configurations of `Radient/bindings`
-provide only the model targets.
+existing `Radient` library. Build `RadientWasm` to generate and compile all
+required artifacts, then run CTest separately for the model, generation, and Node
+integration tests. CTest never generates or rebuilds artifacts. Use `ctest -N` to
+list suites and `ctest -R <pattern>` to select them.
+
+Binding tests are registered in the `DiligentFX/Radient/bindings` build directory,
+so point `ctest --test-dir` there. Pass `-C Release` for a Release build. Native
+builds and standalone configurations of `Radient/bindings` provide only model
+generation and tests.
 
 The generated files are under
 `build/web/DiligentFX/Radient/bindings/javascript/generated/`.
@@ -43,21 +49,22 @@ cross-origin isolation to make `SharedArrayBuffer` available.
 
 ### Browser tests
 
-With Chrome, Chromium, or Edge installed, run:
+After building `RadientWasm`, with Chrome, Chromium, or Edge installed, run:
 
 ```sh
-cmake --build build/web --target Radient-TestJavaScriptBrowser --parallel 2
+ctest --test-dir build/web/DiligentFX/Radient/bindings \
+    -C Debug -L Browser --output-on-failure --no-tests=error
 ```
 
 The runner discovers the browser automatically. Set the CMake cache variable
 `RADIENT_BINDINGS_BROWSER_EXECUTABLE` to select a specific executable. No browser
 automation package or download is needed.
 
-The target runs the same blob cases as Node against the generated production Wasm
-module. A temporary local server sends the cross-origin isolation headers needed
-for shared memory. The test checks that isolation and shared memory are active.
+The `Radient-JavaScriptBrowser` CTest suite runs the same blob cases as Node
+against the generated production Wasm module. A temporary local server sends the
+cross-origin isolation headers needed for shared memory. The test checks that isolation and shared memory are active.
 Chrome runs headlessly with a temporary profile; the runner closes it after the
-tests. Failed assertions, loading errors, and a 60-second timeout fail the target.
+tests. Failed assertions, loading errors, and a 60-second timeout fail the test.
 The runner also supports headless Edge for local Windows testing.
 
 ## Owning blobs
