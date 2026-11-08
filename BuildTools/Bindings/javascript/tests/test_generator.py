@@ -23,6 +23,14 @@ class GeneratorTest(unittest.TestCase):
     def declaration(self, model, name):
         return next(d for d in model["declarations"] if d["name"] == "Diligent::" + name)
 
+    def test_native_field_count_adapters_reject_invalid_members_and_expressions(self):
+        for name, function in [("Diligent::MarshalNestedCountDesc::Missing", "Diligent::Count"),
+                               ("Diligent::MarshalNestedCountDesc::pComputed", "arbitrary()")]:
+            adapters = deepcopy(ADAPTERS)
+            adapters["field_count_functions"] = {name: function}
+            with self.assertRaisesRegex(ModelError, "field count adapter"):
+                self.emit(adapters=adapters)
+
     def test_deterministic_generation_and_unchanged_output(self):
         output = self.emit()
         self.assertEqual(output, self.emit(json.loads(json.dumps(MODEL))))
@@ -555,7 +563,7 @@ class GeneratorTest(unittest.TestCase):
         model = deepcopy(MODEL)
         field = self.declaration(model, "MarshalBufferDesc")["fields"][1]
         adapters = deepcopy(ADAPTERS)
-        adapters["field_policies"] = {"Diligent::MarshalBufferDesc": {"pBytes": deepcopy(field["policy"])}}
+        adapters["field_policies"]["Diligent::MarshalBufferDesc"] = {"pBytes": deepcopy(field["policy"])}
         field["policy"] = {"binding": "manual", "reason": "Backend chooses lifetime"}
         _, _, types = self.emit(model, adapters)
         self.assertIn("pBytes?: Uint8Array | null", types)

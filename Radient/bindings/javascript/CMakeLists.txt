@@ -7,7 +7,7 @@ set(GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 add_custom_target(Radient-GenerateJavaScript
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/generate.py"
-        --model "${MODEL}" --module Radient --header Radient.h --header RadientMeshPrimitives.h
+        --model "${MODEL}" --module Radient --header Radient.h --header RadientMeshPrimitives.h --header NativeAdapters.hpp
         --adapters "${CMAKE_CURRENT_SOURCE_DIR}/API.json" --output "${GENERATED}"
     DEPENDS Radient-GenerateBindingModel
     BYPRODUCTS "${GENERATED}/Radient.cpp" "${GENERATED}/Radient.mjs"
@@ -15,7 +15,11 @@ add_custom_target(Radient-GenerateJavaScript
     COMMENT "Generating Radient JavaScript bindings"
     VERBATIM)
 
+# Compile the small semantic adapters with Radient so they can reuse its
+# private type-size helpers without exposing implementation headers to the glue.
+target_sources(Radient PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/NativeAdapters.cpp")
 add_executable(RadientWasm EXCLUDE_FROM_ALL "${GENERATED}/Radient.cpp")
+target_include_directories(RadientWasm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 add_dependencies(RadientWasm Radient-GenerateJavaScript)
 set_common_target_properties(RadientWasm)
 target_link_libraries(RadientWasm PRIVATE Radient Diligent-BuildSettings)

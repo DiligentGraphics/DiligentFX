@@ -23,6 +23,15 @@
         "lifetime": "call",
         "length": "Size"
       }
+    },
+    "Diligent::RadientMaterialParameterDesc": {
+      "pDefaultValue": {
+        "direction": "out",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call",
+        "binding": "automatic"
+      }
     }
   },
   "fixed_arguments": {
@@ -43,5 +52,8 @@
       "writable": true,
       "success": 0
     }
+  },
+  "field_count_functions": {
+    "Diligent::RadientMaterialParameterDesc::pDefaultValue": "Diligent::RadientBindings::GetMaterialDefaultByteCount"
   }
 }

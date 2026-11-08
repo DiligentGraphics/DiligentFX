@@ -176,12 +176,24 @@ Int32 ReadArrayGroup(const MarshalArrayDesc* pGroups, Uint32 Count, Uint32 Group
     return pGroups[Group].pItems[Item].Id;
 }
 
+Uint64 GetComputedCount(const MarshalNestedCountDesc& Desc)
+{
+    return static_cast<Uint64>(Desc.Counts.ItemCount) + 1;
+}
+
 Uint32 SumNestedCount(const MarshalNestedCountDesc& Desc)
 {
     Uint32 Sum = 0;
     for (Uint32 i = 0; i < Desc.Counts.ItemCount; ++i)
     {
         Sum += Desc.pValues[i];
+    }
+    if (Desc.pComputed != nullptr)
+    {
+        for (Uint32 i = 0; i < Desc.Counts.ItemCount + 1; ++i)
+        {
+            Sum += Desc.pComputed[i];
+        }
     }
     if (Desc.pPair != nullptr)
     {

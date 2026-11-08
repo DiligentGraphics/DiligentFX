@@ -56,9 +56,13 @@ struct MarshalNestedCountDesc
 {
     const Uint32* pValues DEFAULT_INITIALIZER(nullptr);
     MarshalArrayDesc Counts DEFAULT_INITIALIZER({});
+    const Uint32* pComputed DEFAULT_INITIALIZER(nullptr);
     const Uint32* pPair DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct MarshalNestedCountDesc MarshalNestedCountDesc;
+#if DILIGENT_CPP_INTERFACE
+Uint64 GetComputedCount(const MarshalNestedCountDesc& Desc);
+#endif
 
 #include "DefineRefMacro.h"
 Uint32 DILIGENT_GLOBAL_FUNCTION(SumNestedCount)(const MarshalNestedCountDesc REF Desc);

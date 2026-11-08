@@ -236,3 +236,12 @@ generation of missing mip levels for uncompressed raw data.
 `EncodedTextureIsSRGB` applies only to encoded images; raw data uses its format.
 Loading retains its blobs, so their JS wrappers can be disposed after submission.
 Await CPU load completion before inspecting the final texture description.
+
+## Materials
+
+Create a standard definition through the asset manager, then create materials
+from that definition. Parameter names are exported as constants; definitions
+also enumerate their actual parameter set and resolve names to handles.
+Reflected default values are copied `Uint8Array` snapshots; their byte count is
+computed by Radient from the parameter type and array size. Texture references
+returned in descriptions and component snapshots are separate owned wrappers.

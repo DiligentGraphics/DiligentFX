@@ -25,42 +25,247 @@
     "Diligent::GetRadientVertexComponentSize",
     "Diligent::GetRadientVertexAttributeSize",
     "Diligent::RADIENT_COMPONENT_TYPE_MESH",
-    "Diligent::RADIENT_COMPONENT_TYPE_MESH_RENDERER"
+    "Diligent::RADIENT_COMPONENT_TYPE_MESH_RENDERER",
+    "Diligent::IRadientSurfaceMaterialAsset",
+    "Diligent::RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS",
+    "Diligent::RadientStandardMaterialSchemaVersion",
+    "Diligent::RadientStandardMaterialBaseColorFactorName",
+    "Diligent::RadientStandardMaterialDiffuseFactorName",
+    "Diligent::RadientStandardMaterialMetallicFactorName",
+    "Diligent::RadientStandardMaterialRoughnessFactorName",
+    "Diligent::RadientStandardMaterialSpecularFactorName",
+    "Diligent::RadientStandardMaterialGlossinessFactorName",
+    "Diligent::RadientStandardMaterialEmissiveFactorName",
+    "Diligent::RadientStandardMaterialNormalScaleName",
+    "Diligent::RadientStandardMaterialOcclusionStrengthName",
+    "Diligent::RadientStandardMaterialClearCoatFactorName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessFactorName",
+    "Diligent::RadientStandardMaterialClearCoatNormalScaleName",
+    "Diligent::RadientStandardMaterialSheenColorFactorName",
+    "Diligent::RadientStandardMaterialSheenRoughnessFactorName",
+    "Diligent::RadientStandardMaterialSpecularWeightName",
+    "Diligent::RadientStandardMaterialSpecularColorFactorName",
+    "Diligent::RadientStandardMaterialAnisotropyStrengthName",
+    "Diligent::RadientStandardMaterialAnisotropyRotationName",
+    "Diligent::RadientStandardMaterialIridescenceFactorName",
+    "Diligent::RadientStandardMaterialIridescenceIORName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessMinimumName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessMaximumName",
+    "Diligent::RadientStandardMaterialTransmissionFactorName",
+    "Diligent::RadientStandardMaterialIORName",
+    "Diligent::RadientStandardMaterialThicknessFactorName",
+    "Diligent::RadientStandardMaterialAttenuationColorName",
+    "Diligent::RadientStandardMaterialAttenuationDistanceName",
+    "Diligent::RadientStandardMaterialBaseColorTextureName",
+    "Diligent::RadientStandardMaterialBaseColorTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialBaseColorTextureUVScaleName",
+    "Diligent::RadientStandardMaterialBaseColorTextureUVRotationName",
+    "Diligent::RadientStandardMaterialBaseColorTextureUVBiasName",
+    "Diligent::RadientStandardMaterialBaseColorTextureWrapUName",
+    "Diligent::RadientStandardMaterialBaseColorTextureWrapVName",
+    "Diligent::RadientStandardMaterialDiffuseTextureName",
+    "Diligent::RadientStandardMaterialDiffuseTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialDiffuseTextureUVScaleName",
+    "Diligent::RadientStandardMaterialDiffuseTextureUVRotationName",
+    "Diligent::RadientStandardMaterialDiffuseTextureUVBiasName",
+    "Diligent::RadientStandardMaterialDiffuseTextureWrapUName",
+    "Diligent::RadientStandardMaterialDiffuseTextureWrapVName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureWrapUName",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureWrapVName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureWrapUName",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureWrapVName",
+    "Diligent::RadientStandardMaterialNormalTextureName",
+    "Diligent::RadientStandardMaterialNormalTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialNormalTextureUVScaleName",
+    "Diligent::RadientStandardMaterialNormalTextureUVRotationName",
+    "Diligent::RadientStandardMaterialNormalTextureUVBiasName",
+    "Diligent::RadientStandardMaterialNormalTextureWrapUName",
+    "Diligent::RadientStandardMaterialNormalTextureWrapVName",
+    "Diligent::RadientStandardMaterialOcclusionTextureName",
+    "Diligent::RadientStandardMaterialOcclusionTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialOcclusionTextureUVScaleName",
+    "Diligent::RadientStandardMaterialOcclusionTextureUVRotationName",
+    "Diligent::RadientStandardMaterialOcclusionTextureUVBiasName",
+    "Diligent::RadientStandardMaterialOcclusionTextureWrapUName",
+    "Diligent::RadientStandardMaterialOcclusionTextureWrapVName",
+    "Diligent::RadientStandardMaterialEmissiveTextureName",
+    "Diligent::RadientStandardMaterialEmissiveTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialEmissiveTextureUVScaleName",
+    "Diligent::RadientStandardMaterialEmissiveTextureUVRotationName",
+    "Diligent::RadientStandardMaterialEmissiveTextureUVBiasName",
+    "Diligent::RadientStandardMaterialEmissiveTextureWrapUName",
+    "Diligent::RadientStandardMaterialEmissiveTextureWrapVName",
+    "Diligent::RadientStandardMaterialClearCoatTextureName",
+    "Diligent::RadientStandardMaterialClearCoatTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialClearCoatTextureUVScaleName",
+    "Diligent::RadientStandardMaterialClearCoatTextureUVRotationName",
+    "Diligent::RadientStandardMaterialClearCoatTextureUVBiasName",
+    "Diligent::RadientStandardMaterialClearCoatTextureWrapUName",
+    "Diligent::RadientStandardMaterialClearCoatTextureWrapVName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureWrapUName",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureWrapVName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVScaleName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVRotationName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVBiasName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureWrapUName",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureWrapVName",
+    "Diligent::RadientStandardMaterialSheenColorTextureName",
+    "Diligent::RadientStandardMaterialSheenColorTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialSheenColorTextureUVScaleName",
+    "Diligent::RadientStandardMaterialSheenColorTextureUVRotationName",
+    "Diligent::RadientStandardMaterialSheenColorTextureUVBiasName",
+    "Diligent::RadientStandardMaterialSheenColorTextureWrapUName",
+    "Diligent::RadientStandardMaterialSheenColorTextureWrapVName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureWrapUName",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureWrapVName",
+    "Diligent::RadientStandardMaterialSpecularTextureName",
+    "Diligent::RadientStandardMaterialSpecularTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialSpecularTextureUVScaleName",
+    "Diligent::RadientStandardMaterialSpecularTextureUVRotationName",
+    "Diligent::RadientStandardMaterialSpecularTextureUVBiasName",
+    "Diligent::RadientStandardMaterialSpecularTextureWrapUName",
+    "Diligent::RadientStandardMaterialSpecularTextureWrapVName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureUVScaleName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureUVRotationName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureUVBiasName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureWrapUName",
+    "Diligent::RadientStandardMaterialSpecularColorTextureWrapVName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureUVScaleName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureUVRotationName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureUVBiasName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureWrapUName",
+    "Diligent::RadientStandardMaterialAnisotropyTextureWrapVName",
+    "Diligent::RadientStandardMaterialIridescenceTextureName",
+    "Diligent::RadientStandardMaterialIridescenceTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialIridescenceTextureUVScaleName",
+    "Diligent::RadientStandardMaterialIridescenceTextureUVRotationName",
+    "Diligent::RadientStandardMaterialIridescenceTextureUVBiasName",
+    "Diligent::RadientStandardMaterialIridescenceTextureWrapUName",
+    "Diligent::RadientStandardMaterialIridescenceTextureWrapVName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureWrapUName",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureWrapVName",
+    "Diligent::RadientStandardMaterialTransmissionTextureName",
+    "Diligent::RadientStandardMaterialTransmissionTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialTransmissionTextureUVScaleName",
+    "Diligent::RadientStandardMaterialTransmissionTextureUVRotationName",
+    "Diligent::RadientStandardMaterialTransmissionTextureUVBiasName",
+    "Diligent::RadientStandardMaterialTransmissionTextureWrapUName",
+    "Diligent::RadientStandardMaterialTransmissionTextureWrapVName",
+    "Diligent::RadientStandardMaterialThicknessTextureName",
+    "Diligent::RadientStandardMaterialThicknessTextureUVSelectorName",
+    "Diligent::RadientStandardMaterialThicknessTextureUVScaleName",
+    "Diligent::RadientStandardMaterialThicknessTextureUVRotationName",
+    "Diligent::RadientStandardMaterialThicknessTextureUVBiasName",
+    "Diligent::RadientStandardMaterialThicknessTextureWrapUName",
+    "Diligent::RadientStandardMaterialThicknessTextureWrapVName",
+    "Diligent::RadientStandardMaterialBaseColorTextureParameterNames",
+    "Diligent::RadientStandardMaterialDiffuseTextureParameterNames",
+    "Diligent::RadientStandardMaterialMetallicRoughnessTextureParameterNames",
+    "Diligent::RadientStandardMaterialSpecularGlossinessTextureParameterNames",
+    "Diligent::RadientStandardMaterialNormalTextureParameterNames",
+    "Diligent::RadientStandardMaterialOcclusionTextureParameterNames",
+    "Diligent::RadientStandardMaterialEmissiveTextureParameterNames",
+    "Diligent::RadientStandardMaterialClearCoatTextureParameterNames",
+    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureParameterNames",
+    "Diligent::RadientStandardMaterialClearCoatNormalTextureParameterNames",
+    "Diligent::RadientStandardMaterialSheenColorTextureParameterNames",
+    "Diligent::RadientStandardMaterialSheenRoughnessTextureParameterNames",
+    "Diligent::RadientStandardMaterialSpecularTextureParameterNames",
+    "Diligent::RadientStandardMaterialSpecularColorTextureParameterNames",
+    "Diligent::RadientStandardMaterialAnisotropyTextureParameterNames",
+    "Diligent::RadientStandardMaterialIridescenceTextureParameterNames",
+    "Diligent::RadientStandardMaterialIridescenceThicknessTextureParameterNames",
+    "Diligent::RadientStandardMaterialTransmissionTextureParameterNames",
+    "Diligent::RadientStandardMaterialThicknessTextureParameterNames"
   ],
-  "declarations": {"Diligent::IObject": { "binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
+  "declarations": {
+    "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
     "Diligent::RADIENT_STATUS": {"role": "status"},
-    "Diligent::RadientDataBlobCreateInfo": {"fields": { "pData": { "binding": "manual", "reason": "COPY borrows Size bytes for creation; REFERENCE retains their address until destruction. A backend must provide the corresponding storage lifetime.", "length": "Size"},
+    "Diligent::RadientDataBlobCreateInfo": {
+      "fields": {
+        "pData": {"binding": "manual", "reason": "COPY borrows Size bytes for creation; REFERENCE retains their address until destruction. A backend must provide the corresponding storage lifetime.", "length": "Size"},
         "OnLastReaderReleased": {"binding": "manual", "reason": "Callback invocation may occur on a native worker; language runtime dispatch and callback retention need an adapter."},
         "pUserData": {"binding": "manual", "reason": "Opaque context is owned by the callback adapter, not exposed as a language pointer."},
         "OnDestroy": {"binding": "manual", "reason": "The callback adapter releases retained context on blob destruction and handles failed creation separately."}
       }
     },
-    "Diligent::IRadientDataBlob": {"methods": { "BeginRead": { "binding": "manual", "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.", "parameters": { "ppData": { "direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
+    "Diligent::IRadientDataBlob": {
+      "methods": {
+        "BeginRead": {
+          "binding": "manual",
+          "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.",
+          "parameters": {
+            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
           }
         },
         "EndRead": {"binding": "manual", "reason": "Called by the scoped read-access adapter."}
       }
     },
-    "Diligent::IRadientMutableDataBlob": {"methods": { "BeginWrite": { "binding": "manual", "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.", "parameters": { "ppData": { "direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
+    "Diligent::IRadientMutableDataBlob": {
+      "methods": {
+        "BeginWrite": {
+          "binding": "manual",
+          "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.",
+          "parameters": {
+            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
           }
         },
         "EndWrite": {"binding": "manual", "reason": "Called by the scoped write-access adapter."}
       }
     },
-    "Diligent::CreateRadientDataBlob": {"parameters": { "ppBlob": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+    "Diligent::CreateRadientDataBlob": {
+      "parameters": {
+        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
-    "Diligent::CreateRadientMutableDataBlob": {"parameters": { "ppBlob": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+    "Diligent::CreateRadientMutableDataBlob": {
+      "parameters": {
+        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientAssetManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientResourceManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::IThreadPool": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
-    "Diligent::RadientEngineCreateInfo": {"fields": { "pThreadPool": { "binding": "manual", "reason": "Supplying a native thread pool requires a platform adapter."}
+    "Diligent::RadientEngineCreateInfo": {
+      "fields": {
+        "pThreadPool": {"binding": "manual", "reason": "Supplying a native thread pool requires a platform adapter."}
       }
     },
-    "Diligent::CreateRadientEngine": {"parameters": { "ppEngine": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+    "Diligent::CreateRadientEngine": {
+      "parameters": {
+        "ppEngine": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::IRadientEngine": {
@@ -69,22 +274,33 @@
         "CreateSceneWriter",
         "GetAssetManager"
       ],
-      "methods": {"CreateScene": { "parameters": { "ppScene": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+      "methods": {
+        "CreateScene": {
+          "parameters": {
+            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
-        "CreateSceneWriter": {"parameters": { "pScene": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "CreateSceneWriter": {
+          "parameters": {
+            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
-        "GetAssetManager": {"parameters": { "ppAssetManager": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "GetAssetManager": {
+          "parameters": {
+            "ppAssetManager": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
     },
-    "Diligent::RadientSceneDesc": {"fields": { "Name": { "direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientSceneDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientEntityDesc": {"fields": { "Name": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientEntityDesc": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
     "Diligent::IRadientScene": {
@@ -109,63 +325,106 @@
         "GetLight",
         "HasComponent",
         "GetMesh",
-        "GetMeshRenderer"
+        "GetMeshRenderer",
+        "GetMaterialBindings"
       ],
-      "methods": {"GetDesc": { "result": { "lifetime": "object"}
+      "methods": {
+        "GetDesc": {
+          "result": {"lifetime": "object"}
         },
-        "GetEntityName": {"parameters": { "Name": { "direction": "out", "ownership": "borrowed", "lifetime": "call"}
+        "GetEntityName": {
+          "parameters": {
+            "Name": {"direction": "out", "ownership": "borrowed", "lifetime": "call"}
           }
         },
-        "GetEntityFlags": {"parameters": { "Flags": { "direction": "out"}
+        "GetEntityFlags": {
+          "parameters": {
+            "Flags": {"direction": "out"}
           }
         },
-        "GetEntityOwnVisibility": {"parameters": { "Visible": { "direction": "out"}
+        "GetEntityOwnVisibility": {
+          "parameters": {
+            "Visible": {"direction": "out"}
           }
         },
-        "GetEntityEffectiveVisibility": {"parameters": { "Visible": { "direction": "out"}
+        "GetEntityEffectiveVisibility": {
+          "parameters": {
+            "Visible": {"direction": "out"}
           }
         },
-        "GetCachedEntityEffectiveVisibility": {"parameters": { "Visible": { "direction": "out"}
+        "GetCachedEntityEffectiveVisibility": {
+          "parameters": {
+            "Visible": {"direction": "out"}
           }
         },
-        "GetRootEntities": {"parameters": { "pEntities": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Capacity", "written": "NumEntitiesWritten"},
+        "GetRootEntities": {
+          "parameters": {
+            "pEntities": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Capacity", "written": "NumEntitiesWritten"},
             "NumEntitiesWritten": {"direction": "out"}
           }
         },
-        "GetParent": {"parameters": { "Parent": { "direction": "out"}
+        "GetParent": {
+          "parameters": {
+            "Parent": {"direction": "out"}
           }
         },
-        "GetChildCount": {"parameters": { "ChildCount": { "direction": "out"}
+        "GetChildCount": {
+          "parameters": {
+            "ChildCount": {"direction": "out"}
           }
         },
-        "GetChildren": {"parameters": { "pChildren": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChildCount", "written": "NumChildrenWritten"},
+        "GetChildren": {
+          "parameters": {
+            "pChildren": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChildCount", "written": "NumChildrenWritten"},
             "NumChildrenWritten": {"direction": "out"}
           }
         },
-        "GetLocalTransform": {"parameters": { "Transform": { "direction": "out"}
+        "GetLocalTransform": {
+          "parameters": {
+            "Transform": {"direction": "out"}
           }
         },
-        "GetWorldMatrix": {"parameters": { "Matrix": { "direction": "out"}
+        "GetWorldMatrix": {
+          "parameters": {
+            "Matrix": {"direction": "out"}
           }
         },
-        "GetCachedWorldMatrix": {"parameters": { "Matrix": { "direction": "out"}
+        "GetCachedWorldMatrix": {
+          "parameters": {
+            "Matrix": {"direction": "out"}
           }
         },
-        "GetCamera": {"parameters": { "Camera": { "direction": "out"}
+        "GetCamera": {
+          "parameters": {
+            "Camera": {"direction": "out"}
           }
         },
-        "GetLight": {"parameters": { "Light": { "direction": "out"}
+        "GetLight": {
+          "parameters": {
+            "Light": {"direction": "out"}
           }
         },
-        "HasComponent": {"parameters": { "HasComponent": { "direction": "out"}
+        "HasComponent": {
+          "parameters": {
+            "HasComponent": {"direction": "out"}
           }
         },
-        "GetSceneRevisions": {"result": { "lifetime": "object"}
+        "GetSceneRevisions": {
+          "result": {"lifetime": "object"}
         },
-        "GetMesh": {"parameters": { "Mesh": { "direction": "out"}
+        "GetMesh": {
+          "parameters": {
+            "Mesh": {"direction": "out"}
           }
         },
-        "GetMeshRenderer": {"parameters": { "Renderer": { "direction": "out"}
+        "GetMeshRenderer": {
+          "parameters": {
+            "Renderer": {"direction": "out"}
+          }
+        },
+        "GetMaterialBindings": {
+          "parameters": {
+            "Bindings": {"direction": "out"}
           }
         }
       }
@@ -185,14 +444,21 @@
         "SetLight",
         "RemoveComponent",
         "SetMesh",
-        "SetMeshRenderer"
+        "SetMeshRenderer",
+        "SetMaterialBindings"
       ],
-      "methods": {"GetScene": { "result": { "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+      "methods": {
+        "GetScene": {
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
-        "CreateEntity": {"parameters": { "Entity": { "direction": "out"}
+        "CreateEntity": {
+          "parameters": {
+            "Entity": {"direction": "out"}
           }
         },
-        "SetEntityName": {"parameters": { "Name": { "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "SetEntityName": {
+          "parameters": {
+            "Name": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }
@@ -201,12 +467,30 @@
       "include_methods": [
         "GetDesc",
         "CreateMesh",
-        "LoadTexture"
+        "LoadTexture",
+        "CreateStandardMaterialDefinition",
+        "CreateMaterial"
       ],
-      "methods": {"CreateMesh": { "parameters": { "ppMesh": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+      "methods": {
+        "CreateMesh": {
+          "parameters": {
+            "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
-        "LoadTexture": {"parameters": { "ppTexture": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "LoadTexture": {
+          "parameters": {
+            "ppTexture": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateStandardMaterialDefinition": {
+          "parameters": {
+            "ppDefinition": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateMaterial": {
+          "parameters": {
+            "pDefinition": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppMaterial": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -216,92 +500,213 @@
         "GetDesc"
       ]
     },
-    "Diligent::IRadientMaterialAsset": {"include_methods": []},
-    "Diligent::RadientAssetManagerDesc": {"fields": { "Name": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::IRadientMaterialAsset": {
+      "include_methods": [
+        "GetDefinition",
+        "GetVersion",
+        "GetTexture"
+      ],
+      "methods": {
+        "GetDefinition": {
+          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+        },
+        "GetTexture": {
+          "parameters": {
+            "ppTexture": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        }
       }
     },
-    "Diligent::RadientAssetReference": {"fields": { "URI": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientAssetManagerDesc": {
+      "fields": {
+        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::GetRadientAssetLoadStatus": {"parameters": { "pAsset": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientAssetReference": {
+      "fields": {
+        "URI": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::CreateRadientCubeMesh": {"parameters": { "pAssetManager": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::GetRadientAssetLoadStatus": {
+      "parameters": {
+        "pAsset": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::CreateRadientCubeMesh": {
+      "parameters": {
+        "pAssetManager": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
         "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
-    "Diligent::CreateRadientSphereMesh": {"parameters": { "pAssetManager": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::CreateRadientSphereMesh": {
+      "parameters": {
+        "pAssetManager": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
         "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
-    "Diligent::RadientCubeMeshCreateInfo": {"fields": { "Name": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientCubeMeshCreateInfo": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pFaceColors": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": 6}
       }
     },
-    "Diligent::RadientSphereMeshCreateInfo": {"fields": { "Name": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientSphereMeshCreateInfo": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMeshCreateInfo": {"fields": { "Name": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientMeshCreateInfo": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pPrimitives": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "PrimitiveCount"}
       }
     },
-    "Diligent::RadientMeshVertexData": {"fields": { "ppVertexBuffers": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "VertexLayout.BufferCount", "element_nullable": true}
+    "Diligent::RadientMeshVertexData": {
+      "fields": {
+        "ppVertexBuffers": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "VertexLayout.BufferCount", "element_nullable": true}
       }
     },
-    "Diligent::RadientMeshIndexData": {"fields": { "pIndexBuffer": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientMeshIndexData": {
+      "fields": {
+        "pIndexBuffer": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMeshPrimitiveCreateInfo": {"fields": { "Name": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientMeshPrimitiveCreateInfo": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientVertexLayoutDesc": {"fields": { "pAttributes": { "direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AttributeCount"},
+    "Diligent::RadientVertexLayoutDesc": {
+      "fields": {
+        "pAttributes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AttributeCount"},
         "pBuffers": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BufferCount"}
       }
     },
-    "Diligent::RadientVertexAttributeDesc": {"fields": { "Semantic": { "direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientVertexAttributeDesc": {
+      "fields": {
+        "Semantic": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMeshPrimitiveDesc": {"fields": { "Name": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientMeshPrimitiveDesc": {
+      "fields": {
+        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pMaterial": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMeshAssetDesc": {"fields": { "pGeometries": { "direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "GeometryCount"},
+    "Diligent::RadientMeshAssetDesc": {
+      "fields": {
+        "pGeometries": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "GeometryCount"},
         "pPrimitives": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "PrimitiveCount"},
         "pMorphTargets": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MorphTargetCount"}
       }
     },
-    "Diligent::RadientMeshMorphTargetData": {"fields": { "pMorphTargets": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MorphTargetCount"}
+    "Diligent::RadientMeshMorphTargetData": {
+      "fields": {
+        "pMorphTargets": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MorphTargetCount"}
       }
     },
-    "Diligent::RadientMorphTargetDesc": {"fields": { "Name": { "direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientMorphTargetDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pAttributes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AttributeCount"}
       }
     },
-    "Diligent::RadientMorphTargetAttributeDesc": {"fields": { "Semantic": { "direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientMorphTargetAttributeDesc": {
+      "fields": {
+        "Semantic": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMorphTargetCreateInfo": {"fields": { "pAttributeData": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Desc.AttributeCount"}
+    "Diligent::RadientMorphTargetCreateInfo": {
+      "fields": {
+        "pAttributeData": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Desc.AttributeCount"}
       }
     },
-    "Diligent::RadientMorphTargetAttributeCreateInfo": {"fields": { "pDeltaBuffer": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientMorphTargetAttributeCreateInfo": {
+      "fields": {
+        "pDeltaBuffer": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientMeshComponent": {"fields": { "pMesh": { "direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientMeshComponent": {
+      "fields": {
+        "pMesh": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientTextureLoadInfo": {"fields": { "URI": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+    "Diligent::RadientTextureLoadInfo": {
+      "fields": {
+        "URI": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "BaseURI": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pDataBlob": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pTextureData": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
-    "Diligent::RadientTextureData": {"fields": { "pMipLevels": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MipLevelCount"}
+    "Diligent::RadientTextureData": {
+      "fields": {
+        "pMipLevels": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MipLevelCount"}
       }
     },
-    "Diligent::RadientTextureMipData": {"fields": { "pDataBlob": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+    "Diligent::RadientTextureMipData": {
+      "fields": {
+        "pDataBlob": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::IRadientMaterialDefinitionAsset": {
+      "include_methods": [
+        "GetDesc",
+        "GetStatus",
+        "GetParameterCount",
+        "GetParameterDesc",
+        "GetParameterHandle",
+        "FindParameter"
+      ],
+      "methods": {
+        "GetParameterHandle": {
+          "parameters": {
+            "pHandle": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+          }
+        },
+        "FindParameter": {
+          "parameters": {
+            "Name": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pHandle": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+          }
+        }
+      }
+    },
+    "Diligent::RadientMaterialDefinitionDesc": {
+      "fields": {
+        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pParameters": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ParameterCount"}
+      }
+    },
+    "Diligent::RadientMaterialParameterDesc": {
+      "fields": {
+        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pDefaultTexture": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pDefaultValue": {"binding": "manual", "reason": "The byte count is derived from the reflected parameter type and array size."}
+      }
+    },
+    "Diligent::RadientMaterialBinding": {
+      "fields": {
+        "pMaterial": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientMaterialBindingsComponent": {
+      "fields": {
+        "pBindings": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
+      }
+    },
+    "Diligent::RadientStandardMaterialTextureParameterNames": {
+      "fields": {
+        "Texture": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVSelector": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVScale": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVRotation": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVBias": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "WrapU": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "WrapV": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     }
   }

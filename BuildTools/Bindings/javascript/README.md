@@ -513,3 +513,10 @@ also remain explicit when their default temporary could escape through borrowed
 results or output parameters; this preserves snapshot lifetime guarantees.
 
 Descriptor span counts may also name nested value fields (for example, `VertexLayout.BufferCount`) or a fixed integer extent. Native count getters run after the descriptor has been populated, preserving nested defaults and independence from JavaScript property order. Paths cannot traverse pointers.
+
+A `field_count_functions` JavaScript adapter can name a native function that
+accepts a descriptor by const reference and returns its span element count.
+Use this for type-tagged byte payloads whose size is not a descriptor field.
+The header supplied to the generator declares the function; a matching
+`field_policies` entry supplies the borrowed span's direction and lifetime.
+The adapter name is a qualified C++ function identifier, not an expression.

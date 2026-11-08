@@ -140,6 +140,7 @@
   "declarations": {
     "Diligent::MarshalNestedCountDesc": {
       "fields": {
+        "pComputed": {"binding": "manual", "reason": "The native adapter computes the element count."},
         "pValues": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Counts.ItemCount"},
         "pPair": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": 2}
       }

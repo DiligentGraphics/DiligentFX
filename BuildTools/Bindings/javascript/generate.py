@@ -56,11 +56,20 @@ class Generator:
         # Backend selection and policies must not modify the language-neutral model.
         self.types = {d["name"]: deepcopy(d) for d in model["declarations"]}
         if adapters and (not isinstance(adapters, dict) or adapters.get("schema_version") != 1 or
-                         adapters.keys() - {"schema_version", "scoped_bytes", "native_only", "field_policies", "fixed_arguments"}):
+                         adapters.keys() - {"schema_version", "scoped_bytes", "native_only", "field_policies", "fixed_arguments", "field_count_functions"}):
             raise ModelError("Invalid JavaScript adapter configuration")
         self.native_only = set((adapters or {}).get("native_only", []))
         self.fixed_arguments = (adapters or {}).get("fixed_arguments", {})
+        self.field_count_functions = (adapters or {}).get("field_count_functions", {})
+        if not isinstance(self.field_count_functions, dict):
+            raise ModelError("field_count_functions must map descriptor fields to native functions")
         self.configure_selection((adapters or {}).get("field_policies", {}))
+        for name, function in self.field_count_functions.items():
+            owner, _, member = name.rpartition("::")
+            field = next((f for f in self.types.get(owner, {}).get("fields", []) if f["name"] == member), {})
+            if (not isinstance(function, str) or not re.fullmatch(r"[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*", function) or
+                    unalias(field.get("type", {"kind": "void", "const": False, "volatile": False})).get("kind") != "pointer" or "length" in field.get("policy", {})):
+                raise ModelError(f"{name}: field count adapter requires a pointer without a length and a qualified native function name")
         self.scopes = (adapters or {}).get("scoped_bytes", {})
         if not isinstance(self.scopes, dict):
             raise ModelError("scoped_bytes must map qualified method names to adapters")
@@ -115,7 +124,7 @@ class Generator:
                 raise ModelError(f"{owner}: field policies require a selected descriptor")
             policies = {field["name"]: field.get("policy", {}) for field in record["fields"]}
             policies.update(overrides)
-            apply_values_policy(record["fields"], policies, owner, is_field=True)
+            apply_values_policy(record["fields"], policies, owner, is_field=True, types=self.types)
         for name, arguments in self.fixed_arguments.items():
             function = self.types.get(name, {})
             if function.get("kind") != "function" or not isinstance(arguments, dict):
@@ -230,6 +239,10 @@ class Generator:
 
     def span(self, value, siblings, context, *, output=False, field=False):
         policy = value.get("policy", {})
+        if field and context in self.field_count_functions:
+            # A native adapter derives the element count from the complete
+            # descriptor, for example a type-tagged parameter's byte size.
+            policy = dict(policy, length=0)
         if "length" not in policy:
             return None
         t = unalias(value["type"])
@@ -513,8 +526,10 @@ class Generator:
                 span = self.span(field, fields, context, output=True, field=True)
             if span:
                 count = str(span["length"]) if type(span["length"]) is int else f'reinterpret_cast<const {name}*>(pointer)->{span["length"]}'
+                if context in self.field_count_functions:
+                    count = f'{self.field_count_functions[context]}(*reinterpret_cast<const {name}*>(pointer))'
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
-                    'uint64_t', ['uintptr_t' if type(span["length"]) is int else 'uintptr_t pointer'], f'return {count};')
+                    'uint64_t', ['uintptr_t' if type(span["length"]) is int and context not in self.field_count_functions else 'uintptr_t pointer'], f'return {count};')
                 spec = {"span": span}
                 if as_input:
                     spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",

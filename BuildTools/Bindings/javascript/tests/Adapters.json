@@ -13,5 +13,19 @@
       "writable": true,
       "success": 3
     }
+  },
+  "field_count_functions": {
+    "Diligent::MarshalNestedCountDesc::pComputed": "Diligent::GetComputedCount"
+  },
+  "field_policies": {
+    "Diligent::MarshalNestedCountDesc": {
+      "pComputed": {
+        "direction": "in",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call",
+        "binding": "automatic"
+      }
+    }
   }
 }

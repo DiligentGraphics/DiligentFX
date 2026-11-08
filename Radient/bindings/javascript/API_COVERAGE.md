@@ -12,6 +12,8 @@ The model and generator tests separately check declarations and metadata.
 
 | `texture_tests.mjs` | LoadTexture from encoded bytes and supplied mips; texture description; load status, validation and blob lifetime |
 
+| `material_tests.mjs` | Standard definitions, all parameter reflection/lookup methods, material creation/definition/version/texture access, surface queries, scene material bindings |
+
 Native callbacks, externally supplied thread pools, importer implementations,
 and GPU/backend objects are not exposed. Asset-manager `Stop()` and its native
 task output remain native; disposing the engine performs normal shutdown.
