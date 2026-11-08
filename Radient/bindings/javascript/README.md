@@ -227,3 +227,12 @@ completes without GPU uploads.
 
 Mesh descriptions are copied snapshots. Interface fields returned by scene or
 asset getters are retained wrappers and must be disposed separately.
+
+## Textures
+
+`LoadTexture` accepts either an encoded `pDataBlob` or a `pTextureData` descriptor
+with per-mip blobs, offsets, and strides. Native defaults apply, including
+generation of missing mip levels for uncompressed raw data.
+`EncodedTextureIsSRGB` applies only to encoded images; raw data uses its format.
+Loading retains its blobs, so their JS wrappers can be disposed after submission.
+Await CPU load completion before inspecting the final texture description.

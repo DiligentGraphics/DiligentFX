@@ -10,6 +10,8 @@ The model and generator tests separately check declarations and metadata.
 | `components_tests.mjs` | Camera/light getters/setters; component presence and removal |
 | `mesh_tests.mjs` | Asset manager access/description; asset identity/type/status; mesh creation/description; cube/sphere helpers; vertex-size helpers; scene mesh and renderer getters/setters |
 
+| `texture_tests.mjs` | LoadTexture from encoded bytes and supplied mips; texture description; load status, validation and blob lifetime |
+
 Native callbacks, externally supplied thread pools, importer implementations,
 and GPU/backend objects are not exposed. Asset-manager `Stop()` and its native
 task output remain native; disposing the engine performs normal shutdown.

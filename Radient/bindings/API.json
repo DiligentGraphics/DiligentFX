@@ -200,9 +200,13 @@
     "Diligent::IRadientAssetManager": {
       "include_methods": [
         "GetDesc",
-        "CreateMesh"
+        "CreateMesh",
+        "LoadTexture"
       ],
       "methods": {"CreateMesh": { "parameters": { "ppMesh": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "LoadTexture": {"parameters": { "ppTexture": { "direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -286,6 +290,18 @@
       }
     },
     "Diligent::RadientMeshComponent": {"fields": { "pMesh": { "direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientTextureLoadInfo": {"fields": { "URI": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "BaseURI": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pDataBlob": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pTextureData": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientTextureData": {"fields": { "pMipLevels": { "direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MipLevelCount"}
+      }
+    },
+    "Diligent::RadientTextureMipData": {"fields": { "pDataBlob": { "direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
       }
     }
   }
