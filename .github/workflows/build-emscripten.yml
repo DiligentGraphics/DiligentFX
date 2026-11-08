@@ -46,7 +46,7 @@ jobs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        # Ubuntu 26.04 already provides LLVM 22, Python venv, and Ninja.
+        # Ubuntu 26.04 already provides LLVM 22, Python venv, Ninja, and Chrome.
         # Keep the parser on LLVM 22 to match the pinned Python bindings.
         python3 -m venv "$RUNNER_TEMP/bindings-venv"
         "$RUNNER_TEMP/bindings-venv/bin/python" -m pip install -r DiligentFX/BuildTools/Bindings/requirements.txt
@@ -55,6 +55,7 @@ jobs:
           "-DRADIENT_BINDINGS_PYTHON_EXECUTABLE=$RUNNER_TEMP/bindings-venv/bin/python"
           -DRADIENT_BINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1
           "-DRADIENT_BINDINGS_NODE_EXECUTABLE=$(command -v node)"
+          "-DRADIENT_BINDINGS_BROWSER_EXECUTABLE=$(command -v google-chrome)"
         )
         echo "RADIENT_BINDINGS_CMAKE_ARGS=${binding_args[*]}" >> "$GITHUB_ENV"
 
@@ -69,7 +70,7 @@ jobs:
           -DBINDINGS_PYTHON_EXECUTABLE="$RUNNER_TEMP/bindings-venv/bin/python" \
           -DBINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1 \
           -DBINDINGS_NODE_EXECUTABLE="$(command -v node)"
-        cmake --build "$RUNNER_TEMP/binding-js" --target Bindings-TestJavaScript --parallel 2
+        cmake --build "$RUNNER_TEMP/binding-js" --target Bindings-TestJavaScript --parallel "$(nproc)"
 
     - name: Configure CMake
       if:   success()
@@ -88,4 +89,11 @@ jobs:
       run: |
         # Reuse the Radient library and dependencies from the main build.
         cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
-          --target Radient-TestBindingModel Radient-TestJavaScript --parallel 2
+          --target Radient-TestBindingModel Radient-TestJavaScript --parallel "$(nproc)"
+
+    - name: Test Radient bindings in Chrome
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
+          --target Radient-TestJavaScriptBrowser --parallel "$(nproc)"

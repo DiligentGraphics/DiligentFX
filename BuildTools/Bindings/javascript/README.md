@@ -42,6 +42,21 @@ Generated artifacts reside in the build directory's `generated/` folder and are
 not checked in. Only the generator, shared runtime, fixture declarations, metadata,
 native test implementations, and tests belong in source control.
 
+## Browser test runner
+
+`tests/run_browser_tests.py` runs a shared suite in headless Chrome, Chromium, or
+Edge without an automation package. It serves a generated module and the suite
+from a temporary local HTTP server with cross-origin isolation headers, and exits
+with an error if loading fails, a test fails, or the browser does not report before
+the timeout. `--shared-memory` additionally requires the module to use shared Wasm
+memory.
+
+A suite exports `registerTests({test, assert, api, constants, wasm})`. Node supplies
+its standard test runner and assertions; the browser adapter supplies the small
+assertion subset used by these tests. Browser cleanup registered with `t.after()`
+runs even after failure. The production example is
+[Radient's blob suite](../../../Radient/bindings/javascript/README.md#browser-tests).
+
 ## Current binding contract
 
 - Native declaration names are retained, without the `Diligent::` namespace.

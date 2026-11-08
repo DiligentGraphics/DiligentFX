@@ -32,5 +32,22 @@ add_custom_target(Radient-TestJavaScript
     DEPENDS RadientWasm
     COMMENT "Testing generated JavaScript bindings against Radient data blobs"
     VERBATIM)
-set_target_properties(Radient-GenerateJavaScript RadientWasm Radient-TestJavaScript
+
+set(RADIENT_BINDINGS_BROWSER_EXECUTABLE "" CACHE FILEPATH "Chrome, Chromium, or Edge for browser tests (empty auto-detects)")
+set(BROWSER_ARGUMENTS)
+if(RADIENT_BINDINGS_BROWSER_EXECUTABLE)
+    list(APPEND BROWSER_ARGUMENTS --browser "${RADIENT_BINDINGS_BROWSER_EXECUTABLE}")
+endif()
+
+add_custom_target(Radient-TestJavaScriptBrowser
+    COMMAND "${RADIENT_BINDINGS_NODE_EXECUTABLE}" "${BINDING_TOOLS}/javascript/tests/test_browser_harness.mjs"
+    COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
+        --module "${GENERATED}/Radient.mjs"
+        --suite "${CMAKE_CURRENT_SOURCE_DIR}/data_blob_tests.mjs"
+        --shared-memory ${BROWSER_ARGUMENTS}
+    DEPENDS RadientWasm
+    COMMENT "Testing Radient JavaScript data blobs in a headless browser"
+    VERBATIM)
+
+set_target_properties(Radient-GenerateJavaScript RadientWasm Radient-TestJavaScript Radient-TestJavaScriptBrowser
     PROPERTIES FOLDER "DiligentFX/Bindings")

@@ -41,6 +41,25 @@ TypeScript declarations. Generated files are build artifacts, not source files.
 The module uses Diligent's threaded Emscripten build. Browser deployments require
 cross-origin isolation to make `SharedArrayBuffer` available.
 
+### Browser tests
+
+With Chrome, Chromium, or Edge installed, run:
+
+```sh
+cmake --build build/web --target Radient-TestJavaScriptBrowser --parallel 2
+```
+
+The runner discovers the browser automatically. Set the CMake cache variable
+`RADIENT_BINDINGS_BROWSER_EXECUTABLE` to select a specific executable. No browser
+automation package or download is needed.
+
+The target runs the same blob cases as Node against the generated production Wasm
+module. A temporary local server sends the cross-origin isolation headers needed
+for shared memory. The test checks that isolation and shared memory are active.
+Chrome runs headlessly with a temporary profile; the runner closes it after the
+tests. Failed assertions, loading errors, and a 60-second timeout fail the target.
+The runner also supports headless Edge for local Windows testing.
+
 ## Owning blobs
 
 Both factories accept `{Size?: bigint, pData?: Uint8Array | null}` and return
@@ -105,6 +124,8 @@ cannot be queried for the mutable interface. Dispose every acquired wrapper.
 
 The integration tests call the production blob through the generated JavaScript
 and Wasm module. They cover creation, initial-data ownership, access conflicts,
-resizing, error statuses, interface queries, and scope lifetimes. Detailed
-marshalling tests remain in the general generator's mock-based suite. CI runs both
-suites on Linux in Debug and Release configurations; no browser or GPU is needed.
+resizing, error statuses, interface queries, scope lifetimes, and active access
+across Wasm memory growth. The Node and browser runners share these test cases.
+Detailed marshalling tests remain in the general generator's mock-based suite.
+CI runs the Node suites and the browser blob tests on Linux in Debug and Release,
+using the runner image's preinstalled Chrome. No renderer or GPU is needed.
