@@ -50,15 +50,15 @@ public:
 
     // Layout is used only to validate the handle and the supplied value.
     // Explicit assignments are retained regardless of the material's live value.
-    RADIENT_STATUS SetParameter(const MaterialStorage&         Layout,
-                                RadientMaterialParameterHandle Handle,
-                                const void*                    pData,
-                                Uint32                         DataSize);
+    RADIENT_STATUS SetParameter(const MaterialStorage&                Layout,
+                                const RadientMaterialParameterHandle& Handle,
+                                const void*                           pData,
+                                Uint32                                DataSize);
 
-    RADIENT_STATUS SetTexture(const MaterialStorage&         Layout,
-                              RadientMaterialParameterHandle Handle,
-                              Uint32                         ArrayIndex,
-                              IRadientTextureAsset*          pTexture);
+    RADIENT_STATUS SetTexture(const MaterialStorage&                Layout,
+                              const RadientMaterialParameterHandle& Handle,
+                              Uint32                                ArrayIndex,
+                              IRadientTextureAsset*                 pTexture);
 
     bool                  HasEffectiveTextureChanges(const PackedMaterialData& Target) const noexcept;
     MATERIAL_CHANGE_FLAGS ApplyTo(PackedMaterialData& Target, Uint64 ShaderDataVersion) const noexcept;

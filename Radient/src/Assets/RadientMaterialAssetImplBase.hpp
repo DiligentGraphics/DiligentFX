@@ -133,16 +133,16 @@ public:
         return m_Storage.GetVersion();
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
-                                                           void*                          pData,
-                                                           Uint32                         DataSize) const override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(const RadientMaterialParameterHandle& Handle,
+                                                           void*                                 pData,
+                                                           Uint32                                DataSize) const override final
     {
         return m_Storage.GetParameter(Handle, pData, DataSize);
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset**         ppTexture) const override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(const RadientMaterialParameterHandle& Handle,
+                                                         Uint32                                ArrayIndex,
+                                                         IRadientTextureAsset**                ppTexture) const override final
     {
         return m_Storage.GetTexture(Handle, ArrayIndex, ppTexture);
     }
@@ -237,16 +237,16 @@ public:
     }
     using IObject::QueryInterface;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParameter(RadientMaterialParameterHandle Handle,
-                                                           const void*                    pData,
-                                                           Uint32                         DataSize) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParameter(const RadientMaterialParameterHandle& Handle,
+                                                           const void*                           pData,
+                                                           Uint32                                DataSize) override final
     {
         return m_Changes.Parameters.SetParameter(m_pMaterial->GetStorage(), Handle, pData, DataSize);
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTexture(RadientMaterialParameterHandle Handle,
-                                                         Uint32                         ArrayIndex,
-                                                         IRadientTextureAsset*          pTexture) override final
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetTexture(const RadientMaterialParameterHandle& Handle,
+                                                         Uint32                                ArrayIndex,
+                                                         IRadientTextureAsset*                 pTexture) override final
     {
         return m_Changes.Parameters.SetTexture(m_pMaterial->GetStorage(), Handle, ArrayIndex, pTexture);
     }

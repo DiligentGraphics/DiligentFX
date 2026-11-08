@@ -97,11 +97,11 @@ void RadientMaterials_C_TestMaterialMacros(IRadientMaterialAsset*         pMater
     float                            Value       = 0;
     RADIENT_STATUS                   Status      = RADIENT_STATUS_OK;
 
-    Status = IRadientMaterialAsset_GetParameter(pMaterial, Handle, &Value, (Uint32)sizeof(Value));
-    Status = IRadientMaterialAsset_GetTexture(pMaterial, Handle, 0, &pTexture);
+    Status = IRadientMaterialAsset_GetParameter(pMaterial, &Handle, &Value, (Uint32)sizeof(Value));
+    Status = IRadientMaterialAsset_GetTexture(pMaterial, &Handle, 0, &pTexture);
     Status = IRadientMaterialAsset_CreateWriter(pMaterial, &pWriter);
-    Status = IRadientMaterialWriter_SetParameter(pWriter, Handle, &Value, (Uint32)sizeof(Value));
-    Status = IRadientMaterialWriter_SetTexture(pWriter, Handle, 0, pTexture);
+    Status = IRadientMaterialWriter_SetParameter(pWriter, &Handle, &Value, (Uint32)sizeof(Value));
+    Status = IRadientMaterialWriter_SetTexture(pWriter, &Handle, 0, pTexture);
     Status = IRadientMaterialWriter_Commit(pWriter);
     {
         RADIENT_MATERIAL_SURFACE_MODE SurfaceMode = IRadientSurfaceMaterialAsset_GetSurfaceMode(pSurfaceMaterial);

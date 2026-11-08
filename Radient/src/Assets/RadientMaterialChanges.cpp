@@ -41,10 +41,10 @@ namespace Diligent
 namespace RadientMaterialDetail
 {
 
-RADIENT_STATUS MaterialParameterChanges::SetParameter(const MaterialStorage&         Layout,
-                                                      RadientMaterialParameterHandle Handle,
-                                                      const void*                    pData,
-                                                      Uint32                         DataSize)
+RADIENT_STATUS MaterialParameterChanges::SetParameter(const MaterialStorage&                Layout,
+                                                      const RadientMaterialParameterHandle& Handle,
+                                                      const void*                           pData,
+                                                      Uint32                                DataSize)
 {
     if (!Layout.IsValidHandle(Handle) || IsTextureParameter(Layout.m_Data.GetValueType(Handle.Index)))
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -86,10 +86,10 @@ RADIENT_STATUS MaterialParameterChanges::SetParameter(const MaterialStorage&    
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS MaterialParameterChanges::SetTexture(const MaterialStorage&         Layout,
-                                                    RadientMaterialParameterHandle Handle,
-                                                    Uint32                         ArrayIndex,
-                                                    IRadientTextureAsset*          pTexture)
+RADIENT_STATUS MaterialParameterChanges::SetTexture(const MaterialStorage&                Layout,
+                                                    const RadientMaterialParameterHandle& Handle,
+                                                    Uint32                                ArrayIndex,
+                                                    IRadientTextureAsset*                 pTexture)
 {
     if (!Layout.IsValidHandle(Handle) || !IsTextureParameter(Layout.m_Data.GetValueType(Handle.Index)))
         return RADIENT_STATUS_INVALID_ARGUMENT;

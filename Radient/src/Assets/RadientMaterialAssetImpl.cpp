@@ -469,9 +469,9 @@ const MaterialChangeVersions& MaterialStorage::GetChangeVersions() const noexcep
     return m_ChangeVersions;
 }
 
-RADIENT_STATUS MaterialStorage::GetParameter(RadientMaterialParameterHandle Handle,
-                                             void*                          pData,
-                                             Uint32                         DataSize) const
+RADIENT_STATUS MaterialStorage::GetParameter(const RadientMaterialParameterHandle& Handle,
+                                             void*                                 pData,
+                                             Uint32                                DataSize) const
 {
     if (!IsValidHandle(Handle))
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -485,9 +485,9 @@ RADIENT_STATUS MaterialStorage::GetParameter(RadientMaterialParameterHandle Hand
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS MaterialStorage::GetTexture(RadientMaterialParameterHandle Handle,
-                                           Uint32                         ArrayIndex,
-                                           IRadientTextureAsset**         ppTexture) const
+RADIENT_STATUS MaterialStorage::GetTexture(const RadientMaterialParameterHandle& Handle,
+                                           Uint32                                ArrayIndex,
+                                           IRadientTextureAsset**                ppTexture) const
 {
     if (ppTexture == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -564,7 +564,7 @@ MaterialStorage::ReadAccess MaterialStorage::AcquireReadAccess() const
     return ReadAccess{*this};
 }
 
-bool MaterialStorage::IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept
+bool MaterialStorage::IsValidHandle(const RadientMaterialParameterHandle& Handle) const noexcept
 {
     return Handle.Definition == m_DefinitionHandle &&
         Handle.Index < m_Data.GetValueCount() &&

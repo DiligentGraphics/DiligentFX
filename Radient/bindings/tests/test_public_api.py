@@ -115,6 +115,21 @@ class PublicAPITest(unittest.TestCase):
         self.assertEqual([param["default"] for param in pose["ComputeSkinningMatrices"]["parameters"]],
                          [None, None, "False", "True"])
 
+    def test_material_parameter_handles_use_const_references(self):
+        types = extract_public(["RadientMaterials.h"], ["IRadientMaterialAsset", "IRadientMaterialWriter"])
+        for interface, names in (
+                ("IRadientMaterialAsset", ("GetParameter", "GetTexture")),
+                ("IRadientMaterialWriter", ("SetParameter", "SetTexture"))):
+            methods = {method["name"]: method for method in types["Diligent::" + interface]["methods"]}
+            for name in names:
+                with self.subTest(interface=interface, method=name):
+                    handle = methods[name]["parameters"][0]
+                    self.assertEqual(handle["name"], "Handle")
+                    self.assertEqual(handle["type"]["kind"], "reference")
+                    target = unalias(handle["type"]["target"])
+                    self.assertEqual(target["name"], "Diligent::RadientMaterialParameterHandle")
+                    self.assertTrue(target["const"])
+
     def test_standard_material_texture_parameters(self):
         types = extract_public(["RadientStandardMaterialParameters.h"], [
             "RadientStandardMaterialTextureParameterNames", "RadientStandardMaterialTextureParameters",

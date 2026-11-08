@@ -523,17 +523,17 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialAsset, IRadientAsset)
     /// Handle to pData. DataSize must exactly match the parameter's native data
     /// size. Texture parameters are not accepted.
     VIRTUAL RADIENT_STATUS METHOD(GetParameter)(THIS_
-                                                RadientMaterialParameterHandle Handle,
-                                                void*                          pData,
-                                                Uint32                         DataSize) CONST PURE;
+                                                const RadientMaterialParameterHandle REF Handle,
+                                                void*                                    pData,
+                                                Uint32                                   DataSize) CONST PURE;
 
     /// Returns the texture identified by Handle and ArrayIndex. When the texture
     /// is not null, the method calls AddRef() and the caller must call Release().
     /// A null pointer is a valid texture value. On failure, ppTexture is set to null.
     VIRTUAL RADIENT_STATUS METHOD(GetTexture)(THIS_
-                                              RadientMaterialParameterHandle Handle,
-                                              Uint32                         ArrayIndex,
-                                              IRadientTextureAsset**         ppTexture) CONST PURE;
+                                              const RadientMaterialParameterHandle REF Handle,
+                                              Uint32                                   ArrayIndex,
+                                              IRadientTextureAsset**                   ppTexture) CONST PURE;
 
     /// Creates a reusable writer with no pending changes. On success, ppWriter
     /// receives a strong reference to the writer.
@@ -621,16 +621,16 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// value. Returns RADIENT_STATUS_NO_CHANGE only if this writer already has an
     /// identical pending assignment.
     VIRTUAL RADIENT_STATUS METHOD(SetParameter)(THIS_
-                                                RadientMaterialParameterHandle Handle,
-                                                const void*                    pData,
-                                                Uint32                         DataSize) PURE;
+                                                const RadientMaterialParameterHandle REF Handle,
+                                                const void*                              pData,
+                                                Uint32                                   DataSize) PURE;
 
 #if DILIGENT_CPP_INTERFACE
     /// Replaces the complete value or value array identified by Handle, inferring
     /// the native data size from Value.
     template <typename ValueType>
-    RADIENT_STATUS SetParameter(RadientMaterialParameterHandle Handle,
-                                const ValueType&                Value)
+    RADIENT_STATUS SetParameter(const RadientMaterialParameterHandle& Handle,
+                                const ValueType&                     Value)
     {
         static_assert(std::is_trivially_copyable<ValueType>::value,
                       "Material parameter values must be trivially copyable");
@@ -650,9 +650,9 @@ DILIGENT_BEGIN_INTERFACE(IRadientMaterialWriter, IObject)
     /// initialization is rejected by Commit(); assigning the existing texture is
     /// accepted as a no-op.
     VIRTUAL RADIENT_STATUS METHOD(SetTexture)(THIS_
-                                              RadientMaterialParameterHandle Handle,
-                                              Uint32                         ArrayIndex,
-                                              IRadientTextureAsset*          pTexture) PURE;
+                                              const RadientMaterialParameterHandle REF Handle,
+                                              Uint32                                   ArrayIndex,
+                                              IRadientTextureAsset*                    pTexture) PURE;
 
     /// Applies the writer's pending changes to its material asset as one logical
     /// update. This is the authoritative check for whether the assignments change

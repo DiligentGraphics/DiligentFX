@@ -154,14 +154,14 @@ public:
         return GetReference().Version;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(const RadientMaterialParameterHandle&,
                                                            void*,
                                                            Uint32) const override final
     {
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(const RadientMaterialParameterHandle&,
                                                          Uint32,
                                                          IRadientTextureAsset** ppTexture) const override final
     {

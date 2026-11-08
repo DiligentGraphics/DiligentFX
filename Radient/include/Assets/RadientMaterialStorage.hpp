@@ -122,13 +122,13 @@ public:
     // through ReadAccess so they describe the same state as the packed values.
     const MaterialChangeVersions& GetChangeVersions() const noexcept;
 
-    RADIENT_STATUS GetParameter(RadientMaterialParameterHandle Handle,
-                                void*                          pData,
-                                Uint32                         DataSize) const;
+    RADIENT_STATUS GetParameter(const RadientMaterialParameterHandle& Handle,
+                                void*                                 pData,
+                                Uint32                                DataSize) const;
 
-    RADIENT_STATUS GetTexture(RadientMaterialParameterHandle Handle,
-                              Uint32                         ArrayIndex,
-                              IRadientTextureAsset**         ppTexture) const;
+    RADIENT_STATUS GetTexture(const RadientMaterialParameterHandle& Handle,
+                              Uint32                                ArrayIndex,
+                              IRadientTextureAsset**                ppTexture) const;
 
     RADIENT_STATUS           GetLoadStatus() const noexcept;
     RADIENT_STATUS           GetGPUResourceStatus() const noexcept;
@@ -199,7 +199,7 @@ public:
 private:
     friend class MaterialParameterChanges;
 
-    bool IsValidHandle(RadientMaterialParameterHandle Handle) const noexcept;
+    bool IsValidHandle(const RadientMaterialParameterHandle& Handle) const noexcept;
     bool IsInitializationFinished() const noexcept { return m_InitializationFinished.load(std::memory_order_acquire); }
     void FinishInitialization() const noexcept;
     void PublishChange(MATERIAL_CHANGE_FLAGS Flags,

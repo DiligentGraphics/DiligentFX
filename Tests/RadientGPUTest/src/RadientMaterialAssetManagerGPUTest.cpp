@@ -128,15 +128,15 @@ public:
     {
         return m_pMaterial->GetVersion();
     }
-    RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(RadientMaterialParameterHandle Handle,
-                                                   void*                          pData,
-                                                   Uint32                         DataSize) const override
+    RADIENT_STATUS DILIGENT_CALL_TYPE GetParameter(const RadientMaterialParameterHandle& Handle,
+                                                   void*                                 pData,
+                                                   Uint32                                DataSize) const override
     {
         return m_pMaterial->GetParameter(Handle, pData, DataSize);
     }
-    RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(RadientMaterialParameterHandle Handle,
-                                                 Uint32                         ArrayIndex,
-                                                 IRadientTextureAsset**         ppTexture) const override
+    RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(const RadientMaterialParameterHandle& Handle,
+                                                 Uint32                                ArrayIndex,
+                                                 IRadientTextureAsset**                ppTexture) const override
     {
         return m_pMaterial->GetTexture(Handle, ArrayIndex, ppTexture);
     }
