@@ -102,7 +102,16 @@ public:
     {
         return Count != 0 && Count <= m_Items.size() ? m_Items.data() : nullptr;
     }
-    void Update() override
+    Uint64 GetValueCount() const override
+    {
+        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+        return m_ValueCount;
+    }
+    Uint32                        GetItemCount() const override { return static_cast<Uint32>(m_Items.size()); }
+    const Float32*                GetAllValues() const override { return m_ValueCount ? m_Float32.data() : nullptr; }
+    const MarshalOutputArrayItem* GetAllItems() const override { return m_Items.data(); }
+    void                          SetValueCount(Uint64 Count) override { m_ValueCount = Count; }
+    void                          Update() override
     {
         m_Float32[1]                 = 64.f;
         m_Items[0].Id                = 99;
@@ -131,6 +140,7 @@ private:
     std::array<MarshalOutputArrayItem, 2>  m_Items;
     std::array<MarshalOutputArrayGroup, 2> m_Groups;
     MarshalOutputArrayDesc                 m_Desc;
+    Uint64                                 m_ValueCount = 3;
 };
 } // namespace
 

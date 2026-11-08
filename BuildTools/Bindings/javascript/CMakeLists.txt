@@ -187,3 +187,11 @@ add_test(NAME Bindings-JavaScriptInheritedDescriptorsBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/inheriteddescriptors_tests.mjs")
 set_tests_properties(Bindings-JavaScriptInheritedDescriptorsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptCountMethods
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_count_methods.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptCountMethods PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptCountMethodsBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/count_method_tests.mjs")
+set_tests_properties(Bindings-JavaScriptCountMethodsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

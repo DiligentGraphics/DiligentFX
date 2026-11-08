@@ -447,6 +447,7 @@ export function createBindings(wasm, schema) {
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
             const result = spec.result.recordPointer ? outputRecordPointer(nativeResult, spec.result, rollback) : spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,
+                spec.result.span.lengthExport ? BigInt.asUintN(64, wasm[spec.result.span.lengthExport](nativeArgs[0])) :
                 args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span, rollback) :
                 spec.result.record ? outputRecord(nativeResult, spec.result.record, rollback) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);

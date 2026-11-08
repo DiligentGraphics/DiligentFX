@@ -541,13 +541,30 @@ class Generator:
         self.ts.append('}')
         self.schema["records"][short(name)] = rec
 
+    def result_span(self, d, owner, context):
+        result = d["result"]
+        method_name = result.get("policy", {}).get("length_method")
+        if method_name is None:
+            return self.span(result, d["parameters"], context, output=True)
+        method = self.interface_methods(owner).get(method_name) if owner else None
+        if (not method or method["parameters"] or
+                self.scalar(method["result"]["type"]) not in ("u32", "u64")):
+            raise ModelError(f"{context}: length_method must name an unsigned no-argument method on this interface")
+        proxy = deepcopy(result)
+        proxy["policy"].pop("length_method")
+        proxy["policy"]["length"] = method_name
+        span = self.span(proxy, [{"name": method_name, "type": method["result"]["type"]}], context, output=True)
+        span["lengthExport"] = self.export(symbol(context.removesuffix(' result')) + '_Length',
+            'uint64_t', ['uintptr_t self'], f'return reinterpret_cast<{owner}*>(self)->{method_name}();')
+        return span
+
     def callable(self, d, owner=None):
         name = owner + "::" + d["name"] if owner else d["name"]
         if name in self.scopes:
             return self.scoped_bytes(d, owner, self.scopes[name])
         self.automatic(d, name)
         self.automatic(d["result"], name + " result")
-        result_span = self.span(d["result"], d["parameters"], name + " result", output=True)
+        result_span = self.result_span(d, owner, name + " result")
         result_string = self.string(d["result"], name + " result", output=True) if not result_span else None
         result_record = self.record_result(d["result"], name + " result") if not result_span else None
         result_interface = self.interface_value(d["result"], name + " result", output=True) if not result_span else None

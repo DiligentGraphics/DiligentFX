@@ -99,6 +99,11 @@ DILIGENT_BEGIN_INTERFACE(IMarshalArraySnapshots, IObject)
     VIRTUAL const MarshalOutputArrayDesc REF METHOD(GetDescAfterGrowingMemory)(THIS) CONST PURE;
     VIRTUAL const Float32* METHOD(GetValues)(THIS_ Uint32 Count) CONST PURE;
     VIRTUAL const MarshalOutputArrayItem* METHOD(GetItems)(THIS_ Uint32 Count) CONST PURE;
+    VIRTUAL Uint64 METHOD(GetValueCount)(THIS) CONST PURE;
+    VIRTUAL Uint32 METHOD(GetItemCount)(THIS) CONST PURE;
+    VIRTUAL const Float32* METHOD(GetAllValues)(THIS) CONST PURE;
+    VIRTUAL const MarshalOutputArrayItem* METHOD(GetAllItems)(THIS) CONST PURE;
+    VIRTUAL void METHOD(SetValueCount)(THIS_ Uint64 Count) PURE;
     VIRTUAL void METHOD(Update)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
@@ -108,6 +113,11 @@ DILIGENT_END_INTERFACE
 #    define IMarshalArraySnapshots_GetDescAfterGrowingMemory(This) CALL_IFACE_METHOD(MarshalArraySnapshots, GetDescAfterGrowingMemory, This)
 #    define IMarshalArraySnapshots_GetValues(This, ...) CALL_IFACE_METHOD(MarshalArraySnapshots, GetValues, This, __VA_ARGS__)
 #    define IMarshalArraySnapshots_GetItems(This, ...) CALL_IFACE_METHOD(MarshalArraySnapshots, GetItems, This, __VA_ARGS__)
+#    define IMarshalArraySnapshots_GetValueCount(This) CALL_IFACE_METHOD(MarshalArraySnapshots, GetValueCount, This)
+#    define IMarshalArraySnapshots_GetItemCount(This) CALL_IFACE_METHOD(MarshalArraySnapshots, GetItemCount, This)
+#    define IMarshalArraySnapshots_GetAllValues(This) CALL_IFACE_METHOD(MarshalArraySnapshots, GetAllValues, This)
+#    define IMarshalArraySnapshots_GetAllItems(This) CALL_IFACE_METHOD(MarshalArraySnapshots, GetAllItems, This)
+#    define IMarshalArraySnapshots_SetValueCount(This, ...) CALL_IFACE_METHOD(MarshalArraySnapshots, SetValueCount, This, __VA_ARGS__)
 #    define IMarshalArraySnapshots_Update(This) CALL_IFACE_METHOD(MarshalArraySnapshots, Update, This)
 #endif
 

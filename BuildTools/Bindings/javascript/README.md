@@ -452,3 +452,11 @@ JS object. The native derived constructor supplies all defaults; generated nativ
 accessors perform base adjustment and field addressing. Pointer/count relationships
 may refer to inherited count fields. The model retains inheritance, while emitted
 TypeScript descriptor interfaces list the complete field set.
+
+## Array counts from another method
+
+An array result may use `length_method: GetWeightCount` instead of `length`.
+The named method must belong to the same interface or a base, take no arguments,
+and return an unsigned 32-bit or 64-bit count. The wrapper queries the native
+owner and copies the array before returning; no count argument is exposed to JS.
+The pointer and count must describe the same stable data for the synchronous call.

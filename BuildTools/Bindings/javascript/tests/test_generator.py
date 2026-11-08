@@ -305,6 +305,17 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("new (std::nothrow) Diligent::MarshalLeafDesc{}", cpp)
         self.assertIn("EchoInherited(Desc: MarshalLeafDesc): StructSnapshot<MarshalLeafDesc>", types)
 
+    def test_array_counts_from_methods_are_validated(self):
+        cpp, _, types = self.emit()
+        self.assertIn("GetAllValues(): Float32Array", types)
+        self.assertIn("reinterpret_cast<Diligent::IMarshalArraySnapshots*>(self)->GetValueCount()", cpp)
+        for name in ("Missing", "SetValueCount", "Update"):
+            model = deepcopy(MODEL)
+            methods = self.declaration(model, "IMarshalArraySnapshots")["methods"]
+            next(m for m in methods if m["name"] == "GetAllValues")["result"]["policy"]["length_method"] = name
+            with self.assertRaisesRegex(ModelError, "length_method"):
+                self.emit(model)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

@@ -945,7 +945,28 @@
             "length": "Count"
           }
         },
-        "Update": {}
+        "Update": {},
+        "GetValueCount": {},
+        "GetItemCount": {},
+        "SetValueCount": {},
+        "GetAllValues": {
+          "result": {
+            "direction": "out",
+            "nullable": false,
+            "lifetime": "object",
+            "ownership": "borrowed",
+            "length_method": "GetValueCount"
+          }
+        },
+        "GetAllItems": {
+          "result": {
+            "direction": "out",
+            "nullable": false,
+            "lifetime": "object",
+            "ownership": "borrowed",
+            "length_method": "GetItemCount"
+          }
+        }
       }
     },
     "Diligent::CreateMarshalArraySnapshots": {
