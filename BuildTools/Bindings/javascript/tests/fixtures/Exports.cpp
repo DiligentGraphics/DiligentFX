@@ -32,4 +32,6 @@ namespace Diligent
 MarshalEntityAlias EchoEntityID(MarshalEntityAlias Value) { return Value; }
 MarshalEntityID    GetInvalidEntityID() { return MarshalInvalidID; }
 
+Uint32 SumExportParts(const MarshalExportNames& Value) { return Value.Parts[0] + Value.Parts[1]; }
+
 } // namespace Diligent

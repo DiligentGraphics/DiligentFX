@@ -809,7 +809,7 @@ class Generator:
             return f'ReadonlyArray<{self.alias_type(t["element"])}>'
         return ts_scalar(self.scalar(t))
 
-    def constant_value(self, t, value):
+    def constant_value(self, t, value, *, field=False):
         """Emit evaluated values without passing exact integers through JS JSON."""
         t = unalias(t)
         if value is None:
@@ -817,13 +817,22 @@ class Generator:
         if isinstance(value, str):
             return json.dumps(value), 'string'
         if t["kind"] == "array":
-            elements = [self.constant_value(t["element"], element) for element in value]
+            elements = [self.constant_value(t["element"], element, field=field) for element in value]
+            element_type = unalias(t["element"])
+            if field and (element_type["kind"] == "scalar" or
+                          self.types.get(element_type.get("name"), {}).get("kind") == "enum"):
+                array_type = self.span_ts({"type": self.scalar(t["element"])}, output=True)
+                return f'new {array_type}([' + ', '.join(v for v, _ in elements) + '])', array_type
             return ('Object.freeze([' + ', '.join(v for v, _ in elements) + '])',
                     'readonly [' + ', '.join(ts for _, ts in elements) + ']')
         if self.types.get(t.get("name"), {}).get("kind") == "record":
             fields = {f["name"]: f["type"] for f in self.record_fields(t["name"])}
-            elements = [(name, *self.constant_value(fields[name], field)) for name, field in value.items()]
-            return ('Object.freeze({' + ', '.join(f'[{json.dumps(n)}]: {v}' for n, v, _ in elements) + '})',
+            elements = [(name, *self.constant_value(fields[name], value, field=True)) for name, value in value.items()]
+            # Typed arrays cannot be frozen. Return a fresh array from each field
+            # getter so constants remain unchanged and can be passed as descriptors.
+            members = [f'get [{json.dumps(n)}]() {{ return {v}; }}' if unalias(fields[n])["kind"] == "array"
+                       else f'[{json.dumps(n)}]: {v}' for n, v, _ in elements]
+            return ('Object.freeze({' + ', '.join(members) + '})',
                     '{ ' + '; '.join(f'readonly {n}: {ts}' for n, _, ts in elements) + ' }')
         kind = self.scalar(t)
         return (str(value) + 'n' if kind in ('i64', 'u64') else json.dumps(value)), ts_scalar(kind)

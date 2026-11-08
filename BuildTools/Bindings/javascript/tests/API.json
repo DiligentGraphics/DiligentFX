@@ -40,6 +40,7 @@
     "Diligent::EchoArrayDescriptor",
     "Diligent::EchoDouble",
     "Diligent::EchoEntityID",
+    "Diligent::SumExportParts",
     "Diligent::EchoFixedArrays",
     "Diligent::EchoFixedMatrix",
     "Diligent::EchoFloat",
@@ -498,7 +499,7 @@
         "pValues": {"direction": "inout", "nullable": true, "lifetime": "call", "ownership": "borrowed", "length": "Count"}
       }
     },
-    "Diligent::MarshalExportNames": {"fields": {"Name": {"direction": "out", "nullable": false, "lifetime": "static", "ownership": "borrowed"}}},
+    "Diligent::MarshalExportNames": {"fields": {"Name": {"direction": "inout", "nullable": false, "lifetime": "call", "ownership": "borrowed"}}},
     "Diligent::DefaultPointer": {"parameters": {"pDesc": {"nullable": true, "lifetime": "call", "ownership": "borrowed"}}},
     "Diligent::DefaultOutput": {"parameters": {"Value": {"direction": "out"}}},
     "Diligent::DefaultStringLength": {"parameters": {"Text": {"nullable": false, "lifetime": "call", "ownership": "borrowed"}}},

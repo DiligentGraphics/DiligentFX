@@ -215,7 +215,54 @@
     "Diligent::RADIENT_COMPONENT_TYPE_MORPH",
     "Diligent::RadientMorphTargetPositionSemantic",
     "Diligent::RadientMorphTargetNormalSemantic",
-    "Diligent::RadientMorphTargetTangentSemantic"
+    "Diligent::RadientMorphTargetTangentSemantic",
+    "Diligent::InvalidRadientAnimationSchemaID",
+    "Diligent::InvalidRadientAnimationObject",
+    "Diligent::InvalidRadientAnimationTargetIndex",
+    "Diligent::InvalidRadientAnimationSamplerIndex",
+    "Diligent::InvalidRadientAnimationDestinationElement",
+    "Diligent::RadientNodeAnimationSchemaID",
+    "Diligent::RadientNodeTranslationPropertyName",
+    "Diligent::RadientNodeRotationPropertyName",
+    "Diligent::RadientNodeScalePropertyName",
+    "Diligent::RadientNodeVisibilityPropertyName",
+    "Diligent::RadientMorphWeightsAnimationSchemaID",
+    "Diligent::RadientMorphWeightsPropertyName",
+    "Diligent::RadientLightAnimationSchemaID",
+    "Diligent::RadientLightColorPropertyName",
+    "Diligent::RadientLightIntensityPropertyName",
+    "Diligent::RadientLightRangePropertyName",
+    "Diligent::RadientLightExposurePropertyName",
+    "Diligent::RadientLightInnerConeAnglePropertyName",
+    "Diligent::RadientLightOuterConeAnglePropertyName",
+    "Diligent::RadientLightDiffusePropertyName",
+    "Diligent::RadientLightSpecularPropertyName",
+    "Diligent::RadientLightNormalizePropertyName",
+    "Diligent::RadientLightEnableColorTemperaturePropertyName",
+    "Diligent::RadientLightColorTemperaturePropertyName",
+    "Diligent::RadientLightRadiusPropertyName",
+    "Diligent::RadientLightAnglePropertyName",
+    "Diligent::RadientLightShapingFocusPropertyName",
+    "Diligent::RadientCameraAnimationSchemaID",
+    "Diligent::RadientCameraHorizontalAperturePropertyName",
+    "Diligent::RadientCameraVerticalAperturePropertyName",
+    "Diligent::RadientCameraFocalLengthPropertyName",
+    "Diligent::RadientCameraNearClipPropertyName",
+    "Diligent::RadientCameraFarClipPropertyName",
+    "Diligent::RadientCameraFStopPropertyName",
+    "Diligent::RadientCameraFocusDistancePropertyName",
+    "Diligent::RadientMaterialAnimationSchemaID",
+    "Diligent::RadientSurfaceMaterialAnimationSchemaID",
+    "Diligent::RadientSurfaceMaterialAlphaCutoffPropertyName",
+    "Diligent::IID_RadientAnimationDestination",
+    "Diligent::IID_RadientAnimationDestinationBinding",
+    "Diligent::IID_RadientAnimationClipAsset",
+    "Diligent::IID_RadientAnimationBinding",
+    "Diligent::IID_RadientAnimationRegistry",
+    "Diligent::MakeAxisRotation",
+    "Diligent::MakeXRotation",
+    "Diligent::MakeYRotation",
+    "Diligent::MakeZRotation"
   ],
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -280,7 +327,8 @@
       "include_methods": [
         "CreateScene",
         "CreateSceneWriter",
-        "GetAssetManager"
+        "GetAssetManager",
+        "CreateAnimationRegistry"
       ],
       "methods": {
         "CreateScene": {
@@ -297,6 +345,12 @@
         "GetAssetManager": {
           "parameters": {
             "ppAssetManager": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateAnimationRegistry": {
+          "parameters": {
+            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppRegistry": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -493,7 +547,8 @@
         "CreateStandardMaterialDefinition",
         "CreateMaterial",
         "CreateSkeleton",
-        "CreateSkin"
+        "CreateSkin",
+        "CreateAnimationClip"
       ],
       "methods": {
         "CreateMesh": {
@@ -525,6 +580,11 @@
         "CreateSkin": {
           "parameters": {
             "ppSkin": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateAnimationClip": {
+          "parameters": {
+            "ppClip": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -912,6 +972,131 @@
     "Diligent::RadientMorphComponent": {
       "fields": {
         "pWeights": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientAnimationClipDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pTargets": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "TargetCount"},
+        "pSamplers": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "SamplerCount"},
+        "pChannels": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChannelCount"}
+      }
+    },
+    "Diligent::RadientAnimationTargetDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientAnimationSamplerDesc": {
+      "fields": {
+        "pTimes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "KeyframeCount"},
+        "pValues": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ValueDataSize"}
+      }
+    },
+    "Diligent::RadientAnimationChannelDesc": {
+      "fields": {
+        "Property": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientAnimationBindingDesc": {
+      "fields": {
+        "pDestinations": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "DestinationCount"}
+      }
+    },
+    "Diligent::RadientAnimationDestinationDesc": {
+      "fields": {
+        "pDestination": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "pMappings": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MappingCount"}
+      }
+    },
+    "Diligent::IRadientAnimationClipAsset": {
+      "include_methods": [
+        "GetDesc",
+        "CreateBinding"
+      ],
+      "methods": {
+        "CreateBinding": {
+          "parameters": {
+            "ppBinding": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        }
+      }
+    },
+    "Diligent::IRadientAnimationBinding": {
+      "include_methods": [
+        "GetClip",
+        "Evaluate"
+      ],
+      "methods": {
+        "GetClip": {
+          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+        }
+      }
+    },
+    "Diligent::IRadientAnimationDestination": {
+      "include_methods": []
+    },
+    "Diligent::IRadientAnimationRegistry": {
+      "include_methods": [
+        "GetScene",
+        "AddAnimationBinding",
+        "RemoveAnimationBinding",
+        "RemoveEntity",
+        "RemoveAnimationClip",
+        "GetState"
+      ],
+      "methods": {
+        "GetScene": {
+          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+        },
+        "AddAnimationBinding": {
+          "parameters": {
+            "pBinding": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pEntities": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
+          }
+        },
+        "RemoveAnimationBinding": {
+          "parameters": {
+            "pBinding": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pEntities": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
+          }
+        },
+        "RemoveAnimationClip": {
+          "parameters": {
+            "pClip": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+          }
+        }
+      }
+    },
+    "Diligent::RadientAnimationRegistryState": {
+      "fields": {
+        "pEntries": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntryCount"}
+      }
+    },
+    "Diligent::RadientAnimationRegistryEntry": {
+      "fields": {
+        "pClip": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ppBindings": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
+      }
+    },
+    "Diligent::MakeAxisRotation": {
+      "parameters": {
+        "Rotation": {"direction": "out"}
+      }
+    },
+    "Diligent::MakeXRotation": {
+      "parameters": {
+        "Rotation": {"direction": "out"}
+      }
+    },
+    "Diligent::MakeYRotation": {
+      "parameters": {
+        "Rotation": {"direction": "out"}
+      }
+    },
+    "Diligent::MakeZRotation": {
+      "parameters": {
+        "Rotation": {"direction": "out"}
       }
     }
   }

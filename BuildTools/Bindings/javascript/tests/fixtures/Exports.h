@@ -55,6 +55,9 @@ typedef struct MarshalExportNames MarshalExportNames;
 static DILIGENT_CONSTEXPR MarshalExportNames MarshalNames = {MarshalAnimationName, ~0ull, {3, 5}};
 MarshalEntityAlias DILIGENT_GLOBAL_FUNCTION(EchoEntityID)(MarshalEntityAlias Value);
 MarshalEntityID DILIGENT_GLOBAL_FUNCTION(GetInvalidEntityID)(void);
+#include "DefineRefMacro.h"
+Uint32 DILIGENT_GLOBAL_FUNCTION(SumExportParts)(const MarshalExportNames REF Value);
+#include "UndefRefMacro.h"
 
 // clang-format on
 DILIGENT_END_NAMESPACE

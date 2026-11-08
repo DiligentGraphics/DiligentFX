@@ -14,8 +14,10 @@ export function registerTests({test, assert, api, constants}) {
         assert.deepEqual(api.MarshalLookup, [0n, 0xfedcba9876543210n]);
         assert.equal(api.MarshalNames.Invalid, api.MarshalInvalidID);
         assert.equal(api.MarshalNames.Name, "Translation");
-        assert.deepEqual(api.MarshalNames.Parts, [3, 5]);
-        assert.throws(() => {api.MarshalNames.Parts[0] = 9;}, TypeError);
+        assert.ok(api.MarshalNames.Parts instanceof Uint32Array);
+        assert.deepEqual(Array.from(api.MarshalNames.Parts), [3, 5]);
+        api.MarshalNames.Parts[0] = 9;
+        assert.equal(api.SumExportParts(api.MarshalNames), 8);
         assert.throws(() => {api.MarshalNames.Name = "changed";}, TypeError);
         assert.equal(constants.MarshalNames, api.MarshalNames);
     });

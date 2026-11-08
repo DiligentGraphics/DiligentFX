@@ -264,3 +264,12 @@ arguments retain their native defaults.
 Morph data uses blob-backed deltas in mesh creation. Create weights after mesh
 CPU loading completes. `GetWeights()` returns a copied `Float32Array`, sized from
 `GetWeightCount()` natively; use `SetWeights()` to modify the native object.
+
+## Animation
+
+Clips accept typed keyframe times and copied value bytes. Bind targets to the
+scene writer, a material, a skeleton pose, or morph weights through
+`QueryInterface(api.IRadientAnimationDestination)`. `Evaluate()` performs the
+native update; direct writable native output pointers are never exposed.
+Registry snapshots retain every returned clip and binding independently, so
+dispose those wrappers after use, including when the registry entry is removed.
