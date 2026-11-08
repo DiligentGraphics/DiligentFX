@@ -8,7 +8,7 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-The nested-input, struct-result, input-array, and output-array suites also run in
+The nested-input, struct-result, input-array, output-array, and fixed-array suites also run in
 a headless browser.
 No renderer or GPU is required.
 
@@ -39,9 +39,9 @@ Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
 CTest runs Python emitter tests and separate Node suites for scalar/interface,
-byte-buffer, string, nested-input, struct-result, input-array, and output-array
+byte-buffer, string, nested-input, struct-result, input-array, output-array, and fixed-array
 marshalling, plus browser-harness unit tests. The nested-input, struct-result,
-input-array, and output-array cases run in both Node and the browser.
+input-array, output-array, and fixed-array cases run in both Node and the browser.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -126,8 +126,8 @@ single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
 result. Borrowed const-reference struct results become JavaScript snapshots.
 It also supports UTF-8 strings, scalar/struct input and borrowed output arrays,
-input byte spans, and the scoped byte adapters described below. It rejects unsupported declarations
-and policies instead of silently omitting them. Caller-filled output buffers, fixed-size arrays,
+fixed-size array fields, input byte spans, and the scoped byte adapters described below. It rejects unsupported declarations
+and policies instead of silently omitting them. Caller-filled output buffers,
 interface-pointer arrays, callbacks, struct output parameters, by-value struct
 results, default function arguments, and other manual adapters are not implemented
 yet. The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
@@ -231,7 +231,36 @@ modify the JavaScript arrays. Native pointers are never exposed.
 api.UseAttributes([{Semantic: "POSITION"}, {Semantic: "NORMAL"}], 2);
 ```
 
-Fixed-size arrays and arrays of interface pointers are not supported yet.
+Arrays of interface pointers are not supported yet.
+
+## Fixed-size array fields
+
+Embedded C arrays such as `Float32 Data[16]` use the extent from their native
+declaration; no pointer/count policy is required. Numeric, enum, boolean, and
+character elements use the same typed-array representations as pointer/count
+arrays. Struct elements use arrays of descriptor objects. Multidimensional arrays
+use nested JavaScript arrays, with typed arrays for numeric rows. For example,
+`Float32 Rows[2][4]` takes two `Float32Array(4)` rows. Array typedefs preserve these
+dimensions.
+
+A supplied field must have exactly the declared number of elements at every
+dimension. Short, long, sparse, null, and incorrectly typed arrays are rejected.
+Omitting the field or passing `undefined` leaves its native initializer unchanged,
+including matrix identity defaults. Struct elements may omit individual members;
+their defaults come from the containing descriptor's initializer. Empty objects
+preserve those defaults, while missing array elements are errors.
+
+Input values are written directly into the containing native descriptor. Fixed
+arrays and their struct elements require no separate native allocation. Nested
+strings and dynamic spans share the call's existing temporary-storage cleanup.
+Results are independent typed arrays or recursively copied struct arrays, with
+the same lifetime rules as other snapshots. Const arrays and const element fields
+are supported in output-only descriptors.
+
+TypeScript preserves the element types and dimensions; exact lengths are checked
+at runtime. Fixed arrays of pointers, callbacks, and other unsupported element
+types still require adapters. This support applies to embedded fields: C array
+function parameters decay to pointers and use pointer/count metadata instead.
 
 ## Borrowed output arrays
 

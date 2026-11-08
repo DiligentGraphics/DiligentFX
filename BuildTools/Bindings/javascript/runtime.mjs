@@ -114,7 +114,8 @@ export function createBindings(wasm, schema) {
             const fieldValue = value[key];
             // Undefined, like omission, leaves the native default untouched.
             if (fieldValue !== undefined) {
-                if (field.span) spans.push({field, value: fieldValue});
+                if (field.array) inputFixedArray(fieldValue, wasm[field.address](address) >>> 0, field.array, cleanup);
+                else if (field.span) spans.push({field, value: fieldValue});
                 else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
                 else if (field.record) record(fieldValue, field.record, cleanup, wasm[field.address](address) >>> 0);
                 else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
@@ -134,7 +135,8 @@ export function createBindings(wasm, schema) {
         if (!address) throw new Error(`Native function returned a null ${name} reference`);
         const result = {};
         for (const [key, field] of Object.entries(schema.records[name].fields)) {
-            const value = field.span ? outputSpan(wasm[field.get](address),
+            const value = field.array ? outputFixedArray(wasm[field.address](address) >>> 0, field.array) :
+                field.span ? outputSpan(wasm[field.get](address),
                 BigInt.asUintN(64, wasm[field.span.getLength](address)), field.span) :
                 field.record ? outputRecord(wasm[field.address](address), field.record) :
                 field.string ? outputString(wasm[field.get](address), field.string) :
@@ -142,6 +144,25 @@ export function createBindings(wasm, schema) {
             // Snapshot members are copied data properties, never native accessors.
             Object.defineProperty(result, key, {value, enumerable: true, writable: true, configurable: true});
         }
+        return result;
+    }
+
+    function inputFixedArray(value, address, spec, cleanup) {
+        if (!spec.array) {
+            inputSpan(value, spec.count, spec, cleanup, address);
+            return;
+        }
+        if (!Array.isArray(value)) throw new TypeError("Expected an array of fixed-size arrays");
+        if (value.length !== spec.count) throw new RangeError(`Fixed array requires exactly ${spec.count} elements`);
+        for (let i = 0; i < spec.count; ++i) {
+            inputFixedArray(value[i], wasm[spec.element](address, i) >>> 0, spec.array, cleanup);
+        }
+    }
+
+    function outputFixedArray(address, spec) {
+        if (!spec.array) return outputSpan(address, spec.count, spec);
+        const result = new Array(spec.count);
+        for (let i = 0; i < spec.count; ++i) result[i] = outputFixedArray(wasm[spec.element](address, i) >>> 0, spec.array);
         return result;
     }
 
@@ -172,17 +193,21 @@ export function createBindings(wasm, schema) {
         return result;
     }
 
-    function inputSpan(value, count, spec, cleanup) {
+    function inputSpan(value, count, spec, cleanup, address) {
         const length = byteLength(count);
+        const embedded = address !== undefined;
         if (value === null && spec.nullable) return 0;
         if (spec.record) {
             if (!Array.isArray(value)) throw new TypeError(`Expected an array of ${spec.record}`);
+            if (embedded && length !== value.length) throw new RangeError(`Fixed array requires exactly ${length} elements`);
             if (length > value.length) throw new RangeError("Element count exceeds the input array");
-            if (length > (wasm[spec.maxCount]() >>> 0)) throw new RangeError("Struct array exceeds the native allocation limit");
             if (length === 0) return 0;
-            const address = wasm[spec.create](length) >>> 0;
-            if (!address) throw new Error("Could not allocate struct array input");
-            cleanup.push(() => wasm[spec.destroy](address));
+            if (!embedded) {
+                if (length > (wasm[spec.maxCount]() >>> 0)) throw new RangeError("Struct array exceeds the native allocation limit");
+                address = wasm[spec.create](length) >>> 0;
+                if (!address) throw new Error("Could not allocate struct array input");
+                cleanup.push(() => wasm[spec.destroy](address));
+            }
             for (let i = 0; i < length; ++i) {
                 record(value[i], spec.record, cleanup, wasm[spec.element](address, i) >>> 0);
             }
@@ -192,12 +217,15 @@ export function createBindings(wasm, schema) {
         // Preserve Uint8Array inputs accepted by the original signed-byte spans.
         const Type = spec.type === "i8" && value instanceof Uint8Array ? Uint8Array : scalarArrays[spec.type];
         const values = typedArray(value, Type);
+        if (embedded && length !== values.length) throw new RangeError(`Fixed array requires exactly ${length} elements`);
         if (length > values.length) throw new RangeError("Element count exceeds the input array");
         const size = byteLength(length * Type.BYTES_PER_ELEMENT);
         if (size === 0) return 0;
-        const address = wasm._malloc(size) >>> 0;
-        if (!address) throw new Error("Could not allocate array input storage");
-        cleanup.push(() => wasm._free(address));
+        if (!embedded) {
+            address = wasm._malloc(size) >>> 0;
+            if (!address) throw new Error("Could not allocate array input storage");
+            cleanup.push(() => wasm._free(address));
+        }
         // Copy the selected view, not its entire backing buffer. Obtain the heap
         // after allocation, which may grow Wasm memory.
         wasm.HEAPU8.set(new Uint8Array(values.buffer, values.byteOffset, size), address);

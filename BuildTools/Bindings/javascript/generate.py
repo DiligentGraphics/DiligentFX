@@ -172,7 +172,7 @@ class Generator:
         methods.update((m["name"], m) for m in declaration.get("methods", []))
         return methods
 
-    def record_array(self, name, *, output):
+    def record_array(self, name, *, output, allocate=True):
         # Layout facts and element addressing stay in native code. Output-only
         # arrays need no native allocation or default construction.
         prefix = symbol(name) + '_Array'
@@ -186,7 +186,7 @@ class Generator:
             info.update(
                 size=self.export(prefix + 'Size', 'uint32_t', [], f'return sizeof({name});'),
                 alignment=self.export(prefix + 'Alignment', 'uint32_t', [], f'return alignof({name});'))
-        if not output and "create" not in info:
+        if not output and allocate and "create" not in info:
             info.update(
                 maxCount=self.export(prefix + 'MaxCount', 'uint32_t', [], f'return PTRDIFF_MAX / sizeof({name});'),
                 create=self.export(prefix + 'Create', 'uintptr_t', ['uint32_t count'],
@@ -194,6 +194,38 @@ class Generator:
                 destroy=self.export(prefix + 'Destroy', 'void', ['uintptr_t pointer'],
                     f'delete[] reinterpret_cast<{name}*>(pointer);'))
         return info
+
+    def fixed_array(self, t, owner, path, *, as_input, as_output):
+        t = unalias(t)
+        context = owner + "::" + path
+        if t["volatile"] or (as_input and t["const"]):
+            raise ModelError(f"{context}: fixed arrays require non-volatile elements, writable for input")
+        if not isinstance(t["count"], int) or t["count"] <= 0:
+            raise ModelError(f"{context}: fixed arrays require a positive extent")
+        element = unalias(t["element"])
+        if element["volatile"] or (as_input and element["const"]):
+            raise ModelError(f"{context}: fixed arrays require non-volatile elements, writable for input")
+        spec = {"count": t["count"], "nullable": False}
+        declaration = self.types.get(element.get("name"), {})
+        if element["kind"] == "array":
+            # The native compiler supplies the row stride; no layout arithmetic
+            # or struct offsets are duplicated in JavaScript.
+            element_path = path + '[0]'
+            prefix = symbol(owner + "::" + path.split('[')[0])
+            spec["element"] = self.export(prefix + f'_ArrayDimension{path.count("[0]")}_Element',
+                'uintptr_t', ['uintptr_t pointer', 'uint32_t index'],
+                f'return pointer + index * sizeof(reinterpret_cast<const {owner}*>(pointer)->{element_path});')
+            spec["array"], child_ts = self.fixed_array(element, owner, element_path,
+                                                     as_input=as_input, as_output=as_output)
+            return spec, f'{"ReadonlyArray" if as_input else "Array"}<{child_ts}>'
+        if declaration.get("kind") == "record":
+            spec.update(record=short(declaration["name"]),
+                        **self.record_array(declaration["name"], output=as_output, allocate=False))
+        elif element["kind"] == "scalar" or declaration.get("kind") == "enum":
+            spec["type"] = 'u8' if element.get("name") in ("char_s", "char_u") else self.scalar(element)
+        else:
+            raise ModelError(f"{context}: fixed arrays support only scalars, plain structs, and nested arrays")
+        return spec, self.span_ts(spec, output=not as_input)
 
     def span(self, value, siblings, context, *, output=False, field=False):
         policy = value.get("policy", {})
@@ -286,6 +318,8 @@ class Generator:
             t = unalias(t)
             if t["kind"] in ("reference", "pointer"):
                 t = unalias(t["target"])
+            while t["kind"] == "array":
+                t = unalias(t["element"])
             d = self.types.get(t.get("name"), {})
             if d.get("kind") != "record" or d["name"] in used:
                 return
@@ -337,6 +371,17 @@ class Generator:
             field_type = unalias(field["type"])
             if as_input and field_type["const"]:
                 raise ModelError(f"{name}: const fields need an explicit adapter")
+            if field_type["kind"] == "array":
+                if "length" in field.get("policy", {}):
+                    raise ModelError(f"{context}: fixed arrays use their declared extent, not a length policy")
+                array, field_ts = self.fixed_array(field_type, name, field["name"],
+                                                  as_input=as_input, as_output=as_output)
+                address = self.export(symbol(name) + '_Field_' + field["name"], 'uintptr_t',
+                    ['uintptr_t pointer'],
+                    f'return reinterpret_cast<uintptr_t>(&reinterpret_cast<const {name}*>(pointer)->{field["name"]});')
+                rec["fields"][field["name"]] = {"array": array, "address": address}
+                self.ts.append(f'  {field["name"]}{"?" if as_input else ""}: {field_ts};')
+                continue
             span = None
             if as_input:
                 span = self.span(field, d["fields"], context, field=True)

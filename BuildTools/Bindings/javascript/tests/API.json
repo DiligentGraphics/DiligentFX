@@ -991,6 +991,138 @@
         "length": "Count"
       }
     },
-    "Diligent::GetLiveArraySnapshotCount": {}
+    "Diligent::GetLiveArraySnapshotCount": {},
+    "Diligent::MarshalFixedMatrix": {},
+    "Diligent::MarshalFixedArrays": {},
+    "Diligent::MarshalFixedReadOnly": {},
+    "Diligent::MarshalFixedReadOnlyElement": {},
+    "Diligent::MarshalFixedChild": {
+      "fields": {
+        "Label": {
+          "direction": "inout",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "pExtra": {
+          "direction": "inout",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ExtraCount"
+        }
+      }
+    },
+    "Diligent::CheckFixedInputs": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadFixedRow": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadFixedCube": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadFixedChild": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadFixedSample": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::ReadFixedMatrix": {
+      "parameters": {
+        "Matrix": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetFixedArrays": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetFixedReadOnlyArrays": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::EchoFixedArrays": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::EchoFixedMatrix": {
+      "parameters": {
+        "Matrix": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::UpdateFixedArrays": {},
+    "Diligent::ResetFixedArrays": {},
+    "Diligent::GetFixedCallCount": {}
   }
 }

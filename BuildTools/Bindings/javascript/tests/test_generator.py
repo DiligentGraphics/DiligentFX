@@ -98,18 +98,12 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, "struct results require a borrowed const reference"):
                     self.emit(model)
 
-    def test_struct_results_reject_unannotated_pointers_and_fixed_array_fields(self):
-        for kind in ["pointer", "array"]:
-            with self.subTest(kind=kind):
-                model = deepcopy(MODEL)
-                child = self.declaration(model, "MarshalSnapshotChild")
-                field = child["fields"][0]
-                if kind == "pointer":
-                    field["type"] = {"kind": "pointer", "target": field["type"], "const": False, "volatile": False}
-                elif kind == "array":
-                    field["type"] = {"kind": "array", "element": field["type"], "count": 2, "const": False, "volatile": False}
-                with self.assertRaisesRegex(ModelError, "expected a scalar"):
-                    self.emit(model)
+    def test_struct_results_reject_unannotated_pointer_fields(self):
+        model = deepcopy(MODEL)
+        field = self.declaration(model, "MarshalSnapshotChild")["fields"][0]
+        field["type"] = {"kind": "pointer", "target": field["type"], "const": False, "volatile": False}
+        with self.assertRaisesRegex(ModelError, "expected a scalar"):
+            self.emit(model)
 
     def test_struct_results_validate_nested_string_ownership(self):
         for key, value in [("ownership", "owned"), ("lifetime", "read_scope"), ("direction", "in")]:
@@ -227,6 +221,64 @@ class GeneratorTest(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "output spans require"):
             self.emit(model)
 
+    def test_fixed_array_fields_use_parent_storage_and_native_row_strides(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("Data?: Float32Array;", types)
+        self.assertIn("Rows?: ReadonlyArray<Float32Array>;", types)
+        self.assertIn("Cube?: ReadonlyArray<ReadonlyArray<Float32Array>>;", types)
+        self.assertIn("Children?: ReadonlyArray<MarshalFixedChild>;", types)
+        self.assertIn("Items: Array<StructSnapshot<MarshalFixedReadOnlyElement>>;", types)
+        self.assertIn("sizeof(reinterpret_cast<const Diligent::MarshalFixedArrays*>(pointer)->Rows[0])", cpp)
+        self.assertNotIn("binding_Diligent_MarshalFixedChild_ArrayCreate", cpp)
+        self.assertNotIn("binding_Diligent_MarshalFixedMatrix_ArrayCreate", cpp)
+        self.assertNotIn("new (std::nothrow) Diligent::MarshalFixedReadOnlyElement", cpp)
+        array = generator.schema["records"]["MarshalFixedArrays"]["fields"]["Rows"]["array"]
+        self.assertEqual(array["count"], 2)
+        self.assertEqual(array["array"]["count"], 4)
+        self.assertEqual(array["array"]["type"], "float")
+        fields = generator.schema["records"]["MarshalFixedChild"]["fields"]
+        self.assertIn("get", fields["Id"])
+        self.assertIn("set", fields["Id"])
+
+    def test_fixed_array_fields_reject_invalid_extents_and_element_types(self):
+        for change in ["zero", "negative", "pointer", "volatile", "const", "length"]:
+            with self.subTest(change=change):
+                model = deepcopy(MODEL)
+                field = self.declaration(model, "MarshalFixedMatrix")["fields"][0]
+                array = field["type"]
+                if change in ("zero", "negative"):
+                    array["count"] = 0 if change == "zero" else -1
+                elif change == "pointer":
+                    array["element"] = {"kind": "pointer", "const": False, "volatile": False, "target": array["element"]}
+                elif change == "length":
+                    field["policy"] = {"length": "Data"}
+                else:
+                    array["element"][change] = True
+                with self.assertRaisesRegex(ModelError, "fixed arrays"):
+                    self.emit(model)
+
+    def test_nested_array_helpers_do_not_collide_with_field_names(self):
+        model = deepcopy(MODEL)
+        declaration = self.declaration(model, "MarshalFixedArrays")
+        cube = next(f for f in declaration["fields"] if f["name"] == "Cube")
+        # Cube's second dimension must not use the name of a Cube_Row field.
+        declaration["fields"].append(dict(deepcopy(cube), name="Cube_Row", type=deepcopy(cube["type"]["element"])))
+        cpp, _, _ = self.emit(model)
+        self.assertEqual(cpp.count("uintptr_t binding_Diligent_MarshalFixedArrays_Cube_ArrayDimension1_Element("), 1)
+        self.assertEqual(cpp.count("uintptr_t binding_Diligent_MarshalFixedArrays_Cube_Row_ArrayDimension0_Element("), 1)
+
+    def test_fixed_arrays_alone_classify_nested_const_output_records(self):
+        model = deepcopy(MODEL)
+        names = {"MarshalFixedReadOnly", "MarshalFixedReadOnlyElement", "GetFixedReadOnlyArrays"}
+        model["declarations"] = [d for d in model["declarations"] if d["name"].removeprefix("Diligent::") in names]
+        generator = Generator(model, "BindingTests", ["Interfaces.h"], {})
+        cpp, _, _ = generator.generate()
+        self.assertNotIn("new (std::nothrow)", cpp)
+        field = generator.schema["records"]["MarshalFixedReadOnlyElement"]["fields"]["Value"]
+        self.assertIn("get", field)
+        self.assertNotIn("set", field)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"
@@ -246,16 +298,12 @@ class GeneratorTest(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "explicit JavaScript adapter"):
             self.emit(model)
 
-    def test_rejects_unimplemented_pointer_and_array_shapes(self):
-        for kind in ["pointer", "array"]:
-            model = deepcopy(MODEL)
-            field = self.declaration(model, "MarshalDesc")["fields"][0]
-            if kind == "pointer":
-                field["type"] = {"kind": kind, "target": field["type"], "const": False, "volatile": False}
-            else:
-                field["type"] = {"kind": kind, "element": field["type"], "count": 2, "const": False, "volatile": False}
-            with self.assertRaisesRegex(ModelError, "expected a scalar"):
-                self.emit(model)
+    def test_rejects_unannotated_descriptor_pointers(self):
+        model = deepcopy(MODEL)
+        field = self.declaration(model, "MarshalDesc")["fields"][0]
+        field["type"] = {"kind": "pointer", "target": field["type"], "const": False, "volatile": False}
+        with self.assertRaisesRegex(ModelError, "expected a scalar"):
+            self.emit(model)
 
     def test_rejects_unsupported_ownership(self):
         model = deepcopy(MODEL)

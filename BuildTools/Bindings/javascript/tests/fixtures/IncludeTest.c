@@ -75,3 +75,11 @@ const MarshalOutputArrayDesc* CheckCArrayOutput(IMarshalArraySnapshots* pSnapsho
     (void)Values;
     return IMarshalArraySnapshots_GetDesc(pSnapshots);
 }
+
+Float32 CheckCFixedArrays(void)
+{
+    MarshalFixedArrays Desc   = {0};
+    Desc.Rows[1][2]           = 3.f;
+    Desc.Matrices[1].Data[15] = 1.f;
+    return Diligent_ReadFixedRow(&Desc, 1, 2);
+}
