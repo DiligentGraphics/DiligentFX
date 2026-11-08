@@ -413,7 +413,7 @@ and resize restrictions remain the responsibility of the native implementation.
 The same adapter configuration can restrict an API without changing its native
 headers or language-neutral model:
 
-- `native_only` lists qualified enum or descriptor-field names omitted from the
+- `native_only` lists qualified enum, external-type, or descriptor-field names omitted from the
   JavaScript surface. Omitted fields require native defaults and remain initialized
   by the native descriptor constructor. Passing such a field in JavaScript is an
   unknown-field error.

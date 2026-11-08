@@ -4,7 +4,15 @@
     "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE",
     "Diligent::RadientDataBlobCreateInfo::OnLastReaderReleased",
     "Diligent::RadientDataBlobCreateInfo::OnDestroy",
-    "Diligent::RadientDataBlobCreateInfo::pUserData"
+    "Diligent::RadientDataBlobCreateInfo::pUserData",
+    "Diligent::RadientEngineCreateInfo::Backend",
+    "Diligent::RadientEngineCreateInfo::Assets",
+    "Diligent::RadientEngineCreateInfo::pThreadPool",
+    "Diligent::RadientEngineCreateInfo::Resources",
+    "Diligent::IThreadPool",
+    "Diligent::RadientBackendCreateInfo",
+    "Diligent::RadientAssetManagerCreateInfo",
+    "Diligent::RadientResourceManagerCreateInfo"
   ],
   "field_policies": {
     "Diligent::RadientDataBlobCreateInfo": {

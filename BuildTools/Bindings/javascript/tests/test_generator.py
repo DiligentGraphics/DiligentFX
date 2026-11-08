@@ -540,6 +540,17 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("CreateMarshalObject(Desc: MarshalDesc, Mutable: boolean)", types)
         self.assertIn("Diligent::MARSHAL_STATUS_OK, Mutable,", cpp)
 
+    def test_native_only_external_types_require_explicit_selection(self):
+        model = deepcopy(MODEL)
+        model["declarations"].append({"name": "Diligent::NativeConfiguration", "kind": "external"})
+        with self.assertRaisesRegex(ModelError, "no JavaScript runtime implementation"):
+            self.emit(model)
+        adapters = deepcopy(ADAPTERS)
+        adapters["native_only"] = ["Diligent::NativeConfiguration"]
+        cpp, js, types = self.emit(model, adapters)
+        for output in (cpp, js, types):
+            self.assertNotIn("NativeConfiguration", output)
+
     def test_field_policy_override_is_local_to_the_backend(self):
         model = deepcopy(MODEL)
         field = self.declaration(model, "MarshalBufferDesc")["fields"][1]

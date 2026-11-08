@@ -29,13 +29,12 @@ def extract_public(headers, names):
 
 class PublicAPITest(unittest.TestCase):
     def test_data_blob_contract(self):
-        config = json.loads((ROOT / "Radient/bindings/DataBlob.json").read_text(encoding="utf-8"))
+        config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
         self.assertTrue(all(Path(header).suffix == ".h" for header in config["headers"]))
         model = build_model(ROOT, config, API_TARGET, CLANG_ARGS)
         self.assertTrue(all(Path(declaration["source"]["file"]).suffix == ".h"
                             for declaration in model["declarations"]))
         types = declarations(model)
-        self.assertEqual(len(types), 8)
         blob = types["Diligent::IRadientDataBlob"]
         mutable = types["Diligent::IRadientMutableDataBlob"]
         self.assertEqual(blob["bases"], ["Diligent::IObject"])
@@ -51,6 +50,20 @@ class PublicAPITest(unittest.TestCase):
         self.assertEqual(create["parameters"][-1]["policy"]["ownership"], "owned")
         self.assertEqual(blob["methods"][1]["policy"]["binding"], "manual")
         self.assertEqual(types["Diligent::RADIENT_STATUS"]["values"][-1]["value"], -7)
+
+    def test_scene_selection_and_lifetimes(self):
+        config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
+        types = declarations(build_model(ROOT, config, API_TARGET, CLANG_ARGS))
+        engine = types["Diligent::IRadientEngine"]
+        self.assertEqual([m["name"] for m in engine["methods"]], ["CreateScene", "CreateSceneWriter"])
+        scene = {m["name"]: m for m in types["Diligent::IRadientScene"]["methods"]}
+        self.assertNotIn("GetMesh", scene)
+        roots = scene["GetRootEntities"]["parameters"][1]["policy"]
+        self.assertEqual((roots["length"], roots["written"]), ("Capacity", "NumEntitiesWritten"))
+        writer = {m["name"]: m for m in types["Diligent::IRadientSceneWriter"]["methods"]}
+        self.assertEqual(writer["GetScene"]["result"]["policy"]["ownership"], "borrowed")
+        self.assertEqual(writer["SetParent"]["parameters"][-1]["default"], "True")
+        self.assertEqual(types["Diligent::InvalidRadientEntityID"]["value"], 0)
 
     def test_extractor_preserves_data_and_omits_cpp_helpers(self):
         config = {

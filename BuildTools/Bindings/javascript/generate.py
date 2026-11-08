@@ -101,13 +101,13 @@ class Generator:
         """Apply only the JavaScript subset while preserving native declarations."""
         for name in self.native_only:
             declaration = self.types.get(name)
-            if declaration and declaration["kind"] == "enum":
+            if declaration and declaration["kind"] in ("enum", "external"):
                 continue
             owner, _, member = name.rpartition("::")
             record = self.types.get(owner, {})
             field = next((f for f in record.get("fields", []) if f["name"] == member), None)
             if record.get("kind") != "record" or field is None or field.get("default") is None:
-                raise ModelError(f"{name}: native-only selection requires an enum or a descriptor field with a native default")
+                raise ModelError(f"{name}: native-only selection requires an enum, external type, or a descriptor field with a native default")
             record["fields"].remove(field)
         for owner, overrides in field_policies.items():
             record = self.types.get(owner, {})

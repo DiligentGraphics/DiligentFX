@@ -80,11 +80,11 @@ endforeach()
 add_custom_target(Radient-GenerateBindingModel
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/generate.py"
         --source-root "${FX_SOURCE_ROOT}"
-        --config "${CMAKE_CURRENT_SOURCE_DIR}/DataBlob.json"
-        --output "${CMAKE_CURRENT_BINARY_DIR}/generated/RadientDataBlob.json"
+        --config "${CMAKE_CURRENT_SOURCE_DIR}/API.json"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/generated/Radient.json"
         ${BINDING_ARGUMENTS}
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/generated/RadientDataBlob.json"
-    COMMENT "Generating the Radient data-blob binding model"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/generated/Radient.json"
+    COMMENT "Generating the Radient binding model"
     VERBATIM
 )
 

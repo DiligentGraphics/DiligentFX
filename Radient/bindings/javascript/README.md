@@ -1,8 +1,9 @@
 # Radient JavaScript bindings
 
-The initial bindings provide owning read-only and mutable data blobs. They use
-the real Radient implementation, compiled to Wasm, and run in browsers or Node
-without a Radient engine or graphics device.
+The bindings provide owning read-only and mutable data blobs, engine/scene creation,
+and scene editing. They use the real Radient implementation, compiled to Wasm,
+and run in browsers or Node without a graphics device. Blobs can also be created
+without an engine.
 
 ## Build and test
 
@@ -27,7 +28,7 @@ Node 18 or newer is required.
 
 `Radient-GenerateBindingModel` extracts the native API, and
 `Radient-GenerateJavaScript` consumes that model with the JavaScript configuration
-in `DataBlob.json`. `RadientWasm` compiles the generated wrapper and links the
+in `API.json`. `RadientWasm` compiles the generated wrapper and links the
 existing `Radient` library. Build `RadientWasm` to generate and compile all
 required artifacts, then run CTest separately for the model, generation, and Node
 integration tests. CTest never generates or rebuilds artifacts. Use `ctest -N` to
@@ -61,7 +62,7 @@ The runner discovers the browser automatically. Set the environment variable
 executable. This setting is shared with the generic binding tests and requires
 no reconfiguration or rebuild. No browser automation package or download is needed.
 
-The `Radient-JavaScriptBrowser` CTest suite runs the same blob cases as Node
+The `Radient-JavaScript-Browser-*` CTest suites run the same cases as Node
 against the generated production Wasm module. A temporary local server sends the
 cross-origin isolation headers needed for shared memory. The test checks that isolation and shared memory are active.
 Chrome runs headlessly with a temporary profile; the runner closes it after the
@@ -130,10 +131,56 @@ cannot be queried for the mutable interface. Dispose every acquired wrapper.
 
 ## Tests
 
-The integration tests call the production blob through the generated JavaScript
+The integration tests call production Radient through the generated JavaScript
 and Wasm module. They cover creation, initial-data ownership, access conflicts,
 resizing, error statuses, interface queries, scope lifetimes, and active access
 across Wasm memory growth. The Node and browser runners share these test cases.
 Detailed marshalling tests remain in the general generator's mock-based suite.
-CI runs the Node suites and the browser blob tests on Linux in Debug and Release,
+CI runs the Node suites and the browser tests on Linux in Debug and Release,
 using the runner image's preinstalled Chrome. No renderer or GPU is needed.
+
+## Scenes
+
+`Radient/bindings/API.json` selects the native API; the adjacent `javascript/API.json`
+defines JavaScript adaptations. The Wasm target links the production Radient library.
+In addition to owning data blobs, it exposes engine/scene creation and scene writers
+for entity names, hierarchy, visibility, and transforms. Rendering, asset loading,
+and external thread pools are not exposed yet; their engine configuration fields
+use native defaults. The engine therefore operates without a GPU backend.
+
+```js
+const {status, value: engine} = api.CreateRadientEngine({WorkerThreadCount: 1});
+if (status !== api.RADIENT_STATUS.RADIENT_STATUS_OK) throw new Error("Engine creation failed");
+const {value: scene} = engine.CreateScene({Desc: {Name: "Example"}});
+const {value: writer} = engine.CreateSceneWriter(scene);
+try {
+    const {value: entity} = writer.CreateEntity({Name: "Root"});
+    writer.SetLocalTransform(entity, {Position: {x: 2, y: 3, z: 4}});
+    writer.CommitChanges();
+    console.log(scene.GetWorldMatrix(entity).value.Data); // Float32Array snapshot
+    console.log(scene.GetRootEntities(10).value.pEntities); // BigUint64Array snapshot
+} finally {
+    writer.dispose();
+    scene.dispose();
+    engine.dispose();
+}
+```
+
+Check native status values when using the API. Entity IDs and revisions use `bigint`;
+outputs are independent JavaScript snapshots. `GetScene()` returns a retained wrapper
+that must also be disposed. Writers modify the shared scene immediately;
+`CommitChanges()` refreshes derived transforms and visibility, rather than publishing
+a transaction. Omitted descriptor members and default arguments keep native defaults.
+
+The Wasm build preloads `RADIENT_BINDINGS_PTHREAD_POOL_SIZE` workers (one by default).
+Set `WorkerThreadCount` explicitly and size this pool for all simultaneously active
+engines. `WorkerThreadCount: 0` retains native automatic sizing and can exceed the
+preloaded pool. Workers created beyond the pool need the browser event loop to start;
+synchronously joining those workers can deadlock. Preloading allows immediate engine
+creation and disposal in synchronous JavaScript code. Browser hosting must supply the
+cross-origin isolation headers required by shared Wasm memory.
+
+Real-library integration suites in `Radient/bindings/javascript/*_tests.mjs` are
+discovered by CMake and run unchanged in Node and a browser. They check public API
+selection, metadata, marshalling, ownership, and a few connected scene operations;
+native tests remain responsible for exhaustive scene behavior.
