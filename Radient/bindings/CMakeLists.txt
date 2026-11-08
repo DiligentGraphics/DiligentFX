@@ -21,7 +21,9 @@ if(RADIENT_BINDINGS_LIBCLANG)
 endif()
 set(BINDING_TARGET "${RADIENT_BINDINGS_TARGET}")
 if(NOT BINDING_TARGET)
-    if(CMAKE_CXX_COMPILER_TARGET)
+    if(EMSCRIPTEN)
+        set(BINDING_TARGET "wasm32-unknown-emscripten")
+    elseif(CMAKE_CXX_COMPILER_TARGET)
         set(BINDING_TARGET "${CMAKE_CXX_COMPILER_TARGET}")
     elseif(MSVC)
         # MSVC has no -dumpmachine option. Use the configured architecture,
@@ -49,6 +51,12 @@ endif()
 
 set(BINDING_ARGUMENTS "--target=${BINDING_TARGET}")
 if(NOT RADIENT_BINDINGS_TARGET)
+    if(EMSCRIPTEN)
+        list(APPEND BINDING_ARGUMENTS
+            "--clang-arg=--sysroot=${EMSCRIPTEN_SYSROOT}"
+            "--clang-arg=-isystem${EMSCRIPTEN_SYSROOT}/include/c++/v1"
+            --clang-arg=-DPLATFORM_WEB=1)
+    endif()
     # Share the configured compiler's standard headers. An explicit target
     # override supplies its own paths through RADIENT_BINDINGS_CLANG_ARGS.
     foreach(INCLUDE_DIR IN LISTS CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
@@ -88,3 +96,9 @@ add_custom_target(Radient-TestBindingModel
 set_target_properties(Radient-GenerateBindingModel Radient-TestBindingModel PROPERTIES
     FOLDER "DiligentFX/Bindings"
 )
+
+# JavaScript bindings link the production library. Standalone configurations
+# provide only the model targets, without building Radient's dependencies.
+if(EMSCRIPTEN AND TARGET Radient)
+    add_subdirectory(javascript)
+endif()

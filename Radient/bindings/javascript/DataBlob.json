@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "native_only": [
+    "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE",
+    "Diligent::RadientDataBlobCreateInfo::OnLastReaderReleased",
+    "Diligent::RadientDataBlobCreateInfo::OnDestroy",
+    "Diligent::RadientDataBlobCreateInfo::pUserData"
+  ],
+  "field_policies": {
+    "Diligent::RadientDataBlobCreateInfo": {
+      "pData": {
+        "direction": "in",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call",
+        "length": "Size"
+      }
+    }
+  },
+  "fixed_arguments": {
+    "Diligent::CreateRadientDataBlob": {
+      "StorageMode": "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE_COPY"
+    }
+  },
+  "scoped_bytes": {
+    "Diligent::IRadientDataBlob::BeginRead": {
+      "release": "EndRead",
+      "size": "GetSize",
+      "writable": false,
+      "success": 0
+    },
+    "Diligent::IRadientMutableDataBlob::BeginWrite": {
+      "release": "EndWrite",
+      "size": "GetSize",
+      "writable": true,
+      "success": 0
+    }
+  }
+}

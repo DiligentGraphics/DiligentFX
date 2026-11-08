@@ -2,13 +2,14 @@
 """Generate Wasm32 call glue, JavaScript wrappers, and TypeScript declarations."""
 
 import argparse
+from copy import deepcopy
 import json
 from pathlib import Path
 import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from binding_model import ModelError, unalias
+from binding_model import ModelError, apply_values_policy, unalias
 
 
 def short(name):
@@ -52,10 +53,14 @@ class Generator:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", module) or not headers:
             raise ModelError("A module identifier and at least one entry header are required")
         self.module = module
-        self.types = {d["name"]: d for d in model["declarations"]}
+        # Backend selection and policies must not modify the language-neutral model.
+        self.types = {d["name"]: deepcopy(d) for d in model["declarations"]}
         if adapters and (not isinstance(adapters, dict) or adapters.get("schema_version") != 1 or
-                         adapters.keys() - {"schema_version", "scoped_bytes"}):
+                         adapters.keys() - {"schema_version", "scoped_bytes", "native_only", "field_policies", "fixed_arguments"}):
             raise ModelError("Invalid JavaScript adapter configuration")
+        self.native_only = set((adapters or {}).get("native_only", []))
+        self.fixed_arguments = (adapters or {}).get("fixed_arguments", {})
+        self.configure_selection((adapters or {}).get("field_policies", {}))
         self.scopes = (adapters or {}).get("scoped_bytes", {})
         if not isinstance(self.scopes, dict):
             raise ModelError("scoped_bytes must map qualified method names to adapters")
@@ -89,6 +94,38 @@ class Generator:
                 'export interface WriteByteAccess extends ReadByteAccess {',
                 '  writeByte(index: number, value: number): void;',
                 '  copyFrom(source: Uint8Array, destinationOffset?: number): void;', '}']
+
+    def configure_selection(self, field_policies):
+        """Apply only the JavaScript subset while preserving native declarations."""
+        for name in self.native_only:
+            declaration = self.types.get(name)
+            if declaration and declaration["kind"] == "enum":
+                continue
+            owner, _, member = name.rpartition("::")
+            record = self.types.get(owner, {})
+            field = next((f for f in record.get("fields", []) if f["name"] == member), None)
+            if record.get("kind") != "record" or field is None or field.get("default") is None:
+                raise ModelError(f"{name}: native-only selection requires an enum or a descriptor field with a native default")
+            record["fields"].remove(field)
+        for owner, overrides in field_policies.items():
+            record = self.types.get(owner, {})
+            if record.get("kind") != "record" or not isinstance(overrides, dict):
+                raise ModelError(f"{owner}: field policies require a selected descriptor")
+            policies = {field["name"]: field.get("policy", {}) for field in record["fields"]}
+            policies.update(overrides)
+            apply_values_policy(record["fields"], policies, owner)
+        for name, arguments in self.fixed_arguments.items():
+            function = self.types.get(name, {})
+            if function.get("kind") != "function" or not isinstance(arguments, dict):
+                raise ModelError(f"{name}: fixed arguments require a selected free function")
+            parameters = {p["name"]: p for p in function["parameters"]}
+            for parameter, value in arguments.items():
+                p = parameters.get(parameter)
+                enum = self.types.get(unalias(p["type"]).get("name"), {}) if p else {}
+                namespace = enum.get("name", "").rpartition("::")[0]
+                values = {namespace + "::" + v["name"] for v in enum.get("values", [])}
+                if enum.get("kind") != "enum" or value not in values:
+                    raise ModelError(f"{name}::{parameter}: fixed argument must name an enumerator of the parameter type")
 
     def validate_scope(self, name, spec):
         """Scope adapters describe API semantics explicitly, never by method name."""
@@ -225,6 +262,9 @@ class Generator:
         output_type = None
         for p in d["parameters"]:
             pname = p["name"]
+            if pname in self.fixed_arguments.get(name, {}):
+                native_args.append(self.fixed_arguments[name][pname])
+                continue
             self.automatic(p, name + "::" + pname)
             if p.get("default") is not None:
                 raise ModelError(f"{name}::{pname}: default arguments need an explicit adapter")
@@ -313,6 +353,8 @@ class Generator:
         if self.scopes:
             self.export('binding_AddRef', 'void', ['uintptr_t pointer'], 'reinterpret_cast<Diligent::IObject*>(pointer)->AddRef();')
         for name, d in self.types.items():
+            if name in self.native_only:
+                continue
             kind = d["kind"]
             if kind == "external":
                 if name != "Diligent::IObject":

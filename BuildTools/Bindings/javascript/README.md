@@ -87,8 +87,8 @@ borrowed interface inputs, and one scalar or owned-interface output with a statu
 result. It also supports input byte spans and the scoped byte adapters described
 below. It rejects unsupported declarations and policies instead of silently
 omitting them. General arrays, callbacks, aggregate outputs, default function
-arguments, and other manual adapters are not implemented yet. Production API
-bindings are a separate integration step.
+arguments, and other manual adapters are not implemented yet. The first production
+integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
 
 Add target-independent native type information to the shared model. Put JavaScript
 conversion and lifetime behavior in this backend. Add a native fixture and an
@@ -174,3 +174,25 @@ remain usable after memory growth without requiring callers to refresh views.
 The native API must keep the span valid and its size unchanged until release.
 The adapter does not add locking or emulate reader/writer exclusion: conflicts
 and resize restrictions remain the responsibility of the native implementation.
+
+## Selecting a JavaScript subset
+
+The same adapter configuration can restrict an API without changing its native
+headers or language-neutral model:
+
+- `native_only` lists qualified enum or descriptor-field names omitted from the
+  JavaScript surface. Omitted fields require native defaults and remain initialized
+  by the native descriptor constructor. Passing such a field in JavaScript is an
+  unknown-field error.
+- `field_policies` maps descriptor names to field-policy overrides, using the
+  same metadata format as the model. For example, an input whose lifetime depends
+  on storage mode can become a call-scoped byte span when JavaScript fixes that
+  mode to copying.
+- `fixed_arguments` maps free-function names to parameter/enumerator pairs. The
+  native call receives that enumerator, while the parameter is absent from the
+  JavaScript and TypeScript signatures. Only enumerators of the parameter's actual
+  type are accepted; arbitrary C++ expressions are not allowed.
+
+These choices must agree: a temporary byte input cannot be combined with a native
+mode that retains its pointer. Radient's blob configuration fixes COPY storage,
+excludes callbacks and their context, and adapts only the owning creation path.

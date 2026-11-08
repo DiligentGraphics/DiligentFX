@@ -40,7 +40,7 @@ jobs:
       with:
         platform: Web
 
-    # These standalone tests always target Wasm32; Linux Debug and Release
+    # These tests always target Wasm32; Linux Debug and Release
     # cover marshalling without repeating it on every host platform.
     - name: Set up binding test dependencies
       if: runner.os == 'Linux'
@@ -50,23 +50,13 @@ jobs:
         # Keep the parser on LLVM 22 to match the pinned Python bindings.
         python3 -m venv "$RUNNER_TEMP/bindings-venv"
         "$RUNNER_TEMP/bindings-venv/bin/python" -m pip install -r DiligentFX/BuildTools/Bindings/requirements.txt
-
-    - name: Test binding model
-      if: runner.os == 'Linux'
-      shell: bash
-      env:
-        LIBCLANG_LIBRARY_FILE: /usr/lib/llvm-22/lib/libclang-22.so.1
-      run: |
-        bindings_python="$RUNNER_TEMP/bindings-venv/bin/python"
-        sysroot="$(em-config CACHE)/sysroot"
-        parser_args=(
-          --target=wasm32-unknown-emscripten
-          "--clang-arg=--sysroot=$sysroot"
-          "--clang-arg=-isystem$sysroot/include/c++/v1"
-          --clang-arg=-DPLATFORM_WEB=1
+        binding_args=(
+          -DRADIENT_GENERATE_BINDINGS=ON
+          "-DRADIENT_BINDINGS_PYTHON_EXECUTABLE=$RUNNER_TEMP/bindings-venv/bin/python"
+          -DRADIENT_BINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1
+          "-DRADIENT_BINDINGS_NODE_EXECUTABLE=$(command -v node)"
         )
-        "$bindings_python" -B DiligentFX/BuildTools/Bindings/tests/run_tests.py "${parser_args[@]}"
-        "$bindings_python" -B DiligentFX/Radient/bindings/tests/test_public_api.py "${parser_args[@]}"
+        echo "RADIENT_BINDINGS_CMAKE_ARGS=${binding_args[*]}" >> "$GITHUB_ENV"
 
     - name: Test JavaScript bindings
       if: runner.os == 'Linux'
@@ -86,8 +76,16 @@ jobs:
       uses: DiligentGraphics/github-action/configure-cmake@v28
       with:
         build-type: ${{ matrix.build_type }}
-        cmake-args: ${{ matrix.cmake_args }}
+        cmake-args: ${{ matrix.cmake_args }} ${{ env.RADIENT_BINDINGS_CMAKE_ARGS }}
 
     - name: Build
       if:   success()
       uses: DiligentGraphics/github-action/build@v28
+
+    - name: Test Radient bindings
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Reuse the Radient library and dependencies from the main build.
+        cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
+          --target Radient-TestBindingModel Radient-TestJavaScript --parallel 2

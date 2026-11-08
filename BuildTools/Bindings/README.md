@@ -1,9 +1,9 @@
 # Binding generator
 
-This is the first stage of the language bindings: Clang extraction, an explicit
-API selection, semantic metadata, and a language-neutral JSON model. It does not
-yet generate JavaScript, Wasm glue, or TypeScript declarations. The initial
-selection is the data-blob API in `Radient/bindings/DataBlob.json`.
+The shared generator extracts an explicitly selected API with Clang, attaches
+semantic metadata, and produces a language-neutral JSON model. The JavaScript
+backend generates Wasm glue, wrappers, and TypeScript declarations from that model.
+The initial Radient selection is the data-blob API in `Radient/bindings/DataBlob.json`.
 
 The public headers are the signature source. Clang expands Diligent's interface
 macros and supplies types, inheritance, enum values, documentation, and native
@@ -43,8 +43,8 @@ model does not yet contain all ABI information required by every possible backen
 
 Generate a model for each target ABI; a Wasm model must not be used as a native
 C# memory layout. Generated artifacts stay outside the source tree. The initial
-JavaScript backend and its standalone Wasm conformance tests are described in [javascript/README.md](javascript/README.md). Radient-specific runtime
-adapters are not implemented yet.
+JavaScript backend and its standalone Wasm conformance tests are described in [javascript/README.md](javascript/README.md). Radient
+owning data-blob bindings are described in [Radient/bindings/javascript/README.md](../../Radient/bindings/javascript/README.md).
 
 ## Running
 

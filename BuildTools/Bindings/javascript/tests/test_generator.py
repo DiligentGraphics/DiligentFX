@@ -146,6 +146,39 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, "byte spans require"):
                     self.emit(model)
 
+    def test_native_only_fields_and_fixed_arguments_preserve_the_model(self):
+        adapters = deepcopy(ADAPTERS)
+        adapters["native_only"] = ["Diligent::MarshalDesc::Weight"]
+        adapters["fixed_arguments"] = {"Diligent::CreateMarshalObject": {"Status": "Diligent::MARSHAL_STATUS_OK"}}
+        original = deepcopy(MODEL)
+        cpp, _, types = self.emit(adapters=adapters)
+        self.assertEqual(MODEL, original)
+        self.assertNotIn("Weight?:", types)
+        self.assertIn("CreateMarshalObject(Desc: MarshalDesc, Mutable: boolean)", types)
+        self.assertIn("Diligent::MARSHAL_STATUS_OK, Mutable,", cpp)
+
+    def test_field_policy_override_is_local_to_the_backend(self):
+        model = deepcopy(MODEL)
+        field = self.declaration(model, "MarshalBufferDesc")["fields"][1]
+        adapters = deepcopy(ADAPTERS)
+        adapters["field_policies"] = {"Diligent::MarshalBufferDesc": {"pBytes": deepcopy(field["policy"])}}
+        field["policy"] = {"binding": "manual", "reason": "Backend chooses lifetime"}
+        _, _, types = self.emit(model, adapters)
+        self.assertIn("pBytes?: Uint8Array | null", types)
+        self.assertEqual(field["policy"]["binding"], "manual")
+
+    def test_invalid_subset_configuration_is_rejected(self):
+        for section, config, error in [
+            ("native_only", ["Diligent::MarshalDesc::NoSuchField"], "native-only selection"),
+            ("fixed_arguments", {"Diligent::CreateMarshalObject": {"Status": "Diligent::MARSHAL_MODE_FIRST"}}, "enumerator"),
+            ("field_policies", {"Diligent::MarshalDesc": {"NoSuchField": {}}}, "unknown metadata keys"),
+        ]:
+            with self.subTest(section=section):
+                adapters = deepcopy(ADAPTERS)
+                adapters[section] = config
+                with self.assertRaisesRegex(ModelError, error):
+                    self.emit(adapters=adapters)
+
 
 if __name__ == "__main__":
     unittest.main()
