@@ -1123,6 +1123,46 @@
     },
     "Diligent::UpdateFixedArrays": {},
     "Diligent::ResetFixedArrays": {},
-    "Diligent::GetFixedCallCount": {}
+    "Diligent::GetFixedCallCount": {},
+    "Diligent::MarshalOutputRecord": {
+      "fields": {
+        "Label": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "static",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::ReadReferenceOutput": {
+      "parameters": {
+        "Value": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::ReadRecordOutput": {
+      "parameters": {
+        "Value": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::MakeRecordOutput": {
+      "parameters": {
+        "pValue": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    }
   }
 }

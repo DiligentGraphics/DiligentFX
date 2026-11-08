@@ -305,6 +305,7 @@ export function createBindings(wasm, schema) {
 
     function readOutput(address, spec) {
         // Obtain the current heap after the call: native allocations may grow it.
+        if (spec.record) return outputRecord(address, spec.record);
         const view = new DataView(wasm.HEAPU8.buffer);
         if (spec.interface) return adopt(view.getUint32(address, true), spec.interface);
         if (spec.string) return outputString(view.getUint32(address, true), spec.string);
@@ -329,10 +330,11 @@ export function createBindings(wasm, schema) {
             for (const parameter of spec.parameters) {
                 if (parameter.output) {
                     // Eight bytes cover every supported scalar and a Wasm32 pointer.
-                    const address = wasm._malloc(8) >>> 0;
+                    const recordSpec = parameter.output.record && schema.records[parameter.output.record];
+                    const address = (recordSpec ? wasm[recordSpec.create]() : wasm._malloc(8)) >>> 0;
                     if (!address) throw new Error("Could not allocate output storage");
-                    cleanup.push(() => wasm._free(address));
-                    wasm.HEAPU8.fill(0, address, address + 8);
+                    cleanup.push(() => recordSpec ? wasm[recordSpec.destroy](address) : wasm._free(address));
+                    if (!recordSpec) wasm.HEAPU8.fill(0, address, address + 8);
                     output = {address, spec: parameter.output};
                     nativeArgs.push(address);
                 } else {
@@ -360,7 +362,9 @@ export function createBindings(wasm, schema) {
                 spec.result.record ? outputRecord(nativeResult, spec.result.record) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
-            return output ? {status: result, value: readOutput(output.address, output.spec)} : result;
+            if (!output) return result;
+            const value = readOutput(output.address, output.spec);
+            return spec.result === "void" ? value : {status: result, value};
         } finally {
             for (let i = cleanup.length - 1; i >= 0; --i) cleanup[i]();
         }

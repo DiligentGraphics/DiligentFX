@@ -128,7 +128,7 @@ result. Borrowed const-reference struct results become JavaScript snapshots.
 It also supports UTF-8 strings, scalar/struct input and borrowed output arrays,
 fixed-size array fields, input byte spans, and the scoped byte adapters described below. It rejects unsupported declarations
 and policies instead of silently omitting them. Caller-filled output buffers,
-interface-pointer arrays, callbacks, struct output parameters, by-value struct
+interface-pointer arrays, callbacks, by-value struct
 results, default function arguments, and other manual adapters are not implemented
 yet. The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
 
@@ -161,7 +161,7 @@ fields. For example, a getter is declared as
 private. Reading a borrowed result needs no temporary native descriptor allocation.
 
 Pointers other than supported strings and annotated pointer/count arrays are rejected during generation.
-By-value struct returns, struct output parameters, and mutable-reference results
+By-value struct returns and mutable-reference results
 are not supported yet.
 
 ## UTF-8 strings
@@ -399,3 +399,12 @@ headers or language-neutral model:
 These choices must agree: a temporary byte input cannot be combined with a native
 mode that retains its pointer. Radient's blob configuration fixes COPY storage,
 excludes callbacks and their context, and adapts only the owning creation path.
+
+## Scalar and struct output parameters
+
+Writable scalar and struct pointer/reference outputs use native temporary storage.
+Scalar outputs start at zero; structs use their native defaults. The caller omits
+the output argument. Status-returning calls return `{status, value}`; void calls
+return the output value directly. Struct results are snapshots copied before the
+temporary output is destroyed, including on conversion failure. Output storage
+requires `direction: out`, non-nullability, and borrowed call-scoped ownership.

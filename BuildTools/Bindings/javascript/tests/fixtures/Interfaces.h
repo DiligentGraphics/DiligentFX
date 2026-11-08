@@ -34,6 +34,7 @@
 #include "InputArrays.h"
 #include "OutputArrays.h"
 #include "FixedArrays.h"
+#include "OutputParameters.h"
 #include "Object.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)

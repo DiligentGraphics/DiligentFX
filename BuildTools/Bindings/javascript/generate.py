@@ -312,7 +312,7 @@ class Generator:
 
     def record_usage(self):
         """Find input and returned records, including their embedded value structs."""
-        inputs, outputs = set(), set()
+        inputs, outputs, storage = set(), set(), set()
 
         def include(t, used):
             t = unalias(t)
@@ -332,13 +332,19 @@ class Generator:
             for function in callables:
                 include(function["result"]["type"], outputs)
                 for parameter in function["parameters"]:
-                    include(parameter["type"], inputs)
+                    is_output = parameter.get("policy", {}).get("direction") == "out"
+                    include(parameter["type"], outputs if is_output else inputs)
+                    if is_output:
+                        t = unalias(parameter["type"])
+                        inner = unalias(t["target"]) if t["kind"] in ("pointer", "reference") else {}
+                        if self.types.get(inner.get("name"), {}).get("kind") == "record":
+                            storage.add(inner["name"])
         # Preserve input descriptor generation for explicitly selected records
         # that are not used as results (including standalone descriptor models).
         for name, d in self.types.items():
             if d["kind"] == "record" and name not in outputs:
                 include({"kind": "named", "name": name, "const": False, "volatile": False}, inputs)
-        return inputs, outputs
+        return inputs, outputs, inputs | storage
 
     def record_result(self, value, context):
         t, policy = unalias(value["type"]), value.get("policy", {})
@@ -359,7 +365,7 @@ class Generator:
             raise ModelError(f"{name}: only plain descriptors are supported")
         as_input, as_output = name in self.input_records, name in self.output_records
         rec = {"fields": {}}
-        if as_input:
+        if name in self.storage_records:
             rec["create"] = self.export(symbol(name) + "_Create", "uintptr_t", [],
                                         f'return reinterpret_cast<uintptr_t>(new (std::nothrow) {name}{{}});')
             rec["destroy"] = self.export(symbol(name) + "_Destroy", "void", ['uintptr_t pointer'],
@@ -511,12 +517,14 @@ class Generator:
                         # string value may be null, including on failure.
                         output_type = 'string | null'
                         parameters.append({"name": pname, "output": {"string": {"nullable": True}}})
-                    elif t["kind"] != "pointer":
-                        raise ModelError(f"{name}::{pname}: unsupported output reference")
                     elif (target.get("kind") == "named" and self.types.get(target["name"], {}).get("kind") == "interface"
                             and policy.get("ownership") == "owned" and policy.get("lifetime") == "caller"):
                         output_type = short(target["name"]) + ' | null'
                         parameters.append({"name": pname, "output": {"interface": short(target["name"])}})
+                    elif (declaration.get("kind") == "record" and not inner["const"] and not inner["volatile"]
+                            and policy.get("ownership") == "borrowed" and policy.get("lifetime") == "call"):
+                        output_type = f'StructSnapshot<{short(inner["name"])}>'
+                        parameters.append({"name": pname, "output": {"record": short(inner["name"])}})
                     elif policy.get("ownership") == "borrowed" and policy.get("lifetime") == "call":
                         kind = self.scalar(inner)
                         if kind == "void" or inner["const"]:
@@ -535,8 +543,8 @@ class Generator:
                 ts_params.append(f'{pname}: {ts_scalar(kind)}')
         if output_type:
             result_decl = self.types.get(unalias(d["result"]["type"]).get("name"), {})
-            if result_decl.get("policy", {}).get("role") != "status":
-                raise ModelError(f"{name}: output callables require a status result")
+            if result != "void" and result_decl.get("policy", {}).get("role") != "status":
+                raise ModelError(f"{name}: output callables require a status or void result")
         target = f'reinterpret_cast<{owner}*>(self)->{d["name"]}' if owner else name
         call = target + '(' + ', '.join(native_args) + ')'
         if result_span:
@@ -554,7 +562,7 @@ class Generator:
             native_result_type = cpp_type(d["result"]["type"])
             result_type = ('string' + (' | null' if result_string['nullable'] else '')) if result_string else ts_scalar(result)
         export = self.export(symbol(name), native_result_type, native_params, body)
-        ts_return = f'Result<{output_type}>' if output_type else result_type
+        ts_return = (output_type if result == 'void' else f'Result<{output_type}>') if output_type else result_type
         return {"export": export, "parameters": parameters, "result": result,
                 "ts": f'{short(d["name"])}({", ".join(ts_params)}): {ts_return};'}
 
@@ -573,7 +581,7 @@ class Generator:
                 "ts": f'{d["name"]}(): Result<{"WriteByteAccess" if spec["writable"] else "ReadByteAccess"} | null>;'}
 
     def generate(self):
-        self.input_records, self.output_records = self.record_usage()
+        self.input_records, self.output_records, self.storage_records = self.record_usage()
         if self.output_records:
             self.ts += ['export type StructSnapshot<T> = T extends ArrayBufferView ? T :',
                         '  T extends ReadonlyArray<infer E> ? Array<StructSnapshot<E>> : T extends object ?',

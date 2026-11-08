@@ -279,6 +279,13 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("get", field)
         self.assertNotIn("set", field)
 
+    def test_scalar_references_and_struct_output_parameters(self):
+        cpp, _, types = self.emit()
+        self.assertIn("ReadReferenceOutput(Status: number): Result<bigint>;", types)
+        self.assertIn("MakeRecordOutput(): StructSnapshot<MarshalOutputRecord>;", types)
+        self.assertIn("*reinterpret_cast<Diligent::Uint64*>(Value)", cpp)
+        self.assertIn("new (std::nothrow) Diligent::MarshalOutputRecord{}", cpp)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"
