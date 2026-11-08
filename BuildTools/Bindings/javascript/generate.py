@@ -113,7 +113,7 @@ class Generator:
                 raise ModelError(f"{owner}: field policies require a selected descriptor")
             policies = {field["name"]: field.get("policy", {}) for field in record["fields"]}
             policies.update(overrides)
-            apply_values_policy(record["fields"], policies, owner)
+            apply_values_policy(record["fields"], policies, owner, is_field=True)
         for name, arguments in self.fixed_arguments.items():
             function = self.types.get(name, {})
             if function.get("kind") != "function" or not isinstance(arguments, dict):
@@ -206,14 +206,17 @@ class Generator:
             return "void"
         raise ModelError(f"JavaScript backend: expected a scalar, got {t['kind']}")
 
-    def string(self, value, context, *, output=False):
+    def string(self, value, context, *, output=False, field=False):
         t, policy = unalias(value["type"]), value.get("policy", {})
         char = unalias(t["target"]) if t["kind"] == "pointer" else {}
         if char.get("kind") != "scalar" or char.get("name") not in ("char_s", "char_u"):
             return None
         lifetimes = ("call", "object", "static") if output else ("call",)
+        directions = {"out" if output else "in"}
+        if field:
+            directions.add("inout")
         if (t["volatile"] or char["volatile"] or not char["const"] or "length" in policy or
-                policy.get("direction") != ("out" if output else "in") or
+                policy.get("direction") not in directions or
                 policy.get("ownership") != "borrowed" or policy.get("lifetime") not in lifetimes):
             raise ModelError(f"{context}: strings require borrowed const char data with a supported lifetime and direction")
         return {"nullable": policy["nullable"]}
@@ -227,22 +230,68 @@ class Generator:
         self.cpp += [f'EMSCRIPTEN_KEEPALIVE {result} {name}({", ".join(parameters)})', '{', f'    {body}', '}']
         return "_" + name
 
+    def record_usage(self):
+        """Find input and returned records, including their embedded value structs."""
+        inputs, outputs = set(), set()
+
+        def include(t, used):
+            t = unalias(t)
+            if t["kind"] == "reference":
+                t = unalias(t["target"])
+            d = self.types.get(t.get("name"), {})
+            if d.get("kind") != "record" or d["name"] in used:
+                return
+            used.add(d["name"])
+            for field in d["fields"]:
+                include(field["type"], used)
+
+        for d in self.types.values():
+            callables = [d] if d["kind"] == "function" else d.get("methods", [])
+            for function in callables:
+                include(function["result"]["type"], outputs)
+                for parameter in function["parameters"]:
+                    include(parameter["type"], inputs)
+        # Preserve input descriptor generation for explicitly selected records
+        # that are not used as results (including standalone descriptor models).
+        for name, d in self.types.items():
+            if d["kind"] == "record" and name not in outputs:
+                include({"kind": "named", "name": name, "const": False, "volatile": False}, inputs)
+        return inputs, outputs
+
+    def record_result(self, value, context):
+        t, policy = unalias(value["type"]), value.get("policy", {})
+        inner = unalias(t["target"]) if t["kind"] == "reference" else {}
+        declaration = self.types.get(inner.get("name"), {})
+        if declaration.get("kind") != "record":
+            return None
+        if (t["volatile"] or inner["volatile"] or not inner["const"] or
+                policy.get("direction") != "out" or policy.get("nullable") is not False or
+                policy.get("ownership") != "borrowed" or policy.get("lifetime") not in ("call", "object", "static") or
+                "length" in policy):
+            raise ModelError(f"{context}: struct results require a borrowed const reference with a supported lifetime")
+        return short(declaration["name"])
+
     def record(self, d):
         name = d["name"]
         if d["bases"] or d["methods"]:
-            raise ModelError(f"{name}: only plain input descriptors are supported")
+            raise ModelError(f"{name}: only plain descriptors are supported")
+        as_input, as_output = name in self.input_records, name in self.output_records
         rec = {"fields": {}}
-        rec["create"] = self.export(symbol(name) + "_Create", "uintptr_t", [],
-                                    f'return reinterpret_cast<uintptr_t>(new (std::nothrow) {name}{{}});')
-        rec["destroy"] = self.export(symbol(name) + "_Destroy", "void", ['uintptr_t pointer'],
-                                     f'delete reinterpret_cast<{name}*>(pointer);')
+        if as_input:
+            rec["create"] = self.export(symbol(name) + "_Create", "uintptr_t", [],
+                                        f'return reinterpret_cast<uintptr_t>(new (std::nothrow) {name}{{}});')
+            rec["destroy"] = self.export(symbol(name) + "_Destroy", "void", ['uintptr_t pointer'],
+                                         f'delete reinterpret_cast<{name}*>(pointer);')
         self.ts.append(f'export interface {short(name)} {{')
         for field in d["fields"]:
-            self.automatic(field, name + "::" + field["name"])
+            context = name + "::" + field["name"]
+            self.automatic(field, context)
             field_type = unalias(field["type"])
-            if field_type["const"]:
+            if as_input and field_type["const"]:
                 raise ModelError(f"{name}: const fields need an explicit adapter")
-            span = self.byte_span(field, d["fields"], name + "::" + field["name"])
+            if as_output and "length" in field.get("policy", {}):
+                raise ModelError(f"{context}: output byte spans and arrays need an explicit adapter")
+            span = self.byte_span(field, d["fields"], context) if as_input else None
             if span:
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
                     'uint64_t', ['uintptr_t pointer'],
@@ -253,33 +302,46 @@ class Generator:
                 rec["fields"][field["name"]] = {"bytes": span, "set": setter}
                 self.ts.append(f'  {field["name"]}?: Uint8Array' + (' | null;' if span['nullable'] else ';'))
                 continue
-            string = self.string(field, name + "::" + field["name"])
+            string = None
+            if as_input:
+                string = self.string(field, context, field=True)
+            if as_output:
+                string = self.string(field, context, output=True, field=True)
+            spec = {}
             if string:
-                setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
-                    ['uintptr_t pointer', 'uintptr_t data'],
-                    f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
-                rec["fields"][field["name"]] = {"string": string, "set": setter}
-                self.ts.append(f'  {field["name"]}?: string' + (' | null;' if string['nullable'] else ';'))
-                continue
-            nested = self.types.get(field_type.get("name"), {})
-            if field_type["kind"] == "named" and nested.get("kind") == "record":
+                spec["string"] = string
+                field_ts = 'string' + (' | null' if string['nullable'] else '')
+                if as_input:
+                    spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",
+                        ['uintptr_t pointer', 'uintptr_t data'],
+                        f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
+                if as_output:
+                    spec["get"] = self.export(symbol(name) + "_Get_" + field["name"], cpp_type(field["type"]),
+                        ['uintptr_t pointer'], f'return reinterpret_cast<const {name}*>(pointer)->{field["name"]};')
+            elif field_type["kind"] == "named" and self.types.get(field_type["name"], {}).get("kind") == "record":
                 if field_type["volatile"]:
                     raise ModelError("Volatile values need an explicit adapter")
-                # Address the child in its initialized parent: constructing a new
-                # child would discard defaults supplied by the containing field.
+                # Embedded structs keep the containing object's native layout and
+                # lifetime. Input writes preserve the parent's initialized defaults.
+                qualifier = 'const ' if as_output else ''
                 address = self.export(symbol(name) + "_Field_" + field["name"], "uintptr_t",
                     ['uintptr_t pointer'],
-                    f'return reinterpret_cast<uintptr_t>(&reinterpret_cast<{name}*>(pointer)->{field["name"]});')
-                child = short(nested["name"])
-                rec["fields"][field["name"]] = {"record": child, "address": address}
-                self.ts.append(f'  {field["name"]}?: {child};')
-                continue
-            kind = self.scalar(field["type"])
-            setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
-                                 ['uintptr_t pointer', cpp_type(field["type"]) + ' value'],
-                                 f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = value;')
-            rec["fields"][field["name"]] = {"type": kind, "set": setter}
-            self.ts.append(f'  {field["name"]}?: {ts_scalar(kind)};')
+                    f'return reinterpret_cast<uintptr_t>(&reinterpret_cast<{qualifier}{name}*>(pointer)->{field["name"]});')
+                field_ts = short(field_type["name"])
+                spec = {"record": field_ts, "address": address}
+            else:
+                kind = self.scalar(field["type"])
+                spec["type"] = kind
+                field_ts = ts_scalar(kind)
+                if as_input:
+                    spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",
+                        ['uintptr_t pointer', cpp_type(field["type"]) + ' value'],
+                        f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = value;')
+                if as_output:
+                    spec["get"] = self.export(symbol(name) + "_Get_" + field["name"], cpp_type(dict(field_type, const=False)),
+                        ['uintptr_t pointer'], f'return reinterpret_cast<const {name}*>(pointer)->{field["name"]};')
+            rec["fields"][field["name"]] = spec
+            self.ts.append(f'  {field["name"]}{"?" if as_input else ""}: {field_ts};')
         self.ts.append('}')
         self.schema["records"][short(name)] = rec
 
@@ -290,7 +352,9 @@ class Generator:
         self.automatic(d, name)
         self.automatic(d["result"], name + " result")
         result_string = self.string(d["result"], name + " result", output=True)
-        result = {"string": result_string} if result_string else self.scalar(d["result"]["type"])
+        result_record = self.record_result(d["result"], name + " result")
+        result = ({"record": result_record} if result_record else
+                  {"string": result_string} if result_string else self.scalar(d["result"]["type"]))
         native_params, native_args, parameters, ts_params = [], [], [], []
         if owner:
             native_params.append('uintptr_t self')
@@ -371,9 +435,18 @@ class Generator:
             if result_decl.get("policy", {}).get("role") != "status":
                 raise ModelError(f"{name}: output callables require a status result")
         target = f'reinterpret_cast<{owner}*>(self)->{d["name"]}' if owner else name
-        body = ('' if result == "void" else 'return ') + target + '(' + ', '.join(native_args) + ');'
-        export = self.export(symbol(name), cpp_type(d["result"]["type"]), native_params, body)
-        result_type = ('string' + (' | null' if result_string['nullable'] else '')) if result_string else ts_scalar(result)
+        call = target + '(' + ', '.join(native_args) + ')'
+        if result_record:
+            # Borrow only until the synchronous JS snapshot is complete; neither
+            # an allocation nor a native copy is needed for a const-reference result.
+            body = f'return reinterpret_cast<uintptr_t>(&{call});'
+            native_result_type = 'uintptr_t'
+            result_type = f'StructSnapshot<{result_record}>'
+        else:
+            body = ('' if result == "void" else 'return ') + call + ';'
+            native_result_type = cpp_type(d["result"]["type"])
+            result_type = ('string' + (' | null' if result_string['nullable'] else '')) if result_string else ts_scalar(result)
+        export = self.export(symbol(name), native_result_type, native_params, body)
         ts_return = f'Result<{output_type}>' if output_type else result_type
         return {"export": export, "parameters": parameters, "result": result,
                 "ts": f'{short(d["name"])}({", ".join(ts_params)}): {ts_return};'}
@@ -393,7 +466,11 @@ class Generator:
                 "ts": f'{d["name"]}(): Result<{"WriteByteAccess" if spec["writable"] else "ReadByteAccess"} | null>;'}
 
     def generate(self):
-        used_names = {"NativeObject", "NativeType", "Result", "ModuleOptions", "Bindings", "ReadByteAccess", "WriteByteAccess"}
+        self.input_records, self.output_records = self.record_usage()
+        if self.output_records:
+            self.ts += ['export type StructSnapshot<T> = T extends object ?',
+                        '  { [K in keyof T]-?: StructSnapshot<Exclude<T[K], undefined>> } : T;']
+        used_names = {"NativeObject", "NativeType", "Result", "ModuleOptions", "Bindings", "ReadByteAccess", "WriteByteAccess", "StructSnapshot"}
         for name in self.types:
             public_name = short(name)
             if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", public_name) or public_name in used_names:

@@ -67,6 +67,68 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, message):
                     self.emit(model)
 
+    def test_struct_results_have_readers_and_required_snapshot_fields(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("GetDesc(): StructSnapshot<MarshalSnapshotDesc>;", types)
+        self.assertIn("GetStaticDescriptor(): StructSnapshot<MarshalDesc>;", types)
+        self.assertIn("EchoStringDescriptor(Desc: MarshalStringDesc, InvalidUTF8: boolean): StructSnapshot<MarshalStringDesc>;", types)
+        self.assertIn("{ [K in keyof T]-?: StructSnapshot<Exclude<T[K], undefined>> }", types)
+        self.assertIn("Tag: number;", types)
+        self.assertIn("Name: string;", types)
+        self.assertIn("return reinterpret_cast<uintptr_t>(&reinterpret_cast<Diligent::IMarshalSnapshots*>(self)->GetDesc());", cpp)
+        record = generator.schema["records"]["MarshalSnapshotDesc"]
+        self.assertNotIn("create", record)
+        self.assertNotIn("destroy", record)
+        self.assertIn("get", record["fields"]["Name"])
+        self.assertNotIn("set", record["fields"]["Name"])
+        self.assertIn("get", generator.schema["records"]["MarshalStringDesc"]["fields"]["Name"])
+        self.assertIn("set", generator.schema["records"]["MarshalStringDesc"]["fields"]["Name"])
+
+    def test_struct_results_reject_unsupported_reference_contracts(self):
+        for key, value in [("direction", "in"), ("nullable", True), ("ownership", "owned"),
+                           ("lifetime", "read_scope"), ("const", False), ("volatile", True)]:
+            with self.subTest(key=key):
+                model = deepcopy(MODEL)
+                method = self.declaration(model, "IMarshalSnapshots")["methods"][0]
+                if key in ("const", "volatile"):
+                    method["result"]["type"]["target"][key] = value
+                else:
+                    method["result"]["policy"][key] = value
+                with self.assertRaisesRegex(ModelError, "struct results require a borrowed const reference"):
+                    self.emit(model)
+
+    def test_struct_results_reject_pointer_array_and_span_fields(self):
+        for kind in ["pointer", "array", "span"]:
+            with self.subTest(kind=kind):
+                model = deepcopy(MODEL)
+                child = self.declaration(model, "MarshalSnapshotChild")
+                field = child["fields"][0]
+                if kind == "pointer":
+                    field["type"] = {"kind": "pointer", "target": field["type"], "const": False, "volatile": False}
+                elif kind == "array":
+                    field["type"] = {"kind": "array", "element": field["type"], "count": 2, "const": False, "volatile": False}
+                else:
+                    child["fields"][1]["policy"]["length"] = "Sequence"
+                with self.assertRaisesRegex(ModelError, "expected a scalar|output byte spans and arrays"):
+                    self.emit(model)
+
+    def test_struct_results_validate_nested_string_ownership(self):
+        for key, value in [("ownership", "owned"), ("lifetime", "read_scope"), ("direction", "in")]:
+            with self.subTest(key=key):
+                model = deepcopy(MODEL)
+                self.declaration(model, "MarshalSnapshotChild")["fields"][1]["policy"][key] = value
+                with self.assertRaisesRegex(ModelError, "strings require borrowed const char"):
+                    self.emit(model)
+
+    def test_struct_snapshots_do_not_require_iobject(self):
+        model = deepcopy(MODEL)
+        names = {"MarshalDesc", "MARSHAL_MODE", "GetStaticDescriptor"}
+        model["declarations"] = [d for d in model["declarations"] if d["name"].removeprefix("Diligent::") in names]
+        cpp, _, _ = self.emit(model, {})
+        self.assertNotIn("IObject", cpp)
+        self.assertNotIn("binding_Release", cpp)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

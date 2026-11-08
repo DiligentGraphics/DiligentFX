@@ -37,7 +37,7 @@ def validate_binding(policy, context):
 VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length"}
 
 
-def apply_value_policy(value, policy, context, *, is_result=False):
+def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
@@ -56,21 +56,21 @@ def apply_value_policy(value, policy, context, *, is_result=False):
         raise ModelError(f"{context}: invalid ownership")
     if "lifetime" in policy and not policy["lifetime"]:
         raise ModelError(f"{context}: lifetime must not be empty")
-    # Return values describe data received by the caller, not writable output
-    # storage passed to the callee. A returned pointer may point to const data.
-    if (not is_result and policy.get("direction") in ("out", "inout") and
+    # Returned pointers and pointer-valued fields may refer to const data.
+    # Only output parameters require caller-provided writable pointee storage.
+    if (not (is_result or is_field) and policy.get("direction") in ("out", "inout") and
             native_type["kind"] in ("pointer", "reference") and native_type["target"]["const"]):
         raise ModelError(f"{context}: output cannot point to const data")
     if policy:
         value["policy"] = policy
 
 
-def apply_values_policy(values, policies, context):
+def apply_values_policy(values, policies, context, *, is_field=False):
     by_name = {value["name"]: value for value in values}
     validate_keys(policies, by_name.keys(), context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
-        apply_value_policy(value, policy, f"{context}::{value['name']}")
+        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
         if "length" in policy:
             length = by_name.get(policy["length"])
             length_type = unalias(length["type"]) if length else {}
@@ -110,7 +110,7 @@ def apply_declaration_policy(declaration, policy):
         validate_keys(policy, {"binding", "reason"}, name)
     elif kind in ("record", "interface"):
         validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods"}, name)
-        apply_values_policy(declaration["fields"], policy.get("fields", {}), name)
+        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")

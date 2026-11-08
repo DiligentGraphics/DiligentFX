@@ -55,3 +55,8 @@ Float32 CheckCNestedStruct(void)
     Desc.Transform.Scale.x = 1.f;
     return Diligent_ReadNestedValue(&Desc, 3);
 }
+
+const MarshalSnapshotDesc* CheckCStructResult(IMarshalSnapshots* pSnapshots)
+{
+    return IMarshalSnapshots_GetDesc(pSnapshots);
+}

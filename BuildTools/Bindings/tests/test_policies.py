@@ -55,13 +55,21 @@ class PolicyTest(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "output cannot point to const"):
             apply_callable_policy(function, {"result": policy, "parameters": {"Output": policy}}, "ConstResult")
 
+    def test_const_pointer_fields_can_describe_returned_data(self):
+        for direction in ("out", "inout"):
+            with self.subTest(direction=direction):
+                config = function_config()
+                config["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"]["direction"] = direction
+                fields = declarations(self.apply(config))["Diligent::BindingTestDesc"]["fields"]
+                self.assertEqual(fields[1]["policy"]["direction"], direction)
+                self.assertTrue(fields[1]["type"]["target"]["const"])
+
     def test_rejects_stale_or_inconsistent_metadata(self):
         cases = [
             (lambda c: c["declarations"].update({"Diligent::BindingTestDesc": None}), "expected a metadata object"),
             (lambda c: c["declarations"]["Diligent::BindingTestDesc"]["fields"].update({"Missing": {}}), "members: unknown metadata"),
             (lambda c: c["declarations"]["Diligent::IBindingTestObject"]["methods"].update({"Missing": {}}), "methods: unknown metadata"),
             (lambda c: c["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"].update(length="Missing"), "length must name"),
-            (lambda c: c["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"].update(direction="out"), "output cannot point to const"),
             (lambda c: c["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"].update(unsupported_key="borrowed"), "unknown metadata"),
             (lambda c: c["declarations"]["Diligent::IBindingTestObject"].update(iid="Diligent::Missing"), "interface ID not found"),
             (lambda c: c["declarations"]["Diligent::IObject"].pop("reason"), "requires a reason"),

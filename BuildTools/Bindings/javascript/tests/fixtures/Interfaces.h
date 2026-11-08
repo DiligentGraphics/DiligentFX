@@ -30,6 +30,7 @@
 #include "NestedStructs.h"
 #include "Buffers.h"
 #include "StringMarshalling.h"
+#include "StructResults.h"
 #include "Object.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)

@@ -123,6 +123,20 @@ export function createBindings(wasm, schema) {
         return address;
     }
 
+    function outputRecord(address, name) {
+        address >>>= 0;
+        if (!address) throw new Error(`Native function returned a null ${name} reference`);
+        const result = {};
+        for (const [key, field] of Object.entries(schema.records[name].fields)) {
+            const value = field.record ? outputRecord(wasm[field.address](address), field.record) :
+                field.string ? outputString(wasm[field.get](address), field.string) :
+                outputScalar(wasm[field.get](address), field.type);
+            // Snapshot members are copied data properties, never native accessors.
+            Object.defineProperty(result, key, {value, enumerable: true, writable: true, configurable: true});
+        }
+        return result;
+    }
+
     function inputBytes(value, count, nullable, cleanup) {
         const length = byteLength(count);
         if (value === null && nullable) return 0;
@@ -251,7 +265,10 @@ export function createBindings(wasm, schema) {
                 }
             }
             const nativeResult = wasm[spec.export](...nativeArgs);
-            const result = spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
+            // Finish snapshots while the native owner and temporary inputs are
+            // still alive. Only copied JS values escape the call.
+            const result = spec.result.record ? outputRecord(nativeResult, spec.result.record) :
+                spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
             return output ? {status: result, value: readOutput(output.address, output.spec)} : result;
         } finally {

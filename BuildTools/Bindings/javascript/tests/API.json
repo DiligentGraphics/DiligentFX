@@ -190,13 +190,13 @@
     "Diligent::MarshalStringDesc": {
       "fields": {
         "Name": {
-          "direction": "in",
+          "direction": "inout",
           "nullable": false,
           "ownership": "borrowed",
           "lifetime": "call"
         },
         "Label": {
-          "direction": "in",
+          "direction": "inout",
           "nullable": true,
           "ownership": "borrowed",
           "lifetime": "call"
@@ -432,6 +432,99 @@
         }
       }
     },
-    "Diligent::GetNestedCallCount": {}
+    "Diligent::GetNestedCallCount": {},
+    "Diligent::MarshalSnapshotDesc": {
+      "fields": {
+        "Name": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "object"
+        }
+      }
+    },
+    "Diligent::MarshalSnapshotChild": {
+      "fields": {
+        "Label": {
+          "direction": "out",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "object"
+        }
+      }
+    },
+    "Diligent::IMarshalSnapshots": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalSnapshots",
+      "methods": {
+        "GetDesc": {
+          "result": {
+            "direction": "out",
+            "nullable": false,
+            "ownership": "borrowed",
+            "lifetime": "object"
+          }
+        },
+        "GetDescAfterGrowingMemory": {
+          "result": {
+            "direction": "out",
+            "nullable": false,
+            "ownership": "borrowed",
+            "lifetime": "object"
+          }
+        },
+        "Update": {
+          "parameters": {
+            "Name": {
+              "direction": "in",
+              "nullable": true,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            },
+            "Label": {
+              "direction": "in",
+              "nullable": true,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        }
+      }
+    },
+    "Diligent::CreateMarshalSnapshots": {
+      "parameters": {
+        "ppObject": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "owned",
+          "lifetime": "caller"
+        }
+      }
+    },
+    "Diligent::GetStaticDescriptor": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::EchoStringDescriptor": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::GetLiveSnapshotCount": {}
   }
 }

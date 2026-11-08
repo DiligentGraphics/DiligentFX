@@ -8,7 +8,8 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-The nested-struct suite also runs in a headless browser. No renderer or GPU is required.
+The nested-input and struct-result suites also run in a headless browser.
+No renderer or GPU is required.
 
 ## Build and run
 
@@ -37,8 +38,9 @@ Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
 CTest runs the Python emitter tests, Node scalar/interface, byte-buffer, and
-string and nested-struct marshalling suites, and browser-harness unit tests as
-separate entries. The nested-struct cases run in both Node and the browser.
+string, nested-input, and struct-result marshalling suites, and browser-harness
+unit tests as separate entries. The nested-input and struct-result cases run in
+both Node and the browser.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -121,10 +123,12 @@ if (result.value !== null) {
 The backend supports scalar fields and nested value structs in plain input descriptors,
 single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
-result. It also supports UTF-8 strings, input byte spans, and the scoped byte adapters
+result. Borrowed const-reference struct results become JavaScript snapshots.
+It also supports UTF-8 strings, input byte spans, and the scoped byte adapters
 described below. It rejects unsupported declarations and policies instead of silently
-omitting them. General arrays, callbacks, aggregate outputs, default function
-arguments, and other manual adapters are not implemented yet. The first production
+omitting them. General arrays, callbacks, struct output parameters, by-value
+struct results, default function arguments, and other manual adapters are not
+implemented yet. The first production
 integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
 
 Add target-independent native type information to the shared model. Put JavaScript
@@ -132,14 +136,42 @@ conversion and lifetime behavior in this backend. Add a native fixture and an
 execution test for each new supported API shape; emitter-only string checks cannot
 establish correct marshalling.
 
+## Struct results
+
+A `const T&` result (declared with `const T REF` in a Diligent C-compatible header)
+becomes a plain JavaScript object. Supported fields are scalars, enums, UTF-8
+strings, and embedded value structs. Nested objects and strings are copied before
+the wrapper returns or releases temporary inputs. Later native mutation or owner
+destruction does not affect the result, and editing the result does not modify
+native data. The snapshot does not retain the native owner and needs no disposal.
+
+The result policy requires `direction: out`, `nullable: false`,
+`ownership: borrowed`, and `lifetime: call`, `object`, or `static`. Native storage
+must remain valid and stable until synchronous snapshot conversion finishes.
+String fields use `direction: out` (or `inout` for a descriptor used in both
+directions), borrowed ownership, their documented lifetime, and explicit
+nullability. Inputs still require call-scoped string storage. These are data-field
+policies; an output parameter that points directly to const data remains invalid.
+
+Generated TypeScript uses `StructSnapshot<T>` to make all returned fields,
+including nested fields, required while preserving optional input descriptor
+fields. For example, a getter is declared as
+`GetDesc(): StructSnapshot<TextureDesc>`. Native pointers and struct offsets stay
+private. Reading a borrowed result needs no temporary native descriptor allocation.
+
+Pointer/array fields other than supported strings are rejected during generation.
+By-value struct returns, struct output parameters, and mutable-reference results
+are not supported yet.
+
 ## UTF-8 strings
 
 Null-terminated `const Char*` and `const char*` values map to JavaScript `string`.
 Pointers with a `length` policy remain byte spans instead. Mutable character
 buffers, wide strings, and owned native string outputs require separate adapters.
 
-- Input parameters and descriptor fields require `direction: in`,
-  `ownership: borrowed`, and `lifetime: call`. The wrapper encodes UTF-8 into
+- Input parameters and descriptor fields require `direction: in` (`inout` for
+  fields also read in snapshots), `ownership: borrowed`, and `lifetime: call`.
+  The wrapper encodes UTF-8 into
   temporary null-terminated Wasm storage and frees it after the native call.
   Native code that retains the text must copy it during that call.
 - Direct string results require `direction: out`, `ownership: borrowed`, and
