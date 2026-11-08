@@ -255,8 +255,15 @@ class Generator:
             span["type"] = 'u8'
         elif element.get("kind") == "scalar" or declaration.get("kind") == "enum":
             span["type"] = self.scalar(element)
+        elif element.get("kind") == "pointer":
+            interface = self.interface_value({"type": element, "policy": dict(policy, nullable=policy.get("element_nullable", False))}, context, output=output, field=field)
+            if not interface:
+                raise ModelError(f"{context}: pointer arrays require interface elements")
+            span["interface"] = interface
         else:
-            raise ModelError(f"{context}: {'output' if output else 'input'} spans support only scalars and plain structs")
+            raise ModelError(f"{context}: {'output' if output else 'input'} spans support only scalars, structs, and interfaces")
+        if "element_nullable" in policy and "interface" not in span:
+            raise ModelError(f"{context}: element_nullable is only valid for interface arrays")
         return span
 
     def output_buffer(self, value, siblings, context):
@@ -283,6 +290,9 @@ class Generator:
 
     @staticmethod
     def span_ts(span, *, output=False):
+        if "interface" in span:
+            element = span["interface"]
+            return f'{"Array" if output else "ReadonlyArray"}<{element["interface"]}' + (' | null' if element['nullable'] else '') + '>'
         if "record" in span:
             return f'Array<StructSnapshot<{span["record"]}>>' if output else f'ReadonlyArray<{span["record"]}>'
         if span["type"] == "i8" and not output:
@@ -452,10 +462,16 @@ class Generator:
                 string = self.string(field, context, field=True)
             if as_output:
                 string = self.string(field, context, output=True, field=True)
+            interface = None
+            if as_input:
+                interface = self.interface_value(field, context, field=True)
+            if as_output:
+                interface = self.interface_value(field, context, output=True, field=True)
             spec = {}
-            if string:
-                spec["string"] = string
-                field_ts = 'string' + (' | null' if string['nullable'] else '')
+            if string or interface:
+                spec.update(interface if interface else {"string": string})
+                field_ts = ((interface['interface'] + (' | null' if interface['nullable'] else '')) if interface else
+                            'string' + (' | null' if string['nullable'] else ''))
                 if as_input:
                     spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",
                         ['uintptr_t pointer', 'uintptr_t data'],
@@ -636,7 +652,7 @@ class Generator:
     def generate(self):
         self.input_records, self.output_records, self.storage_records = self.record_usage()
         if self.output_records:
-            self.ts += ['export type StructSnapshot<T> = T extends ArrayBufferView ? T :',
+            self.ts += ['export type StructSnapshot<T> = T extends ArrayBufferView | NativeObject ? T :',
                         '  T extends ReadonlyArray<infer E> ? Array<StructSnapshot<E>> : T extends object ?',
                         '  { [K in keyof T]-?: StructSnapshot<Exclude<T[K], undefined>> } : T;']
         used_names = {"NativeObject", "NativeType", "Result", "ModuleOptions", "Bindings", "ReadByteAccess", "WriteByteAccess", "StructSnapshot"}

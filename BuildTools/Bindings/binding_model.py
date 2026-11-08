@@ -34,7 +34,7 @@ def validate_binding(policy, context):
     return binding
 
 
-VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written"}
+VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written", "element_nullable"}
 
 
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
@@ -52,6 +52,8 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
         raise ModelError(f"{context}: invalid direction")
     if "nullable" in policy and not isinstance(policy["nullable"], bool):
         raise ModelError(f"{context}: nullable must be a boolean")
+    if "element_nullable" in policy and (not isinstance(policy["element_nullable"], bool) or "length" not in policy):
+        raise ModelError(f"{context}: element_nullable requires a span and a boolean value")
     if "ownership" in policy and policy["ownership"] not in ("borrowed", "owned"):
         raise ModelError(f"{context}: invalid ownership")
     if "lifetime" in policy and not policy["lifetime"]:

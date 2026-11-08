@@ -152,14 +152,10 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, "input spans require|output buffers require|span length must be"):
                     self.emit(model)
 
-    def test_input_arrays_reject_interface_pointer_elements(self):
-        model = deepcopy(MODEL)
-        parameter = self.declaration(model, "ReadArrayItem")["parameters"][0]
-        parameter["type"]["target"] = {
-            "kind": "pointer", "const": True, "volatile": False,
-            "target": {"kind": "named", "name": "Diligent::IMarshalObject", "const": False, "volatile": False}}
-        with self.assertRaisesRegex(ModelError, "input spans support only scalars and plain structs"):
-            self.emit(model)
+    def test_interface_array_types_and_snapshot_ownership(self):
+        _, _, types = self.emit()
+        self.assertIn("ppObjects?: ReadonlyArray<IMarshalObject | null> | null", types)
+        self.assertIn("T extends ArrayBufferView | NativeObject ? T", types)
 
     def test_array_elements_used_as_results_still_have_input_marshalling(self):
         model = deepcopy(MODEL)
@@ -183,7 +179,7 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("GetItems(Count: number): Array<StructSnapshot<MarshalOutputArrayItem>>;", types)
         self.assertIn("GetStaticOutputArray(Count: bigint): Float64Array | null;", types)
         self.assertIn("pGroups: Array<StructSnapshot<MarshalOutputArrayGroup>>;", types)
-        self.assertIn("T extends ArrayBufferView ? T", types)
+        self.assertIn("T extends ArrayBufferView | NativeObject ? T", types)
         self.assertIn("T extends ReadonlyArray<infer E> ? Array<StructSnapshot<E>>", types)
         self.assertIn("return sizeof(Diligent::MarshalOutputArrayGroup);", cpp)
         self.assertIn("return alignof(Diligent::MarshalOutputArrayGroup);", cpp)
@@ -211,7 +207,8 @@ class GeneratorTest(unittest.TestCase):
         result = self.declaration(model, "GetStaticOutputArray")["result"]
         result["type"]["target"] = {"kind": "pointer", "const": True, "volatile": False,
             "target": {"kind": "named", "name": "Diligent::IMarshalObject", "const": False, "volatile": False}}
-        with self.assertRaisesRegex(ModelError, "output spans support only scalars and plain structs"):
+        result["type"]["target"]["target"]["name"] = "Diligent::MarshalDesc"
+        with self.assertRaisesRegex(ModelError, "pointer arrays require interface elements"):
             self.emit(model)
 
     def test_output_array_fields_require_out_or_inout_policies(self):

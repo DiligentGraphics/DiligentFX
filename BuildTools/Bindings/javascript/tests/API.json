@@ -1262,6 +1262,68 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::MarshalInterfaceDesc": {
+      "fields": {
+        "pObject": {
+          "direction": "inout",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        },
+        "ppObjects": {
+          "direction": "inout",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed",
+          "length": "Count",
+          "element_nullable": true
+        },
+        "Label": {
+          "direction": "inout",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::SumInterfaces": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::EchoInterfaces": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "lifetime": "call",
+        "ownership": "borrowed"
+      }
+    },
+    "Diligent::SumInterfaceArray": {
+      "parameters": {
+        "ppObjects": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed",
+          "length": "Count",
+          "element_nullable": true
+        }
+      }
     }
   }
 }

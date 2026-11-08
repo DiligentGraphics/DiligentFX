@@ -96,6 +96,16 @@ export function createBindings(wasm, schema) {
         }
     }
 
+    function inputInterface(value, spec, cleanup) {
+        if (value === null && spec.nullable) return 0;
+        const address = pointer(value, spec.interface);
+        // Pin inputs until native dispatch and result snapshots finish, including
+        // when later JS descriptor accessors dispose an earlier wrapper.
+        wasm._binding_AddRef(address);
+        cleanup.push(() => wasm._binding_Release(address));
+        return address;
+    }
+
     function outputInterface(address, spec, rollback) {
         address >>>= 0;
         if (!address && !spec.nullable) throw new Error("Native function returned a null interface");
@@ -125,6 +135,7 @@ export function createBindings(wasm, schema) {
             if (fieldValue !== undefined) {
                 if (field.array) inputFixedArray(fieldValue, wasm[field.address](address) >>> 0, field.array, cleanup);
                 else if (field.span) spans.push({field, value: fieldValue});
+                else if (field.interface) wasm[field.set](address, inputInterface(fieldValue, field, cleanup));
                 else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
                 else if (field.record) record(fieldValue, field.record, cleanup, wasm[field.address](address) >>> 0);
                 else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
@@ -139,15 +150,16 @@ export function createBindings(wasm, schema) {
         return address;
     }
 
-    function outputRecord(address, name) {
+    function outputRecord(address, name, rollback) {
         address >>>= 0;
         if (!address) throw new Error(`Native function returned a null ${name} reference`);
         const result = {};
         for (const [key, field] of Object.entries(schema.records[name].fields)) {
-            const value = field.array ? outputFixedArray(wasm[field.address](address) >>> 0, field.array) :
+            const value = field.array ? outputFixedArray(wasm[field.address](address) >>> 0, field.array, rollback) :
                 field.span ? outputSpan(wasm[field.get](address),
-                BigInt.asUintN(64, wasm[field.span.getLength](address)), field.span) :
-                field.record ? outputRecord(wasm[field.address](address), field.record) :
+                BigInt.asUintN(64, wasm[field.span.getLength](address)), field.span, rollback) :
+                field.record ? outputRecord(wasm[field.address](address), field.record, rollback) :
+                field.interface ? outputInterface(wasm[field.get](address), field, rollback) :
                 field.string ? outputString(wasm[field.get](address), field.string) :
                 outputScalar(wasm[field.get](address), field.type);
             // Snapshot members are copied data properties, never native accessors.
@@ -168,20 +180,20 @@ export function createBindings(wasm, schema) {
         }
     }
 
-    function outputFixedArray(address, spec) {
-        if (!spec.array) return outputSpan(address, spec.count, spec);
+    function outputFixedArray(address, spec, rollback) {
+        if (!spec.array) return outputSpan(address, spec.count, spec, rollback);
         const result = new Array(spec.count);
-        for (let i = 0; i < spec.count; ++i) result[i] = outputFixedArray(wasm[spec.element](address, i) >>> 0, spec.array);
+        for (let i = 0; i < spec.count; ++i) result[i] = outputFixedArray(wasm[spec.element](address, i) >>> 0, spec.array, rollback);
         return result;
     }
 
-    function outputSpan(pointer, count, spec) {
+    function outputSpan(pointer, count, spec, rollback) {
         const address = pointer >>> 0;
         const length = byteLength(count);
-        const Type = spec.record ? null : scalarArrays[spec.type];
+        const Type = spec.interface ? Uint32Array : spec.record ? null : scalarArrays[spec.type];
         // A null empty span preserves explicit nullability; a non-null empty
         // span is an empty array. No storage is read for a zero count.
-        if (length === 0) return address === 0 && spec.nullable ? null : spec.record ? [] : new Type();
+        if (length === 0) return address === 0 && spec.nullable ? null : (spec.record || spec.interface) ? [] : new Type();
         const size = spec.record ? wasm[spec.size]() >>> 0 : Type.BYTES_PER_ELEMENT;
         const alignment = spec.record ? wasm[spec.alignment]() >>> 0 : Type.BYTES_PER_ELEMENT;
         // Check the complete range before allocating JS storage or dereferencing
@@ -192,7 +204,15 @@ export function createBindings(wasm, schema) {
         }
         if (spec.record) {
             const result = new Array(length);
-            for (let i = 0; i < length; ++i) result[i] = outputRecord(wasm[spec.element](address, i), spec.record);
+            for (let i = 0; i < length; ++i) result[i] = outputRecord(wasm[spec.element](address, i), spec.record, rollback);
+            return result;
+        }
+        if (spec.interface) {
+            const result = new Array(length);
+            for (let i = 0; i < length; ++i) {
+                const object = new DataView(wasm.HEAPU8.buffer).getUint32(address + i * 4, true);
+                result[i] = outputInterface(object, spec.interface, rollback);
+            }
             return result;
         }
         // Copy bytes into JS-owned storage, never return a view of native memory.
@@ -206,6 +226,20 @@ export function createBindings(wasm, schema) {
         const length = byteLength(count);
         const embedded = address !== undefined;
         if (value === null && spec.nullable) return 0;
+        if (spec.interface) {
+            if (!Array.isArray(value)) throw new TypeError("Expected an interface array");
+            if (length > value.length) throw new RangeError("Element count exceeds the input array");
+            if (length === 0) return 0;
+            const size = byteLength(length * 4);
+            address = wasm._malloc(size) >>> 0;
+            if (!address) throw new Error("Could not allocate interface array");
+            cleanup.push(() => wasm._free(address));
+            for (let i = 0; i < length; ++i) {
+                const object = inputInterface(value[i], spec.interface, cleanup);
+                new DataView(wasm.HEAPU8.buffer).setUint32(address + i * 4, object, true);
+            }
+            return address;
+        }
         if (spec.record) {
             if (!Array.isArray(value)) throw new TypeError(`Expected an array of ${spec.record}`);
             if (embedded && length !== value.length) throw new RangeError(`Fixed array requires exactly ${length} elements`);
@@ -314,7 +348,7 @@ export function createBindings(wasm, schema) {
 
     function readOutput(address, spec, rollback = []) {
         // Obtain the current heap after the call: native allocations may grow it.
-        if (spec.record) return outputRecord(address, spec.record);
+        if (spec.record) return outputRecord(address, spec.record, rollback);
         const view = new DataView(wasm.HEAPU8.buffer);
         if (spec.interface) return outputInterface(view.getUint32(address, true), spec, rollback);
         if (spec.string) return outputString(view.getUint32(address, true), spec.string);
@@ -337,7 +371,7 @@ export function createBindings(wasm, schema) {
                 cleanup.push(() => wasm[buffer.destroy](address));
                 return address;
             }
-            const size = byteLength(capacity * scalarArrays[buffer.type].BYTES_PER_ELEMENT);
+            const size = byteLength(capacity * (buffer.interface ? 4 : scalarArrays[buffer.type].BYTES_PER_ELEMENT));
             const address = wasm._malloc(size) >>> 0;
             if (!address) throw new Error("Could not allocate output array");
             cleanup.push(() => wasm._free(address));
@@ -359,6 +393,7 @@ export function createBindings(wasm, schema) {
         if (args.length !== argumentCount) throw new TypeError(`Expected ${argumentCount} arguments`);
         const nativeArgs = owner ? [pointer(self, owner)] : [];
         const cleanup = [];
+        if (owner && args.length) inputInterface(self, {interface: owner, nullable: false}, cleanup);
         let argument = 0;
         const outputs = [];
         const rollback = [];
@@ -383,7 +418,7 @@ export function createBindings(wasm, schema) {
                     if (parameter.record) {
                         nativeArgs.push(record(value, parameter.record, cleanup));
                     } else if (parameter.interface) {
-                        nativeArgs.push(value === null && parameter.nullable ? 0 : pointer(value, parameter.interface));
+                        nativeArgs.push(inputInterface(value, parameter, cleanup));
                     } else if (parameter.span) {
                         const span = parameter.span;
                         const count = inputScalar(args[inputs.findIndex(p => p.name === span.length)], span.lengthType, span.length);
@@ -399,8 +434,8 @@ export function createBindings(wasm, schema) {
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
             const result = spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,
-                args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span) :
-                spec.result.record ? outputRecord(nativeResult, spec.result.record) :
+                args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span, rollback) :
+                spec.result.record ? outputRecord(nativeResult, spec.result.record, rollback) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
             const values = {};
@@ -411,7 +446,7 @@ export function createBindings(wasm, schema) {
                     const countOutput = buffer.written && outputs.find(o => o.name === buffer.written);
                     const count = countOutput ? byteLength(readOutput(countOutput.address, countOutput.spec)) : output.capacity;
                     if (count > output.capacity) throw new RangeError("Written count exceeds output capacity");
-                    value = outputSpan(output.address, count, buffer);
+                    value = outputSpan(output.address, count, buffer, rollback);
                 } else {
                     output.consumed = true;
                     value = readOutput(output.address, output.spec, rollback);

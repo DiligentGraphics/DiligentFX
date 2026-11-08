@@ -54,6 +54,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
+    "${TEST_SOURCE}/fixtures/InterfaceFields.cpp"
     "${TEST_SOURCE}/fixtures/BorrowedInterfaces.cpp"
     "${TEST_SOURCE}/fixtures/OutputBuffers.cpp"
     "${TEST_SOURCE}/fixtures/OutputParameters.cpp"
@@ -160,3 +161,11 @@ add_test(NAME Bindings-JavaScriptBorrowedInterfacesBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/borrowedinterfaces_tests.mjs")
 set_tests_properties(Bindings-JavaScriptBorrowedInterfacesBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptInterfaceFields
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_interfacefields.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptInterfaceFields PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptInterfaceFieldsBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/interfacefields_tests.mjs")
+set_tests_properties(Bindings-JavaScriptInterfaceFieldsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

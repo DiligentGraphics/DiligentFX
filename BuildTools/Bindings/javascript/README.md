@@ -426,3 +426,12 @@ Borrowed results acquire a reference for their JS wrapper; owned results transfe
 the existing reference. Call `dispose()` on either wrapper. Pointer outputs follow
 the same rule. Multiple-output conversion failures release both already wrapped
 and not yet wrapped owned results. Nullable results preserve null.
+
+## Interfaces in descriptors and arrays
+
+Interface input fields and array elements accept live wrappers from this module.
+They are retained until the call and snapshot conversion finish. Borrowed
+interface outputs acquire independent wrapper references, including when nested
+inside descriptors or arrays. Dispose those wrappers when finished.
+The pointer policy describes borrowed element ownership; `element_nullable`
+allows null interface elements independently of the array's own `nullable` flag.
