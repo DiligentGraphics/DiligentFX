@@ -40,6 +40,47 @@ jobs:
       with:
         platform: Web
 
+    # These standalone tests always target Wasm32; Linux Debug and Release
+    # cover marshalling without repeating it on every host platform.
+    - name: Set up binding test dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Ubuntu 26.04 already provides LLVM 22, Python venv, and Ninja.
+        # Keep the parser on LLVM 22 to match the pinned Python bindings.
+        python3 -m venv "$RUNNER_TEMP/bindings-venv"
+        "$RUNNER_TEMP/bindings-venv/bin/python" -m pip install -r DiligentFX/BuildTools/Bindings/requirements.txt
+
+    - name: Test binding model
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        LIBCLANG_LIBRARY_FILE: /usr/lib/llvm-22/lib/libclang-22.so.1
+      run: |
+        bindings_python="$RUNNER_TEMP/bindings-venv/bin/python"
+        sysroot="$(em-config CACHE)/sysroot"
+        parser_args=(
+          --target=wasm32-unknown-emscripten
+          "--clang-arg=--sysroot=$sysroot"
+          "--clang-arg=-isystem$sysroot/include/c++/v1"
+          --clang-arg=-DPLATFORM_WEB=1
+        )
+        "$bindings_python" -B DiligentFX/BuildTools/Bindings/tests/run_tests.py "${parser_args[@]}"
+        "$bindings_python" -B DiligentFX/Radient/bindings/tests/test_public_api.py "${parser_args[@]}"
+
+    - name: Test JavaScript bindings
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        BUILD_TYPE: ${{ matrix.build_type }}
+      run: |
+        emcmake cmake -S DiligentFX/BuildTools/Bindings/javascript -B "$RUNNER_TEMP/binding-js" -G Ninja \
+          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          -DBINDINGS_PYTHON_EXECUTABLE="$RUNNER_TEMP/bindings-venv/bin/python" \
+          -DBINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1 \
+          -DBINDINGS_NODE_EXECUTABLE="$(command -v node)"
+        cmake --build "$RUNNER_TEMP/binding-js" --target Bindings-TestJavaScript --parallel 2
+
     - name: Configure CMake
       if:   success()
       uses: DiligentGraphics/github-action/configure-cmake@v28
