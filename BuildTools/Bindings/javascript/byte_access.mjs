@@ -8,11 +8,15 @@ const getOffset = Object.getOwnPropertyDescriptor(arrayPrototype, "byteOffset").
 const getLength = Object.getOwnPropertyDescriptor(arrayPrototype, "byteLength").get;
 const setBytes = ByteArray.prototype.set;
 
-export function byteArray(value) {
-    if (!(value instanceof ByteArray)) throw new TypeError("Expected Uint8Array");
+export function typedArray(value, Type) {
+    if (!(value instanceof Type)) throw new TypeError(`Expected ${Type.name}`);
     // Normalize caller views without invoking overridden getters, methods, or
     // species constructors. Constructing the view also rejects detached buffers.
-    return new ByteArray(getBuffer.call(value), getOffset.call(value), getLength.call(value));
+    return new Type(getBuffer.call(value), getOffset.call(value), getLength.call(value) / Type.BYTES_PER_ELEMENT);
+}
+
+export function byteArray(value) {
+    return typedArray(value, ByteArray);
 }
 
 function range(offset, count, length) {

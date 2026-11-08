@@ -1,5 +1,11 @@
 // Shared runtime for generated Wasm32 bindings. Native pointers stay private.
-import {byteArray, byteLength, createByteAccess} from "./byte_access.mjs";
+import {typedArray, byteLength, createByteAccess} from "./byte_access.mjs";
+
+const scalarArrays = {
+    bool: Uint8Array, i8: Int8Array, u8: Uint8Array, i16: Int16Array, u16: Uint16Array,
+    i32: Int32Array, u32: Uint32Array, i64: BigInt64Array, u64: BigUint64Array,
+    float: Float32Array, double: Float64Array,
+};
 
 function inputScalar(value, type, name) {
     if (type === "bool") {
@@ -101,24 +107,24 @@ export function createBindings(wasm, schema) {
             if (!address) throw new Error(`Could not allocate ${name}`);
             cleanup.push(() => wasm[spec.destroy](address));
         }
-        const buffers = [];
+        const spans = [];
         for (const key of Object.keys(value)) {
             if (!Object.hasOwn(spec.fields, key)) throw new TypeError(`Unknown ${name} field: ${key}`);
             const field = spec.fields[key];
             const fieldValue = value[key];
             // Undefined, like omission, leaves the native default untouched.
             if (fieldValue !== undefined) {
-                if (field.bytes) buffers.push({field, value: fieldValue});
+                if (field.span) spans.push({field, value: fieldValue});
                 else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
                 else if (field.record) record(fieldValue, field.record, cleanup, wasm[field.address](address) >>> 0);
                 else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
             }
         }
-        // Length fields and native defaults are resolved before buffer fields,
+        // Counts and native defaults are resolved before pointer/count fields,
         // regardless of the caller's descriptor property order.
-        for (const {field, value: bytes} of buffers) {
-            const length = BigInt.asUintN(64, wasm[field.bytes.getLength](address));
-            wasm[field.set](address, inputBytes(bytes, length, field.bytes.nullable, cleanup));
+        for (const {field, value: elements} of spans) {
+            const length = BigInt.asUintN(64, wasm[field.span.getLength](address));
+            wasm[field.set](address, inputSpan(elements, length, field.span, cleanup));
         }
         return address;
     }
@@ -137,16 +143,41 @@ export function createBindings(wasm, schema) {
         return result;
     }
 
-    function inputBytes(value, count, nullable, cleanup) {
+    function inputSpan(value, count, spec, cleanup) {
         const length = byteLength(count);
-        if (value === null && nullable) return 0;
-        const bytes = byteArray(value);
-        if (length > bytes.byteLength) throw new RangeError("Byte length exceeds the input buffer");
-        if (length === 0) return 0;
-        const address = wasm._malloc(length) >>> 0;
-        if (!address) throw new Error("Could not allocate byte input storage");
+        if (value === null && spec.nullable) return 0;
+        if (spec.record) {
+            if (!Array.isArray(value)) throw new TypeError(`Expected an array of ${spec.record}`);
+            if (length > value.length) throw new RangeError("Element count exceeds the input array");
+            if (length > (wasm[spec.maxCount]() >>> 0)) throw new RangeError("Struct array exceeds the native allocation limit");
+            if (length === 0) return 0;
+            const address = wasm[spec.create](length) >>> 0;
+            if (!address) throw new Error("Could not allocate struct array input");
+            cleanup.push(() => wasm[spec.destroy](address));
+            for (let i = 0; i < length; ++i) {
+                record(value[i], spec.record, cleanup, wasm[spec.element](address, i) >>> 0);
+            }
+            return address;
+        }
+
+        // Preserve Uint8Array inputs accepted by the original signed-byte spans.
+        const Type = spec.type === "i8" && value instanceof Uint8Array ? Uint8Array : scalarArrays[spec.type];
+        const values = typedArray(value, Type);
+        if (length > values.length) throw new RangeError("Element count exceeds the input array");
+        const size = byteLength(length * Type.BYTES_PER_ELEMENT);
+        if (size === 0) return 0;
+        const address = wasm._malloc(size) >>> 0;
+        if (!address) throw new Error("Could not allocate array input storage");
         cleanup.push(() => wasm._free(address));
-        wasm.HEAPU8.set(bytes.subarray(0, length), address);
+        // Copy the selected view, not its entire backing buffer. Obtain the heap
+        // after allocation, which may grow Wasm memory.
+        wasm.HEAPU8.set(new Uint8Array(values.buffer, values.byteOffset, size), address);
+        if (spec.type === "bool") {
+            // Validate the copied representation before native bool objects are read.
+            for (let i = 0; i < length; ++i) {
+                if (wasm.HEAPU8[address + i] > 1) throw new RangeError("Boolean arrays require zero or one");
+            }
+        }
         return address;
     }
 
@@ -253,10 +284,10 @@ export function createBindings(wasm, schema) {
                         nativeArgs.push(record(value, parameter.record, cleanup));
                     } else if (parameter.interface) {
                         nativeArgs.push(value === null && parameter.nullable ? 0 : pointer(value, parameter.interface));
-                    } else if (parameter.bytes) {
-                        const span = parameter.bytes;
+                    } else if (parameter.span) {
+                        const span = parameter.span;
                         const count = inputScalar(args[inputs.findIndex(p => p.name === span.length)], span.lengthType, span.length);
-                        nativeArgs.push(inputBytes(value, count, span.nullable, cleanup));
+                        nativeArgs.push(inputSpan(value, count, span, cleanup));
                     } else if (parameter.string) {
                         nativeArgs.push(inputString(value, parameter.string, cleanup));
                     } else {

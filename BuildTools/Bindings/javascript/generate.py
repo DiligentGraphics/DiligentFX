@@ -68,6 +68,7 @@ class Generator:
         for name, scope in self.scopes.items():
             self.validate_scope(name, scope)
             self.releases.add(name.rsplit("::", 1)[0] + "::" + scope["release"])
+        self.record_arrays = {}
         self.schema = {"records": {}, "interfaces": {}, "functions": {}, "enums": {}}
         self.cpp = ['// Generated file. Do not edit.', '#include <cstdint>', '#include <new>',
                     '#include <emscripten/emscripten.h>']
@@ -171,23 +172,55 @@ class Generator:
         methods.update((m["name"], m) for m in declaration.get("methods", []))
         return methods
 
-    def byte_span(self, value, siblings, context):
+    def input_span(self, value, siblings, context):
         policy = value.get("policy", {})
         if "length" not in policy:
             return None
         t = unalias(value["type"])
-        byte = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        element = unalias(t["target"]) if t["kind"] == "pointer" else {}
         length = next((s for s in siblings if s["name"] == policy["length"]), None)
-        if (not length or t["const"] or t["volatile"] or not byte.get("const") or byte.get("volatile") or
-                not (byte.get("kind") == "void" or
-                     (byte.get("kind") == "scalar" and byte.get("bits") == 8)) or
+        if (not length or t["const"] or t["volatile"] or not element.get("const") or element.get("volatile") or
                 policy.get("direction") != "in" or policy.get("ownership") != "borrowed" or
                 policy.get("lifetime") != "call"):
-            raise ModelError(f"{context}: byte spans require const input bytes borrowed for the call")
+            raise ModelError(f"{context}: input spans require const elements borrowed for the call")
         length_type = self.scalar(length["type"])
         if length_type not in ("u32", "u64"):
-            raise ModelError(f"{context}: byte length must be an unsigned 32-bit or 64-bit scalar")
-        return {"length": policy["length"], "lengthType": length_type, "nullable": policy["nullable"]}
+            raise ModelError(f"{context}: span length must be an unsigned 32-bit or 64-bit scalar")
+        span = {"length": policy["length"], "lengthType": length_type, "nullable": policy["nullable"]}
+        declaration = self.types.get(element.get("name"), {})
+        if declaration.get("kind") == "record":
+            name = declaration["name"]
+            if name not in self.record_arrays:
+                # Native new[] initializes all elements and honors native alignment.
+                # Keep element addressing and the maximum native array size in C++.
+                prefix = symbol(name) + '_Array'
+                self.record_arrays[name] = {
+                    "maxCount": self.export(prefix + 'MaxCount', 'uint32_t', [],
+                        f'return PTRDIFF_MAX / sizeof({name});'),
+                    "create": self.export(prefix + 'Create', 'uintptr_t', ['uint32_t count'],
+                        f'return reinterpret_cast<uintptr_t>(new (std::nothrow) {name}[count]{{}});'),
+                    "destroy": self.export(prefix + 'Destroy', 'void', ['uintptr_t pointer'],
+                        f'delete[] reinterpret_cast<{name}*>(pointer);'),
+                    "element": self.export(prefix + 'Element', 'uintptr_t', ['uintptr_t pointer', 'uint32_t index'],
+                        f'return reinterpret_cast<uintptr_t>(&reinterpret_cast<{name}*>(pointer)[index]);'),
+                }
+            span.update(record=short(name), **self.record_arrays[name])
+        elif element.get("kind") == "void" or element.get("name") in ("char_s", "char_u"):
+            # Existing void/character spans remain raw bytes, including embedded NULs.
+            span["type"] = 'u8'
+        elif element.get("kind") == "scalar" or declaration.get("kind") == "enum":
+            span["type"] = self.scalar(element)
+        else:
+            raise ModelError(f"{context}: input spans support only scalars and plain structs")
+        return span
+
+    @staticmethod
+    def span_ts(span):
+        if "record" in span:
+            return f'ReadonlyArray<{span["record"]}>'
+        return {"bool": "Uint8Array", "i8": "Int8Array | Uint8Array", "u8": "Uint8Array",
+                "i16": "Int16Array", "u16": "Uint16Array", "i32": "Int32Array", "u32": "Uint32Array",
+                "i64": "BigInt64Array", "u64": "BigUint64Array", "float": "Float32Array", "double": "Float64Array"}[span["type"]]
 
     def scalar(self, t):
         t = unalias(t)
@@ -236,7 +269,7 @@ class Generator:
 
         def include(t, used):
             t = unalias(t)
-            if t["kind"] == "reference":
+            if t["kind"] in ("reference", "pointer"):
                 t = unalias(t["target"])
             d = self.types.get(t.get("name"), {})
             if d.get("kind") != "record" or d["name"] in used:
@@ -291,7 +324,7 @@ class Generator:
                 raise ModelError(f"{name}: const fields need an explicit adapter")
             if as_output and "length" in field.get("policy", {}):
                 raise ModelError(f"{context}: output byte spans and arrays need an explicit adapter")
-            span = self.byte_span(field, d["fields"], context) if as_input else None
+            span = self.input_span(field, d["fields"], context) if as_input else None
             if span:
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
                     'uint64_t', ['uintptr_t pointer'],
@@ -299,8 +332,8 @@ class Generator:
                 setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
                     ['uintptr_t pointer', 'uintptr_t data'],
                     f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
-                rec["fields"][field["name"]] = {"bytes": span, "set": setter}
-                self.ts.append(f'  {field["name"]}?: Uint8Array' + (' | null;' if span['nullable'] else ';'))
+                rec["fields"][field["name"]] = {"span": span, "set": setter}
+                self.ts.append(f'  {field["name"]}?: {self.span_ts(span)}' + (' | null;' if span['nullable'] else ';'))
                 continue
             string = None
             if as_input:
@@ -368,12 +401,12 @@ class Generator:
             if p.get("default") is not None:
                 raise ModelError(f"{name}::{pname}: default arguments need an explicit adapter")
             t, policy = unalias(p["type"]), p.get("policy", {})
-            span = self.byte_span(p, d["parameters"], name + "::" + pname)
+            span = self.input_span(p, d["parameters"], name + "::" + pname)
             if span:
                 native_params.append('uintptr_t ' + pname)
                 native_args.append(f'reinterpret_cast<{cpp_type(p["type"])}>({pname})')
-                parameters.append({"name": pname, "bytes": span})
-                ts_params.append(f'{pname}: Uint8Array' + (' | null' if span['nullable'] else ''))
+                parameters.append({"name": pname, "span": span})
+                ts_params.append(f'{pname}: {self.span_ts(span)}' + (' | null' if span['nullable'] else ''))
                 continue
             string = self.string(p, name + "::" + pname)
             if string:

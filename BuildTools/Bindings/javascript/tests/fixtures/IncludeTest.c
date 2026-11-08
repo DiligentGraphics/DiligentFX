@@ -60,3 +60,11 @@ const MarshalSnapshotDesc* CheckCStructResult(IMarshalSnapshots* pSnapshots)
 {
     return IMarshalSnapshots_GetDesc(pSnapshots);
 }
+
+Float64 CheckCArrayInput(const MarshalArrayItem* pItems, Uint32 Count)
+{
+    MarshalArrayDesc Desc = {0};
+    Desc.pItems           = pItems;
+    Desc.ItemCount        = Count;
+    return Diligent_ReadArrayDesc(&Desc, 0, 0);
+}

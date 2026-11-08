@@ -129,6 +129,61 @@ class GeneratorTest(unittest.TestCase):
         self.assertNotIn("IObject", cpp)
         self.assertNotIn("binding_Release", cpp)
 
+    def test_input_arrays_have_element_types_and_contiguous_native_storage(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("CheckArrayFloat32(pValues: Float32Array, Count: number)", types)
+        self.assertIn("CheckArrayUint64(pValues: BigUint64Array, Count: bigint)", types)
+        self.assertIn("pItems?: ReadonlyArray<MarshalArrayItem> | null", types)
+        self.assertIn("pSamples?: Uint16Array | null", types)
+        self.assertIn("new (std::nothrow) Diligent::MarshalArrayItem[count]{}", cpp)
+        self.assertIn("delete[] reinterpret_cast<Diligent::MarshalArrayItem*>(pointer)", cpp)
+        self.assertIn("PTRDIFF_MAX / sizeof(Diligent::MarshalArrayItem)", cpp)
+        self.assertEqual(cpp.count("uintptr_t binding_Diligent_MarshalArrayItem_ArrayCreate("), 1)
+        span = generator.schema["records"]["MarshalArrayDesc"]["fields"]["pItems"]["span"]
+        self.assertEqual(span["record"], "MarshalArrayItem")
+        self.assertEqual(span["length"], "ItemCount")
+        self.assertEqual(span["lengthType"], "u32")
+
+    def test_input_arrays_require_supported_counts_and_call_scoped_const_elements(self):
+        for key, value in [("direction", "out"), ("ownership", "owned"), ("lifetime", "object"),
+                           ("const", False), ("volatile", True), ("count", "int")]:
+            with self.subTest(key=key):
+                model = deepcopy(MODEL)
+                function = self.declaration(model, "CheckArrayFloat32")
+                if key in ("const", "volatile"):
+                    function["parameters"][0]["type"]["target"][key] = value
+                elif key == "count":
+                    function["parameters"][1]["type"] = {"kind": "scalar", "name": value, "bits": 32, "const": False, "volatile": False}
+                else:
+                    function["parameters"][0]["policy"][key] = value
+                with self.assertRaisesRegex(ModelError, "input spans require|span length must be"):
+                    self.emit(model)
+
+    def test_input_arrays_reject_interface_pointer_elements(self):
+        model = deepcopy(MODEL)
+        parameter = self.declaration(model, "ReadArrayItem")["parameters"][0]
+        parameter["type"]["target"] = {
+            "kind": "pointer", "const": True, "volatile": False,
+            "target": {"kind": "named", "name": "Diligent::IMarshalObject", "const": False, "volatile": False}}
+        with self.assertRaisesRegex(ModelError, "input spans support only scalars and plain structs"):
+            self.emit(model)
+
+    def test_array_elements_used_as_results_still_have_input_marshalling(self):
+        model = deepcopy(MODEL)
+        function = self.declaration(model, "ReadArrayItem")
+        function["result"] = {
+            "type": {"kind": "reference", "const": False, "volatile": False,
+                     "target": {"kind": "named", "name": "Diligent::MarshalNestedVector", "const": True, "volatile": False}},
+            "policy": {"direction": "out", "ownership": "borrowed", "nullable": False, "lifetime": "call"}}
+        function["parameters"][0]["type"]["target"] = function["result"]["type"]["target"]
+        model["declarations"] = [function, self.declaration(model, "MarshalNestedVector")]
+        generator = Generator(model, "BindingTests", ["Interfaces.h"], {})
+        generator.generate()
+        fields = generator.schema["records"]["MarshalNestedVector"]["fields"]
+        self.assertIn("get", fields["x"])
+        self.assertIn("set", fields["x"])
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"
@@ -252,7 +307,7 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, error):
                     self.emit(adapters=adapters)
 
-    def test_byte_spans_reject_retention_and_non_byte_data(self):
+    def test_input_spans_reject_retention_and_mutable_data(self):
         for change in ["lifetime", "type", "length"]:
             with self.subTest(change=change):
                 model = deepcopy(MODEL)
@@ -263,7 +318,7 @@ class GeneratorTest(unittest.TestCase):
                     field["type"]["target"]["const"] = False
                 else:
                     field["policy"]["length"] = "NoSuchField"
-                with self.assertRaisesRegex(ModelError, "byte spans require"):
+                with self.assertRaisesRegex(ModelError, "input spans require"):
                     self.emit(model)
 
     def test_native_only_fields_and_fixed_arguments_preserve_the_model(self):

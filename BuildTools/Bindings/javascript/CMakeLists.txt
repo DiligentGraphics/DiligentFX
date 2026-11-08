@@ -51,6 +51,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/Strings.cpp"
     "${TEST_SOURCE}/fixtures/NestedStructs.cpp"
     "${TEST_SOURCE}/fixtures/StructResults.cpp"
+    "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/Implementation.cpp"
     "${TEST_SOURCE}/fixtures/IncludeTest.c")
 add_dependencies(BindingTestsWasm Bindings-GenerateJavaScriptTests)
@@ -78,6 +79,8 @@ add_test(NAME Bindings-JavaScriptNestedStructs
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_nested_structs.mjs" "${GENERATED}/BindingTests.mjs")
 add_test(NAME Bindings-JavaScriptStructResults
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_struct_results.mjs" "${GENERATED}/BindingTests.mjs")
+add_test(NAME Bindings-JavaScriptInputArrays
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_input_arrays.mjs" "${GENERATED}/BindingTests.mjs")
 add_test(NAME Bindings-JavaScriptBrowserHarness
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_browser_harness.mjs")
 set_tests_properties(
@@ -88,6 +91,7 @@ set_tests_properties(
     Bindings-JavaScriptBrowserHarness
     Bindings-JavaScriptNestedStructs
     Bindings-JavaScriptStructResults
+    Bindings-JavaScriptInputArrays
     PROPERTIES LABELS "Bindings;JavaScript")
 
 add_test(NAME Bindings-JavaScriptNestedStructsBrowser
@@ -101,3 +105,9 @@ add_test(NAME Bindings-JavaScriptStructResultsBrowser
         --module "${GENERATED}/BindingTests.mjs"
         --suite "${TEST_SOURCE}/struct_result_tests.mjs")
 set_tests_properties(Bindings-JavaScriptStructResultsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptInputArraysBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs"
+        --suite "${TEST_SOURCE}/input_array_tests.mjs")
+set_tests_properties(Bindings-JavaScriptInputArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

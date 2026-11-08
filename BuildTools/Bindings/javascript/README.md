@@ -8,7 +8,7 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-The nested-input and struct-result suites also run in a headless browser.
+The nested-input, struct-result, and input-array suites also run in a headless browser.
 No renderer or GPU is required.
 
 ## Build and run
@@ -38,9 +38,9 @@ Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
 CTest runs the Python emitter tests, Node scalar/interface, byte-buffer, and
-string, nested-input, and struct-result marshalling suites, and browser-harness
-unit tests as separate entries. The nested-input and struct-result cases run in
-both Node and the browser.
+string, nested-input, struct-result, and input-array marshalling suites, and
+browser-harness unit tests as separate entries. The nested-input, struct-result,
+and input-array cases run in both Node and the browser.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -124,12 +124,12 @@ The backend supports scalar fields and nested value structs in plain input descr
 single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
 result. Borrowed const-reference struct results become JavaScript snapshots.
-It also supports UTF-8 strings, input byte spans, and the scoped byte adapters
-described below. It rejects unsupported declarations and policies instead of silently
-omitting them. General arrays, callbacks, struct output parameters, by-value
-struct results, default function arguments, and other manual adapters are not
-implemented yet. The first production
-integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
+It also supports UTF-8 strings, scalar/struct input arrays, input byte spans, and
+the scoped byte adapters described below. It rejects unsupported declarations
+and policies instead of silently omitting them. Output arrays, fixed-size arrays,
+interface-pointer arrays, callbacks, struct output parameters, by-value struct
+results, default function arguments, and other manual adapters are not implemented
+yet. The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
 
 Add target-independent native type information to the shared model. Put JavaScript
 conversion and lifetime behavior in this backend. Add a native fixture and an
@@ -192,6 +192,46 @@ Malformed native UTF-8 is rejected; a leading U+FEFF is preserved as content.
 
 String conversion uses the current Wasm heap after allocation and native calls,
 including memory growth. Native addresses and string views are not exposed.
+
+## Input arrays
+
+An input `const T*` with a `length` policy naming an unsigned 32-bit or 64-bit
+integer sibling becomes an array input. This works for parameters and descriptor
+fields. Counts remain explicit and measure elements; omitted descriptor fields
+retain native defaults. Metadata requires `direction: in`, `ownership: borrowed`,
+and `lifetime: call`. Native code that retains the data must copy it during the call.
+
+- Integer and floating-point arrays use the corresponding typed array:
+  `Int16Array`, `Uint32Array`, `BigInt64Array`, `Float32Array`, and so on.
+  Enums use the typed array matching their underlying integer type.
+  Boolean arrays use `Uint8Array` containing only zero and one.
+- Struct arrays use `ReadonlyArray<T>` in TypeScript and arrays of objects in
+  JavaScript. One contiguous native allocation initializes every element with its
+  native defaults. Each object overrides only supplied fields, using the same
+  nested-struct, string, and array conversions as a standalone input descriptor.
+- `const void*` and character spans keep their existing `Uint8Array` byte-input
+  convention. Signed eight-bit arrays also continue accepting `Uint8Array` as raw
+  byte representations, in addition to `Int8Array`.
+
+Only the requested prefix is copied; a typed array's byte offset is respected.
+Counts larger than the supplied array or supported native storage are rejected
+before calling the API. Missing struct elements and invalid fields are errors.
+An empty array with a zero count becomes a null pointer. Explicit `null` is allowed
+only with `nullable: true`; the native API determines its meaning for the given
+count. Pointer/count descriptor fields are processed after counts are initialized,
+so JavaScript property order does not change the result.
+
+All temporary arrays and nested data are released after the call, including when
+a later element, argument, or property getter fails. Input conversion does not
+modify the JavaScript arrays. Native pointers are never exposed.
+
+```javascript
+// Given a generated function with const VertexAttribute* pAttributes and Uint32 Count:
+api.UseAttributes([{Semantic: "POSITION"}, {Semantic: "NORMAL"}], 2);
+```
+
+Output arrays, fixed-size arrays, and arrays of interface pointers are not supported
+yet. Array support does not change the snapshot restrictions described above.
 
 ## Byte inputs
 
