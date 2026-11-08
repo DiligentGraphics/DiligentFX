@@ -18,6 +18,8 @@ The model and generator tests separately check declarations and metadata.
 
 | `skinning_tests.mjs` | Skeleton/skin creation and descriptions; every pose and pose-writer method, native-sized matrix outputs, scene skin component |
 
+| `morph_tests.mjs` | Blob-backed target creation/reflection; every weights method; mesh weight factory; scene morph component and removal |
+
 Native callbacks, externally supplied thread pools, importer implementations,
 and GPU/backend objects are not exposed. Asset-manager `Stop()` takes a native device context and remains outside the
 CPU-only binding subset; disposing the engine performs normal shutdown.

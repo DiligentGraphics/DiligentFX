@@ -211,7 +211,11 @@
     "Diligent::IRadientSurfaceMaterialWriter",
     "Diligent::SetStandardMaterialTextureParameters",
     "Diligent::InvalidRadientJointIndex",
-    "Diligent::RADIENT_COMPONENT_TYPE_SKIN"
+    "Diligent::RADIENT_COMPONENT_TYPE_SKIN",
+    "Diligent::RADIENT_COMPONENT_TYPE_MORPH",
+    "Diligent::RadientMorphTargetPositionSemantic",
+    "Diligent::RadientMorphTargetNormalSemantic",
+    "Diligent::RadientMorphTargetTangentSemantic"
   ],
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -331,7 +335,8 @@
         "GetMesh",
         "GetMeshRenderer",
         "GetMaterialBindings",
-        "GetSkin"
+        "GetSkin",
+        "GetMorph"
       ],
       "methods": {
         "GetDesc": {
@@ -436,6 +441,11 @@
           "parameters": {
             "Skin": {"direction": "out"}
           }
+        },
+        "GetMorph": {
+          "parameters": {
+            "Morph": {"direction": "out"}
+          }
         }
       }
     },
@@ -456,7 +466,8 @@
         "SetMesh",
         "SetMeshRenderer",
         "SetMaterialBindings",
-        "SetSkin"
+        "SetSkin",
+        "SetMorph"
       ],
       "methods": {
         "GetScene": {
@@ -520,8 +531,16 @@
     },
     "Diligent::IRadientMeshAsset": {
       "include_methods": [
-        "GetDesc"
-      ]
+        "GetDesc",
+        "CreateMorphTargetWeights"
+      ],
+      "methods": {
+        "CreateMorphTargetWeights": {
+          "parameters": {
+            "ppWeights": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        }
+      }
     },
     "Diligent::IRadientMaterialAsset": {
       "include_methods": [
@@ -865,6 +884,34 @@
       "fields": {
         "pSkin": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pPose": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::IRadientMorphTargetWeights": {
+      "include_methods": [
+        "GetMesh",
+        "GetVersion",
+        "GetWeightCount",
+        "GetWeights",
+        "SetWeights",
+        "ResetToDefaults"
+      ],
+      "methods": {
+        "GetMesh": {
+          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+        },
+        "GetWeights": {
+          "result": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "object", "length_method": "GetWeightCount"}
+        },
+        "SetWeights": {
+          "parameters": {
+            "pWeights": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "WeightCount"}
+          }
+        }
+      }
+    },
+    "Diligent::RadientMorphComponent": {
+      "fields": {
+        "pWeights": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     }
   }

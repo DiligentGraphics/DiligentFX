@@ -260,3 +260,7 @@ support deferred propagation just like native code. `ComputeSkinningMatrices`
 queries the skin joint count natively and returns an array of matrix snapshots;
 JavaScript does not allocate or size native matrix storage. Its optional boolean
 arguments retain their native defaults.
+
+Morph data uses blob-backed deltas in mesh creation. Create weights after mesh
+CPU loading completes. `GetWeights()` returns a copied `Float32Array`, sized from
+`GetWeightCount()` natively; use `SetWeights()` to modify the native object.
