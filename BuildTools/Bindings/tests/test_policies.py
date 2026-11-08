@@ -143,12 +143,12 @@ class PolicyTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, message):
                     self.apply(config)
 
-    def test_requires_policies_for_referenced_types(self):
+    def test_rejects_incomplete_serialized_models(self):
         config = function_config()
         del config["declarations"]["Diligent::IObject"]
         model = copy.deepcopy(self.model)
         model["declarations"] = [decl for decl in model["declarations"] if decl["name"] != "Diligent::IObject"]
-        with self.assertRaisesRegex(ModelError, "types need explicit policies: Diligent::IObject"):
+        with self.assertRaisesRegex(ModelError, "referenced types are missing from the model: Diligent::IObject"):
             apply_policies(model, config["declarations"], self.symbols)
 
     def test_manual_adapter_is_explicit(self):

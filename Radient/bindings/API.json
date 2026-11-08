@@ -5,16 +5,25 @@
     "Radient/interface/RadientEngine.h",
     "../DiligentCore/Common/interface/ThreadPool.h"
   ],
+  "exports": [
+    "Diligent::CreateRadientDataBlob",
+    "Diligent::CreateRadientEngine",
+    "Diligent::CreateRadientMutableDataBlob",
+    "Diligent::InvalidRadientEntityID",
+    "Diligent::RADIENT_COMPONENT_TYPE_CAMERA",
+    "Diligent::RADIENT_COMPONENT_TYPE_LIGHT",
+    "Diligent::RADIENT_COMPONENT_TYPE_TRANSFORM",
+    "Diligent::RadientComponentTypeID",
+    "Diligent::RadientEntityID",
+    "Diligent::RadientRevision"
+  ],
   "declarations": {
     "Diligent::IObject": {
       "binding": "external",
       "reason": "The language runtime supplies reference counting and interface queries.",
       "ownership": "reference_counted"
     },
-    "Diligent::RADIENT_STATUS": {
-      "role": "status"
-    },
-    "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE": {},
+    "Diligent::RADIENT_STATUS": {"role": "status"},
     "Diligent::RadientDataBlobCreateInfo": {
       "fields": {
         "pData": {
@@ -37,196 +46,56 @@
       }
     },
     "Diligent::IRadientDataBlob": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_RadientDataBlob",
       "methods": {
         "BeginRead": {
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.",
-          "parameters": {
-            "ppData": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "read_scope"
-            }
-          }
+          "parameters": {"ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}}
         },
-        "EndRead": {
-          "binding": "manual",
-          "reason": "Called by the scoped read-access adapter."
-        }
+        "EndRead": {"binding": "manual", "reason": "Called by the scoped read-access adapter."}
       }
     },
     "Diligent::IRadientMutableDataBlob": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_RadientMutableDataBlob",
       "methods": {
         "BeginWrite": {
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.",
-          "parameters": {
-            "ppData": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "write_scope"
-            }
-          }
+          "parameters": {"ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}}
         },
-        "EndWrite": {
-          "binding": "manual",
-          "reason": "Called by the scoped write-access adapter."
-        }
+        "EndWrite": {"binding": "manual", "reason": "Called by the scoped write-access adapter."}
       }
     },
-    "Diligent::CreateRadientDataBlob": {
-      "parameters": {
-        "CreateInfo": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppBlob": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
-    },
-    "Diligent::CreateRadientMutableDataBlob": {
-      "parameters": {
-        "CreateInfo": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppBlob": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
-    },
-    "Diligent::RadientBackendCreateInfo": {
-      "binding": "external",
-      "reason": "Engine configuration uses native defaults until this subsystem is exposed."
-    },
-    "Diligent::RadientAssetManagerCreateInfo": {
-      "binding": "external",
-      "reason": "Engine configuration uses native defaults until this subsystem is exposed."
-    },
-    "Diligent::RadientResourceManagerCreateInfo": {
-      "binding": "external",
-      "reason": "Engine configuration uses native defaults until this subsystem is exposed."
-    },
-    "Diligent::IThreadPool": {
-      "binding": "external",
-      "reason": "Engine configuration uses native defaults until this subsystem is exposed."
-    },
+    "Diligent::CreateRadientDataBlob": {"parameters": {"ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}},
+    "Diligent::CreateRadientMutableDataBlob": {"parameters": {"ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}},
+    "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
+    "Diligent::RadientAssetManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
+    "Diligent::RadientResourceManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
+    "Diligent::IThreadPool": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientEngineCreateInfo": {
       "fields": {
-        "pThreadPool": {
-          "binding": "manual",
-          "reason": "Supplying a native thread pool requires a platform adapter."
-        }
+        "pThreadPool": {"binding": "manual", "reason": "Supplying a native thread pool requires a platform adapter."}
       }
     },
     "Diligent::CreateRadientEngine": {
-      "parameters": {
-        "EngineCI": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppEngine": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppEngine": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
     "Diligent::IRadientEngine": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_RadientEngine",
-      "include_methods": [
-        "CreateScene",
-        "CreateSceneWriter"
-      ],
+      "include_methods": ["CreateScene", "CreateSceneWriter"],
       "methods": {
         "CreateScene": {
-          "parameters": {
-            "CreateInfo": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            },
-            "ppScene": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "owned",
-              "lifetime": "caller"
-            }
-          }
+          "parameters": {"ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
         },
         "CreateSceneWriter": {
           "parameters": {
-            "pScene": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            },
-            "ppWriter": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "owned",
-              "lifetime": "caller"
-            }
+            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
     },
-    "Diligent::RADIENT_ENTITY_FLAGS": {},
-    "Diligent::RadientSceneCreateInfo": {},
-    "Diligent::RadientSceneRevisions": {},
-    "Diligent::RadientTransform": {},
-    "Diligent::RadientFloat3": {},
-    "Diligent::RadientQuaternion": {},
-    "Diligent::RadientMatrix4x4": {},
-    "Diligent::RadientEntityID": {},
-    "Diligent::RadientRevision": {},
-    "Diligent::InvalidRadientEntityID": {},
-    "Diligent::RadientSceneDesc": {
-      "fields": {
-        "Name": {
-          "direction": "inout",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::RadientEntityDesc": {
-      "fields": {
-        "Name": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
+    "Diligent::RadientSceneDesc": {"fields": {"Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}}},
+    "Diligent::RadientEntityDesc": {"fields": {"Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}}},
     "Diligent::IRadientScene": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_RadientScene",
       "include_methods": [
         "GetDesc",
         "IsEntityAlive",
@@ -249,114 +118,12 @@
         "HasComponent"
       ],
       "methods": {
-        "GetDesc": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "GetEntityName": {
-          "parameters": {
-            "Name": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetEntityFlags": {
-          "parameters": {
-            "Flags": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetEntityOwnVisibility": {
-          "parameters": {
-            "Visible": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetEntityEffectiveVisibility": {
-          "parameters": {
-            "Visible": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetCachedEntityEffectiveVisibility": {
-          "parameters": {
-            "Visible": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetParent": {
-          "parameters": {
-            "Parent": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetChildCount": {
-          "parameters": {
-            "ChildCount": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetLocalTransform": {
-          "parameters": {
-            "Transform": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetWorldMatrix": {
-          "parameters": {
-            "Matrix": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetCachedWorldMatrix": {
-          "parameters": {
-            "Matrix": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
+        "GetDesc": {"result": {"lifetime": "object"}},
+        "GetEntityName": {"parameters": {"Name": {"direction": "out", "ownership": "borrowed", "lifetime": "call"}}},
+        "GetEntityFlags": {"parameters": {"Flags": {"direction": "out"}}},
+        "GetEntityOwnVisibility": {"parameters": {"Visible": {"direction": "out"}}},
+        "GetEntityEffectiveVisibility": {"parameters": {"Visible": {"direction": "out"}}},
+        "GetCachedEntityEffectiveVisibility": {"parameters": {"Visible": {"direction": "out"}}},
         "GetRootEntities": {
           "parameters": {
             "pEntities": {
@@ -367,14 +134,11 @@
               "length": "Capacity",
               "written": "NumEntitiesWritten"
             },
-            "NumEntitiesWritten": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
+            "NumEntitiesWritten": {"direction": "out"}
           }
         },
+        "GetParent": {"parameters": {"Parent": {"direction": "out"}}},
+        "GetChildCount": {"parameters": {"ChildCount": {"direction": "out"}}},
         "GetChildren": {
           "parameters": {
             "pChildren": {
@@ -385,57 +149,19 @@
               "length": "ChildCount",
               "written": "NumChildrenWritten"
             },
-            "NumChildrenWritten": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
+            "NumChildrenWritten": {"direction": "out"}
           }
         },
-        "GetSceneRevisions": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "GetCamera": {
-          "parameters": {
-            "Camera": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetLight": {
-          "parameters": {
-            "Light": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "HasComponent": {
-          "parameters": {
-            "HasComponent": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        }
+        "GetLocalTransform": {"parameters": {"Transform": {"direction": "out"}}},
+        "GetWorldMatrix": {"parameters": {"Matrix": {"direction": "out"}}},
+        "GetCachedWorldMatrix": {"parameters": {"Matrix": {"direction": "out"}}},
+        "GetCamera": {"parameters": {"Camera": {"direction": "out"}}},
+        "GetLight": {"parameters": {"Light": {"direction": "out"}}},
+        "HasComponent": {"parameters": {"HasComponent": {"direction": "out"}}},
+        "GetSceneRevisions": {"result": {"lifetime": "object"}}
       }
     },
     "Diligent::IRadientSceneWriter": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_RadientSceneWriter",
       "include_methods": [
         "GetScene",
         "CreateEntity",
@@ -451,80 +177,10 @@
         "RemoveComponent"
       ],
       "methods": {
-        "GetScene": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "CreateEntity": {
-          "parameters": {
-            "Desc": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            },
-            "Entity": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "SetEntityName": {
-          "parameters": {
-            "Name": {
-              "direction": "in",
-              "nullable": true,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "SetLocalTransform": {
-          "parameters": {
-            "Transform": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "SetCamera": {
-          "parameters": {
-            "Camera": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "SetLight": {
-          "parameters": {
-            "Light": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        }
+        "GetScene": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}},
+        "CreateEntity": {"parameters": {"Entity": {"direction": "out"}}},
+        "SetEntityName": {"parameters": {"Name": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}}}
       }
-    },
-    "Diligent::RadientCameraComponent": {},
-    "Diligent::RadientLightComponent": {},
-    "Diligent::RadientFloat2": {},
-    "Diligent::RADIENT_CAMERA_PROJECTION": {},
-    "Diligent::RADIENT_LIGHT_TYPE": {},
-    "Diligent::RadientComponentTypeID": {},
-    "Diligent::RADIENT_COMPONENT_TYPE_CAMERA": {},
-    "Diligent::RADIENT_COMPONENT_TYPE_LIGHT": {},
-    "Diligent::RADIENT_COMPONENT_TYPE_TRANSFORM": {}
+    }
   }
 }

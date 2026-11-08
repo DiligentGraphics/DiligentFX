@@ -9,7 +9,7 @@ import os
 
 from clang import cindex
 
-from binding_model import ModelError
+from binding_model import ModelError, referenced_types
 
 
 @lru_cache(maxsize=1)
@@ -285,11 +285,13 @@ def describe_declaration(cursor, root, external, documentation, selected_methods
         raise ModelError(f"{name}: unsupported declaration {kind.name}")
     return result
 
-def extract_api(source_root, headers, declaration_names, target, clang_args=(), *, external_declarations=(), method_selections=None):
+def extract_api(source_root, headers, declaration_names, target, clang_args=(), *,
+                external_declarations=(), method_selections=None, include_dependencies=False):
     """Return a plain-data API model and available symbol names for policy validation.
 
-    This stage reads native declarations only. External declarations remain opaque;
-    their implementation is supplied by a language runtime or another binding.
+    This stage reads native declarations only. With include_dependencies, it
+    follows named types and bases used by the selected signatures and fields.
+    External declarations remain opaque and stop dependency traversal.
     """
     root = Path(source_root).resolve()
     configure_clang()
@@ -326,31 +328,36 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
         for cursor in parent.get_children():
             name = qualified_name(cursor)
             symbols.add(name)
-            if name in selected:
-                if cursor.kind == cindex.CursorKind.TYPEDEF_DECL:
-                    # `typedef struct T T` is the C spelling of the same record,
-                    # not a second declaration or a self-referencing alias.
-                    declaration = cursor.underlying_typedef_type.get_canonical().get_declaration()
-                    if declaration and qualified_name(declaration) == name:
-                        continue
-                if cursor.kind == cindex.CursorKind.FUNCTION_TEMPLATE:
-                    continue
-                if (cursor.kind == cindex.CursorKind.FUNCTION_DECL and
-                        clang_library().clang_Cursor_isFunctionInlined(cursor)):
-                    # Radient's free inline functions are C++ convenience helpers,
-                    # including overloads of the public out-of-line C API.
-                    continue
-                if cursor.kind == cindex.CursorKind.FUNCTION_DECL or cursor.is_definition():
-                    if name in declarations and declarations[name].get_usr() != cursor.get_usr():
-                        raise ModelError(f"{name}: overloaded declarations require explicit support")
-                    declarations[name] = cursor
+            # Index declarations before expanding dependencies. Only describe
+            # selected/reachable types, so unrelated APIs and C++ helpers do not
+            # impose policies or supported-type requirements on this binding.
+            if (cursor.kind in (cindex.CursorKind.STRUCT_DECL, cindex.CursorKind.CLASS_DECL,
+                                cindex.CursorKind.ENUM_DECL, cindex.CursorKind.TYPEDEF_DECL,
+                                cindex.CursorKind.VAR_DECL, cindex.CursorKind.FUNCTION_DECL) and
+                    (cursor.kind == cindex.CursorKind.FUNCTION_DECL or cursor.is_definition())):
+                declarations.setdefault(name, []).append(cursor)
             if cursor.kind in (cindex.CursorKind.NAMESPACE, cindex.CursorKind.LINKAGE_SPEC):
                 visit(cursor)
 
     visit(unit.cursor)
-    missing = selected - declarations.keys()
-    if missing:
-        raise ModelError("Declarations not found: " + ", ".join(sorted(missing)))
+
+    def find_declaration(name):
+        candidates = {}
+        for cursor in declarations.get(name, []):
+            if cursor.kind == cindex.CursorKind.TYPEDEF_DECL:
+                # The C spelling of a record is not a self-referencing alias.
+                declaration = cursor.underlying_typedef_type.get_canonical().get_declaration()
+                if declaration and qualified_name(declaration) == name:
+                    continue
+            if (cursor.kind == cindex.CursorKind.FUNCTION_DECL and
+                    clang_library().clang_Cursor_isFunctionInlined(cursor)):
+                continue
+            candidates[cursor.get_usr()] = cursor
+        if not candidates:
+            raise ModelError("Declarations not found: " + name)
+        if len(candidates) != 1:
+            raise ModelError(f"{name}: overloaded declarations require explicit support")
+        return next(iter(candidates.values()))
 
     source_lines = {}
 
@@ -381,7 +388,15 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
             index -= 1
         return "\n".join(reversed(comments)) or None
 
-    models = [describe_declaration(declarations[name], root, name in external, documentation,
-                                   (method_selections or {}).get(name))
-              for name in sorted(selected)]
-    return {"schema_version": 1, "target": target, "declarations": models}, symbols
+    models = {}
+    pending = set(selected)
+    while pending:
+        name = pending.pop()
+        declaration = describe_declaration(find_declaration(name), root, name in external, documentation,
+                                           (method_selections or {}).get(name))
+        models[name] = declaration
+        if include_dependencies:
+            dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
+            pending.update(dependencies - models.keys())
+    return {"schema_version": 1, "target": target,
+            "declarations": [models[name] for name in sorted(models)]}, symbols

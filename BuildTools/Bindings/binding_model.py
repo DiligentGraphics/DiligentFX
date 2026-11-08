@@ -43,10 +43,36 @@ def validate_method_selection(names, context):
         raise ModelError(f"{context}: include_methods must be a list of unique method names")
 
 
+def inferred_value_policy(value, *, is_result=False, is_field=False):
+    """Derive ordinary value-reference marshalling from the native type.
+
+    References are non-null and do not transfer ownership of their storage.
+    Value references are marshalled during the call (results are snapshots).
+    An API retaining an input reference must explicitly override that lifetime.
+    Pointer ownership/lifetime and mutable argument direction remain explicit.
+    """
+    native_type = unalias(value["type"])
+    if native_type["kind"] not in ("pointer", "reference"):
+        return {}
+    target = unalias(native_type["target"])
+    policy = {}
+    if is_result:
+        policy["direction"] = "out"
+    elif not is_field and target["const"]:
+        policy["direction"] = "in"
+    if native_type["kind"] == "reference":
+        policy["nullable"] = False
+        if target["kind"] not in ("pointer", "reference", "function"):
+            policy.update(ownership="borrowed", lifetime="call")
+    return policy
+
+
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
+    if binding == "automatic":
+        policy = dict(inferred_value_policy(value, is_result=is_result, is_field=is_field), **policy)
     if binding == "external":
         raise ModelError(f"{context}: external binding is only valid for declarations")
     if native_type["kind"] in ("pointer", "reference") and binding == "automatic":
@@ -189,10 +215,13 @@ def apply_policies(model, policies, symbols):
     """
     if model.get("schema_version") != 1:
         raise ModelError("Unsupported model schema_version")
+    for name, policy in policies.items():
+        validate_binding(policy, name)
     declarations = model["declarations"]
     names = {declaration["name"] for declaration in declarations}
-    if names != policies.keys():
-        raise ModelError("Policies must match the extracted declaration selection")
+    unused = policies.keys() - names
+    if unused:
+        raise ModelError("Policies refer to declarations outside the selected API: " + ", ".join(sorted(unused)))
     by_name = {declaration["name"]: declaration for declaration in declarations}
 
     def base_fields(declaration):
@@ -203,12 +232,27 @@ def apply_policies(model, policies, symbols):
             fields.extend(parent.get("fields", []))
         return fields
 
+    def reference_counted(name):
+        return (policies.get(name, {}).get("ownership") == "reference_counted" or
+                any(reference_counted(base) for base in by_name.get(name, {}).get("bases", [])))
+
     for declaration in declarations:
-        apply_declaration_policy(declaration, policies[declaration["name"]], base_fields(declaration))
+        name = declaration["name"]
+        policy = dict(policies.get(name, {}))
+        if declaration["kind"] == "interface":
+            if reference_counted(name):
+                policy.setdefault("ownership", "reference_counted")
+            # Diligent interfaces pair IFoo with the sibling IID_Foo constant.
+            # Use only an actually declared symbol; other naming needs an override.
+            namespace, separator, short_name = name.rpartition("::")
+            iid = namespace + separator + "IID_" + short_name[1:]
+            if short_name.startswith("I") and iid in symbols:
+                policy.setdefault("iid", iid)
+        apply_declaration_policy(declaration, policy, base_fields(declaration))
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:
-            raise ModelError(f"{declaration['name']}: types need explicit policies: {', '.join(sorted(missing))}")
+            raise ModelError(f"{declaration['name']}: referenced types are missing from the model: {', '.join(sorted(missing))}")
         iid = declaration["policy"].get("iid")
         if iid and iid not in symbols:
             raise ModelError(f"{declaration['name']}: interface ID not found: {iid}")

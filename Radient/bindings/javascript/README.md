@@ -142,8 +142,10 @@ using the runner image's preinstalled Chrome. No renderer or GPU is needed.
 
 ## Scenes
 
-`Radient/bindings/API.json` selects the native API; the adjacent `javascript/API.json`
-defines JavaScript adaptations. The Wasm target links the production Radient library.
+`Radient/bindings/API.json` selects entry points and supplies semantic overrides;
+referenced types, ordinary reference policies, and inherited interface ownership
+are discovered automatically. The adjacent `javascript/API.json` defines JavaScript
+adaptations. The Wasm target links the production Radient library.
 In addition to owning data blobs, it exposes engine/scene creation and scene writers
 for entity names, hierarchy, visibility, and transforms. Rendering, asset loading,
 and external thread pools are not exposed yet; their engine configuration fields

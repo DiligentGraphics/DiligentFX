@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract an explicitly selected native API into a language-neutral JSON model."""
+"""Extract selected API entry points and their types into a language-neutral model."""
 
 import argparse
 import json
@@ -12,21 +12,28 @@ from clang_parser import extract_api
 
 def build_model(source_root, config, target, clang_args=()):
     """Compose native extraction and policy validation for the selected API."""
-    validate_keys(config, {"schema_version", "headers", "clang_args", "declarations"}, "configuration")
+    validate_keys(config, {"schema_version", "headers", "clang_args", "exports", "declarations"}, "configuration")
     if config.get("schema_version") != 1:
         raise ModelError("Unsupported configuration schema_version")
     if not isinstance(config.get("headers"), list) or not config["headers"]:
         raise ModelError("Configuration must select entry headers")
-    if not isinstance(config.get("declarations"), dict) or not config["declarations"]:
-        raise ModelError("Configuration must select declarations")
-    policies = config["declarations"]
+    policies = config.get("declarations", {})
+    if not isinstance(policies, dict):
+        raise ModelError("declarations must contain semantic overrides")
+    # Older configurations select every annotated declaration. With exports,
+    # annotations only refine declarations reached from the selected roots.
+    exports = config.get("exports", list(policies))
+    if (not isinstance(exports, list) or not exports or
+            any(not isinstance(name, str) or not name for name in exports) or
+            len(set(exports)) != len(exports)):
+        raise ModelError("exports must be a nonempty list of unique declaration names")
     external = [name for name, policy in policies.items() if validate_binding(policy, name) == "external"]
     methods = {name: policy["include_methods"] for name, policy in policies.items() if "include_methods" in policy}
     for name, selection in methods.items():
         validate_method_selection(selection, name)
-    model, symbols = extract_api(source_root, config["headers"], policies.keys(), target,
+    model, symbols = extract_api(source_root, config["headers"], exports, target,
                                  config.get("clang_args", []) + list(clang_args),
-                                 external_declarations=external, method_selections=methods)
+                                 external_declarations=external, method_selections=methods, include_dependencies=True)
     return apply_policies(model, policies, symbols)
 
 

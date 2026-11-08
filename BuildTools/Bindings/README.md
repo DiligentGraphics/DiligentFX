@@ -146,14 +146,62 @@ artifact first. CTest never builds artifacts automatically.
 ## Metadata and model
 
 The configuration has a version, entry headers relative to the supplied source root,
-optional Clang arguments, and a map of fully qualified declaration names to
-policies. This explicit selection prevents accidentally exporting every included
-Core interface. Referenced records/enums and base interfaces must also be selected,
-or explicitly designated `external` when the language runtime supplies them.
+optional Clang arguments, an `exports` list of fully qualified API entry points,
+and optional `declarations` containing semantic overrides and interface-method
+selections. For example:
+
+```json
+{
+  "schema_version": 1,
+  "headers": ["Radient/interface/RadientSceneWriter.h"],
+  "exports": ["Diligent::IRadientSceneWriter"],
+  "declarations": {
+    "Diligent::IObject": {
+      "binding": "external",
+      "reason": "Runtime supplies reference counting",
+      "ownership": "reference_counted"
+    },
+    "Diligent::RADIENT_STATUS": {"role": "status"},
+    "Diligent::IRadientSceneWriter": {
+      "include_methods": ["SetLocalTransform", "CommitChanges"]
+    }
+  }
+}
+```
+
+Extraction automatically includes referenced records, enums, nested members,
+fixed-array element types, and bases. It follows aliases to their underlying types
+and handles recursive pointer graphs. No empty entries are needed for these types.
+Only selected methods contribute dependencies; unrelated APIs and C++ helpers stay
+out of the model. An `external` declaration stops traversal at a runtime-provided
+type. Standalone constants and typedef names still need selection if they are to
+be exported in their own right. Overrides for unreachable declarations are errors,
+so stale or misspelled configuration does not silently go unused.
+
+For compatibility, omitting `exports` selects the keys of `declarations` as roots.
+New configurations should separate selection from semantic overrides.
+
+The model fills in the following information before language generation:
+
+- References are non-null. Const-qualified parameter targets are inputs; returned
+  pointer/reference values are outputs.
+- Ordinary value references use borrowed, call-scoped storage; returned values
+  are copied to snapshots. Mutable reference arguments still require `direction`
+  (`out` or `inout`, or `in` for a borrowed mutable object). APIs retaining a value
+  reference must explicitly override its lifetime. References to pointers still
+  require the pointed-to value's ownership and lifetime.
+- Interface reference-counting follows inheritance from a base marked
+  `ownership: reference_counted`. Diligent's `IFoo` / `IID_Foo` convention is
+  recognized when the sibling ID constant actually exists. Other names can use an
+  explicit `iid` override; no missing ID is invented.
+
+These defaults never infer raw-pointer ownership, retention, nullability, or
+array length from parameter names. A null descriptor-field default does not prove
+that null is accepted by a native operation. Explicit overrides take precedence.
 
 Policies can be attached to declarations, record `fields`, interface `methods`,
-and function/method `parameters` and `result`. The checked-in blob policy is the
-concrete example. Pointer/reference values require:
+and function/method `parameters` and `result`. Only facts not supplied by the rules
+above need configuration. The resolved pointer/reference policies contain:
 
 - `direction`: `in`, `out`, or `inout`.
 - `nullable`: whether the native argument itself may be null. For `T**`, this
@@ -172,9 +220,13 @@ signatures remain in the model. `external` declarations retain their name and
 policy, without expanding APIs belonging to another runtime.
 
 Generation fails on missing declarations, stale member names, unknown policy
-keys, missing pointer policies, missing type policies, compiler errors, and
+keys, unresolved pointer semantics, missing type definitions, compiler errors, and
 unsupported types or overloads. Adding another API means selecting it, supplying
 its semantics, and extending extraction deliberately where necessary.
+
+The generated model always contains the complete effective policies, regardless
+of whether they were inferred or configured. Language backends do not need to repeat
+inference and continue to consume the same explicit representation.
 
 The JSON model records the target triple, ordered declarations, structured types
 (including aliases, qualifiers, pointer depth, and scalar widths), native defaults,

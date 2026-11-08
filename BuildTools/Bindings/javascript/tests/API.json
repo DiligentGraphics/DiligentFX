@@ -1,792 +1,309 @@
 {
   "schema_version": 1,
-  "headers": [
-    "fixtures/Interfaces.h"
+  "headers": ["fixtures/Interfaces.h"],
+  "exports": [
+    "Diligent::BorrowObject",
+    "Diligent::BorrowObjectOutput",
+    "Diligent::CheckArrayBool",
+    "Diligent::CheckArrayFloat32",
+    "Diligent::CheckArrayFloat64",
+    "Diligent::CheckArrayInt16",
+    "Diligent::CheckArrayInt32",
+    "Diligent::CheckArrayInt64",
+    "Diligent::CheckArrayInt8",
+    "Diligent::CheckArrayMode",
+    "Diligent::CheckArrayUint16",
+    "Diligent::CheckArrayUint32",
+    "Diligent::CheckArrayUint64",
+    "Diligent::CheckArrayUint8",
+    "Diligent::CheckBytes",
+    "Diligent::CheckCharacterBytes",
+    "Diligent::CheckCustomDesc",
+    "Diligent::CheckDefaultDesc",
+    "Diligent::CheckFixedInputs",
+    "Diligent::CheckScalars",
+    "Diligent::CheckStringBytes",
+    "Diligent::ChecksumBytes",
+    "Diligent::CreateComputedOutputs",
+    "Diligent::CreateMarshalArraySnapshots",
+    "Diligent::CreateMarshalBytes",
+    "Diligent::CreateMarshalObject",
+    "Diligent::CreateMarshalSnapshots",
+    "Diligent::CreateMarshalStrings",
+    "Diligent::DefaultArrayCount",
+    "Diligent::DefaultBorrowedDescriptor",
+    "Diligent::DefaultDescriptor",
+    "Diligent::DefaultOutput",
+    "Diligent::DefaultPointer",
+    "Diligent::DefaultStringLength",
+    "Diligent::EchoArrayDescriptor",
+    "Diligent::EchoDouble",
+    "Diligent::EchoEntityID",
+    "Diligent::EchoFixedArrays",
+    "Diligent::EchoFixedMatrix",
+    "Diligent::EchoFloat",
+    "Diligent::EchoInherited",
+    "Diligent::EchoInt16",
+    "Diligent::EchoInt32",
+    "Diligent::EchoInt64",
+    "Diligent::EchoInt8",
+    "Diligent::EchoInterfaces",
+    "Diligent::EchoMode",
+    "Diligent::EchoNullableString",
+    "Diligent::EchoPointerDesc",
+    "Diligent::EchoStatus",
+    "Diligent::EchoString",
+    "Diligent::EchoStringDescriptor",
+    "Diligent::EchoStructPointer",
+    "Diligent::EchoUint16",
+    "Diligent::EchoUint32",
+    "Diligent::EchoUint64",
+    "Diligent::EchoUint8",
+    "Diligent::FillComputedValues",
+    "Diligent::FillIds",
+    "Diligent::FillMultiple",
+    "Diligent::FillRecords",
+    "Diligent::GetArrayCallCount",
+    "Diligent::GetArrayItemName",
+    "Diligent::GetBufferReleaseCount",
+    "Diligent::GetDestructionCount",
+    "Diligent::GetFixedArrays",
+    "Diligent::GetFixedCallCount",
+    "Diligent::GetFixedReadOnlyArrays",
+    "Diligent::GetInvalidEntityID",
+    "Diligent::GetInvalidOutputArray",
+    "Diligent::GetInvalidUTF8",
+    "Diligent::GetLiveArraySnapshotCount",
+    "Diligent::GetLiveBufferCount",
+    "Diligent::GetLiveComputedOutputs",
+    "Diligent::GetLiveObjectCount",
+    "Diligent::GetLiveSnapshotCount",
+    "Diligent::GetLiveStringCount",
+    "Diligent::GetNestedCallCount",
+    "Diligent::GetNestedChecksum",
+    "Diligent::GetNestedName",
+    "Diligent::GetNestedTag",
+    "Diligent::GetObjectSize",
+    "Diligent::GetRecordedValue",
+    "Diligent::GetStaticDescriptor",
+    "Diligent::GetStaticOutputArray",
+    "Diligent::GetStaticString",
+    "Diligent::GetStringCallCount",
+    "Diligent::GetStringDescLabel",
+    "Diligent::GetStringDescName",
+    "Diligent::GetTestHeapSize",
+    "Diligent::GetWideConstant",
+    "Diligent::GrowTestHeap",
+    "Diligent::InvertBool",
+    "Diligent::MakeFailingOutputs",
+    "Diligent::MakeRecordOutput",
+    "Diligent::MarshalAnimationName",
+    "Diligent::MarshalAnimationNamePointer",
+    "Diligent::MarshalAutoOffset",
+    "Diligent::MarshalDefaultEnabled",
+    "Diligent::MarshalDefaultScale",
+    "Diligent::MarshalDescriptorAlias",
+    "Diligent::MarshalEntityAlias",
+    "Diligent::MarshalEntityID",
+    "Diligent::MarshalInvalidID",
+    "Diligent::MarshalLookup",
+    "Diligent::MarshalNames",
+    "Diligent::MarshalNegativeID",
+    "Diligent::MarshalPropertyName",
+    "Diligent::NextDefaultValue",
+    "Diligent::ReadArrayDesc",
+    "Diligent::ReadArrayGroup",
+    "Diligent::ReadArrayItem",
+    "Diligent::ReadFixedChild",
+    "Diligent::ReadFixedCube",
+    "Diligent::ReadFixedMatrix",
+    "Diligent::ReadFixedRow",
+    "Diligent::ReadFixedSample",
+    "Diligent::ReadNestedValue",
+    "Diligent::ReadObjectReference",
+    "Diligent::ReadRecordOutput",
+    "Diligent::ReadReferenceOutput",
+    "Diligent::ReadRequiredPointer",
+    "Diligent::ReadStructPointer",
+    "Diligent::ReadWideOutput",
+    "Diligent::RecordValue",
+    "Diligent::ResetFixedArrays",
+    "Diligent::SumArraySamples",
+    "Diligent::SumInherited",
+    "Diligent::SumInterfaceArray",
+    "Diligent::SumInterfaces",
+    "Diligent::UpdateFixedArrays",
+    "Diligent::WithDefaults",
+    "Diligent::WriteObjectReference"
   ],
   "declarations": {
     "Diligent::IObject": {
       "binding": "external",
-      "reason": "The JavaScript runtime owns native interface references"
+      "reason": "The JavaScript runtime owns native interface references",
+      "ownership": "reference_counted"
     },
-    "Diligent::MARSHAL_STATUS": {
-      "role": "status"
-    },
-    "Diligent::MARSHAL_MODE": {},
-    "Diligent::MarshalDesc": {},
-    "Diligent::IMarshalObject": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalObject",
-      "include_methods": [
-        "GetSize",
-        "GetRefCount"
-      ]
-    },
-    "Diligent::IMarshalMutableObject": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalMutableObject",
-      "methods": {
-        "CopySizeFrom": {
-          "parameters": {
-            "Source": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "CopySizeTo": {
-          "parameters": {
-            "Destination": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        }
-      }
-    },
+    "Diligent::MARSHAL_STATUS": {"role": "status"},
+    "Diligent::IMarshalObject": {"include_methods": ["GetSize", "GetRefCount"]},
+    "Diligent::IMarshalMutableObject": {"methods": {"CopySizeTo": {"parameters": {"Destination": {"direction": "in"}}}}},
     "Diligent::CreateMarshalObject": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppObject": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
-    "Diligent::CheckDefaultDesc": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::CheckCustomDesc": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetObjectSize": {
-      "parameters": {
-        "pObject": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
+    "Diligent::GetObjectSize": {"parameters": {"pObject": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}}},
     "Diligent::ReadWideOutput": {
-      "parameters": {
-        "pValue": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
+      "parameters": {"pValue": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"}}
     },
-    "Diligent::EchoInt8": {},
-    "Diligent::EchoUint8": {},
-    "Diligent::EchoInt16": {},
-    "Diligent::EchoUint16": {},
-    "Diligent::EchoInt32": {},
-    "Diligent::EchoUint32": {},
-    "Diligent::EchoInt64": {},
-    "Diligent::EchoUint64": {},
-    "Diligent::EchoFloat": {},
-    "Diligent::EchoDouble": {},
-    "Diligent::InvertBool": {},
-    "Diligent::EchoMode": {},
-    "Diligent::EchoStatus": {},
-    "Diligent::CheckScalars": {},
-    "Diligent::GetWideConstant": {},
-    "Diligent::RecordValue": {},
-    "Diligent::GetRecordedValue": {},
-    "Diligent::GetLiveObjectCount": {},
-    "Diligent::GetDestructionCount": {},
     "Diligent::MarshalBufferDesc": {
       "fields": {
-        "pBytes": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ByteCount"
-        }
+        "pBytes": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ByteCount"}
       }
     },
     "Diligent::IMarshalBytes": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalBytes",
       "methods": {
         "MapRead": {
           "binding": "manual",
           "reason": "The scoped byte adapter retains access and the owning interface.",
-          "parameters": {
-            "ppData": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "read_scope"
-            }
-          }
+          "parameters": {"ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}}
         },
-        "UnmapRead": {
-          "binding": "manual",
-          "reason": "Called only when the scoped byte adapter is disposed."
-        },
+        "UnmapRead": {"binding": "manual", "reason": "Called only when the scoped byte adapter is disposed."},
         "MapWrite": {
           "binding": "manual",
           "reason": "The scoped byte adapter retains access and the owning interface.",
-          "parameters": {
-            "ppData": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "write_scope"
-            }
-          }
+          "parameters": {"ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}}
         },
-        "UnmapWrite": {
-          "binding": "manual",
-          "reason": "Called only when the scoped byte adapter is disposed."
-        }
+        "UnmapWrite": {"binding": "manual", "reason": "Called only when the scoped byte adapter is disposed."}
       }
     },
     "Diligent::CreateMarshalBytes": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppBuffer": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppBuffer": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
     "Diligent::ChecksumBytes": {
-      "parameters": {
-        "pBytes": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ByteCount"
-        }
-      }
+      "parameters": {"pBytes": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "ByteCount"}}
     },
     "Diligent::CheckBytes": {
-      "parameters": {
-        "pBytes": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ByteCount"
-        }
-      }
+      "parameters": {"pBytes": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "ByteCount"}}
     },
-    "Diligent::GetLiveBufferCount": {},
-    "Diligent::GetBufferReleaseCount": {},
-    "Diligent::GetTestHeapSize": {},
-    "Diligent::GrowTestHeap": {},
     "Diligent::MarshalStringDesc": {
       "fields": {
-        "Name": {
-          "direction": "inout",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "Label": {
-          "direction": "inout",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
+        "Name": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "Label": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     },
     "Diligent::IMarshalStrings": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalStrings",
       "methods": {
-        "SetText": {
-          "parameters": {
-            "Text": {
-              "direction": "in",
-              "nullable": true,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
-          }
-        },
-        "GetText": {
-          "result": {
-            "direction": "out",
-            "nullable": true,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "ReadText": {
-          "parameters": {
-            "Text": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "object"
-            }
-          }
-        },
+        "SetText": {"parameters": {"Text": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}}},
+        "GetText": {"result": {"nullable": true, "ownership": "borrowed", "lifetime": "object"}},
+        "ReadText": {"parameters": {"Text": {"direction": "out", "ownership": "borrowed", "lifetime": "object"}}},
         "ReadTextPointer": {
-          "parameters": {
-            "ppText": {
-              "direction": "out",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "object"
-            }
-          }
+          "parameters": {"ppText": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}}
         }
       }
     },
     "Diligent::CreateMarshalStrings": {
       "parameters": {
-        "Text": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
+        "Text": {"nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "ppObject": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
-    "Diligent::GetStringDescName": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::GetStringDescLabel": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
+    "Diligent::GetStringDescName": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}},
+    "Diligent::GetStringDescLabel": {"result": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}},
     "Diligent::EchoString": {
-      "parameters": {
-        "Text": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
+      "parameters": {"Text": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}},
+      "result": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
     },
     "Diligent::EchoNullableString": {
-      "parameters": {
-        "Text": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
+      "parameters": {"Text": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}},
+      "result": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
     },
-    "Diligent::CheckStringBytes": {
-      "parameters": {
-        "Text": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetStaticString": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::GetInvalidUTF8": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::GetStringCallCount": {},
-    "Diligent::GetLiveStringCount": {},
+    "Diligent::CheckStringBytes": {"parameters": {"Text": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}}},
+    "Diligent::GetStaticString": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "static"}},
+    "Diligent::GetInvalidUTF8": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "static"}},
     "Diligent::CheckCharacterBytes": {
-      "parameters": {
-        "Bytes": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ByteCount"
-        }
-      }
+      "parameters": {"Bytes": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "ByteCount"}}
     },
-    "Diligent::MarshalNestedVector": {},
-    "Diligent::MarshalNestedTransform": {},
     "Diligent::MarshalNestedData": {
       "fields": {
-        "Name": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "pBytes": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ByteCount"
-        }
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pBytes": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ByteCount"}
       }
     },
-    "Diligent::MarshalNestedDesc": {},
-    "Diligent::ReadNestedValue": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetNestedTag": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetNestedName": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::GetNestedChecksum": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetNestedCallCount": {},
-    "Diligent::MarshalSnapshotDesc": {
-      "fields": {
-        "Name": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object"
-        }
-      }
-    },
-    "Diligent::MarshalSnapshotChild": {
-      "fields": {
-        "Label": {
-          "direction": "out",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "object"
-        }
-      }
-    },
+    "Diligent::GetNestedName": {"result": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}},
+    "Diligent::MarshalSnapshotDesc": {"fields": {"Name": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}}},
+    "Diligent::MarshalSnapshotChild": {"fields": {"Label": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "object"}}},
     "Diligent::IMarshalSnapshots": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalSnapshots",
       "methods": {
-        "GetDesc": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "GetDescAfterGrowingMemory": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
+        "GetDesc": {"result": {"lifetime": "object"}},
+        "GetDescAfterGrowingMemory": {"result": {"lifetime": "object"}},
         "Update": {
           "parameters": {
-            "Name": {
-              "direction": "in",
-              "nullable": true,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            },
-            "Label": {
-              "direction": "in",
-              "nullable": true,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            }
+            "Name": {"nullable": true, "ownership": "borrowed", "lifetime": "call"},
+            "Label": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }
     },
     "Diligent::CreateMarshalSnapshots": {
-      "parameters": {
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppObject": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
-    "Diligent::GetStaticDescriptor": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::EchoStringDescriptor": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::GetLiveSnapshotCount": {},
+    "Diligent::GetStaticDescriptor": {"result": {"lifetime": "static"}},
     "Diligent::MarshalArrayItem": {
       "fields": {
-        "Name": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "pValues": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ValueCount"
-        }
+        "Name": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "pValues": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ValueCount"}
       }
     },
     "Diligent::MarshalArrayDesc": {
       "fields": {
-        "pItems": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "ItemCount"
-        },
-        "pSamples": {
-          "direction": "in",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "SampleCount"
-        }
+        "pItems": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ItemCount"},
+        "pSamples": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "SampleCount"}
       }
     },
     "Diligent::CheckArrayInt8": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayUint8": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayInt16": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayUint16": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayInt32": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayUint32": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayInt64": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayUint64": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayFloat32": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayFloat64": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayBool": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
     "Diligent::CheckArrayMode": {
-      "parameters": {
-        "pValues": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pValues": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
-    "Diligent::ReadArrayItem": {
-      "parameters": {
-        "pItems": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
-    },
+    "Diligent::ReadArrayItem": {"parameters": {"pItems": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}},
     "Diligent::GetArrayItemName": {
-      "parameters": {
-        "pItems": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::ReadArrayDesc": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::SumArraySamples": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
+      "parameters": {"pItems": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}},
+      "result": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
     },
     "Diligent::ReadArrayGroup": {
-      "parameters": {
-        "pGroups": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call",
-          "length": "Count"
-        }
-      }
+      "parameters": {"pGroups": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "Count"}}
     },
-    "Diligent::GetArrayCallCount": {},
     "Diligent::MarshalOutputArrayItem": {
       "fields": {
-        "Label": {
-          "direction": "inout",
-          "nullable": true,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
+        "Label": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
         "pSamples": {
           "direction": "inout",
           "nullable": true,
@@ -809,69 +326,15 @@
     },
     "Diligent::MarshalOutputArrayDesc": {
       "fields": {
-        "pInt8": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pUint8": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pInt16": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pUint16": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pInt32": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pUint32": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pInt64": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pUint64": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pFloat32": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
+        "pInt8": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pUint8": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pInt16": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pUint16": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pInt32": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pUint32": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pInt64": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pUint64": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pFloat32": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
         "pFloat64": {
           "direction": "out",
           "nullable": false,
@@ -879,27 +342,9 @@
           "lifetime": "object",
           "length": "WideCount"
         },
-        "pBool": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pMARSHAL_MODE": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
-        "pChar": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "object",
-          "length": "Count"
-        },
+        "pBool": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pMARSHAL_MODE": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
+        "pChar": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"},
         "pGroups": {
           "direction": "out",
           "nullable": false,
@@ -911,12 +356,7 @@
     },
     "Diligent::MarshalArrayRoundTrip": {
       "fields": {
-        "Name": {
-          "direction": "inout",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
+        "Name": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
         "pItems": {
           "direction": "inout",
           "nullable": true,
@@ -934,123 +374,27 @@
       }
     },
     "Diligent::IMarshalArraySnapshots": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalArraySnapshots",
       "methods": {
-        "GetDesc": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "GetDescAfterGrowingMemory": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
-        "GetValues": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object",
-            "length": "Count"
-          }
-        },
-        "GetItems": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object",
-            "length": "Count"
-          }
-        },
-        "Update": {},
-        "GetValueCount": {},
-        "GetItemCount": {},
-        "SetValueCount": {},
+        "GetDesc": {"result": {"lifetime": "object"}},
+        "GetDescAfterGrowingMemory": {"result": {"lifetime": "object"}},
+        "GetValues": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"}},
+        "GetItems": {"result": {"nullable": false, "ownership": "borrowed", "lifetime": "object", "length": "Count"}},
         "GetAllValues": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "lifetime": "object",
-            "ownership": "borrowed",
-            "length_method": "GetValueCount"
-          }
+          "result": {"nullable": false, "lifetime": "object", "ownership": "borrowed", "length_method": "GetValueCount"}
         },
         "GetAllItems": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "lifetime": "object",
-            "ownership": "borrowed",
-            "length_method": "GetItemCount"
-          }
+          "result": {"nullable": false, "lifetime": "object", "ownership": "borrowed", "length_method": "GetItemCount"}
         }
       }
     },
     "Diligent::CreateMarshalArraySnapshots": {
-      "parameters": {
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppObject": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
-    "Diligent::EchoArrayDescriptor": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::GetInvalidOutputArray": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::GetStaticOutputArray": {
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "static",
-        "length": "Count"
-      }
-    },
-    "Diligent::GetLiveArraySnapshotCount": {},
-    "Diligent::MarshalFixedMatrix": {},
-    "Diligent::MarshalFixedArrays": {},
-    "Diligent::MarshalFixedReadOnly": {},
-    "Diligent::MarshalFixedReadOnlyElement": {},
+    "Diligent::GetInvalidOutputArray": {"result": {"lifetime": "static"}},
+    "Diligent::GetStaticOutputArray": {"result": {"nullable": true, "ownership": "borrowed", "lifetime": "static", "length": "Count"}},
     "Diligent::MarshalFixedChild": {
       "fields": {
-        "Label": {
-          "direction": "inout",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
+        "Label": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
         "pExtra": {
           "direction": "inout",
           "nullable": true,
@@ -1060,156 +404,13 @@
         }
       }
     },
-    "Diligent::CheckFixedInputs": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::ReadFixedRow": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::ReadFixedCube": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::ReadFixedChild": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::ReadFixedSample": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::ReadFixedMatrix": {
-      "parameters": {
-        "Matrix": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::GetFixedArrays": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::GetFixedReadOnlyArrays": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "static"
-      }
-    },
-    "Diligent::EchoFixedArrays": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::EchoFixedMatrix": {
-      "parameters": {
-        "Matrix": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "ownership": "borrowed",
-        "lifetime": "call"
-      }
-    },
-    "Diligent::UpdateFixedArrays": {},
-    "Diligent::ResetFixedArrays": {},
-    "Diligent::GetFixedCallCount": {},
-    "Diligent::MarshalOutputRecord": {
-      "fields": {
-        "Label": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "static",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::ReadReferenceOutput": {
-      "parameters": {
-        "Value": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::ReadRecordOutput": {
-      "parameters": {
-        "Value": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
+    "Diligent::GetFixedArrays": {"result": {"lifetime": "static"}},
+    "Diligent::GetFixedReadOnlyArrays": {"result": {"lifetime": "static"}},
+    "Diligent::MarshalOutputRecord": {"fields": {"Label": {"direction": "out", "nullable": false, "lifetime": "static", "ownership": "borrowed"}}},
+    "Diligent::ReadReferenceOutput": {"parameters": {"Value": {"direction": "out"}}},
+    "Diligent::ReadRecordOutput": {"parameters": {"Value": {"direction": "out"}}},
     "Diligent::MakeRecordOutput": {
-      "parameters": {
-        "pValue": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
+      "parameters": {"pValue": {"direction": "out", "nullable": false, "lifetime": "call", "ownership": "borrowed"}}
     },
     "Diligent::FillIds": {
       "parameters": {
@@ -1221,103 +422,40 @@
           "length": "Capacity",
           "written": "Written"
         },
-        "Written": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
+        "Written": {"direction": "out"}
       }
     },
     "Diligent::FillRecords": {
       "parameters": {
-        "pRecords": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed",
-          "length": "Capacity"
-        }
+        "pRecords": {"direction": "out", "nullable": false, "lifetime": "call", "ownership": "borrowed", "length": "Capacity"}
       }
     },
     "Diligent::FillMultiple": {
       "parameters": {
-        "Count": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        },
-        "ppLabel": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "static",
-          "ownership": "borrowed"
-        }
+        "Count": {"direction": "out"},
+        "ppLabel": {"direction": "out", "nullable": false, "lifetime": "static", "ownership": "borrowed"}
       }
     },
     "Diligent::BorrowObject": {
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "lifetime": "object",
-        "ownership": "borrowed"
-      },
-      "parameters": {
-        "pObject": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
+      "result": {"nullable": true, "lifetime": "object", "ownership": "borrowed"},
+      "parameters": {"pObject": {"direction": "in", "nullable": false, "lifetime": "call", "ownership": "borrowed"}}
     },
     "Diligent::BorrowObjectOutput": {
       "parameters": {
-        "pObject": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        },
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "object",
-          "ownership": "borrowed"
-        }
+        "pObject": {"direction": "in", "nullable": false, "lifetime": "call", "ownership": "borrowed"},
+        "ppObject": {"direction": "out", "nullable": false, "lifetime": "object", "ownership": "borrowed"}
       }
     },
     "Diligent::MakeFailingOutputs": {
       "parameters": {
-        "ppFirst": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "caller",
-          "ownership": "owned"
-        },
-        "ppLast": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "caller",
-          "ownership": "owned"
-        },
-        "ppInvalid": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "static",
-          "ownership": "borrowed"
-        }
+        "ppFirst": {"direction": "out", "nullable": false, "lifetime": "caller", "ownership": "owned"},
+        "ppInvalid": {"direction": "out", "nullable": false, "lifetime": "static", "ownership": "borrowed"},
+        "ppLast": {"direction": "out", "nullable": false, "lifetime": "caller", "ownership": "owned"}
       }
     },
     "Diligent::MarshalInterfaceDesc": {
       "fields": {
-        "pObject": {
-          "direction": "inout",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        },
+        "pObject": {"direction": "inout", "nullable": true, "lifetime": "call", "ownership": "borrowed"},
         "ppObjects": {
           "direction": "inout",
           "nullable": true,
@@ -1326,44 +464,12 @@
           "length": "Count",
           "element_nullable": true
         },
-        "Label": {
-          "direction": "inout",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::SumInterfaces": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::EchoInterfaces": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "lifetime": "call",
-        "ownership": "borrowed"
+        "Label": {"direction": "inout", "nullable": false, "lifetime": "call", "ownership": "borrowed"}
       }
     },
     "Diligent::SumInterfaceArray": {
       "parameters": {
         "ppObjects": {
-          "direction": "in",
           "nullable": false,
           "lifetime": "call",
           "ownership": "borrowed",
@@ -1372,271 +478,43 @@
         }
       }
     },
-    "Diligent::MarshalPointerDesc": {
-      "fields": {
-        "pData": {
-          "direction": "inout",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::ReadStructPointer": {
-      "parameters": {
-        "pData": {
-          "direction": "in",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::ReadRequiredPointer": {
-      "parameters": {
-        "pData": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
+    "Diligent::MarshalPointerDesc": {"fields": {"pData": {"direction": "inout", "nullable": true, "lifetime": "call", "ownership": "borrowed"}}},
+    "Diligent::ReadStructPointer": {"parameters": {"pData": {"nullable": true, "lifetime": "call", "ownership": "borrowed"}}},
+    "Diligent::ReadRequiredPointer": {"parameters": {"pData": {"nullable": false, "lifetime": "call", "ownership": "borrowed"}}},
     "Diligent::EchoStructPointer": {
-      "parameters": {
-        "pData": {
-          "direction": "in",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": true,
-        "lifetime": "call",
-        "ownership": "borrowed"
-      }
+      "parameters": {"pData": {"nullable": true, "lifetime": "call", "ownership": "borrowed"}},
+      "result": {"nullable": true, "lifetime": "call", "ownership": "borrowed"}
     },
-    "Diligent::EchoPointerDesc": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "lifetime": "call",
-        "ownership": "borrowed"
-      }
-    },
-    "Diligent::MarshalBaseDesc": {},
     "Diligent::MarshalDerivedDesc": {
       "fields": {
-        "pValues": {
-          "direction": "inout",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed",
-          "length": "Count"
-        }
+        "pValues": {"direction": "inout", "nullable": true, "lifetime": "call", "ownership": "borrowed", "length": "Count"}
       }
     },
-    "Diligent::MarshalLeafDesc": {},
-    "Diligent::EchoInherited": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "lifetime": "call",
-        "ownership": "borrowed"
-      }
-    },
-    "Diligent::SumInherited": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::MarshalEntityID": {},
-    "Diligent::MarshalEntityAlias": {},
-    "Diligent::MarshalDescriptorAlias": {},
-    "Diligent::MarshalPropertyName": {},
-    "Diligent::MarshalInvalidID": {},
-    "Diligent::MarshalAutoOffset": {},
-    "Diligent::MarshalNegativeID": {},
-    "Diligent::MarshalDefaultScale": {},
-    "Diligent::MarshalDefaultEnabled": {},
-    "Diligent::MarshalAnimationName": {},
-    "Diligent::MarshalAnimationNamePointer": {},
-    "Diligent::MarshalLookup": {},
-    "Diligent::MarshalNames": {},
-    "Diligent::EchoEntityID": {},
-    "Diligent::GetInvalidEntityID": {},
-    "Diligent::MarshalExportNames": {
-      "fields": {
-        "Name": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "static",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::WithDefaults": {},
-    "Diligent::NextDefaultValue": {},
-    "Diligent::DefaultPointer": {
-      "parameters": {
-        "pDesc": {
-          "direction": "in",
-          "nullable": true,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::DefaultDescriptor": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::DefaultOutput": {
-      "parameters": {
-        "Value": {
-          "direction": "out",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::DefaultStringLength": {
-      "parameters": {
-        "Text": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      }
-    },
-    "Diligent::DefaultBorrowedDescriptor": {
-      "parameters": {
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "lifetime": "call",
-          "ownership": "borrowed"
-        }
-      },
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "lifetime": "call",
-        "ownership": "borrowed"
-      }
-    },
-    "Diligent::DefaultArrayCount": {
-      "result": {
-        "direction": "out",
-        "nullable": false,
-        "lifetime": "static",
-        "ownership": "borrowed",
-        "length": "Count"
-      }
-    },
-    "Diligent::ReadObjectReference": {
-      "parameters": {
-        "Object": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::WriteObjectReference": {
-      "parameters": {
-        "Object": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "Desc": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        }
-      }
-    },
-    "Diligent::MarshalComputedDesc": {},
-    "Diligent::MarshalComputedMatrix": {},
+    "Diligent::MarshalExportNames": {"fields": {"Name": {"direction": "out", "nullable": false, "lifetime": "static", "ownership": "borrowed"}}},
+    "Diligent::DefaultPointer": {"parameters": {"pDesc": {"nullable": true, "lifetime": "call", "ownership": "borrowed"}}},
+    "Diligent::DefaultOutput": {"parameters": {"Value": {"direction": "out"}}},
+    "Diligent::DefaultStringLength": {"parameters": {"Text": {"nullable": false, "lifetime": "call", "ownership": "borrowed"}}},
+    "Diligent::DefaultArrayCount": {"result": {"nullable": false, "lifetime": "static", "ownership": "borrowed", "length": "Count"}},
+    "Diligent::WriteObjectReference": {"parameters": {"Object": {"direction": "in"}}},
     "Diligent::IMarshalComputedOutputs": {
-      "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalComputedOutputs",
       "methods": {
-        "GetDesc": {
-          "result": {
-            "direction": "out",
-            "nullable": false,
-            "ownership": "borrowed",
-            "lifetime": "object"
-          }
-        },
+        "GetDesc": {"result": {"lifetime": "object"}},
         "FillMatrices": {
           "parameters": {
-            "pSource": {
-              "direction": "in",
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call"
-            },
+            "pSource": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "pMatrices": {
               "direction": "out",
               "nullable": false,
               "ownership": "borrowed",
               "lifetime": "call",
-              "length_from": {
-                "parameter": "pSource",
-                "method": "GetDesc",
-                "field": "Count"
-              }
+              "length_from": {"parameter": "pSource", "method": "GetDesc", "field": "Count"}
             }
           }
         }
       }
     },
     "Diligent::CreateComputedOutputs": {
-      "parameters": {
-        "ppObject": {
-          "direction": "out",
-          "nullable": false,
-          "ownership": "owned",
-          "lifetime": "caller"
-        }
-      }
+      "parameters": {"ppObject": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}}
     },
     "Diligent::FillComputedValues": {
       "parameters": {
@@ -1645,25 +523,9 @@
           "nullable": false,
           "ownership": "borrowed",
           "lifetime": "call",
-          "length_from": {
-            "parameter": "Source",
-            "method": "GetValueCount"
-          }
-        },
-        "Source": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
-        },
-        "Options": {
-          "direction": "in",
-          "nullable": false,
-          "ownership": "borrowed",
-          "lifetime": "call"
+          "length_from": {"parameter": "Source", "method": "GetValueCount"}
         }
       }
-    },
-    "Diligent::GetLiveComputedOutputs": {}
+    }
   }
 }
