@@ -520,3 +520,10 @@ Use this for type-tagged byte payloads whose size is not a descriptor field.
 The header supplied to the generator declares the function; a matching
 `field_policies` entry supplies the borrowed span's direction and lifetime.
 The adapter name is a qualified C++ function identifier, not an expression.
+
+`ModuleOptions.files` optionally supplies a map of absolute POSIX paths to
+`Uint8Array` contents. The wrapper snapshots the bytes before asynchronous module
+initialization and populates Emscripten's virtual filesystem before native code
+runs. Targets using this option must export the `FS` runtime method. Native code
+continues to use its ordinary filesystem APIs; no native callback adapter is
+required. Existing Emscripten `preRun` hooks run after the files are installed.

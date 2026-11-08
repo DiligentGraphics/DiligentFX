@@ -15,9 +15,9 @@ window.addEventListener("unhandledrejection", event => { void fatal(event.reason
 
 try {
     const bindings = await import(config.module);
-    const {registerTests} = await import(config.suite);
+    const {registerTests, moduleOptions = {}} = await import(config.suite);
     let wasm;
-    const api = await bindings.default({onRuntimeInitialized() { wasm = this; }});
+    const api = await bindings.default({...moduleOptions, onRuntimeInitialized() { wasm = this; }});
     const sharedMemory = typeof SharedArrayBuffer !== "undefined" && wasm.HEAPU8.buffer instanceof SharedArrayBuffer;
     if (config.sharedMemory) {
         assert.equal(crossOriginIsolated, true, "Threaded binding tests require cross-origin isolation");

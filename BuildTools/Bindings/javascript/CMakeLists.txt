@@ -61,7 +61,7 @@ target_link_options(BindingTestsWasm PRIVATE
     --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
     -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1
     "-sEXPORTED_FUNCTIONS=['_malloc','_free']"
-    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
+    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS']")
 set_target_properties(BindingTestsWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
 
 # Build BindingTestsWasm first; CTest only executes the prepared suites.

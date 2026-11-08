@@ -41,6 +41,7 @@
     "Diligent::EchoDouble",
     "Diligent::EchoEntityID",
     "Diligent::SumExportParts",
+    "Diligent::SumFileBytes",
     "Diligent::EchoFixedArrays",
     "Diligent::EchoFixedMatrix",
     "Diligent::EchoFloat",
@@ -139,6 +140,7 @@
     "Diligent::WriteObjectReference"
   ],
   "declarations": {
+    "Diligent::SumFileBytes": {"parameters": {"Path": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}}},
     "Diligent::MarshalNestedCountDesc": {
       "fields": {
         "pComputed": {"binding": "manual", "reason": "The native adapter computes the element count."},

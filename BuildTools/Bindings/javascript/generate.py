@@ -93,6 +93,8 @@ class Generator:
                    'export interface ModuleOptions {',
                    '  locateFile?: (path: string, prefix: string) => string;',
                    '  wasmBinary?: ArrayBuffer | Uint8Array;',
+                   '  /** Files copied into the virtual filesystem before native initialization. Use absolute POSIX paths. */',
+                   '  files?: Readonly<Record<string, Uint8Array>>;',
                    '  print?: (message: string) => void;',
                    '  printErr?: (message: string) => void;', '}']
         if self.scopes:
@@ -913,7 +915,7 @@ class Generator:
             function.pop('ts')
         js = '// Generated file. Do not edit.\n'
         js += f'import createWasm from "./{self.module}Wasm.mjs";\n'
-        js += 'import { createBindings } from "./runtime.mjs";\n'
+        js += 'import { createBindings, prepareModuleOptions } from "./runtime.mjs";\n'
         for name, values in self.schema['enums'].items():
             js += f'export const {name} = Object.freeze({json.dumps(values)});\n'
         for name, value in self.constants.items():
@@ -921,7 +923,7 @@ class Generator:
         js += 'const constants = {' + ', '.join(self.constants) + '};\n'
         js += 'const schema = ' + json.dumps(self.schema, indent=2) + ';\n'
         js += 'export default async function(options = {}) {\n'
-        js += '  return createBindings(await createWasm(options), schema, constants);\n}\n'
+        js += '  return createBindings(await createWasm(prepareModuleOptions(options)), schema, constants);\n}\n'
         return '\n'.join(self.cpp) + '\n', js, '\n'.join(self.ts) + '\n'
 
 

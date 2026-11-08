@@ -1,6 +1,31 @@
 // Shared runtime for generated Wasm32 bindings. Native pointers stay private.
 import {typedArray, byteLength, createByteAccess} from "./byte_access.mjs";
 
+// Snapshot file inputs before asynchronous module initialization. Workers use
+// the normal native filesystem, so asset loading needs no JavaScript callbacks.
+export function prepareModuleOptions(options) {
+    const {files, ...result} = options;
+    if (files === undefined) return result;
+    if (files === null || typeof files !== "object" || Array.isArray(files)) {
+        throw new TypeError("files must map absolute paths to Uint8Array data");
+    }
+    const entries = Object.entries(files).map(([path, data]) => {
+        if (!path.startsWith("/") || path.includes("\\") || path.includes("\0") ||
+            path.slice(1).split("/").some(part => part === "" || part === "." || part === "..")) {
+            throw new TypeError("Virtual file paths must be absolute POSIX file paths");
+        }
+        return [path, typedArray(data, Uint8Array).slice()];
+    });
+    const hooks = result.preRun === undefined ? [] : Array.isArray(result.preRun) ? result.preRun : [result.preRun];
+    result.preRun = [module => {
+        for (const [path, data] of entries) {
+            module.FS.mkdirTree(path.slice(0, path.lastIndexOf("/")) || "/");
+            module.FS.writeFile(path, data);
+        }
+    }, ...hooks];
+    return result;
+}
+
 const scalarArrays = {
     bool: Uint8Array, i8: Int8Array, u8: Uint8Array, i16: Int16Array, u16: Uint16Array,
     i32: Int32Array, u32: Uint32Array, i64: BigInt64Array, u64: BigUint64Array,

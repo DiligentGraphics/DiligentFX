@@ -1,10 +1,11 @@
 # Radient JavaScript bindings
 
-The bindings provide owning read-only and mutable data blobs, engine/scene creation,
-scene editing, including camera and light components, and mesh asset creation/reflection. They use the real
-Radient implementation, compiled to Wasm,
-and run in browsers or Node without a graphics device. Blobs can also be created
-without an engine.
+The bindings expose CPU-side Radient APIs for scenes, components, mesh and texture
+assets, material creation and editing, skeletons, skins, morph targets, animation,
+and GLTF/OBJ scene import. They use the real Radient implementation compiled to
+Wasm and run in browsers or Node without a graphics device. Owning read-only and
+mutable data blobs can also be created without an engine. See
+[API execution coverage](API_COVERAGE.md) for the tested methods and exclusions.
 
 ## Build and test
 
@@ -273,3 +274,25 @@ scene writer, a material, a skeleton pose, or morph weights through
 native update; direct writable native output pointers are never exposed.
 Registry snapshots retain every returned clip and binding independently, so
 dispose those wrappers after use, including when the registry entry is removed.
+
+### Scene imports without a GPU
+
+Pass model files and their relative dependencies when creating the module:
+
+```js
+const api = await createRadient({files: {
+    "/assets/model.glb": new Uint8Array(await (await fetch("model.glb")).arrayBuffer()),
+}});
+const result = manager.LoadScene({URI: "/assets/model.glb"});
+```
+
+`files` copies bytes into the module's virtual filesystem before initialization.
+Paths are absolute POSIX paths. Native loaders can resolve adjacent files using
+ordinary relative URIs; provide those files under the corresponding paths too.
+Poll `GetRadientAssetLoadStatus()` while yielding to the JavaScript event loop.
+Use `InstantiateScene()` for an existing scene asset, or `ImportScene()` to load
+and instantiate together. Call `ProcessPendingImports()` to finish pending scene
+instantiations. An optional animation registry receives the imported bindings.
+
+The integration tests load generated GLB and OBJ/MTL files, inspect their scene
+components, and evaluate imported animation in both Node and Chromium.

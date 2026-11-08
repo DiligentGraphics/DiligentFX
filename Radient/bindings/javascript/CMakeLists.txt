@@ -31,7 +31,7 @@ target_link_options(RadientWasm PRIVATE
     -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1
     "-sPTHREAD_POOL_SIZE=${RADIENT_BINDINGS_PTHREAD_POOL_SIZE}"
     "-sEXPORTED_FUNCTIONS=['_malloc','_free']"
-    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
+    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS']")
 set_target_properties(RadientWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
 
 # Build RadientWasm first; these tests never generate or rebuild artifacts.

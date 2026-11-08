@@ -262,7 +262,8 @@
     "Diligent::MakeAxisRotation",
     "Diligent::MakeXRotation",
     "Diligent::MakeYRotation",
-    "Diligent::MakeZRotation"
+    "Diligent::MakeZRotation",
+    "Diligent::InvalidRadientSceneIndex"
   ],
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -328,7 +329,8 @@
         "CreateScene",
         "CreateSceneWriter",
         "GetAssetManager",
-        "CreateAnimationRegistry"
+        "CreateAnimationRegistry",
+        "CreateSceneImporter"
       ],
       "methods": {
         "CreateScene": {
@@ -351,6 +353,12 @@
           "parameters": {
             "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "ppRegistry": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateSceneImporter": {
+          "parameters": {
+            "pWriter": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppImporter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -548,7 +556,8 @@
         "CreateMaterial",
         "CreateSkeleton",
         "CreateSkin",
-        "CreateAnimationClip"
+        "CreateAnimationClip",
+        "LoadScene"
       ],
       "methods": {
         "CreateMesh": {
@@ -585,6 +594,11 @@
         "CreateAnimationClip": {
           "parameters": {
             "ppClip": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "LoadScene": {
+          "parameters": {
+            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -1097,6 +1111,49 @@
     "Diligent::MakeZRotation": {
       "parameters": {
         "Rotation": {"direction": "out"}
+      }
+    },
+    "Diligent::IRadientSceneAsset": {
+      "include_methods": [
+        "GetDesc"
+      ]
+    },
+    "Diligent::RadientSceneLoadInfo": {
+      "fields": {
+        "URI": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ImporterId": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientSceneAssetDesc": {
+      "fields": {
+        "ppAnimationClips": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AnimationClipCount"}
+      }
+    },
+    "Diligent::RadientSceneInstantiateInfo": {
+      "fields": {
+        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pAnimationRegistry": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::IRadientSceneImporter": {
+      "include_methods": [
+        "ImportScene",
+        "InstantiateScene",
+        "ProcessPendingImports"
+      ],
+      "methods": {
+        "ImportScene": {
+          "parameters": {
+            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"},
+            "RootEntity": {"direction": "out"}
+          }
+        },
+        "InstantiateScene": {
+          "parameters": {
+            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "RootEntity": {"direction": "out"}
+          }
+        }
       }
     }
   }

@@ -15,9 +15,13 @@ The model and generator tests separately check declarations and metadata.
 | `skinning_tests.mjs` | Skeleton/skin creation and descriptions; every pose and pose-writer method, native-sized matrix outputs, scene skin component |
 | `morph_tests.mjs` | Blob-backed target creation/reflection; every weights method; mesh weight factory; scene morph component and removal |
 | `animation_tests.mjs` | Clip creation/reflection, binding creation/evaluation, every registry method, scene/material/pose/morph destinations, quaternion helpers |
+| `import_tests.mjs` | Scene loading and clip reflection; importer creation, ImportScene, InstantiateScene, ProcessPendingImports; GLTF/OBJ files, relative MTL dependencies and imported animation |
 
 Native callbacks, externally supplied thread pools, importer implementations,
-and GPU/backend objects are not exposed. Asset-manager `Stop()` takes a native device context and remains outside the
-CPU-only binding subset; disposing the engine performs normal shutdown.
+custom component storage, and GPU/backend objects are not exposed. Asset-manager
+`Stop()` takes a native device context and remains outside the CPU-only binding
+subset; disposing the engine performs normal shutdown.
 
-Direct-write animation destination scopes expose native addresses and are not exported. Use clip bindings and `Evaluate()`; native destinations are obtained through `QueryInterface` and their direct-write scopes are used internally.
+Direct-write animation destination scopes expose native addresses and are not
+exported. Use clip bindings and `Evaluate()`; native destinations are obtained
+through `QueryInterface` and their direct-write scopes are used internally.
