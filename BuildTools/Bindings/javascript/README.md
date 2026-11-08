@@ -8,8 +8,8 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-The nested-input, struct-result, input-array, output-array, and fixed-array suites also run in
-a headless browser.
+The descriptor, array, ownership, output-parameter, constant, and default-argument
+suites also run in a headless browser.
 No renderer or GPU is required.
 
 ## Build and run
@@ -38,10 +38,9 @@ Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
 
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
-CTest runs Python emitter tests and separate Node suites for scalar/interface,
-byte-buffer, string, nested-input, struct-result, input-array, output-array, and fixed-array
-marshalling, plus browser-harness unit tests. The nested-input, struct-result,
-input-array, output-array, and fixed-array cases run in both Node and the browser.
+CTest runs Python emitter tests, browser-harness tests, and separate Node suites
+for each supported marshalling shape. Shared conformance suites run unchanged in
+Node and the browser, including the output and ownership cases below.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -92,14 +91,16 @@ runs even after failure. The production example is
   nothing; `null` is rejected. Only the outer descriptor is allocated, and nested
   strings and byte spans share its call-scoped cleanup.
 - Native status values are returned unchanged, including nonzero success or
-  pending statuses. A callable with one output returns `{status, value}`. Output
-  storage starts at zero; the native contract determines when the output is valid.
+  pending statuses. Status-returning callables with outputs return `{status, value}`;
+  void callables return the output value directly. Scalar output storage starts at
+  zero and struct outputs use native defaults. The native contract determines when
+  the output is valid.
 - An owned interface output is adopted without an additional `AddRef`. Call
   `dispose()` explicitly to release it; repeated disposal is harmless, and calls
   on disposed objects fail. Garbage collection does not release native references.
 - `QueryInterface(api.InterfaceType)` returns a separately owned wrapper or null.
-  Borrowed interface inputs retain their existing ownership. Wrappers cannot be
-  passed between independently loaded Wasm modules.
+  Borrowed interface inputs acquire a temporary reference for the call. Wrappers
+  cannot be passed between independently loaded Wasm modules.
 - JavaScript argument errors throw; native status failures remain status results.
   Temporary descriptors and output storage are released even when marshalling fails.
 
@@ -121,16 +122,13 @@ if (result.value !== null) {
 
 ## Scope and extension
 
-The backend supports scalar fields and nested value structs in plain input descriptors,
-single-inheritance reference-counted interfaces, scalar arguments/results,
-borrowed interface inputs, and one scalar or owned-interface output with a status
-result. Borrowed const-reference struct results become JavaScript snapshots.
-It also supports UTF-8 strings, scalar/struct input and borrowed output arrays,
-fixed-size array fields, input byte spans, and the scoped byte adapters described below. It rejects unsupported declarations
-and policies instead of silently omitting them. Caller-filled output buffers,
-interface-pointer arrays, callbacks, by-value struct
-results, default function arguments, and other manual adapters are not implemented
-yet. The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
+The backend supports scalar and string marshalling, nested and inherited
+descriptors, individual struct pointers, fixed and dynamic arrays, caller-filled
+outputs, interface ownership, and native default arguments. Standalone constants
+and TypeScript typedef aliases are exported. Unsupported declarations and policies
+are rejected rather than silently omitted. Callbacks, by-value struct results,
+and additional custom lifetime adapters remain outside this backend's support.
+The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
 
 Add target-independent native type information to the shared model. Put JavaScript
 conversion and lifetime behavior in this backend. Add a native fixture and an
@@ -144,7 +142,8 @@ becomes a plain JavaScript object. Supported fields are scalars, enums, UTF-8
 strings, embedded value structs, and borrowed pointer/count arrays. Nested data is copied before
 the wrapper returns or releases temporary inputs. Later native mutation or owner
 destruction does not affect the result, and editing the result does not modify
-native data. The snapshot does not retain the native owner and needs no disposal.
+native data. The snapshot does not retain the containing native owner. Any
+interface fields are separately retained wrappers and must be disposed explicitly.
 
 The result policy requires `direction: out`, `nullable: false`,
 `ownership: borrowed`, and `lifetime: call`, `object`, or `static`. Native storage
@@ -470,3 +469,14 @@ objects and ordinary arrays, so importing a constant never needs native storage.
 Selected typedefs are exported TypeScript aliases; they have no runtime wrapper
 or allocation. Alias use in native signatures continues to resolve to the same
 marshalling representation.
+
+## Default function arguments
+
+Defaulted declarations accept fully specified calls. Omitted trailing arguments
+(or trailing `undefined`) use generated native call forms, so C++ evaluates the
+defaults at each invocation. TypeScript marks these arguments optional. Interior
+`undefined` is not a placeholder for a default when later arguments are supplied.
+
+Counts needed for JS array validation remain explicit. Pointer/reference inputs
+also remain explicit when their default temporary could escape through borrowed
+results or output parameters; this preserves snapshot lifetime guarantees.

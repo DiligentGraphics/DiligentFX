@@ -103,7 +103,7 @@ DILIGENT_BEGIN_INTERFACE(IMarshalArraySnapshots, IObject)
     VIRTUAL Uint32 METHOD(GetItemCount)(THIS) CONST PURE;
     VIRTUAL const Float32* METHOD(GetAllValues)(THIS) CONST PURE;
     VIRTUAL const MarshalOutputArrayItem* METHOD(GetAllItems)(THIS) CONST PURE;
-    VIRTUAL void METHOD(SetValueCount)(THIS_ Uint64 Count) PURE;
+    VIRTUAL void METHOD(SetValueCount)(THIS_ Uint64 Count DEFAULT_VALUE(3)) PURE;
     VIRTUAL void METHOD(Update)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE

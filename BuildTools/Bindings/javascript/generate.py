@@ -579,6 +579,7 @@ class Generator:
             native_params.append('uintptr_t self')
         output_type = None
         output_types = {}
+        default_prefixes = {}
         for p in d["parameters"]:
             pname = p["name"]
             if pname in self.fixed_arguments.get(name, {}):
@@ -586,7 +587,7 @@ class Generator:
                 continue
             self.automatic(p, name + "::" + pname)
             if p.get("default") is not None:
-                raise ModelError(f"{name}::{pname}: default arguments need an explicit adapter")
+                default_prefixes[pname] = (len(native_params), len(native_args), len(ts_params))
             t, policy = unalias(p["type"]), p.get("policy", {})
             buffer = self.output_buffer(p, d["parameters"], name + "::" + pname)
             if buffer:
@@ -695,8 +696,26 @@ class Generator:
             native_result_type = cpp_type(d["result"]["type"])
             result_type = ('string' + (' | null' if result_string['nullable'] else '')) if result_string else ts_scalar(result)
         export = self.export(symbol(name), native_result_type, native_params, body)
+        defaults = {}
+        # Let the native call site evaluate omitted defaults. Count arguments
+        # still needed to validate JS arrays must remain explicit. Likewise, do
+        # not let a borrowed result outlive a default-constructed input temporary.
+        lengths = {p.get("policy", {}).get("length") for p in (*d["parameters"], d["result"])}
+        for p in reversed(d["parameters"]):
+            pname = p["name"]
+            parameter = next((item for item in parameters if item["name"] == pname), None)
+            if pname not in default_prefixes or not parameter or "output" in parameter or pname in lengths:
+                break
+            if unalias(p["type"])["kind"] in ("pointer", "reference") and (isinstance(result, dict) or output_types):
+                break
+            param_count, native_count, input_count = default_prefixes[pname]
+            default_call = target + '(' + ', '.join(native_args[:native_count]) + ')'
+            defaults[str(input_count)] = self.export(symbol(name) + f'_Args{input_count}', native_result_type,
+                native_params[:param_count], body.replace(call, default_call))
+            parameter["default"] = True
+            ts_params[input_count] = ts_params[input_count].replace(pname + ':', pname + '?:', 1)
         ts_return = (output_type if result == 'void' else f'Result<{output_type}>') if output_type else result_type
-        return {"export": export, "parameters": parameters, "result": result,
+        return {"export": export, "parameters": parameters, "result": result, "defaults": defaults,
                 "ts": f'{short(d["name"])}({", ".join(ts_params)}): {ts_return};'}
 
     def scoped_bytes(self, d, owner, spec):

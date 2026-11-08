@@ -357,11 +357,13 @@ class GeneratorTest(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "unsupported interface ownership"):
             self.emit(model)
 
-    def test_rejects_default_arguments_instead_of_evaluating_cpp(self):
-        model = deepcopy(MODEL)
-        self.declaration(model, "EchoInt32")["parameters"][0]["default"] = "42"
-        with self.assertRaisesRegex(ModelError, "default arguments"):
-            self.emit(model)
+    def test_default_arguments_use_native_overloads(self):
+        cpp, _, types = self.emit()
+        self.assertIn("Diligent::WithDefaults(Value);", cpp)
+        self.assertIn("Diligent::WithDefaults(Value, Add);", cpp)
+        self.assertIn("WithDefaults(Value: bigint, Add?: boolean, Amount?: number)", types)
+        self.assertIn("SetValueCount(Count?: bigint)", types)
+        self.assertNotIn("NextDefaultValue()", cpp[cpp.index("binding_Diligent_WithDefaults"):])
 
     def test_rejects_runtime_name_collisions(self):
         model = deepcopy(MODEL)

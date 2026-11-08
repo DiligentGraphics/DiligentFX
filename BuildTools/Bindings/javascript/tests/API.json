@@ -1471,6 +1471,73 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::WithDefaults": {},
+    "Diligent::NextDefaultValue": {},
+    "Diligent::DefaultPointer": {
+      "parameters": {
+        "pDesc": {
+          "direction": "in",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::DefaultDescriptor": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::DefaultOutput": {
+      "parameters": {
+        "Value": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::DefaultStringLength": {
+      "parameters": {
+        "Text": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::DefaultBorrowedDescriptor": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "lifetime": "call",
+        "ownership": "borrowed"
+      }
+    },
+    "Diligent::DefaultArrayCount": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "lifetime": "static",
+        "ownership": "borrowed",
+        "length": "Count"
+      }
     }
   }
 }

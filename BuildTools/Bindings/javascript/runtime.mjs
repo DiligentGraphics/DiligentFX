@@ -401,7 +401,11 @@ export function createBindings(wasm, schema, constants = {}) {
         if (spec.scope) return acquireBytes(spec.scope, owner, self, args);
         const inputs = spec.parameters.filter(p => !p.output);
         const argumentCount = inputs.length;
-        if (args.length !== argumentCount) throw new TypeError(`Expected ${argumentCount} arguments`);
+        if (spec.defaults && Object.keys(spec.defaults).length) {
+            while (args.length && args[args.length - 1] === undefined) args = args.slice(0, -1);
+        }
+        const dispatch = args.length === argumentCount ? spec.export : spec.defaults?.[args.length];
+        if (!dispatch) throw new TypeError(`Expected ${argumentCount} arguments or a supported default-argument form`);
         const nativeArgs = owner ? [pointer(self, owner)] : [];
         const cleanup = [];
         if (owner && args.length) inputInterface(self, {interface: owner, nullable: false}, cleanup);
@@ -425,6 +429,10 @@ export function createBindings(wasm, schema, constants = {}) {
                     });
                     nativeArgs.push(address);
                 } else {
+                    if (parameter.default && argument >= args.length) {
+                        ++argument;
+                        continue;
+                    }
                     const value = args[argument++];
                     if (parameter.recordPointer) {
                         nativeArgs.push(inputRecordPointer(value, parameter, cleanup));
@@ -443,7 +451,7 @@ export function createBindings(wasm, schema, constants = {}) {
                     }
                 }
             }
-            const nativeResult = wasm[spec.export](...nativeArgs);
+            const nativeResult = wasm[dispatch](...nativeArgs);
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
             const result = spec.result.recordPointer ? outputRecordPointer(nativeResult, spec.result, rollback) : spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,

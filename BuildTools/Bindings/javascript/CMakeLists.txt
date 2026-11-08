@@ -54,6 +54,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
+    "${TEST_SOURCE}/fixtures/DefaultArguments.cpp"
     "${TEST_SOURCE}/fixtures/Exports.cpp"
     "${TEST_SOURCE}/fixtures/InheritedDescriptors.cpp"
     "${TEST_SOURCE}/fixtures/StructPointers.cpp"
@@ -204,3 +205,11 @@ add_test(NAME Bindings-JavaScriptExportsBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/exports_tests.mjs")
 set_tests_properties(Bindings-JavaScriptExportsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptDefaultArguments
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_defaultarguments.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptDefaultArguments PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptDefaultArgumentsBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/defaultarguments_tests.mjs")
+set_tests_properties(Bindings-JavaScriptDefaultArgumentsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

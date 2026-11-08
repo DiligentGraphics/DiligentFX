@@ -227,3 +227,13 @@ Only the generator, metadata, tests, and handwritten adapters belong in source
 control. Generated models, glue, JS, declarations, and binaries belong in the
 build/package output. Release packages should contain generated outputs so users
 do not need the generator toolchain.
+
+### Output counts and interface-array metadata
+
+`length` names an integer sibling used as an array count or output capacity.
+For caller-filled outputs, `written` optionally names an unsigned scalar output
+containing the written count. An array result can instead use `length_method`
+to name a no-argument unsigned count getter on its interface, including inherited
+methods. `length` and `length_method` are mutually exclusive.
+For interface-pointer arrays, `element_nullable` controls null elements separately
+from the array pointer's `nullable` policy; elements are non-nullable by default.
