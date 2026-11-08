@@ -1208,6 +1208,60 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::BorrowObject": {
+      "result": {
+        "direction": "out",
+        "nullable": true,
+        "lifetime": "object",
+        "ownership": "borrowed"
+      },
+      "parameters": {
+        "pObject": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::BorrowObjectOutput": {
+      "parameters": {
+        "pObject": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        },
+        "ppObject": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "object",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::MakeFailingOutputs": {
+      "parameters": {
+        "ppFirst": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "caller",
+          "ownership": "owned"
+        },
+        "ppLast": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "caller",
+          "ownership": "owned"
+        },
+        "ppInvalid": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "static",
+          "ownership": "borrowed"
+        }
+      }
     }
   }
 }

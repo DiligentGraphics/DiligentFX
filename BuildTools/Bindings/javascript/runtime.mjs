@@ -96,6 +96,15 @@ export function createBindings(wasm, schema) {
         }
     }
 
+    function outputInterface(address, spec, rollback) {
+        address >>>= 0;
+        if (!address && !spec.nullable) throw new Error("Native function returned a null interface");
+        if (address && spec.borrowed) wasm._binding_AddRef(address);
+        const value = adopt(address, spec.interface);
+        if (value) rollback.push(() => value.dispose());
+        return value;
+    }
+
     function record(value, name, cleanup, address) {
         if (!value || typeof value !== "object" || Array.isArray(value)) {
             throw new TypeError(`${name} must be a descriptor object`);
@@ -303,11 +312,11 @@ export function createBindings(wasm, schema) {
         }
     }
 
-    function readOutput(address, spec) {
+    function readOutput(address, spec, rollback = []) {
         // Obtain the current heap after the call: native allocations may grow it.
         if (spec.record) return outputRecord(address, spec.record);
         const view = new DataView(wasm.HEAPU8.buffer);
-        if (spec.interface) return adopt(view.getUint32(address, true), spec.interface);
+        if (spec.interface) return outputInterface(view.getUint32(address, true), spec, rollback);
         if (spec.string) return outputString(view.getUint32(address, true), spec.string);
         const readers = {
             bool: "getUint8", i8: "getInt8", u8: "getUint8", i16: "getInt16", u16: "getUint16",
@@ -362,7 +371,7 @@ export function createBindings(wasm, schema) {
                     const address = allocateOutput(parameter.output, capacity, cleanup);
                     const output = {name: parameter.name, address, spec: parameter.output, capacity, consumed: false};
                     outputs.push(output);
-                    if (output.spec.interface) cleanup.push(() => {
+                    if (output.spec.interface && !output.spec.borrowed) cleanup.push(() => {
                         if (!output.consumed) {
                             const object = new DataView(wasm.HEAPU8.buffer).getUint32(address, true);
                             if (object) wasm._binding_Release(object);
@@ -389,7 +398,7 @@ export function createBindings(wasm, schema) {
             const nativeResult = wasm[spec.export](...nativeArgs);
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
-            const result = spec.result.span ? outputSpan(nativeResult,
+            const result = spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,
                 args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span) :
                 spec.result.record ? outputRecord(nativeResult, spec.result.record) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
@@ -405,8 +414,7 @@ export function createBindings(wasm, schema) {
                     value = outputSpan(output.address, count, buffer);
                 } else {
                     output.consumed = true;
-                    value = readOutput(output.address, output.spec);
-                    if (output.spec.interface && value) rollback.push(() => value.dispose());
+                    value = readOutput(output.address, output.spec, rollback);
                 }
                 Object.defineProperty(values, output.name, {value, enumerable: true});
             }

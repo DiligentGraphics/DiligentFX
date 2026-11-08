@@ -368,6 +368,21 @@ class Generator:
                 include({"kind": "named", "name": name, "const": False, "volatile": False}, inputs)
         return inputs, outputs, inputs | storage
 
+    def interface_value(self, value, context, *, output=False, field=False):
+        t, policy = unalias(value["type"]), value.get("policy", {})
+        inner = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        if self.types.get(inner.get("name"), {}).get("kind") != "interface":
+            return None
+        direction = policy.get("direction")
+        borrowed = policy.get("ownership") == "borrowed"
+        lifetime = policy.get("lifetime")
+        if (t["volatile"] or inner["volatile"] or inner["const"] or
+                direction not in ({"out", "inout"} if output and field else {"out"} if output else {"in", "inout"} if field else {"in"}) or
+                not ((borrowed and lifetime in (("call", "object", "static") if output else ("call",))) or
+                     (output and not field and policy.get("ownership") == "owned" and lifetime == "caller"))):
+            raise ModelError(f"{context}: unsupported interface ownership or lifetime")
+        return {"interface": short(inner["name"]), "nullable": policy["nullable"], "borrowed": borrowed}
+
     def record_result(self, value, context):
         t, policy = unalias(value["type"]), value.get("policy", {})
         inner = unalias(t["target"]) if t["kind"] == "reference" else {}
@@ -484,7 +499,8 @@ class Generator:
         result_span = self.span(d["result"], d["parameters"], name + " result", output=True)
         result_string = self.string(d["result"], name + " result", output=True) if not result_span else None
         result_record = self.record_result(d["result"], name + " result") if not result_span else None
-        result = ({"span": result_span} if result_span else {"record": result_record} if result_record else
+        result_interface = self.interface_value(d["result"], name + " result", output=True) if not result_span else None
+        result = (result_interface if result_interface else {"span": result_span} if result_span else {"record": result_record} if result_record else
                   {"string": result_string} if result_string else self.scalar(d["result"]["type"]))
         native_params, native_args, parameters, ts_params = [], [], [], []
         if owner:
@@ -546,9 +562,10 @@ class Generator:
                         output_type = 'string | null'
                         parameters.append({"name": pname, "output": {"string": {"nullable": True}}})
                     elif (target.get("kind") == "named" and self.types.get(target["name"], {}).get("kind") == "interface"
-                            and policy.get("ownership") == "owned" and policy.get("lifetime") == "caller"):
+                            and not inner["const"]):
+                        interface = self.interface_value({"type": inner, "policy": dict(policy, nullable=True)}, name + "::" + pname, output=True)
                         output_type = short(target["name"]) + ' | null'
-                        parameters.append({"name": pname, "output": {"interface": short(target["name"])}})
+                        parameters.append({"name": pname, "output": interface})
                     elif (declaration.get("kind") == "record" and not inner["const"] and not inner["volatile"]
                             and policy.get("ownership") == "borrowed" and policy.get("lifetime") == "call"):
                         output_type = f'StructSnapshot<{short(inner["name"])}>'
@@ -579,7 +596,11 @@ class Generator:
                 raise ModelError(f"{name}: output callables require a status or void result")
         target = f'reinterpret_cast<{owner}*>(self)->{d["name"]}' if owner else name
         call = target + '(' + ', '.join(native_args) + ')'
-        if result_span:
+        if result_interface:
+            body = f'return reinterpret_cast<uintptr_t>({call});'
+            native_result_type = 'uintptr_t'
+            result_type = result_interface['interface'] + (' | null' if result_interface['nullable'] else '')
+        elif result_span:
             body = f'return reinterpret_cast<uintptr_t>({call});'
             native_result_type = 'uintptr_t'
             result_type = self.span_ts(result_span, output=True) + (' | null' if result_span['nullable'] else '')
@@ -626,7 +647,7 @@ class Generator:
             used_names.add(public_name)
         if any(d["kind"] == "interface" for d in self.types.values()):
             self.export('binding_Release', 'void', ['uintptr_t pointer'], 'reinterpret_cast<Diligent::IObject*>(pointer)->Release();')
-        if self.scopes:
+        if any(d["kind"] == "interface" for d in self.types.values()):
             self.export('binding_AddRef', 'void', ['uintptr_t pointer'], 'reinterpret_cast<Diligent::IObject*>(pointer)->AddRef();')
         for name, d in self.types.items():
             if name in self.native_only:

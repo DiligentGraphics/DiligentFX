@@ -418,3 +418,11 @@ Zero capacity is supported. An invalid written count throws before reading data.
 Multiple outputs are returned in an object keyed by their native parameter names,
 inside `value` for status-returning functions. Output arguments are omitted from
 the JS call. Struct arrays use native default construction and destruction.
+
+## Borrowed interface results
+
+Returned interface pointers explicitly declare `ownership` and `lifetime`.
+Borrowed results acquire a reference for their JS wrapper; owned results transfer
+the existing reference. Call `dispose()` on either wrapper. Pointer outputs follow
+the same rule. Multiple-output conversion failures release both already wrapped
+and not yet wrapped owned results. Nullable results preserve null.

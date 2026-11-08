@@ -291,6 +291,12 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("FillIds(Capacity: number, InvalidCount: boolean, Grow: boolean): Result<{ pIds: BigUint64Array; Written: number }>", types)
         self.assertIn("FillRecords(Capacity: number): Array<StructSnapshot<MarshalOutputRecord>>", types)
 
+    def test_borrowed_interface_returns_retain_ownership_metadata(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        _, _, types = generator.generate()
+        self.assertEqual(generator.schema["functions"]["BorrowObject"]["result"], {"interface": "IMarshalObject", "nullable": True, "borrowed": True})
+        self.assertIn("BorrowObject(pObject: IMarshalObject, Null: boolean): IMarshalObject | null", types)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"
@@ -320,7 +326,7 @@ class GeneratorTest(unittest.TestCase):
     def test_rejects_unsupported_ownership(self):
         model = deepcopy(MODEL)
         self.declaration(model, "CreateMarshalObject")["parameters"][-1]["policy"]["ownership"] = "borrowed"
-        with self.assertRaisesRegex(ModelError, "unsupported output ownership"):
+        with self.assertRaisesRegex(ModelError, "unsupported interface ownership"):
             self.emit(model)
 
     def test_rejects_default_arguments_instead_of_evaluating_cpp(self):
