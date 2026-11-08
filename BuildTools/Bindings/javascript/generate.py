@@ -69,6 +69,7 @@ class Generator:
             self.validate_scope(name, scope)
             self.releases.add(name.rsplit("::", 1)[0] + "::" + scope["release"])
         self.record_arrays = {}
+        self.constants = {}
         self.schema = {"records": {}, "interfaces": {}, "functions": {}, "enums": {}}
         self.cpp = ['// Generated file. Do not edit.', '#include <cstdint>', '#include <new>',
                     '#include <emscripten/emscripten.h>']
@@ -374,6 +375,8 @@ class Generator:
                 include(field["type"], used)
 
         for d in self.types.values():
+            if d["kind"] == "constant":
+                include(d["type"], outputs)
             callables = [d] if d["kind"] == "function" else d.get("methods", [])
             for function in callables:
                 include(function["result"]["type"], outputs)
@@ -710,6 +713,43 @@ class Generator:
                           "writable": spec["writable"], "success": spec["success"]},
                 "ts": f'{d["name"]}(): Result<{"WriteByteAccess" if spec["writable"] else "ReadByteAccess"} | null>;'}
 
+    def alias_type(self, t):
+        t = unalias(t)
+        declaration = self.types.get(t.get("name"), {})
+        if declaration.get("kind") == "record":
+            return short(t["name"])
+        if declaration.get("kind") == "enum":
+            name = short(t["name"])
+            return f'typeof {name}[keyof typeof {name}]'
+        if t["kind"] == "pointer":
+            inner = unalias(t["target"])
+            if inner.get("name") in ("char_s", "char_u") and inner["const"]:
+                return 'string'
+            if self.types.get(inner.get("name"), {}).get("kind") in ("interface", "record"):
+                return short(inner["name"])
+        if t["kind"] == "array":
+            return f'ReadonlyArray<{self.alias_type(t["element"])}>'
+        return ts_scalar(self.scalar(t))
+
+    def constant_value(self, t, value):
+        """Emit evaluated values without passing exact integers through JS JSON."""
+        t = unalias(t)
+        if value is None:
+            return 'null', 'null'
+        if isinstance(value, str):
+            return json.dumps(value), 'string'
+        if t["kind"] == "array":
+            elements = [self.constant_value(t["element"], element) for element in value]
+            return ('Object.freeze([' + ', '.join(v for v, _ in elements) + '])',
+                    'readonly [' + ', '.join(ts for _, ts in elements) + ']')
+        if self.types.get(t.get("name"), {}).get("kind") == "record":
+            fields = {f["name"]: f["type"] for f in self.record_fields(t["name"])}
+            elements = [(name, *self.constant_value(fields[name], field)) for name, field in value.items()]
+            return ('Object.freeze({' + ', '.join(f'[{json.dumps(n)}]: {v}' for n, v, _ in elements) + '})',
+                    '{ ' + '; '.join(f'readonly {n}: {ts}' for n, _, ts in elements) + ' }')
+        kind = self.scalar(t)
+        return (str(value) + 'n' if kind in ('i64', 'u64') else json.dumps(value)), ts_scalar(kind)
+
     def generate(self):
         self.input_records, self.output_records, self.storage_records = self.record_usage()
         if self.output_records:
@@ -742,6 +782,12 @@ class Generator:
                 self.ts.append(f'export const {short(name)}: {{')
                 self.ts += [f'  readonly {v["name"]}: {v["value"]};' for v in d["values"]]
                 self.ts.append('};')
+            elif kind == "constant":
+                value, ts_type = self.constant_value(d["type"], d["value"])
+                self.constants[short(name)] = value
+                self.ts.append(f'export const {short(name)}: {ts_type};')
+            elif kind == "alias":
+                self.ts.append(f'export type {short(name)} = {self.alias_type(d["type"])};')
             elif kind == "record":
                 self.record(d)
             elif kind == "interface":
@@ -768,7 +814,7 @@ class Generator:
                 raise ModelError(f"{name}: JavaScript generation does not support {kind} declarations yet")
         self.cpp.append('}')
         self.ts.append('export interface Bindings {')
-        self.ts += [f'  readonly {name}: typeof {name};' for name in self.schema['enums']]
+        self.ts += [f'  readonly {name}: typeof {name};' for name in (*self.schema['enums'], *self.constants)]
         self.ts += [f'  readonly {name}: NativeType<{name}>;' for name in self.schema['interfaces']]
         self.ts += ['  ' + f['ts'] for f in self.schema['functions'].values()]
         self.ts += ['}', 'export default function createBindings(options?: ModuleOptions): Promise<Bindings>;']
@@ -783,9 +829,12 @@ class Generator:
         js += 'import { createBindings } from "./runtime.mjs";\n'
         for name, values in self.schema['enums'].items():
             js += f'export const {name} = Object.freeze({json.dumps(values)});\n'
+        for name, value in self.constants.items():
+            js += f'export const {name} = {value};\n'
+        js += 'const constants = {' + ', '.join(self.constants) + '};\n'
         js += 'const schema = ' + json.dumps(self.schema, indent=2) + ';\n'
         js += 'export default async function(options = {}) {\n'
-        js += '  return createBindings(await createWasm(options), schema);\n}\n'
+        js += '  return createBindings(await createWasm(options), schema, constants);\n}\n'
         return '\n'.join(self.cpp) + '\n', js, '\n'.join(self.ts) + '\n'
 
 

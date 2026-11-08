@@ -54,6 +54,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
+    "${TEST_SOURCE}/fixtures/Exports.cpp"
     "${TEST_SOURCE}/fixtures/InheritedDescriptors.cpp"
     "${TEST_SOURCE}/fixtures/StructPointers.cpp"
     "${TEST_SOURCE}/fixtures/InterfaceFields.cpp"
@@ -195,3 +196,11 @@ add_test(NAME Bindings-JavaScriptCountMethodsBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/count_method_tests.mjs")
 set_tests_properties(Bindings-JavaScriptCountMethodsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptExports
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_exports.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptExports PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptExportsBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/exports_tests.mjs")
+set_tests_properties(Bindings-JavaScriptExportsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

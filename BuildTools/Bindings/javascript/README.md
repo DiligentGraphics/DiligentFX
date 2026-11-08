@@ -460,3 +460,13 @@ The named method must belong to the same interface or a base, take no arguments,
 and return an unsigned 32-bit or 64-bit count. The wrapper queries the native
 owner and copies the array before returning; no count argument is exposed to JS.
 The pointer and count must describe the same stable data for the synchronous call.
+
+## Standalone constants and typedefs
+
+Selected constants are named ES module exports and read-only members of the
+created API. Integer constants wider than 32 bits use BigInt, preserving invalid
+IDs exactly. Strings use JS strings. Aggregate constants are recursively frozen
+objects and ordinary arrays, so importing a constant never needs native storage.
+Selected typedefs are exported TypeScript aliases; they have no runtime wrapper
+or allocation. Alias use in native signatures continues to resolve to the same
+marshalling representation.

@@ -316,6 +316,15 @@ class GeneratorTest(unittest.TestCase):
             with self.assertRaisesRegex(ModelError, "length_method"):
                 self.emit(model)
 
+    def test_named_constant_and_typedef_exports(self):
+        _, js, types = self.emit()
+        self.assertIn("export const MarshalInvalidID = 18446744073709551615n;", js)
+        self.assertIn("export type MarshalEntityID = bigint;", types)
+        self.assertIn("export type MarshalEntityAlias = bigint;", types)
+        self.assertIn("export type MarshalDescriptorAlias = MarshalDesc;", types)
+        self.assertIn("export type MarshalPropertyName = string;", types)
+        self.assertIn("readonly MarshalInvalidID: typeof MarshalInvalidID", types)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

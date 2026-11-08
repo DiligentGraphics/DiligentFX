@@ -1446,6 +1446,31 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::MarshalEntityID": {},
+    "Diligent::MarshalEntityAlias": {},
+    "Diligent::MarshalDescriptorAlias": {},
+    "Diligent::MarshalPropertyName": {},
+    "Diligent::MarshalInvalidID": {},
+    "Diligent::MarshalAutoOffset": {},
+    "Diligent::MarshalNegativeID": {},
+    "Diligent::MarshalDefaultScale": {},
+    "Diligent::MarshalDefaultEnabled": {},
+    "Diligent::MarshalAnimationName": {},
+    "Diligent::MarshalAnimationNamePointer": {},
+    "Diligent::MarshalLookup": {},
+    "Diligent::MarshalNames": {},
+    "Diligent::EchoEntityID": {},
+    "Diligent::GetInvalidEntityID": {},
+    "Diligent::MarshalExportNames": {
+      "fields": {
+        "Name": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "static",
+          "ownership": "borrowed"
+        }
+      }
     }
   }
 }

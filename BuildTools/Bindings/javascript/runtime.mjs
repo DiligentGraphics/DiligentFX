@@ -42,7 +42,7 @@ function outputScalar(value, type) {
     return value;
 }
 
-export function createBindings(wasm, schema) {
+export function createBindings(wasm, schema, constants = {}) {
     const api = Object.create(null);
     const states = new WeakMap();
     const types = new Map();
@@ -492,6 +492,7 @@ export function createBindings(wasm, schema) {
         return type;
     }
 
+    for (const [name, value] of Object.entries(constants)) api[name] = value;
     for (const name of Object.keys(schema.interfaces)) api[name] = interfaceType(name);
     for (const [name, values] of Object.entries(schema.enums)) api[name] = Object.freeze(values);
     for (const [name, spec] of Object.entries(schema.functions)) {
