@@ -209,7 +209,9 @@
     "Diligent::RadientStandardMaterialTransmissionTextureParameterNames",
     "Diligent::RadientStandardMaterialThicknessTextureParameterNames",
     "Diligent::IRadientSurfaceMaterialWriter",
-    "Diligent::SetStandardMaterialTextureParameters"
+    "Diligent::SetStandardMaterialTextureParameters",
+    "Diligent::InvalidRadientJointIndex",
+    "Diligent::RADIENT_COMPONENT_TYPE_SKIN"
   ],
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -328,7 +330,8 @@
         "HasComponent",
         "GetMesh",
         "GetMeshRenderer",
-        "GetMaterialBindings"
+        "GetMaterialBindings",
+        "GetSkin"
       ],
       "methods": {
         "GetDesc": {
@@ -428,6 +431,11 @@
           "parameters": {
             "Bindings": {"direction": "out"}
           }
+        },
+        "GetSkin": {
+          "parameters": {
+            "Skin": {"direction": "out"}
+          }
         }
       }
     },
@@ -447,7 +455,8 @@
         "RemoveComponent",
         "SetMesh",
         "SetMeshRenderer",
-        "SetMaterialBindings"
+        "SetMaterialBindings",
+        "SetSkin"
       ],
       "methods": {
         "GetScene": {
@@ -471,7 +480,9 @@
         "CreateMesh",
         "LoadTexture",
         "CreateStandardMaterialDefinition",
-        "CreateMaterial"
+        "CreateMaterial",
+        "CreateSkeleton",
+        "CreateSkin"
       ],
       "methods": {
         "CreateMesh": {
@@ -493,6 +504,16 @@
           "parameters": {
             "pDefinition": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "ppMaterial": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateSkeleton": {
+          "parameters": {
+            "ppSkeleton": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "CreateSkin": {
+          "parameters": {
+            "ppSkin": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -750,6 +771,100 @@
     "Diligent::SetStandardMaterialTextureParameters": {
       "parameters": {
         "Writer": {"direction": "in"}
+      }
+    },
+    "Diligent::RadientSkeletonDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pJoints": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+      }
+    },
+    "Diligent::RadientSkeletonJointDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::RadientSkinDesc": {
+      "fields": {
+        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pSkeleton": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "pJoints": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+      }
+    },
+    "Diligent::IRadientSkeletonAsset": {
+      "include_methods": [
+        "GetDesc",
+        "CreatePose"
+      ],
+      "methods": {
+        "CreatePose": {
+          "parameters": {
+            "ppPose": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        }
+      }
+    },
+    "Diligent::IRadientSkeletonPose": {
+      "include_methods": [
+        "GetSkeleton",
+        "GetVersion",
+        "GetJointLocalTransforms",
+        "GetJointGlobalMatrices",
+        "ComputeSkinningMatrices",
+        "UpdateGlobalTransforms",
+        "CreateWriter"
+      ],
+      "methods": {
+        "GetSkeleton": {
+          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+        },
+        "GetJointLocalTransforms": {
+          "parameters": {
+            "pTransforms": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+          }
+        },
+        "GetJointGlobalMatrices": {
+          "parameters": {
+            "pMatrices": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+          }
+        },
+        "ComputeSkinningMatrices": {
+          "parameters": {
+            "pSkin": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pMatrices": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call",
+              "length_from": {"parameter": "pSkin", "method": "GetDesc", "field": "JointCount"}
+            }
+          }
+        },
+        "CreateWriter": {
+          "parameters": {
+            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        }
+      }
+    },
+    "Diligent::IRadientSkeletonPoseWriter": {
+      "include_methods": [
+        "SetJointLocalTransforms",
+        "ResetToRestPose",
+        "Commit"
+      ],
+      "methods": {
+        "SetJointLocalTransforms": {
+          "parameters": {
+            "pTransforms": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+          }
+        }
+      }
+    },
+    "Diligent::RadientSkinComponent": {
+      "fields": {
+        "pSkin": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "pPose": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
       }
     }
   }

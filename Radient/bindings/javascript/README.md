@@ -252,3 +252,11 @@ of a typed array for numeric values. Counts must match the reflected type and
 array size. Writers copy assignments and apply them on `Commit()`. Texture
 assignments follow the native contract: initialize them before querying material
 load status; texture changes after finalization are rejected.
+
+## Skeletons and skins
+
+Skeleton/skin descriptions and joint arrays are copied snapshots. Pose writers
+support deferred propagation just like native code. `ComputeSkinningMatrices`
+queries the skin joint count natively and returns an array of matrix snapshots;
+JavaScript does not allocate or size native matrix storage. Its optional boolean
+arguments retain their native defaults.

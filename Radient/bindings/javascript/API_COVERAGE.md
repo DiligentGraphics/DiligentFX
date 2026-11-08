@@ -16,6 +16,8 @@ The model and generator tests separately check declarations and metadata.
 
 | `material_edit_tests.mjs` | Material parameter reads, reusable writers, SetParameter/SetTexture/Commit, surface writers and standard texture-parameter helper |
 
+| `skinning_tests.mjs` | Skeleton/skin creation and descriptions; every pose and pose-writer method, native-sized matrix outputs, scene skin component |
+
 Native callbacks, externally supplied thread pools, importer implementations,
-and GPU/backend objects are not exposed. Asset-manager `Stop()` and its native
-task output remain native; disposing the engine performs normal shutdown.
+and GPU/backend objects are not exposed. Asset-manager `Stop()` takes a native device context and remains outside the
+CPU-only binding subset; disposing the engine performs normal shutdown.
