@@ -1,7 +1,8 @@
 # Radient JavaScript bindings
 
 The bindings provide owning read-only and mutable data blobs, engine/scene creation,
-and scene editing. They use the real Radient implementation, compiled to Wasm,
+and scene editing, including camera and light components. They use the real
+Radient implementation, compiled to Wasm,
 and run in browsers or Node without a graphics device. Blobs can also be created
 without an engine.
 
@@ -184,3 +185,31 @@ Real-library integration suites in `Radient/bindings/javascript/*_tests.mjs` are
 discovered by CMake and run unchanged in Node and a browser. They check public API
 selection, metadata, marshalling, ownership, and a few connected scene operations;
 native tests remain responsible for exhaustive scene behavior.
+
+## Camera and light components
+
+`SetCamera(entity, descriptor)` and `SetLight(entity, descriptor)` add or replace
+components through a scene writer. Omitted fields take native defaults on each
+call; these methods replace the component rather than patching individual fields.
+`GetCamera(entity)` and `GetLight(entity)` return `{status, value}` with independent
+descriptor snapshots, including nested clipping-range and color objects. Check
+the status: absent components return `RADIENT_STATUS_NOT_FOUND` with default data.
+
+```js
+writer.SetCamera(cameraEntity, {
+    Projection: api.RADIENT_CAMERA_PROJECTION.RADIENT_CAMERA_PROJECTION_PERSPECTIVE,
+    FocalLength: 35,
+    ClippingRange: {x: 0.1, y: 500},
+});
+writer.SetLight(lightEntity, {
+    Type: api.RADIENT_LIGHT_TYPE.RADIENT_LIGHT_TYPE_POINT,
+    Color: {x: 1, y: 0.75, z: 0.5},
+    Intensity: 4,
+});
+scene.HasComponent(cameraEntity, api.RADIENT_COMPONENT_TYPE_CAMERA);
+writer.RemoveComponent(lightEntity, api.RADIENT_COMPONENT_TYPE_LIGHT);
+```
+
+Component type constants are `bigint`; projection/light-type enumerators are
+numbers. Camera and light units and validation rules follow the native descriptors.
+Setting these components does not create a renderer or require a graphics device.

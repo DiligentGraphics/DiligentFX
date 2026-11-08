@@ -243,7 +243,10 @@
         "GetRootEntityCount",
         "GetRootEntities",
         "GetChildren",
-        "GetSceneRevisions"
+        "GetSceneRevisions",
+        "GetCamera",
+        "GetLight",
+        "HasComponent"
       ],
       "methods": {
         "GetDesc": {
@@ -397,6 +400,36 @@
             "ownership": "borrowed",
             "lifetime": "object"
           }
+        },
+        "GetCamera": {
+          "parameters": {
+            "Camera": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        },
+        "GetLight": {
+          "parameters": {
+            "Light": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        },
+        "HasComponent": {
+          "parameters": {
+            "HasComponent": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
         }
       }
     },
@@ -412,7 +445,10 @@
         "SetEntityOwnVisibility",
         "SetParent",
         "SetLocalTransform",
-        "CommitChanges"
+        "CommitChanges",
+        "SetCamera",
+        "SetLight",
+        "RemoveComponent"
       ],
       "methods": {
         "GetScene": {
@@ -458,8 +494,37 @@
               "lifetime": "call"
             }
           }
+        },
+        "SetCamera": {
+          "parameters": {
+            "Camera": {
+              "direction": "in",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        },
+        "SetLight": {
+          "parameters": {
+            "Light": {
+              "direction": "in",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
         }
       }
-    }
+    },
+    "Diligent::RadientCameraComponent": {},
+    "Diligent::RadientLightComponent": {},
+    "Diligent::RadientFloat2": {},
+    "Diligent::RADIENT_CAMERA_PROJECTION": {},
+    "Diligent::RADIENT_LIGHT_TYPE": {},
+    "Diligent::RadientComponentTypeID": {},
+    "Diligent::RADIENT_COMPONENT_TYPE_CAMERA": {},
+    "Diligent::RADIENT_COMPONENT_TYPE_LIGHT": {},
+    "Diligent::RADIENT_COMPONENT_TYPE_TRANSFORM": {}
   }
 }

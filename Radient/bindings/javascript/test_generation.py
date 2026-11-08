@@ -60,6 +60,18 @@ class RadientGenerationTest(unittest.TestCase):
             self.assertNotIn(name, types)
             self.assertNotIn(name, js)
 
+    def test_camera_and_light_component_signatures(self):
+        _, _, types = Generator(MODEL, "Radient", ["RadientDataBlob.h", "RadientEngine.h"], ADAPTERS).generate()
+        for component in ("Camera", "Light"):
+            self.assertIn(f"Get{component}(Entity: bigint): Result<StructSnapshot<Radient{component}Component>>", types)
+            self.assertIn(f"Set{component}(Entity: bigint, {component}: Radient{component}Component): number", types)
+        self.assertIn("HasComponent(Entity: bigint, ComponentType: bigint): Result<boolean>", types)
+        self.assertIn("RemoveComponent(Entity: bigint, ComponentType: bigint): number", types)
+        self.assertIn("export const RADIENT_COMPONENT_TYPE_CAMERA: bigint", types)
+        self.assertIn("export const RADIENT_COMPONENT_TYPE_LIGHT: bigint", types)
+        self.assertIn("ClippingRange?: RadientFloat2", types)
+        self.assertIn("EnableColorTemperature?: boolean", types)
+
 
 if __name__ == "__main__":
     unittest.main()
