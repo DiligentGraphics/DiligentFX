@@ -149,7 +149,7 @@ class GeneratorTest(unittest.TestCase):
                     function["parameters"][1]["type"] = {"kind": "scalar", "name": value, "bits": 32, "const": False, "volatile": False}
                 else:
                     function["parameters"][0]["policy"][key] = value
-                with self.assertRaisesRegex(ModelError, "input spans require|span length must be"):
+                with self.assertRaisesRegex(ModelError, "input spans require|output buffers require|span length must be"):
                     self.emit(model)
 
     def test_input_arrays_reject_interface_pointer_elements(self):
@@ -285,6 +285,11 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("MakeRecordOutput(): StructSnapshot<MarshalOutputRecord>;", types)
         self.assertIn("*reinterpret_cast<Diligent::Uint64*>(Value)", cpp)
         self.assertIn("new (std::nothrow) Diligent::MarshalOutputRecord{}", cpp)
+
+    def test_output_buffer_and_multiple_output_declarations(self):
+        _, _, types = self.emit()
+        self.assertIn("FillIds(Capacity: number, InvalidCount: boolean, Grow: boolean): Result<{ pIds: BigUint64Array; Written: number }>", types)
+        self.assertIn("FillRecords(Capacity: number): Array<StructSnapshot<MarshalOutputRecord>>", types)
 
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)

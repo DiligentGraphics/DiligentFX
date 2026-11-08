@@ -34,6 +34,7 @@
 #include "InputArrays.h"
 #include "OutputArrays.h"
 #include "FixedArrays.h"
+#include "OutputBuffers.h"
 #include "OutputParameters.h"
 #include "Object.h"
 

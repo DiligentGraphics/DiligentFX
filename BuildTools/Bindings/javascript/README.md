@@ -408,3 +408,13 @@ the output argument. Status-returning calls return `{status, value}`; void calls
 return the output value directly. Struct results are snapshots copied before the
 temporary output is destroyed, including on conversion failure. Output storage
 requires `direction: out`, non-nullability, and borrowed call-scoped ownership.
+
+## Caller-filled arrays and multiple outputs
+
+An output pointer with `length` names the input capacity; optional `written`
+names an unsigned scalar output containing the number actually written. The
+wrapper allocates the buffer and returns an owned JS copy of the written prefix.
+Zero capacity is supported. An invalid written count throws before reading data.
+Multiple outputs are returned in an object keyed by their native parameter names,
+inside `value` for status-returning functions. Output arguments are omitted from
+the JS call. Struct arrays use native default construction and destruction.

@@ -1163,6 +1163,51 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::FillIds": {
+      "parameters": {
+        "pIds": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed",
+          "length": "Capacity",
+          "written": "Written"
+        },
+        "Written": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::FillRecords": {
+      "parameters": {
+        "pRecords": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed",
+          "length": "Capacity"
+        }
+      }
+    },
+    "Diligent::FillMultiple": {
+      "parameters": {
+        "Count": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        },
+        "ppLabel": {
+          "direction": "out",
+          "nullable": false,
+          "lifetime": "static",
+          "ownership": "borrowed"
+        }
+      }
     }
   }
 }

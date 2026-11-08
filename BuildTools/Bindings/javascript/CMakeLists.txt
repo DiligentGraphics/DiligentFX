@@ -54,6 +54,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
+    "${TEST_SOURCE}/fixtures/OutputBuffers.cpp"
     "${TEST_SOURCE}/fixtures/OutputParameters.cpp"
     "${TEST_SOURCE}/fixtures/Implementation.cpp"
     "${TEST_SOURCE}/fixtures/IncludeTest.c")
@@ -142,3 +143,11 @@ add_test(NAME Bindings-JavaScriptOutputParametersBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/outputparameters_tests.mjs")
 set_tests_properties(Bindings-JavaScriptOutputParametersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptOutputBuffers
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_outputbuffers.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptOutputBuffers PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptOutputBuffersBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/outputbuffers_tests.mjs")
+set_tests_properties(Bindings-JavaScriptOutputBuffersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

@@ -34,7 +34,7 @@ def validate_binding(policy, context):
     return binding
 
 
-VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length"}
+VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written"}
 
 
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
@@ -67,6 +67,14 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
 
 def validate_length_policy(value, siblings, context):
     policy = value.get("policy", {})
+    if "written" in policy:
+        count = siblings.get(policy["written"], {})
+        count_type = unalias(count["type"]) if count else {}
+        inner = unalias(count_type["target"]) if count_type.get("kind") in ("pointer", "reference") else {}
+        if ("length" not in policy or policy.get("direction") != "out" or
+                count.get("policy", {}).get("direction") != "out" or
+                inner.get("kind") != "scalar" or inner.get("name") not in ("uint", "ulong", "ulonglong")):
+            raise ModelError(f"{context}: written must name an unsigned scalar output")
     if "length" in policy:
         length = siblings.get(policy["length"])
         length_type = unalias(length["type"]) if length else {}
@@ -81,6 +89,7 @@ def apply_values_policy(values, policies, context, *, is_field=False):
     for value in values:
         policy = policies.get(value["name"], {})
         apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
+    for value in values:
         validate_length_policy(value, by_name, f"{context}::{value['name']}")
 
 

@@ -317,6 +317,32 @@ export function createBindings(wasm, schema) {
         return outputScalar(view[readers[spec.type]](address, true), spec.type);
     }
 
+    function allocateOutput(spec, capacity, cleanup) {
+        if (spec.buffer) {
+            const buffer = spec.buffer;
+            if (capacity === 0) return 0;
+            if (buffer.record) {
+                if (capacity > (wasm[buffer.maxCount]() >>> 0)) throw new RangeError("Output array exceeds allocation limit");
+                const address = wasm[buffer.create](capacity) >>> 0;
+                if (!address) throw new Error("Could not allocate output array");
+                cleanup.push(() => wasm[buffer.destroy](address));
+                return address;
+            }
+            const size = byteLength(capacity * scalarArrays[buffer.type].BYTES_PER_ELEMENT);
+            const address = wasm._malloc(size) >>> 0;
+            if (!address) throw new Error("Could not allocate output array");
+            cleanup.push(() => wasm._free(address));
+            wasm.HEAPU8.fill(0, address, address + size);
+            return address;
+        }
+        const recordSpec = spec.record && schema.records[spec.record];
+        const address = (recordSpec ? wasm[recordSpec.create]() : wasm._malloc(8)) >>> 0;
+        if (!address) throw new Error("Could not allocate output storage");
+        cleanup.push(() => recordSpec ? wasm[recordSpec.destroy](address) : wasm._free(address));
+        if (!recordSpec) wasm.HEAPU8.fill(0, address, address + 8);
+        return address;
+    }
+
     function invoke(spec, owner, self, args) {
         if (spec.scope) return acquireBytes(spec.scope, owner, self, args);
         const inputs = spec.parameters.filter(p => !p.output);
@@ -325,17 +351,23 @@ export function createBindings(wasm, schema) {
         const nativeArgs = owner ? [pointer(self, owner)] : [];
         const cleanup = [];
         let argument = 0;
-        let output;
+        const outputs = [];
+        const rollback = [];
+        let completed = false;
         try {
             for (const parameter of spec.parameters) {
                 if (parameter.output) {
-                    // Eight bytes cover every supported scalar and a Wasm32 pointer.
-                    const recordSpec = parameter.output.record && schema.records[parameter.output.record];
-                    const address = (recordSpec ? wasm[recordSpec.create]() : wasm._malloc(8)) >>> 0;
-                    if (!address) throw new Error("Could not allocate output storage");
-                    cleanup.push(() => recordSpec ? wasm[recordSpec.destroy](address) : wasm._free(address));
-                    if (!recordSpec) wasm.HEAPU8.fill(0, address, address + 8);
-                    output = {address, spec: parameter.output};
+                    const buffer = parameter.output.buffer;
+                    const capacity = buffer ? byteLength(inputScalar(args[inputs.findIndex(p => p.name === buffer.length)], buffer.lengthType, buffer.length)) : 0;
+                    const address = allocateOutput(parameter.output, capacity, cleanup);
+                    const output = {name: parameter.name, address, spec: parameter.output, capacity, consumed: false};
+                    outputs.push(output);
+                    if (output.spec.interface) cleanup.push(() => {
+                        if (!output.consumed) {
+                            const object = new DataView(wasm.HEAPU8.buffer).getUint32(address, true);
+                            if (object) wasm._binding_Release(object);
+                        }
+                    });
                     nativeArgs.push(address);
                 } else {
                     const value = args[argument++];
@@ -362,10 +394,28 @@ export function createBindings(wasm, schema) {
                 spec.result.record ? outputRecord(nativeResult, spec.result.record) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
-            if (!output) return result;
-            const value = readOutput(output.address, output.spec);
+            const values = {};
+            for (const output of outputs) {
+                let value;
+                if (output.spec.buffer) {
+                    const buffer = output.spec.buffer;
+                    const countOutput = buffer.written && outputs.find(o => o.name === buffer.written);
+                    const count = countOutput ? byteLength(readOutput(countOutput.address, countOutput.spec)) : output.capacity;
+                    if (count > output.capacity) throw new RangeError("Written count exceeds output capacity");
+                    value = outputSpan(output.address, count, buffer);
+                } else {
+                    output.consumed = true;
+                    value = readOutput(output.address, output.spec);
+                    if (output.spec.interface && value) rollback.push(() => value.dispose());
+                }
+                Object.defineProperty(values, output.name, {value, enumerable: true});
+            }
+            completed = true;
+            if (!outputs.length) return result;
+            const value = outputs.length === 1 ? values[outputs[0].name] : values;
             return spec.result === "void" ? value : {status: result, value};
         } finally {
+            if (!completed) for (let i = rollback.length - 1; i >= 0; --i) rollback[i]();
             for (let i = cleanup.length - 1; i >= 0; --i) cleanup[i]();
         }
     }

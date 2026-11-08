@@ -259,6 +259,28 @@ class Generator:
             raise ModelError(f"{context}: {'output' if output else 'input'} spans support only scalars and plain structs")
         return span
 
+    def output_buffer(self, value, siblings, context):
+        policy = value.get("policy", {})
+        if policy.get("direction") != "out" or "length" not in policy:
+            return None
+        t = unalias(value["type"])
+        element = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        if (not element or element["const"] or element["volatile"] or
+                policy.get("ownership") != "borrowed" or policy.get("lifetime") != "call"):
+            raise ModelError(f"{context}: output buffers require writable borrowed call-scoped elements")
+        # Reuse element layout and capacity validation, with a writable destination.
+        proxy = deepcopy(value)
+        proxy["type"] = dict(t, target=dict(element, const=True))
+        proxy["policy"] = dict(policy, direction="in")
+        proxy["policy"].pop("written", None)
+        span = self.span(proxy, siblings, context)
+        span["nullable"] = False
+        if "record" in span:
+            span.update(self.record_array(element["name"], output=True))
+        if "written" in policy:
+            span["written"] = policy["written"]
+        return span
+
     @staticmethod
     def span_ts(span, *, output=False):
         if "record" in span:
@@ -468,6 +490,7 @@ class Generator:
         if owner:
             native_params.append('uintptr_t self')
         output_type = None
+        output_types = {}
         for p in d["parameters"]:
             pname = p["name"]
             if pname in self.fixed_arguments.get(name, {}):
@@ -477,6 +500,13 @@ class Generator:
             if p.get("default") is not None:
                 raise ModelError(f"{name}::{pname}: default arguments need an explicit adapter")
             t, policy = unalias(p["type"]), p.get("policy", {})
+            buffer = self.output_buffer(p, d["parameters"], name + "::" + pname)
+            if buffer:
+                native_params.append('uintptr_t ' + pname)
+                native_args.append(f'reinterpret_cast<{cpp_type(p["type"])}>({pname})')
+                parameters.append({"name": pname, "output": {"buffer": buffer}})
+                output_types[pname] = self.span_ts(buffer, output=True)
+                continue
             span = self.span(p, d["parameters"], name + "::" + pname)
             if span:
                 native_params.append('uintptr_t ' + pname)
@@ -508,8 +538,6 @@ class Generator:
                     ts_params.append(f'{pname}: {short(inner["name"])}' + (' | null' if policy['nullable'] else ''))
                 elif (policy.get("direction") == "out"
                         and policy.get("nullable") is False):
-                    if output_type is not None:
-                        raise ModelError(f"{name}: multiple outputs need an explicit adapter")
                     target = unalias(inner["target"]) if inner["kind"] == "pointer" else {}
                     string = self.string({"type": inner, "policy": policy}, name + "::" + pname, output=True)
                     if string and not inner["const"]:
@@ -535,12 +563,16 @@ class Generator:
                         raise ModelError(f"{name}::{pname}: unsupported output ownership")
                 else:
                     raise ModelError(f"{name}::{pname}: unsupported pointer/reference marshalling")
+                if parameters[-1].get("output"):
+                    output_types[pname] = output_type
             else:
                 kind = self.scalar(t)
                 native_params.append(cpp_type(p["type"]) + ' ' + pname)
                 native_args.append(pname)
                 parameters.append({"name": pname, "type": kind})
                 ts_params.append(f'{pname}: {ts_scalar(kind)}')
+        output_type = (next(iter(output_types.values())) if len(output_types) == 1 else
+                       '{ ' + '; '.join(f'{n}: {t}' for n, t in output_types.items()) + ' }' if output_types else None)
         if output_type:
             result_decl = self.types.get(unalias(d["result"]["type"]).get("name"), {})
             if result != "void" and result_decl.get("policy", {}).get("role") != "status":
