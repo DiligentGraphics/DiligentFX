@@ -294,6 +294,11 @@ class GeneratorTest(unittest.TestCase):
         self.assertEqual(generator.schema["functions"]["BorrowObject"]["result"], {"interface": "IMarshalObject", "nullable": True, "borrowed": True})
         self.assertIn("BorrowObject(pObject: IMarshalObject, Null: boolean): IMarshalObject | null", types)
 
+    def test_optional_struct_pointer_declarations(self):
+        _, _, types = self.emit()
+        self.assertIn("ReadStructPointer(pData: MarshalDesc | null): bigint", types)
+        self.assertIn("EchoStructPointer(pData: MarshalDesc | null): StructSnapshot<MarshalDesc> | null", types)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

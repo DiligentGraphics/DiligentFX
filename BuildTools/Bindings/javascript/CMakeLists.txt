@@ -54,6 +54,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
     "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
+    "${TEST_SOURCE}/fixtures/StructPointers.cpp"
     "${TEST_SOURCE}/fixtures/InterfaceFields.cpp"
     "${TEST_SOURCE}/fixtures/BorrowedInterfaces.cpp"
     "${TEST_SOURCE}/fixtures/OutputBuffers.cpp"
@@ -169,3 +170,11 @@ add_test(NAME Bindings-JavaScriptInterfaceFieldsBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/interfacefields_tests.mjs")
 set_tests_properties(Bindings-JavaScriptInterfaceFieldsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptStructPointers
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_structpointers.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptStructPointers PROPERTIES LABELS "Bindings;JavaScript")
+add_test(NAME Bindings-JavaScriptStructPointersBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/structpointers_tests.mjs")
+set_tests_properties(Bindings-JavaScriptStructPointersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

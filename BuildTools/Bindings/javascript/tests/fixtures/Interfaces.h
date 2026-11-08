@@ -34,6 +34,7 @@
 #include "InputArrays.h"
 #include "OutputArrays.h"
 #include "FixedArrays.h"
+#include "StructPointers.h"
 #include "InterfaceFields.h"
 #include "BorrowedInterfaces.h"
 #include "OutputBuffers.h"

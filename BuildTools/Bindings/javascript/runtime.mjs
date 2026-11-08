@@ -115,6 +115,15 @@ export function createBindings(wasm, schema) {
         return value;
     }
 
+    function inputRecordPointer(value, spec, cleanup) {
+        return value === null && spec.nullable ? 0 : record(value, spec.recordPointer, cleanup);
+    }
+
+    function outputRecordPointer(address, spec, rollback) {
+        if ((address >>> 0) === 0 && spec.nullable) return null;
+        return outputRecord(address, spec.recordPointer, rollback);
+    }
+
     function record(value, name, cleanup, address) {
         if (!value || typeof value !== "object" || Array.isArray(value)) {
             throw new TypeError(`${name} must be a descriptor object`);
@@ -135,6 +144,7 @@ export function createBindings(wasm, schema) {
             if (fieldValue !== undefined) {
                 if (field.array) inputFixedArray(fieldValue, wasm[field.address](address) >>> 0, field.array, cleanup);
                 else if (field.span) spans.push({field, value: fieldValue});
+                else if (field.recordPointer) wasm[field.set](address, inputRecordPointer(fieldValue, field, cleanup));
                 else if (field.interface) wasm[field.set](address, inputInterface(fieldValue, field, cleanup));
                 else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
                 else if (field.record) record(fieldValue, field.record, cleanup, wasm[field.address](address) >>> 0);
@@ -159,6 +169,7 @@ export function createBindings(wasm, schema) {
                 field.span ? outputSpan(wasm[field.get](address),
                 BigInt.asUintN(64, wasm[field.span.getLength](address)), field.span, rollback) :
                 field.record ? outputRecord(wasm[field.address](address), field.record, rollback) :
+                field.recordPointer ? outputRecordPointer(wasm[field.get](address), field, rollback) :
                 field.interface ? outputInterface(wasm[field.get](address), field, rollback) :
                 field.string ? outputString(wasm[field.get](address), field.string) :
                 outputScalar(wasm[field.get](address), field.type);
@@ -415,7 +426,9 @@ export function createBindings(wasm, schema) {
                     nativeArgs.push(address);
                 } else {
                     const value = args[argument++];
-                    if (parameter.record) {
+                    if (parameter.recordPointer) {
+                        nativeArgs.push(inputRecordPointer(value, parameter, cleanup));
+                    } else if (parameter.record) {
                         nativeArgs.push(record(value, parameter.record, cleanup));
                     } else if (parameter.interface) {
                         nativeArgs.push(inputInterface(value, parameter, cleanup));
@@ -433,7 +446,7 @@ export function createBindings(wasm, schema) {
             const nativeResult = wasm[spec.export](...nativeArgs);
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
-            const result = spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,
+            const result = spec.result.recordPointer ? outputRecordPointer(nativeResult, spec.result, rollback) : spec.result.interface ? outputInterface(nativeResult, spec.result, rollback) : spec.result.span ? outputSpan(nativeResult,
                 args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span, rollback) :
                 spec.result.record ? outputRecord(nativeResult, spec.result.record, rollback) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);

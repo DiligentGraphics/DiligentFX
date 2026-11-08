@@ -393,6 +393,20 @@ class Generator:
             raise ModelError(f"{context}: unsupported interface ownership or lifetime")
         return {"interface": short(inner["name"]), "nullable": policy["nullable"], "borrowed": borrowed}
 
+    def record_pointer(self, value, context, *, output=False, field=False):
+        t, policy = unalias(value["type"]), value.get("policy", {})
+        inner = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        if self.types.get(inner.get("name"), {}).get("kind") != "record":
+            return None
+        directions = {"out" if output else "in"}
+        if field:
+            directions.add("inout")
+        if (t["volatile"] or inner["volatile"] or not inner["const"] or
+                policy.get("direction") not in directions or policy.get("ownership") != "borrowed" or
+                policy.get("lifetime") not in (("call", "object", "static") if output else ("call",)) or "length" in policy):
+            raise ModelError(f"{context}: struct pointers require borrowed const data with a supported lifetime")
+        return {"recordPointer": short(inner["name"]), "nullable": policy["nullable"]}
+
     def record_result(self, value, context):
         t, policy = unalias(value["type"]), value.get("policy", {})
         inner = unalias(t["target"]) if t["kind"] == "reference" else {}
@@ -467,10 +481,16 @@ class Generator:
                 interface = self.interface_value(field, context, field=True)
             if as_output:
                 interface = self.interface_value(field, context, output=True, field=True)
+            record_pointer = None
+            if as_input:
+                record_pointer = self.record_pointer(field, context, field=True)
+            if as_output:
+                record_pointer = self.record_pointer(field, context, output=True, field=True)
             spec = {}
-            if string or interface:
-                spec.update(interface if interface else {"string": string})
-                field_ts = ((interface['interface'] + (' | null' if interface['nullable'] else '')) if interface else
+            if string or interface or record_pointer:
+                spec.update(record_pointer if record_pointer else interface if interface else {"string": string})
+                field_ts = ((record_pointer['recordPointer'] + (' | null' if record_pointer['nullable'] else '')) if record_pointer else
+                            (interface['interface'] + (' | null' if interface['nullable'] else '')) if interface else
                             'string' + (' | null' if string['nullable'] else ''))
                 if as_input:
                     spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",
@@ -516,7 +536,8 @@ class Generator:
         result_string = self.string(d["result"], name + " result", output=True) if not result_span else None
         result_record = self.record_result(d["result"], name + " result") if not result_span else None
         result_interface = self.interface_value(d["result"], name + " result", output=True) if not result_span else None
-        result = (result_interface if result_interface else {"span": result_span} if result_span else {"record": result_record} if result_record else
+        result_pointer = self.record_pointer(d["result"], name + " result", output=True) if not result_span else None
+        result = (result_pointer if result_pointer else result_interface if result_interface else {"span": result_span} if result_span else {"record": result_record} if result_record else
                   {"string": result_string} if result_string else self.scalar(d["result"]["type"]))
         native_params, native_args, parameters, ts_params = [], [], [], []
         if owner:
@@ -559,7 +580,11 @@ class Generator:
                 native_params.append('uintptr_t ' + pname)
                 native_args.append(('*' if t["kind"] == "reference" else '') +
                                    f'reinterpret_cast<{cpp_type(t["target"])}*>({pname})')
-                if (t["kind"] == "reference" and inner["const"] and declaration.get("kind") == "record"
+                record_pointer = self.record_pointer(p, name + "::" + pname) if policy.get("direction") == "in" else None
+                if record_pointer:
+                    parameters.append({"name": pname, **record_pointer})
+                    ts_params.append(f'{pname}: {record_pointer["recordPointer"]}' + (' | null' if record_pointer['nullable'] else ''))
+                elif (t["kind"] == "reference" and inner["const"] and declaration.get("kind") == "record"
                         and policy == {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call"}):
                     parameters.append({"name": pname, "record": short(inner["name"])})
                     ts_params.append(f'{pname}: {short(inner["name"])}')
@@ -612,7 +637,11 @@ class Generator:
                 raise ModelError(f"{name}: output callables require a status or void result")
         target = f'reinterpret_cast<{owner}*>(self)->{d["name"]}' if owner else name
         call = target + '(' + ', '.join(native_args) + ')'
-        if result_interface:
+        if result_pointer:
+            body = f'return reinterpret_cast<uintptr_t>({call});'
+            native_result_type = 'uintptr_t'
+            result_type = f'StructSnapshot<{result_pointer["recordPointer"]}>' + (' | null' if result_pointer['nullable'] else '')
+        elif result_interface:
             body = f'return reinterpret_cast<uintptr_t>({call});'
             native_result_type = 'uintptr_t'
             result_type = result_interface['interface'] + (' | null' if result_interface['nullable'] else '')

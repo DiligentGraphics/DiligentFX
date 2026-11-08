@@ -1324,6 +1324,68 @@
           "element_nullable": true
         }
       }
+    },
+    "Diligent::MarshalPointerDesc": {
+      "fields": {
+        "pData": {
+          "direction": "inout",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::ReadStructPointer": {
+      "parameters": {
+        "pData": {
+          "direction": "in",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::ReadRequiredPointer": {
+      "parameters": {
+        "pData": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
+    },
+    "Diligent::EchoStructPointer": {
+      "parameters": {
+        "pData": {
+          "direction": "in",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": true,
+        "lifetime": "call",
+        "ownership": "borrowed"
+      }
+    },
+    "Diligent::EchoPointerDesc": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "lifetime": "call",
+        "ownership": "borrowed"
+      }
     }
   }
 }

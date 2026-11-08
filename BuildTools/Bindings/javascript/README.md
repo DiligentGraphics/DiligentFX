@@ -435,3 +435,12 @@ interface outputs acquire independent wrapper references, including when nested
 inside descriptors or arrays. Dispose those wrappers when finished.
 The pointer policy describes borrowed element ownership; `element_nullable`
 allows null interface elements independently of the array's own `nullable` flag.
+
+## Individual struct pointers
+
+Borrowed `const T*` inputs accept a descriptor object, or null when the policy
+allows it. Fields use the same representation; omitted fields preserve native
+defaults. Native temporary storage survives through result conversion. Borrowed
+struct pointers returned directly or through fields become copied snapshots,
+including null for optional results. Use `length` only for arrays, not individual
+struct pointers.
