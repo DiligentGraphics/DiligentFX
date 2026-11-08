@@ -47,6 +47,7 @@ add_custom_target(Bindings-GenerateJavaScriptTests
 add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${GENERATED}/BindingTests.cpp"
     "${TEST_SOURCE}/fixtures/Buffers.cpp"
+    "${TEST_SOURCE}/fixtures/Strings.cpp"
     "${TEST_SOURCE}/fixtures/Implementation.cpp"
     "${TEST_SOURCE}/fixtures/IncludeTest.c")
 add_dependencies(BindingTestsWasm Bindings-GenerateJavaScriptTests)
@@ -65,6 +66,7 @@ add_custom_target(Bindings-TestJavaScript
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/test_generator.py" "${MODEL}"
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_marshalling.mjs" "${GENERATED}/BindingTests.mjs"
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_buffers.mjs" "${GENERATED}/BindingTests.mjs"
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_strings.mjs" "${GENERATED}/BindingTests.mjs"
     DEPENDS BindingTestsWasm
     COMMENT "Testing generated bindings through JavaScript, Wasm, and native test objects"
     VERBATIM)

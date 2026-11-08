@@ -186,6 +186,185 @@
     "Diligent::GetLiveBufferCount": {},
     "Diligent::GetBufferReleaseCount": {},
     "Diligent::GetTestHeapSize": {},
-    "Diligent::GrowTestHeap": {}
+    "Diligent::GrowTestHeap": {},
+    "Diligent::MarshalStringDesc": {
+      "fields": {
+        "Name": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "Label": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::IMarshalStrings": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalStrings",
+      "methods": {
+        "SetText": {
+          "parameters": {
+            "Text": {
+              "direction": "in",
+              "nullable": true,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        },
+        "GetText": {
+          "result": {
+            "direction": "out",
+            "nullable": true,
+            "ownership": "borrowed",
+            "lifetime": "object"
+          }
+        },
+        "ReadText": {
+          "parameters": {
+            "Text": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "object"
+            }
+          }
+        },
+        "ReadTextPointer": {
+          "parameters": {
+            "ppText": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "object"
+            }
+          }
+        }
+      }
+    },
+    "Diligent::CreateMarshalStrings": {
+      "parameters": {
+        "Text": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "ppObject": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "owned",
+          "lifetime": "caller"
+        }
+      }
+    },
+    "Diligent::GetStringDescName": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::GetStringDescLabel": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::EchoString": {
+      "parameters": {
+        "Text": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::EchoNullableString": {
+      "parameters": {
+        "Text": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::CheckStringBytes": {
+      "parameters": {
+        "Text": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetStaticString": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetInvalidUTF8": {
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "ownership": "borrowed",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetStringCallCount": {},
+    "Diligent::GetLiveStringCount": {},
+    "Diligent::CheckCharacterBytes": {
+      "parameters": {
+        "Bytes": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ByteCount"
+        }
+      }
+    }
   }
 }

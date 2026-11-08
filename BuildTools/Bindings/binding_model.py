@@ -37,7 +37,7 @@ def validate_binding(policy, context):
 VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length"}
 
 
-def apply_value_policy(value, policy, context):
+def apply_value_policy(value, policy, context, *, is_result=False):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
@@ -56,7 +56,9 @@ def apply_value_policy(value, policy, context):
         raise ModelError(f"{context}: invalid ownership")
     if "lifetime" in policy and not policy["lifetime"]:
         raise ModelError(f"{context}: lifetime must not be empty")
-    if (policy.get("direction") in ("out", "inout") and
+    # Return values describe data received by the caller, not writable output
+    # storage passed to the callee. A returned pointer may point to const data.
+    if (not is_result and policy.get("direction") in ("out", "inout") and
             native_type["kind"] in ("pointer", "reference") and native_type["target"]["const"]):
         raise ModelError(f"{context}: output cannot point to const data")
     if policy:
@@ -81,7 +83,7 @@ def apply_callable_policy(callable_model, policy, context):
     validate_keys(policy, {"binding", "reason", "parameters", "result"}, context)
     validate_binding(policy, context)
     apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context)
-    apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result")
+    apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result", is_result=True)
     callable_model["policy"] = {key: value for key, value in policy.items()
                                 if key not in ("parameters", "result")}
 

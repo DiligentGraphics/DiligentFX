@@ -28,6 +28,7 @@
 
 #include "Structs.h"
 #include "Buffers.h"
+#include "StringMarshalling.h"
 #include "Object.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)

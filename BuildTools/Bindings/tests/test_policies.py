@@ -8,7 +8,7 @@ import unittest
 
 import support
 from support import declarations, function_config
-from binding_model import ModelError, apply_policies
+from binding_model import ModelError, apply_callable_policy, apply_policies
 from clang_parser import extract_api
 
 
@@ -41,6 +41,19 @@ class PolicyTest(unittest.TestCase):
         del config["declarations"]["Diligent::CreateBindingTestObject"]["parameters"]["ppObject"]
         with self.assertRaisesRegex(ModelError, "CreateBindingTestObject::ppObject: missing pointer metadata"):
             self.apply(config)
+
+    def test_const_return_values_are_outputs_without_writable_storage(self):
+        function = copy.deepcopy(declarations(self.model)["Diligent::CreateBindingTestObject"])
+        # Reuse an extracted const-reference type. Returning const data is valid;
+        # passing the same type as writable output storage must still be rejected.
+        function["result"]["type"] = function["parameters"][0]["type"]
+        function["parameters"] = []
+        policy = {"direction": "out", "nullable": False, "ownership": "borrowed", "lifetime": "object"}
+        apply_callable_policy(function, {"result": policy}, "ConstResult")
+        self.assertEqual(function["result"]["policy"], policy)
+        function["parameters"] = [{"name": "Output", "type": function["result"]["type"]}]
+        with self.assertRaisesRegex(ModelError, "output cannot point to const"):
+            apply_callable_policy(function, {"result": policy, "parameters": {"Output": policy}}, "ConstResult")
 
     def test_rejects_stale_or_inconsistent_metadata(self):
         cases = [

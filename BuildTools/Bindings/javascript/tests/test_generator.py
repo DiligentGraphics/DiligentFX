@@ -104,6 +104,41 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("MapRead(reinterpret_cast<const void**>(output))", cpp)
         self.assertIn('"success": 3', js)
 
+    def test_strings_have_explicit_types_and_support_both_output_forms(self):
+        cpp, _, types = self.emit()
+        self.assertIn("Name?: string;", types)
+        self.assertIn("Label?: string | null;", types)
+        self.assertIn("EchoString(Text: string, GrowHeap: boolean): string;", types)
+        self.assertIn("EchoNullableString(Text: string | null): string | null;", types)
+        self.assertIn("GetText(): string | null;", types)
+        self.assertIn("ReadText(Fail: boolean): Result<string | null>;", types)
+        self.assertIn("ReadTextPointer(Fail: boolean): Result<string | null>;", types)
+        self.assertIn("CheckCharacterBytes(ByteCount: number, Bytes: Uint8Array): boolean;", types)
+        self.assertIn("*reinterpret_cast<const Diligent::Char**>(Text)", cpp)
+        self.assertIn("reinterpret_cast<const Diligent::Char**>(ppText)", cpp)
+
+    def test_strings_reject_mutable_owned_and_retained_inputs(self):
+        for change in ["mutable", "ownership", "lifetime", "direction"]:
+            with self.subTest(change=change):
+                model = deepcopy(MODEL)
+                field = self.declaration(model, "MarshalStringDesc")["fields"][1]
+                if change == "mutable":
+                    field["type"]["target"]["const"] = False
+                else:
+                    field["policy"][change] = {"ownership": "owned", "lifetime": "object", "direction": "out"}[change]
+                with self.assertRaisesRegex(ModelError, "strings require borrowed const char"):
+                    self.emit(model)
+
+    def test_strings_reject_unsupported_output_ownership_and_lifetimes(self):
+        for name, key, value in [("GetStaticString", "ownership", "owned"),
+                                 ("GetStaticString", "lifetime", "read_scope"),
+                                 ("EchoString", "direction", "in")]:
+            with self.subTest(name=name, key=key):
+                model = deepcopy(MODEL)
+                self.declaration(model, name)["result"]["policy"][key] = value
+                with self.assertRaisesRegex(ModelError, "strings require borrowed const char"):
+                    self.emit(model)
+
     def test_scope_size_query_can_be_inherited(self):
         model = deepcopy(MODEL)
         interface = self.declaration(model, "IMarshalBytes")

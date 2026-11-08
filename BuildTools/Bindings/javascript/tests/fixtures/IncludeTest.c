@@ -40,3 +40,11 @@ Uint64 CheckCByteInterface(IMarshalBytes* pBytes)
         IMarshalBytes_UnmapRead(pBytes);
     return IMarshalBytes_Size(pBytes);
 }
+
+const Char* CheckCStringInterface(IMarshalStrings* pStrings)
+{
+    const Char* Text = 0;
+    IMarshalStrings_SetText(pStrings, "C string");
+    IMarshalStrings_ReadText(pStrings, False, &Text);
+    return Text;
+}

@@ -206,6 +206,18 @@ class Generator:
             return "void"
         raise ModelError(f"JavaScript backend: expected a scalar, got {t['kind']}")
 
+    def string(self, value, context, *, output=False):
+        t, policy = unalias(value["type"]), value.get("policy", {})
+        char = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        if char.get("kind") != "scalar" or char.get("name") not in ("char_s", "char_u"):
+            return None
+        lifetimes = ("call", "object", "static") if output else ("call",)
+        if (t["volatile"] or char["volatile"] or not char["const"] or "length" in policy or
+                policy.get("direction") != ("out" if output else "in") or
+                policy.get("ownership") != "borrowed" or policy.get("lifetime") not in lifetimes):
+            raise ModelError(f"{context}: strings require borrowed const char data with a supported lifetime and direction")
+        return {"nullable": policy["nullable"]}
+
     @staticmethod
     def automatic(value, context):
         if value.get("policy", {}).get("binding", "automatic") != "automatic":
@@ -227,6 +239,8 @@ class Generator:
         self.ts.append(f'export interface {short(name)} {{')
         for field in d["fields"]:
             self.automatic(field, name + "::" + field["name"])
+            if unalias(field["type"])["const"]:
+                raise ModelError(f"{name}: const fields need an explicit adapter")
             span = self.byte_span(field, d["fields"], name + "::" + field["name"])
             if span:
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
@@ -238,9 +252,15 @@ class Generator:
                 rec["fields"][field["name"]] = {"bytes": span, "set": setter}
                 self.ts.append(f'  {field["name"]}?: Uint8Array' + (' | null;' if span['nullable'] else ';'))
                 continue
+            string = self.string(field, name + "::" + field["name"])
+            if string:
+                setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
+                    ['uintptr_t pointer', 'uintptr_t data'],
+                    f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
+                rec["fields"][field["name"]] = {"string": string, "set": setter}
+                self.ts.append(f'  {field["name"]}?: string' + (' | null;' if string['nullable'] else ';'))
+                continue
             kind = self.scalar(field["type"])
-            if unalias(field["type"])["const"]:
-                raise ModelError(f"{name}: const fields need an explicit adapter")
             setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
                                  ['uintptr_t pointer', cpp_type(field["type"]) + ' value'],
                                  f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = value;')
@@ -255,7 +275,8 @@ class Generator:
             return self.scoped_bytes(d, owner, self.scopes[name])
         self.automatic(d, name)
         self.automatic(d["result"], name + " result")
-        result = self.scalar(d["result"]["type"])
+        result_string = self.string(d["result"], name + " result", output=True)
+        result = {"string": result_string} if result_string else self.scalar(d["result"]["type"])
         native_params, native_args, parameters, ts_params = [], [], [], []
         if owner:
             native_params.append('uintptr_t self')
@@ -276,6 +297,13 @@ class Generator:
                 parameters.append({"name": pname, "bytes": span})
                 ts_params.append(f'{pname}: Uint8Array' + (' | null' if span['nullable'] else ''))
                 continue
+            string = self.string(p, name + "::" + pname)
+            if string:
+                native_params.append('uintptr_t ' + pname)
+                native_args.append(f'reinterpret_cast<{cpp_type(p["type"])}>({pname})')
+                parameters.append({"name": pname, "string": string})
+                ts_params.append(f'{pname}: string' + (' | null' if string['nullable'] else ''))
+                continue
             if t["kind"] in ("pointer", "reference"):
                 inner = unalias(t["target"])
                 declaration = self.types.get(inner.get("name"), {})
@@ -291,12 +319,20 @@ class Generator:
                         and policy.get("lifetime") == "call"):
                     parameters.append({"name": pname, "interface": short(inner["name"]), "nullable": policy["nullable"]})
                     ts_params.append(f'{pname}: {short(inner["name"])}' + (' | null' if policy['nullable'] else ''))
-                elif (t["kind"] == "pointer" and policy.get("direction") == "out"
+                elif (policy.get("direction") == "out"
                         and policy.get("nullable") is False):
                     if output_type is not None:
                         raise ModelError(f"{name}: multiple outputs need an explicit adapter")
                     target = unalias(inner["target"]) if inner["kind"] == "pointer" else {}
-                    if (target.get("kind") == "named" and self.types.get(target["name"], {}).get("kind") == "interface"
+                    string = self.string({"type": inner, "policy": policy}, name + "::" + pname, output=True)
+                    if string and not inner["const"]:
+                        # nullable describes the caller-provided output slot. Its
+                        # string value may be null, including on failure.
+                        output_type = 'string | null'
+                        parameters.append({"name": pname, "output": {"string": {"nullable": True}}})
+                    elif t["kind"] != "pointer":
+                        raise ModelError(f"{name}::{pname}: unsupported output reference")
+                    elif (target.get("kind") == "named" and self.types.get(target["name"], {}).get("kind") == "interface"
                             and policy.get("ownership") == "owned" and policy.get("lifetime") == "caller"):
                         output_type = short(target["name"]) + ' | null'
                         parameters.append({"name": pname, "output": {"interface": short(target["name"])}})
@@ -323,7 +359,8 @@ class Generator:
         target = f'reinterpret_cast<{owner}*>(self)->{d["name"]}' if owner else name
         body = ('' if result == "void" else 'return ') + target + '(' + ', '.join(native_args) + ');'
         export = self.export(symbol(name), cpp_type(d["result"]["type"]), native_params, body)
-        ts_return = f'Result<{output_type}>' if output_type else ts_scalar(result)
+        result_type = ('string' + (' | null' if result_string['nullable'] else '')) if result_string else ts_scalar(result)
+        ts_return = f'Result<{output_type}>' if output_type else result_type
         return {"export": export, "parameters": parameters, "result": result,
                 "ts": f'{short(d["name"])}({", ".join(ts_params)}): {ts_return};'}
 

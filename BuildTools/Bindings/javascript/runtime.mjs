@@ -42,6 +42,9 @@ export function createBindings(wasm, schema) {
     const types = new Map();
     const typeNames = new Map();
     const constructionToken = Symbol("native object");
+    const textEncoder = new TextEncoder();
+    // Preserve a leading U+FEFF as string content, and reject malformed UTF-8.
+    const textDecoder = new TextDecoder("utf-8", {fatal: true, ignoreBOM: true});
 
     function pointer(object, expectedType) {
         const state = states.get(object);
@@ -103,6 +106,7 @@ export function createBindings(wasm, schema) {
             // Undefined, like omission, leaves the native default untouched.
             if (fieldValue !== undefined) {
                 if (field.bytes) buffers.push({field, value: fieldValue});
+                else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
                 else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
             }
         }
@@ -126,6 +130,37 @@ export function createBindings(wasm, schema) {
         cleanup.push(() => wasm._free(address));
         wasm.HEAPU8.set(bytes.subarray(0, length), address);
         return address;
+    }
+
+    function inputString(value, spec, cleanup) {
+        if (value === null && spec.nullable) return 0;
+        if (typeof value !== "string") throw new TypeError("Expected a string");
+        if (value.includes("\0")) throw new TypeError("Native strings cannot contain embedded null characters");
+        const bytes = textEncoder.encode(value);
+        const address = wasm._malloc(bytes.byteLength + 1) >>> 0;
+        if (!address) throw new Error("Could not allocate string input storage");
+        cleanup.push(() => wasm._free(address));
+        // Empty strings still have a terminator and are distinct from null.
+        wasm.HEAPU8.set(bytes, address);
+        wasm.HEAPU8[address + bytes.byteLength] = 0;
+        return address;
+    }
+
+    function outputString(address, spec) {
+        address >>>= 0;
+        if (address === 0) {
+            if (!spec.nullable) throw new Error("Native function returned a null non-nullable string");
+            return null;
+        }
+        const heap = wasm.HEAPU8;
+        if (address >= heap.byteLength) throw new RangeError("Native string is outside Wasm memory");
+        const end = heap.indexOf(0, address);
+        if (end === -1) throw new RangeError("Native string has no null terminator in Wasm memory");
+        const bytes = heap.subarray(address, end);
+        // TextDecoder does not accept SharedArrayBuffer views on all runtimes.
+        // Decoding finishes before the native owner or temporary input is released.
+        return textDecoder.decode(typeof SharedArrayBuffer !== "undefined" && heap.buffer instanceof SharedArrayBuffer ?
+            bytes.slice() : bytes);
     }
 
     function acquireBytes(spec, owner, self, args) {
@@ -166,6 +201,7 @@ export function createBindings(wasm, schema) {
         // Obtain the current heap after the call: native allocations may grow it.
         const view = new DataView(wasm.HEAPU8.buffer);
         if (spec.interface) return adopt(view.getUint32(address, true), spec.interface);
+        if (spec.string) return outputString(view.getUint32(address, true), spec.string);
         const readers = {
             bool: "getUint8", i8: "getInt8", u8: "getUint8", i16: "getInt16", u16: "getUint16",
             i32: "getInt32", u32: "getUint32", i64: "getBigInt64", u64: "getBigUint64",
@@ -203,12 +239,15 @@ export function createBindings(wasm, schema) {
                         const span = parameter.bytes;
                         const count = inputScalar(args[inputs.findIndex(p => p.name === span.length)], span.lengthType, span.length);
                         nativeArgs.push(inputBytes(value, count, span.nullable, cleanup));
+                    } else if (parameter.string) {
+                        nativeArgs.push(inputString(value, parameter.string, cleanup));
                     } else {
                         nativeArgs.push(inputScalar(value, parameter.type, parameter.name));
                     }
                 }
             }
-            const result = outputScalar(wasm[spec.export](...nativeArgs), spec.result);
+            const nativeResult = wasm[spec.export](...nativeArgs);
+            const result = spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
             return output ? {status: result, value: readOutput(output.address, output.spec)} : result;
         } finally {

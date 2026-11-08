@@ -34,7 +34,7 @@ On Windows, use the environment's `Scripts/python.exe` and LLVM's
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
 `Bindings-TestJavaScript` builds these artifacts, runs Python emitter tests, and
-then runs the Node scalar/interface and byte-buffer marshalling tests. Nothing is
+then runs the Node scalar/interface, byte-buffer, and string marshalling tests. Nothing is
 built by default. Native model tests remain independent of this optional
 Emscripten project.
 
@@ -84,8 +84,8 @@ if (result.value !== null) {
 The initial backend supports scalar fields in plain input descriptors,
 single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
-result. It also supports input byte spans and the scoped byte adapters described
-below. It rejects unsupported declarations and policies instead of silently
+result. It also supports UTF-8 strings, input byte spans, and the scoped byte adapters
+described below. It rejects unsupported declarations and policies instead of silently
 omitting them. General arrays, callbacks, aggregate outputs, default function
 arguments, and other manual adapters are not implemented yet. The first production
 integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
@@ -94,6 +94,35 @@ Add target-independent native type information to the shared model. Put JavaScri
 conversion and lifetime behavior in this backend. Add a native fixture and an
 execution test for each new supported API shape; emitter-only string checks cannot
 establish correct marshalling.
+
+## UTF-8 strings
+
+Null-terminated `const Char*` and `const char*` values map to JavaScript `string`.
+Pointers with a `length` policy remain byte spans instead. Mutable character
+buffers, wide strings, and owned native string outputs require separate adapters.
+
+- Input parameters and descriptor fields require `direction: in`,
+  `ownership: borrowed`, and `lifetime: call`. The wrapper encodes UTF-8 into
+  temporary null-terminated Wasm storage and frees it after the native call.
+  Native code that retains the text must copy it during that call.
+- Direct string results require `direction: out`, `ownership: borrowed`, and
+  `lifetime: call`, `object`, or `static`. The storage must remain valid through
+  immediate result conversion. The wrapper copies the text into a JavaScript
+  string before releasing temporary inputs. Later native mutation or destruction
+  does not change the returned JavaScript value.
+- A status-returning method with one `const Char**` or `const Char* REF` output
+  returns `{status, value: string | null}`. Its policy uses `direction: out`,
+  `nullable: false` for the output slot, and the same borrowed lifetimes as direct
+  results. The wrapper initializes the slot to null and preserves the status.
+
+For inputs and direct results, `nullable: true` permits `null`, which is distinct
+from `""`. Omitted or `undefined` descriptor fields retain native defaults.
+Non-string inputs and embedded null characters are rejected before the native
+call. Unpaired JavaScript UTF-16 surrogates become U+FFFD, following `TextEncoder`.
+Malformed native UTF-8 is rejected; a leading U+FEFF is preserved as content.
+
+String conversion uses the current Wasm heap after allocation and native calls,
+including memory growth. Native addresses and string views are not exposed.
 
 ## Byte inputs
 
