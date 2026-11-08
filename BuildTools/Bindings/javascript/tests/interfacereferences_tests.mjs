@@ -6,6 +6,7 @@ export function registerTests({test, assert, api, constants}) {
         const source = api.CreateMarshalObject({Size: 0xfedcba9876543210n}, 0, true).value;
         const mutable = source.QueryInterface(api.IMarshalMutableObject);
         t.after(() => { mutable.dispose(); source.dispose(); });
+        assert.equal(source.GetNativeDesc, undefined);
         assert.equal(api.ReadObjectReference(source), 0xfedcba9876543210n);
         // A derived interface wrapper also satisfies a const base reference.
         assert.equal(api.ReadObjectReference(mutable), source.GetSize());

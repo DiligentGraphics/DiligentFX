@@ -15,7 +15,11 @@
     "Diligent::MarshalDesc": {},
     "Diligent::IMarshalObject": {
       "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalObject"
+      "iid": "Diligent::IID_MarshalObject",
+      "include_methods": [
+        "GetSize",
+        "GetRefCount"
+      ]
     },
     "Diligent::IMarshalMutableObject": {
       "ownership": "reference_counted",

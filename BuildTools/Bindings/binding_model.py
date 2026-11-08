@@ -37,6 +37,12 @@ def validate_binding(policy, context):
 VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written", "element_nullable", "length_method", "length_from"}
 
 
+def validate_method_selection(names, context):
+    if (not isinstance(names, list) or any(not isinstance(name, str) or not name for name in names) or
+            len(set(names)) != len(names)):
+        raise ModelError(f"{context}: include_methods must be a list of unique method names")
+
+
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
@@ -148,7 +154,16 @@ def apply_declaration_policy(declaration, policy, inherited=()):
     elif kind in ("alias", "constant"):
         validate_keys(policy, {"binding", "reason"}, name)
     elif kind in ("record", "interface"):
-        validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods"}, name)
+        validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods", "include_methods"}, name)
+        if "include_methods" in policy:
+            selection = policy["include_methods"]
+            validate_method_selection(selection, name)
+            if kind != "interface":
+                raise ModelError(f"{name}: include_methods applies only to interfaces")
+            missing = set(selection) - {method["name"] for method in declaration["methods"]}
+            if missing:
+                raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
+            declaration["methods"] = [method for method in declaration["methods"] if method["name"] in selection]
         apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})

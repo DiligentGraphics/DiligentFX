@@ -48,6 +48,13 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
+struct MarshalNativeOnlyDesc
+{
+    Uint32 Value;
+};
+
+typedef struct MarshalNativeOnlyDesc MarshalNativeOnlyDesc;
+
 typedef struct IMarshalObject        IMarshalObject;
 typedef struct IMarshalMutableObject IMarshalMutableObject;
 
@@ -66,6 +73,7 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalMutableObject =
 DILIGENT_BEGIN_INTERFACE(IMarshalObject, IObject)
 {
     VIRTUAL Uint64 METHOD(GetSize)(THIS) CONST PURE;
+    VIRTUAL const MarshalNativeOnlyDesc REF METHOD(GetNativeDesc)(THIS) CONST PURE;
     VIRTUAL Uint32 METHOD(GetRefCount)(THIS) CONST PURE;
 };
 DILIGENT_END_INTERFACE

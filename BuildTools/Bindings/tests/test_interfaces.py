@@ -2,8 +2,8 @@
 
 import unittest
 
-from support import extract_fixture
-from binding_model import unalias
+from support import extract_fixture, build_fixture, declarations
+from binding_model import ModelError, unalias
 
 
 class InterfaceTest(unittest.TestCase):
@@ -11,6 +11,39 @@ class InterfaceTest(unittest.TestCase):
     def setUpClass(cls):
         cls.types = extract_fixture("Interfaces.h", [
             "Diligent::IObject", "Diligent::IBindingTestObject", "Diligent::IBindingTestMutableObject"])
+
+    def selection_config(self, methods):
+        return {
+            "schema_version": 1,
+            "headers": ["tests/fixtures/Interfaces.h"],
+            "declarations": {
+                "Diligent::IObject": {"binding": "external", "reason": "Runtime supplies reference counting"},
+                "Diligent::IBindingTestObject": {"include_methods": methods},
+            },
+        }
+
+    def test_selected_methods_do_not_require_omitted_types_or_policies(self):
+        # Read() requires a status enum and output-pointer policy. Neither is
+        # required when only GetSize() is selected.
+        model = declarations(build_fixture(self.selection_config(["GetSize"])))
+        self.assertEqual([m["name"] for m in model["Diligent::IBindingTestObject"]["methods"]], ["GetSize"])
+        self.assertNotIn("Diligent::BINDING_TEST_STATUS", model)
+
+    def test_empty_selection_preserves_interface_identity_and_base(self):
+        model = declarations(build_fixture(self.selection_config([])))
+        interface = model["Diligent::IBindingTestObject"]
+        self.assertEqual(interface["kind"], "interface")
+        self.assertEqual(interface["bases"], ["Diligent::IObject"])
+        self.assertEqual(interface["methods"], [])
+
+    def test_invalid_method_selections_are_rejected(self):
+        for selection in ("GetSize", ["GetSize", "GetSize"], [None], ["Missing"], ["AddRef"]):
+            with self.subTest(selection=selection), self.assertRaises(ModelError):
+                build_fixture(self.selection_config(selection))
+        config = self.selection_config(["GetSize"])
+        config["declarations"]["Diligent::IBindingTestObject"]["methods"] = {"Read": {}}
+        with self.assertRaisesRegex(ModelError, "unknown metadata"):
+            build_fixture(config)
 
     def test_iobject_inheritance_and_method_order(self):
         interface = self.types["Diligent::IBindingTestObject"]

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from binding_model import ModelError, apply_policies, validate_binding, validate_keys
+from binding_model import ModelError, apply_policies, validate_binding, validate_keys, validate_method_selection
 from clang_parser import extract_api
 
 
@@ -21,9 +21,12 @@ def build_model(source_root, config, target, clang_args=()):
         raise ModelError("Configuration must select declarations")
     policies = config["declarations"]
     external = [name for name, policy in policies.items() if validate_binding(policy, name) == "external"]
+    methods = {name: policy["include_methods"] for name, policy in policies.items() if "include_methods" in policy}
+    for name, selection in methods.items():
+        validate_method_selection(selection, name)
     model, symbols = extract_api(source_root, config["headers"], policies.keys(), target,
                                  config.get("clang_args", []) + list(clang_args),
-                                 external_declarations=external)
+                                 external_declarations=external, method_selections=methods)
     return apply_policies(model, policies, symbols)
 
 

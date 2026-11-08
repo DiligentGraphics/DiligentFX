@@ -61,10 +61,15 @@ public:
             delete this;
         return Count;
     }
-    IReferenceCounters* GetReferenceCounters() const override { return nullptr; }
-    Uint64              GetSize() const override { return m_Size; }
-    Uint32              GetRefCount() const override { return m_RefCount; }
-    MARSHAL_STATUS      SetSize(Uint64 Size) override
+    IReferenceCounters*          GetReferenceCounters() const override { return nullptr; }
+    Uint64                       GetSize() const override { return m_Size; }
+    const MarshalNativeOnlyDesc& GetNativeDesc() const override
+    {
+        static const MarshalNativeOnlyDesc Desc{41};
+        return Desc;
+    }
+    Uint32         GetRefCount() const override { return m_RefCount; }
+    MARSHAL_STATUS SetSize(Uint64 Size) override
     {
         m_Size = Size;
         return MARSHAL_STATUS_PENDING;

@@ -208,7 +208,7 @@ def describe_callable(cursor, documentation):
         result.update(const=cursor.is_const_method(), virtual=cursor.is_virtual_method())
     return result
 
-def describe_declaration(cursor, root, external, documentation):
+def describe_declaration(cursor, root, external, documentation, selected_methods=None):
     name = qualified_name(cursor)
     result = {
         "name": name,
@@ -244,6 +244,7 @@ def describe_declaration(cursor, root, external, documentation):
                               if child.kind == cindex.CursorKind.ENUM_CONSTANT_DECL])
     elif kind in (cindex.CursorKind.STRUCT_DECL, cindex.CursorKind.CLASS_DECL):
         fields, methods, bases = [], [], []
+        available_methods = set()
         for child in cursor.get_children():
             if child.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
                 bases.append(qualified_name(child.type.get_declaration()))
@@ -255,7 +256,11 @@ def describe_declaration(cursor, root, external, documentation):
                 # Only virtual methods belong to the C-compatible interface.
                 # Nonvirtual overloads and operators are C++ convenience helpers.
                 if child.is_virtual_method():
-                    methods.append(describe_callable(child, documentation))
+                    available_methods.add(child.spelling)
+                    # Filter before describing the signature: an omitted method
+                    # may use types or marshalling shapes outside this binding.
+                    if selected_methods is None or child.spelling in selected_methods:
+                        methods.append(describe_callable(child, documentation))
             elif child.kind in (
                 cindex.CursorKind.CONSTRUCTOR, cindex.CursorKind.DESTRUCTOR,
                 cindex.CursorKind.CONVERSION_FUNCTION, cindex.CursorKind.FUNCTION_TEMPLATE,
@@ -264,6 +269,10 @@ def describe_declaration(cursor, root, external, documentation):
                 continue
             else:
                 raise ModelError(f"{name}: unsupported member {child.kind.name} '{child.spelling}'")
+        if selected_methods is not None:
+            missing = set(selected_methods) - available_methods
+            if missing:
+                raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
         if len({method["name"] for method in methods}) != len(methods):
             raise ModelError(f"{name}: overloaded methods require explicit support")
         # DILIGENT_DERIVE also gives ordinary descriptors a base class.
@@ -276,7 +285,7 @@ def describe_declaration(cursor, root, external, documentation):
         raise ModelError(f"{name}: unsupported declaration {kind.name}")
     return result
 
-def extract_api(source_root, headers, declaration_names, target, clang_args=(), *, external_declarations=()):
+def extract_api(source_root, headers, declaration_names, target, clang_args=(), *, external_declarations=(), method_selections=None):
     """Return a plain-data API model and available symbol names for policy validation.
 
     This stage reads native declarations only. External declarations remain opaque;
@@ -372,6 +381,7 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
             index -= 1
         return "\n".join(reversed(comments)) or None
 
-    models = [describe_declaration(declarations[name], root, name in external, documentation)
+    models = [describe_declaration(declarations[name], root, name in external, documentation,
+                                   (method_selections or {}).get(name))
               for name in sorted(selected)]
     return {"schema_version": 1, "target": target, "declarations": models}, symbols

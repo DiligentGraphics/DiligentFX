@@ -33,6 +33,12 @@ class GeneratorTest(unittest.TestCase):
             write(path, output[0])
             self.assertEqual(before, path.stat().st_mtime_ns)
 
+    def test_unselected_methods_are_not_exported(self):
+        cpp, js, types = self.emit()
+        for output in (cpp, js, types):
+            self.assertNotIn("GetNativeDesc", output)
+            self.assertNotIn("MarshalNativeOnlyDesc", output)
+
     def test_native_defaults_and_opaque_dispatch(self):
         cpp, js, declarations = self.emit()
         self.assertIn("new (std::nothrow) Diligent::MarshalDesc{}", cpp)

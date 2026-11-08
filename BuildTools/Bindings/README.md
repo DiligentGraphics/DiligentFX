@@ -252,3 +252,14 @@ or `written`. It describes an element count (bytes for `void*`), not a capacity
 argument supplied by the caller.
 For interface-pointer arrays, `element_nullable` controls null elements separately
 from the array pointer's `nullable` policy; elements are non-nullable by default.
+
+### Selecting interface methods
+
+An interface declaration can specify `"include_methods": ["CreateScene", "CreateSceneWriter"]`.
+Only those directly declared virtual methods are extracted and emitted, in native
+declaration order. Omitting the list retains all methods; an empty list exposes
+the interface identity and selected base methods only. Base interfaces have their
+own selections. Unknown or duplicate names and policies for omitted methods are
+errors. Unselected signatures require no type declarations or pointer policies.
+The native interface and its vtable are unchanged; generated calls still use its
+real C++ declaration. This allows bindings to grow without exposing unrelated APIs.
