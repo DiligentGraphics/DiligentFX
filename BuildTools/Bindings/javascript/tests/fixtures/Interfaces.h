@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Structs.h"
+#include "Buffers.h"
 #include "Object.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)

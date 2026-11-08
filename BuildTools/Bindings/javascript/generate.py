@@ -26,7 +26,7 @@ def cpp_type(t):
     if t["kind"] in ("pointer", "reference"):
         return cpp_type(t["target"]) + ("*" if t["kind"] == "pointer" else "&")
     if t["kind"] == "void":
-        return "void"
+        return qualifier + "void"
     names = {"char_s": "char", "char_u": "char", "schar": "signed char", "uchar": "unsigned char",
              "ushort": "unsigned short", "uint": "unsigned int", "ulong": "unsigned long",
              "longlong": "long long", "ulonglong": "unsigned long long"}
@@ -46,13 +46,23 @@ class Generator:
     receives scalar conversion and ownership information, never vtable offsets.
     """
 
-    def __init__(self, model, module, headers):
+    def __init__(self, model, module, headers, adapters=None):
         if model.get("schema_version") != 1 or not model.get("target", "").startswith("wasm32-"):
             raise ModelError("JavaScript generation requires a validated Wasm32 model")
         if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", module) or not headers:
             raise ModelError("A module identifier and at least one entry header are required")
         self.module = module
         self.types = {d["name"]: d for d in model["declarations"]}
+        if adapters and (not isinstance(adapters, dict) or adapters.get("schema_version") != 1 or
+                         adapters.keys() - {"schema_version", "scoped_bytes"}):
+            raise ModelError("Invalid JavaScript adapter configuration")
+        self.scopes = (adapters or {}).get("scoped_bytes", {})
+        if not isinstance(self.scopes, dict):
+            raise ModelError("scoped_bytes must map qualified method names to adapters")
+        self.releases = set()
+        for name, scope in self.scopes.items():
+            self.validate_scope(name, scope)
+            self.releases.add(name.rsplit("::", 1)[0] + "::" + scope["release"])
         self.schema = {"records": {}, "interfaces": {}, "functions": {}, "enums": {}}
         self.cpp = ['// Generated file. Do not edit.', '#include <cstdint>', '#include <new>',
                     '#include <emscripten/emscripten.h>']
@@ -69,6 +79,78 @@ class Generator:
                    '  wasmBinary?: ArrayBuffer | Uint8Array;',
                    '  print?: (message: string) => void;',
                    '  printErr?: (message: string) => void;', '}']
+        if self.scopes:
+            self.ts += [
+                'export interface ReadByteAccess {',
+                '  readonly byteLength: number;', '  readonly disposed: boolean;',
+                '  readByte(index: number): number;',
+                '  copyTo(destination: Uint8Array, sourceOffset?: number): void;',
+                '  toUint8Array(): Uint8Array;', '  dispose(): number;', '}',
+                'export interface WriteByteAccess extends ReadByteAccess {',
+                '  writeByte(index: number, value: number): void;',
+                '  copyFrom(source: Uint8Array, destinationOffset?: number): void;', '}']
+
+    def validate_scope(self, name, spec):
+        """Scope adapters describe API semantics explicitly, never by method name."""
+        if not isinstance(spec, dict) or spec.keys() != {"release", "size", "writable", "success"}:
+            raise ModelError(f"{name}: scoped bytes require release, size, writable, and success")
+        if not isinstance(spec["writable"], bool) or type(spec["success"]) is not int:
+            raise ModelError(f"{name}: invalid scoped byte access mode or success status")
+        owner, _, acquire = name.rpartition("::")
+        declaration = self.types.get(owner, {})
+        methods = self.interface_methods(owner)
+        if declaration.get("kind") != "interface" or any(
+                method not in methods for method in (acquire, spec["release"], spec["size"])):
+            raise ModelError(f"{name}: scoped byte methods must belong to the selected interface or its bases")
+        begin, end, size = (methods[m] for m in (acquire, spec["release"], spec["size"]))
+        for method in (begin, end):
+            status = self.types.get(unalias(method["result"]["type"]).get("name"), {})
+            if (method.get("policy", {}).get("binding") != "manual" or
+                    status.get("policy", {}).get("role") != "status"):
+                raise ModelError(f"{name}: acquire/release must be manual methods returning a status")
+            if self.scalar(method["result"]["type"]) != "i32":
+                raise ModelError(f"{name}: scoped access requires a 32-bit signed status")
+        if end["parameters"] or size["parameters"] or self.scalar(size["result"]["type"]) not in ("u32", "u64"):
+            raise ModelError(f"{name}: release and unsigned size methods must have no arguments")
+        if len(begin["parameters"]) != 1:
+            raise ModelError(f"{name}: acquire must have one borrowed byte-pointer output")
+        param = begin["parameters"][0]
+        outer = unalias(param["type"])
+        inner = unalias(outer["target"]) if outer["kind"] == "pointer" else {}
+        byte = unalias(inner["target"]) if inner.get("kind") == "pointer" else {}
+        policy = param.get("policy", {})
+        if (byte.get("kind") != "void" or byte.get("const") == spec["writable"] or
+                inner.get("const") or policy.get("direction") != "out" or
+                policy.get("ownership") != "borrowed" or policy.get("nullable") is not False):
+            raise ModelError(f"{name}: acquire must return a borrowed void pointer with matching constness")
+        if not -(2 ** 31) <= spec["success"] < 2 ** 31:
+            raise ModelError(f"{name}: scoped access requires a 32-bit signed status")
+
+    def interface_methods(self, name):
+        declaration = self.types.get(name, {})
+        methods = {}
+        for base in declaration.get("bases", []):
+            methods.update(self.interface_methods(base))
+        methods.update((m["name"], m) for m in declaration.get("methods", []))
+        return methods
+
+    def byte_span(self, value, siblings, context):
+        policy = value.get("policy", {})
+        if "length" not in policy:
+            return None
+        t = unalias(value["type"])
+        byte = unalias(t["target"]) if t["kind"] == "pointer" else {}
+        length = next((s for s in siblings if s["name"] == policy["length"]), None)
+        if (not length or t["const"] or t["volatile"] or not byte.get("const") or byte.get("volatile") or
+                not (byte.get("kind") == "void" or
+                     (byte.get("kind") == "scalar" and byte.get("bits") == 8)) or
+                policy.get("direction") != "in" or policy.get("ownership") != "borrowed" or
+                policy.get("lifetime") != "call"):
+            raise ModelError(f"{context}: byte spans require const input bytes borrowed for the call")
+        length_type = self.scalar(length["type"])
+        if length_type not in ("u32", "u64"):
+            raise ModelError(f"{context}: byte length must be an unsigned 32-bit or 64-bit scalar")
+        return {"length": policy["length"], "lengthType": length_type, "nullable": policy["nullable"]}
 
     def scalar(self, t):
         t = unalias(t)
@@ -108,6 +190,17 @@ class Generator:
         self.ts.append(f'export interface {short(name)} {{')
         for field in d["fields"]:
             self.automatic(field, name + "::" + field["name"])
+            span = self.byte_span(field, d["fields"], name + "::" + field["name"])
+            if span:
+                span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
+                    'uint64_t', ['uintptr_t pointer'],
+                    f'return reinterpret_cast<{name}*>(pointer)->{span["length"]};')
+                setter = self.export(symbol(name) + "_Set_" + field["name"], "void",
+                    ['uintptr_t pointer', 'uintptr_t data'],
+                    f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
+                rec["fields"][field["name"]] = {"bytes": span, "set": setter}
+                self.ts.append(f'  {field["name"]}?: Uint8Array' + (' | null;' if span['nullable'] else ';'))
+                continue
             kind = self.scalar(field["type"])
             if unalias(field["type"])["const"]:
                 raise ModelError(f"{name}: const fields need an explicit adapter")
@@ -121,6 +214,8 @@ class Generator:
 
     def callable(self, d, owner=None):
         name = owner + "::" + d["name"] if owner else d["name"]
+        if name in self.scopes:
+            return self.scoped_bytes(d, owner, self.scopes[name])
         self.automatic(d, name)
         self.automatic(d["result"], name + " result")
         result = self.scalar(d["result"]["type"])
@@ -134,6 +229,13 @@ class Generator:
             if p.get("default") is not None:
                 raise ModelError(f"{name}::{pname}: default arguments need an explicit adapter")
             t, policy = unalias(p["type"]), p.get("policy", {})
+            span = self.byte_span(p, d["parameters"], name + "::" + pname)
+            if span:
+                native_params.append('uintptr_t ' + pname)
+                native_args.append(f'reinterpret_cast<{cpp_type(p["type"])}>({pname})')
+                parameters.append({"name": pname, "bytes": span})
+                ts_params.append(f'{pname}: Uint8Array' + (' | null' if span['nullable'] else ''))
+                continue
             if t["kind"] in ("pointer", "reference"):
                 inner = unalias(t["target"])
                 declaration = self.types.get(inner.get("name"), {})
@@ -185,8 +287,22 @@ class Generator:
         return {"export": export, "parameters": parameters, "result": result,
                 "ts": f'{short(d["name"])}({", ".join(ts_params)}): {ts_return};'}
 
+    def scoped_bytes(self, d, owner, spec):
+        name = owner + "::" + d["name"]
+        acquire = self.export(symbol(name), cpp_type(d["result"]["type"]),
+            ['uintptr_t self', 'uintptr_t output'],
+            f'return reinterpret_cast<{owner}*>(self)->{d["name"]}('
+            f'reinterpret_cast<{cpp_type(d["parameters"][0]["type"])}>(output));')
+        release = self.export(symbol(name) + '_Release', 'int32_t', ['uintptr_t self'],
+            f'return reinterpret_cast<{owner}*>(self)->{spec["release"]}();')
+        size = self.export(symbol(name) + '_Size', 'uint64_t', ['uintptr_t self'],
+            f'return reinterpret_cast<{owner}*>(self)->{spec["size"]}();')
+        return {"scope": {"acquire": acquire, "release": release, "size": size,
+                          "writable": spec["writable"], "success": spec["success"]},
+                "ts": f'{d["name"]}(): Result<{"WriteByteAccess" if spec["writable"] else "ReadByteAccess"} | null>;'}
+
     def generate(self):
-        used_names = {"NativeObject", "NativeType", "Result", "ModuleOptions", "Bindings"}
+        used_names = {"NativeObject", "NativeType", "Result", "ModuleOptions", "Bindings", "ReadByteAccess", "WriteByteAccess"}
         for name in self.types:
             public_name = short(name)
             if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", public_name) or public_name in used_names:
@@ -194,6 +310,8 @@ class Generator:
             used_names.add(public_name)
         if any(d["kind"] == "interface" for d in self.types.values()):
             self.export('binding_Release', 'void', ['uintptr_t pointer'], 'reinterpret_cast<Diligent::IObject*>(pointer)->Release();')
+        if self.scopes:
+            self.export('binding_AddRef', 'void', ['uintptr_t pointer'], 'reinterpret_cast<Diligent::IObject*>(pointer)->AddRef();')
         for name, d in self.types.items():
             kind = d["kind"]
             if kind == "external":
@@ -221,7 +339,8 @@ class Generator:
                     'Diligent::IObject* result = nullptr;\n    '
                     f'reinterpret_cast<Diligent::IObject*>(pointer)->QueryInterface({d["policy"]["iid"]}, &result);\n    '
                     f'return reinterpret_cast<uintptr_t>(static_cast<{name}*>(result));')
-                methods = {m["name"]: self.callable(m, name) for m in d["methods"]}
+                methods = {m["name"]: self.callable(m, name) for m in d["methods"]
+                           if name + "::" + m["name"] not in self.releases}
                 base = short(d["bases"][0])
                 self.schema["interfaces"][short(name)] = {"base": base, "query": query, "methods": methods}
                 self.ts.append(f'export interface {short(name)} extends {"NativeObject" if base == "IObject" else base} {{')
@@ -265,15 +384,18 @@ def main():
     parser.add_argument("--module", required=True)
     parser.add_argument("--header", action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--adapters", type=Path, help="JavaScript-specific scoped byte adapters")
     args = parser.parse_args()
     try:
         model = json.loads(args.model.read_text(encoding="utf-8"))
-        cpp, js, declarations = Generator(model, args.module, args.header).generate()
+        adapters = json.loads(args.adapters.read_text(encoding="utf-8")) if args.adapters else None
+        cpp, js, declarations = Generator(model, args.module, args.header, adapters).generate()
         args.output.mkdir(parents=True, exist_ok=True)
         write(args.output / (args.module + '.cpp'), cpp)
         write(args.output / (args.module + '.mjs'), js)
         write(args.output / (args.module + '.d.mts'), declarations)
         write(args.output / 'runtime.mjs', Path(__file__).with_name('runtime.mjs').read_text(encoding="utf-8"))
+        write(args.output / 'byte_access.mjs', Path(__file__).with_name('byte_access.mjs').read_text(encoding="utf-8"))
     except (ModelError, OSError, ValueError) as error:
         parser.exit(1, f"JavaScript binding generation failed: {error}\n")
     print(f"Generated {args.module} JavaScript bindings")

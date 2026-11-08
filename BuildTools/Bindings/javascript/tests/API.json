@@ -95,6 +95,97 @@
     "Diligent::RecordValue": {},
     "Diligent::GetRecordedValue": {},
     "Diligent::GetLiveObjectCount": {},
-    "Diligent::GetDestructionCount": {}
+    "Diligent::GetDestructionCount": {},
+    "Diligent::MarshalBufferDesc": {
+      "fields": {
+        "pBytes": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::IMarshalBytes": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalBytes",
+      "methods": {
+        "MapRead": {
+          "binding": "manual",
+          "reason": "The scoped byte adapter retains access and the owning interface.",
+          "parameters": {
+            "ppData": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "read_scope"
+            }
+          }
+        },
+        "UnmapRead": {
+          "binding": "manual",
+          "reason": "Called only when the scoped byte adapter is disposed."
+        },
+        "MapWrite": {
+          "binding": "manual",
+          "reason": "The scoped byte adapter retains access and the owning interface.",
+          "parameters": {
+            "ppData": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "write_scope"
+            }
+          }
+        },
+        "UnmapWrite": {
+          "binding": "manual",
+          "reason": "Called only when the scoped byte adapter is disposed."
+        }
+      }
+    },
+    "Diligent::CreateMarshalBytes": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "ppBuffer": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "owned",
+          "lifetime": "caller"
+        }
+      }
+    },
+    "Diligent::ChecksumBytes": {
+      "parameters": {
+        "pBytes": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::CheckBytes": {
+      "parameters": {
+        "pBytes": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::GetLiveBufferCount": {},
+    "Diligent::GetBufferReleaseCount": {},
+    "Diligent::GetTestHeapSize": {},
+    "Diligent::GrowTestHeap": {}
   }
 }

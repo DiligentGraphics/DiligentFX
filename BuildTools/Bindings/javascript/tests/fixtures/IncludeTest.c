@@ -32,3 +32,11 @@ Uint64 CheckCInterface(IMarshalMutableObject* pObject)
     IMarshalMutableObject_SetSize(pObject, 17);
     return IMarshalObject_GetSize((IMarshalObject*)pObject);
 }
+
+Uint64 CheckCByteInterface(IMarshalBytes* pBytes)
+{
+    const void* pData = 0;
+    if (IMarshalBytes_MapRead(pBytes, &pData) == MARSHAL_STATUS_OK)
+        IMarshalBytes_UnmapRead(pBytes);
+    return IMarshalBytes_Size(pBytes);
+}

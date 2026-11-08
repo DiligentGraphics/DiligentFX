@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "scoped_bytes": {
+    "Diligent::IMarshalBytes::MapRead": {
+      "release": "UnmapRead",
+      "size": "Size",
+      "writable": false,
+      "success": 0
+    },
+    "Diligent::IMarshalBytes::MapWrite": {
+      "release": "UnmapWrite",
+      "size": "Size",
+      "writable": true,
+      "success": 3
+    }
+  }
+}

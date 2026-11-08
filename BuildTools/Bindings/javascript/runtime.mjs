@@ -1,4 +1,5 @@
 // Shared runtime for generated Wasm32 bindings. Native pointers stay private.
+import {byteArray, byteLength, createByteAccess} from "./byte_access.mjs";
 
 function inputScalar(value, type, name) {
     if (type === "bool") {
@@ -94,16 +95,71 @@ export function createBindings(wasm, schema) {
         const address = wasm[spec.create]() >>> 0;
         if (!address) throw new Error(`Could not allocate ${name}`);
         cleanup.push(() => wasm[spec.destroy](address));
+        const buffers = [];
         for (const key of Object.keys(value)) {
             if (!Object.hasOwn(spec.fields, key)) throw new TypeError(`Unknown ${name} field: ${key}`);
             const field = spec.fields[key];
             const fieldValue = value[key];
             // Undefined, like omission, leaves the native default untouched.
             if (fieldValue !== undefined) {
-                wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
+                if (field.bytes) buffers.push({field, value: fieldValue});
+                else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
             }
         }
+        // Length fields and native defaults are resolved before buffer fields,
+        // regardless of the caller's descriptor property order.
+        for (const {field, value: bytes} of buffers) {
+            const length = BigInt.asUintN(64, wasm[field.bytes.getLength](address));
+            wasm[field.set](address, inputBytes(bytes, length, field.bytes.nullable, cleanup));
+        }
         return address;
+    }
+
+    function inputBytes(value, count, nullable, cleanup) {
+        const length = byteLength(count);
+        if (value === null && nullable) return 0;
+        const bytes = byteArray(value);
+        if (length > bytes.byteLength) throw new RangeError("Byte length exceeds the input buffer");
+        if (length === 0) return 0;
+        const address = wasm._malloc(length) >>> 0;
+        if (!address) throw new Error("Could not allocate byte input storage");
+        cleanup.push(() => wasm._free(address));
+        wasm.HEAPU8.set(bytes.subarray(0, length), address);
+        return address;
+    }
+
+    function acquireBytes(spec, owner, self, args) {
+        if (args.length !== 0) throw new TypeError("Expected 0 arguments");
+        const object = pointer(self, owner);
+        const output = wasm._malloc(4) >>> 0;
+        if (!output) throw new Error("Could not allocate byte access output");
+        let acquired = false;
+        let transferred = false;
+        wasm._binding_AddRef(object);
+        try {
+            wasm.HEAPU8.fill(0, output, output + 4);
+            const status = wasm[spec.acquire](object, output);
+            if (status !== spec.success) return {status, value: null};
+            acquired = true;
+            const length = byteLength(BigInt.asUintN(64, wasm[spec.size](object)));
+            const address = new DataView(wasm.HEAPU8.buffer).getUint32(output, true);
+            if (length !== 0 && (address === 0 || address > wasm.HEAPU8.byteLength ||
+                                length > wasm.HEAPU8.byteLength - address)) {
+                throw new RangeError("Native byte access is outside Wasm memory");
+            }
+            const value = createByteAccess(wasm, address, length, spec.writable, () => {
+                try { return wasm[spec.release](object); }
+                finally { wasm._binding_Release(object); }
+            });
+            transferred = true;
+            return {status, value};
+        } finally {
+            wasm._free(output);
+            if (!transferred) {
+                try { if (acquired) wasm[spec.release](object); }
+                finally { wasm._binding_Release(object); }
+            }
+        }
     }
 
     function readOutput(address, spec) {
@@ -119,7 +175,9 @@ export function createBindings(wasm, schema) {
     }
 
     function invoke(spec, owner, self, args) {
-        const argumentCount = spec.parameters.filter(p => !p.output).length;
+        if (spec.scope) return acquireBytes(spec.scope, owner, self, args);
+        const inputs = spec.parameters.filter(p => !p.output);
+        const argumentCount = inputs.length;
         if (args.length !== argumentCount) throw new TypeError(`Expected ${argumentCount} arguments`);
         const nativeArgs = owner ? [pointer(self, owner)] : [];
         const cleanup = [];
@@ -141,6 +199,10 @@ export function createBindings(wasm, schema) {
                         nativeArgs.push(record(value, parameter.record, cleanup));
                     } else if (parameter.interface) {
                         nativeArgs.push(value === null && parameter.nullable ? 0 : pointer(value, parameter.interface));
+                    } else if (parameter.bytes) {
+                        const span = parameter.bytes;
+                        const count = inputScalar(args[inputs.findIndex(p => p.name === span.length)], span.lengthType, span.length);
+                        nativeArgs.push(inputBytes(value, count, span.nullable, cleanup));
                     } else {
                         nativeArgs.push(inputScalar(value, parameter.type, parameter.name));
                     }

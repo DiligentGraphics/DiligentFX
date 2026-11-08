@@ -38,13 +38,15 @@ add_custom_target(Bindings-GenerateJavaScriptTests
         --output "${MODEL}" ${PARSER_ARGUMENTS}
     COMMAND ${PYTHON_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
         --model "${MODEL}" --module BindingTests --header Interfaces.h --output "${GENERATED}"
+        --adapters "${TEST_SOURCE}/Adapters.json"
     BYPRODUCTS "${MODEL}" "${GENERATED}/BindingTests.cpp" "${GENERATED}/BindingTests.mjs"
-        "${GENERATED}/BindingTests.d.mts" "${GENERATED}/runtime.mjs"
+        "${GENERATED}/BindingTests.d.mts" "${GENERATED}/runtime.mjs" "${GENERATED}/byte_access.mjs"
     COMMENT "Generating JavaScript binding test API"
     VERBATIM)
 
 add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${GENERATED}/BindingTests.cpp"
+    "${TEST_SOURCE}/fixtures/Buffers.cpp"
     "${TEST_SOURCE}/fixtures/Implementation.cpp"
     "${TEST_SOURCE}/fixtures/IncludeTest.c")
 add_dependencies(BindingTestsWasm Bindings-GenerateJavaScriptTests)
@@ -62,6 +64,7 @@ set_target_properties(BindingTestsWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_D
 add_custom_target(Bindings-TestJavaScript
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/test_generator.py" "${MODEL}"
     COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_marshalling.mjs" "${GENERATED}/BindingTests.mjs"
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_buffers.mjs" "${GENERATED}/BindingTests.mjs"
     DEPENDS BindingTestsWasm
     COMMENT "Testing generated bindings through JavaScript, Wasm, and native test objects"
     VERBATIM)
