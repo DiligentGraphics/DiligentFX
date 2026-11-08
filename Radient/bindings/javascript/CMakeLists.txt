@@ -7,7 +7,7 @@ set(GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 add_custom_target(Radient-GenerateJavaScript
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/generate.py"
-        --model "${MODEL}" --module Radient --header RadientDataBlob.h --header RadientEngine.h
+        --model "${MODEL}" --module Radient --header Radient.h --header RadientMeshPrimitives.h
         --adapters "${CMAKE_CURRENT_SOURCE_DIR}/API.json" --output "${GENERATED}"
     DEPENDS Radient-GenerateBindingModel
     BYPRODUCTS "${GENERATED}/Radient.cpp" "${GENERATED}/Radient.mjs"

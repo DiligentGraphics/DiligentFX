@@ -1,7 +1,7 @@
 # Radient JavaScript bindings
 
 The bindings provide owning read-only and mutable data blobs, engine/scene creation,
-and scene editing, including camera and light components. They use the real
+scene editing, including camera and light components, and mesh asset creation/reflection. They use the real
 Radient implementation, compiled to Wasm,
 and run in browsers or Node without a graphics device. Blobs can also be created
 without an engine.
@@ -215,3 +215,15 @@ writer.RemoveComponent(lightEntity, api.RADIENT_COMPONENT_TYPE_LIGHT);
 Component type constants are `bigint`; projection/light-type enumerators are
 numbers. Camera and light units and validation rules follow the native descriptors.
 Setting these components does not create a renderer or require a graphics device.
+
+## Mesh assets
+
+Use `engine.GetAssetManager()` to create meshes from blob-backed vertex/index
+data or the cube/sphere helpers. Vertex layouts use nested descriptor arrays;
+`ppVertexBuffers` contains one blob wrapper per `VertexLayout.BufferCount`.
+Radient retains source blobs during processing. Loading can return either `OK`
+or `PENDING`; poll `GetRadientAssetLoadStatus()` asynchronously. CPU-only loading
+completes without GPU uploads.
+
+Mesh descriptions are copied snapshots. Interface fields returned by scene or
+asset getters are retained wrappers and must be disposed separately.

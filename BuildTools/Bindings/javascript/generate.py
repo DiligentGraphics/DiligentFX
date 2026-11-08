@@ -9,7 +9,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from binding_model import ModelError, apply_values_policy, unalias
+from binding_model import ModelError, apply_values_policy, resolve_span_length, unalias
 
 
 def short(name):
@@ -234,7 +234,7 @@ class Generator:
             return None
         t = unalias(value["type"])
         element = unalias(t["target"]) if t["kind"] == "pointer" else {}
-        length = next((s for s in siblings if s["name"] == policy["length"]), None)
+        length = resolve_span_length(policy["length"], {s["name"]: s for s in siblings}, context, self.types, field=field)
         directions = {"out" if output else "in"}
         if field:
             directions.add("inout")
@@ -244,7 +244,7 @@ class Generator:
                 policy.get("direction") not in directions or policy.get("ownership") != "borrowed" or
                 policy.get("lifetime") not in lifetimes):
             raise ModelError(f"{context}: {'output' if output else 'input'} spans require borrowed const elements with a supported lifetime and direction")
-        length_type = self.scalar(length["type"])
+        length_type = self.scalar(length)
         if length_type not in ("u32", "u64"):
             raise ModelError(f"{context}: span length must be an unsigned 32-bit or 64-bit scalar")
         span = {"length": policy["length"], "lengthType": length_type, "nullable": policy["nullable"]}
@@ -512,9 +512,9 @@ class Generator:
             if as_output:
                 span = self.span(field, fields, context, output=True, field=True)
             if span:
+                count = str(span["length"]) if type(span["length"]) is int else f'reinterpret_cast<const {name}*>(pointer)->{span["length"]}'
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
-                    'uint64_t', ['uintptr_t pointer'],
-                    f'return reinterpret_cast<const {name}*>(pointer)->{span["length"]};')
+                    'uint64_t', ['uintptr_t' if type(span["length"]) is int else 'uintptr_t pointer'], f'return {count};')
                 spec = {"span": span}
                 if as_input:
                     spec["set"] = self.export(symbol(name) + "_Set_" + field["name"], "void",

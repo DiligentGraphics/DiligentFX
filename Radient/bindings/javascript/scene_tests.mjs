@@ -33,9 +33,6 @@ export function registerTests({test, assert, api, constants}) {
         assert.equal(writer.SetEntityName(entity, "Renamed"), NO_CHANGE);
         assert.equal(writer.SetEntityName(entity, null), OK);
         assert.equal(value(scene.GetEntityName(entity)), "");
-        // Only the selected interface methods are available in this increment.
-        assert.equal(engine.GetAssetManager, undefined);
-        assert.equal(writer.SetMesh, undefined);
     });
 
     test("hierarchy enumeration copies written IDs and subtree destruction invalidates handles", t => {

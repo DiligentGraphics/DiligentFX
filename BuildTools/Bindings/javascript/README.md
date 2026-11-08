@@ -511,3 +511,5 @@ defaults at each invocation. TypeScript marks these arguments optional. Interior
 Counts needed for JS array validation remain explicit. Pointer/reference inputs
 also remain explicit when their default temporary could escape through borrowed
 results or output parameters; this preserves snapshot lifetime guarantees.
+
+Descriptor span counts may also name nested value fields (for example, `VertexLayout.BufferCount`) or a fixed integer extent. Native count getters run after the descriptor has been populated, preserving nested defaults and independence from JavaScript property order. Paths cannot traverse pointers.

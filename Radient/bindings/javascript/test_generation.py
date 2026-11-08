@@ -56,7 +56,7 @@ class RadientGenerationTest(unittest.TestCase):
         self.assertIn("GetLocalTransform(Entity: bigint): Result<StructSnapshot<RadientTransform>>", types)
         self.assertIn("GetRootEntities(Capacity: number): Result<", types)
         self.assertIn("KeepWorldTransform?: boolean", types)
-        for name in ("GetAssetManager", "SetMesh", "SetCustomComponentData", "IThreadPool", "Backend", "Resources"):
+        for name in ("SetCustomComponentData", "IThreadPool", "Backend", "Resources"):
             self.assertNotIn(name, types)
             self.assertNotIn(name, js)
 

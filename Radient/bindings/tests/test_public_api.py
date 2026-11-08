@@ -55,9 +55,9 @@ class PublicAPITest(unittest.TestCase):
         config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
         types = declarations(build_model(ROOT, config, API_TARGET, CLANG_ARGS))
         engine = types["Diligent::IRadientEngine"]
-        self.assertEqual([m["name"] for m in engine["methods"]], ["CreateScene", "CreateSceneWriter"])
+        self.assertEqual([m["name"] for m in engine["methods"]], ["GetAssetManager", "CreateScene", "CreateSceneWriter"])
         scene = {m["name"]: m for m in types["Diligent::IRadientScene"]["methods"]}
-        self.assertNotIn("GetMesh", scene)
+        self.assertIn("GetMesh", scene)
         roots = scene["GetRootEntities"]["parameters"][1]["policy"]
         self.assertEqual((roots["length"], roots["written"]), ("Capacity", "NumEntitiesWritten"))
         writer = {m["name"]: m for m in types["Diligent::IRadientSceneWriter"]["methods"]}

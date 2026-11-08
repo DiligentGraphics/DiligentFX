@@ -112,7 +112,30 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
         value["policy"] = policy
 
 
-def validate_length_policy(value, siblings, context):
+def resolve_span_length(length, siblings, context, types=None, *, field=False):
+    """Resolve a sibling count, a nested value-field count, or a fixed field extent."""
+    if field and type(length) is int and 0 <= length <= 0xffffffff:
+        return {"kind": "scalar", "name": "uint", "bits": 32, "const": False, "volatile": False}
+    if not isinstance(length, str) or not length:
+        raise ModelError(f"{context}: length must name an integer sibling")
+    parts = length.split('.')
+    if len(parts) > 1 and not field:
+        raise ModelError(f"{context}: nested lengths require a descriptor field")
+    members = siblings
+    for index, part in enumerate(parts):
+        value = members.get(part)
+        native = unalias(value['type']) if value else {}
+        if index + 1 < len(parts):
+            declaration = (types or {}).get(native.get('name'), {})
+            if native.get('kind') != 'named' or declaration.get('kind') != 'record':
+                raise ModelError(f"{context}: length path must traverse embedded records")
+            members = {f['name']: f for f in declaration['fields']}
+    if native.get('kind') != 'scalar' or native['name'] in ('bool', 'float', 'double'):
+        raise ModelError(f"{context}: length must name an integer sibling")
+    return native
+
+
+def validate_length_policy(value, siblings, context, types=None, *, is_field=False):
     policy = value.get("policy", {})
     if "length_from" in policy:
         source = siblings.get(policy["length_from"]["parameter"], {})
@@ -131,21 +154,17 @@ def validate_length_policy(value, siblings, context):
                 inner.get("kind") != "scalar" or inner.get("name") not in ("uint", "ulong", "ulonglong")):
             raise ModelError(f"{context}: written must name an unsigned scalar output")
     if "length" in policy:
-        length = siblings.get(policy["length"])
-        length_type = unalias(length["type"]) if length else {}
-        if (length_type.get("kind") != "scalar" or
-                length_type["name"] in ("bool", "float", "double")):
-            raise ModelError(f"{context}: length must name an integer sibling")
+        resolve_span_length(policy["length"], siblings, context, types, field=is_field)
 
 
-def apply_values_policy(values, policies, context, *, is_field=False, inherited=()):
+def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None):
     by_name = {value["name"]: value for value in (*inherited, *values)}
     validate_keys(policies, {value["name"] for value in values}, context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
         apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
     for value in values:
-        validate_length_policy(value, by_name, f"{context}::{value['name']}")
+        validate_length_policy(value, by_name, f"{context}::{value['name']}", types, is_field=is_field)
 
 
 def apply_callable_policy(callable_model, policy, context):
@@ -170,7 +189,7 @@ def referenced_types(value):
             yield from referenced_types(child)
 
 
-def apply_declaration_policy(declaration, policy, inherited=()):
+def apply_declaration_policy(declaration, policy, inherited=(), types=None):
     name = declaration["name"]
     kind = declaration["kind"]
     if kind == "external":
@@ -190,7 +209,7 @@ def apply_declaration_policy(declaration, policy, inherited=()):
             if missing:
                 raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
             declaration["methods"] = [method for method in declaration["methods"] if method["name"] in selection]
-        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited)
+        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited, types=types)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")
@@ -248,7 +267,7 @@ def apply_policies(model, policies, symbols):
             iid = namespace + separator + "IID_" + short_name[1:]
             if short_name.startswith("I") and iid in symbols:
                 policy.setdefault("iid", iid)
-        apply_declaration_policy(declaration, policy, base_fields(declaration))
+        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name)
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:

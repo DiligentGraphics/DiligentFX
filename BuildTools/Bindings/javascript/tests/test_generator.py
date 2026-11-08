@@ -270,7 +270,7 @@ class GeneratorTest(unittest.TestCase):
                     result["type"]["target"][key] = value
                 else:
                     result["policy"][key] = value
-                with self.assertRaisesRegex(ModelError, "output spans require"):
+                with self.assertRaisesRegex(ModelError, "length must name" if key == "length" else "output spans require"):
                     self.emit(model)
         model = deepcopy(MODEL)
         result = self.declaration(model, "GetStaticOutputArray")["result"]
@@ -526,7 +526,7 @@ class GeneratorTest(unittest.TestCase):
                     field["type"]["target"]["const"] = False
                 else:
                     field["policy"]["length"] = "NoSuchField"
-                with self.assertRaisesRegex(ModelError, "input spans require"):
+                with self.assertRaisesRegex(ModelError, "length must name" if change == "length" else "input spans require"):
                     self.emit(model)
 
     def test_native_only_fields_and_fixed_arguments_preserve_the_model(self):

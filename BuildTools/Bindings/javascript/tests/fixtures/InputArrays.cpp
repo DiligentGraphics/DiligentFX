@@ -176,5 +176,19 @@ Int32 ReadArrayGroup(const MarshalArrayDesc* pGroups, Uint32 Count, Uint32 Group
     return pGroups[Group].pItems[Item].Id;
 }
 
+Uint32 SumNestedCount(const MarshalNestedCountDesc& Desc)
+{
+    Uint32 Sum = 0;
+    for (Uint32 i = 0; i < Desc.Counts.ItemCount; ++i)
+    {
+        Sum += Desc.pValues[i];
+    }
+    if (Desc.pPair != nullptr)
+    {
+        Sum += Desc.pPair[0] + Desc.pPair[1];
+    }
+    return Sum;
+}
+
 Uint32 GetArrayCallCount() { return ArrayCallCount; }
 } // namespace Diligent

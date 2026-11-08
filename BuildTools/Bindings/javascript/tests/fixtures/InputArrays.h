@@ -52,7 +52,16 @@ struct MarshalArrayDesc
 };
 typedef struct MarshalArrayDesc MarshalArrayDesc;
 
+struct MarshalNestedCountDesc
+{
+    const Uint32* pValues DEFAULT_INITIALIZER(nullptr);
+    MarshalArrayDesc Counts DEFAULT_INITIALIZER({});
+    const Uint32* pPair DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct MarshalNestedCountDesc MarshalNestedCountDesc;
+
 #include "DefineRefMacro.h"
+Uint32 DILIGENT_GLOBAL_FUNCTION(SumNestedCount)(const MarshalNestedCountDesc REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayInt8)(const Int8* pValues, Uint32 Count);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayUint8)(const Uint8* pValues, Uint32 Count);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayInt16)(const Int16* pValues, Uint32 Count);

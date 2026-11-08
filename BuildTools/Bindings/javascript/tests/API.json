@@ -2,6 +2,7 @@
   "schema_version": 1,
   "headers": ["fixtures/Interfaces.h"],
   "exports": [
+    "Diligent::SumNestedCount",
     "Diligent::BorrowObject",
     "Diligent::BorrowObjectOutput",
     "Diligent::CheckArrayBool",
@@ -137,6 +138,12 @@
     "Diligent::WriteObjectReference"
   ],
   "declarations": {
+    "Diligent::MarshalNestedCountDesc": {
+      "fields": {
+        "pValues": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Counts.ItemCount"},
+        "pPair": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": 2}
+      }
+    },
     "Diligent::IObject": {
       "binding": "external",
       "reason": "The JavaScript runtime owns native interface references",
