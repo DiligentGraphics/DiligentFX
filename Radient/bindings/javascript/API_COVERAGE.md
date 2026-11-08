@@ -14,6 +14,8 @@ The model and generator tests separately check declarations and metadata.
 
 | `material_tests.mjs` | Standard definitions, all parameter reflection/lookup methods, material creation/definition/version/texture access, surface queries, scene material bindings |
 
+| `material_edit_tests.mjs` | Material parameter reads, reusable writers, SetParameter/SetTexture/Commit, surface writers and standard texture-parameter helper |
+
 Native callbacks, externally supplied thread pools, importer implementations,
 and GPU/backend objects are not exposed. Asset-manager `Stop()` and its native
 task output remain native; disposing the engine performs normal shutdown.

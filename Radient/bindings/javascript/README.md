@@ -245,3 +245,10 @@ also enumerate their actual parameter set and resolve names to handles.
 Reflected default values are copied `Uint8Array` snapshots; their byte count is
 computed by Radient from the parameter type and array size. Texture references
 returned in descriptions and component snapshots are separate owned wrappers.
+
+Material `GetParameter(handle, byteCount)` returns copied bytes;
+`SetParameter(handle, bytes, byteCount)` accepts a `Uint8Array`. Use a byte view
+of a typed array for numeric values. Counts must match the reflected type and
+array size. Writers copy assignments and apply them on `Commit()`. Texture
+assignments follow the native contract: initialize them before querying material
+load status; texture changes after finalization are rejected.

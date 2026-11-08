@@ -207,7 +207,9 @@
     "Diligent::RadientStandardMaterialIridescenceTextureParameterNames",
     "Diligent::RadientStandardMaterialIridescenceThicknessTextureParameterNames",
     "Diligent::RadientStandardMaterialTransmissionTextureParameterNames",
-    "Diligent::RadientStandardMaterialThicknessTextureParameterNames"
+    "Diligent::RadientStandardMaterialThicknessTextureParameterNames",
+    "Diligent::IRadientSurfaceMaterialWriter",
+    "Diligent::SetStandardMaterialTextureParameters"
   ],
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -504,7 +506,9 @@
       "include_methods": [
         "GetDefinition",
         "GetVersion",
-        "GetTexture"
+        "GetTexture",
+        "GetParameter",
+        "CreateWriter"
       ],
       "methods": {
         "GetDefinition": {
@@ -513,6 +517,16 @@
         "GetTexture": {
           "parameters": {
             "ppTexture": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+          }
+        },
+        "GetParameter": {
+          "parameters": {
+            "pData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
+          }
+        },
+        "CreateWriter": {
+          "parameters": {
+            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -700,13 +714,42 @@
     },
     "Diligent::RadientStandardMaterialTextureParameterNames": {
       "fields": {
-        "Texture": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVSelector": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVScale": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVRotation": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVBias": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "WrapU": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "WrapV": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Texture": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVSelector": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVScale": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVRotation": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "UVBias": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "WrapU": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "WrapV": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::IRadientMaterialWriter": {
+      "include_methods": [
+        "SetParameter",
+        "SetTexture",
+        "Commit"
+      ],
+      "methods": {
+        "SetParameter": {
+          "parameters": {
+            "pData": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
+          }
+        },
+        "SetTexture": {
+          "parameters": {
+            "pTexture": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+          }
+        }
+      }
+    },
+    "Diligent::RadientStandardMaterialTextureParameters": {
+      "fields": {
+        "pTexture": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+      }
+    },
+    "Diligent::SetStandardMaterialTextureParameters": {
+      "parameters": {
+        "Writer": {"direction": "in"}
       }
     }
   }
