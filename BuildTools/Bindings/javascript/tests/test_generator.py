@@ -70,6 +70,43 @@ class GeneratorTest(unittest.TestCase):
                     with self.assertRaises(ModelError):
                         self.emit(model)
 
+    def test_computed_outputs_query_native_objects_and_keep_counts_out_of_js_api(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("reinterpret_cast<Diligent::IMarshalComputedOutputs*>(source)->GetDesc().Count", cpp)
+        self.assertIn("reinterpret_cast<const Diligent::IMarshalComputedOutputs*>(source)->GetValueCount()", cpp)
+        self.assertIn("FillMatrices(pSource: IMarshalComputedOutputs, Fail?: boolean, Grow?: boolean): Result<Array<StructSnapshot<MarshalComputedMatrix>>>;", types)
+        self.assertIn("FillComputedValues(Source: IMarshalComputedOutputs, Options: MarshalDesc): Uint32Array;", types)
+        buffer = generator.schema["interfaces"]["IMarshalComputedOutputs"]["methods"]["FillMatrices"]["parameters"][1]["output"]["buffer"]
+        self.assertEqual(buffer["lengthQuery"]["parameter"], "pSource")
+        self.assertNotIn("length", buffer)
+        self.assertIn("create", buffer)
+        self.assertIn("destroy", buffer)
+
+    def test_computed_outputs_reject_invalid_native_queries(self):
+        for change in ("source", "nullable", "method", "nonconst", "field", "count_type"):
+            with self.subTest(change=change):
+                model = deepcopy(MODEL)
+                interface = self.declaration(model, "IMarshalComputedOutputs")
+                methods = {m["name"]: m for m in interface["methods"]}
+                parameters = methods["FillMatrices"]["parameters"]
+                query = parameters[1]["policy"]["length_from"]
+                if change == "source":
+                    query["parameter"] = "missing"
+                elif change == "nullable":
+                    parameters[0]["policy"]["nullable"] = True
+                elif change == "method":
+                    query["method"] = "SetCount"
+                elif change == "nonconst":
+                    methods["GetDesc"]["const"] = False
+                elif change == "field":
+                    query["field"] = "missing"
+                else:
+                    self.declaration(model, "MarshalComputedDesc")["fields"][0]["type"] = {
+                        "kind": "scalar", "name": "int", "bits": 32, "const": False, "volatile": False}
+                with self.assertRaises(ModelError):
+                    self.emit(model)
+
     def test_nested_fields_use_native_subobjects_and_types(self):
         generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
         cpp, _, types = generator.generate()

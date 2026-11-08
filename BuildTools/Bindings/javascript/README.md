@@ -151,6 +151,21 @@ conversion and lifetime behavior in this backend. Add a native fixture and an
 execution test for each new supported API shape; emitter-only string checks cannot
 establish correct marshalling.
 
+## Output sizes queried from native objects
+
+An output buffer annotated with `length_from` needs no JavaScript count argument.
+The generated C++ helper queries the selected input interface directly, including
+descriptor fields such as `pSkin->GetDesc().JointCount`. Once all inputs have been
+marshalled and retained, the wrapper queries the count, allocates exactly that many
+native elements, and invokes the operation. Output structs use native construction
+and layout. The result is copied into a JavaScript array, and temporary storage is
+released on success, native failure, or snapshot-conversion failure.
+
+Zero counts produce empty arrays. Oversized counts are rejected before allocating
+the output. Native statuses are preserved; as with explicitly sized outputs, the
+API contract determines whether the returned data is valid for a given status.
+The source count must remain stable from the query through the native operation.
+
 ## Struct results
 
 A `const T&` result (declared with `const T REF` in a Diligent C-compatible header)

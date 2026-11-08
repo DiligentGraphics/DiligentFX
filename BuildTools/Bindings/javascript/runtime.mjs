@@ -416,18 +416,9 @@ export function createBindings(wasm, schema, constants = {}) {
         try {
             for (const parameter of spec.parameters) {
                 if (parameter.output) {
-                    const buffer = parameter.output.buffer;
-                    const capacity = buffer ? byteLength(inputScalar(args[inputs.findIndex(p => p.name === buffer.length)], buffer.lengthType, buffer.length)) : 0;
-                    const address = allocateOutput(parameter.output, capacity, cleanup);
-                    const output = {name: parameter.name, address, spec: parameter.output, capacity, consumed: false};
-                    outputs.push(output);
-                    if (output.spec.interface && !output.spec.borrowed) cleanup.push(() => {
-                        if (!output.consumed) {
-                            const object = new DataView(wasm.HEAPU8.buffer).getUint32(address, true);
-                            if (object) wasm._binding_Release(object);
-                        }
-                    });
-                    nativeArgs.push(address);
+                    outputs.push({name: parameter.name, spec: parameter.output,
+                                  index: nativeArgs.length, consumed: false});
+                    nativeArgs.push(0);
                 } else {
                     if (parameter.default && argument >= args.length) {
                         ++argument;
@@ -450,6 +441,30 @@ export function createBindings(wasm, schema, constants = {}) {
                         nativeArgs.push(inputScalar(value, parameter.type, parameter.name));
                     }
                 }
+            }
+            // Resolve native counts after every input has been marshalled and
+            // retained. Later descriptor getters may modify or dispose earlier
+            // interface wrappers; no JS getters run between sizing and dispatch.
+            for (const output of outputs) {
+                const buffer = output.spec.buffer;
+                let capacity = 0;
+                if (buffer?.lengthQuery) {
+                    const query = buffer.lengthQuery;
+                    const sourceIndex = spec.parameters.findIndex(p => p.name === query.parameter) + (owner ? 1 : 0);
+                    capacity = byteLength(BigInt.asUintN(64, wasm[query.export](nativeArgs[sourceIndex])));
+                } else if (buffer) {
+                    capacity = byteLength(inputScalar(args[inputs.findIndex(p => p.name === buffer.length)], buffer.lengthType, buffer.length));
+                }
+                const address = allocateOutput(output.spec, capacity, cleanup);
+                output.address = address;
+                output.capacity = capacity;
+                nativeArgs[output.index] = address;
+                if (output.spec.interface && !output.spec.borrowed) cleanup.push(() => {
+                    if (!output.consumed) {
+                        const object = new DataView(wasm.HEAPU8.buffer).getUint32(address, true);
+                        if (object) wasm._binding_Release(object);
+                    }
+                });
             }
             const nativeResult = wasm[dispatch](...nativeArgs);
             // Finish snapshots while the native owner and temporary inputs are

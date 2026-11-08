@@ -235,5 +235,20 @@ For caller-filled outputs, `written` optionally names an unsigned scalar output
 containing the written count. An array result can instead use `length_method`
 to name a no-argument unsigned count getter on its interface, including inherited
 methods. `length` and `length_method` are mutually exclusive.
+
+Caller-filled output arrays can instead use `length_from` to obtain their required
+element count from another non-null, borrowed input interface:
+
+```json
+"length_from": {"parameter": "pSkin", "method": "GetDesc", "field": "JointCount"}
+```
+
+The method must be const and take no arguments. With `field`, it returns a const
+descriptor reference whose named field is an unsigned 32-bit or 64-bit integer.
+Without `field`, the method returns that count directly. The count must remain
+valid until the native operation completes. This policy is for borrowed, non-null,
+call-scoped output buffers; it cannot be combined with `length`, `length_method`,
+or `written`. It describes an element count (bytes for `void*`), not a capacity
+argument supplied by the caller.
 For interface-pointer arrays, `element_nullable` controls null elements separately
 from the array pointer's `nullable` policy; elements are non-nullable by default.

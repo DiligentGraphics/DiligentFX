@@ -1586,6 +1586,80 @@
           "lifetime": "call"
         }
       }
-    }
+    },
+    "Diligent::MarshalComputedDesc": {},
+    "Diligent::MarshalComputedMatrix": {},
+    "Diligent::IMarshalComputedOutputs": {
+      "ownership": "reference_counted",
+      "iid": "Diligent::IID_MarshalComputedOutputs",
+      "methods": {
+        "GetDesc": {
+          "result": {
+            "direction": "out",
+            "nullable": false,
+            "ownership": "borrowed",
+            "lifetime": "object"
+          }
+        },
+        "FillMatrices": {
+          "parameters": {
+            "pSource": {
+              "direction": "in",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            },
+            "pMatrices": {
+              "direction": "out",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call",
+              "length_from": {
+                "parameter": "pSource",
+                "method": "GetDesc",
+                "field": "Count"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Diligent::CreateComputedOutputs": {
+      "parameters": {
+        "ppObject": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "owned",
+          "lifetime": "caller"
+        }
+      }
+    },
+    "Diligent::FillComputedValues": {
+      "parameters": {
+        "pValues": {
+          "direction": "out",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length_from": {
+            "parameter": "Source",
+            "method": "GetValueCount"
+          }
+        },
+        "Source": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "Options": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetLiveComputedOutputs": {}
   }
 }

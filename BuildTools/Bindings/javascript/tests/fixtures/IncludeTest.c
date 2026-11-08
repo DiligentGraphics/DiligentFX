@@ -92,3 +92,12 @@ Uint64 CheckCInterfaceReferences(IMarshalMutableObject* pMutable, const IMarshal
     IMarshalMutableObject_CopySizeTo(pMutable, pMutable);
     return Diligent_ReadObjectReference(pSource);
 }
+
+void CheckCComputedOutputs(IMarshalComputedOutputs* pSource)
+{
+    MarshalComputedMatrix Matrix  = {0};
+    MarshalDesc           Options = {0};
+    Uint32                Value   = 0;
+    IMarshalComputedOutputs_FillMatrices(pSource, pSource, &Matrix, False, False);
+    Diligent_FillComputedValues(&Value, pSource, &Options);
+}

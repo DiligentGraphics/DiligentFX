@@ -59,6 +59,45 @@ class PolicyTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, "ArrayResult result: length must name an integer sibling"):
                     apply_callable_policy(invalid, {"parameters": parameters, "result": policy}, "ArrayResult")
 
+    def test_computed_output_lengths_require_an_input_query(self):
+        function = copy.deepcopy(declarations(self.model)["Diligent::CreateBindingTestObject"])
+        source_type = function["parameters"][1]["type"]["target"]
+        function["parameters"] = [
+            {"name": "Source", "type": source_type},
+            {"name": "pValues", "type": {
+                "kind": "pointer", "const": False, "volatile": False,
+                "target": {"kind": "scalar", "name": "float", "bits": 32,
+                           "const": False, "volatile": False}}},
+        ]
+        policies = {"parameters": {
+            "Source": {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call"},
+            "pValues": {"direction": "out", "nullable": False, "ownership": "borrowed", "lifetime": "call",
+                        "length_from": {"parameter": "Source", "method": "GetDesc", "field": "Count"}},
+        }}
+        apply_callable_policy(function, policies, "ComputedOutput")
+        self.assertEqual(function["parameters"][1]["policy"], policies["parameters"]["pValues"])
+        for query in (None, "Source", {}, {"parameter": "Source"},
+                      {"parameter": "Source", "method": ""},
+                      {"parameter": "Source", "method": "Count", "field": 1},
+                      {"parameter": "missing", "method": "Count"},
+                      {"parameter": "pValues", "method": "Count"}):
+            with self.subTest(query=query):
+                invalid = copy.deepcopy(policies)
+                invalid["parameters"]["pValues"]["length_from"] = query
+                with self.assertRaisesRegex(ModelError, "length_from"):
+                    apply_callable_policy(copy.deepcopy(function), invalid, "ComputedOutput")
+        for key, value in (("length", "Source"), ("length_method", "GetCount"),
+                           ("written", "Written"), ("nullable", True), ("direction", "in")):
+            with self.subTest(key=key):
+                invalid = copy.deepcopy(policies)
+                invalid["parameters"]["pValues"][key] = value
+                with self.assertRaisesRegex(ModelError, "length_from"):
+                    apply_callable_policy(copy.deepcopy(function), invalid, "ComputedOutput")
+        invalid = copy.deepcopy(policies)
+        invalid["parameters"]["Source"]["nullable"] = True
+        with self.assertRaisesRegex(ModelError, "non-null borrowed input"):
+            apply_callable_policy(copy.deepcopy(function), invalid, "ComputedOutput")
+
     def test_requires_pointer_semantics(self):
         config = function_config()
         del config["declarations"]["Diligent::CreateBindingTestObject"]["parameters"]["ppObject"]

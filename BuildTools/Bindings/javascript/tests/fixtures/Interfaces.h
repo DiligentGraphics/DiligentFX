@@ -41,6 +41,7 @@
 #include "InterfaceFields.h"
 #include "BorrowedInterfaces.h"
 #include "InterfaceReferences.h"
+#include "ComputedOutputs.h"
 #include "OutputBuffers.h"
 #include "OutputParameters.h"
 #include "Object.h"

@@ -267,9 +267,39 @@ class Generator:
             raise ModelError(f"{context}: element_nullable is only valid for interface arrays")
         return span
 
+    def output_length_query(self, query, siblings, context):
+        source = next((p for p in siblings if p["name"] == query["parameter"]), None)
+        source_type = unalias(source["type"]) if source else {}
+        inner = unalias(source_type["target"]) if source_type.get("kind") in ("pointer", "reference") else {}
+        declaration = self.types.get(inner.get("name"), {})
+        if (declaration.get("kind") != "interface" or inner.get("volatile") or
+                source.get("policy", {}) != {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call"}):
+            raise ModelError(f"{context}: length_from requires a non-null borrowed interface input")
+        method = self.interface_methods(declaration["name"]).get(query["method"])
+        if not method or method["parameters"] or not method.get("const"):
+            raise ModelError(f"{context}: length_from requires a const no-argument method")
+        count_type = method["result"]["type"]
+        expression = f'reinterpret_cast<{cpp_type(source_type["target"])}*>(source)->{method["name"]}()'
+        if "field" in query:
+            result = unalias(count_type)
+            record = unalias(result["target"]) if result["kind"] == "reference" else {}
+            if (not record.get("const") or record.get("volatile") or
+                    self.types.get(record.get("name"), {}).get("kind") != "record"):
+                raise ModelError(f"{context}: length_from field requires a const-reference descriptor result")
+            field = next((f for f in self.record_fields(record["name"]) if f["name"] == query["field"]), None)
+            if not field:
+                raise ModelError(f"{context}: unknown length_from field")
+            count_type = field["type"]
+            expression += '.' + field["name"]
+        if self.scalar(count_type) not in ("u32", "u64"):
+            raise ModelError(f"{context}: length_from must produce an unsigned 32-bit or 64-bit count")
+        export = self.export(symbol(context) + '_Length', 'uint64_t', ['uintptr_t source'],
+                             f'return {expression};')
+        return count_type, {"export": export, "parameter": source["name"]}
+
     def output_buffer(self, value, siblings, context):
         policy = value.get("policy", {})
-        if policy.get("direction") != "out" or "length" not in policy:
+        if policy.get("direction") != "out" or not {"length", "length_from"} & policy.keys():
             return None
         t = unalias(value["type"])
         element = unalias(t["target"]) if t["kind"] == "pointer" else {}
@@ -281,7 +311,16 @@ class Generator:
         proxy["type"] = dict(t, target=dict(element, const=True))
         proxy["policy"] = dict(policy, direction="in")
         proxy["policy"].pop("written", None)
+        query = None
+        if "length_from" in policy:
+            count_type, query = self.output_length_query(policy["length_from"], siblings, context)
+            proxy["policy"].pop("length_from")
+            proxy["policy"]["length"] = "count"
+            siblings = [{"name": "count", "type": count_type}]
         span = self.span(proxy, siblings, context)
+        if query:
+            span.pop("length")
+            span["lengthQuery"] = query
         span["nullable"] = False
         if "record" in span:
             span.update(self.record_array(element["name"], output=True))
@@ -704,6 +743,8 @@ class Generator:
         # still needed to validate JS arrays must remain explicit. Likewise, do
         # not let a borrowed result outlive a default-constructed input temporary.
         lengths = {p.get("policy", {}).get("length") for p in (*d["parameters"], d["result"])}
+        lengths.update(p["policy"]["length_from"]["parameter"] for p in d["parameters"]
+                       if "length_from" in p.get("policy", {}))
         for p in reversed(d["parameters"]):
             pname = p["name"]
             parameter = next((item for item in parameters if item["name"] == pname), None)

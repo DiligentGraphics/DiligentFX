@@ -34,7 +34,7 @@ def validate_binding(policy, context):
     return binding
 
 
-VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written", "element_nullable", "length_method"}
+VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written", "element_nullable", "length_method", "length_from"}
 
 
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
@@ -52,6 +52,16 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
         raise ModelError(f"{context}: invalid direction")
     if "nullable" in policy and not isinstance(policy["nullable"], bool):
         raise ModelError(f"{context}: nullable must be a boolean")
+    if "length_from" in policy:
+        source = policy["length_from"]
+        if (is_result or is_field or native_type["kind"] != "pointer" or
+                policy.get("direction") != "out" or policy.get("ownership") != "borrowed" or
+                policy.get("lifetime") != "call" or policy.get("nullable") is not False or
+                {"length", "length_method", "written"} & policy.keys() or
+                not isinstance(source, dict) or not {"parameter", "method"} <= source.keys() or
+                source.keys() - {"parameter", "method", "field"} or
+                any(not isinstance(v, str) or not v for v in source.values())):
+            raise ModelError(f"{context}: length_from requires a borrowed output buffer and a parameter/method query with an optional field")
     if "length_method" in policy and (not is_result or "length" in policy or
             not isinstance(policy["length_method"], str) or not policy["length_method"]):
         raise ModelError(f"{context}: length_method requires a result and cannot be combined with length")
@@ -72,6 +82,14 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
 
 def validate_length_policy(value, siblings, context):
     policy = value.get("policy", {})
+    if "length_from" in policy:
+        source = siblings.get(policy["length_from"]["parameter"], {})
+        source_type = unalias(source["type"]) if source else {}
+        source_policy = source.get("policy", {})
+        if (source_type.get("kind") not in ("pointer", "reference") or
+                source_policy.get("direction") != "in" or source_policy.get("nullable") is not False or
+                source_policy.get("ownership") != "borrowed" or source_policy.get("lifetime") != "call"):
+            raise ModelError(f"{context}: length_from must query a non-null borrowed input parameter")
     if "written" in policy:
         count = siblings.get(policy["written"], {})
         count_type = unalias(count["type"]) if count else {}
