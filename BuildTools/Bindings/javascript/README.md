@@ -31,8 +31,8 @@ On Windows, use the environment's `Scripts/python.exe` and LLVM's
 `bin/libclang.dll`. Alternatively, pass Emscripten's
 `cmake/Modules/Platform/Emscripten.cmake` as `CMAKE_TOOLCHAIN_FILE` directly.
 `BINDINGS_NODE_EXECUTABLE` can select a particular Node executable.
-`BINDINGS_BROWSER_EXECUTABLE` selects Chrome, Chromium, or Edge; an empty value
-auto-detects an installed browser. Use `ctest -LE Browser` to run without a browser.
+Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
+`ctest -LE Browser` to run without a browser.
 
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
@@ -56,6 +56,18 @@ from a temporary local HTTP server with cross-origin isolation headers, and exit
 with an error if loading fails, a test fails, or the browser does not report before
 the timeout. `--shared-memory` additionally requires the module to use shared Wasm
 memory.
+
+To select a browser when running CTest, set the `BINDINGS_TEST_BROWSER_EXECUTABLE`
+environment variable; no reconfiguration or rebuild is needed:
+
+```sh
+BINDINGS_TEST_BROWSER_EXECUTABLE=/path/to/chrome \
+    ctest --test-dir build/binding-js -L Browser --verbose --output-on-failure --no-tests=error
+```
+
+In PowerShell, set `$env:BINDINGS_TEST_BROWSER_EXECUTABLE` before running CTest.
+When invoking the runner directly, `--browser` overrides the environment variable.
+If neither specifies a browser, the runner discovers one automatically.
 
 A suite exports `registerTests({test, assert, api, constants, wasm})`. Node supplies
 its standard test runner and assertions; the browser adapter supplies the small

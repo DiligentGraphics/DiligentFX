@@ -56,9 +56,10 @@ ctest --test-dir build/web/DiligentFX/Radient/bindings \
     -C Debug -L Browser --output-on-failure --no-tests=error
 ```
 
-The runner discovers the browser automatically. Set the CMake cache variable
-`RADIENT_BINDINGS_BROWSER_EXECUTABLE` to select a specific executable. No browser
-automation package or download is needed.
+The runner discovers the browser automatically. Set the environment variable
+`BINDINGS_TEST_BROWSER_EXECUTABLE` when running CTest to select a specific
+executable. This setting is shared with the generic binding tests and requires
+no reconfiguration or rebuild. No browser automation package or download is needed.
 
 The `Radient-JavaScriptBrowser` CTest suite runs the same blob cases as Node
 against the generated production Wasm module. A temporary local server sends the

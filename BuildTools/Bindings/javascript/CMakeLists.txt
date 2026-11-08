@@ -86,13 +86,8 @@ set_tests_properties(
     Bindings-JavaScriptNestedStructs
     PROPERTIES LABELS "Bindings;JavaScript")
 
-set(BINDINGS_BROWSER_EXECUTABLE "" CACHE FILEPATH "Chrome, Chromium, or Edge for browser tests (empty auto-detects)")
-set(BROWSER_ARGUMENTS)
-if(BINDINGS_BROWSER_EXECUTABLE)
-    list(APPEND BROWSER_ARGUMENTS --browser "${BINDINGS_BROWSER_EXECUTABLE}")
-endif()
 add_test(NAME Bindings-JavaScriptNestedStructsBrowser
     COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
         --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/nested_struct_tests.mjs" ${BROWSER_ARGUMENTS})
+        --suite "${TEST_SOURCE}/nested_struct_tests.mjs")
 set_tests_properties(Bindings-JavaScriptNestedStructsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

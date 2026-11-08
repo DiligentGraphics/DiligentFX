@@ -169,7 +169,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--module", type=Path, required=True)
     parser.add_argument("--suite", type=Path, required=True)
-    parser.add_argument("--browser", help="Chrome, Chromium, or Edge executable (otherwise auto-detected)")
+    parser.add_argument("--browser", default=os.environ.get("BINDINGS_TEST_BROWSER_EXECUTABLE"),
+                        help="Chrome, Chromium, or Edge executable (defaults to BINDINGS_TEST_BROWSER_EXECUTABLE or auto-detection)")
     parser.add_argument("--timeout", type=float, default=60, help="Maximum browser test duration in seconds")
     parser.add_argument("--shared-memory", action="store_true", help="Require shared Wasm memory and cross-origin isolation")
     args = parser.parse_args()
