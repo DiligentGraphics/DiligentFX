@@ -19,9 +19,9 @@ def configure_clang():
         bindings_version = version("clang")
     except PackageNotFoundError:
         bindings_version = "not installed"
-    if bindings_version.split(".")[0] != "20":
+    if bindings_version.split(".")[0] != "22":
         raise ModelError(
-            f"Clang 20 Python bindings are required (found {bindings_version}). "
+            f"Clang 22 Python bindings are required (found {bindings_version}). "
             "Install BuildTools/Bindings/requirements.txt in the generator's Python environment.")
     library = os.environ.get("LIBCLANG_LIBRARY_FILE")
     if library:
@@ -30,7 +30,7 @@ def configure_clang():
 
 @lru_cache(maxsize=1)
 def clang_library():
-    """Bind the small part of libclang 20 not exposed by clang.cindex."""
+    """Bind the small part of libclang 22 not exposed by clang.cindex."""
     library = cindex.conf.lib
     functions = [
         ("clang_Cursor_isFunctionInlined", [cindex.Cursor], ctypes.c_uint),
@@ -292,7 +292,7 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
     # Check the native library too: installing the Python package does not replace
     # an older libclang found on the system. Keep incompatible SDK headers out of
     # that diagnostic so the actual toolchain problem is immediately visible.
-    source = '#if __clang_major__ != 20\n#error Binding extraction requires libclang 20.\n#else\n'
+    source = '#if __clang_major__ != 22\n#error Binding extraction requires libclang 22.\n#else\n'
     source += "".join(f'#include "{header.as_posix()}"\n' for header in headers)
     source += "#endif\n"
     try:
@@ -302,7 +302,7 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
             options=cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
     except (cindex.LibclangError, cindex.TranslationUnitLoadError) as error:
         raise ModelError(
-            "Could not load or run libclang 20. Set LIBCLANG_LIBRARY_FILE to its shared library "
+            "Could not load or run libclang 22. Set LIBCLANG_LIBRARY_FILE to its shared library "
             f"(RADIENT_BINDINGS_LIBCLANG in CMake).\n{error}") from error
     errors = [str(diagnostic) for diagnostic in unit.diagnostics if diagnostic.severity >= cindex.Diagnostic.Error]
     if errors:

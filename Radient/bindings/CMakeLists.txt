@@ -7,8 +7,8 @@ endif()
 
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 
-set(RADIENT_BINDINGS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter with Clang 20 bindings")
-set(RADIENT_BINDINGS_LIBCLANG "" CACHE FILEPATH "LLVM 20 shared library (libclang.dll, libclang.so, or libclang.dylib)")
+set(RADIENT_BINDINGS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter with Clang 22 bindings")
+set(RADIENT_BINDINGS_LIBCLANG "" CACHE FILEPATH "LLVM 22 shared library (libclang.dll, libclang.so, or libclang.dylib)")
 set(RADIENT_BINDINGS_TARGET "" CACHE STRING "Clang target triple override for the binding model (empty uses the configured C++ target)")
 set(RADIENT_BINDINGS_CLANG_ARGS "" CACHE STRING "Additional Clang arguments (semicolon-separated)")
 

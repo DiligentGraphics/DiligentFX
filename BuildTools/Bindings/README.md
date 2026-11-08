@@ -48,7 +48,7 @@ adapters are not implemented yet.
 
 ## Running
 
-Use Python 3.10 or newer, LLVM 20, and the Clang 20 Python bindings pinned in
+Use Python 3.10 or newer, LLVM 22, and the Clang 22 Python bindings pinned in
 `BuildTools/Bindings/requirements.txt`. Install the Python requirements in a
 dedicated environment so the generator does not affect other tools:
 
@@ -57,18 +57,23 @@ python -m venv /path/to/bindings-env
 /path/to/bindings-env/bin/python -m pip install -r BuildTools/Bindings/requirements.txt
 ```
 
+The requirements install the Python package from the checksum-pinned LLVM 22.1.2
+source release because Clang 22 Python bindings are not yet published on PyPI.
+An uncached install downloads the approximately 167 MB source archive; only the
+Python bindings are installed, and LLVM itself is not built.
+
 On Windows the interpreter is `bindings-env/Scripts/python.exe`. The `clang`
-Python package does **not** include libclang: install LLVM 20 separately (tested
-with LLVM 20.1.8). Its shared library and built-in headers must remain in their
+Python package does **not** include libclang: install LLVM 22 separately (tested
+with LLVM 22.1.2). Its shared library and built-in headers must remain in their
 LLVM installation layout. Do not install the older bundled `libclang` Python
 package in this environment; both packages provide the same `clang` module.
 
 Set `RADIENT_BINDINGS_PYTHON_EXECUTABLE` to the environment's interpreter and
-`RADIENT_BINDINGS_LIBCLANG` to LLVM 20's `bin/libclang.dll` on Windows,
+`RADIENT_BINDINGS_LIBCLANG` to LLVM 22's `bin/libclang.dll` on Windows,
 `lib/libclang.so` on Linux, or `lib/libclang.dylib` on macOS. For direct Python
 invocation, set the `LIBCLANG_LIBRARY_FILE` environment variable instead. If no
 library path is supplied, Clang's normal shared-library search applies. Both the
-Python bindings and the native parser must use major version 20.
+Python bindings and the native parser must use major version 22.
 
 The CMake targets use the configured C++ target and its standard headers. A native
 Visual Studio build needs no Emscripten installation or environment. Win32 and x64
@@ -99,7 +104,7 @@ toolchain explicitly:
 ```sh
 cmake -S Radient/bindings -B /path/to/build/bindings -A x64 \
     -DRADIENT_BINDINGS_PYTHON_EXECUTABLE=/path/to/bindings-env/Scripts/python.exe \
-    -DRADIENT_BINDINGS_LIBCLANG=/path/to/LLVM-20/bin/libclang.dll
+    -DRADIENT_BINDINGS_LIBCLANG=/path/to/LLVM-22/bin/libclang.dll
 ```
 
 `RADIENT_BINDINGS_TARGET` is an optional Clang target triple override. Leave it

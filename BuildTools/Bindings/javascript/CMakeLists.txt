@@ -9,8 +9,8 @@ endif()
 
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 find_program(BINDINGS_NODE_EXECUTABLE NAMES node REQUIRED)
-set(BINDINGS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter with Clang 20 bindings")
-set(BINDINGS_LIBCLANG "" CACHE FILEPATH "LLVM 20 libclang library")
+set(BINDINGS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter with Clang 22 bindings")
+set(BINDINGS_LIBCLANG "" CACHE FILEPATH "LLVM 22 libclang library")
 
 get_filename_component(BINDING_TOOLS "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 get_filename_component(CORE_SOURCE "${BINDING_TOOLS}/../../../DiligentCore" ABSOLUTE)

@@ -13,8 +13,8 @@ No browser, renderer, or GPU is required.
 ## Build and run
 
 Install Emscripten and activate its environment. Use Node 18 or newer and the
-Clang 20 Python environment described in the [binding tools README](../README.md).
-The extraction library is Clang 20; Emscripten supplies the Wasm compiler and its
+Clang 22 Python environment described in the [binding tools README](../README.md).
+The extraction library is Clang 22; Emscripten supplies the Wasm compiler and its
 standard headers. Tested with Emscripten 6.0.11 and Node 24.
 
 From the FX source directory:
@@ -22,7 +22,7 @@ From the FX source directory:
 ```sh
 emcmake cmake -S BuildTools/Bindings/javascript -B build/binding-js -G Ninja \
     -DBINDINGS_PYTHON_EXECUTABLE=/path/to/bindings-env/bin/python \
-    -DBINDINGS_LIBCLANG=/path/to/LLVM-20/lib/libclang.so
+    -DBINDINGS_LIBCLANG=/path/to/LLVM-22/lib/libclang.so
 cmake --build build/binding-js --target Bindings-TestJavaScript
 ```
 
