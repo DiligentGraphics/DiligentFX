@@ -45,25 +45,13 @@ add_custom_target(Bindings-GenerateJavaScriptTests
     COMMENT "Generating JavaScript binding test API"
     VERBATIM)
 
+# Pick up added and removed fixtures on the next build without editing this list.
+file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS
+    "${TEST_SOURCE}/fixtures/*.c"
+    "${TEST_SOURCE}/fixtures/*.cpp")
 add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${GENERATED}/BindingTests.cpp"
-    "${TEST_SOURCE}/fixtures/Buffers.cpp"
-    "${TEST_SOURCE}/fixtures/Strings.cpp"
-    "${TEST_SOURCE}/fixtures/NestedStructs.cpp"
-    "${TEST_SOURCE}/fixtures/StructResults.cpp"
-    "${TEST_SOURCE}/fixtures/InputArrays.cpp"
-    "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
-    "${TEST_SOURCE}/fixtures/FixedArrays.cpp"
-    "${TEST_SOURCE}/fixtures/DefaultArguments.cpp"
-    "${TEST_SOURCE}/fixtures/Exports.cpp"
-    "${TEST_SOURCE}/fixtures/InheritedDescriptors.cpp"
-    "${TEST_SOURCE}/fixtures/StructPointers.cpp"
-    "${TEST_SOURCE}/fixtures/InterfaceFields.cpp"
-    "${TEST_SOURCE}/fixtures/BorrowedInterfaces.cpp"
-    "${TEST_SOURCE}/fixtures/OutputBuffers.cpp"
-    "${TEST_SOURCE}/fixtures/OutputParameters.cpp"
-    "${TEST_SOURCE}/fixtures/Implementation.cpp"
-    "${TEST_SOURCE}/fixtures/IncludeTest.c")
+    ${FIXTURE_SOURCES})
 add_dependencies(BindingTestsWasm Bindings-GenerateJavaScriptTests)
 target_include_directories(BindingTestsWasm PRIVATE "${TEST_SOURCE}/fixtures" "${CORE_SOURCE}/Primitives/interface")
 target_compile_features(BindingTestsWasm PRIVATE cxx_std_17)
@@ -77,139 +65,32 @@ target_link_options(BindingTestsWasm PRIVATE
 set_target_properties(BindingTestsWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
 
 # Build BindingTestsWasm first; CTest only executes the prepared suites.
-add_test(NAME Bindings-JavaScriptGeneration
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/test_generator.py" "${MODEL}" -v)
-add_test(NAME Bindings-JavaScriptMarshalling
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_marshalling.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptBuffers
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_buffers.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptStrings
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_strings.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptNestedStructs
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_nested_structs.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptStructResults
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_struct_results.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptInputArrays
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_input_arrays.mjs" "${GENERATED}/BindingTests.mjs")
-add_test(NAME Bindings-JavaScriptBrowserHarness
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_browser_harness.mjs")
-set_tests_properties(
-    Bindings-JavaScriptGeneration
-    Bindings-JavaScriptMarshalling
-    Bindings-JavaScriptBuffers
-    Bindings-JavaScriptStrings
-    Bindings-JavaScriptBrowserHarness
-    Bindings-JavaScriptNestedStructs
-    Bindings-JavaScriptStructResults
-    Bindings-JavaScriptInputArrays
-    PROPERTIES LABELS "Bindings;JavaScript")
+# Test filenames define the registrations; helpers use different names or live
+# in subdirectories. CONFIGURE_DEPENDS refreshes CTest registrations on a build.
+file(GLOB PYTHON_TESTS CONFIGURE_DEPENDS "${TEST_SOURCE}/test_*.py")
+foreach(TEST_FILE IN LISTS PYTHON_TESTS)
+    get_filename_component(TEST_NAME "${TEST_FILE}" NAME_WE)
+    set(TEST_NAME "Bindings-JavaScript-Python-${TEST_NAME}")
+    add_test(NAME "${TEST_NAME}"
+        COMMAND ${PYTHON_COMMAND} "${TEST_FILE}" "${MODEL}" -v)
+    set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "Bindings;JavaScript")
+endforeach()
 
-add_test(NAME Bindings-JavaScriptNestedStructsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/nested_struct_tests.mjs")
-set_tests_properties(Bindings-JavaScriptNestedStructsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+file(GLOB NODE_TESTS CONFIGURE_DEPENDS "${TEST_SOURCE}/test_*.mjs")
+foreach(TEST_FILE IN LISTS NODE_TESTS)
+    get_filename_component(TEST_NAME "${TEST_FILE}" NAME_WE)
+    set(TEST_NAME "Bindings-JavaScript-Node-${TEST_NAME}")
+    add_test(NAME "${TEST_NAME}"
+        COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_FILE}" "${GENERATED}/BindingTests.mjs")
+    set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "Bindings;JavaScript")
+endforeach()
 
-add_test(NAME Bindings-JavaScriptStructResultsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/struct_result_tests.mjs")
-set_tests_properties(Bindings-JavaScriptStructResultsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptInputArraysBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/input_array_tests.mjs")
-set_tests_properties(Bindings-JavaScriptInputArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptOutputArrays
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_output_arrays.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputArrays PROPERTIES LABELS "Bindings;JavaScript")
-
-add_test(NAME Bindings-JavaScriptOutputArraysBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/output_array_tests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptFixedArrays
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_fixed_arrays.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptFixedArrays PROPERTIES LABELS "Bindings;JavaScript")
-
-add_test(NAME Bindings-JavaScriptFixedArraysBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs"
-        --suite "${TEST_SOURCE}/fixed_array_tests.mjs")
-set_tests_properties(Bindings-JavaScriptFixedArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptOutputParameters
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_outputparameters.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputParameters PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptOutputParametersBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/outputparameters_tests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputParametersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptOutputBuffers
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_outputbuffers.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputBuffers PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptOutputBuffersBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/outputbuffers_tests.mjs")
-set_tests_properties(Bindings-JavaScriptOutputBuffersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptBorrowedInterfaces
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_borrowedinterfaces.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptBorrowedInterfaces PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptBorrowedInterfacesBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/borrowedinterfaces_tests.mjs")
-set_tests_properties(Bindings-JavaScriptBorrowedInterfacesBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptInterfaceFields
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_interfacefields.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptInterfaceFields PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptInterfaceFieldsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/interfacefields_tests.mjs")
-set_tests_properties(Bindings-JavaScriptInterfaceFieldsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptStructPointers
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_structpointers.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptStructPointers PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptStructPointersBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/structpointers_tests.mjs")
-set_tests_properties(Bindings-JavaScriptStructPointersBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptInheritedDescriptors
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_inheriteddescriptors.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptInheritedDescriptors PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptInheritedDescriptorsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/inheriteddescriptors_tests.mjs")
-set_tests_properties(Bindings-JavaScriptInheritedDescriptorsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptCountMethods
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_count_methods.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptCountMethods PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptCountMethodsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/count_method_tests.mjs")
-set_tests_properties(Bindings-JavaScriptCountMethodsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptExports
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_exports.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptExports PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptExportsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/exports_tests.mjs")
-set_tests_properties(Bindings-JavaScriptExportsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
-
-add_test(NAME Bindings-JavaScriptDefaultArguments
-    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_defaultarguments.mjs" "${GENERATED}/BindingTests.mjs")
-set_tests_properties(Bindings-JavaScriptDefaultArguments PROPERTIES LABELS "Bindings;JavaScript")
-add_test(NAME Bindings-JavaScriptDefaultArgumentsBrowser
-    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
-        --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_SOURCE}/defaultarguments_tests.mjs")
-set_tests_properties(Bindings-JavaScriptDefaultArgumentsBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+file(GLOB BROWSER_TESTS CONFIGURE_DEPENDS "${TEST_SOURCE}/*_tests.mjs")
+foreach(TEST_FILE IN LISTS BROWSER_TESTS)
+    get_filename_component(TEST_NAME "${TEST_FILE}" NAME_WE)
+    set(TEST_NAME "Bindings-JavaScript-Browser-${TEST_NAME}")
+    add_test(NAME "${TEST_NAME}"
+        COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+            --module "${GENERATED}/BindingTests.mjs" --suite "${TEST_FILE}")
+    set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "Bindings;JavaScript;Browser")
+endforeach()

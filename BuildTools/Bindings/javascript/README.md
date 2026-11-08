@@ -46,6 +46,18 @@ rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
 of this optional Emscripten project.
 
+Fixture sources and test suites are discovered automatically:
+
+- `tests/fixtures/*.c` and `*.cpp` are compiled into `BindingTestsWasm`.
+- `tests/test_*.py` run with the generated model path and `-v`.
+- `tests/test_*.mjs` run in Node with the generated module path.
+- `tests/*_tests.mjs` run through the browser runner as shared suites.
+
+CTest names contain the runner and filename, and retain the `Bindings`,
+`JavaScript`, and `Browser` labels. Adding or removing matching files refreshes
+the build and test lists on the next build through CMake's `CONFIGURE_DEPENDS`;
+there is no per-suite CMake registration to maintain.
+
 Generated artifacts reside in the build directory's `generated/` folder and are
 not checked in. Only the generator, shared runtime, fixture declarations, metadata,
 native test implementations, and tests belong in source control.
