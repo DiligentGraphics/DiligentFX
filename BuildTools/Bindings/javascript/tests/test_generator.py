@@ -44,6 +44,29 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("IMarshalMutableObject extends IMarshalObject", declarations)
         self.assertIn("Result<IMarshalObject | null>", declarations)
 
+    def test_nested_fields_use_native_subobjects_and_types(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        fields = generator.schema["records"]["MarshalNestedDesc"]["fields"]
+        self.assertEqual(fields["Transform"], {
+            "record": "MarshalNestedTransform",
+            "address": "_binding_Diligent_MarshalNestedDesc_Field_Transform"})
+        self.assertIn("&reinterpret_cast<Diligent::MarshalNestedDesc*>(pointer)->Transform", cpp)
+        self.assertIn("Transform?: MarshalNestedTransform;", types)
+        # A typedef to a child struct uses the same canonical descriptor.
+        scale = generator.schema["records"]["MarshalNestedTransform"]["fields"]["Scale"]
+        self.assertEqual(scale["record"], "MarshalNestedVector")
+        self.assertIn("Scale?: MarshalNestedVector;", types)
+
+    def test_nested_fields_reject_const_and_volatile(self):
+        for qualifier, message in [("const", "const fields"), ("volatile", "Volatile values")]:
+            with self.subTest(qualifier=qualifier):
+                model = deepcopy(MODEL)
+                field = self.declaration(model, "MarshalNestedDesc")["fields"][1]
+                field["type"][qualifier] = True
+                with self.assertRaisesRegex(ModelError, message):
+                    self.emit(model)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

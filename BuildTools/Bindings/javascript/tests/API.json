@@ -365,6 +365,73 @@
           "length": "ByteCount"
         }
       }
-    }
+    },
+    "Diligent::MarshalNestedVector": {},
+    "Diligent::MarshalNestedTransform": {},
+    "Diligent::MarshalNestedData": {
+      "fields": {
+        "Name": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "pBytes": {
+          "direction": "in",
+          "nullable": true,
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::MarshalNestedDesc": {},
+    "Diligent::ReadNestedValue": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetNestedTag": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetNestedName": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": true,
+        "ownership": "borrowed",
+        "lifetime": "call"
+      }
+    },
+    "Diligent::GetNestedChecksum": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::GetNestedCallCount": {}
   }
 }

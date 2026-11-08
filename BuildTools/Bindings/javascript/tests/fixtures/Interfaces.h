@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Structs.h"
+#include "NestedStructs.h"
 #include "Buffers.h"
 #include "StringMarshalling.h"
 #include "Object.h"

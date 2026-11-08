@@ -239,7 +239,8 @@ class Generator:
         self.ts.append(f'export interface {short(name)} {{')
         for field in d["fields"]:
             self.automatic(field, name + "::" + field["name"])
-            if unalias(field["type"])["const"]:
+            field_type = unalias(field["type"])
+            if field_type["const"]:
                 raise ModelError(f"{name}: const fields need an explicit adapter")
             span = self.byte_span(field, d["fields"], name + "::" + field["name"])
             if span:
@@ -259,6 +260,19 @@ class Generator:
                     f'reinterpret_cast<{name}*>(pointer)->{field["name"]} = reinterpret_cast<{cpp_type(field["type"])}>(data);')
                 rec["fields"][field["name"]] = {"string": string, "set": setter}
                 self.ts.append(f'  {field["name"]}?: string' + (' | null;' if string['nullable'] else ';'))
+                continue
+            nested = self.types.get(field_type.get("name"), {})
+            if field_type["kind"] == "named" and nested.get("kind") == "record":
+                if field_type["volatile"]:
+                    raise ModelError("Volatile values need an explicit adapter")
+                # Address the child in its initialized parent: constructing a new
+                # child would discard defaults supplied by the containing field.
+                address = self.export(symbol(name) + "_Field_" + field["name"], "uintptr_t",
+                    ['uintptr_t pointer'],
+                    f'return reinterpret_cast<uintptr_t>(&reinterpret_cast<{name}*>(pointer)->{field["name"]});')
+                child = short(nested["name"])
+                rec["fields"][field["name"]] = {"record": child, "address": address}
+                self.ts.append(f'  {field["name"]}?: {child};')
                 continue
             kind = self.scalar(field["type"])
             setter = self.export(symbol(name) + "_Set_" + field["name"], "void",

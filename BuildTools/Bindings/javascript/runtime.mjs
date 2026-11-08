@@ -90,14 +90,17 @@ export function createBindings(wasm, schema) {
         }
     }
 
-    function record(value, name, cleanup) {
+    function record(value, name, cleanup, address) {
         if (!value || typeof value !== "object" || Array.isArray(value)) {
             throw new TypeError(`${name} must be a descriptor object`);
         }
         const spec = schema.records[name];
-        const address = wasm[spec.create]() >>> 0;
-        if (!address) throw new Error(`Could not allocate ${name}`);
-        cleanup.push(() => wasm[spec.destroy](address));
+        // Nested fields reuse their parent's initialized storage and cleanup.
+        if (address === undefined) {
+            address = wasm[spec.create]() >>> 0;
+            if (!address) throw new Error(`Could not allocate ${name}`);
+            cleanup.push(() => wasm[spec.destroy](address));
+        }
         const buffers = [];
         for (const key of Object.keys(value)) {
             if (!Object.hasOwn(spec.fields, key)) throw new TypeError(`Unknown ${name} field: ${key}`);
@@ -107,6 +110,7 @@ export function createBindings(wasm, schema) {
             if (fieldValue !== undefined) {
                 if (field.bytes) buffers.push({field, value: fieldValue});
                 else if (field.string) wasm[field.set](address, inputString(fieldValue, field.string, cleanup));
+                else if (field.record) record(fieldValue, field.record, cleanup, wasm[field.address](address) >>> 0);
                 else wasm[field.set](address, inputScalar(fieldValue, field.type, `${name}.${key}`));
             }
         }

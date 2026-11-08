@@ -8,7 +8,7 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-No browser, renderer, or GPU is required.
+The nested-struct suite also runs in a headless browser. No renderer or GPU is required.
 
 ## Build and run
 
@@ -31,11 +31,14 @@ On Windows, use the environment's `Scripts/python.exe` and LLVM's
 `bin/libclang.dll`. Alternatively, pass Emscripten's
 `cmake/Modules/Platform/Emscripten.cmake` as `CMAKE_TOOLCHAIN_FILE` directly.
 `BINDINGS_NODE_EXECUTABLE` can select a particular Node executable.
+`BINDINGS_BROWSER_EXECUTABLE` selects Chrome, Chromium, or Edge; an empty value
+auto-detects an installed browser. Use `ctest -LE Browser` to run without a browser.
 
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
 CTest runs the Python emitter tests, Node scalar/interface, byte-buffer, and
-string marshalling suites, and browser-harness unit tests as separate entries.
+string and nested-struct marshalling suites, and browser-harness unit tests as
+separate entries. The nested-struct cases run in both Node and the browser.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -68,7 +71,11 @@ runs even after failure. The production example is
   silent truncation. Floating-point values use native conversion semantics.
 - Input descriptors are JavaScript objects. Omitted or `undefined` fields retain
   the native defaults. Unknown fields are rejected. Default expressions are never
-  evaluated or duplicated in JavaScript.
+  evaluated or duplicated in JavaScript. Nested value structs accept nested
+  objects and update the child already initialized inside its parent, preserving
+  defaults supplied by the containing field. An empty child object changes
+  nothing; `null` is rejected. Only the outer descriptor is allocated, and nested
+  strings and byte spans share its call-scoped cleanup.
 - Native status values are returned unchanged, including nonzero success or
   pending statuses. A callable with one output returns `{status, value}`. Output
   storage starts at zero; the native contract determines when the output is valid.
@@ -99,7 +106,7 @@ if (result.value !== null) {
 
 ## Scope and extension
 
-The initial backend supports scalar fields in plain input descriptors,
+The backend supports scalar fields and nested value structs in plain input descriptors,
 single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
 result. It also supports UTF-8 strings, input byte spans, and the scoped byte adapters

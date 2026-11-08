@@ -48,3 +48,10 @@ const Char* CheckCStringInterface(IMarshalStrings* pStrings)
     IMarshalStrings_ReadText(pStrings, False, &Text);
     return Text;
 }
+
+Float32 CheckCNestedStruct(void)
+{
+    MarshalNestedDesc Desc = {0};
+    Desc.Transform.Scale.x = 1.f;
+    return Diligent_ReadNestedValue(&Desc, 3);
+}
