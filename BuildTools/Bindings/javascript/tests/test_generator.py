@@ -299,6 +299,12 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("ReadStructPointer(pData: MarshalDesc | null): bigint", types)
         self.assertIn("EchoStructPointer(pData: MarshalDesc | null): StructSnapshot<MarshalDesc> | null", types)
 
+    def test_inherited_descriptors_use_native_derived_access(self):
+        cpp, _, types = self.emit()
+        self.assertIn("reinterpret_cast<Diligent::MarshalLeafDesc*>(pointer)->Tag = value", cpp)
+        self.assertIn("new (std::nothrow) Diligent::MarshalLeafDesc{}", cpp)
+        self.assertIn("EchoInherited(Desc: MarshalLeafDesc): StructSnapshot<MarshalLeafDesc>", types)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"

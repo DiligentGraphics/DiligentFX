@@ -1386,6 +1386,45 @@
         "lifetime": "call",
         "ownership": "borrowed"
       }
+    },
+    "Diligent::MarshalBaseDesc": {},
+    "Diligent::MarshalDerivedDesc": {
+      "fields": {
+        "pValues": {
+          "direction": "inout",
+          "nullable": true,
+          "lifetime": "call",
+          "ownership": "borrowed",
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::MarshalLeafDesc": {},
+    "Diligent::EchoInherited": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      },
+      "result": {
+        "direction": "out",
+        "nullable": false,
+        "lifetime": "call",
+        "ownership": "borrowed"
+      }
+    },
+    "Diligent::SumInherited": {
+      "parameters": {
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "lifetime": "call",
+          "ownership": "borrowed"
+        }
+      }
     }
   }
 }

@@ -444,3 +444,11 @@ defaults. Native temporary storage survives through result conversion. Borrowed
 struct pointers returned directly or through fields become copied snapshots,
 including null for optional results. Use `length` only for arrays, not individual
 struct pointers.
+
+## Inherited descriptors
+
+Descriptors declared with `DILIGENT_DERIVE` expose inherited and own fields in one
+JS object. The native derived constructor supplies all defaults; generated native
+accessors perform base adjustment and field addressing. Pointer/count relationships
+may refer to inherited count fields. The model retains inheritance, while emitted
+TypeScript descriptor interfaces list the complete field set.

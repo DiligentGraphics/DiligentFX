@@ -85,9 +85,9 @@ def validate_length_policy(value, siblings, context):
             raise ModelError(f"{context}: length must name an integer sibling")
 
 
-def apply_values_policy(values, policies, context, *, is_field=False):
-    by_name = {value["name"]: value for value in values}
-    validate_keys(policies, by_name.keys(), context + " members")
+def apply_values_policy(values, policies, context, *, is_field=False, inherited=()):
+    by_name = {value["name"]: value for value in (*inherited, *values)}
+    validate_keys(policies, {value["name"] for value in values}, context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
         apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
@@ -117,7 +117,7 @@ def referenced_types(value):
             yield from referenced_types(child)
 
 
-def apply_declaration_policy(declaration, policy):
+def apply_declaration_policy(declaration, policy, inherited=()):
     name = declaration["name"]
     kind = declaration["kind"]
     if kind == "external":
@@ -128,7 +128,7 @@ def apply_declaration_policy(declaration, policy):
         validate_keys(policy, {"binding", "reason"}, name)
     elif kind in ("record", "interface"):
         validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods"}, name)
-        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True)
+        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")
@@ -157,8 +157,18 @@ def apply_policies(model, policies, symbols):
     names = {declaration["name"] for declaration in declarations}
     if names != policies.keys():
         raise ModelError("Policies must match the extracted declaration selection")
+    by_name = {declaration["name"]: declaration for declaration in declarations}
+
+    def base_fields(declaration):
+        fields = []
+        for base in declaration.get("bases", []):
+            parent = by_name.get(base, {})
+            fields.extend(base_fields(parent))
+            fields.extend(parent.get("fields", []))
+        return fields
+
     for declaration in declarations:
-        apply_declaration_policy(declaration, policies[declaration["name"]])
+        apply_declaration_policy(declaration, policies[declaration["name"]], base_fields(declaration))
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:

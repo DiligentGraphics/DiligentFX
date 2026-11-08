@@ -342,6 +342,18 @@ class Generator:
         self.cpp += [f'EMSCRIPTEN_KEEPALIVE {result} {name}({", ".join(parameters)})', '{', f'    {body}', '}']
         return "_" + name
 
+    def record_fields(self, name):
+        declaration = self.types[name]
+        fields = []
+        for base in declaration.get("bases", []):
+            if self.types.get(base, {}).get("kind") != "record":
+                raise ModelError(f"{name}: descriptor bases must be selected records")
+            fields.extend(self.record_fields(base))
+        fields.extend(declaration["fields"])
+        if len({f["name"] for f in fields}) != len(fields):
+            raise ModelError(f"{name}: inherited descriptor fields must have distinct names")
+        return fields
+
     def record_usage(self):
         """Find input and returned records, including their embedded value structs."""
         inputs, outputs, storage = set(), set(), set()
@@ -356,6 +368,8 @@ class Generator:
             if d.get("kind") != "record" or d["name"] in used:
                 return
             used.add(d["name"])
+            for base in d["bases"]:
+                include({"kind": "named", "name": base, "const": False, "volatile": False}, used)
             for field in d["fields"]:
                 include(field["type"], used)
 
@@ -422,7 +436,7 @@ class Generator:
 
     def record(self, d):
         name = d["name"]
-        if d["bases"] or d["methods"]:
+        if d["methods"]:
             raise ModelError(f"{name}: only plain descriptors are supported")
         as_input, as_output = name in self.input_records, name in self.output_records
         rec = {"fields": {}}
@@ -432,7 +446,8 @@ class Generator:
             rec["destroy"] = self.export(symbol(name) + "_Destroy", "void", ['uintptr_t pointer'],
                                          f'delete reinterpret_cast<{name}*>(pointer);')
         self.ts.append(f'export interface {short(name)} {{')
-        for field in d["fields"]:
+        fields = self.record_fields(name)
+        for field in fields:
             context = name + "::" + field["name"]
             self.automatic(field, context)
             field_type = unalias(field["type"])
@@ -451,9 +466,9 @@ class Generator:
                 continue
             span = None
             if as_input:
-                span = self.span(field, d["fields"], context, field=True)
+                span = self.span(field, fields, context, field=True)
             if as_output:
-                span = self.span(field, d["fields"], context, output=True, field=True)
+                span = self.span(field, fields, context, output=True, field=True)
             if span:
                 span["getLength"] = self.export(symbol(name) + "_Length_" + field["name"],
                     'uint64_t', ['uintptr_t pointer'],
