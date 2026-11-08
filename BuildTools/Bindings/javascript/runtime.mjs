@@ -134,12 +134,41 @@ export function createBindings(wasm, schema) {
         if (!address) throw new Error(`Native function returned a null ${name} reference`);
         const result = {};
         for (const [key, field] of Object.entries(schema.records[name].fields)) {
-            const value = field.record ? outputRecord(wasm[field.address](address), field.record) :
+            const value = field.span ? outputSpan(wasm[field.get](address),
+                BigInt.asUintN(64, wasm[field.span.getLength](address)), field.span) :
+                field.record ? outputRecord(wasm[field.address](address), field.record) :
                 field.string ? outputString(wasm[field.get](address), field.string) :
                 outputScalar(wasm[field.get](address), field.type);
             // Snapshot members are copied data properties, never native accessors.
             Object.defineProperty(result, key, {value, enumerable: true, writable: true, configurable: true});
         }
+        return result;
+    }
+
+    function outputSpan(pointer, count, spec) {
+        const address = pointer >>> 0;
+        const length = byteLength(count);
+        const Type = spec.record ? null : scalarArrays[spec.type];
+        // A null empty span preserves explicit nullability; a non-null empty
+        // span is an empty array. No storage is read for a zero count.
+        if (length === 0) return address === 0 && spec.nullable ? null : spec.record ? [] : new Type();
+        const size = spec.record ? wasm[spec.size]() >>> 0 : Type.BYTES_PER_ELEMENT;
+        const alignment = spec.record ? wasm[spec.alignment]() >>> 0 : Type.BYTES_PER_ELEMENT;
+        // Check the complete range before allocating JS storage or dereferencing
+        // any native elements. Division avoids wrapping count * element size.
+        if (address === 0 || address % alignment !== 0 || address > wasm.HEAPU8.byteLength ||
+            length > Math.floor((wasm.HEAPU8.byteLength - address) / size)) {
+            throw new RangeError("Native array is outside Wasm memory or misaligned");
+        }
+        if (spec.record) {
+            const result = new Array(length);
+            for (let i = 0; i < length; ++i) result[i] = outputRecord(wasm[spec.element](address, i), spec.record);
+            return result;
+        }
+        // Copy bytes into JS-owned storage, never return a view of native memory.
+        // This also works when the Wasm heap uses SharedArrayBuffer.
+        const result = new Type(length);
+        new Uint8Array(result.buffer).set(wasm.HEAPU8.subarray(address, address + length * size));
         return result;
     }
 
@@ -298,7 +327,9 @@ export function createBindings(wasm, schema) {
             const nativeResult = wasm[spec.export](...nativeArgs);
             // Finish snapshots while the native owner and temporary inputs are
             // still alive. Only copied JS values escape the call.
-            const result = spec.result.record ? outputRecord(nativeResult, spec.result.record) :
+            const result = spec.result.span ? outputSpan(nativeResult,
+                args[inputs.findIndex(p => p.name === spec.result.span.length)], spec.result.span) :
+                spec.result.record ? outputRecord(nativeResult, spec.result.record) :
                 spec.result.string ? outputString(nativeResult, spec.result.string) : outputScalar(nativeResult, spec.result);
             // Statuses are preserved verbatim; a nonzero status need not be failure.
             return output ? {status: result, value: readOutput(output.address, output.spec)} : result;

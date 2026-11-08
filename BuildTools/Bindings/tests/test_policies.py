@@ -36,6 +36,29 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(types["Diligent::IBindingTestObject"]["policy"]["iid"], "Diligent::IID_BindingTestObject")
         self.assertEqual(types["Diligent::BINDING_TEST_STATUS"]["policy"]["role"], "status")
 
+    def test_result_array_lengths_name_integer_parameters(self):
+        function = copy.deepcopy(declarations(self.model)["Diligent::CreateBindingTestObject"])
+        function["parameters"] = [{"name": "Count", "type": {
+            "kind": "scalar", "name": "uint", "bits": 32, "const": False, "volatile": False}}]
+        function["result"]["type"] = {"kind": "pointer", "const": False, "volatile": False,
+            "target": {"kind": "scalar", "name": "float", "bits": 32, "const": True, "volatile": False}}
+        policy = {"direction": "out", "nullable": True, "ownership": "borrowed", "lifetime": "static", "length": "Count"}
+        apply_callable_policy(function, {"result": policy}, "ArrayResult")
+        self.assertEqual(function["result"]["policy"]["length"], "Count")
+        for count in [None, "float", "bool", "pointer"]:
+            with self.subTest(count=count):
+                invalid = copy.deepcopy(function)
+                if count is None:
+                    invalid["parameters"] = []
+                elif count == "pointer":
+                    invalid["parameters"][0]["type"] = {"kind": "pointer", "const": False, "volatile": False,
+                        "target": function["parameters"][0]["type"]}
+                else:
+                    invalid["parameters"][0]["type"]["name"] = count
+                parameters = {"Count": support.BORROWED} if count == "pointer" else {}
+                with self.assertRaisesRegex(ModelError, "ArrayResult result: length must name an integer sibling"):
+                    apply_callable_policy(invalid, {"parameters": parameters, "result": policy}, "ArrayResult")
+
     def test_requires_pointer_semantics(self):
         config = function_config()
         del config["declarations"]["Diligent::CreateBindingTestObject"]["parameters"]["ppObject"]

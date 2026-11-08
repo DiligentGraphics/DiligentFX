@@ -52,6 +52,7 @@ add_executable(BindingTestsWasm EXCLUDE_FROM_ALL
     "${TEST_SOURCE}/fixtures/NestedStructs.cpp"
     "${TEST_SOURCE}/fixtures/StructResults.cpp"
     "${TEST_SOURCE}/fixtures/InputArrays.cpp"
+    "${TEST_SOURCE}/fixtures/OutputArrays.cpp"
     "${TEST_SOURCE}/fixtures/Implementation.cpp"
     "${TEST_SOURCE}/fixtures/IncludeTest.c")
 add_dependencies(BindingTestsWasm Bindings-GenerateJavaScriptTests)
@@ -111,3 +112,13 @@ add_test(NAME Bindings-JavaScriptInputArraysBrowser
         --module "${GENERATED}/BindingTests.mjs"
         --suite "${TEST_SOURCE}/input_array_tests.mjs")
 set_tests_properties(Bindings-JavaScriptInputArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")
+
+add_test(NAME Bindings-JavaScriptOutputArrays
+    COMMAND "${BINDINGS_NODE_EXECUTABLE}" "${TEST_SOURCE}/test_output_arrays.mjs" "${GENERATED}/BindingTests.mjs")
+set_tests_properties(Bindings-JavaScriptOutputArrays PROPERTIES LABELS "Bindings;JavaScript")
+
+add_test(NAME Bindings-JavaScriptOutputArraysBrowser
+    COMMAND ${PYTHON_COMMAND} "${TEST_SOURCE}/run_browser_tests.py"
+        --module "${GENERATED}/BindingTests.mjs"
+        --suite "${TEST_SOURCE}/output_array_tests.mjs")
+set_tests_properties(Bindings-JavaScriptOutputArraysBrowser PROPERTIES LABELS "Bindings;JavaScript;Browser")

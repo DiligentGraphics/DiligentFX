@@ -98,8 +98,8 @@ class GeneratorTest(unittest.TestCase):
                 with self.assertRaisesRegex(ModelError, "struct results require a borrowed const reference"):
                     self.emit(model)
 
-    def test_struct_results_reject_pointer_array_and_span_fields(self):
-        for kind in ["pointer", "array", "span"]:
+    def test_struct_results_reject_unannotated_pointers_and_fixed_array_fields(self):
+        for kind in ["pointer", "array"]:
             with self.subTest(kind=kind):
                 model = deepcopy(MODEL)
                 child = self.declaration(model, "MarshalSnapshotChild")
@@ -108,9 +108,7 @@ class GeneratorTest(unittest.TestCase):
                     field["type"] = {"kind": "pointer", "target": field["type"], "const": False, "volatile": False}
                 elif kind == "array":
                     field["type"] = {"kind": "array", "element": field["type"], "count": 2, "const": False, "volatile": False}
-                else:
-                    child["fields"][1]["policy"]["length"] = "Sequence"
-                with self.assertRaisesRegex(ModelError, "expected a scalar|output byte spans and arrays"):
+                with self.assertRaisesRegex(ModelError, "expected a scalar"):
                     self.emit(model)
 
     def test_struct_results_validate_nested_string_ownership(self):
@@ -183,6 +181,51 @@ class GeneratorTest(unittest.TestCase):
         fields = generator.schema["records"]["MarshalNestedVector"]["fields"]
         self.assertIn("get", fields["x"])
         self.assertIn("set", fields["x"])
+
+    def test_output_arrays_have_typed_snapshots_and_native_layout_queries(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("GetValues(Count: number): Float32Array;", types)
+        self.assertIn("GetItems(Count: number): Array<StructSnapshot<MarshalOutputArrayItem>>;", types)
+        self.assertIn("GetStaticOutputArray(Count: bigint): Float64Array | null;", types)
+        self.assertIn("pGroups: Array<StructSnapshot<MarshalOutputArrayGroup>>;", types)
+        self.assertIn("T extends ArrayBufferView ? T", types)
+        self.assertIn("T extends ReadonlyArray<infer E> ? Array<StructSnapshot<E>>", types)
+        self.assertIn("return sizeof(Diligent::MarshalOutputArrayGroup);", cpp)
+        self.assertIn("return alignof(Diligent::MarshalOutputArrayGroup);", cpp)
+        self.assertNotIn("new (std::nothrow) Diligent::MarshalOutputArrayGroup", cpp)
+        field = generator.schema["records"]["MarshalOutputArrayGroup"]["fields"]["pItems"]
+        self.assertIn("get", field)
+        self.assertNotIn("set", field)
+        fields = generator.schema["records"]["MarshalArrayRoundTrip"]["fields"]
+        self.assertIn("get", fields["pItems"])
+        self.assertIn("set", fields["pItems"])
+
+    def test_output_arrays_reject_unsupported_element_and_storage_contracts(self):
+        for key, value in [("direction", "in"), ("ownership", "owned"), ("lifetime", "scope"),
+                           ("const", False), ("volatile", True), ("length", "Missing")]:
+            with self.subTest(key=key):
+                model = deepcopy(MODEL)
+                result = self.declaration(model, "GetStaticOutputArray")["result"]
+                if key in ("const", "volatile"):
+                    result["type"]["target"][key] = value
+                else:
+                    result["policy"][key] = value
+                with self.assertRaisesRegex(ModelError, "output spans require"):
+                    self.emit(model)
+        model = deepcopy(MODEL)
+        result = self.declaration(model, "GetStaticOutputArray")["result"]
+        result["type"]["target"] = {"kind": "pointer", "const": True, "volatile": False,
+            "target": {"kind": "named", "name": "Diligent::IMarshalObject", "const": False, "volatile": False}}
+        with self.assertRaisesRegex(ModelError, "output spans support only scalars and plain structs"):
+            self.emit(model)
+
+    def test_output_array_fields_require_out_or_inout_policies(self):
+        model = deepcopy(MODEL)
+        field = self.declaration(model, "MarshalOutputArrayGroup")["fields"][0]
+        field["policy"]["direction"] = "in"
+        with self.assertRaisesRegex(ModelError, "output spans require"):
+            self.emit(model)
 
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)

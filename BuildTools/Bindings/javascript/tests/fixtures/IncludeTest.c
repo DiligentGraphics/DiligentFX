@@ -68,3 +68,10 @@ Float64 CheckCArrayInput(const MarshalArrayItem* pItems, Uint32 Count)
     Desc.ItemCount        = Count;
     return Diligent_ReadArrayDesc(&Desc, 0, 0);
 }
+
+const MarshalOutputArrayDesc* CheckCArrayOutput(IMarshalArraySnapshots* pSnapshots)
+{
+    const Float32* Values = IMarshalArraySnapshots_GetValues(pSnapshots, 1);
+    (void)Values;
+    return IMarshalArraySnapshots_GetDesc(pSnapshots);
+}

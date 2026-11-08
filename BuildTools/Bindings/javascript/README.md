@@ -8,7 +8,8 @@ calls; JavaScript does not depend on struct offsets or vtable layout.
 The standalone test project uses small native test implementations, not Radient.
 The fixtures use real Diligent declarations and macros and compile as both C and
 C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
-The nested-input, struct-result, and input-array suites also run in a headless browser.
+The nested-input, struct-result, input-array, and output-array suites also run in
+a headless browser.
 No renderer or GPU is required.
 
 ## Build and run
@@ -37,10 +38,10 @@ Browser tests discover Chrome, Chromium, or Edge at test execution time. Use
 
 `Bindings-GenerateJavaScriptTests` generates the model, glue, wrappers, and
 declarations. `BindingTestsWasm` compiles the native test implementation and glue.
-CTest runs the Python emitter tests, Node scalar/interface, byte-buffer, and
-string, nested-input, struct-result, and input-array marshalling suites, and
-browser-harness unit tests as separate entries. The nested-input, struct-result,
-and input-array cases run in both Node and the browser.
+CTest runs Python emitter tests and separate Node suites for scalar/interface,
+byte-buffer, string, nested-input, struct-result, input-array, and output-array
+marshalling, plus browser-harness unit tests. The nested-input, struct-result,
+input-array, and output-array cases run in both Node and the browser.
 Build `BindingTestsWasm` before running CTest; test execution never generates or
 rebuilds the artifacts. Use `ctest -N` to list tests or `ctest -R <pattern>` to
 select suites. Nothing is built by default. Native model tests remain independent
@@ -124,9 +125,9 @@ The backend supports scalar fields and nested value structs in plain input descr
 single-inheritance reference-counted interfaces, scalar arguments/results,
 borrowed interface inputs, and one scalar or owned-interface output with a status
 result. Borrowed const-reference struct results become JavaScript snapshots.
-It also supports UTF-8 strings, scalar/struct input arrays, input byte spans, and
-the scoped byte adapters described below. It rejects unsupported declarations
-and policies instead of silently omitting them. Output arrays, fixed-size arrays,
+It also supports UTF-8 strings, scalar/struct input and borrowed output arrays,
+input byte spans, and the scoped byte adapters described below. It rejects unsupported declarations
+and policies instead of silently omitting them. Caller-filled output buffers, fixed-size arrays,
 interface-pointer arrays, callbacks, struct output parameters, by-value struct
 results, default function arguments, and other manual adapters are not implemented
 yet. The first production integration is [Radient's owning data blobs](../../../Radient/bindings/javascript/README.md).
@@ -140,7 +141,7 @@ establish correct marshalling.
 
 A `const T&` result (declared with `const T REF` in a Diligent C-compatible header)
 becomes a plain JavaScript object. Supported fields are scalars, enums, UTF-8
-strings, and embedded value structs. Nested objects and strings are copied before
+strings, embedded value structs, and borrowed pointer/count arrays. Nested data is copied before
 the wrapper returns or releases temporary inputs. Later native mutation or owner
 destruction does not affect the result, and editing the result does not modify
 native data. The snapshot does not retain the native owner and needs no disposal.
@@ -159,7 +160,7 @@ fields. For example, a getter is declared as
 `GetDesc(): StructSnapshot<TextureDesc>`. Native pointers and struct offsets stay
 private. Reading a borrowed result needs no temporary native descriptor allocation.
 
-Pointer/array fields other than supported strings are rejected during generation.
+Pointers other than supported strings and annotated pointer/count arrays are rejected during generation.
 By-value struct returns, struct output parameters, and mutable-reference results
 are not supported yet.
 
@@ -230,8 +231,43 @@ modify the JavaScript arrays. Native pointers are never exposed.
 api.UseAttributes([{Semantic: "POSITION"}, {Semantic: "NORMAL"}], 2);
 ```
 
-Output arrays, fixed-size arrays, and arrays of interface pointers are not supported
-yet. Array support does not change the snapshot restrictions described above.
+Fixed-size arrays and arrays of interface pointers are not supported yet.
+
+## Borrowed output arrays
+
+Borrowed `const T*` arrays become independent JavaScript snapshots. Supported
+forms are pointer/count fields in returned descriptors and direct pointer results
+whose `length` policy names an explicit integer input parameter. Counts measure
+elements and use unsigned 32-bit or 64-bit types. Metadata requires
+`direction: out`, `ownership: borrowed`, and `lifetime: call`, `object`, or `static`.
+Fields used in both input and output descriptors use `direction: inout` and
+`lifetime: call`.
+
+- Numeric and enum data becomes a new typed array with the corresponding element
+  type. Boolean data uses `Uint8Array`; character and void spans remain bytes,
+  including embedded nulls. Signed eight-bit output uses `Int8Array`.
+- Struct arrays become arrays of recursively copied snapshots. Strings, embedded
+  value structs, and nested pointer/count arrays are copied as well. TypeScript
+  uses `Array<StructSnapshot<T>>`, making all returned element fields required.
+  Numeric typed arrays retain their typed-array declarations.
+- A non-null pointer with zero count produces an empty array. A null pointer with
+  zero count produces `null` for nullable metadata, otherwise an empty array.
+  A null pointer with a nonzero count is invalid, regardless of nullability.
+
+The wrapper checks counts, alignment, and the complete Wasm memory range before
+reading elements or allocating the snapshot. These checks cannot verify a native
+allocation's extent: the native API must return accurate counts and keep all
+referenced data valid and stable until synchronous copying finishes.
+
+Snapshots do not retain native owners or expose native memory. They remain valid
+after native mutation, memory growth, or owner destruction, require no disposal,
+and can be edited without changing native data. Conversion finishes before
+temporary inputs are released; failed conversion also releases those inputs.
+Reading borrowed arrays does not allocate temporary native arrays.
+
+Caller-filled output buffers with capacity/written-count parameters, owned array
+results, and counts obtained through separate getter methods require additional
+adapters and are not supported by this step.
 
 ## Byte inputs
 

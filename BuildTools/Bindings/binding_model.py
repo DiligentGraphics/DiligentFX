@@ -65,18 +65,23 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
         value["policy"] = policy
 
 
+def validate_length_policy(value, siblings, context):
+    policy = value.get("policy", {})
+    if "length" in policy:
+        length = siblings.get(policy["length"])
+        length_type = unalias(length["type"]) if length else {}
+        if (length_type.get("kind") != "scalar" or
+                length_type["name"] in ("bool", "float", "double")):
+            raise ModelError(f"{context}: length must name an integer sibling")
+
+
 def apply_values_policy(values, policies, context, *, is_field=False):
     by_name = {value["name"]: value for value in values}
     validate_keys(policies, by_name.keys(), context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
         apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
-        if "length" in policy:
-            length = by_name.get(policy["length"])
-            length_type = unalias(length["type"]) if length else {}
-            if (length_type.get("kind") != "scalar" or
-                    length_type["name"] in ("bool", "float", "double")):
-                raise ModelError(f"{context}::{value['name']}: length must name an integer sibling")
+        validate_length_policy(value, by_name, f"{context}::{value['name']}")
 
 
 def apply_callable_policy(callable_model, policy, context):
@@ -84,6 +89,8 @@ def apply_callable_policy(callable_model, policy, context):
     validate_binding(policy, context)
     apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context)
     apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result", is_result=True)
+    validate_length_policy(callable_model["result"],
+                           {p["name"]: p for p in callable_model["parameters"]}, context + " result")
     callable_model["policy"] = {key: value for key, value in policy.items()
                                 if key not in ("parameters", "result")}
 
