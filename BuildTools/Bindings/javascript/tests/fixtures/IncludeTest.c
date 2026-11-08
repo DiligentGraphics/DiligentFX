@@ -83,3 +83,12 @@ Float32 CheckCFixedArrays(void)
     Desc.Matrices[1].Data[15] = 1.f;
     return Diligent_ReadFixedRow(&Desc, 1, 2);
 }
+
+Uint64 CheckCInterfaceReferences(IMarshalMutableObject* pMutable, const IMarshalObject* pSource)
+{
+    MarshalDesc Desc = {0};
+    Diligent_WriteObjectReference(pMutable, &Desc);
+    IMarshalMutableObject_CopySizeFrom(pMutable, pSource);
+    IMarshalMutableObject_CopySizeTo(pMutable, pMutable);
+    return Diligent_ReadObjectReference(pSource);
+}

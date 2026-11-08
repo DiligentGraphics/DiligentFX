@@ -44,6 +44,32 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("IMarshalMutableObject extends IMarshalObject", declarations)
         self.assertIn("Result<IMarshalObject | null>", declarations)
 
+    def test_interface_references_preserve_constness_and_use_nonnull_wrappers(self):
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        cpp, _, types = generator.generate()
+        self.assertIn("ReadObjectReference(*reinterpret_cast<const Diligent::IMarshalObject*>(Object))", cpp)
+        self.assertIn("WriteObjectReference(*reinterpret_cast<Diligent::IMarshalMutableObject*>(Object)", cpp)
+        self.assertIn("->CopySizeFrom(*reinterpret_cast<const Diligent::IMarshalObject*>(Source))", cpp)
+        self.assertIn("->CopySizeTo(*reinterpret_cast<Diligent::IMarshalMutableObject*>(Destination))", cpp)
+        self.assertIn("ReadObjectReference(Object: IMarshalObject): bigint;", types)
+        self.assertIn("WriteObjectReference(Object: IMarshalMutableObject, Desc: MarshalDesc): number;", types)
+        self.assertIn("CopySizeFrom(Source: IMarshalObject): number;", types)
+        self.assertIn("CopySizeTo(Destination: IMarshalMutableObject): number;", types)
+        for name, interface in (("ReadObjectReference", "IMarshalObject"),
+                                ("WriteObjectReference", "IMarshalMutableObject")):
+            self.assertEqual(generator.schema["functions"][name]["parameters"][0],
+                             {"name": "Object", "interface": interface, "nullable": False})
+
+    def test_interface_references_require_nonnull_borrowed_inputs(self):
+        for name in ("ReadObjectReference", "WriteObjectReference"):
+            for key, value in (("nullable", True), ("direction", "out"),
+                               ("ownership", "owned"), ("lifetime", "object")):
+                with self.subTest(function=name, key=key):
+                    model = deepcopy(MODEL)
+                    self.declaration(model, name)["parameters"][0]["policy"][key] = value
+                    with self.assertRaises(ModelError):
+                        self.emit(model)
+
     def test_nested_fields_use_native_subobjects_and_types(self):
         generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], ADAPTERS)
         cpp, _, types = generator.generate()

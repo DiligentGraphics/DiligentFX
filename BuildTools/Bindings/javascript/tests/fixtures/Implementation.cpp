@@ -70,6 +70,15 @@ public:
         return MARSHAL_STATUS_PENDING;
     }
 
+    MARSHAL_STATUS CopySizeFrom(const IMarshalObject& Source) override
+    {
+        return SetSize(Source.GetSize());
+    }
+    MARSHAL_STATUS CopySizeTo(IMarshalMutableObject& Destination) const override
+    {
+        return Destination.SetSize(GetSize());
+    }
+
 private:
     ~MarshalObject()
     {

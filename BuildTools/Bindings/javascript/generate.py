@@ -624,9 +624,12 @@ class Generator:
                         and policy == {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call"}):
                     parameters.append({"name": pname, "record": short(inner["name"])})
                     ts_params.append(f'{pname}: {short(inner["name"])}')
-                elif (t["kind"] == "pointer" and declaration.get("kind") == "interface"
+                elif (declaration.get("kind") == "interface"
                         and policy.get("direction") == "in" and policy.get("ownership") == "borrowed"
-                        and policy.get("lifetime") == "call"):
+                        and policy.get("lifetime") == "call"
+                        and (t["kind"] == "pointer" or policy.get("nullable") is False)):
+                    # References use the same borrowed wrapper as pointers, but
+                    # must be non-null before the native bridge dereferences them.
                     parameters.append({"name": pname, "interface": short(inner["name"]), "nullable": policy["nullable"]})
                     ts_params.append(f'{pname}: {short(inner["name"])}' + (' | null' if policy['nullable'] else ''))
                 elif (policy.get("direction") == "out"

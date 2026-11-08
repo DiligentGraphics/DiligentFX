@@ -19,7 +19,29 @@
     },
     "Diligent::IMarshalMutableObject": {
       "ownership": "reference_counted",
-      "iid": "Diligent::IID_MarshalMutableObject"
+      "iid": "Diligent::IID_MarshalMutableObject",
+      "methods": {
+        "CopySizeFrom": {
+          "parameters": {
+            "Source": {
+              "direction": "in",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        },
+        "CopySizeTo": {
+          "parameters": {
+            "Destination": {
+              "direction": "in",
+              "nullable": false,
+              "ownership": "borrowed",
+              "lifetime": "call"
+            }
+          }
+        }
+      }
     },
     "Diligent::CreateMarshalObject": {
       "parameters": {
@@ -1537,6 +1559,32 @@
         "lifetime": "static",
         "ownership": "borrowed",
         "length": "Count"
+      }
+    },
+    "Diligent::ReadObjectReference": {
+      "parameters": {
+        "Object": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
+      }
+    },
+    "Diligent::WriteObjectReference": {
+      "parameters": {
+        "Object": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        },
+        "Desc": {
+          "direction": "in",
+          "nullable": false,
+          "ownership": "borrowed",
+          "lifetime": "call"
+        }
       }
     }
   }

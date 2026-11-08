@@ -111,8 +111,12 @@ runs even after failure. The production example is
   `dispose()` explicitly to release it; repeated disposal is harmless, and calls
   on disposed objects fail. Garbage collection does not release native references.
 - `QueryInterface(api.InterfaceType)` returns a separately owned wrapper or null.
-  Borrowed interface inputs acquire a temporary reference for the call. Wrappers
-  cannot be passed between independently loaded Wasm modules.
+  Borrowed interface inputs acquire a temporary reference for the call. This also
+  applies to mutable and const interface-reference arguments: pass the same native
+  wrapper, and the bridge preserves constness when dereferencing its pointer.
+  References reject null. Mutable references operate on the existing native object;
+  they do not copy it or transfer ownership. Wrappers cannot be passed between
+  independently loaded Wasm modules.
 - JavaScript argument errors throw; native status failures remain status results.
   Temporary descriptors and output storage are released even when marshalling fails.
 

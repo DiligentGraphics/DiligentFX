@@ -40,6 +40,7 @@
 #include "StructPointers.h"
 #include "InterfaceFields.h"
 #include "BorrowedInterfaces.h"
+#include "InterfaceReferences.h"
 #include "OutputBuffers.h"
 #include "OutputParameters.h"
 #include "Object.h"
@@ -84,11 +85,15 @@ DILIGENT_END_INTERFACE
 DILIGENT_BEGIN_INTERFACE(IMarshalMutableObject, IMarshalObject)
 {
     VIRTUAL MARSHAL_STATUS METHOD(SetSize)(THIS_ Uint64 Size) PURE;
+    VIRTUAL MARSHAL_STATUS METHOD(CopySizeFrom)(THIS_ const IMarshalObject REF Source) PURE;
+    VIRTUAL MARSHAL_STATUS METHOD(CopySizeTo)(THIS_ IMarshalMutableObject REF Destination) CONST PURE;
 };
 DILIGENT_END_INTERFACE
 #include "UndefInterfaceHelperMacros.h"
 #if DILIGENT_C_INTERFACE
 #    define IMarshalMutableObject_SetSize(This, ...) CALL_IFACE_METHOD(MarshalMutableObject, SetSize, This, __VA_ARGS__)
+#    define IMarshalMutableObject_CopySizeFrom(This, ...) CALL_IFACE_METHOD(MarshalMutableObject, CopySizeFrom, This, __VA_ARGS__)
+#    define IMarshalMutableObject_CopySizeTo(This, ...) CALL_IFACE_METHOD(MarshalMutableObject, CopySizeTo, This, __VA_ARGS__)
 #endif
 
 #include "DefineRefMacro.h"
