@@ -238,10 +238,15 @@ An API can opt into Diligent's common pointer contracts once:
 ```
 
 With this setting, ordinary pointer parameters and descriptor fields default to
-borrowed, call-scoped storage. Pointers default to non-null; optional inputs and
-nullable results require `nullable: true`. Interface output parameters (`IFoo**`
-or `IFoo*&`) return an owned strong reference with caller lifetime. Direct interface
-pointer returns borrow a reference with object lifetime. Interfaces are identified
+borrowed, call-scoped storage. Descriptor pointer fields default to nullable;
+required fields use `nullable: false`. Function and method pointer parameters
+default to non-null, except arguments with a `nullptr` default. Other optional
+parameters and nullable pointer results require `nullable: true`. References
+remain non-null. Explicit overrides take precedence over these defaults.
+
+Interface output parameters (`IFoo**` or `IFoo*&`) return an owned strong reference
+with caller lifetime. Direct interface pointer returns borrow a reference with
+object lifetime. Interfaces are identified
 from declarations and reference-counted external bases, including through aliases.
 Field arrays of interface pointers remain borrowed descriptor storage.
 
@@ -254,8 +259,11 @@ conventions so backend field overrides and serialized-model validation use the
 same defaults. Without this opt-in, pointer ownership, lifetime, and nullability
 remain required metadata.
 
-These defaults never infer array length from parameter names. A null descriptor-field default does not prove
-that null is accepted by a native operation. Explicit overrides take precedence.
+These defaults never infer array length from parameter names. Nullable descriptor
+fields are an API convention, not an inference from their initializers: a null
+field initializer does not prove that an operation accepts null. Required fields
+must be marked explicitly. A counted array may permit null only when its count is
+zero; nullability does not relax the array/count contract.
 
 Policies can be attached to declarations, record `fields`, interface `methods`,
 and function/method `parameters` and `result`. Only facts not supplied by the rules

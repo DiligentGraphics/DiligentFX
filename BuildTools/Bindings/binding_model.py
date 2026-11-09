@@ -134,8 +134,10 @@ def pointer_defaults(value, policy, *, is_result=False, is_field=False, interfac
 
     These are API contracts, not C++ ownership guarantees. Ordinary pointers
     borrow call-scoped storage. Interface output slots transfer a strong reference,
-    while direct interface returns borrow one from the object. Optional pointers,
-    retained storage, and exceptions to those conventions need explicit metadata.
+    while direct interface returns borrow one from the object. Descriptor pointer
+    fields and pointer arguments defaulted to nullptr are nullable. Other pointer
+    arguments and results are required unless explicitly marked nullable.
+    Retained storage and exceptions to these conventions need explicit metadata.
     """
     native = unalias(value["type"])
     if native["kind"] not in ("pointer", "reference"):
@@ -149,7 +151,8 @@ def pointer_defaults(value, policy, *, is_result=False, is_field=False, interfac
                     slot.get("name") in interfaces)
     ownership = policy.get("ownership", "owned" if owned_output else "borrowed")
     lifetime = "caller" if ownership == "owned" else "object" if interface_result else "call"
-    return {"nullable": False, "ownership": ownership, "lifetime": lifetime}
+    nullable = native["kind"] == "pointer" and (is_field or (not is_result and value.get("default") == "nullptr"))
+    return {"nullable": nullable, "ownership": ownership, "lifetime": lifetime}
 
 
 def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=(), conventions=None, field_direction=None):

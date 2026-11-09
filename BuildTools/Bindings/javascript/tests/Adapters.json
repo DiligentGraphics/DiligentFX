@@ -18,7 +18,6 @@
   "field_policies": {
     "Diligent::MarshalNestedCountDesc": {
       "pComputed": {
-        "nullable": true,
         "binding": "automatic"
       }
     }

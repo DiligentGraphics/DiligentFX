@@ -18,6 +18,7 @@ export function registerTests({test, assert, api}) {
     });
     test("default descriptors, null pointers, strings and output arguments use native defaults", () => {
         assert.equal(api.DefaultPointer(), 0n);
+        assert.equal(api.DefaultPointer(null), 0n);
         assert.equal(api.DefaultPointer({Size: 19n}), 19n);
         assert.equal(api.DefaultDescriptor(), 0xfedcba9876543210n);
         assert.equal(api.DefaultDescriptor({Size: 23n}), 23n);
@@ -25,6 +26,8 @@ export function registerTests({test, assert, api}) {
         assert.equal(api.DefaultOutput(false), 7n);
         assert.equal(api.DefaultStringLength(), 6);
         assert.equal(api.DefaultStringLength("test"), 4);
+        assert.throws(() => api.DefaultStringLength(null), TypeError);
+        assert.throws(() => api.DefaultDescriptor(null), TypeError);
         const object = api.CreateMarshalArraySnapshots().value;
         try {
             object.SetValueCount();

@@ -79,6 +79,13 @@ void DILIGENT_GLOBAL_FUNCTION(InferBindingTestDirections)(
     IObject REF External,
     void* pContext);
 
+// A null default makes a pointer argument optional; other defaults do not.
+void DILIGENT_GLOBAL_FUNCTION(InferBindingTestNullability)(
+    const BindingTestDesc* pRequired,
+    const BindingTestDesc* pOptional DEFAULT_VALUE(nullptr),
+    BindingTestString Text DEFAULT_VALUE(nullptr),
+    BindingTestString Label DEFAULT_VALUE("default"));
+
 // Pointer return ownership is supplied by API conventions or explicit overrides.
 IBindingTestObject* DILIGENT_GLOBAL_FUNCTION(GetBindingTestObject)(void);
 

@@ -75,16 +75,6 @@
     "Diligent::IRadientEngine": {
       "exclude_methods": ["GetBackend", "CreateRenderer"]
     },
-    "Diligent::RadientSceneDesc": {
-      "fields": {
-        "Name": {"nullable": true}
-      }
-    },
-    "Diligent::RadientEntityDesc": {
-      "fields": {
-        "Name": {"nullable": true}
-      }
-    },
     "Diligent::IRadientScene": {
       "methods": {
         "GetDesc": {
@@ -127,136 +117,67 @@
         }
       }
     },
-    "Diligent::RadientAssetManagerDesc": {
-      "fields": {
-        "Name": {"nullable": true}
-      }
-    },
-    "Diligent::RadientAssetReference": {
-      "fields": {
-        "URI": {"nullable": true}
-      }
-    },
     "Diligent::RadientCubeMeshCreateInfo": {
       "fields": {
-        "Name": {"nullable": true},
-        "pMaterial": {"nullable": true},
-        "pFaceColors": {"nullable": true, "length": 6}
-      }
-    },
-    "Diligent::RadientSphereMeshCreateInfo": {
-      "fields": {
-        "Name": {"nullable": true},
-        "pMaterial": {"nullable": true}
+        "pFaceColors": {"length": 6}
       }
     },
     "Diligent::RadientMeshCreateInfo": {
       "fields": {
-        "Name": {"nullable": true},
-        "pPrimitives": {"nullable": true, "length": "PrimitiveCount"}
+        "pPrimitives": {"length": "PrimitiveCount"}
       }
     },
     "Diligent::RadientMeshVertexData": {
       "fields": {
-        "ppVertexBuffers": {"nullable": true, "length": "VertexLayout.BufferCount", "element_nullable": true}
-      }
-    },
-    "Diligent::RadientMeshIndexData": {
-      "fields": {
-        "pIndexBuffer": {"nullable": true}
-      }
-    },
-    "Diligent::RadientMeshPrimitiveCreateInfo": {
-      "fields": {
-        "Name": {"nullable": true},
-        "pMaterial": {"nullable": true}
+        "ppVertexBuffers": {"length": "VertexLayout.BufferCount", "element_nullable": true}
       }
     },
     "Diligent::RadientVertexLayoutDesc": {
       "fields": {
-        "pAttributes": {"nullable": true, "length": "AttributeCount"},
-        "pBuffers": {"nullable": true, "length": "BufferCount"}
-      }
-    },
-    "Diligent::RadientMeshPrimitiveDesc": {
-      "fields": {
-        "Name": {"nullable": true},
-        "pMaterial": {"nullable": true}
+        "pAttributes": {"length": "AttributeCount"},
+        "pBuffers": {"length": "BufferCount"}
       }
     },
     "Diligent::RadientMeshAssetDesc": {
       "fields": {
-        "pGeometries": {"nullable": true, "length": "GeometryCount"},
-        "pPrimitives": {"nullable": true, "length": "PrimitiveCount"},
-        "pMorphTargets": {"nullable": true, "length": "MorphTargetCount"}
+        "pGeometries": {"length": "GeometryCount"},
+        "pPrimitives": {"length": "PrimitiveCount"},
+        "pMorphTargets": {"length": "MorphTargetCount"}
       }
     },
     "Diligent::RadientMeshMorphTargetData": {
       "fields": {
-        "pMorphTargets": {"nullable": true, "length": "MorphTargetCount"}
+        "pMorphTargets": {"length": "MorphTargetCount"}
       }
     },
     "Diligent::RadientMorphTargetDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pAttributes": {"nullable": true, "length": "AttributeCount"}
+        "pAttributes": {"length": "AttributeCount"}
       }
     },
     "Diligent::RadientMorphTargetCreateInfo": {
       "fields": {
-        "pAttributeData": {"nullable": true, "length": "Desc.AttributeCount"}
-      }
-    },
-    "Diligent::RadientMeshComponent": {
-      "fields": {
-        "pMesh": {"nullable": true}
-      }
-    },
-    "Diligent::RadientTextureLoadInfo": {
-      "fields": {
-        "URI": {"nullable": true},
-        "BaseURI": {"nullable": true},
-        "pDataBlob": {"nullable": true},
-        "pTextureData": {"nullable": true}
+        "pAttributeData": {"length": "Desc.AttributeCount"}
       }
     },
     "Diligent::RadientTextureData": {
       "fields": {
-        "pMipLevels": {"nullable": true, "length": "MipLevelCount"}
+        "pMipLevels": {"length": "MipLevelCount"}
       }
     },
     "Diligent::RadientMaterialDefinitionDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pParameters": {"nullable": true, "length": "ParameterCount"}
+        "pParameters": {"length": "ParameterCount"}
       }
     },
     "Diligent::RadientMaterialParameterDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pDefaultTexture": {"nullable": true},
         "pDefaultValue": {"binding": "manual", "reason": "The byte count is derived from the reflected parameter type and array size."}
-      }
-    },
-    "Diligent::RadientMaterialBinding": {
-      "fields": {
-        "pMaterial": {"nullable": true}
       }
     },
     "Diligent::RadientMaterialBindingsComponent": {
       "fields": {
-        "pBindings": {"nullable": true, "length": "BindingCount"}
-      }
-    },
-    "Diligent::RadientStandardMaterialTextureParameterNames": {
-      "fields": {
-        "Texture": {"nullable": true},
-        "UVSelector": {"nullable": true},
-        "UVScale": {"nullable": true},
-        "UVRotation": {"nullable": true},
-        "UVBias": {"nullable": true},
-        "WrapU": {"nullable": true},
-        "WrapV": {"nullable": true}
+        "pBindings": {"length": "BindingCount"}
       }
     },
     "Diligent::IRadientMaterialWriter": {
@@ -273,26 +194,15 @@
         }
       }
     },
-    "Diligent::RadientStandardMaterialTextureParameters": {
-      "fields": {
-        "pTexture": {"nullable": true}
-      }
-    },
     "Diligent::RadientSkeletonDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pJoints": {"nullable": true, "length": "JointCount"}
-      }
-    },
-    "Diligent::RadientSkeletonJointDesc": {
-      "fields": {
-        "Name": {"nullable": true}
+        "pJoints": {"length": "JointCount"}
       }
     },
     "Diligent::RadientSkinDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pJoints": {"nullable": true, "length": "JointCount"}
+        "pJoints": {"length": "JointCount"},
+        "pSkeleton": {"nullable": false}
       }
     },
     "Diligent::IRadientSkeletonPose": {
@@ -325,12 +235,6 @@
         }
       }
     },
-    "Diligent::RadientSkinComponent": {
-      "fields": {
-        "pSkin": {"nullable": true},
-        "pPose": {"nullable": true}
-      }
-    },
     "Diligent::IRadientMorphTargetWeights": {
       "methods": {
         "GetWeights": {
@@ -343,38 +247,28 @@
         }
       }
     },
-    "Diligent::RadientMorphComponent": {
-      "fields": {
-        "pWeights": {"nullable": true}
-      }
-    },
     "Diligent::RadientAnimationClipDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pTargets": {"nullable": true, "length": "TargetCount"},
-        "pSamplers": {"nullable": true, "length": "SamplerCount"},
-        "pChannels": {"nullable": true, "length": "ChannelCount"}
-      }
-    },
-    "Diligent::RadientAnimationTargetDesc": {
-      "fields": {
-        "Name": {"nullable": true}
+        "pTargets": {"length": "TargetCount"},
+        "pSamplers": {"length": "SamplerCount"},
+        "pChannels": {"length": "ChannelCount"}
       }
     },
     "Diligent::RadientAnimationSamplerDesc": {
       "fields": {
-        "pTimes": {"nullable": true, "length": "KeyframeCount"},
-        "pValues": {"nullable": true, "length": "ValueDataSize"}
+        "pTimes": {"length": "KeyframeCount"},
+        "pValues": {"length": "ValueDataSize"}
       }
     },
     "Diligent::RadientAnimationBindingDesc": {
       "fields": {
-        "pDestinations": {"nullable": true, "length": "DestinationCount"}
+        "pDestinations": {"length": "DestinationCount"}
       }
     },
     "Diligent::RadientAnimationDestinationDesc": {
       "fields": {
-        "pMappings": {"nullable": true, "length": "MappingCount"}
+        "pMappings": {"length": "MappingCount"},
+        "pDestination": {"nullable": false}
       }
     },
     "Diligent::IRadientAnimationDestination": {
@@ -396,28 +290,48 @@
     },
     "Diligent::RadientAnimationRegistryState": {
       "fields": {
-        "pEntries": {"nullable": true, "length": "EntryCount"}
+        "pEntries": {"length": "EntryCount"}
       }
     },
     "Diligent::RadientAnimationRegistryEntry": {
       "fields": {
-        "ppBindings": {"nullable": true, "length": "BindingCount"}
+        "ppBindings": {"length": "BindingCount"},
+        "pClip": {"nullable": false}
       }
     },
     "Diligent::RadientSceneLoadInfo": {
       "fields": {
-        "ImporterId": {"nullable": true}
+        "URI": {"nullable": false}
       }
     },
     "Diligent::RadientSceneAssetDesc": {
       "fields": {
-        "ppAnimationClips": {"nullable": true, "length": "AnimationClipCount"}
+        "ppAnimationClips": {"length": "AnimationClipCount"}
       }
     },
-    "Diligent::RadientSceneInstantiateInfo": {
+    "Diligent::RadientAnimationChannelDesc": {
       "fields": {
-        "Name": {"nullable": true},
-        "pAnimationRegistry": {"nullable": true}
+        "Property": {"nullable": false}
+      }
+    },
+    "Diligent::RadientMorphTargetAttributeCreateInfo": {
+      "fields": {
+        "pDeltaBuffer": {"nullable": false}
+      }
+    },
+    "Diligent::RadientMorphTargetAttributeDesc": {
+      "fields": {
+        "Semantic": {"nullable": false}
+      }
+    },
+    "Diligent::RadientTextureMipData": {
+      "fields": {
+        "pDataBlob": {"nullable": false}
+      }
+    },
+    "Diligent::RadientVertexAttributeDesc": {
+      "fields": {
+        "Semantic": {"nullable": false}
       }
     }
   }

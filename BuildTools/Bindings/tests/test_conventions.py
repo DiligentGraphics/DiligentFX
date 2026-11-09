@@ -28,18 +28,18 @@ class ConventionTest(unittest.TestCase):
         self.assertEqual(parameters[1]["policy"],
                          {"direction": "out", "nullable": False, "ownership": "owned", "lifetime": "caller"})
         self.assertEqual(types["Diligent::BindingTestDesc"]["fields"][1]["policy"],
-                         {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call", "length": "Size"})
+                         {"direction": "in", "nullable": True, "ownership": "borrowed", "lifetime": "call", "length": "Size"})
         restored = json.loads(json.dumps(model))
         self.assertEqual(apply_policies(restored, config["declarations"], {"Diligent::IID_BindingTestObject"}), model)
 
-    def test_overrides_preserve_nullable_retained_and_borrowed_outputs(self):
+    def test_overrides_preserve_required_fields_retained_storage_and_borrowed_outputs(self):
         config = self.config()
-        config["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"].update(nullable=True, lifetime="object")
+        config["declarations"]["Diligent::BindingTestDesc"]["fields"]["pData"].update(nullable=False, lifetime="object")
         config["declarations"]["Diligent::CreateBindingTestObject"] = {
             "parameters": {"ppObject": {"ownership": "borrowed"}}}
         types = declarations(build_fixture(config))
         field = types["Diligent::BindingTestDesc"]["fields"][1]
-        self.assertTrue(field["policy"]["nullable"])
+        self.assertFalse(field["policy"]["nullable"])
         self.assertEqual(field["policy"]["lifetime"], "object")
         output = types["Diligent::CreateBindingTestObject"]["parameters"][1]
         self.assertEqual(output["policy"]["ownership"], "borrowed")
@@ -67,8 +67,26 @@ class ConventionTest(unittest.TestCase):
                                interfaces={"Diligent::IBindingTestObject"}, conventions="diligent")
             self.assertEqual(value["policy"]["ownership"], "borrowed")
             self.assertEqual(value["policy"]["lifetime"], "call")
+            self.assertEqual(value["policy"]["nullable"], kind == "pointer")
             apply_value_policy(value, {}, "Object", interfaces={"Diligent::IBindingTestObject"}, conventions="diligent")
             self.assertEqual(value["policy"]["ownership"], "owned")
+
+    def test_null_pointer_argument_defaults_including_typedefs(self):
+        config = self.config()
+        config["headers"].append("tests/fixtures/Inference.h")
+        config["exports"].append("Diligent::InferBindingTestNullability")
+        parameters = declarations(build_fixture(config))["Diligent::InferBindingTestNullability"]["parameters"]
+        self.assertEqual([p["default"] for p in parameters], [None, "nullptr", "nullptr", '"default"'])
+        self.assertEqual([p["policy"]["nullable"] for p in parameters], [False, True, True, False])
+
+    def test_explicit_parameter_nullability_overrides_defaults(self):
+        config = self.config()
+        config["headers"].append("tests/fixtures/Inference.h")
+        config["exports"].append("Diligent::InferBindingTestNullability")
+        config["declarations"]["Diligent::InferBindingTestNullability"] = {
+            "parameters": {"pRequired": {"nullable": True}, "pOptional": {"nullable": False}}}
+        parameters = declarations(build_fixture(config))["Diligent::InferBindingTestNullability"]["parameters"]
+        self.assertEqual([p["policy"]["nullable"] for p in parameters], [True, False, True, False])
 
     def test_conventions_require_explicit_opt_in(self):
         config = self.config()

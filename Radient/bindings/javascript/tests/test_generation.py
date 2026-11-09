@@ -38,6 +38,17 @@ class RadientGenerationTest(unittest.TestCase):
             self.assertNotIn(name, types)
             self.assertNotIn(name, js)
 
+    def test_optional_fields_and_required_pointer_contracts(self):
+        _, _, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
+        self.assertIn("Name?: string | null", types)
+        self.assertIn("pTexture?: IRadientTextureAsset | null", types)
+        self.assertIn("Semantic?: string;", types)
+        self.assertNotIn("Semantic?: string | null", types)
+        self.assertIn("pSkeleton?: IRadientSkeletonAsset;", types)
+        self.assertNotIn("pSkeleton?: IRadientSkeletonAsset | null", types)
+        self.assertIn("pDataBlob?: IRadientDataBlob;", types)
+        self.assertIn("CreateSceneWriter(pScene: IRadientScene)", types)
+
     def test_standalone_id_types_and_constants(self):
         _, js, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
         for name in ("RadientHandle", "RadientFrameID", "RadientAnimationObjectID",
