@@ -421,7 +421,10 @@ TEST(RadientMeshRenderingGPUTest, PreservesDrawableChangesAcrossFailedFramePrepa
     ASSERT_NE(MorphEntity, InvalidRadientEntityID);
     RefCntAutoPtr<IRadientSceneWriter> pWriter;
     ASSERT_EQ(Scene.pEngine->CreateSceneWriter(Scene.pScene, &pWriter), RADIENT_STATUS_OK);
-    const RadientExtent2D      TargetSize = Scene.pTarget->GetDesc().Size;
+    // A target without an output resource fails frame preparation. Switching
+    // targets preserves the original output texture and its immutable target.
+    RefCntAutoPtr<IRadientRenderTarget> pEmptyTarget;
+    ASSERT_EQ(Scene.pRenderer->CreateRenderTarget({}, &pEmptyTarget), RADIENT_STATUS_OK);
     const std::array<Uint8, 4> Background{0, 0, 0, 255};
 
     for (bool RemoveEntity : {false, true})
@@ -436,12 +439,12 @@ TEST(RadientMeshRenderingGPUTest, PreservesDrawableChangesAcrossFailedFramePrepa
             ASSERT_EQ(pWriter->RemoveComponent(MorphEntity, RADIENT_COMPONENT_TYPE_MORPH), RADIENT_STATUS_OK);
         }
         ASSERT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
-        ASSERT_EQ(Scene.pTarget->Resize(0, 0), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.pView->SetRenderTarget(pEmptyTarget), RADIENT_STATUS_OK);
         // The first failed frame synchronizes the removal; the second has no new
         // scene changes and must still preserve that unconsumed notification.
         EXPECT_EQ(Scene.RenderFrame(), RADIENT_STATUS_INVALID_ARGUMENT);
         EXPECT_EQ(Scene.RenderFrame(), RADIENT_STATUS_INVALID_ARGUMENT);
-        ASSERT_EQ(Scene.pTarget->Resize(TargetSize.Width, TargetSize.Height), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.pView->SetRenderTarget(Scene.pTarget), RADIENT_STATUS_OK);
         ASSERT_NO_FATAL_FAILURE(Scene.RenderUntilReady());
 
         SampledColors Centers;

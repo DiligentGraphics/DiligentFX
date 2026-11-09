@@ -250,11 +250,44 @@ RefCntAutoPtr<IRadientRenderer> CreateTestRenderer(IRadientEngine& Engine)
     return pRenderer;
 }
 
+// Headless rendering exercises scene preparation without GPU resources.
+// Supply dimensions through a swap chain, as a real presentation target does.
+class HeadlessSwapChain final : public ObjectBase<ISwapChain>
+{
+public:
+    explicit HeadlessSwapChain(IReferenceCounters* pRefCounters) :
+        ObjectBase<ISwapChain>{pRefCounters}
+    {
+        m_Desc.Width  = 640;
+        m_Desc.Height = 480;
+    }
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_SwapChain, ObjectBase<ISwapChain>)
+
+    void DILIGENT_CALL_TYPE                 Present(Uint32) override {}
+    const SwapChainDesc& DILIGENT_CALL_TYPE GetDesc() const override { return m_Desc; }
+    void DILIGENT_CALL_TYPE                 Resize(Uint32 Width, Uint32 Height, SURFACE_TRANSFORM Transform) override
+    {
+        m_Desc.Width        = Width;
+        m_Desc.Height       = Height;
+        m_Desc.PreTransform = Transform;
+    }
+    void DILIGENT_CALL_TYPE          SetFullscreenMode(const DisplayModeAttribs&) override {}
+    void DILIGENT_CALL_TYPE          SetWindowedMode() override {}
+    void DILIGENT_CALL_TYPE          SetMaximumFrameLatency(Uint32) override {}
+    ITextureView* DILIGENT_CALL_TYPE GetCurrentBackBufferRTV() override { return nullptr; }
+    ITextureView* DILIGENT_CALL_TYPE GetDepthBufferDSV() override { return nullptr; }
+
+private:
+    SwapChainDesc m_Desc;
+};
+
 RefCntAutoPtr<IRadientRenderTarget> CreateTestRenderTarget(IRadientRenderer& Renderer)
 {
-    RadientRenderTargetDesc TargetDesc{};
-    TargetDesc.Name = "Radient test target";
-    TargetDesc.Size = {640, 480};
+    RefCntAutoPtr<ISwapChain> pSwapChain{MakeNewRCObj<HeadlessSwapChain>()()};
+    RadientRenderTargetDesc   TargetDesc{};
+    TargetDesc.Name       = "Radient test target";
+    TargetDesc.pSwapChain = pSwapChain;
 
     RefCntAutoPtr<IRadientRenderTarget> pTarget;
     EXPECT_EQ(Renderer.CreateRenderTarget(TargetDesc, &pTarget), RADIENT_STATUS_OK);
@@ -262,7 +295,9 @@ RefCntAutoPtr<IRadientRenderTarget> CreateTestRenderTarget(IRadientRenderer& Ren
     if (pTarget != nullptr)
     {
         EXPECT_STREQ(pTarget->GetDesc().Name, TargetDesc.Name);
-        EXPECT_EQ(pTarget->GetDesc().Size, TargetDesc.Size);
+        RadientExtent2D Size;
+        pTarget->GetSize(Size);
+        EXPECT_EQ(Size, (RadientExtent2D{640, 480}));
     }
 
     return pTarget;
@@ -1479,7 +1514,7 @@ TEST(RadientEngineTest, ValidatesActiveMorphTargetLimit)
 
 TEST(RadientRendererTest, CreateRenderTarget)
 {
-    // Render targets should preserve name and size metadata after creation.
+    // The immutable target retains its name and follows the swap chain size.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -1487,7 +1522,16 @@ TEST(RadientRendererTest, CreateRenderTarget)
     ASSERT_NE(pRenderer, nullptr);
 
     RefCntAutoPtr<IRadientRenderTarget> pTarget = CreateTestRenderTarget(*pRenderer);
-    EXPECT_NE(pTarget, nullptr);
+    ASSERT_NE(pTarget, nullptr);
+    pTarget->GetSwapChain()->Resize(320, 200);
+    RadientExtent2D Size;
+    pTarget->GetSize(Size);
+    EXPECT_EQ(Size, (RadientExtent2D{320, 200}));
+
+    RefCntAutoPtr<IRadientRenderTarget> pEmptyTarget;
+    ASSERT_EQ(pRenderer->CreateRenderTarget({}, &pEmptyTarget), RADIENT_STATUS_OK);
+    pEmptyTarget->GetSize(Size);
+    EXPECT_EQ(Size, RadientExtent2D{});
 }
 
 TEST(RadientRendererTest, CreateView)

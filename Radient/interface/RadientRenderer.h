@@ -87,9 +87,6 @@ struct RadientRenderTargetDesc
     /// Target name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
-    /// Target size.
-    RadientExtent2D Size DEFAULT_INITIALIZER({});
-
     /// Native swap chain for local presentation targets. Its current views
     /// are used when the corresponding explicit view below is null.
     ISwapChain* pSwapChain DEFAULT_INITIALIZER(nullptr);
@@ -146,16 +143,24 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientRenderTarget =
 
 // clang-format off
 
-/// Render target interface.
+/// Immutable render target resource association.
+///
+/// To replace explicit texture views, create a new target and assign it to the view.
+/// A swap-chain target follows the swap chain's current buffers and dimensions.
+/// Resize the swap chain between frames; the Radient target does not need to be recreated.
 DILIGENT_BEGIN_INTERFACE(IRadientRenderTarget, IObject)
 {
     /// Returns the render target description.
     VIRTUAL const RadientRenderTargetDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
-    /// Updates the logical render target size.
-    VIRTUAL RADIENT_STATUS METHOD(Resize)(THIS_
-                                          Uint32 Width,
-                                          Uint32 Height) PURE;
+    /// Writes the current output dimensions in pixels to Size.
+    ///
+    /// An explicit color RTV determines the size from its selected mip level.
+    /// Otherwise, the current swap-chain dimensions are used. Writes zero
+    /// width and height when neither a color RTV nor a swap chain is supplied.
+    ///
+    /// \param [out] Size - Current output dimensions.
+    VIRTUAL void METHOD(GetSize)(THIS_ RadientExtent2D REF Size) CONST PURE;
 
     /// Returns the explicit color RTV, or the swap chain's current back-buffer
     /// RTV if no explicit view was supplied. Returns null if neither is available.
@@ -177,7 +182,7 @@ DILIGENT_END_INTERFACE
 #if DILIGENT_C_INTERFACE
 
 #    define IRadientRenderTarget_GetDesc(This)    CALL_IFACE_METHOD(RadientRenderTarget, GetDesc,    This)
-#    define IRadientRenderTarget_Resize(This, ...) CALL_IFACE_METHOD(RadientRenderTarget, Resize,     This, __VA_ARGS__)
+#    define IRadientRenderTarget_GetSize(This, ...) CALL_IFACE_METHOD(RadientRenderTarget, GetSize,    This, __VA_ARGS__)
 #    define IRadientRenderTarget_GetColorRTV(This) CALL_IFACE_METHOD(RadientRenderTarget, GetColorRTV, This)
 #    define IRadientRenderTarget_GetDepthDSV(This) CALL_IFACE_METHOD(RadientRenderTarget, GetDepthDSV, This)
 #    define IRadientRenderTarget_GetSwapChain(This) CALL_IFACE_METHOD(RadientRenderTarget, GetSwapChain, This)

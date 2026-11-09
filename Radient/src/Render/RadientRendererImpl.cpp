@@ -31,6 +31,8 @@
 #include "Cast.hpp"
 #include "Errors.hpp"
 
+#include <algorithm>
+
 namespace Diligent
 {
 
@@ -59,14 +61,23 @@ const RadientRenderTargetDesc& RadientRenderTargetImpl::GetDesc() const
     return m_Desc;
 }
 
-RADIENT_STATUS RadientRenderTargetImpl::Resize(Uint32 Width, Uint32 Height)
+void RadientRenderTargetImpl::GetSize(RadientExtent2D& Size) const
 {
-    const RadientExtent2D NewSize{Width, Height};
-    if (m_Desc.Size == NewSize)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    m_Desc.Size = NewSize;
-    return RADIENT_STATUS_OK;
+    if (m_pColorRTV != nullptr)
+    {
+        const TextureDesc& Desc     = m_pColorRTV->GetTexture()->GetDesc();
+        const Uint32       MipLevel = m_pColorRTV->GetDesc().MostDetailedMip;
+        Size                        = {std::max(Desc.Width >> MipLevel, 1u), std::max(Desc.Height >> MipLevel, 1u)};
+    }
+    else if (m_pSwapChain != nullptr)
+    {
+        const SwapChainDesc& Desc = m_pSwapChain->GetDesc();
+        Size                      = {Desc.Width, Desc.Height};
+    }
+    else
+    {
+        Size = {};
+    }
 }
 
 ITextureView* RadientRenderTargetImpl::GetColorRTV()

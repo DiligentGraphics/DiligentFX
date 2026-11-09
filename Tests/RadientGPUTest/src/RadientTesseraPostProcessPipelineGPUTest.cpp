@@ -64,7 +64,6 @@ TestRenderTarget CreateTestRenderTarget(IRenderDevice* pDevice, Uint32 Width, Ui
 
     RadientRenderTargetDesc TargetDesc;
     TargetDesc.Name      = "Radient PostFX test target";
-    TargetDesc.Size      = {Width, Height};
     TargetDesc.pColorRTV = Result.pColor->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
     Result.pTarget       = RadientRenderTargetImpl::Create(TargetDesc);
     return Result;
@@ -103,7 +102,6 @@ TEST(RadientRendererGPUTest, RejectsShaderResourceRenderTargetViews)
     {
         SCOPED_TRACE(UseSwapChain);
         RadientRenderTargetDesc TargetDesc;
-        TargetDesc.Size       = {Desc.Width, Desc.Height};
         TargetDesc.pSwapChain = UseSwapChain ? pSwapChain : nullptr;
         TargetDesc.pColorRTV  = pSRV;
         {
@@ -173,7 +171,6 @@ TEST(RadientRendererGPUTest, RequiresWritableRenderTargetViews)
         for (ITextureView* pDepthView : DepthViews)
         {
             RadientRenderTargetDesc TargetDesc;
-            TargetDesc.Size      = {ColorDesc.Width, ColorDesc.Height};
             TargetDesc.pColorRTV = pColorView;
             TargetDesc.pDepthDSV = pDepthView;
             RefCntAutoPtr<IRadientRenderTarget> pTarget;
@@ -187,7 +184,6 @@ TEST(RadientRendererGPUTest, RequiresWritableRenderTargetViews)
     // A render target needs a writable depth view, even though read-only DSVs
     // may be bound for depth testing in other rendering passes.
     RadientRenderTargetDesc TargetDesc;
-    TargetDesc.Size      = {ColorDesc.Width, ColorDesc.Height};
     TargetDesc.pColorRTV = pRTV;
     TargetDesc.pDepthDSV = pReadOnlyDSV;
     RefCntAutoPtr<IRadientRenderTarget> pTarget;
@@ -196,6 +192,68 @@ TEST(RadientRendererGPUTest, RequiresWritableRenderTargetViews)
     EXPECT_EQ(pTarget, nullptr);
 }
 
+// The output view selects the mip dimensions, even when a swap chain is also
+// supplied. Small mip heights clamp to one pixel independently of the width.
+TEST(RadientFrameRenderTargetsGPUTest, UsesOutputViewMipDimensions)
+{
+    GPUTestingEnvironment::ScopedReset AutoReset;
+    GPUTestingEnvironment* const       pEnvironment = GPUTestingEnvironment::GetInstance();
+    IRenderDevice* const               pDevice      = pEnvironment->GetDevice();
+
+    TextureDesc Desc;
+    Desc.Name      = "Radient mip render target";
+    Desc.Type      = RESOURCE_DIM_TEX_2D;
+    Desc.Width     = 63;
+    Desc.Height    = 5;
+    Desc.MipLevels = 6;
+    Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
+    Desc.BindFlags = BIND_RENDER_TARGET;
+    RefCntAutoPtr<ITexture> pTexture;
+    pDevice->CreateTexture(Desc, nullptr, &pTexture);
+    ASSERT_NE(pTexture, nullptr);
+
+    struct MipCase
+    {
+        Uint32          MipLevel;
+        RadientExtent2D Size;
+    };
+    const MipCase Cases[] = {{0, {63, 5}}, {2, {15, 1}}, {5, {1, 1}}};
+    for (const MipCase& Case : Cases)
+    {
+        SCOPED_TRACE(Case.MipLevel);
+        TextureViewDesc ViewDesc;
+        ViewDesc.ViewType        = TEXTURE_VIEW_RENDER_TARGET;
+        ViewDesc.MostDetailedMip = Case.MipLevel;
+        ViewDesc.NumMipLevels    = 1;
+        RefCntAutoPtr<ITextureView> pRTV;
+        pTexture->CreateView(ViewDesc, &pRTV);
+        ASSERT_NE(pRTV, nullptr);
+
+        for (bool UseSwapChain : {false, true})
+        {
+            SCOPED_TRACE(UseSwapChain);
+            RadientRenderTargetDesc TargetDesc;
+            TargetDesc.pColorRTV                        = pRTV;
+            TargetDesc.pSwapChain                       = UseSwapChain ? pEnvironment->GetSwapChain() : nullptr;
+            RefCntAutoPtr<IRadientRenderTarget> pTarget = RadientRenderTargetImpl::Create(TargetDesc);
+            RadientExtent2D                     Size;
+            pTarget->GetSize(Size);
+            EXPECT_EQ(Size, Case.Size);
+
+            RadientFrameRenderTargets Targets;
+            ASSERT_EQ(Targets.Prepare(pDevice, *pTarget), RADIENT_STATUS_OK);
+            EXPECT_EQ(Targets.GetSize(), Case.Size);
+            EXPECT_EQ(Targets.GetOutputColorRTV(), pRTV);
+            ASSERT_NE(Targets.GetSceneColorRTV(), nullptr);
+            const TextureDesc& SceneColorDesc = Targets.GetSceneColorRTV()->GetTexture()->GetDesc();
+            EXPECT_EQ(SceneColorDesc.Width, Case.Size.Width);
+            EXPECT_EQ(SceneColorDesc.Height, Case.Size.Height);
+        }
+    }
+}
+
+// The same target must follow swap-chain resizing and refresh its output view
+// and internal buffers without an explicit Radient resize notification.
 TEST(RadientFrameRenderTargetsGPUTest, PreparesSwapChainOnlyTarget)
 {
     GPUTestingEnvironment::ScopedReset AutoReset;
@@ -208,17 +266,49 @@ TEST(RadientFrameRenderTargetsGPUTest, PreparesSwapChainOnlyTarget)
     // Presentation targets resolve their output view from the swap chain.
     // Supplying the captured RTV here would conceal a missing fallback.
     RadientRenderTargetDesc Desc;
-    Desc.Size                                   = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     Desc.pSwapChain                             = pSwapChain;
     RefCntAutoPtr<IRadientRenderTarget> pTarget = RadientRenderTargetImpl::Create(Desc);
     ASSERT_NE(pTarget, nullptr);
     ASSERT_EQ(pTarget->GetDesc().pColorRTV, nullptr);
     ASSERT_NE(pSwapChain->GetCurrentBackBufferRTV(), nullptr);
 
+    // Restore the shared testing swap chain even if an assertion fails.
+    struct SwapChainSizeGuard
+    {
+        ISwapChain&   SwapChain;
+        SwapChainDesc Desc;
+        ~SwapChainSizeGuard()
+        {
+            SwapChain.Resize(Desc.Width, Desc.Height, Desc.PreTransform);
+        }
+    } RestoreSize{*pSwapChain, pSwapChain->GetDesc()};
+    RadientExtent2D Size;
+    pTarget->GetSize(Size);
+    EXPECT_EQ(Size, (RadientExtent2D{RestoreSize.Desc.Width, RestoreSize.Desc.Height}));
+
     RadientFrameRenderTargets Targets;
     ASSERT_EQ(Targets.Prepare(pDevice, *pTarget), RADIENT_STATUS_OK);
     EXPECT_EQ(Targets.GetOutputColorRTV(), pSwapChain->GetCurrentBackBufferRTV());
     EXPECT_EQ(pTarget->GetDepthDSV(), pSwapChain->GetDepthBufferDSV());
+    const Uint32 InitialVersion = Targets.GetVersion();
+
+    const RadientExtent2D NewSize{RestoreSize.Desc.Width + 16, RestoreSize.Desc.Height + 8};
+    pSwapChain->Resize(NewSize.Width, NewSize.Height, RestoreSize.Desc.PreTransform);
+    pTarget->GetSize(Size);
+    EXPECT_EQ(Size, NewSize);
+    ASSERT_EQ(Targets.Prepare(pDevice, *pTarget), RADIENT_STATUS_OK);
+    EXPECT_GT(Targets.GetVersion(), InitialVersion);
+    EXPECT_EQ(Targets.GetSize(), NewSize);
+    EXPECT_EQ(Targets.GetOutputColorRTV(), pSwapChain->GetCurrentBackBufferRTV());
+    EXPECT_EQ(pTarget->GetDepthDSV(), pSwapChain->GetDepthBufferDSV());
+    ASSERT_NE(Targets.GetSceneColorRTV(), nullptr);
+    const TextureDesc& SceneColorDesc = Targets.GetSceneColorRTV()->GetTexture()->GetDesc();
+    EXPECT_EQ(SceneColorDesc.Width, NewSize.Width);
+    EXPECT_EQ(SceneColorDesc.Height, NewSize.Height);
+
+    const Uint32 ResizedVersion = Targets.GetVersion();
+    ASSERT_EQ(Targets.Prepare(pDevice, *pTarget), RADIENT_STATUS_OK);
+    EXPECT_EQ(Targets.GetVersion(), ResizedVersion);
 }
 
 TEST(RadientFrameRenderTargetsGPUTest, CreatesIndependentGBuffers)

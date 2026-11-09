@@ -28,16 +28,16 @@
 
 void RadientRenderTarget_C_TestMacros(IRadientRenderTarget* pTarget)
 {
-    const RadientRenderTargetDesc* pDesc      = IRadientRenderTarget_GetDesc(pTarget);
-    RADIENT_STATUS                 Status     = RADIENT_STATUS_OK;
+    const RadientRenderTargetDesc* pDesc = IRadientRenderTarget_GetDesc(pTarget);
+    RadientExtent2D                Size;
     ITextureView*                  pRTV       = IRadientRenderTarget_GetColorRTV(pTarget);
     ITextureView*                  pDSV       = IRadientRenderTarget_GetDepthDSV(pTarget);
     ISwapChain*                    pSwapChain = IRadientRenderTarget_GetSwapChain(pTarget);
 
-    Status = IRadientRenderTarget_Resize(pTarget, 1, 1);
+    IRadientRenderTarget_GetSize(pTarget, &Size);
 
     (void)pDesc;
-    (void)Status;
+    (void)Size;
     (void)pRTV;
     (void)pDSV;
     (void)pSwapChain;

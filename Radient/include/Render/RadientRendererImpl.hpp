@@ -55,8 +55,7 @@ public:
 
     virtual const RadientRenderTargetDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE Resize(Uint32 Width,
-                                                     Uint32 Height) override final;
+    virtual void DILIGENT_CALL_TYPE GetSize(RadientExtent2D& Size) const override final;
 
     virtual ITextureView* DILIGENT_CALL_TYPE GetColorRTV() override final;
 

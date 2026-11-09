@@ -70,8 +70,9 @@ const Char* RadientFrameRenderTargets::GetGBufferName(GBufferTarget Target) noex
 
 RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadientRenderTarget& Target)
 {
-    const RadientRenderTargetDesc& Desc = Target.GetDesc();
-    if (Desc.Size.Width == 0 || Desc.Size.Height == 0)
+    RadientExtent2D Size;
+    Target.GetSize(Size);
+    if (Size.Width == 0 || Size.Height == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     m_pOutputColorRTV = Target.GetColorRTV();
@@ -90,16 +91,16 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
         ITexture* const     pTexture        = m_GBuffer[TargetIndex];
         RecreateTargets |=
             pTexture == nullptr ||
-            pTexture->GetDesc().Width != Desc.Size.Width ||
-            pTexture->GetDesc().Height != Desc.Size.Height ||
+            pTexture->GetDesc().Width != Size.Width ||
+            pTexture->GetDesc().Height != Size.Height ||
             pTexture->GetDesc().Format != GetGBufferFormat(GBufferTargetId);
     }
     for (ITexture* pTexture : m_Depth)
     {
         RecreateTargets |=
             pTexture == nullptr ||
-            pTexture->GetDesc().Width != Desc.Size.Width ||
-            pTexture->GetDesc().Height != Desc.Size.Height ||
+            pTexture->GetDesc().Width != Size.Width ||
+            pTexture->GetDesc().Height != Size.Height ||
             pTexture->GetDesc().Format != DepthFormat;
     }
 
@@ -113,8 +114,8 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
             TextureDesc Texture;
             Texture.Name      = GetGBufferName(GBufferTargetId);
             Texture.Type      = RESOURCE_DIM_TEX_2D;
-            Texture.Width     = Desc.Size.Width;
-            Texture.Height    = Desc.Size.Height;
+            Texture.Width     = Size.Width;
+            Texture.Height    = Size.Height;
             Texture.Format    = GetGBufferFormat(GBufferTargetId);
             Texture.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
 
@@ -134,8 +135,8 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
             TextureDesc Texture;
             Texture.Name      = DepthIndex == 0 ? "Radient depth 0" : "Radient depth 1";
             Texture.Type      = RESOURCE_DIM_TEX_2D;
-            Texture.Width     = Desc.Size.Width;
-            Texture.Height    = Desc.Size.Height;
+            Texture.Width     = Size.Width;
+            Texture.Height    = Size.Height;
             Texture.Format    = DepthFormat;
             Texture.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
 
@@ -155,12 +156,12 @@ RADIENT_STATUS RadientFrameRenderTargets::Prepare(IRenderDevice* pDevice, IRadie
         m_DepthHistoryValid = false;
         ++m_Version;
     }
-    else if (pDevice == nullptr && m_Size != Desc.Size)
+    else if (pDevice == nullptr && m_Size != Size)
     {
         ++m_Version;
     }
 
-    m_Size = Desc.Size;
+    m_Size = Size;
 
     return RADIENT_STATUS_OK;
 }

@@ -330,7 +330,6 @@ void RadientQuadTestScene::Initialize(const QuadSetups& Setups, Bool EnableAsync
     ASSERT_NE(pReadback, nullptr);
 
     RadientRenderTargetDesc TargetDesc;
-    TargetDesc.Size      = {OutputWidth, OutputHeight};
     TargetDesc.pColorRTV = pOutput->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
     ASSERT_EQ(pRenderer->CreateRenderTarget(TargetDesc, &pTarget), RADIENT_STATUS_OK);
     RadientViewDesc ViewDesc;

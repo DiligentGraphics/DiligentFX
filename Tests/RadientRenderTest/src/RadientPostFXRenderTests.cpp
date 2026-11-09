@@ -498,7 +498,6 @@ TEST_F(RadientRender, Bloom)
 
     RadientRenderTargetDesc TargetDesc{};
     TargetDesc.Name       = "Bloom render test target";
-    TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
@@ -697,7 +696,6 @@ TEST_F(RadientRender, SSAO)
 
     RadientRenderTargetDesc TargetDesc{};
     TargetDesc.Name       = "SSAO render test target";
-    TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
@@ -1001,7 +999,6 @@ TEST_F(RadientRender, SSR)
 
     RadientRenderTargetDesc TargetDesc{};
     TargetDesc.Name       = "SSR render test target";
-    TargetDesc.Size       = {pSwapChain->GetDesc().Width, pSwapChain->GetDesc().Height};
     TargetDesc.pSwapChain = pSwapChain;
 
     RefCntAutoPtr<IRadientRenderTarget> pRenderTarget;
