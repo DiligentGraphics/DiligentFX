@@ -174,9 +174,31 @@ fixed-array element types, and bases. It follows aliases to their underlying typ
 and handles recursive pointer graphs. No empty entries are needed for these types.
 Only selected methods contribute dependencies; unrelated APIs and C++ helpers stay
 out of the model. An `external` declaration stops traversal at a runtime-provided
-type. Standalone constants and typedef names still need selection if they are to
-be exported in their own right. Overrides for unreachable declarations are errors,
+type. Standalone constants and typedef names can be selected individually or
+discovered from public headers. Overrides for unreachable declarations are errors,
 so stale or misspelled configuration does not silently go unused.
+
+Instead of enumerating declarations, `exports` can select their source headers:
+
+```json
+"exports": {
+  "headers": ["MyAPI/interface/*.h"],
+  "exclude_headers": ["MyAPI/interface/NativeOnly.h"],
+  "exclude": ["MyAPI::UnsupportedCallback"],
+  "include": ["OtherAPI::RequiredConstant"]
+}
+```
+
+`headers` and `exclude_headers` match source-root-relative paths with `/` separators;
+`exclude` matches qualified declaration names. Patterns use case-sensitive shell
+wildcards. All sections except `headers` are optional. `include` contains explicit
+declaration names and takes precedence over exclusions. Discovery examines headers
+already parsed through the entry headers; it does not include additional files.
+Dependencies remain automatic even when their own headers or names are excluded
+from discovery. C++ inline functions and self-aliasing C typedefs are filtered as
+they are for explicit selection. Other unsupported declarations produce errors.
+This keeps export scope separate from marshalling semantics without maintaining
+an inventory of every constant, typedef, or interface member.
 
 For compatibility, omitting `exports` selects the keys of `declarations` as roots.
 New configurations should separate selection from semantic overrides.
@@ -315,7 +337,9 @@ from the array pointer's `nullable` policy; elements are non-nullable by default
 
 ### Selecting interface methods
 
-An interface declaration can specify `"include_methods": ["CreateScene", "CreateSceneWriter"]`.
+All declared interface methods are included by default; do not repeat the full
+method list. To expose only a subset, an interface declaration can specify
+`"include_methods": ["CreateScene", "CreateSceneWriter"]`.
 Only those directly declared virtual methods are extracted and emitted, in native
 declaration order. Omitting the list retains all methods; an empty list exposes
 the interface identity and selected base methods only. Base interfaces have their

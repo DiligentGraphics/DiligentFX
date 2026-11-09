@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from functools import lru_cache
+from fnmatch import fnmatchcase
 from importlib.metadata import PackageNotFoundError, version
 import ast
 import ctypes
@@ -286,7 +287,8 @@ def describe_declaration(cursor, root, external, documentation, selected_methods
     return result
 
 def extract_api(source_root, headers, declaration_names, target, clang_args=(), *,
-                external_declarations=(), method_selections=None, include_dependencies=False):
+                external_declarations=(), method_selections=None, include_dependencies=False,
+                export_headers=(), excluded_headers=(), excluded_declarations=()):
     """Return a plain-data API model and available symbol names for policy validation.
 
     This stage reads native declarations only. With include_dependencies, it
@@ -341,18 +343,38 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
 
     visit(unit.cursor)
 
-    def find_declaration(name):
-        candidates = {}
-        for cursor in declarations.get(name, []):
-            if cursor.kind == cindex.CursorKind.TYPEDEF_DECL:
-                # The C spelling of a record is not a self-referencing alias.
-                declaration = cursor.underlying_typedef_type.get_canonical().get_declaration()
-                if declaration and qualified_name(declaration) == name:
-                    continue
-            if (cursor.kind == cindex.CursorKind.FUNCTION_DECL and
-                    clang_library().clang_Cursor_isFunctionInlined(cursor)):
+    def is_exportable(cursor):
+        if cursor.kind == cindex.CursorKind.TYPEDEF_DECL:
+            # The C spelling of a record is not a self-referencing alias.
+            declaration = cursor.underlying_typedef_type.get_canonical().get_declaration()
+            if declaration and qualified_name(declaration) == qualified_name(cursor):
+                return False
+        return not (cursor.kind == cindex.CursorKind.FUNCTION_DECL and
+                    clang_library().clang_Cursor_isFunctionInlined(cursor))
+
+    # Header selection applies to declaration locations, not the include graph.
+    # Included SDK headers and C++ helpers therefore do not become export roots.
+    # Exclusions only remove roots; a selected signature still brings in its types.
+    if export_headers:
+        for name, cursors in declarations.items():
+            if any(fnmatchcase(name, pattern) for pattern in excluded_declarations):
                 continue
-            candidates[cursor.get_usr()] = cursor
+            for cursor in cursors:
+                try:
+                    path = Path(os.path.relpath(cursor.location.file.name, root)).as_posix()
+                except ValueError:
+                    # Headers on another Windows drive cannot match relative paths.
+                    continue
+                if (any(fnmatchcase(path, pattern) for pattern in export_headers) and
+                        not any(fnmatchcase(path, pattern) for pattern in excluded_headers) and
+                        is_exportable(cursor)):
+                    selected.add(name)
+                    break
+    if not selected:
+        raise ModelError("No declarations selected for export")
+
+    def find_declaration(name):
+        candidates = {cursor.get_usr(): cursor for cursor in declarations.get(name, []) if is_exportable(cursor)}
         if not candidates:
             raise ModelError("Declarations not found: " + name)
         if len(candidates) != 1:

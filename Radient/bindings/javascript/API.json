@@ -21,7 +21,7 @@
         "nullable": true,
         "ownership": "borrowed",
         "lifetime": "call",
-        "length": "Size"
+        "binding": "automatic"
       }
     },
     "Diligent::RadientMaterialParameterDesc": {
@@ -43,13 +43,11 @@
     "Diligent::IRadientDataBlob::BeginRead": {
       "release": "EndRead",
       "size": "GetSize",
-      "writable": false,
       "success": 0
     },
     "Diligent::IRadientMutableDataBlob::BeginWrite": {
       "release": "EndWrite",
       "size": "GetSize",
-      "writable": true,
       "success": 0
     }
   },

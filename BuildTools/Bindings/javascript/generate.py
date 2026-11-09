@@ -70,12 +70,13 @@ class Generator:
             if (not isinstance(function, str) or not re.fullmatch(r"[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*", function) or
                     unalias(field.get("type", {"kind": "void", "const": False, "volatile": False})).get("kind") != "pointer" or "length" in field.get("policy", {})):
                 raise ModelError(f"{name}: field count adapter requires a pointer without a length and a qualified native function name")
-        self.scopes = (adapters or {}).get("scoped_bytes", {})
-        if not isinstance(self.scopes, dict):
+        scopes = (adapters or {}).get("scoped_bytes", {})
+        if not isinstance(scopes, dict):
             raise ModelError("scoped_bytes must map qualified method names to adapters")
+        self.scopes = {}
         self.releases = set()
-        for name, scope in self.scopes.items():
-            self.validate_scope(name, scope)
+        for name, scope in scopes.items():
+            self.scopes[name] = self.validate_scope(name, scope)
             self.releases.add(name.rsplit("::", 1)[0] + "::" + scope["release"])
         self.record_arrays = {}
         self.constants = {}
@@ -125,7 +126,11 @@ class Generator:
             if record.get("kind") != "record" or not isinstance(overrides, dict):
                 raise ModelError(f"{owner}: field policies require a selected descriptor")
             policies = {field["name"]: field.get("policy", {}) for field in record["fields"]}
-            policies.update(overrides)
+            for member, override in overrides.items():
+                policy = dict(policies.get(member, {}), **override)
+                if override.get("binding") == "automatic" and "reason" not in override:
+                    policy.pop("reason", None)
+                policies[member] = policy
             apply_values_policy(record["fields"], policies, owner, is_field=True, types=self.types)
         for name, arguments in self.fixed_arguments.items():
             function = self.types.get(name, {})
@@ -142,9 +147,9 @@ class Generator:
 
     def validate_scope(self, name, spec):
         """Scope adapters describe API semantics explicitly, never by method name."""
-        if not isinstance(spec, dict) or spec.keys() != {"release", "size", "writable", "success"}:
-            raise ModelError(f"{name}: scoped bytes require release, size, writable, and success")
-        if not isinstance(spec["writable"], bool) or type(spec["success"]) is not int:
+        if not isinstance(spec, dict) or spec.keys() != {"release", "size", "success"}:
+            raise ModelError(f"{name}: scoped bytes require only release, size, and success")
+        if type(spec["success"]) is not int:
             raise ModelError(f"{name}: invalid scoped byte access mode or success status")
         owner, _, acquire = name.rpartition("::")
         declaration = self.types.get(owner, {})
@@ -169,12 +174,13 @@ class Generator:
         inner = unalias(outer["target"]) if outer["kind"] == "pointer" else {}
         byte = unalias(inner["target"]) if inner.get("kind") == "pointer" else {}
         policy = param.get("policy", {})
-        if (byte.get("kind") != "void" or byte.get("const") == spec["writable"] or
+        if (byte.get("kind") != "void" or
                 inner.get("const") or policy.get("direction") != "out" or
                 policy.get("ownership") != "borrowed" or policy.get("nullable") is not False):
-            raise ModelError(f"{name}: acquire must return a borrowed void pointer with matching constness")
+            raise ModelError(f"{name}: acquire must return a borrowed void pointer")
         if not -(2 ** 31) <= spec["success"] < 2 ** 31:
             raise ModelError(f"{name}: scoped access requires a 32-bit signed status")
+        return dict(spec, writable=not byte["const"])
 
     def interface_methods(self, name):
         declaration = self.types.get(name, {})

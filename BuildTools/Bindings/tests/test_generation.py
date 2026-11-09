@@ -67,7 +67,7 @@ DILIGENT_END_NAMESPACE
 
     def test_fixtures_are_c_compatible(self):
         configure_clang()
-        headers = sorted((support.TOOLS / "tests/fixtures").glob("*.h"))
+        headers = sorted((support.TOOLS / "tests/fixtures").rglob("*.h"))
         # Exercise the C call macros too, so a fixture cannot silently become C++-only.
         source = "".join(f'#include "{header.as_posix()}"\n' for header in headers) + '''
 void UseTestAPI(IBindingTestObject* pObject, IBindingTestMutableObject* pMutable)

@@ -5,275 +5,43 @@
     "../DiligentCore/Common/interface/ThreadPool.h",
     "Radient/interface/RadientMeshPrimitives.h"
   ],
-  "exports": [
-    "Diligent::CreateRadientDataBlob",
-    "Diligent::CreateRadientEngine",
-    "Diligent::CreateRadientMutableDataBlob",
-    "Diligent::InvalidRadientEntityID",
-    "Diligent::InvalidRadientHandle",
-    "Diligent::InvalidRadientComponentTypeID",
-    "Diligent::InvalidRadientFrameID",
-    "Diligent::RADIENT_COMPONENT_TYPE_CAMERA",
-    "Diligent::RADIENT_COMPONENT_TYPE_LIGHT",
-    "Diligent::RADIENT_COMPONENT_TYPE_TRANSFORM",
-    "Diligent::RadientComponentTypeID",
-    "Diligent::RadientEntityID",
-    "Diligent::RadientRevision",
-    "Diligent::RadientHandle",
-    "Diligent::RadientFrameID",
-    "Diligent::RadientAnimationSchemaID",
-    "Diligent::RadientAnimationObjectID",
-    "Diligent::RadientAnimationDestinationElement",
-    "Diligent::GetRadientAssetLoadStatus",
-    "Diligent::CreateRadientCubeMesh",
-    "Diligent::CreateRadientSphereMesh",
-    "Diligent::RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS",
-    "Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT",
-    "Diligent::RADIENT_VERTEX_AUTO_OFFSET",
-    "Diligent::RADIENT_VERTEX_AUTO_STRIDE",
-    "Diligent::GetRadientVertexComponentSize",
-    "Diligent::GetRadientVertexAttributeSize",
-    "Diligent::RADIENT_COMPONENT_TYPE_MESH",
-    "Diligent::RADIENT_COMPONENT_TYPE_MESH_RENDERER",
-    "Diligent::IRadientSurfaceMaterialAsset",
-    "Diligent::RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS",
-    "Diligent::RadientStandardMaterialSchemaVersion",
-    "Diligent::RadientStandardMaterialBaseColorFactorName",
-    "Diligent::RadientStandardMaterialDiffuseFactorName",
-    "Diligent::RadientStandardMaterialMetallicFactorName",
-    "Diligent::RadientStandardMaterialRoughnessFactorName",
-    "Diligent::RadientStandardMaterialSpecularFactorName",
-    "Diligent::RadientStandardMaterialGlossinessFactorName",
-    "Diligent::RadientStandardMaterialEmissiveFactorName",
-    "Diligent::RadientStandardMaterialNormalScaleName",
-    "Diligent::RadientStandardMaterialOcclusionStrengthName",
-    "Diligent::RadientStandardMaterialClearCoatFactorName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessFactorName",
-    "Diligent::RadientStandardMaterialClearCoatNormalScaleName",
-    "Diligent::RadientStandardMaterialSheenColorFactorName",
-    "Diligent::RadientStandardMaterialSheenRoughnessFactorName",
-    "Diligent::RadientStandardMaterialSpecularWeightName",
-    "Diligent::RadientStandardMaterialSpecularColorFactorName",
-    "Diligent::RadientStandardMaterialAnisotropyStrengthName",
-    "Diligent::RadientStandardMaterialAnisotropyRotationName",
-    "Diligent::RadientStandardMaterialIridescenceFactorName",
-    "Diligent::RadientStandardMaterialIridescenceIORName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessMinimumName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessMaximumName",
-    "Diligent::RadientStandardMaterialTransmissionFactorName",
-    "Diligent::RadientStandardMaterialIORName",
-    "Diligent::RadientStandardMaterialThicknessFactorName",
-    "Diligent::RadientStandardMaterialAttenuationColorName",
-    "Diligent::RadientStandardMaterialAttenuationDistanceName",
-    "Diligent::RadientStandardMaterialBaseColorTextureName",
-    "Diligent::RadientStandardMaterialBaseColorTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialBaseColorTextureUVScaleName",
-    "Diligent::RadientStandardMaterialBaseColorTextureUVRotationName",
-    "Diligent::RadientStandardMaterialBaseColorTextureUVBiasName",
-    "Diligent::RadientStandardMaterialBaseColorTextureWrapUName",
-    "Diligent::RadientStandardMaterialBaseColorTextureWrapVName",
-    "Diligent::RadientStandardMaterialDiffuseTextureName",
-    "Diligent::RadientStandardMaterialDiffuseTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialDiffuseTextureUVScaleName",
-    "Diligent::RadientStandardMaterialDiffuseTextureUVRotationName",
-    "Diligent::RadientStandardMaterialDiffuseTextureUVBiasName",
-    "Diligent::RadientStandardMaterialDiffuseTextureWrapUName",
-    "Diligent::RadientStandardMaterialDiffuseTextureWrapVName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureWrapUName",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureWrapVName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureWrapUName",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureWrapVName",
-    "Diligent::RadientStandardMaterialNormalTextureName",
-    "Diligent::RadientStandardMaterialNormalTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialNormalTextureUVScaleName",
-    "Diligent::RadientStandardMaterialNormalTextureUVRotationName",
-    "Diligent::RadientStandardMaterialNormalTextureUVBiasName",
-    "Diligent::RadientStandardMaterialNormalTextureWrapUName",
-    "Diligent::RadientStandardMaterialNormalTextureWrapVName",
-    "Diligent::RadientStandardMaterialOcclusionTextureName",
-    "Diligent::RadientStandardMaterialOcclusionTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialOcclusionTextureUVScaleName",
-    "Diligent::RadientStandardMaterialOcclusionTextureUVRotationName",
-    "Diligent::RadientStandardMaterialOcclusionTextureUVBiasName",
-    "Diligent::RadientStandardMaterialOcclusionTextureWrapUName",
-    "Diligent::RadientStandardMaterialOcclusionTextureWrapVName",
-    "Diligent::RadientStandardMaterialEmissiveTextureName",
-    "Diligent::RadientStandardMaterialEmissiveTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialEmissiveTextureUVScaleName",
-    "Diligent::RadientStandardMaterialEmissiveTextureUVRotationName",
-    "Diligent::RadientStandardMaterialEmissiveTextureUVBiasName",
-    "Diligent::RadientStandardMaterialEmissiveTextureWrapUName",
-    "Diligent::RadientStandardMaterialEmissiveTextureWrapVName",
-    "Diligent::RadientStandardMaterialClearCoatTextureName",
-    "Diligent::RadientStandardMaterialClearCoatTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialClearCoatTextureUVScaleName",
-    "Diligent::RadientStandardMaterialClearCoatTextureUVRotationName",
-    "Diligent::RadientStandardMaterialClearCoatTextureUVBiasName",
-    "Diligent::RadientStandardMaterialClearCoatTextureWrapUName",
-    "Diligent::RadientStandardMaterialClearCoatTextureWrapVName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureWrapUName",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureWrapVName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVScaleName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVRotationName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureUVBiasName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureWrapUName",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureWrapVName",
-    "Diligent::RadientStandardMaterialSheenColorTextureName",
-    "Diligent::RadientStandardMaterialSheenColorTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialSheenColorTextureUVScaleName",
-    "Diligent::RadientStandardMaterialSheenColorTextureUVRotationName",
-    "Diligent::RadientStandardMaterialSheenColorTextureUVBiasName",
-    "Diligent::RadientStandardMaterialSheenColorTextureWrapUName",
-    "Diligent::RadientStandardMaterialSheenColorTextureWrapVName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureWrapUName",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureWrapVName",
-    "Diligent::RadientStandardMaterialSpecularTextureName",
-    "Diligent::RadientStandardMaterialSpecularTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialSpecularTextureUVScaleName",
-    "Diligent::RadientStandardMaterialSpecularTextureUVRotationName",
-    "Diligent::RadientStandardMaterialSpecularTextureUVBiasName",
-    "Diligent::RadientStandardMaterialSpecularTextureWrapUName",
-    "Diligent::RadientStandardMaterialSpecularTextureWrapVName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureUVScaleName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureUVRotationName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureUVBiasName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureWrapUName",
-    "Diligent::RadientStandardMaterialSpecularColorTextureWrapVName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureUVScaleName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureUVRotationName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureUVBiasName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureWrapUName",
-    "Diligent::RadientStandardMaterialAnisotropyTextureWrapVName",
-    "Diligent::RadientStandardMaterialIridescenceTextureName",
-    "Diligent::RadientStandardMaterialIridescenceTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialIridescenceTextureUVScaleName",
-    "Diligent::RadientStandardMaterialIridescenceTextureUVRotationName",
-    "Diligent::RadientStandardMaterialIridescenceTextureUVBiasName",
-    "Diligent::RadientStandardMaterialIridescenceTextureWrapUName",
-    "Diligent::RadientStandardMaterialIridescenceTextureWrapVName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureWrapUName",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureWrapVName",
-    "Diligent::RadientStandardMaterialTransmissionTextureName",
-    "Diligent::RadientStandardMaterialTransmissionTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialTransmissionTextureUVScaleName",
-    "Diligent::RadientStandardMaterialTransmissionTextureUVRotationName",
-    "Diligent::RadientStandardMaterialTransmissionTextureUVBiasName",
-    "Diligent::RadientStandardMaterialTransmissionTextureWrapUName",
-    "Diligent::RadientStandardMaterialTransmissionTextureWrapVName",
-    "Diligent::RadientStandardMaterialThicknessTextureName",
-    "Diligent::RadientStandardMaterialThicknessTextureUVSelectorName",
-    "Diligent::RadientStandardMaterialThicknessTextureUVScaleName",
-    "Diligent::RadientStandardMaterialThicknessTextureUVRotationName",
-    "Diligent::RadientStandardMaterialThicknessTextureUVBiasName",
-    "Diligent::RadientStandardMaterialThicknessTextureWrapUName",
-    "Diligent::RadientStandardMaterialThicknessTextureWrapVName",
-    "Diligent::RadientStandardMaterialBaseColorTextureParameterNames",
-    "Diligent::RadientStandardMaterialDiffuseTextureParameterNames",
-    "Diligent::RadientStandardMaterialMetallicRoughnessTextureParameterNames",
-    "Diligent::RadientStandardMaterialSpecularGlossinessTextureParameterNames",
-    "Diligent::RadientStandardMaterialNormalTextureParameterNames",
-    "Diligent::RadientStandardMaterialOcclusionTextureParameterNames",
-    "Diligent::RadientStandardMaterialEmissiveTextureParameterNames",
-    "Diligent::RadientStandardMaterialClearCoatTextureParameterNames",
-    "Diligent::RadientStandardMaterialClearCoatRoughnessTextureParameterNames",
-    "Diligent::RadientStandardMaterialClearCoatNormalTextureParameterNames",
-    "Diligent::RadientStandardMaterialSheenColorTextureParameterNames",
-    "Diligent::RadientStandardMaterialSheenRoughnessTextureParameterNames",
-    "Diligent::RadientStandardMaterialSpecularTextureParameterNames",
-    "Diligent::RadientStandardMaterialSpecularColorTextureParameterNames",
-    "Diligent::RadientStandardMaterialAnisotropyTextureParameterNames",
-    "Diligent::RadientStandardMaterialIridescenceTextureParameterNames",
-    "Diligent::RadientStandardMaterialIridescenceThicknessTextureParameterNames",
-    "Diligent::RadientStandardMaterialTransmissionTextureParameterNames",
-    "Diligent::RadientStandardMaterialThicknessTextureParameterNames",
-    "Diligent::IRadientSurfaceMaterialWriter",
-    "Diligent::SetStandardMaterialTextureParameters",
-    "Diligent::InvalidRadientJointIndex",
-    "Diligent::RADIENT_COMPONENT_TYPE_SKIN",
-    "Diligent::RADIENT_COMPONENT_TYPE_MORPH",
-    "Diligent::RadientMorphTargetPositionSemantic",
-    "Diligent::RadientMorphTargetNormalSemantic",
-    "Diligent::RadientMorphTargetTangentSemantic",
-    "Diligent::InvalidRadientAnimationSchemaID",
-    "Diligent::InvalidRadientAnimationObject",
-    "Diligent::InvalidRadientAnimationTargetIndex",
-    "Diligent::InvalidRadientAnimationSamplerIndex",
-    "Diligent::InvalidRadientAnimationDestinationElement",
-    "Diligent::RadientNodeAnimationSchemaID",
-    "Diligent::RadientNodeTranslationPropertyName",
-    "Diligent::RadientNodeRotationPropertyName",
-    "Diligent::RadientNodeScalePropertyName",
-    "Diligent::RadientNodeVisibilityPropertyName",
-    "Diligent::RadientMorphWeightsAnimationSchemaID",
-    "Diligent::RadientMorphWeightsPropertyName",
-    "Diligent::RadientLightAnimationSchemaID",
-    "Diligent::RadientLightColorPropertyName",
-    "Diligent::RadientLightIntensityPropertyName",
-    "Diligent::RadientLightRangePropertyName",
-    "Diligent::RadientLightExposurePropertyName",
-    "Diligent::RadientLightInnerConeAnglePropertyName",
-    "Diligent::RadientLightOuterConeAnglePropertyName",
-    "Diligent::RadientLightDiffusePropertyName",
-    "Diligent::RadientLightSpecularPropertyName",
-    "Diligent::RadientLightNormalizePropertyName",
-    "Diligent::RadientLightEnableColorTemperaturePropertyName",
-    "Diligent::RadientLightColorTemperaturePropertyName",
-    "Diligent::RadientLightRadiusPropertyName",
-    "Diligent::RadientLightAnglePropertyName",
-    "Diligent::RadientLightShapingFocusPropertyName",
-    "Diligent::RadientCameraAnimationSchemaID",
-    "Diligent::RadientCameraHorizontalAperturePropertyName",
-    "Diligent::RadientCameraVerticalAperturePropertyName",
-    "Diligent::RadientCameraFocalLengthPropertyName",
-    "Diligent::RadientCameraNearClipPropertyName",
-    "Diligent::RadientCameraFarClipPropertyName",
-    "Diligent::RadientCameraFStopPropertyName",
-    "Diligent::RadientCameraFocusDistancePropertyName",
-    "Diligent::RadientMaterialAnimationSchemaID",
-    "Diligent::RadientSurfaceMaterialAnimationSchemaID",
-    "Diligent::RadientSurfaceMaterialAlphaCutoffPropertyName",
-    "Diligent::IID_RadientAnimationDestination",
-    "Diligent::IID_RadientAnimationDestinationBinding",
-    "Diligent::IID_RadientAnimationClipAsset",
-    "Diligent::IID_RadientAnimationBinding",
-    "Diligent::IID_RadientAnimationRegistry",
-    "Diligent::MakeAxisRotation",
-    "Diligent::MakeXRotation",
-    "Diligent::MakeYRotation",
-    "Diligent::MakeZRotation",
-    "Diligent::InvalidRadientSceneIndex"
-  ],
+  "exports": {
+    "headers": [
+      "Radient/interface/*.h"
+    ],
+    "exclude_headers": [
+      "Radient/interface/RadientAssetResolver.h",
+      "Radient/interface/RadientBackend.h",
+      "Radient/interface/RadientView.h",
+      "Radient/interface/RadientRenderer.h"
+    ],
+    "exclude": [
+      "Diligent::IID_*",
+      "Diligent::RadientFloat4",
+      "Diligent::RadientBounds",
+      "Diligent::RadientExtent2D",
+      "Diligent::RADIENT_BACKEND_TYPE",
+      "Diligent::RadientDataBlobReadReleaseCallbackType",
+      "Diligent::RadientDataBlobDestroyCallbackType",
+      "Diligent::RadientBoneIndices4",
+      "Diligent::RADIENT_ANIMATION_VALUE_SEMANTIC",
+      "Diligent::RadientAnimationPropertyBindingDesc",
+      "Diligent::RadientAnimationResolvedPropertyDesc",
+      "Diligent::IRadientAnimationDestinationBinding",
+      "Diligent::RadientSurfaceMaterialDefinitionDesc",
+      "Diligent::RadientPostProcessMaterialDefinitionDesc",
+      "Diligent::RadientComputeMaterialDefinitionDesc",
+      "Diligent::RadientCustomComponentData"
+    ],
+    "include": [
+      "Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT",
+      "Diligent::IID_RadientAnimationDestination",
+      "Diligent::IID_RadientAnimationDestinationBinding",
+      "Diligent::IID_RadientAnimationClipAsset",
+      "Diligent::IID_RadientAnimationBinding",
+      "Diligent::IID_RadientAnimationRegistry"
+    ]
+  },
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
     "Diligent::RADIENT_STATUS": {"role": "status"},
@@ -383,32 +151,6 @@
       }
     },
     "Diligent::IRadientScene": {
-      "include_methods": [
-        "GetDesc",
-        "IsEntityAlive",
-        "GetEntityName",
-        "GetEntityFlags",
-        "GetEntityOwnVisibility",
-        "GetEntityEffectiveVisibility",
-        "GetCachedEntityEffectiveVisibility",
-        "GetParent",
-        "GetChildCount",
-        "GetLocalTransform",
-        "GetWorldMatrix",
-        "GetCachedWorldMatrix",
-        "GetRootEntityCount",
-        "GetRootEntities",
-        "GetChildren",
-        "GetSceneRevisions",
-        "GetCamera",
-        "GetLight",
-        "HasComponent",
-        "GetMesh",
-        "GetMeshRenderer",
-        "GetMaterialBindings",
-        "GetSkin",
-        "GetMorph"
-      ],
       "methods": {
         "GetDesc": {
           "result": {"lifetime": "object"}
@@ -521,10 +263,6 @@
       }
     },
     "Diligent::IRadientMeshAsset": {
-      "include_methods": [
-        "GetDesc",
-        "CreateMorphTargetWeights"
-      ],
       "methods": {
         "CreateMorphTargetWeights": {
           "parameters": {
@@ -534,13 +272,6 @@
       }
     },
     "Diligent::IRadientMaterialAsset": {
-      "include_methods": [
-        "GetDefinition",
-        "GetVersion",
-        "GetTexture",
-        "GetParameter",
-        "CreateWriter"
-      ],
       "methods": {
         "GetDefinition": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
@@ -698,14 +429,6 @@
       }
     },
     "Diligent::IRadientMaterialDefinitionAsset": {
-      "include_methods": [
-        "GetDesc",
-        "GetStatus",
-        "GetParameterCount",
-        "GetParameterDesc",
-        "GetParameterHandle",
-        "FindParameter"
-      ],
       "methods": {
         "GetParameterHandle": {
           "parameters": {
@@ -755,11 +478,6 @@
       }
     },
     "Diligent::IRadientMaterialWriter": {
-      "include_methods": [
-        "SetParameter",
-        "SetTexture",
-        "Commit"
-      ],
       "methods": {
         "SetParameter": {
           "parameters": {
@@ -797,10 +515,6 @@
       }
     },
     "Diligent::IRadientSkeletonAsset": {
-      "include_methods": [
-        "GetDesc",
-        "CreatePose"
-      ],
       "methods": {
         "CreatePose": {
           "parameters": {
@@ -810,15 +524,6 @@
       }
     },
     "Diligent::IRadientSkeletonPose": {
-      "include_methods": [
-        "GetSkeleton",
-        "GetVersion",
-        "GetJointLocalTransforms",
-        "GetJointGlobalMatrices",
-        "ComputeSkinningMatrices",
-        "UpdateGlobalTransforms",
-        "CreateWriter"
-      ],
       "methods": {
         "GetSkeleton": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
@@ -852,11 +557,6 @@
       }
     },
     "Diligent::IRadientSkeletonPoseWriter": {
-      "include_methods": [
-        "SetJointLocalTransforms",
-        "ResetToRestPose",
-        "Commit"
-      ],
       "methods": {
         "SetJointLocalTransforms": {
           "parameters": {
@@ -872,14 +572,6 @@
       }
     },
     "Diligent::IRadientMorphTargetWeights": {
-      "include_methods": [
-        "GetMesh",
-        "GetVersion",
-        "GetWeightCount",
-        "GetWeights",
-        "SetWeights",
-        "ResetToDefaults"
-      ],
       "methods": {
         "GetMesh": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
@@ -935,10 +627,6 @@
       }
     },
     "Diligent::IRadientAnimationClipAsset": {
-      "include_methods": [
-        "GetDesc",
-        "CreateBinding"
-      ],
       "methods": {
         "CreateBinding": {
           "parameters": {
@@ -948,10 +636,6 @@
       }
     },
     "Diligent::IRadientAnimationBinding": {
-      "include_methods": [
-        "GetClip",
-        "Evaluate"
-      ],
       "methods": {
         "GetClip": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
@@ -962,14 +646,6 @@
       "include_methods": []
     },
     "Diligent::IRadientAnimationRegistry": {
-      "include_methods": [
-        "GetScene",
-        "AddAnimationBinding",
-        "RemoveAnimationBinding",
-        "RemoveEntity",
-        "RemoveAnimationClip",
-        "GetState"
-      ],
       "methods": {
         "GetScene": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
@@ -1004,11 +680,6 @@
         "ppBindings": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
       }
     },
-    "Diligent::IRadientSceneAsset": {
-      "include_methods": [
-        "GetDesc"
-      ]
-    },
     "Diligent::RadientSceneLoadInfo": {
       "fields": {
         "URI": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
@@ -1027,11 +698,6 @@
       }
     },
     "Diligent::IRadientSceneImporter": {
-      "include_methods": [
-        "ImportScene",
-        "InstantiateScene",
-        "ProcessPendingImports"
-      ],
       "methods": {
         "ImportScene": {
           "parameters": {

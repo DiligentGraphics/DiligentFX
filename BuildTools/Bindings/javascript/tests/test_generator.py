@@ -505,6 +505,16 @@ class GeneratorTest(unittest.TestCase):
         cpp, _, _ = self.emit(model, adapters)
         self.assertIn("reinterpret_cast<Diligent::IMarshalBytes*>(self)->GetSize()", cpp)
 
+    def test_scope_access_mode_is_inferred_from_pointee_constness(self):
+        adapters = deepcopy(ADAPTERS)
+        original = deepcopy(adapters)
+        generator = Generator(MODEL, "BindingTests", ["Interfaces.h"], adapters)
+        generator.generate()
+        methods = generator.schema["interfaces"]["IMarshalBytes"]["methods"]
+        self.assertFalse(methods["MapRead"]["scope"]["writable"])
+        self.assertTrue(methods["MapWrite"]["scope"]["writable"])
+        self.assertEqual(adapters, original)
+
     def test_scope_methods_require_an_explicit_adapter(self):
         with self.assertRaisesRegex(ModelError, "explicit JavaScript adapter"):
             self.emit(adapters={})
@@ -513,9 +523,9 @@ class GeneratorTest(unittest.TestCase):
         for key, value, error in [
             ("size", "NoSuchMethod", "must belong"),
             ("release", "NoSuchMethod", "must belong"),
-            ("writable", True, "matching constness"),
+            ("writable", True, "require only release, size, and success"),
             ("success", 2**32, "32-bit signed status"),
-            ("writable", "false", "invalid scoped byte"),
+            ("success", "0", "invalid scoped byte"),
         ]:
             with self.subTest(key=key, value=value):
                 adapters = deepcopy(ADAPTERS)
@@ -563,11 +573,19 @@ class GeneratorTest(unittest.TestCase):
         model = deepcopy(MODEL)
         field = self.declaration(model, "MarshalBufferDesc")["fields"][1]
         adapters = deepcopy(ADAPTERS)
-        adapters["field_policies"]["Diligent::MarshalBufferDesc"] = {"pBytes": deepcopy(field["policy"])}
-        field["policy"] = {"binding": "manual", "reason": "Backend chooses lifetime"}
-        _, _, types = self.emit(model, adapters)
+        adapters["field_policies"]["Diligent::MarshalBufferDesc"] = {
+            "pBytes": {"binding": "automatic", "lifetime": "call"}}
+        field["policy"].update(binding="manual", reason="Backend chooses lifetime", lifetime="object")
+        original_model, original_adapters = deepcopy(model), deepcopy(adapters)
+        generator = Generator(model, "BindingTests", ["Interfaces.h"], adapters)
+        _, _, types = generator.generate()
         self.assertIn("pBytes?: Uint8Array | null", types)
-        self.assertEqual(field["policy"]["binding"], "manual")
+        policy = generator.types["Diligent::MarshalBufferDesc"]["fields"][1]["policy"]
+        self.assertEqual(policy["length"], "ByteCount")
+        self.assertEqual(policy["lifetime"], "call")
+        self.assertNotIn("reason", policy)
+        self.assertEqual(model, original_model)
+        self.assertEqual(adapters, original_adapters)
 
     def test_invalid_subset_configuration_is_rejected(self):
         for section, config, error in [

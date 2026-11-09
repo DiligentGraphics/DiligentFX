@@ -362,7 +362,6 @@ For example:
     "Diligent::IMarshalBytes::MapRead": {
       "release": "UnmapRead",
       "size": "Size",
-      "writable": false,
       "success": 0
     }
   }
@@ -370,7 +369,8 @@ For example:
 ```
 
 The acquire method returns a signed 32-bit status and one borrowed `const void*`
-output (`void*` for writable access). The adapter's exact `success` status means
+output (`void*` for writable access). Read/write access is inferred from that
+pointee's constness, including typedefs. The adapter's exact `success` status means
 that access has been acquired; any other status returns `{status, value: null}`.
 The no-argument size query returns `Uint32` or `Uint64` and runs after acquisition.
 The no-argument release method returns a status and consumes the scope, including
@@ -418,7 +418,10 @@ headers or language-neutral model:
   by the native descriptor constructor. Passing such a field in JavaScript is an
   unknown-field error.
 - `field_policies` maps descriptor names to field-policy overrides, using the
-  same metadata format as the model. For example, an input whose lifetime depends
+  same metadata format as the model. Overrides merge with the original policy,
+  so unchanged properties such as array lengths need not be repeated. Switching
+  a manual field to `binding: automatic` removes its manual reason unless a new
+  reason is supplied. For example, an input whose lifetime depends
   on storage mode can become a call-scoped byte span when JavaScript fixes that
   mode to copying.
 - `fixed_arguments` maps free-function names to parameter/enumerator pairs. The
