@@ -45,6 +45,43 @@ class InterfaceTest(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "unknown metadata"):
             build_fixture(config)
 
+    def exclusion_config(self, methods):
+        config = self.selection_config([])
+        config["declarations"]["Diligent::IBindingTestObject"] = {"exclude_methods": methods}
+        return config
+
+    def test_excluded_methods_do_not_require_dependencies_or_policies(self):
+        model = declarations(build_fixture(self.exclusion_config(["Read"])))
+        self.assertEqual([m["name"] for m in model["Diligent::IBindingTestObject"]["methods"]], ["GetSize"])
+        self.assertNotIn("Diligent::BINDING_TEST_STATUS", model)
+        model = declarations(build_fixture(self.exclusion_config(["Read", "GetSize"])))
+        self.assertEqual(model["Diligent::IBindingTestObject"]["kind"], "interface")
+        self.assertEqual(model["Diligent::IBindingTestObject"]["methods"], [])
+
+    def test_unlisted_and_derived_methods_are_included_automatically(self):
+        config = self.exclusion_config(["Read"])
+        config["exports"] = ["Diligent::IBindingTestMutableObject"]
+        model = declarations(build_fixture(config))
+        self.assertEqual([m["name"] for m in model["Diligent::IBindingTestObject"]["methods"]], ["GetSize"])
+        self.assertEqual([m["name"] for m in model["Diligent::IBindingTestMutableObject"]["methods"]], ["Resize"])
+        config = self.exclusion_config([])
+        config["conventions"] = "diligent"
+        model = declarations(build_fixture(config))
+        self.assertEqual([m["name"] for m in model["Diligent::IBindingTestObject"]["methods"]], ["GetSize", "Read"])
+
+    def test_invalid_method_exclusions_are_rejected(self):
+        for exclusion in ("Read", ["Read", "Read"], [None], ["Missing"], ["AddRef"]):
+            with self.subTest(exclusion=exclusion), self.assertRaises(ModelError):
+                build_fixture(self.exclusion_config(exclusion))
+        config = self.exclusion_config(["Read"])
+        config["declarations"]["Diligent::IBindingTestObject"]["include_methods"] = ["GetSize"]
+        with self.assertRaisesRegex(ModelError, "mutually exclusive"):
+            build_fixture(config)
+        del config["declarations"]["Diligent::IBindingTestObject"]["include_methods"]
+        config["declarations"]["Diligent::IBindingTestObject"]["methods"] = {"Read": {}}
+        with self.assertRaisesRegex(ModelError, "unknown metadata"):
+            build_fixture(config)
+
     def test_iobject_inheritance_and_method_order(self):
         interface = self.types["Diligent::IBindingTestObject"]
         self.assertEqual(interface["kind"], "interface")

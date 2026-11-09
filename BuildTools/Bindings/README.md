@@ -371,7 +371,11 @@ method list. To expose only a subset, an interface declaration can specify
 Only those directly declared virtual methods are extracted and emitted, in native
 declaration order. Omitting the list retains all methods; an empty list exposes
 the interface identity and selected base methods only. Base interfaces have their
-own selections. Unknown or duplicate names and policies for omitted methods are
-errors. Unselected signatures require no type declarations or pointer policies.
+own selections. When most methods are supported, use `exclude_methods` instead,
+for example `"exclude_methods": ["SetCustomComponentData"]`. New native methods
+then participate automatically. Inclusion and exclusion lists cannot be combined
+on the same interface. Unknown or duplicate names and policies for omitted methods
+are errors; exclusion names are checked during extraction against the full native
+interface before signatures are discarded. Unselected signatures require no type declarations or pointer policies.
 The native interface and its vtable are unchanged; generated calls still use its
 real C++ declaration. This allows bindings to grow without exposing unrelated APIs.

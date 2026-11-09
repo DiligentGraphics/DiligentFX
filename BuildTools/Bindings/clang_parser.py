@@ -209,7 +209,7 @@ def describe_callable(cursor, documentation):
         result.update(const=cursor.is_const_method(), virtual=cursor.is_virtual_method())
     return result
 
-def describe_declaration(cursor, root, external, documentation, selected_methods=None):
+def describe_declaration(cursor, root, external, documentation, selected_methods=None, excluded_methods=()):
     name = qualified_name(cursor)
     result = {
         "name": name,
@@ -260,7 +260,8 @@ def describe_declaration(cursor, root, external, documentation, selected_methods
                     available_methods.add(child.spelling)
                     # Filter before describing the signature: an omitted method
                     # may use types or marshalling shapes outside this binding.
-                    if selected_methods is None or child.spelling in selected_methods:
+                    if ((selected_methods is None or child.spelling in selected_methods) and
+                            child.spelling not in excluded_methods):
                         methods.append(describe_callable(child, documentation))
             elif child.kind in (
                 cindex.CursorKind.CONSTRUCTOR, cindex.CursorKind.DESTRUCTOR,
@@ -274,6 +275,9 @@ def describe_declaration(cursor, root, external, documentation, selected_methods
             missing = set(selected_methods) - available_methods
             if missing:
                 raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
+        missing = set(excluded_methods) - available_methods
+        if missing:
+            raise ModelError(f"{name}: unknown excluded methods: {', '.join(sorted(missing))}")
         if len({method["name"] for method in methods}) != len(methods):
             raise ModelError(f"{name}: overloaded methods require explicit support")
         # DILIGENT_DERIVE also gives ordinary descriptors a base class.
@@ -287,7 +291,7 @@ def describe_declaration(cursor, root, external, documentation, selected_methods
     return result
 
 def extract_api(source_root, headers, declaration_names, target, clang_args=(), *,
-                external_declarations=(), method_selections=None, include_dependencies=False,
+                external_declarations=(), method_selections=None, method_exclusions=None, include_dependencies=False,
                 export_headers=(), excluded_headers=(), excluded_declarations=()):
     """Return a plain-data API model and available symbol names for policy validation.
 
@@ -415,7 +419,7 @@ def extract_api(source_root, headers, declaration_names, target, clang_args=(), 
     while pending:
         name = pending.pop()
         declaration = describe_declaration(find_declaration(name), root, name in external, documentation,
-                                           (method_selections or {}).get(name))
+                                           (method_selections or {}).get(name), (method_exclusions or {}).get(name, ()))
         models[name] = declaration
         if include_dependencies:
             dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))

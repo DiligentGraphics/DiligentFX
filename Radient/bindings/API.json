@@ -3,8 +3,7 @@
   "conventions": "diligent",
   "headers": [
     "Radient/interface/Radient.h",
-    "../DiligentCore/Common/interface/ThreadPool.h",
-    "Radient/interface/RadientMeshPrimitives.h"
+    "../DiligentCore/Common/interface/ThreadPool.h"
   ],
   "exports": {
     "headers": [
@@ -17,15 +16,8 @@
       "Radient/interface/RadientRenderer.h"
     ],
     "exclude": [
-      "Diligent::IID_*",
-      "Diligent::RadientFloat4",
-      "Diligent::RadientBounds",
-      "Diligent::RadientExtent2D",
-      "Diligent::RADIENT_BACKEND_TYPE",
       "Diligent::RadientDataBlobReadReleaseCallbackType",
       "Diligent::RadientDataBlobDestroyCallbackType",
-      "Diligent::RadientBoneIndices4",
-      "Diligent::RADIENT_ANIMATION_VALUE_SEMANTIC",
       "Diligent::RadientAnimationPropertyBindingDesc",
       "Diligent::RadientAnimationResolvedPropertyDesc",
       "Diligent::IRadientAnimationDestinationBinding",
@@ -34,14 +26,7 @@
       "Diligent::RadientComputeMaterialDefinitionDesc",
       "Diligent::RadientCustomComponentData"
     ],
-    "include": [
-      "Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT",
-      "Diligent::IID_RadientAnimationDestination",
-      "Diligent::IID_RadientAnimationDestinationBinding",
-      "Diligent::IID_RadientAnimationClipAsset",
-      "Diligent::IID_RadientAnimationBinding",
-      "Diligent::IID_RadientAnimationRegistry"
-    ]
+    "include": ["Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT"]
   },
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -88,13 +73,7 @@
       }
     },
     "Diligent::IRadientEngine": {
-      "include_methods": [
-        "CreateScene",
-        "CreateSceneWriter",
-        "GetAssetManager",
-        "CreateAnimationRegistry",
-        "CreateSceneImporter"
-      ]
+      "exclude_methods": ["GetBackend", "CreateRenderer"]
     },
     "Diligent::RadientSceneDesc": {
       "fields": {
@@ -127,25 +106,7 @@
       }
     },
     "Diligent::IRadientSceneWriter": {
-      "include_methods": [
-        "GetScene",
-        "CreateEntity",
-        "DestroyEntity",
-        "SetEntityName",
-        "SetEntityFlags",
-        "SetEntityOwnVisibility",
-        "SetParent",
-        "SetLocalTransform",
-        "CommitChanges",
-        "SetCamera",
-        "SetLight",
-        "RemoveComponent",
-        "SetMesh",
-        "SetMeshRenderer",
-        "SetMaterialBindings",
-        "SetSkin",
-        "SetMorph"
-      ],
+      "exclude_methods": ["SetCustomComponentData"],
       "methods": {
         "SetEntityName": {
           "parameters": {
@@ -155,17 +116,7 @@
       }
     },
     "Diligent::IRadientAssetManager": {
-      "include_methods": [
-        "GetDesc",
-        "CreateMesh",
-        "LoadTexture",
-        "CreateStandardMaterialDefinition",
-        "CreateMaterial",
-        "CreateSkeleton",
-        "CreateSkin",
-        "CreateAnimationClip",
-        "LoadScene"
-      ]
+      "exclude_methods": ["RegisterSceneAssetImporter", "Stop"]
     },
     "Diligent::IRadientMaterialAsset": {
       "methods": {
@@ -427,7 +378,7 @@
       }
     },
     "Diligent::IRadientAnimationDestination": {
-      "include_methods": []
+      "exclude_methods": ["CreateBinding"]
     },
     "Diligent::IRadientAnimationRegistry": {
       "methods": {

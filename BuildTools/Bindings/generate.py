@@ -41,11 +41,15 @@ def build_model(source_root, config, target, clang_args=()):
         raise ModelError("exports must be a nonempty list of unique declaration names or a header selection")
     external = [name for name, policy in policies.items() if validate_binding(policy, name) == "external"]
     methods = {name: policy["include_methods"] for name, policy in policies.items() if "include_methods" in policy}
-    for name, selection in methods.items():
-        validate_method_selection(selection, name)
+    exclusions = {name: policy["exclude_methods"] for name, policy in policies.items() if "exclude_methods" in policy}
+    if methods.keys() & exclusions.keys():
+        raise ModelError("include_methods and exclude_methods are mutually exclusive")
+    for key, selections in (("include_methods", methods), ("exclude_methods", exclusions)):
+        for name, selection in selections.items():
+            validate_method_selection(selection, name, key)
     model, symbols = extract_api(source_root, config["headers"], exports, target,
                                  config.get("clang_args", []) + list(clang_args),
-                                 external_declarations=external, method_selections=methods, include_dependencies=True,
+                                 external_declarations=external, method_selections=methods, method_exclusions=exclusions, include_dependencies=True,
                                  export_headers=export_headers, excluded_headers=excluded_headers,
                                  excluded_declarations=excluded_declarations)
     return apply_policies(model, policies, symbols, config.get("conventions"))

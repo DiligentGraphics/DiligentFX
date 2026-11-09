@@ -37,10 +37,10 @@ def validate_binding(policy, context):
 VALUE_KEYS = {"binding", "reason", "direction", "nullable", "ownership", "lifetime", "length", "written", "element_nullable", "length_method", "length_from"}
 
 
-def validate_method_selection(names, context):
+def validate_method_selection(names, context, key="include_methods"):
     if (not isinstance(names, list) or any(not isinstance(name, str) or not name for name in names) or
             len(set(names)) != len(names)):
-        raise ModelError(f"{context}: include_methods must be a list of unique method names")
+        raise ModelError(f"{context}: {key} must be a list of unique method names")
 
 
 def inferred_value_policy(value, *, is_result=False, is_field=False, interfaces=()):
@@ -105,6 +105,8 @@ def record_usage(types, policies=None):
                 overrides = policy
             else:
                 if "include_methods" in policy and function["name"] not in policy["include_methods"]:
+                    continue
+                if function["name"] in policy.get("exclude_methods", []):
                     continue
                 overrides = policy.get("methods", {}).get(function["name"], {})
             include(function["result"]["type"], outputs)
@@ -286,7 +288,17 @@ def apply_declaration_policy(declaration, policy, inherited=(), types=None, inte
     elif kind in ("alias", "constant"):
         validate_keys(policy, {"binding", "reason"}, name)
     elif kind in ("record", "interface"):
-        validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods", "include_methods"}, name)
+        validate_keys(policy, {"binding", "reason", "ownership", "iid", "fields", "methods", "include_methods", "exclude_methods"}, name)
+        if "include_methods" in policy and "exclude_methods" in policy:
+            raise ModelError(f"{name}: include_methods and exclude_methods are mutually exclusive")
+        if "exclude_methods" in policy:
+            validate_method_selection(policy["exclude_methods"], name, "exclude_methods")
+            if kind != "interface":
+                raise ModelError(f"{name}: exclude_methods applies only to interfaces")
+            # Extraction validates names against the full native interface before
+            # dropping signatures. A serialized selected model lacks those methods.
+            declaration["methods"] = [method for method in declaration["methods"]
+                                      if method["name"] not in policy["exclude_methods"]]
         if "include_methods" in policy:
             selection = policy["include_methods"]
             validate_method_selection(selection, name)

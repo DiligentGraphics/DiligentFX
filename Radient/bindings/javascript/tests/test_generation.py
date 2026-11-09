@@ -52,6 +52,14 @@ class RadientGenerationTest(unittest.TestCase):
                 self.assertIn(f"readonly {name}: typeof {name};", types)
         self.assertIn("export const RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT: number;", types)
 
+    def test_supported_types_and_interface_ids_are_discovered_without_individual_exports(self):
+        _, js, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
+        for name in ("RadientFloat4", "RadientBounds", "RadientExtent2D", "RadientBoneIndices4"):
+            self.assertIn(f"export interface {name} {{", types)
+        for name in ("IID_RadientEngine", "IID_RadientScene", "IID_RadientDataBlob", "IID_RadientMaterialAsset"):
+            self.assertIn(f"export const {name} =", js)
+            self.assertIn(f"export const {name}:", types)
+
     def test_inherited_interfaces_and_scopes(self):
         _, _, types = Generator(MODEL, "Radient", ["RadientDataBlob.h", "RadientEngine.h"], ADAPTERS).generate()
         self.assertIn("IRadientMutableDataBlob extends IRadientDataBlob", types)
