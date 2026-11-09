@@ -53,6 +53,7 @@ class Generator:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", module) or not headers:
             raise ModelError("A module identifier and at least one entry header are required")
         self.module = module
+        self.conventions = model.get("conventions")
         # Backend selection and policies must not modify the language-neutral model.
         self.types = {d["name"]: deepcopy(d) for d in model["declarations"]}
         if adapters and (not isinstance(adapters, dict) or adapters.get("schema_version") != 1 or
@@ -131,7 +132,7 @@ class Generator:
                 if override.get("binding") == "automatic" and "reason" not in override:
                     policy.pop("reason", None)
                 policies[member] = policy
-            apply_values_policy(record["fields"], policies, owner, is_field=True, types=self.types)
+            apply_values_policy(record["fields"], policies, owner, is_field=True, types=self.types, conventions=self.conventions)
         for name, arguments in self.fixed_arguments.items():
             function = self.types.get(name, {})
             if function.get("kind") != "function" or not isinstance(arguments, dict):

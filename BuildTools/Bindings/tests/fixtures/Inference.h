@@ -76,6 +76,9 @@ void DILIGENT_GLOBAL_FUNCTION(InferBindingTestDirections)(
     IObject REF External,
     void* pContext);
 
+// Pointer return ownership is supplied by API conventions or explicit overrides.
+IBindingTestObject* DILIGENT_GLOBAL_FUNCTION(GetBindingTestObject)(void);
+
 // An unrelated signature must not need extraction support or metadata.
 void DILIGENT_GLOBAL_FUNCTION(UnselectedLongDouble)(long double Value);
 

@@ -12,7 +12,7 @@ from clang_parser import extract_api
 
 def build_model(source_root, config, target, clang_args=()):
     """Compose native extraction and policy validation for the selected API."""
-    validate_keys(config, {"schema_version", "headers", "clang_args", "exports", "declarations"}, "configuration")
+    validate_keys(config, {"schema_version", "headers", "clang_args", "exports", "declarations", "conventions"}, "configuration")
     if config.get("schema_version") != 1:
         raise ModelError("Unsupported configuration schema_version")
     if not isinstance(config.get("headers"), list) or not config["headers"]:
@@ -48,7 +48,7 @@ def build_model(source_root, config, target, clang_args=()):
                                  external_declarations=external, method_selections=methods, include_dependencies=True,
                                  export_headers=export_headers, excluded_headers=excluded_headers,
                                  excluded_declarations=excluded_declarations)
-    return apply_policies(model, policies, symbols)
+    return apply_policies(model, policies, symbols, config.get("conventions"))
 
 
 def main():

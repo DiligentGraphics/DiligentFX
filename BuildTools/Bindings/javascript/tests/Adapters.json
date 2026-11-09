@@ -20,8 +20,6 @@
       "pComputed": {
         "direction": "in",
         "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call",
         "binding": "automatic"
       }
     }

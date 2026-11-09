@@ -19,8 +19,6 @@
       "pData": {
         "direction": "in",
         "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call",
         "binding": "automatic"
       }
     },
@@ -28,8 +26,6 @@
       "pDefaultValue": {
         "direction": "out",
         "nullable": true,
-        "ownership": "borrowed",
-        "lifetime": "call",
         "binding": "automatic"
       }
     }

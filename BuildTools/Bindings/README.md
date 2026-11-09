@@ -225,8 +225,30 @@ The model fills in the following information before language generation:
   recognized when the sibling ID constant actually exists. Other names can use an
   explicit `iid` override; no missing ID is invented.
 
-These defaults never infer raw-pointer ownership, retention, nullability, or
-array length from parameter names. A null descriptor-field default does not prove
+An API can opt into Diligent's common pointer contracts once:
+
+```json
+"conventions": "diligent"
+```
+
+With this setting, ordinary pointer parameters and descriptor fields default to
+borrowed, call-scoped storage. Pointers default to non-null; optional inputs and
+nullable results require `nullable: true`. Interface output parameters (`IFoo**`
+or `IFoo*&`) return an owned strong reference with caller lifetime. Direct interface
+pointer returns borrow a reference with object lifetime. Interfaces are identified
+from declarations and reference-counted external bases, including through aliases.
+Field arrays of interface pointers remain borrowed descriptor storage.
+
+These are API conventions, not ownership guarantees derived from C++. Explicit
+value policies override them. A borrowed output interface can specify just
+`ownership: borrowed`; its lifetime defaults to `call`. Retention, static storage,
+ownership-transferring direct returns, and scoped access need explicit exceptions.
+Callbacks still require an adapter contract. The resolved model records the chosen
+conventions so backend field overrides and serialized-model validation use the
+same defaults. Without this opt-in, pointer ownership, lifetime, and nullability
+remain required metadata.
+
+These defaults never infer array length from parameter names. A null descriptor-field default does not prove
 that null is accepted by a native operation. Explicit overrides take precedence.
 
 Policies can be attached to declarations, record `fields`, interface `methods`,

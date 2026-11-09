@@ -72,12 +72,37 @@ def inferred_value_policy(value, *, is_result=False, is_field=False, interfaces=
     return policy
 
 
-def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=()):
+def pointer_defaults(value, policy, *, is_result=False, is_field=False, interfaces=()):
+    """Diligent conventions, enabled once per API and overridden per value.
+
+    These are API contracts, not C++ ownership guarantees. Ordinary pointers
+    borrow call-scoped storage. Interface output slots transfer a strong reference,
+    while direct interface returns borrow one from the object. Optional pointers,
+    retained storage, and exceptions to those conventions need explicit metadata.
+    """
+    native = unalias(value["type"])
+    if native["kind"] not in ("pointer", "reference"):
+        return {}
+    target = unalias(native["target"])
+    if target["kind"] == "function":
+        return {}  # Callbacks still require an adapter contract.
+    interface_result = is_result and target.get("name") in interfaces
+    slot = unalias(target["target"]) if target["kind"] == "pointer" else {}
+    owned_output = (not (is_result or is_field) and policy.get("direction") == "out" and
+                    slot.get("name") in interfaces)
+    ownership = policy.get("ownership", "owned" if owned_output else "borrowed")
+    lifetime = "caller" if ownership == "owned" else "object" if interface_result else "call"
+    return {"nullable": False, "ownership": ownership, "lifetime": lifetime}
+
+
+def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=(), conventions=None):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
     if binding == "automatic":
         policy = dict(inferred_value_policy(value, is_result=is_result, is_field=is_field, interfaces=interfaces), **policy)
+        if conventions == "diligent":
+            policy = dict(pointer_defaults(value, policy, is_result=is_result, is_field=is_field, interfaces=interfaces), **policy)
     if binding == "external":
         raise ModelError(f"{context}: external binding is only valid for declarations")
     if native_type["kind"] in ("pointer", "reference") and binding == "automatic":
@@ -162,21 +187,21 @@ def validate_length_policy(value, siblings, context, types=None, *, is_field=Fal
         resolve_span_length(policy["length"], siblings, context, types, field=is_field)
 
 
-def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None, interfaces=()):
+def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None, interfaces=(), conventions=None):
     by_name = {value["name"]: value for value in (*inherited, *values)}
     validate_keys(policies, {value["name"] for value in values}, context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
-        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field, interfaces=interfaces)
+        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field, interfaces=interfaces, conventions=conventions)
     for value in values:
         validate_length_policy(value, by_name, f"{context}::{value['name']}", types, is_field=is_field)
 
 
-def apply_callable_policy(callable_model, policy, context, interfaces=()):
+def apply_callable_policy(callable_model, policy, context, interfaces=(), conventions=None):
     validate_keys(policy, {"binding", "reason", "parameters", "result"}, context)
     validate_binding(policy, context)
-    apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context, interfaces=interfaces)
-    apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result", is_result=True)
+    apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context, interfaces=interfaces, conventions=conventions)
+    apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result", is_result=True, interfaces=interfaces, conventions=conventions)
     validate_length_policy(callable_model["result"],
                            {p["name"]: p for p in callable_model["parameters"]}, context + " result")
     callable_model["policy"] = {key: value for key, value in policy.items()
@@ -194,7 +219,7 @@ def referenced_types(value):
             yield from referenced_types(child)
 
 
-def apply_declaration_policy(declaration, policy, inherited=(), types=None, interfaces=()):
+def apply_declaration_policy(declaration, policy, inherited=(), types=None, interfaces=(), conventions=None):
     name = declaration["name"]
     kind = declaration["kind"]
     if kind == "external":
@@ -214,14 +239,14 @@ def apply_declaration_policy(declaration, policy, inherited=(), types=None, inte
             if missing:
                 raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
             declaration["methods"] = [method for method in declaration["methods"] if method["name"] in selection]
-        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited, types=types)
+        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited, types=types, interfaces=interfaces, conventions=conventions)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")
         for method in methods:
-            apply_callable_policy(method, method_policies.get(method["name"], {}), name + "::" + method["name"], interfaces)
+            apply_callable_policy(method, method_policies.get(method["name"], {}), name + "::" + method["name"], interfaces, conventions)
     elif kind == "function":
-        apply_callable_policy(declaration, policy, name, interfaces)
+        apply_callable_policy(declaration, policy, name, interfaces, conventions)
         return
     else:
         raise ModelError(f"{name}: unsupported declaration kind '{kind}'")
@@ -231,7 +256,7 @@ def apply_declaration_policy(declaration, policy, inherited=(), types=None, inte
     declaration["policy"] = {key: value for key, value in policy.items() if key not in ("fields", "methods")}
 
 
-def apply_policies(model, policies, symbols):
+def apply_policies(model, policies, symbols, conventions=None):
     """Validate and attach policies to a freshly extracted or JSON-loaded model.
 
     Mutates the supplied model. The result contains only JSON-compatible data,
@@ -239,6 +264,12 @@ def apply_policies(model, policies, symbols):
     """
     if model.get("schema_version") != 1:
         raise ModelError("Unsupported model schema_version")
+    if conventions is None:
+        conventions = model.get("conventions")
+    if conventions not in (None, "diligent"):
+        raise ModelError("Unsupported API conventions: " + str(conventions))
+    if conventions:
+        model["conventions"] = conventions
     for name, policy in policies.items():
         validate_binding(policy, name)
     declarations = model["declarations"]
@@ -279,7 +310,7 @@ def apply_policies(model, policies, symbols):
             iid = namespace + separator + "IID_" + short_name[1:]
             if short_name.startswith("I") and iid in symbols:
                 policy.setdefault("iid", iid)
-        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name, interfaces)
+        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name, interfaces, conventions)
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:

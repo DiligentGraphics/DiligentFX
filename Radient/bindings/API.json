@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "conventions": "diligent",
   "headers": [
     "Radient/interface/Radient.h",
     "../DiligentCore/Common/interface/ThreadPool.h",
@@ -59,7 +60,7 @@
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.",
           "parameters": {
-            "ppData": {"nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
+            "ppData": {"lifetime": "read_scope"}
           }
         },
         "EndRead": {"binding": "manual", "reason": "Called by the scoped read-access adapter."}
@@ -71,20 +72,10 @@
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.",
           "parameters": {
-            "ppData": {"nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
+            "ppData": {"lifetime": "write_scope"}
           }
         },
         "EndWrite": {"binding": "manual", "reason": "Called by the scoped write-access adapter."}
-      }
-    },
-    "Diligent::CreateRadientDataBlob": {
-      "parameters": {
-        "ppBlob": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-      }
-    },
-    "Diligent::CreateRadientMutableDataBlob": {
-      "parameters": {
-        "ppBlob": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
@@ -96,11 +87,6 @@
         "pThreadPool": {"binding": "manual", "reason": "Supplying a native thread pool requires a platform adapter."}
       }
     },
-    "Diligent::CreateRadientEngine": {
-      "parameters": {
-        "ppEngine": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-      }
-    },
     "Diligent::IRadientEngine": {
       "include_methods": [
         "CreateScene",
@@ -108,46 +94,16 @@
         "GetAssetManager",
         "CreateAnimationRegistry",
         "CreateSceneImporter"
-      ],
-      "methods": {
-        "CreateScene": {
-          "parameters": {
-            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateSceneWriter": {
-          "parameters": {
-            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "GetAssetManager": {
-          "parameters": {
-            "ppAssetManager": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateAnimationRegistry": {
-          "parameters": {
-            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppRegistry": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateSceneImporter": {
-          "parameters": {
-            "pWriter": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppImporter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        }
-      }
+      ]
     },
     "Diligent::RadientSceneDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientEntityDesc": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::IRadientScene": {
@@ -155,19 +111,14 @@
         "GetDesc": {
           "result": {"lifetime": "object"}
         },
-        "GetEntityName": {
-          "parameters": {
-            "Name": {"ownership": "borrowed", "lifetime": "call"}
-          }
-        },
         "GetRootEntities": {
           "parameters": {
-            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Capacity", "written": "NumEntitiesWritten"}
+            "pEntities": {"nullable": true, "length": "Capacity", "written": "NumEntitiesWritten"}
           }
         },
         "GetChildren": {
           "parameters": {
-            "pChildren": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChildCount", "written": "NumChildrenWritten"}
+            "pChildren": {"nullable": true, "length": "ChildCount", "written": "NumChildrenWritten"}
           }
         },
         "GetSceneRevisions": {
@@ -196,12 +147,9 @@
         "SetMorph"
       ],
       "methods": {
-        "GetScene": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        },
         "SetEntityName": {
           "parameters": {
-            "Name": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
+            "Name": {"nullable": true}
           }
         }
       }
@@ -217,341 +165,223 @@
         "CreateSkin",
         "CreateAnimationClip",
         "LoadScene"
-      ],
-      "methods": {
-        "CreateMesh": {
-          "parameters": {
-            "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "LoadTexture": {
-          "parameters": {
-            "ppTexture": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateStandardMaterialDefinition": {
-          "parameters": {
-            "ppDefinition": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateMaterial": {
-          "parameters": {
-            "pDefinition": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppMaterial": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateSkeleton": {
-          "parameters": {
-            "ppSkeleton": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateSkin": {
-          "parameters": {
-            "ppSkin": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "CreateAnimationClip": {
-          "parameters": {
-            "ppClip": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "LoadScene": {
-          "parameters": {
-            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        }
-      }
-    },
-    "Diligent::IRadientMeshAsset": {
-      "methods": {
-        "CreateMorphTargetWeights": {
-          "parameters": {
-            "ppWeights": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        }
-      }
+      ]
     },
     "Diligent::IRadientMaterialAsset": {
       "methods": {
-        "GetDefinition": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        },
-        "GetTexture": {
-          "parameters": {
-            "ppTexture": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
         "GetParameter": {
           "parameters": {
-            "pData": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
-          }
-        },
-        "CreateWriter": {
-          "parameters": {
-            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "pData": {"length": "DataSize"}
           }
         }
       }
     },
     "Diligent::RadientAssetManagerDesc": {
       "fields": {
-        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "out", "nullable": true}
       }
     },
     "Diligent::RadientAssetReference": {
       "fields": {
-        "URI": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
-      }
-    },
-    "Diligent::GetRadientAssetLoadStatus": {
-      "parameters": {
-        "pAsset": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
-      }
-    },
-    "Diligent::CreateRadientCubeMesh": {
-      "parameters": {
-        "pAssetManager": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-      }
-    },
-    "Diligent::CreateRadientSphereMesh": {
-      "parameters": {
-        "pAssetManager": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "URI": {"direction": "out", "nullable": true}
       }
     },
     "Diligent::RadientCubeMeshCreateInfo": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pFaceColors": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": 6}
+        "Name": {"direction": "in", "nullable": true},
+        "pMaterial": {"direction": "in", "nullable": true},
+        "pFaceColors": {"direction": "in", "nullable": true, "length": 6}
       }
     },
     "Diligent::RadientSphereMeshCreateInfo": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "in", "nullable": true},
+        "pMaterial": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientMeshCreateInfo": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pPrimitives": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "PrimitiveCount"}
+        "Name": {"direction": "in", "nullable": true},
+        "pPrimitives": {"direction": "in", "nullable": true, "length": "PrimitiveCount"}
       }
     },
     "Diligent::RadientMeshVertexData": {
       "fields": {
-        "ppVertexBuffers": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "VertexLayout.BufferCount", "element_nullable": true}
+        "ppVertexBuffers": {"direction": "in", "nullable": true, "length": "VertexLayout.BufferCount", "element_nullable": true}
       }
     },
     "Diligent::RadientMeshIndexData": {
       "fields": {
-        "pIndexBuffer": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pIndexBuffer": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientMeshPrimitiveCreateInfo": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pMaterial": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "in", "nullable": true},
+        "pMaterial": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientVertexLayoutDesc": {
       "fields": {
-        "pAttributes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AttributeCount"},
-        "pBuffers": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BufferCount"}
+        "pAttributes": {"direction": "inout", "nullable": true, "length": "AttributeCount"},
+        "pBuffers": {"direction": "inout", "nullable": true, "length": "BufferCount"}
       }
     },
     "Diligent::RadientVertexAttributeDesc": {
       "fields": {
-        "Semantic": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+        "Semantic": {"direction": "inout"}
       }
     },
     "Diligent::RadientMeshPrimitiveDesc": {
       "fields": {
-        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pMaterial": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "out", "nullable": true},
+        "pMaterial": {"direction": "out", "nullable": true}
       }
     },
     "Diligent::RadientMeshAssetDesc": {
       "fields": {
-        "pGeometries": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "GeometryCount"},
-        "pPrimitives": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "PrimitiveCount"},
-        "pMorphTargets": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MorphTargetCount"}
+        "pGeometries": {"direction": "out", "nullable": true, "length": "GeometryCount"},
+        "pPrimitives": {"direction": "out", "nullable": true, "length": "PrimitiveCount"},
+        "pMorphTargets": {"direction": "out", "nullable": true, "length": "MorphTargetCount"}
       }
     },
     "Diligent::RadientMeshMorphTargetData": {
       "fields": {
-        "pMorphTargets": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MorphTargetCount"}
+        "pMorphTargets": {"direction": "in", "nullable": true, "length": "MorphTargetCount"}
       }
     },
     "Diligent::RadientMorphTargetDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pAttributes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AttributeCount"}
+        "Name": {"direction": "inout", "nullable": true},
+        "pAttributes": {"direction": "inout", "nullable": true, "length": "AttributeCount"}
       }
     },
     "Diligent::RadientMorphTargetAttributeDesc": {
       "fields": {
-        "Semantic": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+        "Semantic": {"direction": "inout"}
       }
     },
     "Diligent::RadientMorphTargetCreateInfo": {
       "fields": {
-        "pAttributeData": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Desc.AttributeCount"}
+        "pAttributeData": {"direction": "in", "nullable": true, "length": "Desc.AttributeCount"}
       }
     },
     "Diligent::RadientMorphTargetAttributeCreateInfo": {
       "fields": {
-        "pDeltaBuffer": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+        "pDeltaBuffer": {"direction": "in"}
       }
     },
     "Diligent::RadientMeshComponent": {
       "fields": {
-        "pMesh": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pMesh": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientTextureLoadInfo": {
       "fields": {
-        "URI": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "BaseURI": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pDataBlob": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pTextureData": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "URI": {"direction": "in", "nullable": true},
+        "BaseURI": {"direction": "in", "nullable": true},
+        "pDataBlob": {"direction": "in", "nullable": true},
+        "pTextureData": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientTextureData": {
       "fields": {
-        "pMipLevels": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MipLevelCount"}
+        "pMipLevels": {"direction": "in", "nullable": true, "length": "MipLevelCount"}
       }
     },
     "Diligent::RadientTextureMipData": {
       "fields": {
-        "pDataBlob": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
-      }
-    },
-    "Diligent::IRadientMaterialDefinitionAsset": {
-      "methods": {
-        "GetParameterHandle": {
-          "parameters": {
-            "pHandle": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
-          }
-        },
-        "FindParameter": {
-          "parameters": {
-            "Name": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pHandle": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
-          }
-        }
+        "pDataBlob": {"direction": "in"}
       }
     },
     "Diligent::RadientMaterialDefinitionDesc": {
       "fields": {
-        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pParameters": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ParameterCount"}
+        "Name": {"direction": "out", "nullable": true},
+        "pParameters": {"direction": "out", "nullable": true, "length": "ParameterCount"}
       }
     },
     "Diligent::RadientMaterialParameterDesc": {
       "fields": {
-        "Name": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pDefaultTexture": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
+        "Name": {"direction": "out", "nullable": true},
+        "pDefaultTexture": {"direction": "out", "nullable": true},
         "pDefaultValue": {"binding": "manual", "reason": "The byte count is derived from the reflected parameter type and array size."}
       }
     },
     "Diligent::RadientMaterialBinding": {
       "fields": {
-        "pMaterial": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pMaterial": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientMaterialBindingsComponent": {
       "fields": {
-        "pBindings": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
+        "pBindings": {"direction": "inout", "nullable": true, "length": "BindingCount"}
       }
     },
     "Diligent::RadientStandardMaterialTextureParameterNames": {
       "fields": {
-        "Texture": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVSelector": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVScale": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVRotation": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "UVBias": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "WrapU": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "WrapV": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Texture": {"direction": "inout", "nullable": true},
+        "UVSelector": {"direction": "inout", "nullable": true},
+        "UVScale": {"direction": "inout", "nullable": true},
+        "UVRotation": {"direction": "inout", "nullable": true},
+        "UVBias": {"direction": "inout", "nullable": true},
+        "WrapU": {"direction": "inout", "nullable": true},
+        "WrapV": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::IRadientMaterialWriter": {
       "methods": {
         "SetParameter": {
           "parameters": {
-            "pData": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
+            "pData": {"length": "DataSize"}
           }
         },
         "SetTexture": {
           "parameters": {
-            "pTexture": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
+            "pTexture": {"nullable": true}
           }
         }
       }
     },
     "Diligent::RadientStandardMaterialTextureParameters": {
       "fields": {
-        "pTexture": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pTexture": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientSkeletonDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pJoints": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+        "Name": {"direction": "inout", "nullable": true},
+        "pJoints": {"direction": "inout", "nullable": true, "length": "JointCount"}
       }
     },
     "Diligent::RadientSkeletonJointDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientSkinDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pSkeleton": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "pJoints": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
-      }
-    },
-    "Diligent::IRadientSkeletonAsset": {
-      "methods": {
-        "CreatePose": {
-          "parameters": {
-            "ppPose": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        }
+        "Name": {"direction": "inout", "nullable": true},
+        "pSkeleton": {"direction": "inout"},
+        "pJoints": {"direction": "inout", "nullable": true, "length": "JointCount"}
       }
     },
     "Diligent::IRadientSkeletonPose": {
       "methods": {
-        "GetSkeleton": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        },
         "GetJointLocalTransforms": {
           "parameters": {
-            "pTransforms": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pTransforms": {"length": "JointCount"}
           }
         },
         "GetJointGlobalMatrices": {
           "parameters": {
-            "pMatrices": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pMatrices": {"length": "JointCount"}
           }
         },
         "ComputeSkinningMatrices": {
           "parameters": {
-            "pSkin": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "pMatrices": {
-              "nullable": false,
-              "ownership": "borrowed",
-              "lifetime": "call",
               "length_from": {"parameter": "pSkin", "method": "GetDesc", "field": "JointCount"}
             }
-          }
-        },
-        "CreateWriter": {
-          "parameters": {
-            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -560,86 +390,67 @@
       "methods": {
         "SetJointLocalTransforms": {
           "parameters": {
-            "pTransforms": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pTransforms": {"nullable": true, "length": "JointCount"}
           }
         }
       }
     },
     "Diligent::RadientSkinComponent": {
       "fields": {
-        "pSkin": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pPose": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pSkin": {"direction": "inout", "nullable": true},
+        "pPose": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::IRadientMorphTargetWeights": {
       "methods": {
-        "GetMesh": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        },
         "GetWeights": {
-          "result": {"nullable": true, "ownership": "borrowed", "lifetime": "object", "length_method": "GetWeightCount"}
+          "result": {"nullable": true, "lifetime": "object", "length_method": "GetWeightCount"}
         },
         "SetWeights": {
           "parameters": {
-            "pWeights": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "WeightCount"}
+            "pWeights": {"nullable": true, "length": "WeightCount"}
           }
         }
       }
     },
     "Diligent::RadientMorphComponent": {
       "fields": {
-        "pWeights": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "pWeights": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientAnimationClipDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pTargets": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "TargetCount"},
-        "pSamplers": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "SamplerCount"},
-        "pChannels": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChannelCount"}
+        "Name": {"direction": "inout", "nullable": true},
+        "pTargets": {"direction": "inout", "nullable": true, "length": "TargetCount"},
+        "pSamplers": {"direction": "inout", "nullable": true, "length": "SamplerCount"},
+        "pChannels": {"direction": "inout", "nullable": true, "length": "ChannelCount"}
       }
     },
     "Diligent::RadientAnimationTargetDesc": {
       "fields": {
-        "Name": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "Name": {"direction": "inout", "nullable": true}
       }
     },
     "Diligent::RadientAnimationSamplerDesc": {
       "fields": {
-        "pTimes": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "KeyframeCount"},
-        "pValues": {"direction": "inout", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ValueDataSize"}
+        "pTimes": {"direction": "inout", "nullable": true, "length": "KeyframeCount"},
+        "pValues": {"direction": "inout", "nullable": true, "length": "ValueDataSize"}
       }
     },
     "Diligent::RadientAnimationChannelDesc": {
       "fields": {
-        "Property": {"direction": "inout", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+        "Property": {"direction": "inout"}
       }
     },
     "Diligent::RadientAnimationBindingDesc": {
       "fields": {
-        "pDestinations": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "DestinationCount"}
+        "pDestinations": {"direction": "in", "nullable": true, "length": "DestinationCount"}
       }
     },
     "Diligent::RadientAnimationDestinationDesc": {
       "fields": {
-        "pDestination": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "pMappings": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "MappingCount"}
-      }
-    },
-    "Diligent::IRadientAnimationClipAsset": {
-      "methods": {
-        "CreateBinding": {
-          "parameters": {
-            "ppBinding": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        }
-      }
-    },
-    "Diligent::IRadientAnimationBinding": {
-      "methods": {
-        "GetClip": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        }
+        "pDestination": {"direction": "in"},
+        "pMappings": {"direction": "in", "nullable": true, "length": "MappingCount"}
       }
     },
     "Diligent::IRadientAnimationDestination": {
@@ -647,68 +458,44 @@
     },
     "Diligent::IRadientAnimationRegistry": {
       "methods": {
-        "GetScene": {
-          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
-        },
         "AddAnimationBinding": {
           "parameters": {
-            "pBinding": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
+            "pEntities": {"nullable": true, "length": "EntityCount"}
           }
         },
         "RemoveAnimationBinding": {
           "parameters": {
-            "pBinding": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
-          }
-        },
-        "RemoveAnimationClip": {
-          "parameters": {
-            "pClip": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
+            "pEntities": {"nullable": true, "length": "EntityCount"}
           }
         }
       }
     },
     "Diligent::RadientAnimationRegistryState": {
       "fields": {
-        "pEntries": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntryCount"}
+        "pEntries": {"direction": "out", "nullable": true, "length": "EntryCount"}
       }
     },
     "Diligent::RadientAnimationRegistryEntry": {
       "fields": {
-        "pClip": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ppBindings": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
+        "pClip": {"direction": "out"},
+        "ppBindings": {"direction": "out", "nullable": true, "length": "BindingCount"}
       }
     },
     "Diligent::RadientSceneLoadInfo": {
       "fields": {
-        "URI": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ImporterId": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+        "URI": {"direction": "in"},
+        "ImporterId": {"direction": "in", "nullable": true}
       }
     },
     "Diligent::RadientSceneAssetDesc": {
       "fields": {
-        "ppAnimationClips": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "AnimationClipCount"}
+        "ppAnimationClips": {"direction": "out", "nullable": true, "length": "AnimationClipCount"}
       }
     },
     "Diligent::RadientSceneInstantiateInfo": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"},
-        "pAnimationRegistry": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
-      }
-    },
-    "Diligent::IRadientSceneImporter": {
-      "methods": {
-        "ImportScene": {
-          "parameters": {
-            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
-          }
-        },
-        "InstantiateScene": {
-          "parameters": {
-            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
-          }
-        }
+        "Name": {"direction": "in", "nullable": true},
+        "pAnimationRegistry": {"direction": "in", "nullable": true}
       }
     }
   }
