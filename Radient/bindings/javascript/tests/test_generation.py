@@ -38,6 +38,20 @@ class RadientGenerationTest(unittest.TestCase):
             self.assertNotIn(name, types)
             self.assertNotIn(name, js)
 
+    def test_standalone_id_types_and_constants(self):
+        _, js, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
+        for name in ("RadientHandle", "RadientFrameID", "RadientAnimationObjectID",
+                     "RadientAnimationDestinationElement"):
+            with self.subTest(alias=name):
+                self.assertIn(f"export type {name} = bigint;", types)
+                self.assertNotIn(f"export const {name} =", js)
+        self.assertIn("export type RadientAnimationSchemaID = INTERFACE_ID;", types)
+        for name in ("InvalidRadientHandle", "InvalidRadientComponentTypeID", "InvalidRadientFrameID"):
+            with self.subTest(constant=name):
+                self.assertIn(f"export const {name}: bigint;", types)
+                self.assertIn(f"readonly {name}: typeof {name};", types)
+        self.assertIn("export const RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT: number;", types)
+
     def test_inherited_interfaces_and_scopes(self):
         _, _, types = Generator(MODEL, "Radient", ["RadientDataBlob.h", "RadientEngine.h"], ADAPTERS).generate()
         self.assertIn("IRadientMutableDataBlob extends IRadientDataBlob", types)

@@ -5,6 +5,7 @@ The model and generator tests separately check declarations and metadata.
 
 | Suite | Executed API |
 | --- | --- |
+| `exports_tests.mjs` | Standalone invalid IDs and the active morph-target limit; named typedefs are checked by generation tests |
 | `data_blob_tests.mjs` | Owning factories; size, scoped reads/writes, resize, QueryInterface and disposal |
 | `scene_tests.mjs` | Engine/scene/writer creation; hierarchy, names, flags, visibility, transforms, revisions and commit |
 | `components_tests.mjs` | Camera/light getters/setters; component presence and removal |
