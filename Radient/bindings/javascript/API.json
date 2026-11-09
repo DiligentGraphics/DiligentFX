@@ -17,14 +17,12 @@
   "field_policies": {
     "Diligent::RadientDataBlobCreateInfo": {
       "pData": {
-        "direction": "in",
         "nullable": true,
         "binding": "automatic"
       }
     },
     "Diligent::RadientMaterialParameterDesc": {
       "pDefaultValue": {
-        "direction": "out",
         "nullable": true,
         "binding": "automatic"
       }

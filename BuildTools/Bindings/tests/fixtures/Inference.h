@@ -42,6 +42,7 @@ typedef struct BindingTestLink BindingTestLink;
 
 struct BindingTestEnvelope DILIGENT_DERIVE(BindingTestExtendedDesc)
     BindingTestVector Basis[2];
+    BindingTestLink Links[2];
     const BindingTestLink* pLink DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct BindingTestEnvelope BindingTestEnvelope;
@@ -50,6 +51,8 @@ typedef BindingTestEnvelope BindingTestEnvelopeAlias;
 #include "DefineRefMacro.h"
 
 void DILIGENT_GLOBAL_FUNCTION(UseBindingTestEnvelope)(const BindingTestEnvelopeAlias REF Desc);
+void DILIGENT_GLOBAL_FUNCTION(GetBindingTestEnvelope)(BindingTestEnvelope REF Desc);
+const BindingTestEnvelope REF DILIGENT_GLOBAL_FUNCTION(GetBindingTestEnvelopeSnapshot)(void);
 const BindingTestVector REF DILIGENT_GLOBAL_FUNCTION(GetBindingTestVector)(void);
 void DILIGENT_GLOBAL_FUNCTION(EditBindingTestVector)(BindingTestVector REF Value);
 

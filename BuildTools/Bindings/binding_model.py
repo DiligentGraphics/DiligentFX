@@ -50,8 +50,8 @@ def inferred_value_policy(value, *, is_result=False, is_field=False, interfaces=
     Value references are marshalled during the call (results are snapshots).
     An API retaining an input reference must explicitly override that lifetime.
     Mutable value arguments default to outputs; interface arguments are inputs.
-    Inout and mutable input storage require overrides. Pointer ownership/lifetime
-    and field directions remain explicit.
+    Inout and mutable input storage require overrides. Record-usage analysis
+    supplies field directions; API conventions can supply pointer contracts.
     """
     native_type = unalias(value["type"])
     if native_type["kind"] not in ("pointer", "reference"):
@@ -70,6 +70,61 @@ def inferred_value_policy(value, *, is_result=False, is_field=False, interfaces=
         if target["kind"] not in ("pointer", "reference", "function"):
             policy.update(ownership="borrowed", lifetime="call")
     return policy
+
+
+def record_usage(types, policies=None):
+    """Propagate input/output use through records, bases, arrays, and pointers.
+
+    Descriptor fields follow the enclosing descriptor's marshalling direction;
+    indirect writable buffers can override that convention. The same analysis is
+    used before policy validation and by emitters consuming a resolved model.
+    """
+    policies = policies or {}
+    inputs, outputs, storage = set(), set(), set()
+
+    def include(native, used):
+        native = unalias(native)
+        while native["kind"] in ("reference", "pointer", "array"):
+            native = unalias(native["element"] if native["kind"] == "array" else native["target"])
+        declaration = types.get(native.get("name"), {})
+        if declaration.get("kind") != "record" or declaration["name"] in used:
+            return
+        used.add(declaration["name"])
+        for base in declaration["bases"]:
+            include({"kind": "named", "name": base, "const": False, "volatile": False}, used)
+        for field in declaration["fields"]:
+            include(field["type"], used)
+
+    for name, declaration in types.items():
+        policy = policies.get(name, {})
+        if declaration["kind"] == "constant":
+            include(declaration["type"], outputs)
+        callables = [declaration] if declaration["kind"] == "function" else declaration.get("methods", [])
+        for function in callables:
+            if declaration["kind"] == "function":
+                overrides = policy
+            else:
+                if "include_methods" in policy and function["name"] not in policy["include_methods"]:
+                    continue
+                overrides = policy.get("methods", {}).get(function["name"], {})
+            include(function["result"]["type"], outputs)
+            for parameter in function["parameters"]:
+                effective = dict(inferred_value_policy(parameter), **parameter.get("policy", {}))
+                effective.update(overrides.get("parameters", {}).get(parameter["name"], {}))
+                direction = effective.get("direction", "in")
+                if direction != "out":
+                    include(parameter["type"], inputs)
+                if direction in ("out", "inout"):
+                    include(parameter["type"], outputs)
+                    native = unalias(parameter["type"])
+                    target = unalias(native["target"]) if native["kind"] in ("pointer", "reference") else {}
+                    if types.get(target.get("name"), {}).get("kind") == "record":
+                        storage.add(target["name"])
+    # Standalone descriptors still need constructors and input marshalling.
+    for name, declaration in types.items():
+        if declaration["kind"] == "record" and name not in outputs:
+            include({"kind": "named", "name": name, "const": False, "volatile": False}, inputs)
+    return inputs, outputs, inputs | storage
 
 
 def pointer_defaults(value, policy, *, is_result=False, is_field=False, interfaces=()):
@@ -95,10 +150,12 @@ def pointer_defaults(value, policy, *, is_result=False, is_field=False, interfac
     return {"nullable": False, "ownership": ownership, "lifetime": lifetime}
 
 
-def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=(), conventions=None):
+def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=(), conventions=None, field_direction=None):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
+    if is_field and field_direction and native_type["kind"] in ("pointer", "reference"):
+        policy = dict({"direction": field_direction}, **policy)
     if binding == "automatic":
         policy = dict(inferred_value_policy(value, is_result=is_result, is_field=is_field, interfaces=interfaces), **policy)
         if conventions == "diligent":
@@ -187,12 +244,12 @@ def validate_length_policy(value, siblings, context, types=None, *, is_field=Fal
         resolve_span_length(policy["length"], siblings, context, types, field=is_field)
 
 
-def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None, interfaces=(), conventions=None):
+def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None, interfaces=(), conventions=None, field_direction=None):
     by_name = {value["name"]: value for value in (*inherited, *values)}
     validate_keys(policies, {value["name"] for value in values}, context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
-        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field, interfaces=interfaces, conventions=conventions)
+        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field, interfaces=interfaces, conventions=conventions, field_direction=field_direction)
     for value in values:
         validate_length_policy(value, by_name, f"{context}::{value['name']}", types, is_field=is_field)
 
@@ -219,7 +276,7 @@ def referenced_types(value):
             yield from referenced_types(child)
 
 
-def apply_declaration_policy(declaration, policy, inherited=(), types=None, interfaces=(), conventions=None):
+def apply_declaration_policy(declaration, policy, inherited=(), types=None, interfaces=(), conventions=None, field_direction=None):
     name = declaration["name"]
     kind = declaration["kind"]
     if kind == "external":
@@ -239,7 +296,7 @@ def apply_declaration_policy(declaration, policy, inherited=(), types=None, inte
             if missing:
                 raise ModelError(f"{name}: unknown selected methods: {', '.join(sorted(missing))}")
             declaration["methods"] = [method for method in declaration["methods"] if method["name"] in selection]
-        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited, types=types, interfaces=interfaces, conventions=conventions)
+        apply_values_policy(declaration["fields"], policy.get("fields", {}), name, is_field=True, inherited=inherited, types=types, interfaces=interfaces, conventions=conventions, field_direction=field_direction)
         methods = declaration["methods"]
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")
@@ -298,6 +355,7 @@ def apply_policies(model, policies, symbols, conventions=None):
         return (policies.get(name, {}).get("ownership") == "reference_counted" or
                 any(reference_counted(base) for base in by_name.get(name, {}).get("bases", [])))
 
+    input_records, output_records, _ = record_usage(by_name, policies)
     for declaration in declarations:
         name = declaration["name"]
         policy = dict(policies.get(name, {}))
@@ -310,7 +368,9 @@ def apply_policies(model, policies, symbols, conventions=None):
             iid = namespace + separator + "IID_" + short_name[1:]
             if short_name.startswith("I") and iid in symbols:
                 policy.setdefault("iid", iid)
-        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name, interfaces, conventions)
+        field_direction = ("inout" if name in input_records and name in output_records else
+                           "out" if name in output_records else "in")
+        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name, interfaces, conventions, field_direction)
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:

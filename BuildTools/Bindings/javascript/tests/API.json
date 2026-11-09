@@ -144,8 +144,8 @@
     "Diligent::MarshalNestedCountDesc": {
       "fields": {
         "pComputed": {"binding": "manual", "reason": "The native adapter computes the element count."},
-        "pValues": {"direction": "in", "nullable": true, "length": "Counts.ItemCount"},
-        "pPair": {"direction": "in", "nullable": true, "length": 2}
+        "pValues": {"nullable": true, "length": "Counts.ItemCount"},
+        "pPair": {"nullable": true, "length": 2}
       }
     },
     "Diligent::IObject": {
@@ -158,7 +158,7 @@
     "Diligent::GetObjectSize": {"parameters": {"pObject": {"nullable": true}}},
     "Diligent::MarshalBufferDesc": {
       "fields": {
-        "pBytes": {"direction": "in", "nullable": true, "length": "ByteCount"}
+        "pBytes": {"nullable": true, "length": "ByteCount"}
       }
     },
     "Diligent::IMarshalBytes": {
@@ -185,8 +185,7 @@
     },
     "Diligent::MarshalStringDesc": {
       "fields": {
-        "Name": {"direction": "inout"},
-        "Label": {"direction": "inout", "nullable": true}
+        "Label": {"nullable": true}
       }
     },
     "Diligent::IMarshalStrings": {
@@ -216,13 +215,13 @@
     },
     "Diligent::MarshalNestedData": {
       "fields": {
-        "Name": {"direction": "in", "nullable": true},
-        "pBytes": {"direction": "in", "nullable": true, "length": "ByteCount"}
+        "Name": {"nullable": true},
+        "pBytes": {"nullable": true, "length": "ByteCount"}
       }
     },
     "Diligent::GetNestedName": {"result": {"nullable": true}},
-    "Diligent::MarshalSnapshotDesc": {"fields": {"Name": {"direction": "out", "lifetime": "object"}}},
-    "Diligent::MarshalSnapshotChild": {"fields": {"Label": {"direction": "out", "nullable": true, "lifetime": "object"}}},
+    "Diligent::MarshalSnapshotDesc": {"fields": {"Name": {"lifetime": "object"}}},
+    "Diligent::MarshalSnapshotChild": {"fields": {"Label": {"nullable": true, "lifetime": "object"}}},
     "Diligent::IMarshalSnapshots": {
       "methods": {
         "GetDesc": {"result": {"lifetime": "object"}},
@@ -238,14 +237,13 @@
     "Diligent::GetStaticDescriptor": {"result": {"lifetime": "static"}},
     "Diligent::MarshalArrayItem": {
       "fields": {
-        "Name": {"direction": "in"},
-        "pValues": {"direction": "in", "nullable": true, "length": "ValueCount"}
+        "pValues": {"nullable": true, "length": "ValueCount"}
       }
     },
     "Diligent::MarshalArrayDesc": {
       "fields": {
-        "pItems": {"direction": "in", "nullable": true, "length": "ItemCount"},
-        "pSamples": {"direction": "in", "nullable": true, "length": "SampleCount"}
+        "pItems": {"nullable": true, "length": "ItemCount"},
+        "pSamples": {"nullable": true, "length": "SampleCount"}
       }
     },
     "Diligent::CheckArrayInt8": {
@@ -294,9 +292,8 @@
     },
     "Diligent::MarshalOutputArrayItem": {
       "fields": {
-        "Label": {"direction": "inout", "nullable": true},
+        "Label": {"nullable": true},
         "pSamples": {
-          "direction": "inout",
           "nullable": true,
           "length": "SampleCount"
         }
@@ -305,7 +302,6 @@
     "Diligent::MarshalOutputArrayGroup": {
       "fields": {
         "pItems": {
-          "direction": "out",
           "nullable": true,
           "lifetime": "object",
           "length": "ItemCount"
@@ -314,25 +310,23 @@
     },
     "Diligent::MarshalOutputArrayDesc": {
       "fields": {
-        "pInt8": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pUint8": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pInt16": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pUint16": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pInt32": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pUint32": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pInt64": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pUint64": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pFloat32": {"direction": "out", "lifetime": "object", "length": "Count"},
+        "pInt8": {"lifetime": "object", "length": "Count"},
+        "pUint8": {"lifetime": "object", "length": "Count"},
+        "pInt16": {"lifetime": "object", "length": "Count"},
+        "pUint16": {"lifetime": "object", "length": "Count"},
+        "pInt32": {"lifetime": "object", "length": "Count"},
+        "pUint32": {"lifetime": "object", "length": "Count"},
+        "pInt64": {"lifetime": "object", "length": "Count"},
+        "pUint64": {"lifetime": "object", "length": "Count"},
+        "pFloat32": {"lifetime": "object", "length": "Count"},
         "pFloat64": {
-          "direction": "out",
           "lifetime": "object",
           "length": "WideCount"
         },
-        "pBool": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pMARSHAL_MODE": {"direction": "out", "lifetime": "object", "length": "Count"},
-        "pChar": {"direction": "out", "lifetime": "object", "length": "Count"},
+        "pBool": {"lifetime": "object", "length": "Count"},
+        "pMARSHAL_MODE": {"lifetime": "object", "length": "Count"},
+        "pChar": {"lifetime": "object", "length": "Count"},
         "pGroups": {
-          "direction": "out",
           "lifetime": "object",
           "length": "GroupCount"
         }
@@ -340,14 +334,11 @@
     },
     "Diligent::MarshalArrayRoundTrip": {
       "fields": {
-        "Name": {"direction": "inout"},
         "pItems": {
-          "direction": "inout",
           "nullable": true,
           "length": "ItemCount"
         },
         "pValues": {
-          "direction": "inout",
           "nullable": true,
           "length": "ValueCount"
         }
@@ -371,9 +362,7 @@
     "Diligent::GetStaticOutputArray": {"result": {"nullable": true, "lifetime": "static", "length": "Count"}},
     "Diligent::MarshalFixedChild": {
       "fields": {
-        "Label": {"direction": "inout"},
         "pExtra": {
-          "direction": "inout",
           "nullable": true,
           "length": "ExtraCount"
         }
@@ -381,7 +370,7 @@
     },
     "Diligent::GetFixedArrays": {"result": {"lifetime": "static"}},
     "Diligent::GetFixedReadOnlyArrays": {"result": {"lifetime": "static"}},
-    "Diligent::MarshalOutputRecord": {"fields": {"Label": {"direction": "out", "lifetime": "static"}}},
+    "Diligent::MarshalOutputRecord": {"fields": {"Label": {"lifetime": "static"}}},
     "Diligent::FillIds": {
       "parameters": {
         "pIds": {
@@ -415,14 +404,12 @@
     },
     "Diligent::MarshalInterfaceDesc": {
       "fields": {
-        "pObject": {"direction": "inout", "nullable": true},
+        "pObject": {"nullable": true},
         "ppObjects": {
-          "direction": "inout",
           "nullable": true,
           "length": "Count",
           "element_nullable": true
-        },
-        "Label": {"direction": "inout"}
+        }
       }
     },
     "Diligent::SumInterfaceArray": {
@@ -433,7 +420,7 @@
         }
       }
     },
-    "Diligent::MarshalPointerDesc": {"fields": {"pData": {"direction": "inout", "nullable": true}}},
+    "Diligent::MarshalPointerDesc": {"fields": {"pData": {"nullable": true}}},
     "Diligent::ReadStructPointer": {"parameters": {"pData": {"nullable": true}}},
     "Diligent::EchoStructPointer": {
       "parameters": {"pData": {"nullable": true}},
@@ -441,10 +428,9 @@
     },
     "Diligent::MarshalDerivedDesc": {
       "fields": {
-        "pValues": {"direction": "inout", "nullable": true, "length": "Count"}
+        "pValues": {"nullable": true, "length": "Count"}
       }
     },
-    "Diligent::MarshalExportNames": {"fields": {"Name": {"direction": "inout"}}},
     "Diligent::DefaultPointer": {"parameters": {"pDesc": {"nullable": true}}},
     "Diligent::DefaultArrayCount": {"result": {"lifetime": "static", "length": "Count"}},
     "Diligent::IMarshalComputedOutputs": {

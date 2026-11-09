@@ -214,8 +214,14 @@ The model fills in the following information before language generation:
   `const char**` is an output, while `char* const*` is an input. Returned
   pointer/reference values are outputs. Use explicit `direction: inout` for
   parameters that both read and write caller data, or `direction: in` for mutable
-  input buffers. Pointer fields still need an explicit direction, since their
-  containing descriptor may be used for input, output, or both.
+  input buffers.
+- Descriptor-field directions follow the selected API's use of their containing
+  record: input, output, or both. This propagates through base descriptors, embedded
+  records, fixed arrays, and pointer fields. Constants contribute output use;
+  standalone descriptors default to input use. Explicit field directions override
+  this convention, for example for an indirect output buffer in an input descriptor.
+  This describes marshalling, not whether C++ permits writing through a member.
+  A `const` descriptor can still hold a writable pointer.
 - Ordinary value references use borrowed, call-scoped storage; returned values
   are copied to snapshots. APIs retaining a value reference must explicitly
   override its lifetime. References to pointers still require the pointed-to

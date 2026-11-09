@@ -9,7 +9,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from binding_model import ModelError, apply_values_policy, resolve_span_length, unalias
+from binding_model import ModelError, apply_values_policy, record_usage, resolve_span_length, unalias
 
 
 def short(name):
@@ -416,46 +416,6 @@ class Generator:
             raise ModelError(f"{name}: inherited descriptor fields must have distinct names")
         return fields
 
-    def record_usage(self):
-        """Find input and returned records, including their embedded value structs."""
-        inputs, outputs, storage = set(), set(), set()
-
-        def include(t, used):
-            t = unalias(t)
-            if t["kind"] in ("reference", "pointer"):
-                t = unalias(t["target"])
-            while t["kind"] == "array":
-                t = unalias(t["element"])
-            d = self.types.get(t.get("name"), {})
-            if d.get("kind") != "record" or d["name"] in used:
-                return
-            used.add(d["name"])
-            for base in d["bases"]:
-                include({"kind": "named", "name": base, "const": False, "volatile": False}, used)
-            for field in d["fields"]:
-                include(field["type"], used)
-
-        for d in self.types.values():
-            if d["kind"] == "constant":
-                include(d["type"], outputs)
-            callables = [d] if d["kind"] == "function" else d.get("methods", [])
-            for function in callables:
-                include(function["result"]["type"], outputs)
-                for parameter in function["parameters"]:
-                    is_output = parameter.get("policy", {}).get("direction") == "out"
-                    include(parameter["type"], outputs if is_output else inputs)
-                    if is_output:
-                        t = unalias(parameter["type"])
-                        inner = unalias(t["target"]) if t["kind"] in ("pointer", "reference") else {}
-                        if self.types.get(inner.get("name"), {}).get("kind") == "record":
-                            storage.add(inner["name"])
-        # Preserve input descriptor generation for explicitly selected records
-        # that are not used as results (including standalone descriptor models).
-        for name, d in self.types.items():
-            if d["kind"] == "record" and name not in outputs:
-                include({"kind": "named", "name": name, "const": False, "volatile": False}, inputs)
-        return inputs, outputs, inputs | storage
-
     def interface_value(self, value, context, *, output=False, field=False):
         t, policy = unalias(value["type"]), value.get("policy", {})
         inner = unalias(t["target"]) if t["kind"] == "pointer" else {}
@@ -847,7 +807,7 @@ class Generator:
         return (str(value) + 'n' if kind in ('i64', 'u64') else json.dumps(value)), ts_scalar(kind)
 
     def generate(self):
-        self.input_records, self.output_records, self.storage_records = self.record_usage()
+        self.input_records, self.output_records, self.storage_records = record_usage(self.types)
         if self.output_records:
             self.ts += ['export type StructSnapshot<T> = T extends ArrayBufferView | NativeObject ? T :',
                         '  T extends ReadonlyArray<infer E> ? Array<StructSnapshot<E>> : T extends object ?',
