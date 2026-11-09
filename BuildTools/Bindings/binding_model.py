@@ -43,13 +43,15 @@ def validate_method_selection(names, context):
         raise ModelError(f"{context}: include_methods must be a list of unique method names")
 
 
-def inferred_value_policy(value, *, is_result=False, is_field=False):
+def inferred_value_policy(value, *, is_result=False, is_field=False, interfaces=()):
     """Derive ordinary value-reference marshalling from the native type.
 
     References are non-null and do not transfer ownership of their storage.
     Value references are marshalled during the call (results are snapshots).
     An API retaining an input reference must explicitly override that lifetime.
-    Pointer ownership/lifetime and mutable argument direction remain explicit.
+    Mutable value arguments default to outputs; interface arguments are inputs.
+    Inout and mutable input storage require overrides. Pointer ownership/lifetime
+    and field directions remain explicit.
     """
     native_type = unalias(value["type"])
     if native_type["kind"] not in ("pointer", "reference"):
@@ -58,8 +60,11 @@ def inferred_value_policy(value, *, is_result=False, is_field=False):
     policy = {}
     if is_result:
         policy["direction"] = "out"
-    elif not is_field and target["const"]:
-        policy["direction"] = "in"
+    elif not is_field:
+        # Inspect the immediate pointee/referent, after resolving typedefs.
+        # const char** writes a pointer, while char* const* reads pointers.
+        is_interface = target["kind"] == "named" and target["name"] in interfaces
+        policy["direction"] = "in" if target["const"] or is_interface else "out"
     if native_type["kind"] == "reference":
         policy["nullable"] = False
         if target["kind"] not in ("pointer", "reference", "function"):
@@ -67,12 +72,12 @@ def inferred_value_policy(value, *, is_result=False, is_field=False):
     return policy
 
 
-def apply_value_policy(value, policy, context, *, is_result=False, is_field=False):
+def apply_value_policy(value, policy, context, *, is_result=False, is_field=False, interfaces=()):
     validate_keys(policy, VALUE_KEYS, context)
     binding = validate_binding(policy, context)
     native_type = unalias(value["type"])
     if binding == "automatic":
-        policy = dict(inferred_value_policy(value, is_result=is_result, is_field=is_field), **policy)
+        policy = dict(inferred_value_policy(value, is_result=is_result, is_field=is_field, interfaces=interfaces), **policy)
     if binding == "external":
         raise ModelError(f"{context}: external binding is only valid for declarations")
     if native_type["kind"] in ("pointer", "reference") and binding == "automatic":
@@ -106,7 +111,7 @@ def apply_value_policy(value, policy, context, *, is_result=False, is_field=Fals
     # Returned pointers and pointer-valued fields may refer to const data.
     # Only output parameters require caller-provided writable pointee storage.
     if (not (is_result or is_field) and policy.get("direction") in ("out", "inout") and
-            native_type["kind"] in ("pointer", "reference") and native_type["target"]["const"]):
+            native_type["kind"] in ("pointer", "reference") and unalias(native_type["target"])["const"]):
         raise ModelError(f"{context}: output cannot point to const data")
     if policy:
         value["policy"] = policy
@@ -157,20 +162,20 @@ def validate_length_policy(value, siblings, context, types=None, *, is_field=Fal
         resolve_span_length(policy["length"], siblings, context, types, field=is_field)
 
 
-def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None):
+def apply_values_policy(values, policies, context, *, is_field=False, inherited=(), types=None, interfaces=()):
     by_name = {value["name"]: value for value in (*inherited, *values)}
     validate_keys(policies, {value["name"] for value in values}, context + " members")
     for value in values:
         policy = policies.get(value["name"], {})
-        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field)
+        apply_value_policy(value, policy, f"{context}::{value['name']}", is_field=is_field, interfaces=interfaces)
     for value in values:
         validate_length_policy(value, by_name, f"{context}::{value['name']}", types, is_field=is_field)
 
 
-def apply_callable_policy(callable_model, policy, context):
+def apply_callable_policy(callable_model, policy, context, interfaces=()):
     validate_keys(policy, {"binding", "reason", "parameters", "result"}, context)
     validate_binding(policy, context)
-    apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context)
+    apply_values_policy(callable_model["parameters"], policy.get("parameters", {}), context, interfaces=interfaces)
     apply_value_policy(callable_model["result"], policy.get("result", {}), context + " result", is_result=True)
     validate_length_policy(callable_model["result"],
                            {p["name"]: p for p in callable_model["parameters"]}, context + " result")
@@ -189,7 +194,7 @@ def referenced_types(value):
             yield from referenced_types(child)
 
 
-def apply_declaration_policy(declaration, policy, inherited=(), types=None):
+def apply_declaration_policy(declaration, policy, inherited=(), types=None, interfaces=()):
     name = declaration["name"]
     kind = declaration["kind"]
     if kind == "external":
@@ -214,9 +219,9 @@ def apply_declaration_policy(declaration, policy, inherited=(), types=None):
         method_policies = policy.get("methods", {})
         validate_keys(method_policies, {method["name"] for method in methods}, name + " methods")
         for method in methods:
-            apply_callable_policy(method, method_policies.get(method["name"], {}), name + "::" + method["name"])
+            apply_callable_policy(method, method_policies.get(method["name"], {}), name + "::" + method["name"], interfaces)
     elif kind == "function":
-        apply_callable_policy(declaration, policy, name)
+        apply_callable_policy(declaration, policy, name, interfaces)
         return
     else:
         raise ModelError(f"{name}: unsupported declaration kind '{kind}'")
@@ -242,6 +247,13 @@ def apply_policies(model, policies, symbols):
     if unused:
         raise ModelError("Policies refer to declarations outside the selected API: " + ", ".join(sorted(unused)))
     by_name = {declaration["name"]: declaration for declaration in declarations}
+    # Use declarations rather than interface-name prefixes. External interfaces
+    # are identified by their reference-counting contract, before policy application
+    # so inference does not depend on declaration order.
+    interfaces = {name for name, declaration in by_name.items()
+                  if declaration["kind"] == "interface" or
+                  (declaration["kind"] == "external" and
+                   policies.get(name, {}).get("ownership") == "reference_counted")}
 
     def base_fields(declaration):
         fields = []
@@ -267,7 +279,7 @@ def apply_policies(model, policies, symbols):
             iid = namespace + separator + "IID_" + short_name[1:]
             if short_name.startswith("I") and iid in symbols:
                 policy.setdefault("iid", iid)
-        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name)
+        apply_declaration_policy(declaration, policy, base_fields(declaration), by_name, interfaces)
         dependencies = set(referenced_types(declaration)) | set(declaration.get("bases", []))
         missing = dependencies - names
         if missing:

@@ -291,7 +291,7 @@
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginRead with EndRead; empty blobs may return a null data pointer.",
           "parameters": {
-            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
+            "ppData": {"nullable": false, "ownership": "borrowed", "lifetime": "read_scope"}
           }
         },
         "EndRead": {"binding": "manual", "reason": "Called by the scoped read-access adapter."}
@@ -303,7 +303,7 @@
           "binding": "manual",
           "reason": "A scoped access adapter retains the blob and pairs successful BeginWrite with EndWrite; empty blobs may return a null data pointer.",
           "parameters": {
-            "ppData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
+            "ppData": {"nullable": false, "ownership": "borrowed", "lifetime": "write_scope"}
           }
         },
         "EndWrite": {"binding": "manual", "reason": "Called by the scoped write-access adapter."}
@@ -311,12 +311,12 @@
     },
     "Diligent::CreateRadientDataBlob": {
       "parameters": {
-        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "ppBlob": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::CreateRadientMutableDataBlob": {
       "parameters": {
-        "ppBlob": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "ppBlob": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
@@ -330,7 +330,7 @@
     },
     "Diligent::CreateRadientEngine": {
       "parameters": {
-        "ppEngine": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "ppEngine": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::IRadientEngine": {
@@ -344,30 +344,30 @@
       "methods": {
         "CreateScene": {
           "parameters": {
-            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateSceneWriter": {
           "parameters": {
-            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "GetAssetManager": {
           "parameters": {
-            "ppAssetManager": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppAssetManager": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateAnimationRegistry": {
           "parameters": {
-            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppRegistry": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppRegistry": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateSceneImporter": {
           "parameters": {
-            "pWriter": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppImporter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "pWriter": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppImporter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -415,108 +415,21 @@
         },
         "GetEntityName": {
           "parameters": {
-            "Name": {"direction": "out", "ownership": "borrowed", "lifetime": "call"}
-          }
-        },
-        "GetEntityFlags": {
-          "parameters": {
-            "Flags": {"direction": "out"}
-          }
-        },
-        "GetEntityOwnVisibility": {
-          "parameters": {
-            "Visible": {"direction": "out"}
-          }
-        },
-        "GetEntityEffectiveVisibility": {
-          "parameters": {
-            "Visible": {"direction": "out"}
-          }
-        },
-        "GetCachedEntityEffectiveVisibility": {
-          "parameters": {
-            "Visible": {"direction": "out"}
+            "Name": {"ownership": "borrowed", "lifetime": "call"}
           }
         },
         "GetRootEntities": {
           "parameters": {
-            "pEntities": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Capacity", "written": "NumEntitiesWritten"},
-            "NumEntitiesWritten": {"direction": "out"}
-          }
-        },
-        "GetParent": {
-          "parameters": {
-            "Parent": {"direction": "out"}
-          }
-        },
-        "GetChildCount": {
-          "parameters": {
-            "ChildCount": {"direction": "out"}
+            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "Capacity", "written": "NumEntitiesWritten"}
           }
         },
         "GetChildren": {
           "parameters": {
-            "pChildren": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChildCount", "written": "NumChildrenWritten"},
-            "NumChildrenWritten": {"direction": "out"}
-          }
-        },
-        "GetLocalTransform": {
-          "parameters": {
-            "Transform": {"direction": "out"}
-          }
-        },
-        "GetWorldMatrix": {
-          "parameters": {
-            "Matrix": {"direction": "out"}
-          }
-        },
-        "GetCachedWorldMatrix": {
-          "parameters": {
-            "Matrix": {"direction": "out"}
-          }
-        },
-        "GetCamera": {
-          "parameters": {
-            "Camera": {"direction": "out"}
-          }
-        },
-        "GetLight": {
-          "parameters": {
-            "Light": {"direction": "out"}
-          }
-        },
-        "HasComponent": {
-          "parameters": {
-            "HasComponent": {"direction": "out"}
+            "pChildren": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "ChildCount", "written": "NumChildrenWritten"}
           }
         },
         "GetSceneRevisions": {
           "result": {"lifetime": "object"}
-        },
-        "GetMesh": {
-          "parameters": {
-            "Mesh": {"direction": "out"}
-          }
-        },
-        "GetMeshRenderer": {
-          "parameters": {
-            "Renderer": {"direction": "out"}
-          }
-        },
-        "GetMaterialBindings": {
-          "parameters": {
-            "Bindings": {"direction": "out"}
-          }
-        },
-        "GetSkin": {
-          "parameters": {
-            "Skin": {"direction": "out"}
-          }
-        },
-        "GetMorph": {
-          "parameters": {
-            "Morph": {"direction": "out"}
-          }
         }
       }
     },
@@ -544,11 +457,6 @@
         "GetScene": {
           "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
-        "CreateEntity": {
-          "parameters": {
-            "Entity": {"direction": "out"}
-          }
-        },
         "SetEntityName": {
           "parameters": {
             "Name": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
@@ -571,43 +479,43 @@
       "methods": {
         "CreateMesh": {
           "parameters": {
-            "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "LoadTexture": {
           "parameters": {
-            "ppTexture": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppTexture": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateStandardMaterialDefinition": {
           "parameters": {
-            "ppDefinition": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppDefinition": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateMaterial": {
           "parameters": {
-            "pDefinition": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "ppMaterial": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "pDefinition": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "ppMaterial": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateSkeleton": {
           "parameters": {
-            "ppSkeleton": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppSkeleton": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateSkin": {
           "parameters": {
-            "ppSkin": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppSkin": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "CreateAnimationClip": {
           "parameters": {
-            "ppClip": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppClip": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "LoadScene": {
           "parameters": {
-            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -620,7 +528,7 @@
       "methods": {
         "CreateMorphTargetWeights": {
           "parameters": {
-            "ppWeights": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppWeights": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -635,21 +543,21 @@
       ],
       "methods": {
         "GetDefinition": {
-          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
         "GetTexture": {
           "parameters": {
-            "ppTexture": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppTexture": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "GetParameter": {
           "parameters": {
-            "pData": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
+            "pData": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
           }
         },
         "CreateWriter": {
           "parameters": {
-            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -666,19 +574,19 @@
     },
     "Diligent::GetRadientAssetLoadStatus": {
       "parameters": {
-        "pAsset": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+        "pAsset": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
       }
     },
     "Diligent::CreateRadientCubeMesh": {
       "parameters": {
-        "pAssetManager": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "pAssetManager": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::CreateRadientSphereMesh": {
       "parameters": {
-        "pAssetManager": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-        "ppMesh": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+        "pAssetManager": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+        "ppMesh": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
       }
     },
     "Diligent::RadientCubeMeshCreateInfo": {
@@ -801,13 +709,13 @@
       "methods": {
         "GetParameterHandle": {
           "parameters": {
-            "pHandle": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+            "pHandle": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
           }
         },
         "FindParameter": {
           "parameters": {
-            "Name": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pHandle": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+            "Name": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pHandle": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }
@@ -855,12 +763,12 @@
       "methods": {
         "SetParameter": {
           "parameters": {
-            "pData": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
+            "pData": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "DataSize"}
           }
         },
         "SetTexture": {
           "parameters": {
-            "pTexture": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
+            "pTexture": {"nullable": true, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }
@@ -868,11 +776,6 @@
     "Diligent::RadientStandardMaterialTextureParameters": {
       "fields": {
         "pTexture": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call"}
-      }
-    },
-    "Diligent::SetStandardMaterialTextureParameters": {
-      "parameters": {
-        "Writer": {"direction": "in"}
       }
     },
     "Diligent::RadientSkeletonDesc": {
@@ -901,7 +804,7 @@
       "methods": {
         "CreatePose": {
           "parameters": {
-            "ppPose": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppPose": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -918,23 +821,22 @@
       ],
       "methods": {
         "GetSkeleton": {
-          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
         "GetJointLocalTransforms": {
           "parameters": {
-            "pTransforms": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pTransforms": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
           }
         },
         "GetJointGlobalMatrices": {
           "parameters": {
-            "pMatrices": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pMatrices": {"nullable": false, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
           }
         },
         "ComputeSkinningMatrices": {
           "parameters": {
-            "pSkin": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pSkin": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
             "pMatrices": {
-              "direction": "out",
               "nullable": false,
               "ownership": "borrowed",
               "lifetime": "call",
@@ -944,7 +846,7 @@
         },
         "CreateWriter": {
           "parameters": {
-            "ppWriter": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppWriter": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -958,7 +860,7 @@
       "methods": {
         "SetJointLocalTransforms": {
           "parameters": {
-            "pTransforms": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
+            "pTransforms": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "JointCount"}
           }
         }
       }
@@ -980,14 +882,14 @@
       ],
       "methods": {
         "GetMesh": {
-          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
         "GetWeights": {
-          "result": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "object", "length_method": "GetWeightCount"}
+          "result": {"nullable": true, "ownership": "borrowed", "lifetime": "object", "length_method": "GetWeightCount"}
         },
         "SetWeights": {
           "parameters": {
-            "pWeights": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "WeightCount"}
+            "pWeights": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "WeightCount"}
           }
         }
       }
@@ -1040,7 +942,7 @@
       "methods": {
         "CreateBinding": {
           "parameters": {
-            "ppBinding": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"}
+            "ppBinding": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         }
       }
@@ -1052,7 +954,7 @@
       ],
       "methods": {
         "GetClip": {
-          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         }
       }
     },
@@ -1070,23 +972,23 @@
       ],
       "methods": {
         "GetScene": {
-          "result": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "object"}
+          "result": {"nullable": false, "ownership": "borrowed", "lifetime": "object"}
         },
         "AddAnimationBinding": {
           "parameters": {
-            "pBinding": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pEntities": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
+            "pBinding": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
           }
         },
         "RemoveAnimationBinding": {
           "parameters": {
-            "pBinding": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "pEntities": {"direction": "in", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
+            "pBinding": {"nullable": false, "ownership": "borrowed", "lifetime": "call"},
+            "pEntities": {"nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "EntityCount"}
           }
         },
         "RemoveAnimationClip": {
           "parameters": {
-            "pClip": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"}
+            "pClip": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }
@@ -1100,26 +1002,6 @@
       "fields": {
         "pClip": {"direction": "out", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
         "ppBindings": {"direction": "out", "nullable": true, "ownership": "borrowed", "lifetime": "call", "length": "BindingCount"}
-      }
-    },
-    "Diligent::MakeAxisRotation": {
-      "parameters": {
-        "Rotation": {"direction": "out"}
-      }
-    },
-    "Diligent::MakeXRotation": {
-      "parameters": {
-        "Rotation": {"direction": "out"}
-      }
-    },
-    "Diligent::MakeYRotation": {
-      "parameters": {
-        "Rotation": {"direction": "out"}
-      }
-    },
-    "Diligent::MakeZRotation": {
-      "parameters": {
-        "Rotation": {"direction": "out"}
       }
     },
     "Diligent::IRadientSceneAsset": {
@@ -1153,14 +1035,12 @@
       "methods": {
         "ImportScene": {
           "parameters": {
-            "ppScene": {"direction": "out", "nullable": false, "ownership": "owned", "lifetime": "caller"},
-            "RootEntity": {"direction": "out"}
+            "ppScene": {"nullable": false, "ownership": "owned", "lifetime": "caller"}
           }
         },
         "InstantiateScene": {
           "parameters": {
-            "pScene": {"direction": "in", "nullable": false, "ownership": "borrowed", "lifetime": "call"},
-            "RootEntity": {"direction": "out"}
+            "pScene": {"nullable": false, "ownership": "borrowed", "lifetime": "call"}
           }
         }
       }

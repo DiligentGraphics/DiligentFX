@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Structs.h"
+#include "Interfaces.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
@@ -51,6 +52,29 @@ typedef BindingTestEnvelope BindingTestEnvelopeAlias;
 void DILIGENT_GLOBAL_FUNCTION(UseBindingTestEnvelope)(const BindingTestEnvelopeAlias REF Desc);
 const BindingTestVector REF DILIGENT_GLOBAL_FUNCTION(GetBindingTestVector)(void);
 void DILIGENT_GLOBAL_FUNCTION(EditBindingTestVector)(BindingTestVector REF Value);
+
+typedef const Float32 BindingTestConstFloat;
+typedef const Char* BindingTestString;
+typedef IBindingTestObject BindingTestObjectAlias;
+
+// Direction depends on the immediate target, not the variable name or constness
+// of the pointer itself. Interfaces represent existing input objects.
+void DILIGENT_GLOBAL_FUNCTION(InferBindingTestDirections)(
+    const Float32* pInput,
+    Float32* pOutput,
+    Float32* const pConstPointer,
+    const Char** ppText,
+    const Char* REF Text,
+    const Char* const* ppInputText,
+    BindingTestConstFloat* pAliasedInput,
+    BindingTestString* pAliasedText,
+    BindingTestObjectAlias* pObject,
+    BindingTestObjectAlias REF Object,
+    const BindingTestObjectAlias REF ConstObject,
+    BindingTestObjectAlias** ppObject,
+    IObject* pExternal,
+    IObject REF External,
+    void* pContext);
 
 // An unrelated signature must not need extraction support or metadata.
 void DILIGENT_GLOBAL_FUNCTION(UnselectedLongDouble)(long double Value);

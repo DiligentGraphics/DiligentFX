@@ -183,13 +183,21 @@ New configurations should separate selection from semantic overrides.
 
 The model fills in the following information before language generation:
 
-- References are non-null. Const-qualified parameter targets are inputs; returned
-  pointer/reference values are outputs.
+- References are non-null. Const-qualified parameter targets are inputs;
+  mutable value pointers/references default to outputs. Interface pointers and
+  references are inputs, while pointers/references to interface pointers default
+  to outputs. Interfaces are identified from declarations, including external
+  types marked `ownership: reference_counted`, rather than their names.
+- Direction depends on the immediate target after resolving typedefs:
+  `const char**` is an output, while `char* const*` is an input. Returned
+  pointer/reference values are outputs. Use explicit `direction: inout` for
+  parameters that both read and write caller data, or `direction: in` for mutable
+  input buffers. Pointer fields still need an explicit direction, since their
+  containing descriptor may be used for input, output, or both.
 - Ordinary value references use borrowed, call-scoped storage; returned values
-  are copied to snapshots. Mutable reference arguments still require `direction`
-  (`out` or `inout`, or `in` for a borrowed mutable object). APIs retaining a value
-  reference must explicitly override its lifetime. References to pointers still
-  require the pointed-to value's ownership and lifetime.
+  are copied to snapshots. APIs retaining a value reference must explicitly
+  override its lifetime. References to pointers still require the pointed-to
+  value's ownership and lifetime.
 - Interface reference-counting follows inheritance from a base marked
   `ownership: reference_counted`. Diligent's `IFoo` / `IID_Foo` convention is
   recognized when the sibling ID constant actually exists. Other names can use an
