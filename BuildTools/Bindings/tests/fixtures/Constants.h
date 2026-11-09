@@ -89,6 +89,36 @@ static DILIGENT_CONSTEXPR BindingTestSchemaID BindingTestSchema =
 
 static DILIGENT_CONSTEXPR BindingTestSchemaID BindingTestZeroSchema = {0};
 
+// Aggregate bases precede direct fields, including when braces are omitted.
+struct BindingTestAggregateBase
+{
+    Uint32 A DEFAULT_INITIALIZER(5);
+};
+typedef struct BindingTestAggregateBase BindingTestAggregateBase;
+struct BindingTestAggregateChild DILIGENT_DERIVE(BindingTestAggregateBase)
+    Uint32 B DEFAULT_INITIALIZER(7);
+};
+typedef struct BindingTestAggregateChild BindingTestAggregateChild;
+struct BindingTestAggregateLeaf DILIGENT_DERIVE(BindingTestAggregateChild)
+    Uint32 C;
+};
+typedef struct BindingTestAggregateLeaf BindingTestAggregateLeaf;
+struct BindingTestAggregateHolder
+{
+    BindingTestAggregateChild Child;
+};
+typedef struct BindingTestAggregateHolder BindingTestAggregateHolder;
+
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInherited = {{11}, 13};
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInheritedFlat = {11, 13};
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInheritedDefault = {};
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInheritedPartial = {{17}};
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInheritedEmptyBase = {{}, 19};
+static DILIGENT_CONSTEXPR BindingTestAggregateLeaf BindingTestInheritedLeaf = {{{23}, 29}, 31};
+static DILIGENT_CONSTEXPR BindingTestAggregateLeaf BindingTestInheritedLeafDefault = {};
+static DILIGENT_CONSTEXPR BindingTestAggregateHolder BindingTestInheritedNestedDefault = {};
+static DILIGENT_CONSTEXPR BindingTestAggregateChild BindingTestInheritedArray[2] = {{{11}, 13}};
+
 // clang-format on
 
 DILIGENT_END_NAMESPACE // namespace Diligent

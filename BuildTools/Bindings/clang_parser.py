@@ -1,6 +1,7 @@
 """Extract native API declarations with Clang; no binding policies or language emission."""
 
 from pathlib import Path
+from collections import deque
 from functools import lru_cache
 from fnmatch import fnmatchcase
 from importlib.metadata import PackageNotFoundError, version
@@ -117,10 +118,8 @@ def default_expression(cursor):
 def zero_value(native_type):
     """Value-initialized aggregate members omitted from a braced initializer."""
     native_type = native_type.get_canonical()
-    if native_type.kind == cindex.TypeKind.CONSTANTARRAY:
-        return [zero_value(native_type.element_type) for _ in range(native_type.element_count)]
-    if native_type.kind == cindex.TypeKind.RECORD:
-        return {field.spelling: initial_field_value(field) for field in native_type.get_fields()}
+    if native_type.kind in (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.RECORD):
+        return aggregate_value(native_type)
     if native_type.kind == cindex.TypeKind.BOOL:
         return False
     if native_type.kind in (cindex.TypeKind.FLOAT, cindex.TypeKind.DOUBLE):
@@ -133,6 +132,37 @@ def zero_value(native_type):
 def initial_field_value(field):
     expression = initializer(field)
     return constant_value(expression) if expression else zero_value(field.type)
+
+
+def aggregate_value(native_type, elements=()):
+    """Consume aggregate elements in C++ order, flattening base subobjects."""
+    remaining = deque(elements)
+
+    def next_value(member_type, field=None):
+        member_type = member_type.get_canonical()
+        if not remaining:
+            return initial_field_value(field) if field is not None else zero_value(member_type)
+        # Clang exposes the written initializer list. With brace elision, a
+        # nested aggregate consumes its members from the enclosing list.
+        if (member_type.kind in (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.RECORD) and
+                remaining[0].type.get_canonical().kind != member_type.kind):
+            return read_aggregate(member_type)
+        return constant_value(remaining.popleft())
+
+    def read_aggregate(aggregate_type):
+        if aggregate_type.kind == cindex.TypeKind.CONSTANTARRAY:
+            return [next_value(aggregate_type.element_type) for _ in range(aggregate_type.element_count)]
+        result = {}
+        # Declaration order puts direct bases before fields. Each base occupies
+        # one aggregate element, but its fields belong to the flattened value.
+        for member in aggregate_type.get_declaration().get_children():
+            if member.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
+                result.update(next_value(member.type))
+            elif member.kind == cindex.CursorKind.FIELD_DECL:
+                result[member.spelling] = next_value(member.type, member)
+        return result
+
+    return read_aggregate(native_type)
 
 
 def constant_value(cursor):
@@ -185,12 +215,8 @@ def constant_value(cursor):
     if expression and expression.kind == cindex.CursorKind.INIT_LIST_EXPR:
         native_type = expression.type.get_canonical()
         elements = [child for child in expression.get_children() if child.kind.is_expression()]
-        if native_type.kind == cindex.TypeKind.CONSTANTARRAY:
-            return [constant_value(elements[index]) if index < len(elements)
-                    else zero_value(native_type.element_type) for index in range(native_type.element_count)]
-        if native_type.kind == cindex.TypeKind.RECORD:
-            return {field.spelling: constant_value(elements[index]) if index < len(elements)
-                    else initial_field_value(field) for index, field in enumerate(native_type.get_fields())}
+        if native_type.kind in (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.RECORD):
+            return aggregate_value(native_type, elements)
     raise ModelError(f"{qualified_name(cursor)}: unsupported constant initializer")
 
 

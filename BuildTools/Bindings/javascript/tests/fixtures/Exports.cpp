@@ -34,4 +34,10 @@ MarshalEntityID    GetInvalidEntityID() { return MarshalInvalidID; }
 
 Uint32 SumExportParts(const MarshalExportNames& Value) { return Value.Parts[0] + Value.Parts[1]; }
 
+Bool CheckInheritedExport(const MarshalExportLeaf& Value, Bool UseDefaults)
+{
+    const MarshalExportLeaf& Expected = UseDefaults ? MarshalInheritedDefault : MarshalInherited;
+    return Value.A == Expected.A && Value.B == Expected.B && Value.C == Expected.C;
+}
+
 } // namespace Diligent

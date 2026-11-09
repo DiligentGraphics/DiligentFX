@@ -13,7 +13,9 @@ class ConstantTest(unittest.TestCase):
         cls.types = extract_fixture("Constants.h", ["Diligent::BindingTest" + name for name in (
             "InvalidEntity", "Error", "Mask", "Enabled", "Scale", "AutoOffset",
             "PropertyName", "PropertyNamePointer", "Names", "NameArray", "EscapedName", "UnicodeName",
-            "JoinedName", "PaddedName", "Schema", "ZeroSchema")])
+            "JoinedName", "PaddedName", "Schema", "ZeroSchema", "Inherited", "InheritedFlat",
+            "InheritedDefault", "InheritedPartial", "InheritedEmptyBase", "InheritedLeaf",
+            "InheritedLeafDefault", "InheritedNestedDefault", "InheritedArray")])
 
     def test_unsigned_64_bit_sentinel_remains_exact(self):
         constant = self.types["Diligent::BindingTestInvalidEntity"]
@@ -77,6 +79,28 @@ class ConstantTest(unittest.TestCase):
     def test_omitted_aggregate_members_are_zero_initialized(self):
         self.assertEqual(self.types["Diligent::BindingTestZeroSchema"]["value"],
                          {"Data1": 0, "Data2": 0, "Data3": 0, "Data4": [0] * 8})
+
+    def test_inherited_aggregate_initializers_follow_base_then_field_order(self):
+        for name in ("Inherited", "InheritedFlat"):
+            with self.subTest(constant=name):
+                self.assertEqual(self.types["Diligent::BindingTest" + name]["value"], {"A": 11, "B": 13})
+
+    def test_inherited_aggregate_defaults_and_partial_initialization(self):
+        for name, expected in (("InheritedDefault", {"A": 5, "B": 7}),
+                               ("InheritedPartial", {"A": 17, "B": 7}),
+                               ("InheritedEmptyBase", {"A": 5, "B": 19})):
+            with self.subTest(constant=name):
+                self.assertEqual(self.types["Diligent::BindingTest" + name]["value"], expected)
+
+    def test_multilevel_inherited_aggregates(self):
+        self.assertEqual(self.types["Diligent::BindingTestInheritedLeaf"]["value"], {"A": 23, "B": 29, "C": 31})
+        self.assertEqual(self.types["Diligent::BindingTestInheritedLeafDefault"]["value"], {"A": 5, "B": 7, "C": 0})
+
+    def test_omitted_inherited_records_and_array_elements_keep_base_defaults(self):
+        self.assertEqual(self.types["Diligent::BindingTestInheritedNestedDefault"]["value"],
+                         {"Child": {"A": 5, "B": 7}})
+        self.assertEqual(self.types["Diligent::BindingTestInheritedArray"]["value"],
+                         [{"A": 11, "B": 13}, {"A": 5, "B": 7}])
 
     def test_constants_participate_in_policy_validation(self):
         config = {

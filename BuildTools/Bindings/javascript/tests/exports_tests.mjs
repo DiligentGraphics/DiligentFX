@@ -1,4 +1,12 @@
 export function registerTests({test, assert, api, constants}) {
+    test("inherited constants preserve base fields and match their compiled native values", () => {
+        assert.deepEqual(constants.MarshalInherited, {A: 0xfedcba9876543210n, B: 13, C: 1.5});
+        assert.deepEqual(constants.MarshalInheritedDefault, {A: 5n, B: 7, C: 0.5});
+        assert.equal(api.MarshalInherited, constants.MarshalInherited);
+        assert.equal(api.MarshalInheritedDefault, constants.MarshalInheritedDefault);
+        assert.equal(api.CheckInheritedExport(constants.MarshalInherited, false), true);
+        assert.equal(api.CheckInheritedExport(constants.MarshalInheritedDefault, true), true);
+    });
     test("standalone constants are named exports and module members with exact values", () => {
         assert.equal(constants.MarshalInvalidID, 0xffffffffffffffffn);
         assert.equal(api.MarshalInvalidID, api.GetInvalidEntityID());

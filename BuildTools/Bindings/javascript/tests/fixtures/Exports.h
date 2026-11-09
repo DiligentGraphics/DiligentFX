@@ -53,10 +53,27 @@ struct MarshalExportNames
 };
 typedef struct MarshalExportNames MarshalExportNames;
 static DILIGENT_CONSTEXPR MarshalExportNames MarshalNames = {MarshalAnimationName, ~0ull, {3, 5}};
+struct MarshalExportBase
+{
+    Uint64 A DEFAULT_INITIALIZER(5);
+};
+typedef struct MarshalExportBase MarshalExportBase;
+struct MarshalExportChild DILIGENT_DERIVE(MarshalExportBase)
+    Uint32 B DEFAULT_INITIALIZER(7);
+};
+typedef struct MarshalExportChild MarshalExportChild;
+struct MarshalExportLeaf DILIGENT_DERIVE(MarshalExportChild)
+    Float32 C DEFAULT_INITIALIZER(0.5f);
+};
+typedef struct MarshalExportLeaf MarshalExportLeaf;
+static DILIGENT_CONSTEXPR MarshalExportLeaf MarshalInherited = {{{0xfedcba9876543210ull}, 13}, 1.5f};
+static DILIGENT_CONSTEXPR MarshalExportLeaf MarshalInheritedDefault = {};
+
 MarshalEntityAlias DILIGENT_GLOBAL_FUNCTION(EchoEntityID)(MarshalEntityAlias Value);
 MarshalEntityID DILIGENT_GLOBAL_FUNCTION(GetInvalidEntityID)(void);
 #include "DefineRefMacro.h"
 Uint32 DILIGENT_GLOBAL_FUNCTION(SumExportParts)(const MarshalExportNames REF Value);
+Bool DILIGENT_GLOBAL_FUNCTION(CheckInheritedExport)(const MarshalExportLeaf REF Value, Bool UseDefaults);
 #include "UndefRefMacro.h"
 
 // clang-format on

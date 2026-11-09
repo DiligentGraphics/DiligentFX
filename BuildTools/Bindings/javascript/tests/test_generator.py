@@ -402,6 +402,11 @@ class GeneratorTest(unittest.TestCase):
         self.assertIn("export type MarshalPropertyName = string;", types)
         self.assertIn("readonly MarshalInvalidID: typeof MarshalInvalidID", types)
 
+    def test_inherited_constant_types_include_base_and_direct_fields(self):
+        _, _, types = self.emit()
+        for name in ("MarshalInherited", "MarshalInheritedDefault"):
+            self.assertIn(f"export const {name}: {{ readonly A: bigint; readonly B: number; readonly C: number }};", types)
+
     def test_rejects_wrong_model_target(self):
         model = deepcopy(MODEL)
         model["target"] = "x86_64-pc-windows-msvc"
