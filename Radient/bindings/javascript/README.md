@@ -5,7 +5,7 @@ assets, material creation and editing, skeletons, skins, morph targets, animatio
 and GLTF/OBJ scene import. They use the real Radient implementation compiled to
 Wasm and run in browsers or Node without a graphics device. Owning read-only and
 mutable data blobs can also be created without an engine. See
-[API execution coverage](API_COVERAGE.md) for the tested methods and exclusions.
+[API execution coverage](tests/API_COVERAGE.md) for the tested methods and exclusions.
 
 ## Build and test
 
@@ -184,7 +184,7 @@ synchronously joining those workers can deadlock. Preloading allows immediate en
 creation and disposal in synchronous JavaScript code. Browser hosting must supply the
 cross-origin isolation headers required by shared Wasm memory.
 
-Real-library integration suites in `Radient/bindings/javascript/*_tests.mjs` are
+Real-library integration suites in `Radient/bindings/javascript/tests/*_tests.mjs` are
 discovered by CMake and run unchanged in Node and a browser. They check public API
 selection, metadata, marshalling, ownership, and a few connected scene operations;
 native tests remain responsible for exhaustive scene behavior.

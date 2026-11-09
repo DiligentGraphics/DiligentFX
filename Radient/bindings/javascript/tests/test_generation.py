@@ -6,12 +6,12 @@ from pathlib import Path
 import sys
 import unittest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "BuildTools/Bindings"))
 from javascript.generate import Generator
 
 MODEL = json.loads(Path(sys.argv.pop(1)).read_text(encoding="utf-8"))
-ADAPTERS = json.loads(Path(__file__).with_name("API.json").read_text(encoding="utf-8"))
+ADAPTERS = json.loads((Path(__file__).resolve().parents[1] / "API.json").read_text(encoding="utf-8"))
 
 
 class RadientGenerationTest(unittest.TestCase):
