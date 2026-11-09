@@ -1,6 +1,77 @@
-// Browser-only smoke test. Image capture and glTF golden comparisons belong to
+// Browser-only lifecycle tests. Image capture and glTF golden comparisons belong to
 // the rendering suites; this checks the reusable WebGPU/canvas adapter itself.
+// Observe the resources created by one initialization attempt. Always clean up
+// after a failed assertion too, so a regression cannot leak workers into later tests.
+function trackInitializationResources(t) {
+    const NativeWorker = globalThis.Worker;
+    const requestDevice = GPUAdapter.prototype.requestDevice;
+    const workers = new Set();
+    const devices = [];
+    const destroyedDevices = new Set();
+    let workerCount = 0;
+    t.after(() => {
+        globalThis.Worker = NativeWorker;
+        GPUAdapter.prototype.requestDevice = requestDevice;
+        for (const worker of workers) worker.terminate();
+        for (const device of devices) device.destroy();
+    });
+    globalThis.Worker = class extends NativeWorker {
+        constructor(...args) {
+            super(...args);
+            workers.add(this);
+            ++workerCount;
+        }
+        terminate() {
+            workers.delete(this);
+            super.terminate();
+        }
+    };
+    GPUAdapter.prototype.requestDevice = async function(...args) {
+        const device = await requestDevice.apply(this, args);
+        devices.push(device);
+        const destroy = device.destroy;
+        device.destroy = function() {
+            destroyedDevices.add(this);
+            destroy.call(this);
+        };
+        return device;
+    };
+    return {workers, devices, destroyedDevices, get workerCount() { return workerCount; }};
+}
+
 export function registerTests({test, assert}) {
+    for (const [name, options] of [
+        ["missing Wasm", {locateFile(path, prefix) {
+            return prefix + (path.endsWith(".wasm") ? "missing.wasm" : path);
+        }}],
+        ["conflicting virtual file paths", {files: {
+            "/conflict": new Uint8Array([1]),
+            "/conflict/child": new Uint8Array([2]),
+        }}],
+    ]) {
+        test(`WebGPU initialization releases workers and device after ${name}`, async t => {
+            const {default: createRadientBrowser} = await import("/generated/RadientBrowser.mjs");
+            const resources = trackInitializationResources(t);
+            let initialized = false;
+            let error;
+            try {
+                const browser = await createRadientBrowser({
+                    canvas: document.createElement("canvas"),
+                    moduleOptions: {...options, onRuntimeInitialized() { initialized = true; }},
+                });
+                t.after(() => browser.dispose());
+            } catch (caught) {
+                error = caught;
+            }
+            assert.ok(error, "Initialization must reject");
+            assert.equal(initialized, false, "The failure must precede onRuntimeInitialized");
+            assert.equal(resources.devices.length, 1);
+            assert.ok(resources.destroyedDevices.has(resources.devices[0]), "The GPU device must be destroyed");
+            assert.equal((await resources.devices[0].lost).reason, "destroyed");
+            assert.ok(resources.workerCount > 0, "The module must have preloaded workers before failing");
+            assert.equal(resources.workers.size, 0, "All preloaded workers must be terminated");
+        });
+    }
     test("WebGPU engine attaches, presents, resizes existing targets, and shuts down", async t => {
         const {default: createRadientBrowser} = await import("/generated/RadientBrowser.mjs");
         const canvas = document.createElement("canvas");

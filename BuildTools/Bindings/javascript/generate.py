@@ -890,7 +890,15 @@ class Generator:
         js += 'const constants = {' + ', '.join(self.constants) + '};\n'
         js += 'const schema = ' + json.dumps(self.schema, indent=2) + ';\n'
         js += 'export default async function(options = {}) {\n'
-        js += '  return createBindings(await createWasm(prepareModuleOptions(options)), schema, constants);\n}\n'
+        js += '  const module = prepareModuleOptions(options);\n'
+        js += '  try {\n'
+        js += '    return createBindings(await createWasm(module), schema, constants);\n'
+        js += '  } catch (error) {\n'
+        js += '    // Emscripten preloads workers before onRuntimeInitialized. Its factory\n'
+        js += '    // populates the supplied module object even when initialization rejects.\n'
+        js += '    module.PThread?.terminateAllThreads();\n'
+        js += '    throw error;\n'
+        js += '  }\n}\n'
         return '\n'.join(self.cpp) + '\n', js, '\n'.join(self.ts) + '\n'
 
 

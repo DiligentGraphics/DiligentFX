@@ -4,6 +4,16 @@ export const moduleOptions = {files: {
 }};
 
 export function registerTests({test, assert, api, constants}) {
+    test("module initialization preserves callback failures without a worker pool", async () => {
+        const expected = new Error("Initialization callback failed");
+        let error;
+        try {
+            await constants.default({onRuntimeInitialized() { throw expected; }});
+        } catch (caught) {
+            error = caught;
+        }
+        assert.equal(error, expected);
+    });
     test("preloaded virtual files are readable by ordinary native file IO", () => {
         moduleOptions.files["/bindings/nested/世界.bin"].fill(0);
         assert.equal(api.SumFileBytes("/bindings/nested/世界.bin"), 258);

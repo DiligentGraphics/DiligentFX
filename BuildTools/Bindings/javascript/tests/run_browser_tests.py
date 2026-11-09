@@ -79,12 +79,17 @@ def run(args, *, extra_roots=None, test_config=None, entry_point="/harness/run_t
                 self.send_error(404)
                 return
             content_type = {".mjs": "text/javascript", ".wasm": "application/wasm"}.get(file.suffix)
-            self.send_response(200)
-            self.send_header("Content-Type", content_type or mimetypes.guess_type(file.name)[0] or "application/octet-stream")
-            self.send_header("Content-Length", str(file.stat().st_size))
-            self.end_headers()
-            with file.open("rb") as source:
-                shutil.copyfileobj(source, self.wfile)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", content_type or mimetypes.guess_type(file.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(file.stat().st_size))
+                self.end_headers()
+                with file.open("rb") as source:
+                    shutil.copyfileobj(source, self.wfile)
+            except (BrokenPipeError, ConnectionResetError):
+                # Initialization-failure tests terminate preloaded workers while
+                # their module scripts may still be downloading.
+                pass
 
         def do_POST(self):
             if handle_post is not None and handle_post(self):
