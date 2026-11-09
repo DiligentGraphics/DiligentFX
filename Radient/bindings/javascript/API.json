@@ -10,6 +10,13 @@
     "Diligent::RadientEngineCreateInfo::pThreadPool",
     "Diligent::RadientEngineCreateInfo::Resources",
     "Diligent::IThreadPool",
+    "Diligent::IDeviceContext",
+    "Diligent::ISwapChain",
+    "Diligent::ITextureView",
+    "Diligent::RadientFrameAttribs::pDeviceContext",
+    "Diligent::RadientRenderTargetDesc::pSwapChain",
+    "Diligent::RadientRenderTargetDesc::pColorRTV",
+    "Diligent::RadientRenderTargetDesc::pDepthDSV",
     "Diligent::RadientBackendCreateInfo",
     "Diligent::RadientAssetManagerCreateInfo",
     "Diligent::RadientResourceManagerCreateInfo"

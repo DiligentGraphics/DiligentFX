@@ -105,6 +105,18 @@ class RadientGenerationTest(unittest.TestCase):
         self.assertIn("ClippingRange?: RadientFloat2", types)
         self.assertIn("EnableColorTemperature?: boolean", types)
 
+    def test_renderer_and_view_signatures(self):
+        _, _, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
+        self.assertIn("CreateRenderer(Desc: RadientRendererDesc): Result<IRadientRenderer | null>", types)
+        self.assertIn("GetSize(): StructSnapshot<RadientExtent2D>", types)
+        self.assertIn("SetScene(pScene: IRadientScene | null): number", types)
+        self.assertIn("BeginFrame(Attribs: RadientFrameAttribs): number", types)
+        self.assertIn("Render(Attribs: RadientRenderAttribs): number", types)
+        self.assertIn("pView?: IRadientView;", types)
+        self.assertIn("CreateRadientBrowserEngine(CreateInfo: RadientEngineCreateInfo)", types)
+        for native in ("pDeviceContext", "pSwapChain", "pColorRTV", "pDepthDSV", "GetColorRTV", "GetDepthDSV"):
+            self.assertNotIn(native, types)
+
 
 if __name__ == "__main__":
     unittest.main()

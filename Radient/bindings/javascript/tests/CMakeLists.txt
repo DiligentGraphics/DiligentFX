@@ -20,3 +20,14 @@ foreach(SUITE IN LISTS SUITES)
     set_tests_properties("Radient-JavaScript-Browser-${SUITE_NAME}"
         PROPERTIES LABELS "Bindings;JavaScript;Browser" TIMEOUT 90)
 endforeach()
+
+# Browser GPU bootstrap is separate from the suites that also run in Node.
+if(WEBGPU_SUPPORTED)
+    add_test(NAME Radient-JavaScript-Browser-WebGPU
+        COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
+            --module "${GENERATED}/Radient.mjs"
+            --suite "${CMAKE_CURRENT_SOURCE_DIR}/browser/bootstrap_tests.mjs"
+            --shared-memory --timeout 180)
+    set_tests_properties(Radient-JavaScript-Browser-WebGPU
+        PROPERTIES LABELS "Bindings;JavaScript;Browser;WebGPU" TIMEOUT 210)
+endif()

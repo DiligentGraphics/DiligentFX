@@ -56,7 +56,7 @@ class PublicAPITest(unittest.TestCase):
         types = declarations(build_model(ROOT, config, API_TARGET, CLANG_ARGS))
         engine = types["Diligent::IRadientEngine"]
         self.assertTrue({"GetAssetManager", "CreateScene", "CreateSceneWriter"}.issubset({m["name"] for m in engine["methods"]}))
-        self.assertNotIn("CreateRenderer", {m["name"] for m in engine["methods"]})
+        self.assertIn("CreateRenderer", {m["name"] for m in engine["methods"]})
         scene = {m["name"]: m for m in types["Diligent::IRadientScene"]["methods"]}
         self.assertIn("GetMesh", scene)
         roots = scene["GetRootEntities"]["parameters"][1]["policy"]

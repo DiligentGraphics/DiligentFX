@@ -1,6 +1,7 @@
 # JavaScript API execution coverage
 
-Every suite runs against real Radient in Node and a browser, without a GPU.
+Shared suites run against real Radient in Node and a browser, without a GPU.
+The separate browser bootstrap suite uses a real WebGPU device.
 The model and generator tests separately check declarations and metadata.
 
 | Suite | Executed API |
@@ -17,11 +18,13 @@ The model and generator tests separately check declarations and metadata.
 | `morph_tests.mjs` | Blob-backed target creation/reflection; every weights method; mesh weight factory; scene morph component and removal |
 | `animation_tests.mjs` | Clip creation/reflection, binding creation/evaluation, every registry method, scene/material/pose/morph destinations, quaternion helpers |
 | `import_tests.mjs` | Scene loading and clip reflection; importer creation, ImportScene, InstantiateScene, ProcessPendingImports; GLTF/OBJ files, relative MTL dependencies and imported animation |
+| `renderer_tests.mjs` | Renderer/view creation and descriptions, render-target size, all view setters, retained scene/target snapshots, frame calls without a GPU |
+| `browser/bootstrap_tests.mjs` | Browser-only WebGPU device attachment, canvas target creation, frame submission, resize, and shutdown |
 
 Native callbacks, externally supplied thread pools, importer implementations,
-custom component storage, and GPU/backend objects are not exposed. Asset-manager
-`Stop()` takes a native device context and remains outside the CPU-only binding
-subset; disposing the engine performs normal shutdown.
+custom component storage, and native Diligent GPU/backend objects are not exposed.
+The browser adapter supplies device/context/swap-chain access and calls asset-manager
+`Stop()` during disposal. CPU-only engines use normal engine disposal.
 
 Direct-write animation destination scopes expose native addresses and are not
 exported. Use clip bindings and `Evaluate()`; native destinations are obtained

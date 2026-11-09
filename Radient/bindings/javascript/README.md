@@ -1,10 +1,11 @@
 # Radient JavaScript bindings
 
-The bindings expose CPU-side Radient APIs for scenes, components, mesh and texture
+The bindings expose Radient APIs for scenes, components, mesh and texture
 assets, material creation and editing, skeletons, skins, morph targets, animation,
 and GLTF/OBJ scene import. They use the real Radient implementation compiled to
 Wasm and run in browsers or Node without a graphics device. Owning read-only and
-mutable data blobs can also be created without an engine. See
+mutable data blobs can also be created without an engine. Renderer and view
+bindings also support browser WebGPU through the canvas adapter below. See
 [API execution coverage](tests/API_COVERAGE.md) for the tested methods and exclusions.
 
 ## Build and test
@@ -296,3 +297,72 @@ instantiations. An optional animation registry receives the imported bindings.
 
 The integration tests load generated GLB and OBJ/MTL files, inspect their scene
 components, and evaluate imported animation in both Node and Chromium.
+
+## Browser rendering
+
+Build with `-DDILIGENT_NO_WEBGPU=OFF`. The browser entry point,
+`RadientBrowser.mjs`, is copied alongside the generated bindings, with
+`RadientBrowser.d.mts` for TypeScript (using the browser WebGPU types).
+It requests a WebGPU adapter/device asynchronously and creates a GPU-backed
+engine using Diligent's WebGPU backend. Each instance owns one canvas, device,
+engine, and Wasm module. Use HTTPS or localhost and serve the cross-origin
+isolation headers required by Wasm workers.
+
+```js
+import createRadientBrowser from "./generated/RadientBrowser.mjs";
+
+const browser = await createRadientBrowser({canvas: document.querySelector("canvas")});
+const {engine, api} = browser;
+function value(result) {
+    if (result.status < 0 || result.value === null) throw new Error(`Radient status ${result.status}`);
+    return result.value;
+}
+const renderer = value(engine.CreateRenderer({}));
+const target = browser.createRenderTarget(renderer);
+const scene = value(engine.CreateScene({}));
+const view = value(renderer.CreateView({pScene: scene, pRenderTarget: target}));
+// Populate the scene and set view.Camera through the regular generated API.
+
+function render(time, deltaTime) {
+    const status = renderer.BeginFrame({Time: time, DeltaTime: deltaTime});
+    if (status < 0) throw new Error(`BeginFrame failed: ${status}`);
+    try {
+        const result = renderer.Render({pView: view});
+        if (result < 0) throw new Error(`Render failed: ${result}`);
+    } finally {
+        renderer.EndFrame();
+        browser.present();
+    }
+}
+// Invoke render from requestAnimationFrame, with time values in seconds.
+// Do not await between rendering and presentation: canvas textures expire
+// when control returns to the browser.
+
+browser.resize(1280, 720); // Physical pixels; call between frames.
+console.log(target.GetSize()); // {Width: 1280, Height: 720}; the target is retained.
+
+// Stop the animation loop, then release all application-owned objects.
+view.dispose();
+scene.dispose();
+target.dispose();
+renderer.dispose();
+browser.dispose();
+```
+
+`moduleOptions` accepts the same options as `Radient.mjs`, including virtual
+filesystem `files` for asset loading. `engineCreateInfo` supplies engine options;
+the default is one worker, matching `RADIENT_BINDINGS_PTHREAD_POOL_SIZE`. Use a
+matching preloaded pool when increasing the worker count. `powerPreference` and
+`forceFallbackAdapter` are forwarded to WebGPU adapter selection.
+
+Canvas size is explicit; the adapter does not install a resize observer or alter
+CSS dimensions. Suspended/hidden canvases can skip rendering instead of requesting
+a zero-sized swap chain. `device.lost` and `uncapturederror` are available on
+`browser.device`; device recreation is the application's responsibility.
+
+Renderer and view methods are exercised without a GPU in both Node and the
+browser. WebGPU-enabled builds additionally register
+`Radient-JavaScript-Browser-WebGPU`, which checks real device attachment, frame
+submission, resizing an existing target, and shutdown. This smoke test requires
+a working browser WebGPU adapter and fails if one is unavailable. Pixel capture
+and glTF golden-image comparisons are a separate test layer.

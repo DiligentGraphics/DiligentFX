@@ -3,17 +3,17 @@
   "conventions": "diligent",
   "headers": [
     "Radient/interface/Radient.h",
+    "Radient/bindings/javascript/BrowserNative.h",
     "../DiligentCore/Common/interface/ThreadPool.h"
   ],
   "exports": {
     "headers": [
-      "Radient/interface/*.h"
+      "Radient/interface/*.h",
+      "Radient/bindings/javascript/BrowserNative.h"
     ],
     "exclude_headers": [
       "Radient/interface/RadientAssetResolver.h",
-      "Radient/interface/RadientBackend.h",
-      "Radient/interface/RadientView.h",
-      "Radient/interface/RadientRenderer.h"
+      "Radient/interface/RadientBackend.h"
     ],
     "exclude": [
       "Diligent::RadientDataBlobReadReleaseCallbackType",
@@ -73,7 +73,27 @@
       }
     },
     "Diligent::IRadientEngine": {
-      "exclude_methods": ["GetBackend", "CreateRenderer"]
+      "exclude_methods": ["GetBackend"]
+    },
+    "Diligent::IDeviceContext": {"binding": "external", "reason": "The browser adapter supplies the native graphics context."},
+    "Diligent::ISwapChain": {"binding": "external", "reason": "The browser adapter owns the canvas swap chain."},
+    "Diligent::ITextureView": {"binding": "external", "reason": "Native texture views are supplied by the platform adapter."},
+    "Diligent::IRadientRenderTarget": {
+      "exclude_methods": ["GetColorRTV", "GetDepthDSV", "GetSwapChain"],
+      "methods": {"GetDesc": {"result": {"lifetime": "object"}}}
+    },
+    "Diligent::IRadientRenderer": {
+      "methods": {"GetDesc": {"result": {"lifetime": "object"}}}
+    },
+    "Diligent::IRadientView": {
+      "methods": {
+        "GetDesc": {"result": {"lifetime": "object"}},
+        "SetScene": {"parameters": {"pScene": {"nullable": true}}},
+        "SetRenderTarget": {"parameters": {"pRenderTarget": {"nullable": true}}}
+      }
+    },
+    "Diligent::RadientRenderAttribs": {
+      "fields": {"pView": {"nullable": false}}
     },
     "Diligent::IRadientScene": {
       "methods": {
