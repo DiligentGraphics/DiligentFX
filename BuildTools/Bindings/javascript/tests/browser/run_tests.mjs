@@ -23,7 +23,8 @@ try {
         assert.equal(crossOriginIsolated, true, "Threaded binding tests require cross-origin isolation");
         assert.equal(sharedMemory, true, "Expected the production shared-memory Wasm build");
     }
-    const tests = await runTests(test => registerTests({test, assert, api, constants: bindings, wasm}));
+    const moduleURL = new URL(config.module, location.href);
+    const tests = await runTests(test => registerTests({test, assert, api, constants: bindings, wasm, moduleURL}));
     await report({userAgent: navigator.userAgent, crossOriginIsolated, sharedMemory, tests});
 } catch (error) {
     await fatal(error);

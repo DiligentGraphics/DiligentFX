@@ -1,0 +1,17 @@
+# Emscripten incoming options used by our JavaScript bindings.
+# Extend this contract when a binding feature needs another option.
+# Public ModuleOptions: locate the external Wasm binary.
+locateFile
+# Public ModuleOptions: initialize from caller-supplied Wasm bytes.
+wasmBinary
+# Public ModuleOptions: redirect native output and diagnostics.
+print
+printErr
+# prepareModuleOptions implements files by installing a preRun hook.
+preRun
+# Browser integration and test runners capture the initialized module here.
+onRuntimeInitialized
+# RadientBrowser supplies the canvas used by its native swap chain.
+canvas
+# Keep the main threaded runtime alive between API calls while allowing pthreads to exit.
+noExitRuntime

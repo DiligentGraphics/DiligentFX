@@ -57,7 +57,11 @@ target_include_directories(BindingTestsWasm PRIVATE "${TEST_SOURCE}/fixtures" "$
 target_compile_features(BindingTestsWasm PRIVATE cxx_std_17)
 target_compile_options(BindingTestsWasm PRIVATE -Wall -Wextra -Werror)
 target_compile_definitions(BindingTestsWasm PRIVATE PLATFORM_WEB=1)
+# Enable the public ModuleOptions fields and the initialization hooks used
+# by the bindings. The shared response file documents each option.
+set_property(TARGET BindingTestsWasm APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/IncomingModuleAPI.txt")
 target_link_options(BindingTestsWasm PRIVATE
+    "-sINCOMING_MODULE_JS_API=@${CMAKE_CURRENT_SOURCE_DIR}/IncomingModuleAPI.txt"
     --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
     -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1
     "-sEXPORTED_FUNCTIONS=['_malloc','_free']"

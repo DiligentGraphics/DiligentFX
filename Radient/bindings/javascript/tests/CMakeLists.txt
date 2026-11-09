@@ -7,6 +7,8 @@ set_tests_properties(Radient-JavaScriptGeneration PROPERTIES LABELS "Bindings;Ja
 
 # Each suite runs unchanged against the real library in Node and a browser.
 file(GLOB SUITES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*_tests.mjs")
+# Exercise the same module-initialization contract with Radient's threaded build.
+list(APPEND SUITES "${BINDING_TOOLS}/javascript/tests/wasm_binary_tests.mjs")
 foreach(SUITE IN LISTS SUITES)
     get_filename_component(SUITE_NAME "${SUITE}" NAME_WE)
     add_test(NAME "Radient-JavaScript-Node-${SUITE_NAME}"
