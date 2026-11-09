@@ -95,7 +95,7 @@ jobs:
       run: |
         # Reuse the Radient library and dependencies from the main build.
         cmake --build "$DILIGENT_BUILD_DIR" --config "$DILIGENT_BUILD_TYPE" \
-          --target RadientWasm --parallel "$(nproc)"
+          --target RadientWasm RadientBrowserRenderTest --parallel "$(nproc)"
 
     - name: Test Radient bindings
       if: runner.os == 'Linux'
@@ -104,9 +104,29 @@ jobs:
         ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Radient/bindings" \
           -C "$DILIGENT_BUILD_TYPE" -LE Browser --verbose --output-on-failure --no-tests=error
 
+    - name: Clone Radient test data
+      if: runner.os == 'Linux'
+      uses: actions/checkout@v6
+      with:
+        repository: DiligentGraphics/DiligentTestData
+        ref: radient
+        path: DiligentTestData
+
+    - name: Clone glTF Sample Assets
+      if: runner.os == 'Linux'
+      uses: actions/checkout@v6
+      with:
+        repository: KhronosGroup/glTF-Sample-Assets
+        ref: ${{env.DILIGENT_GLTF_SAMPLE_ASSETS_COMMIT}}
+        path: glTF-Sample-Assets
+
     - name: Test Radient bindings in Chrome
       if: runner.os == 'Linux'
       shell: bash
+      env:
+        RADIENT_BROWSER_TEST_MODELS: ${{github.workspace}}/glTF-Sample-Assets
+        RADIENT_BROWSER_TEST_ASSETS: ${{github.workspace}}/DiligentTestData
+        RADIENT_BROWSER_TEST_OUTPUT: ${{github.workspace}}/BrowserRenderResults
       run: |
         # Use software rendering on hosted runners. Canvas presentation needs
         # the Vulkan compositor as well as a SwiftShader WebGPU adapter.
@@ -126,3 +146,11 @@ jobs:
         export BINDINGS_TEST_BROWSER_EXECUTABLE="$RUNNER_TEMP/chrome-webgpu"
         ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Radient/bindings" \
           -C "$DILIGENT_BUILD_TYPE" -L Browser --verbose --output-on-failure --no-tests=error
+
+    - name: Upload Radient browser render images
+      if: ${{ always() && runner.os == 'Linux' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: RadientBrowserRenderImages-${{matrix.build_type}}
+        path: BrowserRenderResults
+        if-no-files-found: warn

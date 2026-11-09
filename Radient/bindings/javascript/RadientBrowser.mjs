@@ -12,7 +12,7 @@ const optionalFeatures = [
 /** Create one GPU-backed Radient engine and canvas swap chain in a new Wasm module. */
 export default async function createRadientBrowser({
     canvas, moduleOptions = {}, engineCreateInfo = {},
-    powerPreference = "high-performance", forceFallbackAdapter = false,
+    powerPreference = "high-performance", forceFallbackAdapter = false, enableCapture = false,
 } = {}) {
     if (typeof HTMLCanvasElement === "undefined" || !(canvas instanceof HTMLCanvasElement)) {
         throw new TypeError("canvas must be an HTMLCanvasElement");
@@ -57,7 +57,7 @@ export default async function createRadientBrowser({
                 moduleOptions.onRuntimeInitialized?.call(this);
             },
         });
-        const result = api.CreateRadientBrowserEngine({WorkerThreadCount: 1, ...engineCreateInfo});
+        const result = api.CreateRadientBrowserEngine({WorkerThreadCount: 1, ...engineCreateInfo}, enableCapture);
         check(result.status, "Creating the WebGPU engine");
         engine = result.value;
         if (!engine) throw new Error("The WebGPU engine was not created; build RadientWasm with WebGPU enabled");

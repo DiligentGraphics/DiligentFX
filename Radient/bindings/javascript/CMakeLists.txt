@@ -18,32 +18,44 @@ add_custom_target(Radient-GenerateJavaScript
 # private type-size helpers without exposing implementation headers to the glue.
 target_sources(Radient PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/NativeAdapters.cpp")
 add_executable(RadientWasm EXCLUDE_FROM_ALL "${GENERATED}/Radient.cpp" BrowserNative.cpp)
-if(WEBGPU_SUPPORTED)
-    target_link_libraries(RadientWasm PRIVATE Diligent-GraphicsEngineWebGPU-static)
-    target_link_options(RadientWasm PRIVATE "--js-library=${CMAKE_CURRENT_SOURCE_DIR}/Browser.library.js")
-    set_property(TARGET RadientWasm APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Browser.library.js")
-endif()
-# Keep the browser entry point alongside the generated module. CPU-only builds
-# still provide the normal Node/browser bindings; GPU creation returns UNSUPPORTED.
-configure_file(RadientBrowser.mjs "${GENERATED}/RadientBrowser.mjs" COPYONLY)
-configure_file(RadientBrowser.d.mts "${GENERATED}/RadientBrowser.d.mts" COPYONLY)
-target_include_directories(RadientWasm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 add_dependencies(RadientWasm Radient-GenerateJavaScript)
-set_common_target_properties(RadientWasm)
-target_link_libraries(RadientWasm PRIVATE Radient Diligent-Common Diligent-BuildSettings)
-# Preload workers before module initialization resolves: immediate engine
-# destruction can join its workers without waiting for the browser event loop.
+
+set(RADIENT_JAVASCRIPT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+# Preload workers so engine shutdown can join without waiting on browser startup.
 set(RADIENT_BINDINGS_PTHREAD_POOL_SIZE "1" CACHE STRING "Number of preloaded Radient Wasm workers")
-target_link_options(RadientWasm PRIVATE
-    -pthread --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
-    # Shader translation (glslang/Tint) needs more than the default 64 KiB stack.
-    -sSTACK_SIZE=2097152
-    "$<$<CONFIG:Debug>:-sSTACK_OVERFLOW_CHECK=2>"
-    -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1
-    "-sPTHREAD_POOL_SIZE=${RADIENT_BINDINGS_PTHREAD_POOL_SIZE}"
-    "-sEXPORTED_FUNCTIONS=['_malloc','_free']"
-    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS','PThread']")
-set_target_properties(RadientWasm PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${GENERATED}")
+
+# Both Wasm modules link Radient and its shader translation libraries. Limit
+# Ninja to one of these memory-intensive links at a time, while allowing
+# compilation to use the requested build parallelism.
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS radient_wasm_link=1)
+
+# Production bindings and the render-test executable share the same native
+# library and module settings. Test-only image helpers stay out of RadientWasm.
+function(configure_radient_wasm_target Target OutputDirectory)
+    set_common_target_properties(${Target})
+    set_property(TARGET ${Target} PROPERTY JOB_POOL_LINK radient_wasm_link)
+    target_include_directories(${Target} PRIVATE "${RADIENT_JAVASCRIPT_SOURCE_DIR}")
+    target_link_libraries(${Target} PRIVATE Radient Diligent-Common Diligent-BuildSettings)
+    if(WEBGPU_SUPPORTED)
+        target_link_libraries(${Target} PRIVATE Diligent-GraphicsEngineWebGPU-static)
+        target_link_options(${Target} PRIVATE "--js-library=${RADIENT_JAVASCRIPT_SOURCE_DIR}/Browser.library.js")
+        set_property(TARGET ${Target} APPEND PROPERTY LINK_DEPENDS "${RADIENT_JAVASCRIPT_SOURCE_DIR}/Browser.library.js")
+    endif()
+    foreach(File RadientBrowser.mjs RadientBrowser.d.mts)
+        configure_file("${RADIENT_JAVASCRIPT_SOURCE_DIR}/${File}" "${OutputDirectory}/${File}" COPYONLY)
+    endforeach()
+    target_link_options(${Target} PRIVATE
+        -pthread --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
+        # Shader translation (glslang/Tint) needs more than the default 64 KiB stack.
+        -sSTACK_SIZE=2097152
+        "$<$<CONFIG:Debug>:-sSTACK_OVERFLOW_CHECK=2>"
+        -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1
+        "-sPTHREAD_POOL_SIZE=${RADIENT_BINDINGS_PTHREAD_POOL_SIZE}"
+        "-sEXPORTED_FUNCTIONS=['_malloc','_free']"
+        "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS','PThread']")
+    set_target_properties(${Target} PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${OutputDirectory}")
+endfunction()
+configure_radient_wasm_target(RadientWasm "${GENERATED}")
 
 add_subdirectory(tests)
 

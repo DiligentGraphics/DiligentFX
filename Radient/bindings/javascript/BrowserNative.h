@@ -35,7 +35,8 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 /// Attaches to the module's preinitialized WebGPU device and canvas.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientBrowserEngine)(const RadientEngineCreateInfo REF CreateInfo,
-                                                                    IRadientEngine**                  ppEngine);
+                                                                    IRadientEngine**                  ppEngine,
+                                                                    Bool EnableCapture                DEFAULT_VALUE(False));
 
 /// Creates an immutable target that follows the engine's canvas swap chain.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientCanvasRenderTarget)(IRadientEngine*        pEngine,

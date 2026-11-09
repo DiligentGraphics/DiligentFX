@@ -1,6 +1,6 @@
 """Run a shared JavaScript test suite in headless Chrome, Chromium, or Edge.
 
-Only the generated module, suite, and browser harness directories are served.
+Only the module, suite, browser harness, and explicitly supplied asset directories are served.
 The browser posts structured results; missing results, startup errors, and test
 failures all fail the command. No browser automation package is required.
 """
@@ -39,18 +39,19 @@ def find_browser(explicit):
     raise RuntimeError("Chrome/Chromium/Edge was not found; pass --browser with its executable path")
 
 
-def run(args):
+def run(args, *, extra_roots=None, test_config=None, entry_point="/harness/run_tests.mjs", handle_post=None):
     module = args.module.resolve(strict=True)
     suite = args.suite.resolve(strict=True)
     roots = {"generated": module.parent, "tests": suite.parent,
              "harness": Path(__file__).resolve().parent / "browser"}
-    config = json.dumps({"module": "/generated/" + quote(module.name),
+    roots.update(extra_roots or {})
+    config = json.dumps({"test": test_config, "module": "/generated/" + quote(module.name),
                          "suite": "/tests/" + quote(suite.name),
                          "sharedMemory": args.shared_memory}).replace("<", "\\u003c")
     page = ("<!doctype html><meta charset=utf-8><title>Binding tests</title>"
             '<script id="config" type="application/json">' + config + '</script>'
             '<pre id="result">Running binding tests...</pre>'
-            '<script type="module" src="/harness/run_tests.mjs"></script>').encode()
+            '<script type="module" src="' + entry_point + '"></script>').encode()
     completed = threading.Event()
     reports = []
 
@@ -86,6 +87,8 @@ def run(args):
                 shutil.copyfileobj(source, self.wfile)
 
         def do_POST(self):
+            if handle_post is not None and handle_post(self):
+                return
             if self.path != "/result":
                 self.send_error(404)
                 return

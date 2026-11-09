@@ -38,7 +38,7 @@ extern "C" void RadientRegisterCanvas();
 namespace Diligent
 {
 
-RADIENT_STATUS CreateRadientBrowserEngine(const RadientEngineCreateInfo& CreateInfo, IRadientEngine** ppEngine)
+RADIENT_STATUS CreateRadientBrowserEngine(const RadientEngineCreateInfo& CreateInfo, IRadientEngine** ppEngine, Bool EnableCapture)
 {
     if (ppEngine == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -69,6 +69,8 @@ RADIENT_STATUS CreateRadientBrowserEngine(const RadientEngineCreateInfo& CreateI
     SwapChainDesc SCDesc;
     SCDesc.Width  = static_cast<Uint32>(Width);
     SCDesc.Height = static_cast<Uint32>(Height);
+    if (EnableCapture)
+        SCDesc.Usage |= SWAP_CHAIN_USAGE_COPY_SOURCE;
     RefCntAutoPtr<ISwapChain> pSwapChain;
     pFactory->CreateSwapChainWebGPU(pDevice, pContext, SCDesc, NativeWindow{CanvasTarget}, &pSwapChain);
     if (!pSwapChain)

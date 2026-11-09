@@ -8,6 +8,8 @@ export interface BrowserOptions {
     engineCreateInfo?: RadientEngineCreateInfo;
     powerPreference?: GPUPowerPreference;
     forceFallbackAdapter?: boolean;
+    /** Allow native image readback from the canvas swap chain. Defaults to false. */
+    enableCapture?: boolean;
 }
 
 export interface RadientBrowser {

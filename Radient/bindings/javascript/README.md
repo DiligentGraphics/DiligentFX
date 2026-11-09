@@ -364,5 +364,56 @@ Renderer and view methods are exercised without a GPU in both Node and the
 browser. WebGPU-enabled builds additionally register
 `Radient-JavaScript-Browser-WebGPU`, which checks real device attachment, frame
 submission, resizing an existing target, and shutdown. This smoke test requires
-a working browser WebGPU adapter and fails if one is unavailable. Pixel capture
-and glTF golden-image comparisons are a separate test layer.
+a working browser WebGPU adapter and fails if one is unavailable. The golden-image
+suite below covers rendered glTF scenes.
+
+## Browser golden-image tests
+
+Build `RadientBrowserRenderTest` in a WebGPU-enabled Emscripten configuration.
+It links the production Radient library and generated bindings, plus test-only
+image capture/comparison helpers. `RadientWasm` does not contain those helpers.
+
+The suite reads `Tests/RadientRenderTest/assets/RadientRenderTests.json` unchanged.
+Every entry, animation timestamp, and debug visualization runs by default at
+512 x 512 pixels. A single browser page and Wasm instance share the engine,
+renderer, and view across all cases. Scene import, cameras, lighting, animation,
+and frame preparation all run through the JavaScript bindings. Native code only
+captures the GPU image, compares pixels, and encodes PNG files.
+
+Provide a checkout of glTF-Sample-Assets and the `radient` branch of
+DiligentGraphics/DiligentTestData. Chrome references live in
+`GoldenImages/Chrome/GLTF/<case>/<capture>_wgpu.png`, alongside the native
+references in `GoldenImages/GLTF`. Shared assets, including environment maps,
+remain common to both suites. `GoldenImages/Chrome/metadata.json` records the
+browser and rendering configuration used for the reference images.
+
+```sh
+python Radient/bindings/javascript/tests/browser/render/run_render_tests.py \
+  --module <build>/DiligentFX/Radient/bindings/javascript/tests/browser/render/generated/Radient.mjs \
+  --models <glTF-Sample-Assets> --assets <DiligentTestData> \
+  --output <BrowserRenderResults> --browser <chrome-executable-or-wrapper>
+```
+
+The browser executable and asset locations are run-time settings. CTest uses
+`BINDINGS_TEST_BROWSER_EXECUTABLE`, `RADIENT_BROWSER_TEST_MODELS`,
+`RADIENT_BROWSER_TEST_ASSETS`, and `RADIENT_BROWSER_TEST_OUTPUT` for these paths.
+Use `--reference-directory` (or `RADIENT_BROWSER_TEST_REFERENCES`) to override
+the reference directory, for example for a future `GoldenImages/Safari/GLTF`
+baseline in the same branch.
+
+Run `ctest -R Radient-Browser-GoldenImages --verbose` from the bindings build
+directory. The Emscripten workflow supplies Chrome/SwiftShader options and uploads
+the rendered images, differences, and `results.json` with capture/case/total timings.
+
+Use `--filter 'Animated*'` to narrow a local run. `--update-golden-images` writes
+the captures into the selected reference directory, in per-case folders, after
+comparison. Missing or differing references still fail that run; candidates must
+be reviewed before committing them to the reference branch. Normal runs never
+modify references. By default,
+RGB comparison permits a channel error of 2 and a bad-pixel ratio of 0.0001,
+matching the native CI defaults; manifest overrides are honored.
+
+Capture copies the back buffer before presentation and polls a fence while
+yielding to the browser. It never uses `WaitForIdle()` or a browser screenshot.
+The browser adapter's optional `enableCapture` setting enables copy-source usage
+on the canvas swap chain; it is false for ordinary applications.

@@ -30,4 +30,5 @@ if(WEBGPU_SUPPORTED)
             --shared-memory --timeout 180)
     set_tests_properties(Radient-JavaScript-Browser-WebGPU
         PROPERTIES LABELS "Bindings;JavaScript;Browser;WebGPU" TIMEOUT 210)
+    add_subdirectory(browser/render)
 endif()
