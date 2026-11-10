@@ -72,14 +72,14 @@ export function createBindings(wasm, schema, constants = {}) {
     const states = new WeakMap();
     const types = new Map();
     const typeNames = new Map();
-    const constructionToken = Symbol("native object");
+    const interfaceTypes = new Map();
     const textEncoder = new TextEncoder();
     // Preserve a leading U+FEFF as string content, and reject malformed UTF-8.
     const textDecoder = new TextDecoder("utf-8", {fatal: true, ignoreBOM: true});
 
     function pointer(object, expectedType) {
         const state = states.get(object);
-        if (!state || (expectedType && !(object instanceof types.get(expectedType)))) {
+        if (!state || (expectedType && !state.interfaces.has(expectedType))) {
             throw new TypeError("Expected a compatible native object from this module");
         }
         if (!state.pointer) throw new Error("Native object has been disposed");
@@ -87,9 +87,8 @@ export function createBindings(wasm, schema, constants = {}) {
     }
 
     class NativeObject {
-        constructor(token, address) {
-            if (token !== constructionToken) throw new TypeError("Use a native factory to create objects");
-            states.set(this, {pointer: address});
+        constructor() {
+            throw new TypeError("Use a native factory to create objects");
         }
         get disposed() {
             const state = states.get(this);
@@ -114,7 +113,11 @@ export function createBindings(wasm, schema, constants = {}) {
         address >>>= 0;
         if (!address) return null;
         try {
-            return new (types.get(type))(constructionToken, address);
+            // Adoption alone assigns native identity. Do not pass private
+            // state through constructors whose prototype chain callers can alter.
+            const object = Object.create(types.get(type).prototype);
+            states.set(object, {pointer: address, interfaces: interfaceTypes.get(type)});
+            return object;
         } catch (error) {
             wasm._binding_Release(address);
             throw error;
@@ -529,6 +532,11 @@ export function createBindings(wasm, schema, constants = {}) {
         if (types.has(name)) return types.get(name);
         const spec = schema.interfaces[name];
         const base = spec.base === "IObject" ? NativeObject : interfaceType(spec.base);
+        // Derive compatibility from native metadata once per interface. Each
+        // wrapper retains this private set, independent of mutable JS prototypes.
+        const interfaces = new Set(spec.base === "IObject" ? [] : interfaceTypes.get(spec.base));
+        interfaces.add(name);
+        interfaceTypes.set(name, interfaces);
         const type = class extends base {};
         types.set(name, type);
         typeNames.set(type, name);
