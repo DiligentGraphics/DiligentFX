@@ -59,8 +59,11 @@ target_compile_options(BindingTestsWasm PRIVATE -Wall -Wextra -Werror)
 target_compile_definitions(BindingTestsWasm PRIVATE PLATFORM_WEB=1)
 # Enable the public ModuleOptions fields and the initialization hooks used
 # by the bindings. The shared response file documents each option.
-set_property(TARGET BindingTestsWasm APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/IncomingModuleAPI.txt")
+set_property(TARGET BindingTestsWasm APPEND PROPERTY LINK_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/IncomingModuleAPI.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/initialization.js")
 target_link_options(BindingTestsWasm PRIVATE
+    "SHELL:--pre-js \"${CMAKE_CURRENT_SOURCE_DIR}/initialization.js\""
     "-sINCOMING_MODULE_JS_API=@${CMAKE_CURRENT_SOURCE_DIR}/IncomingModuleAPI.txt"
     --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
     -sALLOW_MEMORY_GROWTH=1 -sASSERTIONS=1

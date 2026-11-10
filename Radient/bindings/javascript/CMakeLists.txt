@@ -46,8 +46,11 @@ function(configure_radient_wasm_target Target OutputDirectory)
     endforeach()
     # Enable the public ModuleOptions fields and the initialization hooks used
     # by the bindings. The shared response file documents each option.
-    set_property(TARGET ${Target} APPEND PROPERTY LINK_DEPENDS "${BINDING_TOOLS}/javascript/IncomingModuleAPI.txt")
+    set_property(TARGET ${Target} APPEND PROPERTY LINK_DEPENDS
+        "${BINDING_TOOLS}/javascript/IncomingModuleAPI.txt"
+        "${BINDING_TOOLS}/javascript/initialization.js")
     target_link_options(${Target} PRIVATE
+        "SHELL:--pre-js \"${BINDING_TOOLS}/javascript/initialization.js\""
         "-sINCOMING_MODULE_JS_API=@${BINDING_TOOLS}/javascript/IncomingModuleAPI.txt"
         -pthread --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node
         # Shader translation (glslang/Tint) needs more than the default 64 KiB stack.

@@ -40,7 +40,16 @@ function trackInitializationResources(t) {
 }
 
 export function registerTests({test, assert}) {
-    for (const [name, options] of [
+    for (const [name, options, injectFailure] of [
+        ["initial Wasm memory allocation failure", {}, t => {
+            // Fail the initial allocation without exhausting actual memory.
+            // Emscripten has created workers but has not exported PThread yet.
+            const Memory = WebAssembly.Memory;
+            const error = new RangeError("Injected initial Wasm memory allocation failure");
+            t.after(() => { WebAssembly.Memory = Memory; });
+            WebAssembly.Memory = new Proxy(Memory, {construct() { throw error; }});
+            return error;
+        }],
         ["missing Wasm", {locateFile(path, prefix) {
             return prefix + (path.endsWith(".wasm") ? "missing.wasm" : path);
         }}],
@@ -52,6 +61,7 @@ export function registerTests({test, assert}) {
         test(`WebGPU initialization releases workers and device after ${name}`, async t => {
             const {default: createRadientBrowser} = await import("/generated/RadientBrowser.mjs");
             const resources = trackInitializationResources(t);
+            const injectedError = injectFailure?.(t);
             let initialized = false;
             let error;
             try {
@@ -64,6 +74,7 @@ export function registerTests({test, assert}) {
                 error = caught;
             }
             assert.ok(error, "Initialization must reject");
+            if (injectedError) assert.equal(error, injectedError);
             assert.equal(initialized, false, "The failure must precede onRuntimeInitialized");
             assert.equal(resources.devices.length, 1);
             assert.ok(resources.destroyedDevices.has(resources.devices[0]), "The GPU device must be destroyed");
