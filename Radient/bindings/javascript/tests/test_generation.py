@@ -89,9 +89,19 @@ class RadientGenerationTest(unittest.TestCase):
         self.assertIn("GetLocalTransform(Entity: bigint): Result<StructSnapshot<RadientTransform>>", types)
         self.assertIn("GetRootEntities(Capacity: number): Result<", types)
         self.assertIn("KeepWorldTransform?: boolean", types)
-        for name in ("SetCustomComponentData", "IThreadPool", "Backend", "Resources"):
+        for name in ("SetCustomComponentData", "IThreadPool", "Backend"):
             self.assertNotIn(name, types)
             self.assertNotIn(name, js)
+
+    def test_resource_configuration_uses_native_defaults_and_integer_widths(self):
+        cpp, _, types = Generator(MODEL, "Radient", ["Radient.h"], ADAPTERS).generate()
+        self.assertIn("Resources?: RadientResourceManagerCreateInfo", types)
+        self.assertIn("new (std::nothrow) Diligent::RadientResourceManagerCreateInfo{}", cpp)
+        for name in ("IndexBufferSize", "MorphTargetBufferSize", "VertexPoolSize",
+                     "TextureAtlasSize", "TextureAtlasSlices", "TextureAtlasMaxSlices"):
+            self.assertIn(f"{name}?: number;", types)
+        for name in ("MaxIndexBufferSize", "MaxMorphTargetBufferSize", "TextureAtlasMipLevel0Size"):
+            self.assertIn(f"{name}?: bigint;", types)
 
     def test_camera_and_light_component_signatures(self):
         _, _, types = Generator(MODEL, "Radient", ["RadientDataBlob.h", "RadientEngine.h"], ADAPTERS).generate()

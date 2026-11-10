@@ -8,7 +8,7 @@ The model and generator tests separately check declarations and metadata.
 | --- | --- |
 | `exports_tests.mjs` | Standalone invalid IDs and the active morph-target limit; named typedefs are checked by generation tests |
 | `data_blob_tests.mjs` | Owning factories; size, scoped reads/writes, resize, QueryInterface and disposal |
-| `scene_tests.mjs` | Engine/scene/writer creation; hierarchy, names, flags, visibility, transforms, revisions and commit |
+| `scene_tests.mjs` | Engine/scene/writer creation and resource configuration; hierarchy, names, flags, visibility, transforms, revisions and commit |
 | `components_tests.mjs` | Camera/light getters/setters; component presence and removal |
 | `mesh_tests.mjs` | Asset manager access/description; asset identity/type/status; mesh creation/description; cube/sphere helpers; vertex-size helpers; scene mesh and renderer getters/setters |
 | `texture_tests.mjs` | LoadTexture from encoded bytes and supplied mips; texture description; load status, validation and blob lifetime |
@@ -19,7 +19,7 @@ The model and generator tests separately check declarations and metadata.
 | `animation_tests.mjs` | Clip creation/reflection, binding creation/evaluation, every registry method, scene/material/pose/morph destinations, quaternion helpers |
 | `import_tests.mjs` | Scene loading and clip reflection; importer creation, ImportScene, InstantiateScene, ProcessPendingImports; GLTF/OBJ files, relative MTL dependencies and imported animation |
 | `renderer_tests.mjs` | Renderer/view creation and descriptions, render-target size, all view setters, retained scene/target snapshots, frame calls without a GPU |
-| `browser/bootstrap_tests.mjs` | Browser-only WebGPU device attachment, canvas target creation, frame submission, resize, shutdown, and failed-initialization cleanup |
+| `browser/bootstrap_tests.mjs` | Browser-only WebGPU device attachment with custom resource capacities, canvas target creation, frame submission, resize, shutdown, and failed-initialization cleanup |
 
 Native callbacks, externally supplied thread pools, importer implementations,
 custom component storage, and native Diligent GPU/backend objects are not exposed.

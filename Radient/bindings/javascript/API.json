@@ -8,7 +8,6 @@
     "Diligent::RadientEngineCreateInfo::Backend",
     "Diligent::RadientEngineCreateInfo::Assets",
     "Diligent::RadientEngineCreateInfo::pThreadPool",
-    "Diligent::RadientEngineCreateInfo::Resources",
     "Diligent::IThreadPool",
     "Diligent::IDeviceContext",
     "Diligent::ISwapChain",
@@ -18,8 +17,7 @@
     "Diligent::RadientRenderTargetDesc::pColorRTV",
     "Diligent::RadientRenderTargetDesc::pDepthDSV",
     "Diligent::RadientBackendCreateInfo",
-    "Diligent::RadientAssetManagerCreateInfo",
-    "Diligent::RadientResourceManagerCreateInfo"
+    "Diligent::RadientAssetManagerCreateInfo"
   ],
   "field_policies": {
     "Diligent::RadientDataBlobCreateInfo": {

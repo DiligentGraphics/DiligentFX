@@ -142,6 +142,26 @@ Detailed marshalling tests remain in the general generator's mock-based suite.
 CI runs the Node suites and the browser tests on Linux in Debug and Release,
 using the runner image's preinstalled Chrome. No renderer or GPU is needed.
 
+## Engine resource configuration
+
+`RadientEngineCreateInfo.Resources` accepts a partial
+`RadientResourceManagerCreateInfo` to configure GPU resource pools. Omitted fields
+keep their native defaults. The three 64-bit byte limits (`MaxIndexBufferSize`,
+`MaxMorphTargetBufferSize`, and `TextureAtlasMipLevel0Size`) use JavaScript `bigint`;
+the other fields use `number`. Zero retains each field's documented native meaning.
+These settings take effect when the engine has a GPU backend.
+
+```js
+const browser = await createRadientBrowser({
+    canvas,
+    engineCreateInfo: {Resources: {
+        TextureAtlasSize: 1024,
+        TextureAtlasMipLevel0Size: 4n * 1024n * 1024n,
+        VertexPoolSize: 32768,
+    }},
+});
+```
+
 ## Scenes
 
 `Radient/bindings/API.json` selects entry points and supplies semantic overrides;
@@ -149,9 +169,9 @@ referenced types, ordinary reference policies, and inherited interface ownership
 are discovered automatically. The adjacent `javascript/API.json` defines JavaScript
 adaptations. The Wasm target links the production Radient library.
 In addition to owning data blobs, it exposes engine/scene creation and scene writers
-for entity names, hierarchy, visibility, and transforms. Rendering, asset loading,
-and external thread pools are not exposed yet; their engine configuration fields
-use native defaults. The engine therefore operates without a GPU backend.
+for entity names, hierarchy, visibility, and transforms. `CreateRadientEngine`
+creates an engine without a GPU backend; use the browser adapter for WebGPU.
+Externally supplied thread pools and native backend objects are not exposed.
 
 ```js
 const {status, value: engine} = api.CreateRadientEngine({WorkerThreadCount: 1});

@@ -65,7 +65,6 @@
     },
     "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientAssetManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
-    "Diligent::RadientResourceManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::IThreadPool": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientEngineCreateInfo": {
       "fields": {

@@ -106,7 +106,13 @@ export function registerTests({test, assert}) {
         canvas.height = 32;
         document.body.append(canvas);
         t.after(() => canvas.remove());
-        const browser = await createRadientBrowser({canvas});
+        const browser = await createRadientBrowser({canvas, engineCreateInfo: {Resources: {
+            IndexBufferSize: 4096, MaxIndexBufferSize: 65536n,
+            MorphTargetBufferSize: 4096, MaxMorphTargetBufferSize: 65536n,
+            VertexPoolSize: 1024,
+            TextureAtlasSize: 64, TextureAtlasMipLevel0Size: 65536n,
+            TextureAtlasSlices: 1, TextureAtlasMaxSlices: 8,
+        }}});
         t.after(() => browser.dispose());
         const errors = [];
         browser.device.addEventListener("uncapturederror", event => errors.push(event.error.message));

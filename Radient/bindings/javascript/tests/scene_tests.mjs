@@ -10,6 +10,19 @@ export function registerTests({test, assert, api, constants}) {
     const {RADIENT_ENTITY_FLAG_VISIBLE: VISIBLE, RADIENT_ENTITY_FLAG_NONE: NONE} = constants.RADIENT_ENTITY_FLAGS;
     const invalid = constants.InvalidRadientEntityID;
 
+    test("engine resource configuration accepts partial descriptors and validates integer types", t => {
+        for (const Resources of [{}, {VertexPoolSize: 1024, MaxIndexBufferSize: 0n}]) {
+            const result = api.CreateRadientEngine({WorkerThreadCount: 1, Resources});
+            t.after(() => result.value?.dispose());
+            assert.equal(result.status, OK);
+            assert.ok(result.value !== null);
+            result.value.dispose();
+        }
+        assert.throws(() => api.CreateRadientEngine({Resources: {MaxIndexBufferSize: 4096}}), TypeError);
+        assert.throws(() => api.CreateRadientEngine({Resources: {TextureAtlasSize: 64n}}), TypeError);
+        assert.throws(() => api.CreateRadientEngine({Resources: {VertexPoolSize: -1}}), RangeError);
+    });
+
     test("scene and entity names are copied, with native defaults and bigint IDs", t => {
         const {engine, scene, writer, value} = createSceneFixture(t, api, assert, OK, "Scène 世界");
         assert.deepEqual(scene.GetDesc(), {Name: "Scène 世界"});
