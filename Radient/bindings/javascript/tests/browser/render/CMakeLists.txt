@@ -10,6 +10,8 @@ add_custom_target(Radient-GenerateBrowserRenderTests
         --header Radient.h --header RadientMeshPrimitives.h --header NativeAdapters.hpp
         --header BrowserNative.h --header NativeCapture.h
         --adapters "${BROWSER_BINDINGS}/API.json" --output "${RENDER_GENERATED}"
+    # Validate the production API even when only the render-test module is built.
+    DEPENDS Radient-GenerateJavaScript
     BYPRODUCTS "${RENDER_GENERATED}/Radient.cpp" "${RENDER_GENERATED}/Radient.mjs"
         "${RENDER_GENERATED}/Radient.d.mts" "${RENDER_GENERATED}/runtime.mjs" "${RENDER_GENERATED}/byte_access.mjs"
     VERBATIM)

@@ -341,10 +341,11 @@ without translating them into language-specific code.
 - Generate backend glue against the existing Radient interfaces. JS/Wasm,
   Java/JNI, and Swift can consume the same extraction and semantic policies.
 
-Only the generator, metadata, tests, and handwritten adapters belong in source
-control. Generated models, glue, JS, declarations, and binaries belong in the
-build/package output. Release packages should contain generated outputs so users
-do not need the generator toolchain.
+The generator, metadata, explicitly updated API surface baselines, tests, and
+handwritten adapters belong in source control. Generated parser
+models, glue, JS, declarations, and binaries belong in the build/package output.
+Release packages should contain generated outputs so users do not need the generator
+toolchain.
 
 ### Output counts and interface-array metadata
 

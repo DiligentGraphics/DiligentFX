@@ -913,12 +913,17 @@ def main():
     parser.add_argument("--header", action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--adapters", type=Path, help="JavaScript-specific scoped byte adapters")
+    parser.add_argument("--surface", type=Path, help="Write the compact binding contract for API baseline checks")
     args = parser.parse_args()
     try:
         model = json.loads(args.model.read_text(encoding="utf-8"))
         adapters = json.loads(args.adapters.read_text(encoding="utf-8")) if args.adapters else None
-        cpp, js, declarations = Generator(model, args.module, args.header, adapters).generate()
+        generator = Generator(model, args.module, args.header, adapters)
+        cpp, js, declarations = generator.generate()
         args.output.mkdir(parents=True, exist_ok=True)
+        if args.surface:
+            from javascript.api_surface import build_surface, format_surface
+            write(args.surface, format_surface(build_surface(generator)))
         write(args.output / (args.module + '.cpp'), cpp)
         write(args.output / (args.module + '.mjs'), js)
         write(args.output / (args.module + '.d.mts'), declarations)

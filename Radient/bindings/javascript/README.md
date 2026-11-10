@@ -51,6 +51,41 @@ TypeScript declarations. Generated files are build artifacts, not source files.
 The module uses Diligent's threaded Emscripten build. Browser deployments require
 cross-origin isolation to make `SharedArrayBuffer` available.
 
+### Reviewing API changes
+
+The checked-in `api_surface.json` sits beside `API.json` and records the reviewed
+binding contract. `API.json` supplies generation configuration. The snapshot
+contains the selected native declarations and effective JavaScript binding
+policies: signatures, descriptor fields and defaults,
+inheritance, constants, typedefs, ownership, nullability, array counts, and adapter
+contracts. It omits comments, source locations, and generated implementation details.
+Native-only fields and methods replaced by scoped access are omitted; the scope's
+acquire/release contract is recorded instead. The snapshot always uses Wasm32.
+
+Binding generation writes the current surface to the build directory and compares
+it with the reviewed snapshot. Additions, removals, and changes fail the build with
+a diff, including APIs generated automatically. Production and browser render-test
+bindings both require this check before their generated glue can be compiled.
+Normal builds never update the checked-in snapshot. Unit tests separately verify
+the checker's behavior.
+
+For an intentional API change, let the build regenerate the current surface (it
+will stop at the comparison). Add or update the corresponding tests, then explicitly
+accept the generated surface by running this script from the DiligentEngine root:
+
+```sh
+python DiligentFX/BuildTools/Bindings/javascript/api_surface.py \
+    --actual build/web/DiligentFX/Radient/bindings/javascript/generated/api_surface.json \
+    --baseline DiligentFX/Radient/bindings/javascript/api_surface.json --update
+```
+
+Use your configured build directory in place of `build/web`. The script copies the
+freshly generated contract; it does not parse headers or rebuild bindings. Review
+and commit the snapshot diff together with the API and test changes, then resume
+the build and run the binding tests. There is no CMake update target or option.
+The snapshot requires acknowledgment of API changes; it does not prove that new
+tests were added or that behavior changed without a declaration change is covered.
+
 ### Browser tests
 
 After building `RadientWasm`, with Chrome, Chromium, or Edge installed, run:

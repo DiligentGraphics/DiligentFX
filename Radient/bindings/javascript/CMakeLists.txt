@@ -8,9 +8,16 @@ add_custom_target(Radient-GenerateJavaScript
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/generate.py"
         --model "${MODEL}" --module Radient --header Radient.h --header RadientMeshPrimitives.h --header NativeAdapters.hpp --header BrowserNative.h
         --adapters "${CMAKE_CURRENT_SOURCE_DIR}/API.json" --output "${GENERATED}"
+        --surface "${GENERATED}/api_surface.json"
+    # A normal build validates the reviewed contract; only the explicit Python
+    # update command may accept changes to the source snapshot.
+    COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/api_surface.py"
+        --actual "${GENERATED}/api_surface.json"
+        --baseline "${CMAKE_CURRENT_SOURCE_DIR}/api_surface.json"
     DEPENDS Radient-GenerateBindingModel
     BYPRODUCTS "${GENERATED}/Radient.cpp" "${GENERATED}/Radient.mjs"
         "${GENERATED}/Radient.d.mts" "${GENERATED}/runtime.mjs" "${GENERATED}/byte_access.mjs"
+        "${GENERATED}/api_surface.json"
     COMMENT "Generating Radient JavaScript bindings"
     VERBATIM)
 
